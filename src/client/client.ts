@@ -43,6 +43,7 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
+  private customHeaders: Record<string, string>;
 
   /**
    * Constructs an A2AClient instance.
@@ -51,7 +52,8 @@ export class A2AClient {
    * The `url` field from the Agent Card will be used as the RPC service endpoint.
    * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com).
    */
-  constructor(agentBaseUrl: string) {
+  constructor(agentBaseUrl: string, customHeaders: Record<string, string> = {}) {
+    this.customHeaders = customHeaders;
     this.agentBaseUrl = agentBaseUrl.replace(/\/$/, ""); // Remove trailing slash if any
     this.agentCardPromise = this._fetchAndCacheAgentCard();
   }
@@ -65,7 +67,7 @@ export class A2AClient {
     const agentCardUrl = `${this.agentBaseUrl}/.well-known/agent.json`;
     try {
       const response = await fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
+        headers: { 'Accept': 'application/json', ...this.customHeaders },
       });
       if (!response.ok) {
         throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
@@ -96,7 +98,7 @@ export class A2AClient {
       const specificAgentBaseUrl = agentBaseUrl.replace(/\/$/, "");
       const agentCardUrl = `${specificAgentBaseUrl}/.well-known/agent.json`;
       const response = await fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
+        headers: { 'Accept': 'application/json', ...this.customHeaders },
       });
       if (!response.ok) {
         throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
@@ -149,6 +151,7 @@ export class A2AClient {
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json", // Expect JSON response for non-streaming requests
+        ...this.customHeaders,
       },
       body: JSON.stringify(rpcRequest),
     });
@@ -227,6 +230,7 @@ export class A2AClient {
       headers: {
         "Content-Type": "application/json",
         "Accept": "text/event-stream", // Crucial for SSE
+        ...this.customHeaders
       },
       body: JSON.stringify(rpcRequest),
     });
@@ -334,6 +338,7 @@ export class A2AClient {
       headers: {
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
+        ...this.customHeaders
       },
       body: JSON.stringify(rpcRequest),
     });

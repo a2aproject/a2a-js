@@ -1,0 +1,455 @@
+import 'mocha';
+import { assert, expect } from 'chai';
+import sinon from 'sinon';
+import { describe, beforeEach, afterEach, it } from 'node:test';
+import { InMemoryTaskStore, DefaultRequestHandler } from '../../src/index.js';
+import { DefaultExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
+/**
+ * A realistic mock of AgentExecutor for cancellation tests.
+ */
+class CancellableMockAgentExecutor {
+    cancelledTasks = new Set();
+    clock;
+    constructor(clock) {
+        this.clock = clock;
+    }
+    execute = async (requestContext, eventBus) => {
+        const taskId = requestContext.taskId;
+        const contextId = requestContext.contextId;
+        eventBus.publish({ id: taskId, contextId, status: { state: "submitted" }, kind: 'task' });
+        eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "working" }, final: false });
+        // Simulate a long-running process
+        for (let i = 0; i < 5; i++) {
+            if (this.cancelledTasks.has(taskId)) {
+                eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "canceled" }, final: true });
+                eventBus.finished();
+                return;
+            }
+            // Use fake timers to simulate work
+            await this.clock.tickAsync(100);
+        }
+        eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "completed" }, final: true });
+        eventBus.finished();
+    };
+    cancelTask = async (taskId, eventBus) => {
+        this.cancelledTasks.add(taskId);
+        // The execute loop is responsible for publishing the final state
+    };
+    // Stub for spying on cancelTask calls
+    cancelTaskSpy = sinon.spy(this, 'cancelTask');
+}
+describe('DefaultRequestHandler as A2ARequestHandler', () => {
+    let handler;
+    let mockTaskStore;
+    let mockAgentExecutor;
+    let executionEventBusManager;
+    let clock;
+    const testAgentCard = {
+        name: 'Test Agent',
+        description: 'An agent for testing purposes',
+        url: 'http://localhost:8080',
+        version: '1.0.0',
+        capabilities: {
+            streaming: true,
+            pushNotifications: true,
+        },
+        defaultInputModes: ['text/plain'],
+        defaultOutputModes: ['text/plain'],
+        skills: [
+            {
+                id: 'test-skill',
+                name: 'Test Skill',
+                description: 'A skill for testing',
+                tags: ['test'],
+            },
+        ],
+    };
+    // Before each test, reset the components to a clean state
+    beforeEach(() => {
+        mockTaskStore = new InMemoryTaskStore();
+        // Default mock for most tests
+        mockAgentExecutor = new MockAgentExecutor();
+        executionEventBusManager = new DefaultExecutionEventBusManager();
+        handler = new DefaultRequestHandler(testAgentCard, mockTaskStore, mockAgentExecutor, executionEventBusManager);
+    });
+    // After each test, restore any sinon fakes or stubs
+    afterEach(() => {
+        sinon.restore();
+        if (clock) {
+            clock.restore();
+        }
+    });
+    // Helper function to create a basic user message
+    const createTestMessage = (id, text) => ({
+        messageId: id,
+        role: 'user',
+        parts: [{ kind: 'text', text }],
+        kind: 'message',
+    });
+    /**
+     * A mock implementation of AgentExecutor to control agent behavior during tests.
+     */
+    class MockAgentExecutor {
+        // Stubs to control and inspect calls to execute and cancelTask
+        execute = sinon.stub();
+        cancelTask = sinon.stub();
+    }
+    it('sendMessage: should return a simple message response', async () => {
+        const params = {
+            message: createTestMessage('msg-1', 'Hello'),
+        };
+        const agentResponse = {
+            messageId: 'agent-msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Hi there!' }],
+            kind: 'message',
+        };
+        mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+            bus.publish(agentResponse);
+            bus.finished();
+        });
+        const result = await handler.sendMessage(params);
+        assert.deepEqual(result, agentResponse, "The result should be the agent's message");
+        assert.isTrue(mockAgentExecutor.execute.calledOnce, "AgentExecutor.execute should be called once");
+    });
+    it('sendMessage: (blocking) should return a task in a completed state with an artifact', async () => {
+        const params = {
+            message: createTestMessage('msg-2', 'Do a task')
+        };
+        const taskId = 'task-123';
+        const contextId = 'ctx-abc';
+        const testArtifact = {
+            artifactId: 'artifact-1',
+            name: 'Test Document',
+            description: 'A test artifact.',
+            parts: [{ kind: 'text', text: 'This is the content of the artifact.' }]
+        };
+        mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+            bus.publish({
+                id: taskId,
+                contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },
+                final: false
+            });
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'artifact-update',
+                artifact: testArtifact
+            });
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "completed", message: { role: 'agent', parts: [{ kind: 'text', text: 'Done!' }], messageId: 'agent-msg-2', kind: 'message' } },
+                final: true
+            });
+            bus.finished();
+        });
+        const result = await handler.sendMessage(params);
+        const taskResult = result;
+        assert.equal(taskResult.kind, 'task');
+        assert.equal(taskResult.id, taskId);
+        assert.equal(taskResult.status.state, "completed");
+        assert.isDefined(taskResult.artifacts, 'Task result should have artifacts');
+        assert.isArray(taskResult.artifacts);
+        assert.lengthOf(taskResult.artifacts, 1);
+        assert.deepEqual(taskResult.artifacts[0], testArtifact);
+    });
+    it('sendMessage: should handle agent execution failure for blocking calls', async () => {
+        const errorMessage = 'Agent failed!';
+        mockAgentExecutor.execute.rejects(new Error(errorMessage));
+        // Test blocking case
+        const blockingParams = {
+            message: createTestMessage('msg-fail-block', 'Test failure blocking'),
+        };
+        const blockingResult = await handler.sendMessage(blockingParams);
+        const blockingTask = blockingResult;
+        assert.equal(blockingTask.kind, 'task', 'Result should be a task');
+        assert.equal(blockingTask.status.state, 'failed', 'Task status should be failed');
+        assert.include((blockingTask.status.message?.parts[0]).text, errorMessage, 'Error message should be in the status');
+    });
+    it('sendMessage: (non-blocking) should return first task event immediately and process full task in background', async () => {
+        clock = sinon.useFakeTimers();
+        const saveSpy = sinon.spy(mockTaskStore, 'save');
+        const params = {
+            message: createTestMessage('msg-nonblock', 'Do a long task'),
+            configuration: { blocking: false, acceptedOutputModes: [] }
+        };
+        const taskId = 'task-nonblock-123';
+        const contextId = 'ctx-nonblock-abc';
+        mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+            // First event is the task creation, which should be returned immediately
+            bus.publish({
+                id: taskId,
+                contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+            // Simulate work before publishing more events
+            await clock.tickAsync(500);
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "completed" },
+                final: true
+            });
+            bus.finished();
+        });
+        // This call should return as soon as the first 'task' event is published
+        const immediateResult = await handler.sendMessage(params);
+        // Assert that we got the initial task object back right away
+        const taskResult = immediateResult;
+        assert.equal(taskResult.kind, 'task');
+        assert.equal(taskResult.id, taskId);
+        assert.equal(taskResult.status.state, 'submitted', "Should return immediately with 'submitted' state");
+        // The background processing should not have completed yet
+        assert.isTrue(saveSpy.calledOnce, "Save should be called for the initial task creation");
+        assert.equal(saveSpy.firstCall.args[0].status.state, 'submitted');
+        // Allow the background processing to complete
+        await clock.runAllAsync();
+        // Now, check the final state in the store to ensure background processing finished
+        const finalTask = await mockTaskStore.load(taskId);
+        assert.isDefined(finalTask);
+        assert.equal(finalTask.status.state, 'completed', "Task should be 'completed' in the store after background processing");
+        assert.isTrue(saveSpy.calledTwice, "Save should be called twice (submitted and completed)");
+        assert.equal(saveSpy.secondCall.args[0].status.state, 'completed');
+    });
+    it('sendMessage: should handle agent execution failure for non-blocking calls', async () => {
+        const errorMessage = 'Agent failed!';
+        mockAgentExecutor.execute.rejects(new Error(errorMessage));
+        // Test non-blocking case
+        const nonBlockingParams = {
+            message: createTestMessage('msg-fail-nonblock', 'Test failure non-blocking'),
+            configuration: { blocking: false, acceptedOutputModes: [] },
+        };
+        const nonBlockingResult = await handler.sendMessage(nonBlockingParams);
+        const nonBlockingTask = nonBlockingResult;
+        assert.equal(nonBlockingTask.kind, 'task', 'Result should be a task');
+        assert.equal(nonBlockingTask.status.state, 'failed', 'Task status should be failed');
+        assert.include((nonBlockingTask.status.message?.parts[0]).text, errorMessage, 'Error message should be in the status');
+    });
+    it('sendMessageStream: should stream submitted, working, and completed events', async () => {
+        const params = {
+            message: createTestMessage('msg-3', 'Stream a task')
+        };
+        const taskId = 'task-stream-1';
+        const contextId = 'ctx-stream-1';
+        mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+            bus.publish({ id: taskId, contextId, status: { state: "submitted" }, kind: 'task' });
+            await new Promise(res => setTimeout(res, 10));
+            bus.publish({ taskId, contextId, kind: 'status-update', status: { state: "working" }, final: false });
+            await new Promise(res => setTimeout(res, 10));
+            bus.publish({ taskId, contextId, kind: 'status-update', status: { state: "completed" }, final: true });
+            bus.finished();
+        });
+        const eventGenerator = handler.sendMessageStream(params);
+        const events = [];
+        for await (const event of eventGenerator) {
+            events.push(event);
+        }
+        assert.lengthOf(events, 3, "Stream should yield 3 events");
+        assert.equal(events[0].status.state, "submitted");
+        assert.equal(events[1].status.state, "working");
+        assert.equal(events[2].status.state, "completed");
+        assert.isTrue(events[2].final);
+    });
+    it('sendMessage: should reject if task is in a terminal state', async () => {
+        const taskId = 'task-terminal-1';
+        const terminalStates = ['completed', 'failed', 'canceled', 'rejected'];
+        for (const state of terminalStates) {
+            const fakeTask = {
+                id: taskId,
+                contextId: 'ctx-terminal',
+                status: { state: state },
+                kind: 'task'
+            };
+            await mockTaskStore.save(fakeTask);
+            const params = {
+                message: { ...createTestMessage('msg-1', 'test'), taskId: taskId }
+            };
+            try {
+                await handler.sendMessage(params);
+                assert.fail(`Should have thrown for state: ${state}`);
+            }
+            catch (error) {
+                expect(error.code).to.equal(-32600); // Invalid Request
+                expect(error.message).to.contain(`Task ${taskId} is in a terminal state (${state}) and cannot be modified.`);
+            }
+        }
+    });
+    it('sendMessageStream: should reject if task is in a terminal state', async () => {
+        const taskId = 'task-terminal-2';
+        const fakeTask = {
+            id: taskId,
+            contextId: 'ctx-terminal-stream',
+            status: { state: 'completed' },
+            kind: 'task'
+        };
+        await mockTaskStore.save(fakeTask);
+        const params = {
+            message: { ...createTestMessage('msg-1', 'test'), taskId: taskId }
+        };
+        const generator = handler.sendMessageStream(params);
+        try {
+            await generator.next();
+            assert.fail('sendMessageStream should have thrown an error');
+        }
+        catch (error) {
+            expect(error.code).to.equal(-32600);
+            expect(error.message).to.contain(`Task ${taskId} is in a terminal state (completed) and cannot be modified.`);
+        }
+    });
+    it('sendMessageStream: should stop at input-required state', async () => {
+        const params = {
+            message: createTestMessage('msg-4', 'I need input')
+        };
+        const taskId = 'task-input';
+        const contextId = 'ctx-input';
+        mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+            bus.publish({ id: taskId, contextId, status: { state: "submitted" }, kind: 'task' });
+            bus.publish({ taskId, contextId, kind: 'status-update', status: { state: "input-required" }, final: true });
+            bus.finished();
+        });
+        const eventGenerator = handler.sendMessageStream(params);
+        const events = [];
+        for await (const event of eventGenerator) {
+            events.push(event);
+        }
+        assert.lengthOf(events, 2);
+        const lastEvent = events[1];
+        assert.equal(lastEvent.status.state, "input-required");
+        assert.isTrue(lastEvent.final);
+    });
+    it('resubscribe: should allow multiple clients to receive events for the same task', async () => {
+        const saveSpy = sinon.spy(mockTaskStore, 'save');
+        clock = sinon.useFakeTimers();
+        const params = {
+            message: createTestMessage('msg-5', 'Long running task')
+        };
+        let taskId;
+        let contextId;
+        mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+            taskId = ctx.taskId;
+            contextId = ctx.contextId;
+            bus.publish({ id: taskId, contextId, status: { state: "submitted" }, kind: 'task' });
+            bus.publish({ taskId, contextId, kind: 'status-update', status: { state: "working" }, final: false });
+            await clock.tickAsync(100);
+            bus.publish({ taskId, contextId, kind: 'status-update', status: { state: "completed" }, final: true });
+            bus.finished();
+        });
+        const stream1_generator = handler.sendMessageStream(params);
+        const stream1_iterator = stream1_generator[Symbol.asyncIterator]();
+        const firstEventResult = await stream1_iterator.next();
+        const firstEvent = firstEventResult.value;
+        assert.equal(firstEvent.id, taskId, 'Should get task event first');
+        const secondEventResult = await stream1_iterator.next();
+        const secondEvent = secondEventResult.value;
+        assert.equal(secondEvent.taskId, taskId, 'Should get the task status update event second');
+        const stream2_generator = handler.resubscribe({ id: taskId });
+        const results1 = [firstEvent, secondEvent];
+        const results2 = [];
+        const collect = async (iterator, results) => {
+            for await (const res of iterator) {
+                results.push(res);
+            }
+        };
+        const p1 = collect(stream1_iterator, results1);
+        const p2 = collect(stream2_generator, results2);
+        await clock.runAllAsync();
+        await Promise.all([p1, p2]);
+        assert.equal(results1[0].status.state, "submitted");
+        assert.equal(results1[1].status.state, "working");
+        assert.equal(results1[2].status.state, "completed");
+        // First event of resubscribe is always a task.
+        assert.equal(results2[0].status.state, "working");
+        assert.equal(results2[1].status.state, "completed");
+        assert.isTrue(saveSpy.calledThrice, 'TaskStore.save should be called 3 times');
+        const lastSaveCall = saveSpy.lastCall.args[0];
+        assert.equal(lastSaveCall.id, taskId);
+        assert.equal(lastSaveCall.status.state, "completed");
+    });
+    it('getTask: should return an existing task from the store', async () => {
+        const fakeTask = {
+            id: 'task-exist',
+            contextId: 'ctx-exist',
+            status: { state: "working" },
+            kind: 'task',
+            history: []
+        };
+        await mockTaskStore.save(fakeTask);
+        const result = await handler.getTask({ id: 'task-exist' });
+        assert.deepEqual(result, fakeTask);
+    });
+    it('set/getTaskPushNotificationConfig: should save and retrieve config', async () => {
+        const taskId = 'task-push-config';
+        const fakeTask = { id: taskId, contextId: 'ctx-push', status: { state: "working" }, kind: 'task' };
+        await mockTaskStore.save(fakeTask);
+        const pushConfig = {
+            url: 'https://example.com/notify',
+            token: 'secret-token'
+        };
+        const setParams = { taskId, pushNotificationConfig: pushConfig };
+        const setResponse = await handler.setTaskPushNotificationConfig(setParams);
+        assert.deepEqual(setResponse.pushNotificationConfig, pushConfig, "Set response should return the config");
+        const getParams = { id: taskId };
+        const getResponse = await handler.getTaskPushNotificationConfig(getParams);
+        assert.deepEqual(getResponse.pushNotificationConfig, pushConfig, "Get response should return the saved config");
+    });
+    it('cancelTask: should cancel a running task and notify listeners', async () => {
+        clock = sinon.useFakeTimers();
+        // Use the more advanced mock for this specific test
+        const cancellableExecutor = new CancellableMockAgentExecutor(clock);
+        handler = new DefaultRequestHandler(testAgentCard, mockTaskStore, cancellableExecutor, executionEventBusManager);
+        const streamParams = { message: createTestMessage('msg-9', 'Start and cancel') };
+        const streamGenerator = handler.sendMessageStream(streamParams);
+        const streamEvents = [];
+        const streamingPromise = (async () => {
+            for await (const event of streamGenerator) {
+                streamEvents.push(event);
+            }
+        })();
+        // Allow the task to be created and enter the 'working' state
+        await clock.tickAsync(150);
+        const createdTask = streamEvents.find(e => e.kind === 'task');
+        assert.isDefined(createdTask, 'Task creation event should have been received');
+        const taskId = createdTask.id;
+        // Now, issue the cancel request
+        const cancelResponse = await handler.cancelTask({ id: taskId });
+        // Let the executor's loop run to completion to detect the cancellation
+        await clock.runAllAsync();
+        await streamingPromise;
+        assert.isTrue(cancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any));
+        const lastEvent = streamEvents[streamEvents.length - 1];
+        assert.equal(lastEvent.status.state, "canceled");
+        const finalTask = await handler.getTask({ id: taskId });
+        assert.equal(finalTask.status.state, "canceled");
+        // Canceled API issues cancel request to executor and returns latest task state.
+        // In this scenario, executor is waiting on clock to detect that task has been cancelled.
+        // While the cancel API has returned with latest task state => Working.
+        assert.equal(cancelResponse.status.state, "working");
+    });
+    it('cancelTask: should fail for tasks in a terminal state', async () => {
+        const taskId = 'task-terminal';
+        const fakeTask = { id: taskId, contextId: 'ctx-terminal', status: { state: "completed" }, kind: 'task' };
+        await mockTaskStore.save(fakeTask);
+        try {
+            await handler.cancelTask({ id: taskId });
+            assert.fail('Should have thrown a TaskNotCancelableError');
+        }
+        catch (error) {
+            assert.equal(error.code, -32002);
+            expect(error.message).to.contain('Task not cancelable');
+        }
+        assert.isFalse(mockAgentExecutor.cancelTask.called);
+    });
+});
+//# sourceMappingURL=default_request_handler.spec.js.map
