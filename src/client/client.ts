@@ -46,14 +46,31 @@ export class A2AClient {
 
   /**
    * Constructs an A2AClient instance.
-   * It initiates fetching the agent card from the provided agent baseUrl.
-   * The Agent Card is expected at `${agentBaseUrl}/.well-known/agent.json`.
+   * AgentCard is provided directly. agentCard.url will be used as the endpoint.
+   * @param agentCard The AgentCard object directly.
+   */
+  constructor(agentCard: AgentCard);
+  /**
+   * Constructs an A2AClient instance.
+   * It can accept either an AgentCard object directly or a base URL string.
+   * If a URL is provided, it initiates fetching the agent card from `${agentBaseUrl}/.well-known/agent.json`.
    * The `url` field from the Agent Card will be used as the RPC service endpoint.
    * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com).
    */
-  constructor(agentBaseUrl: string) {
-    this.agentBaseUrl = agentBaseUrl.replace(/\/$/, ""); // Remove trailing slash if any
-    this.agentCardPromise = this._fetchAndCacheAgentCard();
+  constructor(agentBaseUrl: string);
+  constructor(agentCardOrUrl: AgentCard | string) {
+    if (typeof agentCardOrUrl === 'string') {
+      // Handle URL string input
+      this.agentBaseUrl = agentCardOrUrl.replace(/\/$/, ""); // Remove trailing slash if any
+      this.agentCardPromise = this._fetchAndCacheAgentCard();
+    } else {
+      // Handle AgentCard object input
+      const agentCard = agentCardOrUrl as AgentCard;
+      const endpointUrl = agentCard.url.replace(/\/$/, ""); // Remove trailing slash if any
+      this.agentBaseUrl = endpointUrl; //  Not applicable when AgentCard is provided directly
+      this.serviceEndpointUrl = endpointUrl; // Cache the service endpoint URL from the provided agent card
+      this.agentCardPromise = Promise.resolve(agentCard); // Resolve immediately with the provided card
+    }
   }
 
   /**
