@@ -1,4 +1,10 @@
-import express, { Request, Response, Express } from "express";
+import express, {
+  Request,
+  Response,
+  Express,
+  RequestHandler,
+  ErrorRequestHandler,
+} from "express";
 
 import { A2AError } from "./error.js";
 import {
@@ -22,16 +28,16 @@ export class A2AExpressApp {
    * Adds A2A routes to an existing Express app.
    * @param app Optional existing Express app.
    * @param baseUrl The base URL for A2A endpoints (e.g., "/a2a/api").
-   * @param middlewares Middlewares to apply to the A2A routes.
+   * @param middlewares Array of Express middlewares to apply to the A2A routes.
    * @returns The Express app with A2A routes.
    */
   public setupRoutes(
     app: Express,
     baseUrl: string = "",
-    middlewares: any[]
+    middlewares?: Array<RequestHandler | ErrorRequestHandler>
   ): Express {
     app.use(express.json());
-    middlewares.forEach((middleware) => {
+    middlewares?.forEach((middleware) => {
       app.use(middleware);
     });
 
