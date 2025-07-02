@@ -36,10 +36,7 @@ export class A2AExpressApp {
     baseUrl: string = "",
     middlewares?: Array<RequestHandler | ErrorRequestHandler>
   ): Express {
-    app.use(express.json());
-    middlewares?.forEach((middleware) => {
-      app.use(middleware);
-    });
+    app.use(express.json(), ...(middlewares ?? []));
 
     app.get(
       `${baseUrl}/.well-known/agent.json`,
