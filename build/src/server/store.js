@@ -1,8 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.InMemoryTaskStore = void 0;
 // ========================
 // InMemoryTaskStore
 // ========================
 // Use Task directly for storage
-export class InMemoryTaskStore {
+class InMemoryTaskStore {
     store = new Map();
     async load(taskId) {
         const entry = this.store.get(taskId);
@@ -14,4 +17,5 @@ export class InMemoryTaskStore {
         this.store.set(task.id, { ...task });
     }
 }
+exports.InMemoryTaskStore = InMemoryTaskStore;
 //# sourceMappingURL=store.js.map

@@ -1,5 +1,8 @@
-import { EventEmitter } from 'events';
-export class DefaultExecutionEventBus extends EventEmitter {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DefaultExecutionEventBus = void 0;
+const events_1 = require("events");
+class DefaultExecutionEventBus extends events_1.EventEmitter {
     constructor() {
         super();
     }
@@ -10,4 +13,5 @@ export class DefaultExecutionEventBus extends EventEmitter {
         this.emit('finished');
     }
 }
+exports.DefaultExecutionEventBus = DefaultExecutionEventBus;
 //# sourceMappingURL=execution_event_bus.js.map

@@ -1,18 +1,21 @@
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
-import { RequestContext } from "../agent_execution/request_context.js";
-import { A2AError } from "../error.js";
-import { DefaultExecutionEventBusManager } from "../events/execution_event_bus_manager.js";
-import { ExecutionEventQueue } from "../events/execution_event_queue.js";
-import { ResultManager } from "../result_manager.js";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DefaultRequestHandler = void 0;
+const uuid_1 = require("uuid"); // For generating unique IDs
+const request_context_js_1 = require("../agent_execution/request_context.js");
+const error_js_1 = require("../error.js");
+const execution_event_bus_manager_js_1 = require("../events/execution_event_bus_manager.js");
+const execution_event_queue_js_1 = require("../events/execution_event_queue.js");
+const result_manager_js_1 = require("../result_manager.js");
 const terminalStates = ["completed", "failed", "canceled", "rejected"];
-export class DefaultRequestHandler {
+class DefaultRequestHandler {
     agentCard;
     taskStore;
     agentExecutor;
     eventBusManager;
     // Store for push notification configurations (could be part of TaskStore or separate)
     pushNotificationConfigs = new Map();
-    constructor(agentCard, taskStore, agentExecutor, eventBusManager = new DefaultExecutionEventBusManager()) {
+    constructor(agentCard, taskStore, agentExecutor, eventBusManager = new execution_event_bus_manager_js_1.DefaultExecutionEventBusManager()) {
         this.agentCard = agentCard;
         this.taskStore = taskStore;
         this.agentExecutor = agentExecutor;
@@ -28,11 +31,11 @@ export class DefaultRequestHandler {
         if (incomingMessage.taskId) {
             task = await this.taskStore.load(incomingMessage.taskId);
             if (!task) {
-                throw A2AError.taskNotFound(incomingMessage.taskId);
+                throw error_js_1.A2AError.taskNotFound(incomingMessage.taskId);
             }
             if (terminalStates.includes(task.status.state)) {
                 // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
-                throw A2AError.invalidRequest(`Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`);
+                throw error_js_1.A2AError.invalidRequest(`Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`);
             }
         }
         if (incomingMessage.referenceTaskIds && incomingMessage.referenceTaskIds.length > 0) {
@@ -51,10 +54,10 @@ export class DefaultRequestHandler {
         // Ensure contextId is present
         const messageForContext = { ...incomingMessage };
         if (!messageForContext.contextId) {
-            messageForContext.contextId = task?.contextId || uuidv4();
+            messageForContext.contextId = task?.contextId || (0, uuid_1.v4)();
         }
-        const contextId = incomingMessage.contextId || uuidv4();
-        return new RequestContext(messageForContext, taskId, contextId, task, referenceTasks);
+        const contextId = incomingMessage.contextId || (0, uuid_1.v4)();
+        return new request_context_js_1.RequestContext(messageForContext, taskId, contextId, task, referenceTasks);
     }
     async _processEvents(taskId, resultManager, eventQueue, options) {
         let firstResultSent = false;
@@ -69,7 +72,7 @@ export class DefaultRequestHandler {
                 }
             }
             if (options?.firstResultRejector && !firstResultSent) {
-                options.firstResultRejector(A2AError.internalError('Execution finished before a message or task was produced.'));
+                options.firstResultRejector(error_js_1.A2AError.internalError('Execution finished before a message or task was produced.'));
             }
         }
         catch (error) {
@@ -87,20 +90,20 @@ export class DefaultRequestHandler {
     async sendMessage(params) {
         const incomingMessage = params.message;
         if (!incomingMessage.messageId) {
-            throw A2AError.invalidParams('message.messageId is required.');
+            throw error_js_1.A2AError.invalidParams('message.messageId is required.');
         }
         // Default to blocking behavior if 'blocking' is not explicitly false.
         const isBlocking = params.configuration?.blocking !== false;
-        const taskId = incomingMessage.taskId || uuidv4();
+        const taskId = incomingMessage.taskId || (0, uuid_1.v4)();
         // Instantiate ResultManager before creating RequestContext
-        const resultManager = new ResultManager(this.taskStore);
+        const resultManager = new result_manager_js_1.ResultManager(this.taskStore);
         resultManager.setContext(incomingMessage); // Set context for ResultManager
         const requestContext = await this._createRequestContext(incomingMessage, taskId, false);
         // Use the (potentially updated) contextId from requestContext
         const finalMessageForAgent = requestContext.userMessage;
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
         // EventQueue should be attached to the bus, before the agent execution begins.
-        const eventQueue = new ExecutionEventQueue(eventBus);
+        const eventQueue = new execution_event_queue_js_1.ExecutionEventQueue(eventBus);
         // Start agent execution (non-blocking).
         // It runs in the background and publishes events to the eventBus.
         this.agentExecutor.execute(requestContext, eventBus).catch(err => {
@@ -108,14 +111,14 @@ export class DefaultRequestHandler {
             // Publish a synthetic error event, which will be handled by the ResultManager
             // and will also settle the firstResultPromise for non-blocking calls.
             const errorTask = {
-                id: requestContext.task?.id || uuidv4(), // Use existing task ID or generate new
+                id: requestContext.task?.id || (0, uuid_1.v4)(), // Use existing task ID or generate new
                 contextId: finalMessageForAgent.contextId,
                 status: {
                     state: "failed",
                     message: {
                         kind: "message",
                         role: "agent",
-                        messageId: uuidv4(),
+                        messageId: (0, uuid_1.v4)(),
                         parts: [{ kind: "text", text: `Agent execution error: ${err.message}` }],
                         taskId: requestContext.task?.id,
                         contextId: finalMessageForAgent.contextId,
@@ -145,7 +148,7 @@ export class DefaultRequestHandler {
             await this._processEvents(taskId, resultManager, eventQueue);
             const finalResult = resultManager.getFinalResult();
             if (!finalResult) {
-                throw A2AError.internalError('Agent execution finished without a result, and no task context found.');
+                throw error_js_1.A2AError.internalError('Agent execution finished without a result, and no task context found.');
             }
             return finalResult;
         }
@@ -164,30 +167,30 @@ export class DefaultRequestHandler {
         if (!incomingMessage.messageId) {
             // For streams, messageId might be set by client, or server can generate if not present.
             // Let's assume client provides it or throw for now.
-            throw A2AError.invalidParams('message.messageId is required for streaming.');
+            throw error_js_1.A2AError.invalidParams('message.messageId is required for streaming.');
         }
-        const taskId = incomingMessage.taskId || uuidv4();
+        const taskId = incomingMessage.taskId || (0, uuid_1.v4)();
         // Instantiate ResultManager before creating RequestContext
-        const resultManager = new ResultManager(this.taskStore);
+        const resultManager = new result_manager_js_1.ResultManager(this.taskStore);
         resultManager.setContext(incomingMessage); // Set context for ResultManager
         const requestContext = await this._createRequestContext(incomingMessage, taskId, true);
         const finalMessageForAgent = requestContext.userMessage;
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
-        const eventQueue = new ExecutionEventQueue(eventBus);
+        const eventQueue = new execution_event_queue_js_1.ExecutionEventQueue(eventBus);
         // Start agent execution (non-blocking)
         this.agentExecutor.execute(requestContext, eventBus).catch(err => {
             console.error(`Agent execution failed for stream message ${finalMessageForAgent.messageId}:`, err);
             // Publish a synthetic error event if needed
             const errorTaskStatus = {
                 kind: "status-update",
-                taskId: requestContext.task?.id || uuidv4(), // Use existing or a placeholder
+                taskId: requestContext.task?.id || (0, uuid_1.v4)(), // Use existing or a placeholder
                 contextId: finalMessageForAgent.contextId,
                 status: {
                     state: "failed",
                     message: {
                         kind: "message",
                         role: "agent",
-                        messageId: uuidv4(),
+                        messageId: (0, uuid_1.v4)(),
                         parts: [{ kind: "text", text: `Agent execution error: ${err.message}` }],
                         taskId: requestContext.task?.id,
                         contextId: finalMessageForAgent.contextId,
@@ -212,7 +215,7 @@ export class DefaultRequestHandler {
     async getTask(params) {
         const task = await this.taskStore.load(params.id);
         if (!task) {
-            throw A2AError.taskNotFound(params.id);
+            throw error_js_1.A2AError.taskNotFound(params.id);
         }
         if (params.historyLength !== undefined && params.historyLength >= 0) {
             if (task.history) {
@@ -228,12 +231,12 @@ export class DefaultRequestHandler {
     async cancelTask(params) {
         const task = await this.taskStore.load(params.id);
         if (!task) {
-            throw A2AError.taskNotFound(params.id);
+            throw error_js_1.A2AError.taskNotFound(params.id);
         }
         // Check if task is in a cancelable state
         const nonCancelableStates = ["completed", "failed", "canceled", "rejected"];
         if (nonCancelableStates.includes(task.status.state)) {
-            throw A2AError.taskNotCancelable(params.id);
+            throw error_js_1.A2AError.taskNotCancelable(params.id);
         }
         const eventBus = this.eventBusManager.getByTaskId(params.id);
         if (eventBus) {
@@ -246,7 +249,7 @@ export class DefaultRequestHandler {
                 message: {
                     kind: "message",
                     role: "agent",
-                    messageId: uuidv4(),
+                    messageId: (0, uuid_1.v4)(),
                     parts: [{ kind: "text", text: "Task cancellation requested by user." }],
                     taskId: task.id,
                     contextId: task.contextId,
@@ -262,11 +265,11 @@ export class DefaultRequestHandler {
     }
     async setTaskPushNotificationConfig(params) {
         if (!this.agentCard.capabilities.pushNotifications) {
-            throw A2AError.pushNotificationNotSupported();
+            throw error_js_1.A2AError.pushNotificationNotSupported();
         }
         const taskAndHistory = await this.taskStore.load(params.taskId);
         if (!taskAndHistory) {
-            throw A2AError.taskNotFound(params.taskId);
+            throw error_js_1.A2AError.taskNotFound(params.taskId);
         }
         // Store the config. In a real app, this might be stored in the TaskStore
         // or a dedicated push notification service.
@@ -275,25 +278,25 @@ export class DefaultRequestHandler {
     }
     async getTaskPushNotificationConfig(params) {
         if (!this.agentCard.capabilities.pushNotifications) {
-            throw A2AError.pushNotificationNotSupported();
+            throw error_js_1.A2AError.pushNotificationNotSupported();
         }
         const taskAndHistory = await this.taskStore.load(params.id); // Ensure task exists
         if (!taskAndHistory) {
-            throw A2AError.taskNotFound(params.id);
+            throw error_js_1.A2AError.taskNotFound(params.id);
         }
         const config = this.pushNotificationConfigs.get(params.id);
         if (!config) {
-            throw A2AError.internalError(`Push notification config not found for task ${params.id}.`);
+            throw error_js_1.A2AError.internalError(`Push notification config not found for task ${params.id}.`);
         }
         return { taskId: params.id, pushNotificationConfig: config };
     }
     async *resubscribe(params) {
         if (!this.agentCard.capabilities.streaming) {
-            throw A2AError.unsupportedOperation("Streaming (and thus resubscription) is not supported.");
+            throw error_js_1.A2AError.unsupportedOperation("Streaming (and thus resubscription) is not supported.");
         }
         const task = await this.taskStore.load(params.id);
         if (!task) {
-            throw A2AError.taskNotFound(params.id);
+            throw error_js_1.A2AError.taskNotFound(params.id);
         }
         // Yield the current task state first
         yield task;
@@ -309,7 +312,7 @@ export class DefaultRequestHandler {
             return;
         }
         // Attach a new queue to the existing bus for this resubscription
-        const eventQueue = new ExecutionEventQueue(eventBus);
+        const eventQueue = new execution_event_queue_js_1.ExecutionEventQueue(eventBus);
         // Note: The ResultManager part is already handled by the original execution flow.
         // Resubscribe just listens for new events.
         try {
@@ -337,4 +340,5 @@ export class DefaultRequestHandler {
         }
     }
 }
+exports.DefaultRequestHandler = DefaultRequestHandler;
 //# sourceMappingURL=default_request_handler.js.map

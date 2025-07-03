@@ -1,8 +1,11 @@
-import { A2AError } from "../error.js";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.JsonRpcTransportHandler = void 0;
+const error_js_1 = require("../error.js");
 /**
  * Handles JSON-RPC transport layer, routing requests to A2ARequestHandler.
  */
-export class JsonRpcTransportHandler {
+class JsonRpcTransportHandler {
     requestHandler;
     constructor(requestHandler) {
         this.requestHandler = requestHandler;
@@ -22,16 +25,16 @@ export class JsonRpcTransportHandler {
                 rpcRequest = requestBody;
             }
             else {
-                throw A2AError.parseError('Invalid request body type.');
+                throw error_js_1.A2AError.parseError('Invalid request body type.');
             }
             if (rpcRequest.jsonrpc !== '2.0' ||
                 !rpcRequest.method ||
                 typeof rpcRequest.method !== 'string') {
-                throw A2AError.invalidRequest('Invalid JSON-RPC request structure.');
+                throw error_js_1.A2AError.invalidRequest('Invalid JSON-RPC request structure.');
             }
         }
         catch (error) {
-            const a2aError = error instanceof A2AError ? error : A2AError.parseError(error.message || 'Failed to parse JSON request.');
+            const a2aError = error instanceof error_js_1.A2AError ? error : error_js_1.A2AError.parseError(error.message || 'Failed to parse JSON request.');
             return {
                 jsonrpc: '2.0',
                 id: (typeof rpcRequest?.id !== 'undefined' ? rpcRequest.id : null),
@@ -43,7 +46,7 @@ export class JsonRpcTransportHandler {
             if (method === 'message/stream' || method === 'tasks/resubscribe') {
                 const agentCard = await this.requestHandler.getAgentCard();
                 if (!agentCard.capabilities.streaming) {
-                    throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
+                    throw error_js_1.A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
                 }
                 const agentEventStream = method === 'message/stream'
                     ? this.requestHandler.sendMessageStream(params)
@@ -92,7 +95,7 @@ export class JsonRpcTransportHandler {
                         result = await this.requestHandler.getTaskPushNotificationConfig(params);
                         break;
                     default:
-                        throw A2AError.methodNotFound(method);
+                        throw error_js_1.A2AError.methodNotFound(method);
                 }
                 return {
                     jsonrpc: '2.0',
@@ -102,7 +105,7 @@ export class JsonRpcTransportHandler {
             }
         }
         catch (error) {
-            const a2aError = error instanceof A2AError ? error : A2AError.internalError(error.message || 'An unexpected error occurred.');
+            const a2aError = error instanceof error_js_1.A2AError ? error : error_js_1.A2AError.internalError(error.message || 'An unexpected error occurred.');
             return {
                 jsonrpc: '2.0',
                 id: requestId,
@@ -111,4 +114,5 @@ export class JsonRpcTransportHandler {
         }
     }
 }
+exports.JsonRpcTransportHandler = JsonRpcTransportHandler;
 //# sourceMappingURL=jsonrpc_transport_handler.js.map

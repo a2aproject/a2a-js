@@ -1,5 +1,8 @@
-import { DefaultExecutionEventBus } from "./execution_event_bus.js";
-export class DefaultExecutionEventBusManager {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DefaultExecutionEventBusManager = void 0;
+const execution_event_bus_js_1 = require("./execution_event_bus.js");
+class DefaultExecutionEventBusManager {
     taskIdToBus = new Map();
     /**
      * Creates or retrieves an existing ExecutionEventBus based on the taskId.
@@ -8,7 +11,7 @@ export class DefaultExecutionEventBusManager {
      */
     createOrGetByTaskId(taskId) {
         if (!this.taskIdToBus.has(taskId)) {
-            this.taskIdToBus.set(taskId, new DefaultExecutionEventBus());
+            this.taskIdToBus.set(taskId, new execution_event_bus_js_1.DefaultExecutionEventBus());
         }
         return this.taskIdToBus.get(taskId);
     }
@@ -33,4 +36,5 @@ export class DefaultExecutionEventBusManager {
         this.taskIdToBus.delete(taskId);
     }
 }
+exports.DefaultExecutionEventBusManager = DefaultExecutionEventBusManager;
 //# sourceMappingURL=execution_event_bus_manager.js.map

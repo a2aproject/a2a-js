@@ -1,4 +1,7 @@
-export class RequestContext {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RequestContext = void 0;
+class RequestContext {
     userMessage;
     task;
     referenceTasks;
@@ -12,4 +15,5 @@ export class RequestContext {
         this.referenceTasks = referenceTasks;
     }
 }
+exports.RequestContext = RequestContext;
 //# sourceMappingURL=request_context.js.map

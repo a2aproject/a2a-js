@@ -1,4 +1,7 @@
-export class ResultManager {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ResultManager = void 0;
+class ResultManager {
     taskStore;
     currentTask;
     latestUserMessage; // To add to history if a new task is created
@@ -146,4 +149,5 @@ export class ResultManager {
         return this.currentTask;
     }
 }
+exports.ResultManager = ResultManager;
 //# sourceMappingURL=result_manager.js.map

@@ -1,7 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.A2AError = void 0;
 /**
  * Custom error class for A2A server operations, incorporating JSON-RPC error codes.
  */
-export class A2AError extends Error {
+class A2AError extends Error {
     code;
     data;
     taskId; // Optional task ID context
@@ -54,4 +57,5 @@ export class A2AError extends Error {
         return new A2AError(-32004, `Unsupported operation: ${operation}`);
     }
 }
+exports.A2AError = A2AError;
 //# sourceMappingURL=error.js.map

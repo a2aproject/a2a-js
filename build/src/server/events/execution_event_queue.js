@@ -1,8 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ExecutionEventQueue = void 0;
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
  * and provides an async generator to consume them.
  */
-export class ExecutionEventQueue {
+class ExecutionEventQueue {
     eventBus;
     eventQueue = [];
     resolvePromise;
@@ -60,4 +63,5 @@ export class ExecutionEventQueue {
         this.eventBus.off('finished', this.handleFinished);
     }
 }
+exports.ExecutionEventQueue = ExecutionEventQueue;
 //# sourceMappingURL=execution_event_queue.js.map

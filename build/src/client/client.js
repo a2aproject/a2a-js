@@ -1,7 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.A2AClient = void 0;
 /**
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
  */
-export class A2AClient {
+class A2AClient {
     agentBaseUrl;
     agentCardPromise;
     requestIdCounter = 1;
@@ -410,4 +413,5 @@ export class A2AClient {
         return "error" in response;
     }
 }
+exports.A2AClient = A2AClient;
 //# sourceMappingURL=client.js.map

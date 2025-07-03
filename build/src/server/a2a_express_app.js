@@ -1,12 +1,18 @@
-import express from 'express';
-import { A2AError } from "./error.js";
-import { JsonRpcTransportHandler } from "./transports/jsonrpc_transport_handler.js";
-export class A2AExpressApp {
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.A2AExpressApp = void 0;
+const express_1 = __importDefault(require("express"));
+const error_js_1 = require("./error.js");
+const jsonrpc_transport_handler_js_1 = require("./transports/jsonrpc_transport_handler.js");
+class A2AExpressApp {
     requestHandler; // Kept for getAgentCard
     jsonRpcTransportHandler;
     constructor(requestHandler) {
         this.requestHandler = requestHandler; // DefaultRequestHandler instance
-        this.jsonRpcTransportHandler = new JsonRpcTransportHandler(requestHandler);
+        this.jsonRpcTransportHandler = new jsonrpc_transport_handler_js_1.JsonRpcTransportHandler(requestHandler);
     }
     /**
      * Adds A2A routes to an existing Express app.
@@ -15,7 +21,7 @@ export class A2AExpressApp {
      * @returns The Express app with A2A routes.
      */
     setupRoutes(app, baseUrl = '') {
-        app.use(express.json());
+        app.use(express_1.default.json());
         app.get(`${baseUrl}/.well-known/agent.json`, async (req, res) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
@@ -47,7 +53,7 @@ export class A2AExpressApp {
                     catch (streamError) {
                         console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
                         // If the stream itself throws an error, send a final JSONRPCErrorResponse
-                        const a2aError = streamError instanceof A2AError ? streamError : A2AError.internalError(streamError.message || 'Streaming error.');
+                        const a2aError = streamError instanceof error_js_1.A2AError ? streamError : error_js_1.A2AError.internalError(streamError.message || 'Streaming error.');
                         const errorResponse = {
                             jsonrpc: '2.0',
                             id: req.body?.id || null, // Use original request ID if available
@@ -76,7 +82,7 @@ export class A2AExpressApp {
             }
             catch (error) { // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
                 console.error("Unhandled error in A2AExpressApp POST handler:", error);
-                const a2aError = error instanceof A2AError ? error : A2AError.internalError('General processing error.');
+                const a2aError = error instanceof error_js_1.A2AError ? error : error_js_1.A2AError.internalError('General processing error.');
                 const errorResponse = {
                     jsonrpc: '2.0',
                     id: req.body?.id || null,
@@ -95,4 +101,5 @@ export class A2AExpressApp {
         return app;
     }
 }
+exports.A2AExpressApp = A2AExpressApp;
 //# sourceMappingURL=a2a_express_app.js.map
