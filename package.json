@@ -8,7 +8,7 @@
   },
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
-  "type": "module",
+  "type": "commonjs",
   "files": [
     "build/src",
     "!build/src/**/*.map",
