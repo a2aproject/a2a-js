@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import { Message, AgentCard, PushNotificationConfig, Task, MessageSendParams, TaskState, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig } from "../../types.js";
+import { Message, AgentCard, PushNotificationConfig, Task, MessageSendParams, TaskState, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, Message2 } from "../../types.js";
 import { AgentExecutor } from "../agent_execution/agent_executor.js";
 import { RequestContext } from "../agent_execution/request_context.js";
 import { A2AError } from "../error.js";
@@ -310,27 +310,28 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             await this.agentExecutor.cancelTask(params.id, eventBus);
         }
         else {
+            const message2: Message2 = { // Optional: Add a system message indicating cancellation
+                kind: "message",
+                role: "agent",
+                messageId: uuidv4(),
+                parts: [{ kind: "text", text: "Task cancellation requested by user." }],
+                taskId: task.id,
+                contextId: task.contextId,
+            }
             // Here we are marking task as cancelled. We are not waiting for the executor to actually cancel processing.
             task.status = {
                 state: "canceled",
-                message: { // Optional: Add a system message indicating cancellation
-                    kind: "message",
-                    role: "agent",
-                    messageId: uuidv4(),
-                    parts: [{ kind: "text", text: "Task cancellation requested by user." }],
-                    taskId: task.id,
-                    contextId: task.contextId,
-                },
+                message: message2,
                 timestamp: new Date().toISOString(),
             };
             // Add cancellation message to history
-            task.history = [...(task.history || []), task.status.message];
+            task.history = [...(task.history || []), message2];
 
             await this.taskStore.save(task);
         }
 
         const latestTask = await this.taskStore.load(params.id);
-        return latestTask;
+        return latestTask as Task;
     }
 
     async setTaskPushNotificationConfig(

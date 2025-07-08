@@ -410,7 +410,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             message: createTestMessage('msg-5', 'Long running task')
         };
 
-        let taskId;
+        let taskId: string = '';
         let contextId;
     
         (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
