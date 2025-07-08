@@ -19,6 +19,7 @@ export type { TaskStore } from "./server/store.js";
 export { InMemoryTaskStore } from "./server/store.js";
 
 export { JsonRpcTransportHandler } from "./server/transports/jsonrpc_transport_handler.js";
+export { constructGrpcService, a2AServiceDefinition} from './server/transports/grpc/index.js'
 export { A2AExpressApp } from "./server/a2a_express_app.js";
 export { A2AError } from "./server/error.js";
 
