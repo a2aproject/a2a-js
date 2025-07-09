@@ -60,5 +60,11 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "uuid": "^11.1.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./build/src/index.js"
+    },
+    "./client": "./build/src/client/index.js"
   }
 }
