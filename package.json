@@ -63,8 +63,12 @@
   },
   "exports": {
     ".": {
+      "types": "./build/src/index.d.ts",
       "import": "./build/src/index.js"
     },
-    "./client": "./build/src/client/index.js"
+    "./client": {
+      "types": "./build/src/client/index.d.ts",
+      "import": "./build/src/client/index.js"
+    }
   }
 }
