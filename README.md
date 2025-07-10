@@ -30,7 +30,7 @@ This directory contains a TypeScript server implementation for the Agent-to-Agen
 ### 1. Define Agent Card
 
 ```typescript
-import { AgentCard } from "@a2a-js/sdk";
+import type { AgentCard } from "@a2a-js/sdk";
 
 const movieAgentCard: AgentCard = {
   name: "Movie Agent",
@@ -86,7 +86,7 @@ import {
   RequestContext,
   ExecutionEventBus,
   DefaultRequestHandler,
-} from "@a2a-js/sdk";
+} from "@a2a-js/sdk/server";
 
 // 1. Define your agent's logic as a AgentExecutor
 class MyAgentExecutor implements AgentExecutor {
