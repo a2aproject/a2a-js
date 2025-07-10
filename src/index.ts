@@ -24,6 +24,7 @@ export { A2AError } from "./server/error.js";
 
 // Export Client
 export { A2AClient } from "./client/client.js";
+export * from "./client/auth-handler.js";
 
 // Re-export all schema types for convenience
 export * from "./types.js";

@@ -31,9 +31,14 @@ import {
   A2AError,
   SendMessageSuccessResponse
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
+import { AuthenticationHandler, HttpHeaders } from './auth-handler.js';
 
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
+
+export interface A2AClientOptions {
+  authHandler?: AuthenticationHandler
+}
 
 /**
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
@@ -43,6 +48,7 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
+  private authHandler?: AuthenticationHandler;
 
   /**
    * Constructs an A2AClient instance.
@@ -51,9 +57,10 @@ export class A2AClient {
    * The `url` field from the Agent Card will be used as the RPC service endpoint.
    * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com).
    */
-  constructor(agentBaseUrl: string) {
+  constructor(agentBaseUrl: string, options?: A2AClientOptions) {
     this.agentBaseUrl = agentBaseUrl.replace(/\/$/, ""); // Remove trailing slash if any
     this.agentCardPromise = this._fetchAndCacheAgentCard();
+    this.authHandler = options?.authHandler;
   }
 
   /**
@@ -62,7 +69,7 @@ export class A2AClient {
    * @returns A Promise that resolves to the AgentCard.
    */
   private async _fetchAndCacheAgentCard(): Promise<AgentCard> {
-    const agentCardUrl = `${this.agentBaseUrl}/.well-known/agent.json`;
+    const agentCardUrl = this.resolveAgentCardUrl( this.agentBaseUrl );
     try {
       const response = await fetch(agentCardUrl, {
         headers: { 'Accept': 'application/json' },
@@ -93,8 +100,8 @@ export class A2AClient {
    */
   public async getAgentCard(agentBaseUrl?: string): Promise<AgentCard> {
     if (agentBaseUrl) {
-      const specificAgentBaseUrl = agentBaseUrl.replace(/\/$/, "");
-      const agentCardUrl = `${specificAgentBaseUrl}/.well-known/agent.json`;
+      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl );
+
       const response = await fetch(agentCardUrl, {
         headers: { 'Accept': 'application/json' },
       });
@@ -105,6 +112,21 @@ export class A2AClient {
     }
     // If no specific URL is given, return the promise for the initially configured agent's card.
     return this.agentCardPromise;
+  }
+
+  /**
+   * Determines the agent card URL based on the agent URL.  If the agent URL is at the root
+   * of a webserver, then the well-known agent card path will be used.  Otherwise /agent.json
+   * will be appended to the URL path.
+   * @param agentUrl The agent URL.
+   * @returns The agent card URL.
+   */
+  private resolveAgentCardUrl( agentUrl: string ): string {
+    agentUrl = agentUrl.replace(/\/$/, ""); // remove trailing slash if any
+    const url = new URL( agentUrl );
+    return url.pathname === "/"
+      ? `${agentUrl}/.well-known/agent.json`
+      : `${agentUrl}/agent.json`;
   }
 
   /**
@@ -144,14 +166,7 @@ export class A2AClient {
       id: requestId,
     };
 
-    const httpResponse = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json", // Expect JSON response for non-streaming requests
-      },
-      body: JSON.stringify(rpcRequest),
-    });
+    const httpResponse = await this._fetch( endpoint, rpcRequest );
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
@@ -185,6 +200,39 @@ export class A2AClient {
     return rpcResponse as TResponse;
   }
 
+  /**
+   * fetch() with authentication handling.  Uses a generic authentication handler that can inspect
+   * HTTP response codes and headers and suggest new headers to use during an automatic retry.
+   * @param url The URL to fetch.
+   * @param rpcRequest The JSON-RPC request to send.
+   * @param acceptHeader The Accept header to use.  Defaults to "application/json".
+   * @returns A Promise that resolves to the fetch HTTP response.
+   */
+  private async _fetch( url: string, rpcRequest: JSONRPCRequest, acceptHeader: string = "application/json" ): Promise<Response> {
+    const options = (headers: HttpHeaders = {}) => ({
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": acceptHeader, // Expect JSON response for non-streaming requests
+        ...headers // if we have an Authorization header, add it
+      },
+      body: JSON.stringify(rpcRequest)
+    } as RequestInit);
+    const requestInit = options( this.authHandler?.headers() );
+
+    let fetchResponse = await fetch(url, requestInit);
+
+    // check for HTTP 401/403 and retry request if necessary
+    const updatedHeaders = await this.authHandler?.shouldRetryWithHeaders(requestInit, fetchResponse);
+    if (updatedHeaders) {
+      // retry request with revised headers
+      fetchResponse = await fetch(url, options(updatedHeaders));
+      if (fetchResponse.ok && this.authHandler?.onSuccess)
+        await this.authHandler.onSuccess(updatedHeaders); // Remember headers that worked
+    }
+
+    return fetchResponse;
+  }
 
   /**
    * Sends a message to the agent.
@@ -222,14 +270,7 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "text/event-stream", // Crucial for SSE
-      },
-      body: JSON.stringify(rpcRequest),
-    });
+    const response = await this._fetch( endpoint, rpcRequest, "text/event-stream" );
 
     if (!response.ok) {
       // Attempt to read error body for more details
