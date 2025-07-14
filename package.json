@@ -11,13 +11,19 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": {
-        "import": "./dist/index.d.ts",
-        "require": "./dist/index.d.cts",
-        "default": "./index.d.ts"
-      },
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js",
+      "require": "./dist/client/index.cjs"
     }
   },
   "files": [
@@ -45,7 +51,7 @@
   },
   "scripts": {
     "clean": "gts clean",
-    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "build": "tsup",
     "pretest": "npm run build",
     "test": "mocha build/test/**/*.js",
     "coverage": "c8 npm run test",
