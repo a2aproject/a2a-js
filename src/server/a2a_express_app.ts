@@ -26,9 +26,10 @@ export class A2AExpressApp {
         baseUrl: string = "",
         middlewares?: Array<RequestHandler | ErrorRequestHandler>
     ): Express {
-        app.use(express.json(), ...(middlewares ?? []));
+        const router = express.Router();
+        router.use(express.json(), ...(middlewares ?? []));
 
-        app.get(`${baseUrl}/.well-known/agent.json`, async (req: Request, res: Response) => {
+        router.get("/.well-known/agent.json", async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
                 const agentCard = await this.requestHandler.getAgentCard();
@@ -39,7 +40,7 @@ export class A2AExpressApp {
             }
         });
 
-        app.post(baseUrl, async (req: Request, res: Response) => {
+        router.post("/", async (req: Request, res: Response) => {
             try {
                 const rpcResponseOrStream = await this.jsonRpcTransportHandler.handle(req.body);
 
@@ -100,6 +101,8 @@ export class A2AExpressApp {
                 }
             }
         });
+
+        app.use(baseUrl, router);
         // The separate /stream endpoint is no longer needed.
         return app;
     }
