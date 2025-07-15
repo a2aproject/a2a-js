@@ -73,12 +73,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
 
         // Ensure contextId is present
-        const messageForContext = { ...incomingMessage };
-        if (!messageForContext.contextId) {
-            messageForContext.contextId = task?.contextId || uuidv4();
-        }
+        const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
-        const contextId = incomingMessage.contextId || uuidv4();
+        const messageForContext = {
+          ...incomingMessage,
+          contextId,
+        };
 
         return new RequestContext(
             messageForContext,
