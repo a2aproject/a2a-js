@@ -16,9 +16,10 @@ import {
   DataPart,
   // Type for the agent card
   AgentCard,
-  Part, // Added for explicit Part typing
-  A2AClient,
+  Part // Added for explicit Part typing
 } from "../index.js";
+
+import { A2AClient } from "../client/index.js";
 
 // --- ANSI Colors ---
 const colors = {

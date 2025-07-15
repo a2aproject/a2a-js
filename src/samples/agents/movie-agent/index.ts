@@ -2,13 +2,6 @@ import express from "express";
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
-  InMemoryTaskStore,
-  TaskStore,
-  A2AExpressApp,
-  AgentExecutor,
-  RequestContext,
-  ExecutionEventBus,
-  DefaultRequestHandler,
   AgentCard,
   Task,
   TaskState,
@@ -16,6 +9,15 @@ import {
   TextPart,
   Message
 } from "../../../index.js";
+import {
+  InMemoryTaskStore,
+  TaskStore,
+  A2AExpressApp,
+  AgentExecutor,
+  RequestContext,
+  ExecutionEventBus,
+  DefaultRequestHandler
+} from "../../../server/index.js";
 import { MessageData } from "genkit";
 import { ai } from "./genkit.js";
 import { searchMovies, searchPeople } from "./tools.js";
