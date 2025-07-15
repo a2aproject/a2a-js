@@ -4,7 +4,8 @@ import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import { describe, beforeEach, afterEach, it } from 'node:test';
-import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
+import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler } from '../../src/server/index.js';
+import { AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 
@@ -599,13 +600,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             message: {
                 messageId: 'msg-ctx2',
                 role: 'user',
-                parts: [{ kind: 'text', text: 'Hola' }],
+                parts: [{ kind: 'text', text: 'Hi' }],
                 kind: 'message',
                 taskId,
             },
         };
+        let capturedContextId: string | undefined;
         (mockAgentExecutor.execute as SinonStub).callsFake(async (ctx, bus) => {
-            expect(ctx.contextId).to.equal(taskContextId);
+            capturedContextId = ctx.contextId;
             bus.publish({
                 id: ctx.taskId,
                 contextId: ctx.contextId,
@@ -615,6 +617,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             bus && bus.finished && bus.finished();
         });
         await handler.sendMessage(params);
+        expect(capturedContextId).to.equal(taskContextId);
     });
 
     it('should generate a new contextId if not present in message or task (contextId assignment logic)', async () => {
@@ -622,14 +625,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             message: {
                 messageId: 'msg-ctx3',
                 role: 'user',
-                parts: [{ kind: 'text', text: 'Hola' }],
+                parts: [{ kind: 'text', text: 'Hey' }],
                 kind: 'message',
             },
         };
+        let capturedContextId: string | undefined;
         (mockAgentExecutor.execute as SinonStub).callsFake(async (ctx, bus) => {
-            expect(ctx.contextId).to.be.a('string').and.not.empty;
-            expect(ctx.contextId).to.not.equal('incoming-ctx-id');
-            expect(ctx.contextId).to.not.equal('task-context-id');
+            capturedContextId = ctx.contextId;
             bus.publish({
                 id: ctx.taskId,
                 contextId: ctx.contextId,
@@ -639,5 +641,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             bus && bus.finished && bus.finished();
         });
         await handler.sendMessage(params);
+        expect(capturedContextId).to.be.a('string').and.not.empty.and.not.equal('incoming-ctx-id');
     });
 });
