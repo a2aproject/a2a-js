@@ -569,14 +569,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             message: {
                 messageId: 'msg-ctx',
                 role: 'user',
-                parts: [{ kind: 'text', text: 'Hello' }],
+                parts: [{ kind: 'text', text: 'Hola' }],
                 kind: 'message',
                 contextId: 'incoming-ctx-id',
             },
         };
-        let capturedContextId: string | undefined;
         (mockAgentExecutor.execute as SinonStub).callsFake(async (ctx, bus) => {
-            capturedContextId = ctx.contextId;
+            expect(ctx.contextId).to.equal('incoming-ctx-id');
             bus.publish({
                 id: ctx.taskId,
                 contextId: ctx.contextId,
@@ -586,7 +585,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             bus && bus.finished && bus.finished();
         });
         await handler.sendMessage(params);
-        expect(capturedContextId).to.equal('incoming-ctx-id');
     });
 
     it('should use contextId from task if not present in incomingMessage (contextId assignment logic)', async () => {
@@ -643,6 +641,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             bus && bus.finished && bus.finished();
         });
         await handler.sendMessage(params);
-        expect(capturedContextId).to.be.a('string').and.not.empty;
+        expect(capturedContextId).to.be.a('string').and.not.empty.and.not.equal('incoming-ctx-id');
     });
 });
