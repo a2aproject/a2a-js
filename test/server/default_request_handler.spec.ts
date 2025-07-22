@@ -564,7 +564,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.isFalse((mockAgentExecutor as MockAgentExecutor).cancelTask.called);
     });
 
-    it('ExecutionEventQueueshould be instantiable and return an object', () => {
+    it('ExecutionEventQueue should be instantiable and return an object', () => {
         const fakeBus = {
             on: () => {},
             off: () => {}
