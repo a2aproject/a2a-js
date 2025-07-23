@@ -285,7 +285,7 @@ import type {
 } from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
 
-const client = new A2AClient("http://localhost:41241"); // Replace with your server URL
+const client = new A2AClient("http://localhost:41241"); // Replace with your server URL or your agentCard
 
 async function run() {
   const messageId = uuidv4();
