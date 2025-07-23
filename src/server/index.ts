@@ -6,10 +6,11 @@
 export type { AgentExecutor } from "./agent_execution/agent_executor.js";
 export { RequestContext } from "./agent_execution/request_context.js";
 
-export type { ExecutionEventBus } from "./events/execution_event_bus.js";
+export type { AgentExecutionEvent, ExecutionEventBus } from "./events/execution_event_bus.js";
 export { DefaultExecutionEventBus } from "./events/execution_event_bus.js";
 export type { ExecutionEventBusManager } from "./events/execution_event_bus_manager.js";
 export { DefaultExecutionEventBusManager } from "./events/execution_event_bus_manager.js";
+export { ExecutionEventQueue } from "./events/execution_event_queue.js";
 
 export type { A2ARequestHandler } from "./request_handler/a2a_request_handler.js";
 export { DefaultRequestHandler } from "./request_handler/default_request_handler.js";

@@ -4,7 +4,8 @@ import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import { describe, beforeEach, afterEach, it } from 'node:test';
-import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
+import { AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
+import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue } from '../../src/server/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 
@@ -561,5 +562,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             expect(error.message).to.contain('Task not cancelable');
         }
         assert.isFalse((mockAgentExecutor as MockAgentExecutor).cancelTask.called);
+    });
+
+    it('ExecutionEventQueue should be instantiable and return an object', () => {
+        const fakeBus = {
+            on: () => {},
+            off: () => {}
+        } as any;
+        const queue = new ExecutionEventQueue(fakeBus);
+        expect(queue).to.be.instanceOf(ExecutionEventQueue);
     });
 });
