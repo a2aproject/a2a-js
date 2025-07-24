@@ -20,10 +20,20 @@
       "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs"
     },
+    "./server/*": {
+      "import": "./dist/server/*.js",
+      "types": "./dist/server/*.d.ts",
+      "require": "./dist/server/*.cjs"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
       "require": "./dist/client/index.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "server/*": ["dist/server/*"]
     }
   },
   "files": [
