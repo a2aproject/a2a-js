@@ -11,4 +11,3 @@ plugins:
     out: src/server/transports/grpc
     opt:
       - server_grpc1
-      - ts_naming import_extension=.js
