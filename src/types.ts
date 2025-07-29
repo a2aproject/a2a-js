@@ -111,7 +111,7 @@ export type JSONRPCResponse =
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SendMessageResponse".
  */
-export type SendMessageResponse = JSONRPCErrorResponse & SendMessageSuccessResponse;
+export type SendMessageResponse = JSONRPCErrorResponse | SendMessageSuccessResponse;
 /**
  * JSON-RPC response model for the 'message/stream' method.
  *
