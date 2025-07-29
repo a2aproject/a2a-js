@@ -90,7 +90,7 @@ export type GetTaskPushNotificationConfigResponse = JSONRPCErrorResponse | GetTa
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "GetTaskResponse".
  */
-export type GetTaskResponse = JSONRPCErrorResponse & GetTaskSuccessResponse;
+export type GetTaskResponse = JSONRPCErrorResponse | GetTaskSuccessResponse;
 /**
  * Represents a JSON-RPC 2.0 Response object.
  *
