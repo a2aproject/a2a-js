@@ -309,7 +309,7 @@ async function run() {
     const sendResponse: SendMessageResponse =
       await client.sendMessage(sendParams);
 
-    if ("error" in sendResponse && sendResponse.error) {
+if ("error" in sendResponse) {
       console.error("Error sending message:", sendResponse.error);
       return;
     }
