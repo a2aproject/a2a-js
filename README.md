@@ -182,7 +182,7 @@ class MyAgentExecutor implements AgentExecutor {
       artifact: {
         artifactId: "artifact-1",
         name: "artifact-1",
-        parts: [{ text: `Task ${context.task.id} completed.` }],
+        parts: [{ kind: "text", text: `Task ${taskId} completed.` }],
       },
       append: false, // Each emission is a complete file snapshot
       lastChunk: true, // True for this file artifact

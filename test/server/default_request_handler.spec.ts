@@ -644,5 +644,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         });
         await handler.sendMessage(params);
         expect(capturedContextId).to.be.a('string').and.not.empty;
+      
+    it('ExecutionEventQueue should be instantiable and return an object', () => {
+        const fakeBus = {
+            on: () => {},
+            off: () => {}
+        } as any;
+        const queue = new ExecutionEventQueue(fakeBus);
+        expect(queue).to.be.instanceOf(ExecutionEventQueue);
     });
 });
