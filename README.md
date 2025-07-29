@@ -334,7 +334,7 @@ if ("error" in sendResponse) {
       const getParams: TaskQueryParams = { id: taskId };
       const getResponse: GetTaskResponse = await client.getTask(getParams);
 
-      if ("error" in getResponse && getResponse.error) {
+if ("error" in getResponse) {
         console.error(`Error getting task ${taskId}:`, getResponse.error);
         return;
       }
