@@ -50,9 +50,9 @@ export class A2AClient {
   /**
    * Constructs an A2AClient instance.
    * It initiates fetching the agent card from the provided agent baseUrl.
-   * The Agent Card is expected at `${agentBaseUrl}/.well-known/agent.json`.
+   * The Agent Card is fetched from a path relative to the agentBaseUrl, which defaults to '.well-known/agent.json'.
    * The `url` field from the Agent Card will be used as the RPC service endpoint.
-   * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com);
+   * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
    * @param agentCardPath path to the agent card, defaults to .well-known/agent.json
    */
   constructor(agentBaseUrl: string, agentCardPath: string = A2AClient.DEFAULT_AGENT_CARD_PATH) {
