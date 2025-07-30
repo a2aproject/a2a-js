@@ -4,8 +4,8 @@ import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import { describe, beforeEach, afterEach, it } from 'node:test';
-import { AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue } from '../../src/server/index.js';
+import { AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 
@@ -564,6 +564,88 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.isFalse((mockAgentExecutor as MockAgentExecutor).cancelTask.called);
     });
 
+    it('should use contextId from incomingMessage if present (contextId assignment logic)', async () => {
+        const params: MessageSendParams = {
+            message: {
+                messageId: 'msg-ctx',
+                role: 'user',
+                parts: [{ kind: 'text', text: 'Hello' }],
+                kind: 'message',
+                contextId: 'incoming-ctx-id',
+            },
+        };
+        let capturedContextId: string | undefined;
+        (mockAgentExecutor.execute as SinonStub).callsFake(async (ctx, bus) => {
+            capturedContextId = ctx.contextId;
+            bus.publish({
+                id: ctx.taskId,
+                contextId: ctx.contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+            bus && bus.finished && bus.finished();
+        });
+        await handler.sendMessage(params);
+        expect(capturedContextId).to.equal('incoming-ctx-id');
+    });
+
+    it('should use contextId from task if not present in incomingMessage (contextId assignment logic)', async () => {
+        const taskId = 'task-ctx-id';
+        const taskContextId = 'task-context-id';
+        await mockTaskStore.save({
+            id: taskId,
+            contextId: taskContextId,
+            status: { state: 'working' },
+            kind: 'task',
+        });
+        const params: MessageSendParams = {
+            message: {
+                messageId: 'msg-ctx2',
+                role: 'user',
+                parts: [{ kind: 'text', text: 'Hi' }],
+                kind: 'message',
+                taskId,
+            },
+        };
+        let capturedContextId: string | undefined;
+        (mockAgentExecutor.execute as SinonStub).callsFake(async (ctx, bus) => {
+            capturedContextId = ctx.contextId;
+            bus.publish({
+                id: ctx.taskId,
+                contextId: ctx.contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+            bus && bus.finished && bus.finished();
+        });
+        await handler.sendMessage(params);
+        expect(capturedContextId).to.equal(taskContextId);
+    });
+
+    it('should generate a new contextId if not present in message or task (contextId assignment logic)', async () => {
+        const params: MessageSendParams = {
+            message: {
+                messageId: 'msg-ctx3',
+                role: 'user',
+                parts: [{ kind: 'text', text: 'Hey' }],
+                kind: 'message',
+            },
+        };
+        let capturedContextId: string | undefined;
+        (mockAgentExecutor.execute as SinonStub).callsFake(async (ctx, bus) => {
+            capturedContextId = ctx.contextId;
+            bus.publish({
+                id: ctx.taskId,
+                contextId: ctx.contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+            bus && bus.finished && bus.finished();
+        });
+        await handler.sendMessage(params);
+        expect(capturedContextId).to.be.a('string').and.not.empty;
+    });
+      
     it('ExecutionEventQueue should be instantiable and return an object', () => {
         const fakeBus = {
             on: () => {},
