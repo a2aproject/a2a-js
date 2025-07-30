@@ -53,7 +53,7 @@
     "clean": "gts clean",
     "build": "tsup",
     "pretest": "npm run build",
-    "test": "mocha build/test/**/*.js",
+    "test": "mocha test/**/*.spec.ts",
     "coverage": "c8 npm run test",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
     "sample:cli": "tsx src/samples/cli.ts",
@@ -66,5 +66,8 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "uuid": "^11.1.0"
+  },
+  "mocha": {
+    "require": "tsx"
   }
 }

@@ -4,7 +4,7 @@ import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import { describe, beforeEach, afterEach, it } from 'node:test';
-import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler } from '../../src/server/index.js';
+import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue } from '../../src/server/index.js';
 import { AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
@@ -644,6 +644,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         });
         await handler.sendMessage(params);
         expect(capturedContextId).to.be.a('string').and.not.empty;
+    });
       
     it('ExecutionEventQueue should be instantiable and return an object', () => {
         const fakeBus = {
