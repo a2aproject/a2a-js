@@ -23,6 +23,16 @@ npm install @a2a-js/sdk
 
 You can also find JavaScript samples [here](https://github.com/google-a2a/a2a-samples/tree/main/samples/js).
 
+## Subpath Exports
+
+This SDK now supports subpath exports, allowing you to import specific modules without forcing a dependency on Express. This is particularly useful if you want to implement your own transport layer or use a different web framework.
+
+import { TaskStore, InMemoryTaskStore } from "@a2a-js/sdk/server/store.js";
+import * as utils from "@a2a-js/sdk/server/utils.js";
+```
+
+This allows for more flexible usage patterns and avoids pulling in Express as a dependency when you're implementing custom transport layers.
+
 ## A2A Server
 
 This directory contains a TypeScript server implementation for the Agent-to-Agent (A2A) communication protocol, built using Express.js.
@@ -78,6 +88,7 @@ const movieAgentCard: AgentCard = {
 ### 2. Define Agent Executor
 
 ```typescript
+// Traditional import (includes Express dependency)
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -87,6 +98,10 @@ import {
   ExecutionEventBus,
   DefaultRequestHandler,
 } from "@a2a-js/sdk/server";
+
+// Alternative: Use subpath exports for more granular control
+// import { DefaultRequestHandler } from "@a2a-js/sdk/server/request_handler/default_request_handler.js";
+// import { AgentExecutor } from "@a2a-js/sdk/server/agent_execution/agent_executor.js";
 
 // 1. Define your agent's logic as a AgentExecutor
 class MyAgentExecutor implements AgentExecutor {
