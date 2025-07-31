@@ -31,6 +31,7 @@ import {
   A2AError,
   SendMessageSuccessResponse
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
+import { fetchWithTimeout } from './utils.js';
 
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
@@ -149,15 +150,37 @@ export class A2AClient {
       id: requestId,
     };
 
-    const httpResponse = await fetch(endpoint, {
+    const fetchOptions: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json", // Expect JSON response for non-streaming requests
       },
       body: JSON.stringify(rpcRequest),
-    });
+    };
 
+    // Extract timeout from params if it exists
+    const timeout = (params as any)?.configuration?.timeout || (params as any)?.timeout;
+
+    // Add timeout if specified
+    let httpResponse: Response;
+    if (timeout) {
+      httpResponse = await fetchWithTimeout(endpoint, {
+        ...fetchOptions,
+        timeout: timeout,
+      });
+    } else {
+      httpResponse = await fetch(endpoint, fetchOptions);
+    }
+    return this._handleHttpResponse(httpResponse, method, rpcRequest, requestId);
+  }
+
+  private async _handleHttpResponse<TResponse extends JSONRPCResponse>(
+    httpResponse: Response,
+    method: string,
+    rpcRequest: JSONRPCRequest,
+    requestId: number
+  ): Promise<TResponse> {
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
       try {
@@ -193,7 +216,7 @@ export class A2AClient {
 
   /**
    * Sends a message to the agent.
-   * The behavior (blocking/non-blocking) and push notification configuration
+   * The behavior (blocking/non-blocking), timeout, and push notification configuration
    * are specified within the `params.configuration` object.
    * Optionally, `params.message.contextId` or `params.message.taskId` can be provided.
    * @param params The parameters for sending the message, including the message content and configuration.
@@ -205,7 +228,7 @@ export class A2AClient {
 
   /**
    * Sends a message to the agent and streams back responses using Server-Sent Events (SSE).
-   * Push notification configuration can be specified in `params.configuration`.
+   * Push notification configuration and timeout can be specified in `params.configuration`.
    * Optionally, `params.message.contextId` or `params.message.taskId` can be provided.
    * Requires the agent to support streaming (`capabilities.streaming: true` in AgentCard).
    * @param params The parameters for sending the message.
@@ -227,14 +250,26 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await fetch(endpoint, {
+    const fetchOptions: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Accept": "text/event-stream", // Crucial for SSE
       },
       body: JSON.stringify(rpcRequest),
-    });
+    };
+
+    let response: Response;
+    const timeout = (params as any)?.configuration?.timeout || (params as any)?.timeout;
+
+    if (timeout) {
+      response = await fetchWithTimeout(endpoint, {
+        ...fetchOptions,
+        timeout: timeout,
+      });
+    } else {
+      response = await fetch(endpoint, fetchOptions);
+    }
 
     if (!response.ok) {
       // Attempt to read error body for more details
@@ -265,7 +300,7 @@ export class A2AClient {
   /**
    * Sets or updates the push notification configuration for a given task.
    * Requires the agent to support push notifications (`capabilities.pushNotifications: true` in AgentCard).
-   * @param params Parameters containing the taskId and the TaskPushNotificationConfig.
+   * @param params Parameters containing the taskId, the TaskPushNotificationConfig, and optional timeout.
    * @returns A Promise resolving to SetTaskPushNotificationConfigResponse.
    */
   public async setTaskPushNotificationConfig(params: TaskPushNotificationConfig): Promise<SetTaskPushNotificationConfigResponse> {
@@ -282,7 +317,7 @@ export class A2AClient {
 
   /**
    * Gets the push notification configuration for a given task.
-   * @param params Parameters containing the taskId.
+   * @param params Parameters containing the taskId and optional timeout.
    * @returns A Promise resolving to GetTaskPushNotificationConfigResponse.
    */
   public async getTaskPushNotificationConfig(params: TaskIdParams): Promise<GetTaskPushNotificationConfigResponse> {
@@ -296,7 +331,7 @@ export class A2AClient {
 
   /**
    * Retrieves a task by its ID.
-   * @param params Parameters containing the taskId and optional historyLength.
+   * @param params Parameters containing the taskId, optional historyLength, and optional timeout.
    * @returns A Promise resolving to GetTaskResponse, which contains the Task object or an error.
    */
   public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
@@ -305,7 +340,7 @@ export class A2AClient {
 
   /**
    * Cancels a task by its ID.
-   * @param params Parameters containing the taskId.
+   * @param params Parameters containing the taskId and optional timeout.
    * @returns A Promise resolving to CancelTaskResponse, which contains the updated Task object or an error.
    */
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
@@ -316,7 +351,7 @@ export class A2AClient {
    * Resubscribes to a task's event stream using Server-Sent Events (SSE).
    * This is used if a previous SSE connection for an active task was broken.
    * Requires the agent to support streaming (`capabilities.streaming: true` in AgentCard).
-   * @param params Parameters containing the taskId.
+   * @param params Parameters containing the taskId and optional timeout.
    * @returns An AsyncGenerator yielding A2AStreamEventData (Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent).
    */
   public async *resubscribeTask(params: TaskIdParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
@@ -334,14 +369,26 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await fetch(endpoint, {
+    const fetchOptions: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
       },
       body: JSON.stringify(rpcRequest),
-    });
+    };
+
+    let response: Response;
+    const timeout = params.timeout;
+
+    if (timeout) {
+      response = await fetchWithTimeout(endpoint, {
+        ...fetchOptions,
+        timeout: timeout,
+      });
+    } else {
+      response = await fetch(endpoint, fetchOptions);
+    }
 
     if (!response.ok) {
       let errorBody = "";
