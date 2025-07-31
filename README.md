@@ -215,6 +215,8 @@ class MyAgentExecutor implements AgentExecutor {
 
 ### 3. Start the server
 
+#### Using Express
+
 ```typescript
 const taskStore: TaskStore = new InMemoryTaskStore();
 const agentExecutor: AgentExecutor = new MyAgentExecutor();
@@ -239,6 +241,95 @@ expressApp.listen(PORT, () => {
   console.log("[MyAgent] Press Ctrl+C to stop the server");
 });
 ```
+
+#### Using without Express
+
+You can also use the A2A SDK without Express by directly using the `JsonRpcTransportHandler`. You could directly import from the nested modules. This gives you full control over the HTTP server implementation:
+
+```typescript
+import { createServer } from "http";
+import { JsonRpcTransportHandler } from "@a2a-js/sdk/server/transports/jsonrpc_transport_handler.js";
+import { DefaultRequestHandler } from "@a2a-js/sdk/server/request_handler/default_request_handler.js";
+import { InMemoryTaskStore } from "@a2a-js/sdk/server/store.js";
+
+const taskStore: TaskStore = new InMemoryTaskStore();
+const agentExecutor: AgentExecutor = new MyAgentExecutor();
+
+const requestHandler = new DefaultRequestHandler(
+  coderAgentCard,
+  taskStore,
+  agentExecutor
+);
+
+const transportHandler = new JsonRpcTransportHandler(requestHandler);
+
+const server = createServer(async (req, res) => {
+  // Handle agent card endpoint
+  if (req.url === "/.well-known/agent.json" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(coderAgentCard));
+    return;
+  }
+
+  // Handle JSON-RPC endpoint
+  if (req.url === "/" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+
+    req.on("end", async () => {
+      try {
+        const requestBody = JSON.parse(body);
+        const response = await transportHandler.handle(requestBody);
+
+        // Check if it's a stream
+        if (response && typeof (response as any)[Symbol.asyncIterator] === "function") {
+          const stream = response as AsyncGenerator<any, void, undefined>;
+          
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          });
+
+          try {
+            for await (const event of stream) {
+              res.write(`id: ${new Date().getTime()}\n`);
+              res.write(`data: ${JSON.stringify(event)}\n\n`);
+            }
+          } catch (streamError) {
+            console.error("Stream error:", streamError);
+          }
+        } else {
+          // Single response
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(response));
+        }
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+      }
+    });
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+const PORT = process.env.CODER_AGENT_PORT || 41242;
+server.listen(PORT, () => {
+  console.log(
+    `[MyAgent] Server started on http://localhost:${PORT}`
+  );
+  console.log(
+    `[MyAgent] Agent Card: http://localhost:${PORT}/.well-known/agent.json`
+  );
+  console.log("[MyAgent] Press Ctrl+C to stop the server");
+});
+```
+
+This approach gives you complete control over the HTTP server implementation while still using the A2A SDK's core functionality for handling JSON-RPC requests and managing agent execution.
 
 ### Agent Executor
 
