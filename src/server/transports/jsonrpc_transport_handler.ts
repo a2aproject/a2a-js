@@ -50,10 +50,11 @@ export class JsonRpcTransportHandler {
             } as JSONRPCErrorResponse;
         }
 
-        const { method, params = {}, id: requestId = null } = rpcRequest;
+        const { method, id: requestId = null } = rpcRequest;
 
         try {
             if (method === 'message/stream' || method === 'tasks/resubscribe') {
+                const params = rpcRequest.params;
                 const agentCard = await this.requestHandler.getAgentCard();
                 if (!agentCard.capabilities.streaming) {
                     throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
@@ -89,22 +90,22 @@ export class JsonRpcTransportHandler {
                 let result: any;
                 switch (method) {
                     case 'message/send':
-                        result = await this.requestHandler.sendMessage(params as MessageSendParams);
+                        result = await this.requestHandler.sendMessage(rpcRequest.params as MessageSendParams);
                         break;
                     case 'tasks/get':
-                        result = await this.requestHandler.getTask(params as TaskQueryParams);
+                        result = await this.requestHandler.getTask(rpcRequest.params as TaskQueryParams);
                         break;
                     case 'tasks/cancel':
-                        result = await this.requestHandler.cancelTask(params as TaskIdParams);
+                        result = await this.requestHandler.cancelTask(rpcRequest.params as TaskIdParams);
                         break;
                     case 'tasks/pushNotificationConfig/set':
                         result = await this.requestHandler.setTaskPushNotificationConfig(
-                            params as TaskPushNotificationConfig
+                            rpcRequest.params as TaskPushNotificationConfig
                         );
                         break;
                     case 'tasks/pushNotificationConfig/get':
                         result = await this.requestHandler.getTaskPushNotificationConfig(
-                            params as TaskIdParams
+                            rpcRequest.params as TaskIdParams
                         );
                         break;
                     default:

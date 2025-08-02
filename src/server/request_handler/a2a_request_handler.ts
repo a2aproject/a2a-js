@@ -1,4 +1,17 @@
-import { Message, AgentCard, MessageSendParams, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig } from "../../types.js";
+import {
+    Message,
+    AgentCard,
+    MessageSendParams,
+    Task,
+    TaskStatusUpdateEvent,
+    TaskArtifactUpdateEvent,
+    TaskQueryParams,
+    TaskIdParams,
+    TaskPushNotificationConfig,
+    GetTaskPushNotificationConfigParams,
+    ListTaskPushNotificationConfigParams,
+    DeleteTaskPushNotificationConfigParams,
+} from "../../types.js";
 
 export interface A2ARequestHandler {
     getAgentCard(): Promise<AgentCard>;
@@ -26,8 +39,16 @@ export interface A2ARequestHandler {
     ): Promise<TaskPushNotificationConfig>;
 
     getTaskPushNotificationConfig(
-        params: TaskIdParams
+        params: TaskIdParams | GetTaskPushNotificationConfigParams
     ): Promise<TaskPushNotificationConfig>;
+
+    listTaskPushNotificationConfigs(
+        params: ListTaskPushNotificationConfigParams
+    ): Promise<TaskPushNotificationConfig[]>;
+
+    deleteTaskPushNotificationConfig(
+        params: DeleteTaskPushNotificationConfigParams
+    ): Promise<void>;
 
     resubscribe(
         params: TaskIdParams

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import { Message, AgentCard, PushNotificationConfig, Task, MessageSendParams, TaskState, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig } from "../../types.js";
+import { Message, AgentCard, PushNotificationConfig, Task, MessageSendParams, TaskState, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
 import { AgentExecutor } from "../agent_execution/agent_executor.js";
 import { RequestContext } from "../agent_execution/request_context.js";
 import { A2AError } from "../error.js";
@@ -19,7 +19,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     private readonly agentExecutor: AgentExecutor;
     private readonly eventBusManager: ExecutionEventBusManager;
     // Store for push notification configurations (could be part of TaskStore or separate)
-    private readonly pushNotificationConfigs: Map<string, PushNotificationConfig> = new Map();
+    private readonly pushNotificationConfigs: Map<string, PushNotificationConfig[]> = new Map();
 
 
     constructor(
@@ -339,31 +339,106 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
         }
-        const taskAndHistory = await this.taskStore.load(params.taskId);
-        if (!taskAndHistory) {
+        const task = await this.taskStore.load(params.taskId);
+        if (!task) {
             throw A2AError.taskNotFound(params.taskId);
         }
-        // Store the config. In a real app, this might be stored in the TaskStore
-        // or a dedicated push notification service.
-        this.pushNotificationConfigs.set(params.taskId, params.pushNotificationConfig);
+        
+        const { taskId, pushNotificationConfig } = params;
+
+        // Default the config ID to the task ID if not provided for backward compatibility.
+        if (!pushNotificationConfig.id) {
+            pushNotificationConfig.id = taskId;
+        }
+
+        const configs = this.pushNotificationConfigs.get(taskId) || [];
+        
+        // Remove existing config with the same ID to replace it
+        const updatedConfigs = configs.filter(c => c.id !== pushNotificationConfig.id);
+        
+        updatedConfigs.push(pushNotificationConfig);
+
+        this.pushNotificationConfigs.set(taskId, updatedConfigs);
+
         return params;
     }
 
     async getTaskPushNotificationConfig(
-        params: TaskIdParams
+        params: TaskIdParams | GetTaskPushNotificationConfigParams
     ): Promise<TaskPushNotificationConfig> {
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
         }
-        const taskAndHistory = await this.taskStore.load(params.id); // Ensure task exists
-        if (!taskAndHistory) {
+        const task = await this.taskStore.load(params.id);
+        if (!task) {
             throw A2AError.taskNotFound(params.id);
         }
-        const config = this.pushNotificationConfigs.get(params.id);
-        if (!config) {
+
+        const configs = this.pushNotificationConfigs.get(params.id) || [];
+        if (configs.length === 0) {
             throw A2AError.internalError(`Push notification config not found for task ${params.id}.`);
         }
+
+        let configId: string;
+        if ('pushNotificationConfigId' in params && params.pushNotificationConfigId) {
+            configId = params.pushNotificationConfigId;
+        } else {
+            // For backward compatibility, if no config ID is given, assume it's the task ID.
+            configId = params.id;
+        }
+
+        const config = configs.find(c => c.id === configId);
+
+        if (!config) {
+            throw A2AError.internalError(`Push notification config with id '${configId}' not found for task ${params.id}.`);
+        }
         return { taskId: params.id, pushNotificationConfig: config };
+    }
+    
+    async listTaskPushNotificationConfigs(
+        params: ListTaskPushNotificationConfigParams
+    ): Promise<TaskPushNotificationConfig[]> {
+        if (!this.agentCard.capabilities.pushNotifications) {
+            throw A2AError.pushNotificationNotSupported();
+        }
+        const task = await this.taskStore.load(params.id);
+        if (!task) {
+            throw A2AError.taskNotFound(params.id);
+        }
+
+        const configs = this.pushNotificationConfigs.get(params.id) || [];
+
+        return configs.map(config => ({
+            taskId: params.id,
+            pushNotificationConfig: config,
+        }));
+    }
+
+    async deleteTaskPushNotificationConfig(
+        params: DeleteTaskPushNotificationConfigParams
+    ): Promise<void> {
+        if (!this.agentCard.capabilities.pushNotifications) {
+            throw A2AError.pushNotificationNotSupported();
+        }
+        const task = await this.taskStore.load(params.id);
+        if (!task) {
+            throw A2AError.taskNotFound(params.id);
+        }
+        
+        const { id: taskId, pushNotificationConfigId } = params;
+
+        const configs = this.pushNotificationConfigs.get(taskId);
+        if (!configs) {
+            return;
+        }
+
+        const updatedConfigs = configs.filter(c => c.id !== pushNotificationConfigId);
+
+        if (updatedConfigs.length === 0) {
+            this.pushNotificationConfigs.delete(taskId);
+        } else if (updatedConfigs.length < configs.length) {
+            this.pushNotificationConfigs.set(taskId, updatedConfigs);
+        }
     }
 
     async *resubscribe(

@@ -6,6 +6,8 @@
  */
 
 /**
+ * A discriminated union of all standard JSON-RPC and A2A-specific error types.
+ *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "A2AError".
  */
@@ -20,9 +22,10 @@ export type A2AError =
   | PushNotificationNotSupportedError
   | UnsupportedOperationError
   | ContentTypeNotSupportedError
-  | InvalidAgentResponseError;
+  | InvalidAgentResponseError
+  | AuthenticatedExtendedCardNotConfiguredError;
 /**
- * A2A supported request types
+ * A discriminated union representing all possible JSON-RPC 2.0 requests supported by the A2A specification.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "A2ARequest".
@@ -34,17 +37,21 @@ export type A2ARequest =
   | CancelTaskRequest
   | SetTaskPushNotificationConfigRequest
   | GetTaskPushNotificationConfigRequest
-  | TaskResubscriptionRequest;
+  | TaskResubscriptionRequest
+  | ListTaskPushNotificationConfigRequest
+  | DeleteTaskPushNotificationConfigRequest
+  | GetAuthenticatedExtendedCardRequest;
 /**
- * Represents a part of a message, which can be text, a file, or structured data.
+ * A discriminated union representing a part of a message or artifact, which can
+ * be text, a file, or structured data.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "Part".
  */
 export type Part = TextPart | FilePart | DataPart;
 /**
- * Mirrors the OpenAPI Security Scheme Object
- * (https://swagger.io/specification/#security-scheme-object)
+ * Defines a security scheme that can be used to secure an agent's endpoints.
+ * This is a discriminated union type based on the OpenAPI 3.0 Security Scheme Object.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SecurityScheme".
@@ -53,16 +60,95 @@ export type SecurityScheme =
   | APIKeySecurityScheme
   | HTTPAuthSecurityScheme
   | OAuth2SecurityScheme
-  | OpenIdConnectSecurityScheme;
+  | OpenIdConnectSecurityScheme
+  | MutualTLSSecurityScheme;
 /**
- * JSON-RPC response for the 'tasks/cancel' method.
+ * Represents a JSON-RPC response for the `tasks/cancel` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "CancelTaskResponse".
  */
 export type CancelTaskResponse = JSONRPCErrorResponse | CancelTaskSuccessResponse;
 /**
- * Represents the possible states of a Task.
+ * Represents a JSON-RPC response for the `tasks/pushNotificationConfig/delete` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "DeleteTaskPushNotificationConfigResponse".
+ */
+export type DeleteTaskPushNotificationConfigResponse =
+  | JSONRPCErrorResponse
+  | DeleteTaskPushNotificationConfigSuccessResponse;
+/**
+ * Represents a JSON-RPC response for the `agent/getAuthenticatedExtendedCard` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "GetAuthenticatedExtendedCardResponse".
+ */
+export type GetAuthenticatedExtendedCardResponse = JSONRPCErrorResponse | GetAuthenticatedExtendedCardSuccessResponse;
+/**
+ * Represents a JSON-RPC response for the `tasks/pushNotificationConfig/get` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "GetTaskPushNotificationConfigResponse".
+ */
+export type GetTaskPushNotificationConfigResponse = JSONRPCErrorResponse | GetTaskPushNotificationConfigSuccessResponse;
+/**
+ * Represents a JSON-RPC response for the `tasks/get` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "GetTaskResponse".
+ */
+export type GetTaskResponse = JSONRPCErrorResponse | GetTaskSuccessResponse;
+/**
+ * A discriminated union representing all possible JSON-RPC 2.0 responses
+ * for the A2A specification methods.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "JSONRPCResponse".
+ */
+export type JSONRPCResponse =
+  | JSONRPCErrorResponse
+  | SendMessageSuccessResponse
+  | SendStreamingMessageSuccessResponse
+  | GetTaskSuccessResponse
+  | CancelTaskSuccessResponse
+  | SetTaskPushNotificationConfigSuccessResponse
+  | GetTaskPushNotificationConfigSuccessResponse
+  | ListTaskPushNotificationConfigSuccessResponse
+  | DeleteTaskPushNotificationConfigSuccessResponse
+  | GetAuthenticatedExtendedCardSuccessResponse;
+/**
+ * Represents a JSON-RPC response for the `tasks/pushNotificationConfig/list` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTaskPushNotificationConfigResponse".
+ */
+export type ListTaskPushNotificationConfigResponse =
+  | JSONRPCErrorResponse
+  | ListTaskPushNotificationConfigSuccessResponse;
+/**
+ * Represents a JSON-RPC response for the `message/send` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "SendMessageResponse".
+ */
+export type SendMessageResponse = JSONRPCErrorResponse | SendMessageSuccessResponse;
+/**
+ * Represents a JSON-RPC response for the `message/stream` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "SendStreamingMessageResponse".
+ */
+export type SendStreamingMessageResponse = JSONRPCErrorResponse | SendStreamingMessageSuccessResponse;
+/**
+ * Represents a JSON-RPC response for the `tasks/pushNotificationConfig/set` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "SetTaskPushNotificationConfigResponse".
+ */
+export type SetTaskPushNotificationConfigResponse = JSONRPCErrorResponse | SetTaskPushNotificationConfigSuccessResponse;
+/**
+ * Defines the lifecycle states of a Task.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskState".
@@ -78,793 +164,909 @@ export type TaskState =
   | "auth-required"
   | "unknown";
 /**
- * JSON-RPC response for the 'tasks/pushNotificationConfig/set' method.
+ * Supported A2A transport protocols.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "GetTaskPushNotificationConfigResponse".
+ * via the `definition` "TransportProtocol".
  */
-export type GetTaskPushNotificationConfigResponse = JSONRPCErrorResponse | GetTaskPushNotificationConfigSuccessResponse;
-/**
- * JSON-RPC response for the 'tasks/get' method.
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "GetTaskResponse".
- */
-export type GetTaskResponse = JSONRPCErrorResponse | GetTaskSuccessResponse;
-/**
- * Represents a JSON-RPC 2.0 Response object.
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "JSONRPCResponse".
- */
-export type JSONRPCResponse =
-  | JSONRPCErrorResponse
-  | SendMessageSuccessResponse
-  | SendStreamingMessageSuccessResponse
-  | GetTaskSuccessResponse
-  | CancelTaskSuccessResponse
-  | SetTaskPushNotificationConfigSuccessResponse
-  | GetTaskPushNotificationConfigSuccessResponse;
-/**
- * JSON-RPC response model for the 'message/send' method.
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "SendMessageResponse".
- */
-export type SendMessageResponse = JSONRPCErrorResponse | SendMessageSuccessResponse;
-/**
- * JSON-RPC response model for the 'message/stream' method.
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "SendStreamingMessageResponse".
- */
-export type SendStreamingMessageResponse = JSONRPCErrorResponse | SendStreamingMessageSuccessResponse;
-/**
- * JSON-RPC response for the 'tasks/pushNotificationConfig/set' method.
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "SetTaskPushNotificationConfigResponse".
- */
-export type SetTaskPushNotificationConfigResponse = JSONRPCErrorResponse | SetTaskPushNotificationConfigSuccessResponse;
+export type TransportProtocol = "JSONRPC" | "GRPC" | "HTTP+JSON";
 
 export interface MySchema {
   [k: string]: unknown;
 }
 /**
- * JSON-RPC error indicating invalid JSON was received by the server.
+ * An error indicating that the server received invalid JSON.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "JSONParseError".
  */
 export interface JSONParseError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for a JSON parse error.
    */
   code: -32700;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * JSON-RPC error indicating the JSON sent is not a valid Request object.
+ * An error indicating that the JSON sent is not a valid Request object.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "InvalidRequestError".
  */
 export interface InvalidRequestError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for an invalid request.
    */
   code: -32600;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * JSON-RPC error indicating the method does not exist or is not available.
+ * An error indicating that the requested method does not exist or is not available.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "MethodNotFoundError".
  */
 export interface MethodNotFoundError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for a method not found error.
    */
   code: -32601;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * JSON-RPC error indicating invalid method parameter(s).
+ * An error indicating that the method parameters are invalid.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "InvalidParamsError".
  */
 export interface InvalidParamsError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for an invalid parameters error.
    */
   code: -32602;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * JSON-RPC error indicating an internal JSON-RPC error on the server.
+ * An error indicating an internal error on the server.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "InternalError".
  */
 export interface InternalError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for an internal server error.
    */
   code: -32603;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * A2A specific error indicating the requested task ID was not found.
+ * An A2A-specific error indicating that the requested task ID was not found.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskNotFoundError".
  */
 export interface TaskNotFoundError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for a task not found error.
    */
   code: -32001;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * A2A specific error indicating the task is in a state where it cannot be canceled.
+ * An A2A-specific error indicating that the task is in a state where it cannot be canceled.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskNotCancelableError".
  */
 export interface TaskNotCancelableError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for a task that cannot be canceled.
    */
   code: -32002;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * A2A specific error indicating the agent does not support push notifications.
+ * An A2A-specific error indicating that the agent does not support push notifications.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "PushNotificationNotSupportedError".
  */
 export interface PushNotificationNotSupportedError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for when push notifications are not supported.
    */
   code: -32003;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * A2A specific error indicating the requested operation is not supported by the agent.
+ * An A2A-specific error indicating that the requested operation is not supported by the agent.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "UnsupportedOperationError".
  */
 export interface UnsupportedOperationError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for an unsupported operation.
    */
   code: -32004;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * A2A specific error indicating incompatible content types between request and agent capabilities.
+ * An A2A-specific error indicating an incompatibility between the requested
+ * content types and the agent's capabilities.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "ContentTypeNotSupportedError".
  */
 export interface ContentTypeNotSupportedError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for an unsupported content type.
    */
   code: -32005;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * A2A specific error indicating agent returned invalid response for the current method
+ * An A2A-specific error indicating that the agent returned a response that
+ * does not conform to the specification for the current method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "InvalidAgentResponseError".
  */
 export interface InvalidAgentResponseError {
   /**
-   * A Number that indicates the error type that occurred.
+   * The error code for an invalid agent response.
    */
   code: -32006;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * The error message.
    */
   message: string;
 }
 /**
- * JSON-RPC request model for the 'message/send' method.
+ * An A2A-specific error indicating that the agent does not have an Authenticated Extended Card configured
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "AuthenticatedExtendedCardNotConfiguredError".
+ */
+export interface AuthenticatedExtendedCardNotConfiguredError {
+  /**
+   * The error code for when an authenticated extended card is not configured.
+   */
+  code: -32007;
+  /**
+   * A primitive or structured value containing additional information about the error.
+   * This may be omitted.
+   */
+  data?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The error message.
+   */
+  message: string;
+}
+/**
+ * Represents a JSON-RPC request for the `message/send` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SendMessageRequest".
  */
 export interface SendMessageRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier for this request.
    */
   id: string | number;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * The method name. Must be 'message/send'.
    */
   method: "message/send";
   params: MessageSendParams;
 }
 /**
- * A Structured value that holds the parameter values to be used during the invocation of the method.
+ * The parameters for sending a message.
  */
 export interface MessageSendParams {
   configuration?: MessageSendConfiguration;
   message: Message;
   /**
-   * Extension metadata.
+   * Optional metadata for extensions.
    */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * Send message configuration.
+ * Optional configuration for the send request.
  */
 export interface MessageSendConfiguration {
   /**
-   * Accepted output modalities by the client.
+   * A list of output MIME types the client is prepared to accept in the response.
    */
-  acceptedOutputModes: string[];
+  acceptedOutputModes?: string[];
   /**
-   * If the server should treat the client as a blocking request.
+   * If true, the client will wait for the task to complete. The server may reject this if the task is long-running.
    */
   blocking?: boolean;
   /**
-   * Number of recent messages to be retrieved.
+   * The number of most recent messages from the task's history to retrieve in the response.
    */
   historyLength?: number;
   pushNotificationConfig?: PushNotificationConfig;
 }
 /**
- * Where the server should send notifications when disconnected.
+ * Configuration for the agent to send push notifications for updates after the initial response.
  */
 export interface PushNotificationConfig {
   authentication?: PushNotificationAuthenticationInfo;
   /**
-   * Push Notification ID - created by server to support multiple callbacks
+   * A unique ID for the push notification configuration, set by the client
+   * to support multiple notification callbacks.
    */
   id?: string;
   /**
-   * Token unique to this task/session.
+   * A unique token for this task or session to validate incoming push notifications.
    */
   token?: string;
   /**
-   * URL for sending the push notifications.
+   * The callback URL where the agent should send push notifications.
    */
   url: string;
 }
 /**
- * Defines authentication details for push notifications.
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "PushNotificationAuthenticationInfo".
+ * Optional authentication details for the agent to use when calling the notification URL.
  */
 export interface PushNotificationAuthenticationInfo {
   /**
-   * Optional credentials
+   * Optional credentials required by the push notification endpoint.
    */
   credentials?: string;
   /**
-   * Supported authentication schemes - e.g. Basic, Bearer
+   * A list of supported authentication schemes (e.g., 'Basic', 'Bearer').
    */
   schemes: string[];
 }
 /**
- * The message being sent to the server.
+ * The message object being sent to the agent.
  */
 export interface Message {
   /**
-   * The context the message is associated with
+   * The context identifier for this message, used to group related interactions.
    */
   contextId?: string;
   /**
-   * The URIs of extensions that are present or contributed to this Message.
+   * The URIs of extensions that are relevant to this message.
    */
   extensions?: string[];
   /**
-   * Event type
+   * The type of this object, used as a discriminator. Always 'message' for a Message.
    */
   kind: "message";
   /**
-   * Identifier created by the message creator
+   * A unique identifier for the message, typically a UUID, generated by the sender.
    */
   messageId: string;
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
   };
   /**
-   * Message content
+   * An array of content parts that form the message body. A message can be
+   * composed of multiple parts of different types (e.g., text and files).
    */
   parts: Part[];
   /**
-   * List of tasks referenced as context by this message.
+   * A list of other task IDs that this message references for additional context.
    */
   referenceTaskIds?: string[];
   /**
-   * Message sender's role
+   * Identifies the sender of the message. `user` for the client, `agent` for the service.
    */
   role: "agent" | "user";
   /**
-   * Identifier of task the message is related to
+   * The identifier of the task this message is part of. Can be omitted for the first message of a new task.
    */
   taskId?: string;
 }
 /**
- * Represents a text segment within parts.
+ * Represents a text segment within a message or artifact.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TextPart".
  */
 export interface TextPart {
   /**
-   * Part type - text for TextParts
+   * The type of this part, used as a discriminator. Always 'text'.
    */
   kind: "text";
   /**
-   * Optional metadata associated with the part.
+   * Optional metadata associated with this part.
    */
   metadata?: {
     [k: string]: unknown;
   };
   /**
-   * Text content
+   * The string content of the text part.
    */
   text: string;
 }
 /**
- * Represents a File segment within parts.
+ * Represents a file segment within a message or artifact. The file content can be
+ * provided either directly as bytes or as a URI.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "FilePart".
  */
 export interface FilePart {
   /**
-   * File content either as url or bytes
+   * The file content, represented as either a URI or as base64-encoded bytes.
    */
   file: FileWithBytes | FileWithUri;
   /**
-   * Part type - file for FileParts
+   * The type of this part, used as a discriminator. Always 'file'.
    */
   kind: "file";
   /**
-   * Optional metadata associated with the part.
+   * Optional metadata associated with this part.
    */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * Define the variant where 'bytes' is present and 'uri' is absent
+ * Represents a file with its content provided directly as a base64-encoded string.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "FileWithBytes".
  */
 export interface FileWithBytes {
   /**
-   * base64 encoded content of the file
+   * The base64-encoded content of the file.
    */
   bytes: string;
   /**
-   * Optional mimeType for the file
+   * The MIME type of the file (e.g., "application/pdf").
    */
   mimeType?: string;
   /**
-   * Optional name for the file
+   * An optional name for the file (e.g., "document.pdf").
    */
   name?: string;
 }
 /**
- * Define the variant where 'uri' is present and 'bytes' is absent
+ * Represents a file with its content located at a specific URI.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "FileWithUri".
  */
 export interface FileWithUri {
   /**
-   * Optional mimeType for the file
+   * The MIME type of the file (e.g., "application/pdf").
    */
   mimeType?: string;
   /**
-   * Optional name for the file
+   * An optional name for the file (e.g., "document.pdf").
    */
   name?: string;
   /**
-   * URL for the File content
+   * A URL pointing to the file's content.
    */
   uri: string;
 }
 /**
- * Represents a structured data segment within a message part.
+ * Represents a structured data segment (e.g., JSON) within a message or artifact.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "DataPart".
  */
 export interface DataPart {
   /**
-   * Structured data content
+   * The structured data content.
    */
   data: {
     [k: string]: unknown;
   };
   /**
-   * Part type - data for DataParts
+   * The type of this part, used as a discriminator. Always 'data'.
    */
   kind: "data";
   /**
-   * Optional metadata associated with the part.
+   * Optional metadata associated with this part.
    */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * JSON-RPC request model for the 'message/stream' method.
+ * Represents a JSON-RPC request for the `message/stream` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SendStreamingMessageRequest".
  */
 export interface SendStreamingMessageRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier for this request.
    */
   id: string | number;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * The method name. Must be 'message/stream'.
    */
   method: "message/stream";
   params: MessageSendParams1;
 }
 /**
- * A Structured value that holds the parameter values to be used during the invocation of the method.
+ * The parameters for sending a message.
  */
 export interface MessageSendParams1 {
   configuration?: MessageSendConfiguration;
   message: Message;
   /**
-   * Extension metadata.
+   * Optional metadata for extensions.
    */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * JSON-RPC request model for the 'tasks/get' method.
+ * Represents a JSON-RPC request for the `tasks/get` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "GetTaskRequest".
  */
 export interface GetTaskRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier for this request.
    */
   id: string | number;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * The method name. Must be 'tasks/get'.
    */
   method: "tasks/get";
   params: TaskQueryParams;
 }
 /**
- * A Structured value that holds the parameter values to be used during the invocation of the method.
+ * The parameters for querying a task.
  */
 export interface TaskQueryParams {
   /**
-   * Number of recent messages to be retrieved.
+   * The number of most recent messages from the task's history to retrieve.
    */
   historyLength?: number;
   /**
-   * Task id.
+   * The unique identifier of the task.
    */
   id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * JSON-RPC request model for the 'tasks/cancel' method.
+ * Represents a JSON-RPC request for the `tasks/cancel` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "CancelTaskRequest".
  */
 export interface CancelTaskRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier for this request.
    */
   id: string | number;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * The method name. Must be 'tasks/cancel'.
    */
   method: "tasks/cancel";
   params: TaskIdParams;
 }
 /**
- * A Structured value that holds the parameter values to be used during the invocation of the method.
+ * The parameters identifying the task to cancel.
  */
 export interface TaskIdParams {
   /**
-   * Task id.
+   * The unique identifier of the task.
    */
   id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * JSON-RPC request model for the 'tasks/pushNotificationConfig/set' method.
+ * Represents a JSON-RPC request for the `tasks/pushNotificationConfig/set` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SetTaskPushNotificationConfigRequest".
  */
 export interface SetTaskPushNotificationConfigRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier for this request.
    */
   id: string | number;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * The method name. Must be 'tasks/pushNotificationConfig/set'.
    */
   method: "tasks/pushNotificationConfig/set";
   params: TaskPushNotificationConfig;
 }
 /**
- * A Structured value that holds the parameter values to be used during the invocation of the method.
+ * The parameters for setting the push notification configuration.
  */
 export interface TaskPushNotificationConfig {
   pushNotificationConfig: PushNotificationConfig1;
   /**
-   * Task id.
+   * The ID of the task.
    */
   taskId: string;
 }
 /**
- * Push notification configuration.
+ * The push notification configuration for this task.
  */
 export interface PushNotificationConfig1 {
   authentication?: PushNotificationAuthenticationInfo;
   /**
-   * Push Notification ID - created by server to support multiple callbacks
+   * A unique ID for the push notification configuration, set by the client
+   * to support multiple notification callbacks.
    */
   id?: string;
   /**
-   * Token unique to this task/session.
+   * A unique token for this task or session to validate incoming push notifications.
    */
   token?: string;
   /**
-   * URL for sending the push notifications.
+   * The callback URL where the agent should send push notifications.
    */
   url: string;
 }
 /**
- * JSON-RPC request model for the 'tasks/pushNotificationConfig/get' method.
+ * Represents a JSON-RPC request for the `tasks/pushNotificationConfig/get` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "GetTaskPushNotificationConfigRequest".
  */
 export interface GetTaskPushNotificationConfigRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier for this request.
    */
   id: string | number;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * The method name. Must be 'tasks/pushNotificationConfig/get'.
    */
   method: "tasks/pushNotificationConfig/get";
-  params: TaskIdParams1;
+  /**
+   * The parameters for getting a push notification configuration.
+   */
+  params: TaskIdParams1 | GetTaskPushNotificationConfigParams;
 }
 /**
- * A Structured value that holds the parameter values to be used during the invocation of the method.
+ * Defines parameters containing a task ID, used for simple task operations.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "TaskIdParams".
  */
 export interface TaskIdParams1 {
   /**
-   * Task id.
+   * The unique identifier of the task.
    */
   id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * JSON-RPC request model for the 'tasks/resubscribe' method.
+ * Defines parameters for fetching a specific push notification configuration for a task.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "GetTaskPushNotificationConfigParams".
+ */
+export interface GetTaskPushNotificationConfigParams {
+  /**
+   * The unique identifier of the task.
+   */
+  id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The ID of the push notification configuration to retrieve.
+   */
+  pushNotificationConfigId?: string;
+}
+/**
+ * Represents a JSON-RPC request for the `tasks/resubscribe` method, used to resume a streaming connection.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskResubscriptionRequest".
  */
 export interface TaskResubscriptionRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier for this request.
    */
   id: string | number;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * The method name. Must be 'tasks/resubscribe'.
    */
   method: "tasks/resubscribe";
   params: TaskIdParams2;
 }
 /**
- * A Structured value that holds the parameter values to be used during the invocation of the method.
+ * Defines parameters containing a task ID, used for simple task operations.
  */
 export interface TaskIdParams2 {
   /**
-   * Task id.
+   * The unique identifier of the task.
    */
   id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * API Key security scheme.
+ * Represents a JSON-RPC request for the `tasks/pushNotificationConfig/list` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTaskPushNotificationConfigRequest".
+ */
+export interface ListTaskPushNotificationConfigRequest {
+  /**
+   * The identifier for this request.
+   */
+  id: string | number;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  /**
+   * The method name. Must be 'tasks/pushNotificationConfig/list'.
+   */
+  method: "tasks/pushNotificationConfig/list";
+  params: ListTaskPushNotificationConfigParams;
+}
+/**
+ * The parameters identifying the task whose configurations are to be listed.
+ */
+export interface ListTaskPushNotificationConfigParams {
+  /**
+   * The unique identifier of the task.
+   */
+  id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Represents a JSON-RPC request for the `tasks/pushNotificationConfig/delete` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "DeleteTaskPushNotificationConfigRequest".
+ */
+export interface DeleteTaskPushNotificationConfigRequest {
+  /**
+   * The identifier for this request.
+   */
+  id: string | number;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  /**
+   * The method name. Must be 'tasks/pushNotificationConfig/delete'.
+   */
+  method: "tasks/pushNotificationConfig/delete";
+  params: DeleteTaskPushNotificationConfigParams;
+}
+/**
+ * The parameters identifying the push notification configuration to delete.
+ */
+export interface DeleteTaskPushNotificationConfigParams {
+  /**
+   * The unique identifier of the task.
+   */
+  id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The ID of the push notification configuration to delete.
+   */
+  pushNotificationConfigId: string;
+}
+/**
+ * Represents a JSON-RPC request for the `agent/getAuthenticatedExtendedCard` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "GetAuthenticatedExtendedCardRequest".
+ */
+export interface GetAuthenticatedExtendedCardRequest {
+  /**
+   * The identifier for this request.
+   */
+  id: string | number;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  /**
+   * The method name. Must be 'agent/getAuthenticatedExtendedCard'.
+   */
+  method: "agent/getAuthenticatedExtendedCard";
+}
+/**
+ * Defines a security scheme using an API key.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "APIKeySecurityScheme".
  */
 export interface APIKeySecurityScheme {
   /**
-   * Description of this security scheme.
+   * An optional description for the security scheme.
    */
   description?: string;
   /**
-   * The location of the API key. Valid values are "query", "header", or "cookie".
+   * The location of the API key.
    */
   in: "cookie" | "header" | "query";
   /**
-   * The name of the header, query or cookie parameter to be used.
+   * The name of the header, query, or cookie parameter to be used.
    */
   name: string;
+  /**
+   * The type of the security scheme. Must be 'apiKey'.
+   */
   type: "apiKey";
 }
 /**
@@ -875,192 +1077,256 @@ export interface APIKeySecurityScheme {
  */
 export interface AgentCapabilities {
   /**
-   * extensions supported by this agent.
+   * A list of protocol extensions supported by the agent.
    */
   extensions?: AgentExtension[];
   /**
-   * true if the agent can notify updates to client.
+   * Indicates if the agent supports sending push notifications for asynchronous task updates.
    */
   pushNotifications?: boolean;
   /**
-   * true if the agent exposes status change history for tasks.
+   * Indicates if the agent provides a history of state transitions for a task.
    */
   stateTransitionHistory?: boolean;
   /**
-   * true if the agent supports SSE.
+   * Indicates if the agent supports Server-Sent Events (SSE) for streaming responses.
    */
   streaming?: boolean;
 }
 /**
- * A declaration of an extension supported by an Agent.
+ * A declaration of a protocol extension supported by an Agent.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "AgentExtension".
  */
 export interface AgentExtension {
   /**
-   * A description of how this agent uses this extension.
+   * A human-readable description of how this agent uses the extension.
    */
   description?: string;
   /**
-   * Optional configuration for the extension.
+   * Optional, extension-specific configuration parameters.
    */
   params?: {
     [k: string]: unknown;
   };
   /**
-   * Whether the client must follow specific requirements of the extension.
+   * If true, the client must understand and comply with the extension's requirements
+   * to interact with the agent.
    */
   required?: boolean;
   /**
-   * The URI of the extension.
+   * The unique URI identifying the extension.
    */
   uri: string;
 }
 /**
- * An AgentCard conveys key information:
- * - Overall details (version, name, description, uses)
- * - Skills: A set of capabilities the agent can perform
- * - Default modalities/content types supported by the agent.
- * - Authentication requirements
+ * The AgentCard is a self-describing manifest for an agent. It provides essential
+ * metadata including the agent's identity, capabilities, skills, supported
+ * communication methods, and security requirements.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "AgentCard".
  */
 export interface AgentCard {
+  /**
+   * A list of additional supported interfaces (transport and URL combinations).
+   * This allows agents to expose multiple transports, potentially at different URLs.
+   *
+   * Best practices:
+   * - SHOULD include all supported transports for completeness
+   * - SHOULD include an entry matching the main 'url' and 'preferredTransport'
+   * - MAY reuse URLs if multiple transports are available at the same endpoint
+   * - MUST accurately declare the transport available at each URL
+   *
+   * Clients can select any interface from this list based on their transport capabilities
+   * and preferences. This enables transport negotiation and fallback scenarios.
+   */
+  additionalInterfaces?: AgentInterface[];
   capabilities: AgentCapabilities1;
   /**
-   * The set of interaction modes that the agent supports across all skills. This can be overridden per-skill.
-   * Supported media types for input.
+   * Default set of supported input MIME types for all skills, which can be
+   * overridden on a per-skill basis.
    */
   defaultInputModes: string[];
   /**
-   * Supported media types for output.
+   * Default set of supported output MIME types for all skills, which can be
+   * overridden on a per-skill basis.
    */
   defaultOutputModes: string[];
   /**
-   * A human-readable description of the agent. Used to assist users and
-   * other agents in understanding what the agent can do.
+   * A human-readable description of the agent, assisting users and other agents
+   * in understanding its purpose.
    */
   description: string;
   /**
-   * A URL to documentation for the agent.
+   * An optional URL to the agent's documentation.
    */
   documentationUrl?: string;
   /**
-   * A URL to an icon for the agent.
+   * An optional URL to an icon for the agent.
    */
   iconUrl?: string;
   /**
-   * Human readable name of the agent.
+   * A human-readable name for the agent.
    */
   name: string;
+  /**
+   * The transport protocol for the preferred endpoint (the main 'url' field).
+   * If not specified, defaults to 'JSONRPC'.
+   *
+   * IMPORTANT: The transport specified here MUST be available at the main 'url'.
+   * This creates a binding between the main URL and its supported transport protocol.
+   * Clients should prefer this transport and URL combination when both are supported.
+   */
+  preferredTransport?: string;
+  /**
+   * The version of the A2A protocol this agent supports.
+   */
+  protocolVersion: string;
   provider?: AgentProvider;
   /**
-   * Security requirements for contacting the agent.
+   * A list of security requirement objects that apply to all agent interactions. Each object
+   * lists security schemes that can be used. Follows the OpenAPI 3.0 Security Requirement Object.
+   * This list can be seen as an OR of ANDs. Each object in the list describes one possible
+   * set of security requirements that must be present on a request. This allows specifying,
+   * for example, "callers must either use OAuth OR an API Key AND mTLS."
    */
   security?: {
     [k: string]: string[];
   }[];
   /**
-   * Security scheme details used for authenticating with this agent.
+   * A declaration of the security schemes available to authorize requests. The key is the
+   * scheme name. Follows the OpenAPI 3.0 Security Scheme Object.
    */
   securitySchemes?: {
     [k: string]: SecurityScheme;
   };
   /**
-   * Skills are a unit of capability that an agent can perform.
+   * JSON Web Signatures computed for this AgentCard.
+   */
+  signatures?: AgentCardSignature[];
+  /**
+   * The set of skills, or distinct capabilities, that the agent can perform.
    */
   skills: AgentSkill[];
   /**
-   * true if the agent supports providing an extended agent card when the user is authenticated.
-   * Defaults to false if not specified.
+   * If true, the agent can provide an extended agent card with additional details
+   * to authenticated users. Defaults to false.
    */
   supportsAuthenticatedExtendedCard?: boolean;
   /**
-   * A URL to the address the agent is hosted at.
+   * The preferred endpoint URL for interacting with the agent.
+   * This URL MUST support the transport specified by 'preferredTransport'.
    */
   url: string;
   /**
-   * The version of the agent - format is up to the provider.
+   * The agent's own version number. The format is defined by the provider.
    */
   version: string;
 }
 /**
- * Optional capabilities supported by the agent.
+ * Declares a combination of a target URL and a transport protocol for interacting with the agent.
+ * This allows agents to expose the same functionality over multiple transport mechanisms.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "AgentInterface".
  */
-export interface AgentCapabilities1 {
+export interface AgentInterface {
   /**
-   * extensions supported by this agent.
+   * The transport protocol supported at this URL.
    */
-  extensions?: AgentExtension[];
+  transport: string;
   /**
-   * true if the agent can notify updates to client.
-   */
-  pushNotifications?: boolean;
-  /**
-   * true if the agent exposes status change history for tasks.
-   */
-  stateTransitionHistory?: boolean;
-  /**
-   * true if the agent supports SSE.
-   */
-  streaming?: boolean;
-}
-/**
- * The service provider of the agent
- */
-export interface AgentProvider {
-  /**
-   * Agent provider's organization name.
-   */
-  organization: string;
-  /**
-   * Agent provider's URL.
+   * The URL where this interface is available. Must be a valid absolute HTTPS URL in production.
    */
   url: string;
 }
 /**
- * HTTP Authentication security scheme.
+ * A declaration of optional capabilities supported by the agent.
+ */
+export interface AgentCapabilities1 {
+  /**
+   * A list of protocol extensions supported by the agent.
+   */
+  extensions?: AgentExtension[];
+  /**
+   * Indicates if the agent supports sending push notifications for asynchronous task updates.
+   */
+  pushNotifications?: boolean;
+  /**
+   * Indicates if the agent provides a history of state transitions for a task.
+   */
+  stateTransitionHistory?: boolean;
+  /**
+   * Indicates if the agent supports Server-Sent Events (SSE) for streaming responses.
+   */
+  streaming?: boolean;
+}
+/**
+ * Information about the agent's service provider.
+ */
+export interface AgentProvider {
+  /**
+   * The name of the agent provider's organization.
+   */
+  organization: string;
+  /**
+   * A URL for the agent provider's website or relevant documentation.
+   */
+  url: string;
+}
+/**
+ * Defines a security scheme using HTTP authentication.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "HTTPAuthSecurityScheme".
  */
 export interface HTTPAuthSecurityScheme {
   /**
-   * A hint to the client to identify how the bearer token is formatted. Bearer tokens are usually
-   * generated by an authorization server, so this information is primarily for documentation
-   * purposes.
+   * A hint to the client to identify how the bearer token is formatted (e.g., "JWT").
+   * This is primarily for documentation purposes.
    */
   bearerFormat?: string;
   /**
-   * Description of this security scheme.
+   * An optional description for the security scheme.
    */
   description?: string;
   /**
-   * The name of the HTTP Authentication scheme to be used in the Authorization header as defined
-   * in RFC7235. The values used SHOULD be registered in the IANA Authentication Scheme registry.
-   * The value is case-insensitive, as defined in RFC7235.
+   * The name of the HTTP Authentication scheme to be used in the Authorization header,
+   * as defined in RFC7235 (e.g., "Bearer").
+   * This value should be registered in the IANA Authentication Scheme registry.
    */
   scheme: string;
+  /**
+   * The type of the security scheme. Must be 'http'.
+   */
   type: "http";
 }
 /**
- * OAuth2.0 security scheme configuration.
+ * Defines a security scheme using OAuth 2.0.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "OAuth2SecurityScheme".
  */
 export interface OAuth2SecurityScheme {
   /**
-   * Description of this security scheme.
+   * An optional description for the security scheme.
    */
   description?: string;
   flows: OAuthFlows;
+  /**
+   * URL to the oauth2 authorization server metadata
+   * [RFC8414](https://datatracker.ietf.org/doc/html/rfc8414). TLS is required.
+   */
+  oauth2MetadataUrl?: string;
+  /**
+   * The type of the security scheme. Must be 'oauth2'.
+   */
   type: "oauth2";
 }
 /**
- * An object containing configuration information for the flow types supported.
+ * An object containing configuration information for the supported OAuth 2.0 flows.
  */
 export interface OAuthFlows {
   authorizationCode?: AuthorizationCodeOAuthFlow;
@@ -1073,148 +1339,192 @@ export interface OAuthFlows {
  */
 export interface AuthorizationCodeOAuthFlow {
   /**
-   * The authorization URL to be used for this flow. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS
+   * The authorization URL to be used for this flow.
+   * This MUST be a URL and use TLS.
    */
   authorizationUrl: string;
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens.
+   * This MUST be a URL and use TLS.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
   /**
-   * The token URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard
-   * requires the use of TLS.
+   * The token URL to be used for this flow.
+   * This MUST be a URL and use TLS.
    */
   tokenUrl: string;
 }
 /**
- * Configuration for the OAuth Client Credentials flow. Previously called application in OpenAPI 2.0
+ * Configuration for the OAuth Client Credentials flow. Previously called application in OpenAPI 2.0.
  */
 export interface ClientCredentialsOAuthFlow {
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens. This MUST be a URL.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
   /**
-   * The token URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard
-   * requires the use of TLS.
+   * The token URL to be used for this flow. This MUST be a URL.
    */
   tokenUrl: string;
 }
 /**
- * Configuration for the OAuth Implicit flow
+ * Configuration for the OAuth Implicit flow.
  */
 export interface ImplicitOAuthFlow {
   /**
-   * The authorization URL to be used for this flow. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS
+   * The authorization URL to be used for this flow. This MUST be a URL.
    */
   authorizationUrl: string;
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens. This MUST be a URL.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
 }
 /**
- * Configuration for the OAuth Resource Owner Password flow
+ * Configuration for the OAuth Resource Owner Password flow.
  */
 export interface PasswordOAuthFlow {
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens. This MUST be a URL.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
   /**
-   * The token URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard
-   * requires the use of TLS.
+   * The token URL to be used for this flow. This MUST be a URL.
    */
   tokenUrl: string;
 }
 /**
- * OpenID Connect security scheme configuration.
+ * Defines a security scheme using OpenID Connect.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "OpenIdConnectSecurityScheme".
  */
 export interface OpenIdConnectSecurityScheme {
   /**
-   * Description of this security scheme.
+   * An optional description for the security scheme.
    */
   description?: string;
   /**
-   * Well-known URL to discover the [[OpenID-Connect-Discovery]] provider metadata.
+   * The OpenID Connect Discovery URL for the OIDC provider's metadata.
    */
   openIdConnectUrl: string;
+  /**
+   * The type of the security scheme. Must be 'openIdConnect'.
+   */
   type: "openIdConnect";
 }
 /**
- * Represents a unit of capability that an agent can perform.
+ * Defines a security scheme using mTLS authentication.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "MutualTLSSecurityScheme".
+ */
+export interface MutualTLSSecurityScheme {
+  /**
+   * An optional description for the security scheme.
+   */
+  description?: string;
+  /**
+   * The type of the security scheme. Must be 'mutualTLS'.
+   */
+  type: "mutualTLS";
+}
+/**
+ * AgentCardSignature represents a JWS signature of an AgentCard.
+ * This follows the JSON format of an RFC 7515 JSON Web Signature (JWS).
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "AgentCardSignature".
+ */
+export interface AgentCardSignature {
+  /**
+   * The unprotected JWS header values.
+   */
+  header?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The protected JWS header for the signature. This is a Base64url-encoded
+   * JSON object, as per RFC 7515.
+   */
+  protected: string;
+  /**
+   * The computed signature, Base64url-encoded.
+   */
+  signature: string;
+}
+/**
+ * Represents a distinct capability or function that an agent can perform.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "AgentSkill".
  */
 export interface AgentSkill {
   /**
-   * Description of the skill - will be used by the client or a human
-   * as a hint to understand what the skill does.
+   * A detailed description of the skill, intended to help clients or users
+   * understand its purpose and functionality.
    */
   description: string;
   /**
-   * The set of example scenarios that the skill can perform.
-   * Will be used by the client as a hint to understand how the skill can be used.
+   * Example prompts or scenarios that this skill can handle. Provides a hint to
+   * the client on how to use the skill.
    */
   examples?: string[];
   /**
-   * Unique identifier for the agent's skill.
+   * A unique identifier for the agent's skill.
    */
   id: string;
   /**
-   * The set of interaction modes that the skill supports
-   * (if different than the default).
-   * Supported media types for input.
+   * The set of supported input MIME types for this skill, overriding the agent's defaults.
    */
   inputModes?: string[];
   /**
-   * Human readable name of the skill.
+   * A human-readable name for the skill.
    */
   name: string;
   /**
-   * Supported media types for output.
+   * The set of supported output MIME types for this skill, overriding the agent's defaults.
    */
   outputModes?: string[];
   /**
-   * Set of tagwords describing classes of capabilities for this specific skill.
+   * Security schemes necessary for the agent to leverage this skill.
+   * As in the overall AgentCard.security, this list represents a logical OR of security
+   * requirement objects. Each object is a set of security schemes that must be used together
+   * (a logical AND).
+   */
+  security?: {
+    [k: string]: string[];
+  }[];
+  /**
+   * A set of keywords describing the skill's capabilities.
    */
   tags: string[];
 }
@@ -1226,75 +1536,75 @@ export interface AgentSkill {
  */
 export interface AgentProvider1 {
   /**
-   * Agent provider's organization name.
+   * The name of the agent provider's organization.
    */
   organization: string;
   /**
-   * Agent provider's URL.
+   * A URL for the agent provider's website or relevant documentation.
    */
   url: string;
 }
 /**
- * Represents an artifact generated for a task.
+ * Represents a file, data structure, or other resource generated by an agent during a task.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "Artifact".
  */
 export interface Artifact {
   /**
-   * Unique identifier for the artifact.
+   * A unique identifier for the artifact within the scope of the task.
    */
   artifactId: string;
   /**
-   * Optional description for the artifact.
+   * An optional, human-readable description of the artifact.
    */
   description?: string;
   /**
-   * The URIs of extensions that are present or contributed to this Artifact.
+   * The URIs of extensions that are relevant to this artifact.
    */
   extensions?: string[];
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
   };
   /**
-   * Optional name for the artifact.
+   * An optional, human-readable name for the artifact.
    */
   name?: string;
   /**
-   * Artifact parts.
+   * An array of content parts that make up the artifact.
    */
   parts: Part[];
 }
 /**
- * Configuration details for a supported OAuth Flow
+ * Defines configuration details for the OAuth 2.0 Authorization Code flow.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "AuthorizationCodeOAuthFlow".
  */
 export interface AuthorizationCodeOAuthFlow1 {
   /**
-   * The authorization URL to be used for this flow. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS
+   * The authorization URL to be used for this flow.
+   * This MUST be a URL and use TLS.
    */
   authorizationUrl: string;
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens.
+   * This MUST be a URL and use TLS.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
   /**
-   * The token URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard
-   * requires the use of TLS.
+   * The token URL to be used for this flow.
+   * This MUST be a URL and use TLS.
    */
   tokenUrl: string;
 }
@@ -1305,6 +1615,9 @@ export interface AuthorizationCodeOAuthFlow1 {
  * via the `definition` "JSONRPCErrorResponse".
  */
 export interface JSONRPCErrorResponse {
+  /**
+   * An object describing the error that occurred.
+   */
   error:
     | JSONRPCError
     | JSONParseError
@@ -1317,82 +1630,83 @@ export interface JSONRPCErrorResponse {
     | PushNotificationNotSupportedError
     | UnsupportedOperationError
     | ContentTypeNotSupportedError
-    | InvalidAgentResponseError;
+    | InvalidAgentResponseError
+    | AuthenticatedExtendedCardNotConfiguredError;
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
 }
 /**
- * Represents a JSON-RPC 2.0 Error object.
- * This is typically included in a JSONRPCErrorResponse when an error occurs.
+ * Represents a JSON-RPC 2.0 Error object, included in an error response.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "JSONRPCError".
  */
 export interface JSONRPCError {
   /**
-   * A Number that indicates the error type that occurred.
+   * A number that indicates the error type that occurred.
    */
   code: number;
   /**
-   * A Primitive or Structured value that contains additional information about the error.
+   * A primitive or structured value containing additional information about the error.
    * This may be omitted.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * A String providing a short description of the error.
+   * A string providing a short description of the error.
    */
   message: string;
 }
 /**
- * JSON-RPC success response model for the 'tasks/cancel' method.
+ * Represents a successful JSON-RPC response for the `tasks/cancel` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "CancelTaskSuccessResponse".
  */
 export interface CancelTaskSuccessResponse {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   result: Task;
 }
 /**
- * The result object on success.
+ * The result, containing the final state of the canceled Task object.
  */
 export interface Task {
   /**
-   * Collection of artifacts created by the agent.
+   * A collection of artifacts generated by the agent during the execution of the task.
    */
   artifacts?: Artifact[];
   /**
-   * Server-generated id for contextual alignment across interactions
+   * A server-generated identifier for maintaining context across multiple related tasks or interactions.
    */
   contextId: string;
+  /**
+   * An array of messages exchanged during the task, representing the conversation history.
+   */
   history?: Message1[];
   /**
-   * Unique identifier for the task
+   * A unique identifier for the task, generated by the server for a new task.
    */
   id: string;
   /**
-   * Event type
+   * The type of this object, used as a discriminator. Always 'task' for a Task.
    */
   kind: "task";
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
@@ -1400,215 +1714,387 @@ export interface Task {
   status: TaskStatus;
 }
 /**
- * Represents a single message exchanged between user and agent.
+ * Represents a single message in the conversation between a user and an agent.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "Message".
  */
 export interface Message1 {
   /**
-   * The context the message is associated with
+   * The context identifier for this message, used to group related interactions.
    */
   contextId?: string;
   /**
-   * The URIs of extensions that are present or contributed to this Message.
+   * The URIs of extensions that are relevant to this message.
    */
   extensions?: string[];
   /**
-   * Event type
+   * The type of this object, used as a discriminator. Always 'message' for a Message.
    */
   kind: "message";
   /**
-   * Identifier created by the message creator
+   * A unique identifier for the message, typically a UUID, generated by the sender.
    */
   messageId: string;
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
   };
   /**
-   * Message content
+   * An array of content parts that form the message body. A message can be
+   * composed of multiple parts of different types (e.g., text and files).
    */
   parts: Part[];
   /**
-   * List of tasks referenced as context by this message.
+   * A list of other task IDs that this message references for additional context.
    */
   referenceTaskIds?: string[];
   /**
-   * Message sender's role
+   * Identifies the sender of the message. `user` for the client, `agent` for the service.
    */
   role: "agent" | "user";
   /**
-   * Identifier of task the message is related to
+   * The identifier of the task this message is part of. Can be omitted for the first message of a new task.
    */
   taskId?: string;
 }
 /**
- * Current status of the task
+ * The current status of the task, including its state and a descriptive message.
  */
 export interface TaskStatus {
   message?: Message2;
-  state: TaskState;
   /**
-   * ISO 8601 datetime string when the status was recorded.
+   * The current state of the task's lifecycle.
+   */
+  state:
+    | "submitted"
+    | "working"
+    | "input-required"
+    | "completed"
+    | "canceled"
+    | "failed"
+    | "rejected"
+    | "auth-required"
+    | "unknown";
+  /**
+   * An ISO 8601 datetime string indicating when this status was recorded.
    */
   timestamp?: string;
 }
 /**
- * Represents a single message exchanged between user and agent.
+ * Represents a single message in the conversation between a user and an agent.
  */
 export interface Message2 {
   /**
-   * The context the message is associated with
+   * The context identifier for this message, used to group related interactions.
    */
   contextId?: string;
   /**
-   * The URIs of extensions that are present or contributed to this Message.
+   * The URIs of extensions that are relevant to this message.
    */
   extensions?: string[];
   /**
-   * Event type
+   * The type of this object, used as a discriminator. Always 'message' for a Message.
    */
   kind: "message";
   /**
-   * Identifier created by the message creator
+   * A unique identifier for the message, typically a UUID, generated by the sender.
    */
   messageId: string;
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
   };
   /**
-   * Message content
+   * An array of content parts that form the message body. A message can be
+   * composed of multiple parts of different types (e.g., text and files).
    */
   parts: Part[];
   /**
-   * List of tasks referenced as context by this message.
+   * A list of other task IDs that this message references for additional context.
    */
   referenceTaskIds?: string[];
   /**
-   * Message sender's role
+   * Identifies the sender of the message. `user` for the client, `agent` for the service.
    */
   role: "agent" | "user";
   /**
-   * Identifier of task the message is related to
+   * The identifier of the task this message is part of. Can be omitted for the first message of a new task.
    */
   taskId?: string;
 }
 /**
- * Configuration details for a supported OAuth Flow
+ * Defines configuration details for the OAuth 2.0 Client Credentials flow.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "ClientCredentialsOAuthFlow".
  */
 export interface ClientCredentialsOAuthFlow1 {
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens. This MUST be a URL.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
   /**
-   * The token URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard
-   * requires the use of TLS.
+   * The token URL to be used for this flow. This MUST be a URL.
    */
   tokenUrl: string;
 }
 /**
- * Represents the base entity for FileParts
+ * Defines parameters for deleting a specific push notification configuration for a task.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "DeleteTaskPushNotificationConfigParams".
+ */
+export interface DeleteTaskPushNotificationConfigParams1 {
+  /**
+   * The unique identifier of the task.
+   */
+  id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The ID of the push notification configuration to delete.
+   */
+  pushNotificationConfigId: string;
+}
+/**
+ * Represents a successful JSON-RPC response for the `tasks/pushNotificationConfig/delete` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "DeleteTaskPushNotificationConfigSuccessResponse".
+ */
+export interface DeleteTaskPushNotificationConfigSuccessResponse {
+  /**
+   * The identifier established by the client.
+   */
+  id: string | number | null;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  /**
+   * The result is null on successful deletion.
+   */
+  result: null;
+}
+/**
+ * Defines base properties for a file.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "FileBase".
  */
 export interface FileBase {
   /**
-   * Optional mimeType for the file
+   * The MIME type of the file (e.g., "application/pdf").
    */
   mimeType?: string;
   /**
-   * Optional name for the file
+   * An optional name for the file (e.g., "document.pdf").
    */
   name?: string;
 }
 /**
- * JSON-RPC success response model for the 'tasks/pushNotificationConfig/get' method.
+ * Represents a successful JSON-RPC response for the `agent/getAuthenticatedExtendedCard` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "GetAuthenticatedExtendedCardSuccessResponse".
+ */
+export interface GetAuthenticatedExtendedCardSuccessResponse {
+  /**
+   * The identifier established by the client.
+   */
+  id: string | number | null;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  result: AgentCard1;
+}
+/**
+ * The result is an Agent Card object.
+ */
+export interface AgentCard1 {
+  /**
+   * A list of additional supported interfaces (transport and URL combinations).
+   * This allows agents to expose multiple transports, potentially at different URLs.
+   *
+   * Best practices:
+   * - SHOULD include all supported transports for completeness
+   * - SHOULD include an entry matching the main 'url' and 'preferredTransport'
+   * - MAY reuse URLs if multiple transports are available at the same endpoint
+   * - MUST accurately declare the transport available at each URL
+   *
+   * Clients can select any interface from this list based on their transport capabilities
+   * and preferences. This enables transport negotiation and fallback scenarios.
+   */
+  additionalInterfaces?: AgentInterface[];
+  capabilities: AgentCapabilities1;
+  /**
+   * Default set of supported input MIME types for all skills, which can be
+   * overridden on a per-skill basis.
+   */
+  defaultInputModes: string[];
+  /**
+   * Default set of supported output MIME types for all skills, which can be
+   * overridden on a per-skill basis.
+   */
+  defaultOutputModes: string[];
+  /**
+   * A human-readable description of the agent, assisting users and other agents
+   * in understanding its purpose.
+   */
+  description: string;
+  /**
+   * An optional URL to the agent's documentation.
+   */
+  documentationUrl?: string;
+  /**
+   * An optional URL to an icon for the agent.
+   */
+  iconUrl?: string;
+  /**
+   * A human-readable name for the agent.
+   */
+  name: string;
+  /**
+   * The transport protocol for the preferred endpoint (the main 'url' field).
+   * If not specified, defaults to 'JSONRPC'.
+   *
+   * IMPORTANT: The transport specified here MUST be available at the main 'url'.
+   * This creates a binding between the main URL and its supported transport protocol.
+   * Clients should prefer this transport and URL combination when both are supported.
+   */
+  preferredTransport?: string;
+  /**
+   * The version of the A2A protocol this agent supports.
+   */
+  protocolVersion: string;
+  provider?: AgentProvider;
+  /**
+   * A list of security requirement objects that apply to all agent interactions. Each object
+   * lists security schemes that can be used. Follows the OpenAPI 3.0 Security Requirement Object.
+   * This list can be seen as an OR of ANDs. Each object in the list describes one possible
+   * set of security requirements that must be present on a request. This allows specifying,
+   * for example, "callers must either use OAuth OR an API Key AND mTLS."
+   */
+  security?: {
+    [k: string]: string[];
+  }[];
+  /**
+   * A declaration of the security schemes available to authorize requests. The key is the
+   * scheme name. Follows the OpenAPI 3.0 Security Scheme Object.
+   */
+  securitySchemes?: {
+    [k: string]: SecurityScheme;
+  };
+  /**
+   * JSON Web Signatures computed for this AgentCard.
+   */
+  signatures?: AgentCardSignature[];
+  /**
+   * The set of skills, or distinct capabilities, that the agent can perform.
+   */
+  skills: AgentSkill[];
+  /**
+   * If true, the agent can provide an extended agent card with additional details
+   * to authenticated users. Defaults to false.
+   */
+  supportsAuthenticatedExtendedCard?: boolean;
+  /**
+   * The preferred endpoint URL for interacting with the agent.
+   * This URL MUST support the transport specified by 'preferredTransport'.
+   */
+  url: string;
+  /**
+   * The agent's own version number. The format is defined by the provider.
+   */
+  version: string;
+}
+/**
+ * Represents a successful JSON-RPC response for the `tasks/pushNotificationConfig/get` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "GetTaskPushNotificationConfigSuccessResponse".
  */
 export interface GetTaskPushNotificationConfigSuccessResponse {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   result: TaskPushNotificationConfig1;
 }
 /**
- * The result object on success.
+ * The result, containing the requested push notification configuration.
  */
 export interface TaskPushNotificationConfig1 {
   pushNotificationConfig: PushNotificationConfig1;
   /**
-   * Task id.
+   * The ID of the task.
    */
   taskId: string;
 }
 /**
- * JSON-RPC success response for the 'tasks/get' method.
+ * Represents a successful JSON-RPC response for the `tasks/get` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "GetTaskSuccessResponse".
  */
 export interface GetTaskSuccessResponse {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   result: Task1;
 }
 /**
- * The result object on success.
+ * The result, containing the requested Task object.
  */
 export interface Task1 {
   /**
-   * Collection of artifacts created by the agent.
+   * A collection of artifacts generated by the agent during the execution of the task.
    */
   artifacts?: Artifact[];
   /**
-   * Server-generated id for contextual alignment across interactions
+   * A server-generated identifier for maintaining context across multiple related tasks or interactions.
    */
   contextId: string;
+  /**
+   * An array of messages exchanged during the task, representing the conversation history.
+   */
   history?: Message1[];
   /**
-   * Unique identifier for the task
+   * A unique identifier for the task, generated by the server for a new task.
    */
   id: string;
   /**
-   * Event type
+   * The type of this object, used as a discriminator. Always 'task' for a Task.
    */
   kind: "task";
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
@@ -1616,44 +2102,42 @@ export interface Task1 {
   status: TaskStatus;
 }
 /**
- * Configuration details for a supported OAuth Flow
+ * Defines configuration details for the OAuth 2.0 Implicit flow.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "ImplicitOAuthFlow".
  */
 export interface ImplicitOAuthFlow1 {
   /**
-   * The authorization URL to be used for this flow. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS
+   * The authorization URL to be used for this flow. This MUST be a URL.
    */
   authorizationUrl: string;
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens. This MUST be a URL.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
 }
 /**
- * Base interface for any JSON-RPC 2.0 request or response.
+ * Defines the base structure for any JSON-RPC 2.0 request, response, or notification.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "JSONRPCMessage".
  */
 export interface JSONRPCMessage {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * A unique identifier established by the client. It must be a String, a Number, or null.
+   * The server must reply with the same value in the response. This property is omitted for notifications.
    */
   id?: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
 }
@@ -1665,70 +2149,74 @@ export interface JSONRPCMessage {
  */
 export interface JSONRPCRequest {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * A unique identifier established by the client. It must be a String, a Number, or null.
+   * The server must reply with the same value in the response. This property is omitted for notifications.
    */
   id?: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * A String containing the name of the method to be invoked.
+   * A string containing the name of the method to be invoked.
    */
   method: string;
   /**
-   * A Structured value that holds the parameter values to be used during the invocation of the method.
+   * A structured value holding the parameter values to be used during the method invocation.
    */
   params?: {
     [k: string]: unknown;
   };
 }
 /**
- * JSON-RPC success response model for the 'message/send' method.
+ * Represents a successful JSON-RPC response for the `message/send` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SendMessageSuccessResponse".
  */
 export interface SendMessageSuccessResponse {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * The result object on success
+   * The result, which can be a direct reply Message or the initial Task object.
    */
   result: Task2 | Message1;
 }
 /**
+ * Represents a single, stateful operation or conversation between a client and an agent.
+ *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "Task".
  */
 export interface Task2 {
   /**
-   * Collection of artifacts created by the agent.
+   * A collection of artifacts generated by the agent during the execution of the task.
    */
   artifacts?: Artifact[];
   /**
-   * Server-generated id for contextual alignment across interactions
+   * A server-generated identifier for maintaining context across multiple related tasks or interactions.
    */
   contextId: string;
+  /**
+   * An array of messages exchanged during the task, representing the conversation history.
+   */
   history?: Message1[];
   /**
-   * Unique identifier for the task
+   * A unique identifier for the task, generated by the server for a new task.
    */
   id: string;
   /**
-   * Event type
+   * The type of this object, used as a discriminator. Always 'task' for a Task.
    */
   kind: "task";
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
@@ -1736,208 +2224,272 @@ export interface Task2 {
   status: TaskStatus;
 }
 /**
- * JSON-RPC success response model for the 'message/stream' method.
+ * Represents a successful JSON-RPC response for the `message/stream` method.
+ * The server may send multiple response objects for a single request.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SendStreamingMessageSuccessResponse".
  */
 export interface SendStreamingMessageSuccessResponse {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * The result object on success
+   * The result, which can be a Message, Task, or a streaming update event.
    */
   result: Task2 | Message1 | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 }
 /**
- * Sent by server during sendStream or subscribe requests
+ * An event sent by the agent to notify the client of a change in a task's status.
+ * This is typically used in streaming or subscription models.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskStatusUpdateEvent".
  */
 export interface TaskStatusUpdateEvent {
   /**
-   * The context the task is associated with
+   * The context ID associated with the task.
    */
   contextId: string;
   /**
-   * Indicates the end of the event stream
+   * If true, this is the final event in the stream for this interaction.
    */
   final: boolean;
   /**
-   * Event type
+   * The type of this event, used as a discriminator. Always 'status-update'.
    */
   kind: "status-update";
   /**
-   * Extension metadata.
+   * Optional metadata for extensions.
    */
   metadata?: {
     [k: string]: unknown;
   };
   status: TaskStatus1;
   /**
-   * Task id
+   * The ID of the task that was updated.
    */
   taskId: string;
 }
 /**
- * Current status of the task
+ * The new status of the task.
  */
 export interface TaskStatus1 {
   message?: Message2;
-  state: TaskState;
   /**
-   * ISO 8601 datetime string when the status was recorded.
+   * The current state of the task's lifecycle.
+   */
+  state:
+    | "submitted"
+    | "working"
+    | "input-required"
+    | "completed"
+    | "canceled"
+    | "failed"
+    | "rejected"
+    | "auth-required"
+    | "unknown";
+  /**
+   * An ISO 8601 datetime string indicating when this status was recorded.
    */
   timestamp?: string;
 }
 /**
- * Sent by server during sendStream or subscribe requests
+ * An event sent by the agent to notify the client that an artifact has been
+ * generated or updated. This is typically used in streaming models.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskArtifactUpdateEvent".
  */
 export interface TaskArtifactUpdateEvent {
   /**
-   * Indicates if this artifact appends to a previous one
+   * If true, the content of this artifact should be appended to a previously sent artifact with the same ID.
    */
   append?: boolean;
   artifact: Artifact1;
   /**
-   * The context the task is associated with
+   * The context ID associated with the task.
    */
   contextId: string;
   /**
-   * Event type
+   * The type of this event, used as a discriminator. Always 'artifact-update'.
    */
   kind: "artifact-update";
   /**
-   * Indicates if this is the last chunk of the artifact
+   * If true, this is the final chunk of the artifact.
    */
   lastChunk?: boolean;
   /**
-   * Extension metadata.
+   * Optional metadata for extensions.
    */
   metadata?: {
     [k: string]: unknown;
   };
   /**
-   * Task id
+   * The ID of the task this artifact belongs to.
    */
   taskId: string;
 }
 /**
- * Represents an artifact generated for a task.
+ * Represents a file, data structure, or other resource generated by an agent during a task.
  */
 export interface Artifact1 {
   /**
-   * Unique identifier for the artifact.
+   * A unique identifier for the artifact within the scope of the task.
    */
   artifactId: string;
   /**
-   * Optional description for the artifact.
+   * An optional, human-readable description of the artifact.
    */
   description?: string;
   /**
-   * The URIs of extensions that are present or contributed to this Artifact.
+   * The URIs of extensions that are relevant to this artifact.
    */
   extensions?: string[];
   /**
-   * Extension metadata.
+   * Optional metadata for extensions. The key is an extension-specific identifier.
    */
   metadata?: {
     [k: string]: unknown;
   };
   /**
-   * Optional name for the artifact.
+   * An optional, human-readable name for the artifact.
    */
   name?: string;
   /**
-   * Artifact parts.
+   * An array of content parts that make up the artifact.
    */
   parts: Part[];
 }
 /**
- * JSON-RPC success response model for the 'tasks/pushNotificationConfig/set' method.
+ * Represents a successful JSON-RPC response for the `tasks/pushNotificationConfig/set` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SetTaskPushNotificationConfigSuccessResponse".
  */
 export interface SetTaskPushNotificationConfigSuccessResponse {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   result: TaskPushNotificationConfig2;
 }
 /**
- * The result object on success.
+ * The result, containing the configured push notification settings.
  */
 export interface TaskPushNotificationConfig2 {
   pushNotificationConfig: PushNotificationConfig1;
   /**
-   * Task id.
+   * The ID of the task.
    */
   taskId: string;
 }
 /**
- * Represents a JSON-RPC 2.0 Success Response object.
+ * Represents a successful JSON-RPC response for the `tasks/pushNotificationConfig/list` method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTaskPushNotificationConfigSuccessResponse".
+ */
+export interface ListTaskPushNotificationConfigSuccessResponse {
+  /**
+   * The identifier established by the client.
+   */
+  id: string | number | null;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  /**
+   * The result, containing an array of all push notification configurations for the task.
+   */
+  result: TaskPushNotificationConfig3[];
+}
+/**
+ * A container associating a push notification configuration with a specific task.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "TaskPushNotificationConfig".
+ */
+export interface TaskPushNotificationConfig3 {
+  pushNotificationConfig: PushNotificationConfig1;
+  /**
+   * The ID of the task.
+   */
+  taskId: string;
+}
+/**
+ * Represents a successful JSON-RPC 2.0 Response object.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "JSONRPCSuccessResponse".
  */
 export interface JSONRPCSuccessResponse {
   /**
-   * An identifier established by the Client that MUST contain a String, Number.
-   * Numbers SHOULD NOT contain fractional parts.
+   * The identifier established by the client.
    */
   id: string | number | null;
   /**
-   * Specifies the version of the JSON-RPC protocol. MUST be exactly "2.0".
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
    */
   jsonrpc: "2.0";
   /**
-   * The result object on success
+   * The value of this member is determined by the method invoked on the Server.
    */
   result: {
     [k: string]: unknown;
   };
 }
 /**
- * Configuration for the send message request.
+ * Defines parameters for listing all push notification configurations associated with a task.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTaskPushNotificationConfigParams".
+ */
+export interface ListTaskPushNotificationConfigParams1 {
+  /**
+   * The unique identifier of the task.
+   */
+  id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Defines configuration options for a `message/send` or `message/stream` request.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "MessageSendConfiguration".
  */
 export interface MessageSendConfiguration1 {
   /**
-   * Accepted output modalities by the client.
+   * A list of output MIME types the client is prepared to accept in the response.
    */
-  acceptedOutputModes: string[];
+  acceptedOutputModes?: string[];
   /**
-   * If the server should treat the client as a blocking request.
+   * If true, the client will wait for the task to complete. The server may reject this if the task is long-running.
    */
   blocking?: boolean;
   /**
-   * Number of recent messages to be retrieved.
+   * The number of most recent messages from the task's history to retrieve in the response.
    */
   historyLength?: number;
   pushNotificationConfig?: PushNotificationConfig;
 }
 /**
- * Sent by the client to the agent as a request. May create, continue or restart a task.
+ * Defines the parameters for a request to send a message to an agent. This can be used
+ * to create a new task, continue an existing one, or restart a task.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "MessageSendParams".
@@ -1946,14 +2498,14 @@ export interface MessageSendParams2 {
   configuration?: MessageSendConfiguration;
   message: Message;
   /**
-   * Extension metadata.
+   * Optional metadata for extensions.
    */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * Allows configuration of the supported OAuth Flows
+ * Defines the configuration for the supported OAuth 2.0 flows.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "OAuthFlows".
@@ -1965,46 +2517,60 @@ export interface OAuthFlows1 {
   password?: PasswordOAuthFlow;
 }
 /**
- * Base properties common to all message parts.
+ * Defines base properties common to all message or artifact parts.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "PartBase".
  */
 export interface PartBase {
   /**
-   * Optional metadata associated with the part.
+   * Optional metadata associated with this part.
    */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * Configuration details for a supported OAuth Flow
+ * Defines configuration details for the OAuth 2.0 Resource Owner Password flow.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "PasswordOAuthFlow".
  */
 export interface PasswordOAuthFlow1 {
   /**
-   * The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2
-   * standard requires the use of TLS.
+   * The URL to be used for obtaining refresh tokens. This MUST be a URL.
    */
   refreshUrl?: string;
   /**
-   * The available scopes for the OAuth2 security scheme. A map between the scope name and a short
-   * description for it. The map MAY be empty.
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
    */
   scopes: {
     [k: string]: string;
   };
   /**
-   * The token URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard
-   * requires the use of TLS.
+   * The token URL to be used for this flow. This MUST be a URL.
    */
   tokenUrl: string;
 }
 /**
- * Configuration for setting up push notifications for task updates.
+ * Defines authentication details for a push notification endpoint.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "PushNotificationAuthenticationInfo".
+ */
+export interface PushNotificationAuthenticationInfo1 {
+  /**
+   * Optional credentials required by the push notification endpoint.
+   */
+  credentials?: string;
+  /**
+   * A list of supported authentication schemes (e.g., 'Basic', 'Bearer').
+   */
+  schemes: string[];
+}
+/**
+ * Defines the configuration for setting up push notifications for task updates.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "PushNotificationConfig".
@@ -2012,88 +2578,76 @@ export interface PasswordOAuthFlow1 {
 export interface PushNotificationConfig2 {
   authentication?: PushNotificationAuthenticationInfo;
   /**
-   * Push Notification ID - created by server to support multiple callbacks
+   * A unique ID for the push notification configuration, set by the client
+   * to support multiple notification callbacks.
    */
   id?: string;
   /**
-   * Token unique to this task/session.
+   * A unique token for this task or session to validate incoming push notifications.
    */
   token?: string;
   /**
-   * URL for sending the push notifications.
+   * The callback URL where the agent should send push notifications.
    */
   url: string;
 }
 /**
- * Base properties shared by all security schemes.
+ * Defines base properties shared by all security scheme objects.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SecuritySchemeBase".
  */
 export interface SecuritySchemeBase {
   /**
-   * Description of this security scheme.
+   * An optional description for the security scheme.
    */
   description?: string;
 }
 /**
- * Parameters containing only a task ID, used for simple task operations.
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "TaskIdParams".
- */
-export interface TaskIdParams3 {
-  /**
-   * Task id.
-   */
-  id: string;
-  metadata?: {
-    [k: string]: unknown;
-  };
-}
-/**
- * Parameters for setting or getting push notification configuration for a task
- *
- * This interface was referenced by `MySchema`'s JSON-Schema
- * via the `definition` "TaskPushNotificationConfig".
- */
-export interface TaskPushNotificationConfig3 {
-  pushNotificationConfig: PushNotificationConfig1;
-  /**
-   * Task id.
-   */
-  taskId: string;
-}
-/**
- * Parameters for querying a task, including optional history length.
+ * Defines parameters for querying a task, with an option to limit history length.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskQueryParams".
  */
 export interface TaskQueryParams1 {
   /**
-   * Number of recent messages to be retrieved.
+   * The number of most recent messages from the task's history to retrieve.
    */
   historyLength?: number;
   /**
-   * Task id.
+   * The unique identifier of the task.
    */
   id: string;
+  /**
+   * Optional metadata associated with the request.
+   */
   metadata?: {
     [k: string]: unknown;
   };
 }
 /**
- * TaskState and accompanying message.
+ * Represents the status of a task at a specific point in time.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "TaskStatus".
  */
 export interface TaskStatus2 {
   message?: Message2;
-  state: TaskState;
   /**
-   * ISO 8601 datetime string when the status was recorded.
+   * The current state of the task's lifecycle.
+   */
+  state:
+    | "submitted"
+    | "working"
+    | "input-required"
+    | "completed"
+    | "canceled"
+    | "failed"
+    | "rejected"
+    | "auth-required"
+    | "unknown";
+  /**
+   * An ISO 8601 datetime string indicating when this status was recorded.
    */
   timestamp?: string;
 }
