@@ -434,6 +434,10 @@ export interface MessageSendConfiguration {
    * Number of recent messages to be retrieved.
    */
   historyLength?: number;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   pushNotificationConfig?: PushNotificationConfig;
 }
 /**
@@ -690,6 +694,10 @@ export interface TaskQueryParams {
    * Task id.
    */
   id: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   metadata?: {
     [k: string]: unknown;
   };
@@ -724,6 +732,10 @@ export interface TaskIdParams {
    * Task id.
    */
   id: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   metadata?: {
     [k: string]: unknown;
   };
@@ -759,6 +771,10 @@ export interface TaskPushNotificationConfig {
    * Task id.
    */
   taskId: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
 }
 /**
  * Push notification configuration.
@@ -808,6 +824,10 @@ export interface TaskIdParams1 {
    * Task id.
    */
   id: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   metadata?: {
     [k: string]: unknown;
   };
@@ -842,6 +862,10 @@ export interface TaskIdParams2 {
    * Task id.
    */
   id: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   metadata?: {
     [k: string]: unknown;
   };
@@ -1934,6 +1958,10 @@ export interface MessageSendConfiguration1 {
    * Number of recent messages to be retrieved.
    */
   historyLength?: number;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   pushNotificationConfig?: PushNotificationConfig;
 }
 /**
@@ -2047,6 +2075,10 @@ export interface TaskIdParams3 {
    * Task id.
    */
   id: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   metadata?: {
     [k: string]: unknown;
   };
@@ -2063,6 +2095,10 @@ export interface TaskPushNotificationConfig3 {
    * Task id.
    */
   taskId: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
 }
 /**
  * Parameters for querying a task, including optional history length.
@@ -2079,6 +2115,10 @@ export interface TaskQueryParams1 {
    * Task id.
    */
   id: string;
+  /**
+   * Timeout in milliseconds for the request. If not specified, no timeout is applied.
+   */
+  timeout?: number;
   metadata?: {
     [k: string]: unknown;
   };
