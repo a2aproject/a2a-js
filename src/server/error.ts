@@ -93,4 +93,11 @@ export class A2AError extends Error {
       `Unsupported operation: ${operation}`
     );
   }
+
+  static authenticatedExtendedCardNotConfigured(): A2AError {
+    return new A2AError(
+      -32007,
+      `Extended card not configured.`
+    );
+  }
 }

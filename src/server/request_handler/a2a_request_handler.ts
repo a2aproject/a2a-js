@@ -16,6 +16,8 @@ import {
 export interface A2ARequestHandler {
     getAgentCard(): Promise<AgentCard>;
 
+    getAuthenticatedExtendedAgentCard(): Promise<AgentCard>;
+
     sendMessage(
         params: MessageSendParams
     ): Promise<Message | Task>;

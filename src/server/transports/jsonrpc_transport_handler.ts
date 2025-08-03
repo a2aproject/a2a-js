@@ -1,5 +1,4 @@
-import { A2AResponse } from "../../a2a_response.js";
-import { JSONRPCRequest, JSONRPCErrorResponse, MessageSendParams, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, JSONRPCSuccessResponse, SendStreamingMessageSuccessResponse, A2ARequest } from "../../types.js";
+import { JSONRPCErrorResponse, MessageSendParams, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, A2ARequest, JSONRPCResponse, DeleteTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 
@@ -20,7 +19,7 @@ export class JsonRpcTransportHandler {
      */
     public async handle(
         requestBody: any
-    ): Promise<A2AResponse | AsyncGenerator<A2AResponse, void, undefined>> {
+    ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
         let rpcRequest: A2ARequest;
 
         try {
@@ -53,6 +52,19 @@ export class JsonRpcTransportHandler {
         const { method, id: requestId = null } = rpcRequest;
 
         try {
+            if(method === 'agent/getAuthenticatedExtendedCard') {
+                const result = await this.requestHandler.getAuthenticatedExtendedAgentCard();
+                return {
+                    jsonrpc: '2.0',
+                    id: requestId,
+                    result: result,
+                } as JSONRPCResponse;
+            }
+
+            if (!rpcRequest.params) {
+                throw A2AError.invalidParams(`'params' is required for '${method}'`);
+            }
+
             if (method === 'message/stream' || method === 'tasks/resubscribe') {
                 const params = rpcRequest.params;
                 const agentCard = await this.requestHandler.getAgentCard();
@@ -64,7 +76,7 @@ export class JsonRpcTransportHandler {
                     : this.requestHandler.resubscribe(params as TaskIdParams);
 
                 // Wrap the agent event stream into a JSON-RPC result stream
-                return (async function* jsonRpcEventStream(): AsyncGenerator<A2AResponse, void, undefined> {
+                return (async function* jsonRpcEventStream(): AsyncGenerator<JSONRPCResponse, void, undefined> {
                     try {
                         for await (const event of agentEventStream) {
                             yield {
@@ -90,22 +102,32 @@ export class JsonRpcTransportHandler {
                 let result: any;
                 switch (method) {
                     case 'message/send':
-                        result = await this.requestHandler.sendMessage(rpcRequest.params as MessageSendParams);
+                        result = await this.requestHandler.sendMessage(rpcRequest.params);
                         break;
                     case 'tasks/get':
-                        result = await this.requestHandler.getTask(rpcRequest.params as TaskQueryParams);
+                        result = await this.requestHandler.getTask(rpcRequest.params);
                         break;
                     case 'tasks/cancel':
-                        result = await this.requestHandler.cancelTask(rpcRequest.params as TaskIdParams);
+                        result = await this.requestHandler.cancelTask(rpcRequest.params);
                         break;
                     case 'tasks/pushNotificationConfig/set':
                         result = await this.requestHandler.setTaskPushNotificationConfig(
-                            rpcRequest.params as TaskPushNotificationConfig
+                            rpcRequest.params
                         );
                         break;
                     case 'tasks/pushNotificationConfig/get':
                         result = await this.requestHandler.getTaskPushNotificationConfig(
-                            rpcRequest.params as TaskIdParams
+                            rpcRequest.params
+                        );
+                        break;
+                    case 'tasks/pushNotificationConfig/delete':
+                        result = await this.requestHandler.deleteTaskPushNotificationConfig(
+                            rpcRequest.params
+                        );
+                        break;
+                    case 'tasks/pushNotificationConfig/list':
+                        result = await this.requestHandler.listTaskPushNotificationConfigs(
+                            rpcRequest.params
                         );
                         break;
                     default:
@@ -115,7 +137,7 @@ export class JsonRpcTransportHandler {
                     jsonrpc: '2.0',
                     id: requestId,
                     result: result,
-                } as A2AResponse;
+                } as JSONRPCResponse;
             }
         } catch (error: any) {
             const a2aError = error instanceof A2AError ? error : A2AError.internalError(error.message || 'An unexpected error occurred.');

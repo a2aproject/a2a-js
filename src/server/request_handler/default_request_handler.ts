@@ -15,6 +15,7 @@ const terminalStates: TaskState[] = ["completed", "failed", "canceled", "rejecte
 
 export class DefaultRequestHandler implements A2ARequestHandler {
     private readonly agentCard: AgentCard;
+    private readonly extendedAgentCard?: AgentCard;
     private readonly taskStore: TaskStore;
     private readonly agentExecutor: AgentExecutor;
     private readonly eventBusManager: ExecutionEventBusManager;
@@ -27,15 +28,25 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         taskStore: TaskStore,
         agentExecutor: AgentExecutor,
         eventBusManager: ExecutionEventBusManager = new DefaultExecutionEventBusManager(),
+        extendedAgentCard?: AgentCard,
     ) {
         this.agentCard = agentCard;
         this.taskStore = taskStore;
         this.agentExecutor = agentExecutor;
         this.eventBusManager = eventBusManager;
+        this.extendedAgentCard = extendedAgentCard;
     }
 
     async getAgentCard(): Promise<AgentCard> {
         return this.agentCard;
+    }
+
+    async getAuthenticatedExtendedAgentCard(): Promise<AgentCard> {
+        if(!this.extendedAgentCard) {
+            throw A2AError.authenticatedExtendedCardNotConfigured()
+        }
+
+        return this.extendedAgentCard;
     }
 
     private async _createRequestContext(

@@ -1,7 +1,7 @@
 import express, { Request, Response, Express, RequestHandler, ErrorRequestHandler } from 'express';
 
 import { A2AError } from "./error.js";
-import { A2AResponse, JSONRPCErrorResponse, JSONRPCSuccessResponse } from "../index.js";
+import { JSONRPCErrorResponse, JSONRPCResponse, JSONRPCSuccessResponse } from "../index.js";
 import { A2ARequestHandler } from "./request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "./transports/jsonrpc_transport_handler.js";
 
@@ -82,7 +82,7 @@ export class A2AExpressApp {
                         }
                     }
                 } else { // Single JSON-RPC response
-                    const rpcResponse = rpcResponseOrStream as A2AResponse;
+                    const rpcResponse = rpcResponseOrStream as JSONRPCResponse;
                     res.status(200).json(rpcResponse);
                 }
             } catch (error: any) { // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
