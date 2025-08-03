@@ -1,9 +1,9 @@
 import express, { Request, Response, Express, RequestHandler, ErrorRequestHandler } from 'express';
 
-import { A2AError } from "./error.js";
-import { JSONRPCErrorResponse, JSONRPCResponse, JSONRPCSuccessResponse } from "../index.js";
-import { A2ARequestHandler } from "./request_handler/a2a_request_handler.js";
-import { JsonRpcTransportHandler } from "./transports/jsonrpc_transport_handler.js";
+import { A2AError } from "../error.js";
+import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from "../../index.js";
+import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
+import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
 
 export class A2AExpressApp {
     private requestHandler: A2ARequestHandler; // Kept for getAgentCard

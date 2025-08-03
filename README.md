@@ -21,11 +21,24 @@ You can install the A2A SDK using either `npm`.
 npm install @a2a-js/sdk
 ```
 
+### For Server Usage
+
+If you plan to use the A2A server functionality (A2AExpressApp), you'll also need to install Express as it's a peer dependency:
+
+```bash
+npm install express
+```
+
 You can also find JavaScript samples [here](https://github.com/google-a2a/a2a-samples/tree/main/samples/js).
 
 ## A2A Server
 
 This directory contains a TypeScript server implementation for the Agent-to-Agent (A2A) communication protocol, built using Express.js.
+
+**Note:** Express is a peer dependency for server functionality. Make sure to install it separately:
+```bash
+npm install express
+```
 
 ### 1. Define Agent Card
 
@@ -81,12 +94,12 @@ const movieAgentCard: AgentCard = {
 import {
   InMemoryTaskStore,
   TaskStore,
-  A2AExpressApp,
   AgentExecutor,
   RequestContext,
   ExecutionEventBus,
   DefaultRequestHandler,
 } from "@a2a-js/sdk/server";
+import { A2AExpressApp } from "@a2a-js/sdk/server/express";
 
 // 1. Define your agent's logic as a AgentExecutor
 class MyAgentExecutor implements AgentExecutor {
