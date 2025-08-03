@@ -12,12 +12,12 @@ import {
 import {
   InMemoryTaskStore,
   TaskStore,
-  A2AExpressApp,
   AgentExecutor,
   RequestContext,
   ExecutionEventBus,
   DefaultRequestHandler
 } from "../../../server/index.js";
+import { A2AExpressApp } from "../../../server/express/index.js";
 import { MessageData } from "genkit";
 import { ai } from "./genkit.js";
 import { searchMovies, searchPeople } from "./tools.js";
