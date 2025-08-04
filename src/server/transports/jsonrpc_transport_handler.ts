@@ -121,9 +121,10 @@ export class JsonRpcTransportHandler {
                         );
                         break;
                     case 'tasks/pushNotificationConfig/delete':
-                        result = await this.requestHandler.deleteTaskPushNotificationConfig(
+                        await this.requestHandler.deleteTaskPushNotificationConfig(
                             rpcRequest.params
                         );
+                        result = null;
                         break;
                     case 'tasks/pushNotificationConfig/list':
                         result = await this.requestHandler.listTaskPushNotificationConfigs(

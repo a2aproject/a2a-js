@@ -3,8 +3,8 @@ import { assert, expect } from 'chai';
 import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
-import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue } from '../../src/server/index.js';
-import { AgentCard, Artifact, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
+import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError } from '../../src/server/index.js';
+import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 
@@ -486,6 +486,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await mockTaskStore.save(fakeTask);
     
         const pushConfig: PushNotificationConfig = {
+            id: 'config-1',
             url: 'https://example.com/notify',
             token: 'secret-token'
         };
@@ -494,9 +495,128 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const setResponse = await handler.setTaskPushNotificationConfig(setParams);
         assert.deepEqual(setResponse.pushNotificationConfig, pushConfig, "Set response should return the config");
     
-        const getParams: TaskIdParams = { id: taskId };
+        const getParams: GetTaskPushNotificationConfigParams = { id: taskId, pushNotificationConfigId: 'config-1' };
         const getResponse = await handler.getTaskPushNotificationConfig(getParams);
         assert.deepEqual(getResponse.pushNotificationConfig, pushConfig, "Get response should return the saved config");
+    });
+
+    it('set/getTaskPushNotificationConfig: should save and retrieve config by task ID for backward compatibility', async () => {
+        const taskId = 'task-push-compat';
+        await mockTaskStore.save({ id: taskId, contextId: 'ctx-compat', status: { state: 'working' }, kind: 'task' });
+        
+        // Config ID defaults to task ID
+        const pushConfig: PushNotificationConfig = { url: 'https://example.com/notify-compat' };
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: pushConfig });
+
+        const getResponse = await handler.getTaskPushNotificationConfig({ id: taskId });
+        expect(getResponse.pushNotificationConfig.id).to.equal(taskId);
+        expect(getResponse.pushNotificationConfig.url).to.equal(pushConfig.url);
+    });
+
+    it('setTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
+        const taskId = 'task-overwrite';
+        await mockTaskStore.save({ id: taskId, contextId: 'ctx-overwrite', status: { state: 'working' }, kind: 'task' });
+        const initialConfig: PushNotificationConfig = { id: 'config-same', url: 'https://initial.url' };
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: initialConfig });
+
+        const newConfig: PushNotificationConfig = { id: 'config-same', url: 'https://new.url' };
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: newConfig });
+        
+        const configs = await handler.listTaskPushNotificationConfigs({ id: taskId });
+        expect(configs).to.have.lengthOf(1);
+        expect(configs[0].pushNotificationConfig.url).to.equal('https://new.url');
+    });
+
+    it('listTaskPushNotificationConfigs: should return all configs for a task', async () => {
+        const taskId = 'task-list-configs';
+        await mockTaskStore.save({ id: taskId, contextId: 'ctx-list', status: { state: 'working' }, kind: 'task' });
+        const config1: PushNotificationConfig = { id: 'cfg1', url: 'https://url1.com' };
+        const config2: PushNotificationConfig = { id: 'cfg2', url: 'https://url2.com' };
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: config1 });
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: config2 });
+
+        const listParams: ListTaskPushNotificationConfigParams = { id: taskId };
+        const listResponse = await handler.listTaskPushNotificationConfigs(listParams);
+        
+        expect(listResponse).to.be.an('array').with.lengthOf(2);
+        assert.deepInclude(listResponse, { taskId, pushNotificationConfig: config1 });
+        assert.deepInclude(listResponse, { taskId, pushNotificationConfig: config2 });
+    });
+    
+    it('deleteTaskPushNotificationConfig: should remove a specific config', async () => {
+        const taskId = 'task-delete-config';
+        await mockTaskStore.save({ id: taskId, contextId: 'ctx-delete', status: { state: 'working' }, kind: 'task' });
+        const config1: PushNotificationConfig = { id: 'cfg-del-1', url: 'https://url1.com' };
+        const config2: PushNotificationConfig = { id: 'cfg-del-2', url: 'https://url2.com' };
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: config1 });
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: config2 });
+
+        const deleteParams: DeleteTaskPushNotificationConfigParams = { id: taskId, pushNotificationConfigId: 'cfg-del-1' };
+        await handler.deleteTaskPushNotificationConfig(deleteParams);
+
+        const remainingConfigs = await handler.listTaskPushNotificationConfigs({ id: taskId });
+        expect(remainingConfigs).to.have.lengthOf(1);
+        expect(remainingConfigs[0].pushNotificationConfig.id).to.equal('cfg-del-2');
+    });
+
+    it('deleteTaskPushNotificationConfig: should remove the whole entry if last config is deleted', async () => {
+        const taskId = 'task-delete-last-config';
+        await mockTaskStore.save({ id: taskId, contextId: 'ctx-delete-last', status: { state: 'working' }, kind: 'task' });
+        const config: PushNotificationConfig = { id: 'cfg-last', url: 'https://last.com' };
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig: config });
+
+        await handler.deleteTaskPushNotificationConfig({ id: taskId, pushNotificationConfigId: 'cfg-last' });
+
+        const configs = await handler.listTaskPushNotificationConfigs({ id: taskId });
+        expect(configs).to.be.an('array').with.lengthOf(0);
+    });
+
+    it('Push Notification methods should throw error if task does not exist', async () => {
+        const nonExistentTaskId = 'task-non-existent';
+        const config: PushNotificationConfig = { id: 'cfg-x', url: 'https://x.com' };
+        
+        const methodsToTest = [
+            { name: 'setTaskPushNotificationConfig', params: { taskId: nonExistentTaskId, pushNotificationConfig: config } },
+            { name: 'getTaskPushNotificationConfig', params: { id: nonExistentTaskId, pushNotificationConfigId: 'cfg-x' } },
+            { name: 'listTaskPushNotificationConfigs', params: { id: nonExistentTaskId } },
+            { name: 'deleteTaskPushNotificationConfig', params: { id: nonExistentTaskId, pushNotificationConfigId: 'cfg-x' } },
+        ];
+    
+        for (const method of methodsToTest) {
+            try {
+                await (handler as any)[method.name](method.params);
+                assert.fail(`Method ${method.name} should have thrown for non-existent task.`);
+            } catch (error: any) {
+                expect(error).to.be.instanceOf(A2AError);
+                expect(error.code).to.equal(-32001); // Task Not Found
+            }
+        }
+    });
+
+    it('Push Notification methods should throw error if pushNotifications are not supported', async () => {
+        const unsupportedAgentCard = { ...testAgentCard, capabilities: { ...testAgentCard.capabilities, pushNotifications: false } };
+        handler = new DefaultRequestHandler(unsupportedAgentCard, mockTaskStore, mockAgentExecutor, executionEventBusManager);
+        
+        const taskId = 'task-unsupported';
+        await mockTaskStore.save({ id: taskId, contextId: 'ctx-unsupported', status: { state: 'working' }, kind: 'task' });
+        const config: PushNotificationConfig = { id: 'cfg-u', url: 'https://u.com' };
+
+        const methodsToTest = [
+            { name: 'setTaskPushNotificationConfig', params: { taskId, pushNotificationConfig: config } },
+            { name: 'getTaskPushNotificationConfig', params: { id: taskId, pushNotificationConfigId: 'cfg-u' } },
+            { name: 'listTaskPushNotificationConfigs', params: { id: taskId } },
+            { name: 'deleteTaskPushNotificationConfig', params: { id: taskId, pushNotificationConfigId: 'cfg-u' } },
+        ];
+
+        for (const method of methodsToTest) {
+            try {
+                await (handler as any)[method.name](method.params);
+                assert.fail(`Method ${method.name} should have thrown for unsupported push notifications.`);
+            } catch (error: any) {
+                expect(error).to.be.instanceOf(A2AError);
+                expect(error.code).to.equal(-32003); // Push Notification Not Supported
+            }
+        }
     });
     
     it('cancelTask: should cancel a running task and notify listeners', async () => {
