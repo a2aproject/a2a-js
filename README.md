@@ -92,6 +92,7 @@ const movieAgentCard: AgentCard = {
 
 ```typescript
 import {
+  A2AExpressApp,
   InMemoryTaskStore,
   TaskStore,
   AgentExecutor,
@@ -99,7 +100,6 @@ import {
   ExecutionEventBus,
   DefaultRequestHandler,
 } from "@a2a-js/sdk/server";
-import { A2AExpressApp } from "@a2a-js/sdk/server/express";
 
 // 1. Define your agent's logic as a AgentExecutor
 class MyAgentExecutor implements AgentExecutor {
