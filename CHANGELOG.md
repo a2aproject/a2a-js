@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/a2aproject/a2a-js/compare/v0.2.5...v0.3.0) (2025-08-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* upgrade to a2a 0.3.0 spec version ([#87](https://github.com/a2aproject/a2a-js/issues/87))
+* make Express dependency optional
+
+### Features
+
+* make Express dependency optional ([60899c5](https://github.com/a2aproject/a2a-js/commit/60899c51e2910570402d1207f6b50952bed8862f))
+* upgrade to a2a 0.3.0 spec version ([#87](https://github.com/a2aproject/a2a-js/issues/87)) ([ae53da1](https://github.com/a2aproject/a2a-js/commit/ae53da1e36ff58912e01fefa854c5b3174edf7d8))
+
 ## [0.2.5](https://github.com/a2aproject/a2a-js/compare/v0.2.4...v0.2.5) (2025-07-30)
 
 
