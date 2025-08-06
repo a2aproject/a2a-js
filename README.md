@@ -55,6 +55,7 @@ const movieAgentCard: AgentCard = {
     organization: "A2A Agents",
     url: "https://example.com/a2a-agents", // Added provider URL
   },
+  protocolVersion: "0.3.0", // A2A protocol this agent supports.
   version: "0.0.2", // Incremented version
   capabilities: {
     streaming: true, // Supports streaming
