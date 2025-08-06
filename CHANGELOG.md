@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/a2aproject/a2a-js/compare/v0.3.0...v0.3.1) (2025-08-06)
+
+
+### Bug Fixes
+
+* add missing express entrypoint to tsup config ([#96](https://github.com/a2aproject/a2a-js/issues/96)) ([8e990e4](https://github.com/a2aproject/a2a-js/commit/8e990e497927e3554699f8ebb005829b170d9bc3))
+
 ## [0.3.0](https://github.com/a2aproject/a2a-js/compare/v0.2.5...v0.3.0) (2025-08-05)
 
 
