@@ -2,16 +2,16 @@ import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from ".
 
 export type AgentExecutionEvent = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
+export type EventListener = (event: AgentExecutionEvent) => void;
+
 export interface ExecutionEventBus {
   publish(event: AgentExecutionEvent): void;
-  on(eventName: "event" | "finished", listener: (event: AgentExecutionEvent) => void): this;
-  off(eventName: "event" | "finished", listener: (event: AgentExecutionEvent) => void): this;
-  once(eventName: "event" | "finished", listener: (event: AgentExecutionEvent) => void): this;
+  on(eventName: "event" | "finished", listener: EventListener): this;
+  off(eventName: "event" | "finished", listener: EventListener): this;
+  once(eventName: "event" | "finished", listener: EventListener): this;
   removeAllListeners(eventName?: "event" | "finished"): this;
   finished(): void;
 }
-
-type EventListener = (event: AgentExecutionEvent) => void;
 
 export class DefaultExecutionEventBus implements ExecutionEventBus {
   private eventListeners: Map<string, Set<EventListener>> = new Map();
