@@ -248,7 +248,7 @@ expressApp.listen(PORT, () => {
     `[MyAgent] Server using new framework started on http://localhost:${PORT}`
   );
   console.log(
-    `[MyAgent] Agent Card: http://localhost:${PORT}/.well-known/agent.json`
+    `[MyAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`
   );
   console.log("[MyAgent] Press Ctrl+C to stop the server");
 });

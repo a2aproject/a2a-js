@@ -29,7 +29,7 @@ export class A2AExpressApp {
         const router = express.Router();
         router.use(express.json(), ...(middlewares ?? []));
 
-        router.get("/.well-known/agent.json", async (req: Request, res: Response) => {
+        router.get("/.well-known/agent-card.json", async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
                 const agentCard = await this.requestHandler.getAgentCard();
