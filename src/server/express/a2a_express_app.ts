@@ -4,6 +4,7 @@ import { A2AError } from "../error.js";
 import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from "../../index.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
+import { AGENT_CARD_PATH } from "../../constants.js";
 
 export class A2AExpressApp {
     private requestHandler: A2ARequestHandler; // Kept for getAgentCard
@@ -19,17 +20,19 @@ export class A2AExpressApp {
      * @param app Optional existing Express app.
      * @param baseUrl The base URL for A2A endpoints (e.g., "/a2a/api").
      * @param middlewares Optional array of Express middlewares to apply to the A2A routes.
+     * @param agentCardPath Optional custom path for the agent card endpoint (defaults to /.well-known/agent-card.json).
      * @returns The Express app with A2A routes.
      */
     public setupRoutes(
         app: Express,
         baseUrl: string = "",
-        middlewares?: Array<RequestHandler | ErrorRequestHandler>
+        middlewares?: Array<RequestHandler | ErrorRequestHandler>,
+        agentCardPath: string = AGENT_CARD_PATH
     ): Express {
         const router = express.Router();
         router.use(express.json(), ...(middlewares ?? []));
 
-        router.get("/.well-known/agent-card.json", async (req: Request, res: Response) => {
+        router.get(agentCardPath, async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
                 const agentCard = await this.requestHandler.getAgentCard();
