@@ -3,11 +3,6 @@
  */
 
 /**
- * The well-known path for the agent card endpoint
+ * The well-known path for the agent card
  */
-export const AGENT_CARD_PATH = "/.well-known/agent-card.json";
-
-/**
- * The relative well-known path for the agent card (without leading slash)
- */
-export const AGENT_CARD_RELATIVE_PATH = ".well-known/agent-card.json";
+export const AGENT_CARD_PATH = ".well-known/agent-card.json";

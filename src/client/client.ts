@@ -31,7 +31,7 @@ import {
   A2AError,
   SendMessageSuccessResponse
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
-import { AGENT_CARD_RELATIVE_PATH } from "../constants.js";
+import { AGENT_CARD_PATH } from "../constants.js";
 
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
@@ -44,7 +44,6 @@ export class A2AClient {
   private agentBaseUrl: string;
   private agentCardPath: string;
   private agentCardPromise: Promise<AgentCard>;
-  private static readonly DEFAULT_AGENT_CARD_PATH = AGENT_CARD_RELATIVE_PATH;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
 
@@ -56,7 +55,7 @@ export class A2AClient {
    * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
    * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
    */
-  constructor(agentBaseUrl: string, agentCardPath: string = A2AClient.DEFAULT_AGENT_CARD_PATH) {
+  constructor(agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH) {
     this.agentBaseUrl = agentBaseUrl.replace(/\/$/, ""); // Remove trailing slash if any
     this.agentCardPath = agentCardPath.replace(/^\//, ""); // Remove leading slash if any
     this.agentCardPromise = this._fetchAndCacheAgentCard();
@@ -98,7 +97,7 @@ export class A2AClient {
    * If provided, this will fetch a new card, not use the cached one from the constructor's URL.
    * @returns A Promise that resolves to the AgentCard.
    */
-  public async getAgentCard(agentBaseUrl?: string, agentCardPath: string = A2AClient.DEFAULT_AGENT_CARD_PATH): Promise<AgentCard> {
+  public async getAgentCard(agentBaseUrl?: string, agentCardPath: string = AGENT_CARD_PATH): Promise<AgentCard> {
     if (agentBaseUrl) {
       const agentCardUrl = `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`
       const response = await fetch(agentCardUrl, {

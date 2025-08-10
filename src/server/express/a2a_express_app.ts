@@ -27,7 +27,7 @@ export class A2AExpressApp {
         app: Express,
         baseUrl: string = "",
         middlewares?: Array<RequestHandler | ErrorRequestHandler>,
-        agentCardPath: string = AGENT_CARD_PATH
+        agentCardPath: string = `/${AGENT_CARD_PATH}`
     ): Express {
         const router = express.Router();
         router.use(express.json(), ...(middlewares ?? []));
