@@ -16,6 +16,14 @@ describe('A2AExpressApp', () => {
     let mockJsonRpcTransportHandler: JsonRpcTransportHandler;
     let app: A2AExpressApp;
     let expressApp: Express;
+
+    // Helper function to create JSON-RPC request bodies
+    const createRpcRequest = (id: string | null, method = 'message/send', params: object = {}) => ({
+        jsonrpc: '2.0',
+        method,
+        id,
+        params,
+    });
     
     const testAgentCard: AgentCard = {
         protocolVersion: '0.3.0',
@@ -36,12 +44,23 @@ describe('A2AExpressApp', () => {
     beforeEach(() => {
         mockRequestHandler = {
             getAgentCard: sinon.stub().resolves(testAgentCard),
-        } as any;
+            getAuthenticatedExtendedAgentCard: sinon.stub(),
+            sendMessage: sinon.stub(),
+            sendMessageStream: sinon.stub(),
+            getTask: sinon.stub(),
+            cancelTask: sinon.stub(),
+            setTaskPushNotificationConfig: sinon.stub(),
+            getTaskPushNotificationConfig: sinon.stub(),
+            listTaskPushNotificationConfigs: sinon.stub(),
+            deleteTaskPushNotificationConfig: sinon.stub(),
+            resubscribe: sinon.stub(),
+        };
         
         app = new A2AExpressApp(mockRequestHandler);
         expressApp = express();
         
-        // Mock the JsonRpcTransportHandler
+        // Mock the JsonRpcTransportHandler - accessing private property for testing
+        // Note: This is a necessary testing approach given current A2AExpressApp design
         mockJsonRpcTransportHandler = sinon.createStubInstance(JsonRpcTransportHandler);
         (app as any).jsonRpcTransportHandler = mockJsonRpcTransportHandler;
     });
@@ -73,8 +92,8 @@ describe('A2AExpressApp', () => {
 
         it('should setup routes with custom middlewares', () => {
             const middlewares = [
-                (req: Request, res: Response, next: Function) => next(),
-                (req: Request, res: Response, next: Function) => next()
+                (_req: Request, _res: Response, next: Function) => next(),
+                (_req: Request, _res: Response, next: Function) => next()
             ];
             const setupApp = app.setupRoutes(expressApp, '', middlewares);
             assert.equal(setupApp, expressApp);
@@ -139,12 +158,7 @@ describe('A2AExpressApp', () => {
 
             (mockJsonRpcTransportHandler.handle as SinonStub).resolves(mockResponse);
 
-            const requestBody = {
-                jsonrpc: '2.0',
-                method: 'message/send',
-                id: 'test-id',
-                params: {}
-            };
+            const requestBody = createRpcRequest('test-id');
 
             const response = await request(expressApp)
                 .post('/')
@@ -165,12 +179,7 @@ describe('A2AExpressApp', () => {
 
             (mockJsonRpcTransportHandler.handle as SinonStub).resolves(mockStreamResponse);
 
-            const requestBody = {
-                jsonrpc: '2.0',
-                method: 'message/stream',
-                id: 'stream-test',
-                params: {}
-            };
+            const requestBody = createRpcRequest('stream-test', 'message/stream');
 
             const response = await request(expressApp)
                 .post('/')
@@ -196,12 +205,7 @@ describe('A2AExpressApp', () => {
 
             (mockJsonRpcTransportHandler.handle as SinonStub).resolves(mockErrorStream);
 
-            const requestBody = {
-                jsonrpc: '2.0',
-                method: 'message/stream',
-                id: 'stream-error-test',
-                params: {}
-            };
+            const requestBody = createRpcRequest('stream-error-test', 'message/stream');
 
             const response = await request(expressApp)
                 .post('/')
@@ -213,16 +217,37 @@ describe('A2AExpressApp', () => {
             assert.include(responseText, 'Streaming error');
         });
 
+        it('should handle immediate streaming error', async () => {
+            const mockImmediateErrorStream = {
+                async *[Symbol.asyncIterator]() {
+                    throw new A2AError(-32603, 'Immediate streaming error');
+                }
+            };
+
+            (mockJsonRpcTransportHandler.handle as SinonStub).resolves(mockImmediateErrorStream);
+
+            const requestBody = createRpcRequest('immediate-stream-error-test', 'message/stream');
+
+            const response = await request(expressApp)
+                .post('/')
+                .send(requestBody)
+                .expect(200);
+
+            // Assert SSE headers and error event content
+            assert.include(response.headers['content-type'], 'text/event-stream');
+            assert.equal(response.headers['cache-control'], 'no-cache');
+            assert.equal(response.headers['connection'], 'keep-alive');
+            
+            const responseText = response.text;
+            assert.include(responseText, 'event: error');
+            assert.include(responseText, 'Immediate streaming error');
+        });
+
         it('should handle general processing error', async () => {
             const error = new A2AError(-32603, 'Processing error');
             (mockJsonRpcTransportHandler.handle as SinonStub).rejects(error);
 
-            const requestBody = {
-                jsonrpc: '2.0',
-                method: 'message/send',
-                id: 'error-test',
-                params: {}
-            };
+            const requestBody = createRpcRequest('error-test');
 
             const response = await request(expressApp)
                 .post('/')
@@ -242,12 +267,7 @@ describe('A2AExpressApp', () => {
             const genericError = new Error('Generic error');
             (mockJsonRpcTransportHandler.handle as SinonStub).rejects(genericError);
 
-            const requestBody = {
-                jsonrpc: '2.0',
-                method: 'message/send',
-                id: 'generic-error-test',
-                params: {}
-            };
+            const requestBody = createRpcRequest('generic-error-test');
 
             const response = await request(expressApp)
                 .post('/')
@@ -263,11 +283,7 @@ describe('A2AExpressApp', () => {
             const error = new A2AError(-32600, 'No ID error');
             (mockJsonRpcTransportHandler.handle as SinonStub).rejects(error);
 
-            const requestBody = {
-                jsonrpc: '2.0',
-                method: 'message/send',
-                params: {}
-            };
+            const requestBody = createRpcRequest(null);
 
             const response = await request(expressApp)
                 .post('/')
@@ -281,7 +297,7 @@ describe('A2AExpressApp', () => {
     describe('middleware integration', () => {
         it('should apply custom middlewares to routes', async () => {
             const middlewareCalled = sinon.spy();
-            const testMiddleware = (req: Request, res: Response, next: Function) => {
+            const testMiddleware = (_req: Request, _res: Response, next: Function) => {
                 middlewareCalled();
                 next();
             };
@@ -297,7 +313,7 @@ describe('A2AExpressApp', () => {
         });
 
         it('should handle middleware errors', async () => {
-            const errorMiddleware = (req: Request, res: Response, next: Function) => {
+            const errorMiddleware = (_req: Request, _res: Response, next: Function) => {
                 next(new Error('Middleware error'));
             };
 
