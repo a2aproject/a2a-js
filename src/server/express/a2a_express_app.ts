@@ -27,12 +27,12 @@ export class A2AExpressApp {
         app: Express,
         baseUrl: string = "",
         middlewares?: Array<RequestHandler | ErrorRequestHandler>,
-        agentCardPath: string = `/${AGENT_CARD_PATH}`
+        agentCardPath: string = AGENT_CARD_PATH
     ): Express {
         const router = express.Router();
         router.use(express.json(), ...(middlewares ?? []));
 
-        router.get(agentCardPath, async (req: Request, res: Response) => {
+        router.get(`/${agentCardPath}`, async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
                 const agentCard = await this.requestHandler.getAgentCard();
