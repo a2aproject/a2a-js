@@ -1,6 +1,8 @@
 /**
- * Main entry point for the A2A Server V2 library.
  * Exports the common types.
+ * 
+ * Use the client/index.ts file to import the client-only codebase.
+ * Use the server/index.ts file to import the server-only codebase.
  */
 
 export * from "./types.js";
