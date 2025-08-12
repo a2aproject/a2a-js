@@ -36,6 +36,10 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         pushConfig: PushNotificationConfig
     ): Promise<boolean> {
         const url = pushConfig.url;
+        const controller = new AbortController();
+        // Abort the request if it takes longer than 5 seconds.
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json'
@@ -48,7 +52,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             const response = await fetch(url, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify(task)
+                body: JSON.stringify(task),
+                signal: controller.signal
             });
 
             if (!response.ok) {
@@ -60,6 +65,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         } catch (error) {
             console.error(`Error sending push notification for task_id=${task.id} to URL: ${url}. Error:`, error);
             return false;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 }
