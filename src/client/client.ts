@@ -36,6 +36,18 @@ import { AGENT_CARD_PATH } from "../constants.js";
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
+// Type for custom headers
+export interface CustomHeaders {
+  [key: string]: string;
+}
+
+/**
+ * Configuration options for the A2AClient
+ */
+export interface A2AClientConfig {
+  /** Custom headers to include in all requests */
+  customHeaders?: CustomHeaders;
+}
 
 /**
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
@@ -46,6 +58,7 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
+  private customHeaders: CustomHeaders;
 
   /**
    * Constructs an A2AClient instance.
@@ -54,11 +67,56 @@ export class A2AClient {
    * The `url` field from the Agent Card will be used as the RPC service endpoint.
    * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
    * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * @param config Optional configuration including bearer token and custom headers
    */
-  constructor(agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH) {
+  constructor(
+    agentBaseUrl: string, 
+    agentCardPath: string = AGENT_CARD_PATH,
+    config?: A2AClientConfig
+  ) {
     this.agentBaseUrl = agentBaseUrl.replace(/\/$/, ""); // Remove trailing slash if any
     this.agentCardPath = agentCardPath.replace(/^\//, ""); // Remove leading slash if any
+    this.customHeaders = { ...(config?.customHeaders || {}) };
     this.agentCardPromise = this._fetchAndCacheAgentCard();
+  }
+
+
+
+  /**
+   * Updates custom headers used in all requests.
+   * @param headers The new custom headers
+   */
+  public setCustomHeaders(headers: CustomHeaders): void {
+    this.customHeaders = { ...headers };
+  }
+
+  /**
+   * Adds or updates a specific custom header.
+   * @param key The header key
+   * @param value The header value
+   */
+  public setCustomHeader(key: string, value: string): void {
+    this.customHeaders[key] = value;
+  }
+
+  /**
+   * Gets the current custom headers.
+   * @returns A copy of the current custom headers
+   */
+  public getCustomHeaders(): CustomHeaders {
+    return { ...this.customHeaders };
+  }
+
+  /**
+   * Builds the headers for HTTP requests, including custom headers.
+   * @param additionalHeaders Additional headers to include for this specific request
+   * @returns The complete headers object
+   */
+  private _buildHeaders(additionalHeaders: Record<string, string> = {}): Record<string, string> {
+    return {
+      ...this.customHeaders,
+      ...additionalHeaders
+    };
   }
 
   /**
@@ -70,7 +128,7 @@ export class A2AClient {
     const agentCardUrl = `${this.agentBaseUrl}/${this.agentCardPath}`
     try {
       const response = await fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
+        headers: this._buildHeaders({ 'Accept': 'application/json' }),
       });
       if (!response.ok) {
         throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
@@ -101,7 +159,7 @@ export class A2AClient {
     if (agentBaseUrl) {
       const agentCardUrl = `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`
       const response = await fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
+        headers: this._buildHeaders({ 'Accept': 'application/json' }),
       });
       if (!response.ok) {
         throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
@@ -151,10 +209,10 @@ export class A2AClient {
 
     const httpResponse = await fetch(endpoint, {
       method: "POST",
-      headers: {
+      headers: this._buildHeaders({
         "Content-Type": "application/json",
         "Accept": "application/json", // Expect JSON response for non-streaming requests
-      },
+      }),
       body: JSON.stringify(rpcRequest),
     });
 
@@ -229,10 +287,10 @@ export class A2AClient {
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
+      headers: this._buildHeaders({
         "Content-Type": "application/json",
         "Accept": "text/event-stream", // Crucial for SSE
-      },
+      }),
       body: JSON.stringify(rpcRequest),
     });
 
@@ -336,10 +394,10 @@ export class A2AClient {
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
+      headers: this._buildHeaders({
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
-      },
+      }),
       body: JSON.stringify(rpcRequest),
     });
 

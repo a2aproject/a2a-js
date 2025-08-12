@@ -364,6 +364,29 @@ async function run() {
 run();
 ```
 
+### Custom Headers
+
+The A2AClient supports custom headers for authentication and other purposes. You can set headers during initialization or dynamically using the provided methods.
+
+```typescript
+import { A2AClient, A2AClientConfig } from "@a2a-js/sdk/client";
+
+// Set headers during initialization
+const config: A2AClientConfig = {
+  customHeaders: {
+    "Authorization": "Bearer your-token-here"
+  }
+};
+const client = new A2AClient("http://localhost:41241", ".well-known/agent-card.json", config);
+
+// Or set headers after creation
+client.setCustomHeaders({ "X-API-Version": "2.0" });
+client.setCustomHeader("Authorization", "Bearer new-token");
+
+// Get current headers
+const headers = client.getCustomHeaders();
+```
+
 ### Streaming Usage
 
 ```typescript
