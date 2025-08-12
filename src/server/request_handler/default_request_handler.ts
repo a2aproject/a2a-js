@@ -165,6 +165,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // Use the (potentially updated) contextId from requestContext
         const finalMessageForAgent = requestContext.userMessage;
 
+        // If push notification config is provided, save it to the store.
+        if (params.configuration?.pushNotificationConfig) {
+            await this.pushNotificationStore.save(taskId, params.configuration.pushNotificationConfig);
+        }
+
 
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
         // EventQueue should be attached to the bus, before the agent execution begins.
@@ -258,6 +263,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
         const eventQueue = new ExecutionEventQueue(eventBus);
+
+        // If push notification config is provided, save it to the store.
+        if (params.configuration?.pushNotificationConfig) {
+            await this.pushNotificationStore.save(taskId, params.configuration.pushNotificationConfig);
+        }
 
 
         // Start agent execution (non-blocking)
