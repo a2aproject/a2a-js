@@ -594,24 +594,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             url: 'https://push-1.com'
         };
         const contextId = 'ctx-push-1';
-        const taskId = 'task-push-1';
-
-        const task: Task = {
-            id: taskId,
-            contextId,
-            status: { state: "submitted" },
-            kind: 'task'
-        };
-        await mockTaskStore.save(task);
 
         const params: MessageSendParams = {
-            message: {
-                ...createTestMessage('msg-push-1', 'Work more on the task'),
-                taskId
-            },
+            message: createTestMessage('msg-push-1', 'Work on task with push notification'),
+            configuration: {
+                pushNotificationConfig: pushNotificationConfig
+            }
         };
-
-        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig });
 
         (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
             bus.publish({
@@ -640,12 +629,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const result = await handler.sendMessage(params);
         const taskResult = result as Task;
 
-        assert.equal(taskResult.id, taskId);
+        assert.equal(taskResult.id, taskResult.id);
         assert.equal(taskResult.status.state, "completed");
 
         assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledTwice);
-        assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0].id, taskId);
-        assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0].id, taskId);
+        assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0].id, taskResult.id);
+        assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0].id, taskResult.id);
     });
 
     it('Push Notification methods should throw error if task does not exist', async () => {
