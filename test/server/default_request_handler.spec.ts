@@ -3,10 +3,11 @@ import { assert, expect } from 'chai';
 import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
-import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError } from '../../src/server/index.js';
+import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError, InMemoryPushNotificationStore, PushNotificationStore } from '../../src/server/index.js';
 import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
+import { PushNotificationSender } from '../../src/server/push_notification/push_notification_sender.js';
 
 /**
  * A realistic mock of AgentExecutor for cancellation tests.
@@ -61,6 +62,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let mockTaskStore: TaskStore;
     let mockAgentExecutor: AgentExecutor;
     let executionEventBusManager: ExecutionEventBusManager;
+    let mockPushNotificationStore: PushNotificationStore;
+    let mockPushNotificationSender: PushNotificationSender;
     let clock: SinonFakeTimers;
 
     const testAgentCard: AgentCard = {
@@ -68,6 +71,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         description: 'An agent for testing purposes',
         url: 'http://localhost:8080',
         version: '1.0.0',
+        protocolVersion: '0.3.0',
         capabilities: {
             streaming: true,
             pushNotifications: true,
@@ -87,6 +91,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Before each test, reset the components to a clean state
     beforeEach(() => {
         mockTaskStore = new InMemoryTaskStore();
+        mockPushNotificationStore = new InMemoryPushNotificationStore();
+        mockPushNotificationSender = new MockPushNotificationSender();
         // Default mock for most tests
         mockAgentExecutor = new MockAgentExecutor();
         executionEventBusManager = new DefaultExecutionEventBusManager();
@@ -125,6 +131,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         > = sinon.stub();
         public cancelTask: SinonStub<[string, ExecutionEventBus], Promise<void>> =
             sinon.stub();
+    }
+
+    class MockPushNotificationSender implements PushNotificationSender {
+        public send: SinonStub<[Task], Promise<void>> = sinon.stub();
     }
 
     it('sendMessage: should return a simple message response', async () => {
@@ -569,6 +579,73 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
         const configs = await handler.listTaskPushNotificationConfigs({ id: taskId });
         expect(configs).to.be.an('array').with.lengthOf(0);
+    });
+
+    it('should send push notification when task update is received', async () => {
+        const handler = new DefaultRequestHandler(
+            testAgentCard,
+            mockTaskStore,
+            mockAgentExecutor,
+            executionEventBusManager,
+            mockPushNotificationStore,
+            mockPushNotificationSender,
+        );
+        const pushNotificationConfig: PushNotificationConfig = {
+            url: 'https://push-1.com'
+        };
+        const contextId = 'ctx-push-1';
+        const taskId = 'task-push-1';
+
+        const task: Task = {
+            id: taskId,
+            contextId,
+            status: { state: "submitted" },
+            kind: 'task'
+        };
+        await mockTaskStore.save(task);
+
+        const params: MessageSendParams = {
+            message: {
+                ...createTestMessage('msg-push-1', 'Work more on the task'),
+                taskId
+            },
+        };
+
+        await handler.setTaskPushNotificationConfig({ taskId, pushNotificationConfig });
+
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            bus.publish({
+                id: ctx.taskId,
+                contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+            bus.publish({
+                taskId: ctx.taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },   
+                final: false
+            });
+            bus.publish({
+                taskId: ctx.taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "completed" },
+                final: true
+            });
+            bus.finished();
+        });
+
+        const result = await handler.sendMessage(params);
+        const taskResult = result as Task;
+
+        assert.equal(taskResult.id, taskId);
+        assert.equal(taskResult.status.state, "completed");
+
+        assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledTwice);
+        assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0].id, taskId);
+        assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0].id, taskId);
     });
 
     it('Push Notification methods should throw error if task does not exist', async () => {
