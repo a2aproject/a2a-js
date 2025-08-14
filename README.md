@@ -422,9 +422,7 @@ const customClient = new MyCustomClient("your-auth-token");
 
 // Pass the custom HTTP client to the A2AClient constructor
 const client = new A2AClient("http://localhost:41241", {
-  options: {
-    httpClient: customClient,
-  },
+  httpClient: customClient,
 });
 
 // Use the client as normal - all requests will include the authorization header

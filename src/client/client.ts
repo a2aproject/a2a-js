@@ -89,7 +89,7 @@ export class A2AClient {
    * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
    * @param options A2AClientOptions object that can include:
    * - `agentCardPath`: The path to the agent card, defaults to '.well-known/agent-card.json'.
-   * - `httpClient`: An optional custom HTTP client implementation that implements the `HttpClient` interface. If not provided, a default implementation using the fetch
+   * - `httpClient`: An optional custom HTTP client implementation that implements the `HttpClient` interface. If not provided, a default HttpClient will be used, that is native node js fetch under the hood.
    */
   constructor(
     agentBaseUrl: string,

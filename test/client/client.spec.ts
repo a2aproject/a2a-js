@@ -163,7 +163,7 @@ describe('A2AClient with HttpClient', () => {
       async sendRequest(url: string, options?: RequestInit): Promise<Response> {
         // Add authorization header to all requests
         const headers = {
-          ...options.headers,
+          ...options?.headers,
           'Authorization': `Bearer ${this.authToken}`
         };
         
