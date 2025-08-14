@@ -68,6 +68,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         description: 'An agent for testing purposes',
         url: 'http://localhost:8080',
         version: '1.0.0',
+        protocolVersion: '0.3.0',
         capabilities: {
             streaming: true,
             pushNotifications: true,

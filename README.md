@@ -36,6 +36,7 @@ You can also find JavaScript samples [here](https://github.com/google-a2a/a2a-sa
 This directory contains a TypeScript server implementation for the Agent-to-Agent (A2A) communication protocol, built using Express.js.
 
 **Note:** Express is a peer dependency for server functionality. Make sure to install it separately:
+
 ```bash
 npm install express
 ```
@@ -281,7 +282,7 @@ There's a `A2AClient` class, which provides methods for interacting with an A2A 
 - **A2A Methods:** Implements standard A2A methods like `sendMessage`, `sendMessageStream`, `getTask`, `cancelTask`, `setTaskPushNotificationConfig`, `getTaskPushNotificationConfig`, and `resubscribeTask`.
 - **Error Handling:** Provides basic error handling for network issues and JSON-RPC errors.
 - **Streaming Support:** Manages Server-Sent Events (SSE) for real-time task updates (`sendMessageStream`, `resubscribeTask`).
-- **Extensibility:** Allows providing a custom `fetch` implementation for different environments (e.g., Node.js).
+- **Extensibility:** Allows injecting a custom HTTP client for different environments or adding custom headers/authentication.
 
 ### Basic Usage
 
@@ -320,8 +321,9 @@ async function run() {
       },
     };
 
-    const sendResponse: SendMessageResponse =
-      await client.sendMessage(sendParams);
+    const sendResponse: SendMessageResponse = await client.sendMessage(
+      sendParams
+    );
 
     if (sendResponse.error) {
       console.error("Error sending message:", sendResponse.error);
@@ -364,6 +366,78 @@ async function run() {
 run();
 ```
 
+### Custom HTTP Client
+
+The A2AClient supports injecting a custom HTTP client, which allows you to customize how HTTP requests are made. This is useful for:
+
+- Adding custom headers to all requests
+- Implementing authentication
+- Using a different HTTP library i.e. `got`, `ky`, `axios`, `node-fetch` etc
+- Adding logging or monitoring
+- Handling enterprise proxy configurations
+
+#### HttpClient Interface
+
+```typescript
+interface HttpClient {
+  /**
+   * Sends an HTTP request and returns a Response
+   * @param url The URL to send the request to
+   * @param options The request options (method, headers, body)
+   * @returns A Promise that resolves to a Response
+   */
+  sendRequest(url: string, options?: RequestInit): Promise<Response>;
+}
+```
+
+#### Example: Custom HTTP Client with Authentication
+
+```typescript
+import { A2AClient, HttpClient } from "@a2a-js/sdk/client";
+
+class MyCustomClient implements HttpClient {
+  private authToken: string;
+
+  constructor(authToken: string) {
+    this.authToken = authToken;
+  }
+
+  async sendRequest(url: string, options?: RequestInit): Promise<Response> {
+    // Add authorization header to all requests
+    const headers = {
+      ...options?.headers,
+      Authorization: `Bearer ${this.authToken}`,
+    };
+
+    // Use fetch with the modified options or, use a http client of your choice, add timeouts etc
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  }
+}
+
+// Create an instance of the custom HTTP client
+const customClient = new MyCustomClient("your-auth-token");
+
+// Pass the custom HTTP client to the A2AClient constructor
+const client = new A2AClient("http://localhost:41241", {
+  options: {
+    httpClient: customClient,
+  },
+});
+
+// Use the client as normal - all requests will include the authorization header
+const response = await client.sendMessage({
+  message: {
+    messageId: "123",
+    role: "user",
+    parts: [{ kind: "text", text: "Hello" }],
+    kind: "message",
+  },
+});
+```
+
 ### Streaming Usage
 
 ```typescript
@@ -403,7 +477,9 @@ async function streamTask() {
       if ((event as Task).kind === "task") {
         currentTaskId = (event as Task).id;
         console.log(
-          `[${currentTaskId}] Task created. Status: ${(event as Task).status.state}`
+          `[${currentTaskId}] Task created. Status: ${
+            (event as Task).status.state
+          }`
         );
         continue;
       }
@@ -412,9 +488,9 @@ async function streamTask() {
       if ((event as TaskStatusUpdateEvent).kind === "status-update") {
         const statusEvent = event as TaskStatusUpdateEvent;
         console.log(
-          `[${statusEvent.taskId}] Status Update: ${statusEvent.status.state} - ${
-            statusEvent.status.message?.parts[0]?.text ?? ""
-          }`
+          `[${statusEvent.taskId}] Status Update: ${
+            statusEvent.status.state
+          } - ${statusEvent.status.message?.parts[0]?.text ?? ""}`
         );
         if (statusEvent.final) {
           console.log(`[${statusEvent.taskId}] Stream marked as final.`);

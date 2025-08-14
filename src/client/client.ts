@@ -36,6 +36,39 @@ import { AGENT_CARD_PATH } from "../constants.js";
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
+/**
+ * Interface for a custom HTTP client that can be injected into the A2AClient
+ */
+export interface HttpClient {
+  /**
+   * Sends an HTTP request and returns a Response
+   * @param url The URL to send the request to
+   * @param options The request options (method, headers, body)
+   * @returns A Promise that resolves to a Response
+   */
+  sendRequest(url:string | URL | globalThis.Request, options?: RequestInit): Promise<Response>;
+}
+
+/**
+ * Default implementation of HttpClient using the fetch API
+ */
+export class DefaultHttpClient implements HttpClient {
+  /**
+   * Sends an HTTP request using the fetch API
+   * @param url The URL to send the request to
+   * @param options The request options (method, headers, body)
+   * @returns A Promise that resolves to a Response
+   */
+  async sendRequest(url: string | URL | globalThis.Request, options?: RequestInit): Promise<Response> {
+    return fetch(url, options);
+  }
+}
+
+export type A2AClientOptions = {
+  agentCardPath?: string; 
+  httpClient?: HttpClient;
+}
+
 
 /**
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
@@ -46,6 +79,7 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
+  private httpClient: HttpClient;
 
   /**
    * Constructs an A2AClient instance.
@@ -53,11 +87,17 @@ export class A2AClient {
    * The Agent Card is fetched from a path relative to the agentBaseUrl, which defaults to '.well-known/agent-card.json'.
    * The `url` field from the Agent Card will be used as the RPC service endpoint.
    * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
-   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * @param options A2AClientOptions object that can include:
+   * - `agentCardPath`: The path to the agent card, defaults to '.well-known/agent-card.json'.
+   * - `httpClient`: An optional custom HTTP client implementation that implements the `HttpClient` interface. If not provided, a default implementation using the fetch
    */
-  constructor(agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH) {
+  constructor(
+    agentBaseUrl: string,
+    options?: A2AClientOptions,
+  ) {
     this.agentBaseUrl = agentBaseUrl.replace(/\/$/, ""); // Remove trailing slash if any
-    this.agentCardPath = agentCardPath.replace(/^\//, ""); // Remove leading slash if any
+    this.agentCardPath = (options?.agentCardPath || AGENT_CARD_PATH).replace(/^\//, ""); // Remove leading slash if any
+    this.httpClient = options?.httpClient || new DefaultHttpClient();
     this.agentCardPromise = this._fetchAndCacheAgentCard();
   }
 
@@ -69,7 +109,8 @@ export class A2AClient {
   private async _fetchAndCacheAgentCard(): Promise<AgentCard> {
     const agentCardUrl = `${this.agentBaseUrl}/${this.agentCardPath}`
     try {
-      const response = await fetch(agentCardUrl, {
+      const response = await this.httpClient.sendRequest(agentCardUrl, {
+        method: 'GET',
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
@@ -100,7 +141,8 @@ export class A2AClient {
   public async getAgentCard(agentBaseUrl?: string, agentCardPath: string = AGENT_CARD_PATH): Promise<AgentCard> {
     if (agentBaseUrl) {
       const agentCardUrl = `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`
-      const response = await fetch(agentCardUrl, {
+      const response = await this.httpClient.sendRequest(agentCardUrl, {
+        method: 'GET',
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
@@ -149,7 +191,7 @@ export class A2AClient {
       id: requestId,
     };
 
-    const httpResponse = await fetch(endpoint, {
+    const httpResponse = await this.httpClient.sendRequest(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -227,7 +269,7 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await fetch(endpoint, {
+    const response = await this.httpClient.sendRequest(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -334,7 +376,7 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await fetch(endpoint, {
+    const response = await this.httpClient.sendRequest(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
