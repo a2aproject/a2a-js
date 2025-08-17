@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.2](https://github.com/a2aproject/a2a-js/compare/v0.3.1...v0.3.2) (2025-08-17)
+
+
+### Features
+
+* Added generic client hooks for HTTP based authentication, and improved agent.json resolution ([#33](https://github.com/a2aproject/a2a-js/issues/33)) ([a9826ac](https://github.com/a2aproject/a2a-js/commit/a9826acde3bb1f741153407e6179fd21f2e7a4bb))
+
+
+### Bug Fixes
+
+* fix Incorrect Well-Known Path for Agent Card ([#102](https://github.com/a2aproject/a2a-js/issues/102)) ([3a0f1d0](https://github.com/a2aproject/a2a-js/commit/3a0f1d07843b725c9beaf1078bc43418ff2871ed))
+
+
+### Miscellaneous Chores
+
+* release 0.3.2 ([#111](https://github.com/a2aproject/a2a-js/issues/111)) ([03f35e0](https://github.com/a2aproject/a2a-js/commit/03f35e0ed29d2b24df7eddb2a7fe21d0690f503e))
+
 ## [0.3.1](https://github.com/a2aproject/a2a-js/compare/v0.3.0...v0.3.1) (2025-08-06)
 
 
