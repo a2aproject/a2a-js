@@ -91,8 +91,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Before each test, reset the components to a clean state
     beforeEach(() => {
         mockTaskStore = new InMemoryTaskStore();
-        mockPushNotificationStore = new InMemoryPushNotificationStore();
-        mockPushNotificationSender = new MockPushNotificationSender();
         // Default mock for most tests
         mockAgentExecutor = new MockAgentExecutor();
         executionEventBusManager = new DefaultExecutionEventBusManager();
@@ -582,6 +580,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     it('should send push notification when task update is received', async () => {
+        const mockPushNotificationStore = new InMemoryPushNotificationStore();
+        const mockPushNotificationSender = new MockPushNotificationSender();
+        
         const handler = new DefaultRequestHandler(
             testAgentCard,
             mockTaskStore,
@@ -632,9 +633,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.equal(taskResult.id, taskResult.id);
         assert.equal(taskResult.status.state, "completed");
 
-        assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledTwice);
+        assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledThrice);
         assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0].id, taskResult.id);
         assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0].id, taskResult.id);
+        assert.equal((mockPushNotificationSender as MockPushNotificationSender).send.thirdCall.args[0].id, taskResult.id);
     });
 
     it('Push Notification methods should throw error if task does not exist', async () => {

@@ -16,19 +16,17 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             return;
         }
 
-        const promises = pushConfigs.map(pushConfig => 
+        pushConfigs.forEach(pushConfig => {
             this._dispatchNotification(task, pushConfig)
-        );
-        
-        const results = await Promise.allSettled(promises);
-        
-        const failedCount = results.filter(result => 
-            result.status === 'rejected' || (result.status === 'fulfilled' && !result.value)
-        ).length;
-        
-        if (failedCount > 0) {
-            console.warn(`Some push notifications failed to send for task_id=${task.id}. ${failedCount}/${results.length} failed.`);
-        }
+                .then(success => {
+                    if (!success) {
+                        console.warn(`Push notification failed to send for task_id=${task.id} to URL: ${pushConfig.url}`);
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error);
+                });
+        });
     }
 
     private async _dispatchNotification(
