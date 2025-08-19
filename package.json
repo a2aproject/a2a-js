@@ -73,7 +73,7 @@
     "uuid": "^11.1.0"
   },
   "peerDependencies": {
-    "express": "^5.1.0"
+    "express": "^4.21.2 || ^5.1.0"
   },
   "peerDependenciesMeta": {
     "express": {
