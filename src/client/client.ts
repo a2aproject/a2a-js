@@ -29,7 +29,11 @@ import {
   GetTaskPushNotificationConfigSuccessResponse,
   TaskResubscriptionRequest,
   A2AError,
-  SendMessageSuccessResponse
+  SendMessageSuccessResponse,
+  ListTaskPushNotificationConfigParams,
+  ListTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigParams
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from "../constants.js";
 
@@ -309,6 +313,30 @@ export class A2AClient {
     // The 'params' (TaskIdParams) directly matches the structure expected by the RPC method.
     return this._postRpcRequest<TaskIdParams, GetTaskPushNotificationConfigResponse>(
       "tasks/pushNotificationConfig/get",
+      params
+    );
+  }
+
+  /**
+   * Lists the push notification configurations for a given task.
+   * @param params Parameters containing the taskId.
+   * @returns A Promise resolving to ListTaskPushNotificationConfigResponse.
+   */
+  public async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams): Promise<ListTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>(
+      "tasks/pushNotificationConfig/list",
+      params
+    );
+  }
+
+  /**
+   * Deletes the push notification configuration for a given task.
+   * @param params Parameters containing the taskId.
+   * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
+   */
+  public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(
+      "tasks/pushNotificationConfig/delete",
       params
     );
   }
