@@ -361,6 +361,19 @@ export class A2AClient {
   }
 
   /**
+   * @template TExtensionParams The type of parameters for the custom extension method.
+   * @template TExtensionResponse The type of response expected from the custom extension method. 
+   * This should extend JSONRPCResponse. This ensures the extension response is still a valid A2A response.
+   * @param method Custom JSON-RPC method defined in the AgentCard's extensions.
+   * @param params Extension paramters defined in the AgentCard's extensions.
+   * @returns A Promise that resolves to the RPC response.
+   */
+  public async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams) {
+    return this._postRpcRequest<TExtensionParams, TExtensionResponse>(method, params);
+  }
+
+
+  /**
    * Resubscribes to a task's event stream using Server-Sent Events (SSE).
    * This is used if a previous SSE connection for an active task was broken.
    * Requires the agent to support streaming (`capabilities.streaming: true` in AgentCard).
