@@ -331,7 +331,7 @@ export class A2AClient {
 
   /**
    * Deletes the push notification configuration for a given task.
-   * @param params Parameters containing the taskId.
+   * @param params Parameters containing the taskId and push notification configuration ID.
    * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
    */
   public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
