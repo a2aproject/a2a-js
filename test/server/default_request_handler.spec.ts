@@ -629,40 +629,37 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
         const result = await handler.sendMessage(params);
         const taskResult = result as Task;
+        const task = await mockTaskStore.load(taskResult.id);
 
         // Verify the complete task object
-        assert.isDefined(taskResult.id);
-        assert.equal(taskResult.contextId, contextId);
-        assert.equal(taskResult.kind, 'task');
-        assert.equal(taskResult.status.state, "completed");
-        assert.isArray(taskResult.history);
+        assert.deepEqual(taskResult, task);
 
         // Verify push notifications were sent with complete task objects
         assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledThrice);
         
         // Verify first call (submitted state)
         const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0] as Task;
-        assert.isDefined(firstCallTask.id, 'First call task ID should be defined');
-        assert.equal(firstCallTask.id, taskResult.id);
-        assert.equal(firstCallTask.contextId, contextId);
-        assert.equal(firstCallTask.kind, 'task');
-        assert.equal(firstCallTask.status.state, 'submitted');
+        const expectedFirstTask: Task = {
+            ...taskResult,
+            status: { state: 'submitted' }
+        };
+        assert.deepEqual(firstCallTask, expectedFirstTask);
         
-        // Verify second call (working state)
+        // // Verify second call (working state)
         const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0] as Task;
-        assert.isDefined(secondCallTask.id, 'Second call task ID should be defined');
-        assert.equal(secondCallTask.id, taskResult.id);
-        assert.equal(secondCallTask.contextId, contextId);
-        assert.equal(secondCallTask.kind, 'task');
-        assert.equal(secondCallTask.status.state, 'working');
+        const expectedSecondTask: Task = {
+            ...taskResult,
+            status: { state: 'working' }
+        };
+        assert.deepEqual(secondCallTask, expectedSecondTask);
         
-        // Verify third call (completed state)
+        // // Verify third call (completed state)
         const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.thirdCall.args[0] as Task;
-        assert.isDefined(thirdCallTask.id, 'Third call task ID should be defined');
-        assert.equal(thirdCallTask.id, taskResult.id);
-        assert.equal(thirdCallTask.contextId, contextId);
-        assert.equal(thirdCallTask.kind, 'task');
-        assert.equal(thirdCallTask.status.state, 'completed');
+        const expectedThirdTask: Task = {
+            ...taskResult,
+            status: { state: 'completed' }
+        };
+        assert.deepEqual(thirdCallTask, expectedThirdTask);
     });
 
     it('sendMessageStream: should send push notification when task update is received', async () => {
@@ -729,26 +726,32 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         // Verify push notifications were sent with complete task objects
         assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledThrice);
         
+        const taskId = (events[0] as Task).id;
+        const taskResult = await mockTaskStore.load(taskId);
+        
         // Verify first call (submitted state)
         const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0] as Task;
-        assert.equal(firstCallTask.id, (events[0] as Task).id);
-        assert.equal(firstCallTask.contextId, contextId);
-        assert.equal(firstCallTask.kind, 'task');
-        assert.equal(firstCallTask.status.state, 'submitted');
+        const expectedFirstTask: Task = {
+            ...taskResult,
+            status: { state: 'submitted' }
+        };
+        assert.deepEqual(firstCallTask, expectedFirstTask);
         
         // Verify second call (working state)
         const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0] as Task;
-        assert.equal(secondCallTask.id, (events[0] as Task).id);
-        assert.equal(secondCallTask.contextId, contextId);
-        assert.equal(secondCallTask.kind, 'task');
-        assert.equal(secondCallTask.status.state, 'working');
+        const expectedSecondTask: Task = {
+            ...taskResult,
+            status: { state: 'working' }
+        };
+        assert.deepEqual(secondCallTask, expectedSecondTask);
         
         // Verify third call (completed state)
         const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.thirdCall.args[0] as Task;
-        assert.equal(thirdCallTask.id, (events[0] as Task).id);
-        assert.equal(thirdCallTask.contextId, contextId);
-        assert.equal(thirdCallTask.kind, 'task');
-        assert.equal(thirdCallTask.status.state, 'completed');
+        const expectedThirdTask: Task = {
+            ...taskResult,
+            status: { state: 'completed' }
+        };
+        assert.deepEqual(thirdCallTask, expectedThirdTask);
     });
 
     it('Push Notification methods should throw error if task does not exist', async () => {
