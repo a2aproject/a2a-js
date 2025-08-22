@@ -5,11 +5,14 @@ import { AgentExecutor } from "../agent_execution/agent_executor.js";
 import { RequestContext } from "../agent_execution/request_context.js";
 import { A2AError } from "../error.js";
 import { ExecutionEventBusManager, DefaultExecutionEventBusManager } from "../events/execution_event_bus_manager.js";
-import { ExecutionEventBus } from "../events/execution_event_bus.js";
+import { AgentExecutionEvent, ExecutionEventBus } from "../events/execution_event_bus.js";
 import { ExecutionEventQueue } from "../events/execution_event_queue.js";
 import { ResultManager } from "../result_manager.js";
 import { TaskStore } from "../store.js";
 import { A2ARequestHandler } from "./a2a_request_handler.js";
+import { InMemoryPushNotificationStore, PushNotificationStore } from '../push_notification/push_notification_store.js';
+import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
+import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 
 const terminalStates: TaskState[] = ["completed", "failed", "canceled", "rejected"];
 
@@ -19,8 +22,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     private readonly taskStore: TaskStore;
     private readonly agentExecutor: AgentExecutor;
     private readonly eventBusManager: ExecutionEventBusManager;
-    // Store for push notification configurations (could be part of TaskStore or separate)
-    private readonly pushNotificationConfigs: Map<string, PushNotificationConfig[]> = new Map();
+    private readonly pushNotificationStore ?: PushNotificationStore;
+    private readonly pushNotificationSender ?: PushNotificationSender;
 
 
     constructor(
@@ -28,6 +31,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         taskStore: TaskStore,
         agentExecutor: AgentExecutor,
         eventBusManager: ExecutionEventBusManager = new DefaultExecutionEventBusManager(),
+        pushNotificationStore?: PushNotificationStore,
+        pushNotificationSender?: PushNotificationSender,
         extendedAgentCard?: AgentCard,
     ) {
         this.agentCard = agentCard;
@@ -35,6 +40,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         this.agentExecutor = agentExecutor;
         this.eventBusManager = eventBusManager;
         this.extendedAgentCard = extendedAgentCard;
+
+        // If push notifications are supported, use the provided store and sender.
+        // Otherwise, use the default in-memory store and sender.
+        if (agentCard.capabilities.pushNotifications) {
+            this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
+            this.pushNotificationSender = pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
+        }
     }
 
     async getAgentCard(): Promise<AgentCard> {
@@ -114,6 +126,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             for await (const event of eventQueue.events()) {
                 await resultManager.processEvent(event);
 
+                await this._sendPushNotificationIfNeeded(event);
+
                 if (options?.firstResultResolver && !firstResultSent) {
                     if (event.kind === 'message' || event.kind === 'task') {
                         options.firstResultResolver(event as Message | Task);
@@ -155,6 +169,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         const requestContext = await this._createRequestContext(incomingMessage, taskId, false);
         // Use the (potentially updated) contextId from requestContext
         const finalMessageForAgent = requestContext.userMessage;
+
+        // If push notification config is provided, save it to the store.
+        if (params.configuration?.pushNotificationConfig && this.agentCard.capabilities.pushNotifications) {
+            await this.pushNotificationStore?.save(taskId, params.configuration.pushNotificationConfig);
+        }
 
 
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
@@ -250,6 +269,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
         const eventQueue = new ExecutionEventQueue(eventBus);
 
+        // If push notification config is provided, save it to the store.
+        if (params.configuration?.pushNotificationConfig && this.agentCard.capabilities.pushNotifications) {
+            await this.pushNotificationStore?.save(taskId, params.configuration.pushNotificationConfig);
+        }
+
 
         // Start agent execution (non-blocking)
         this.agentExecutor.execute(requestContext, eventBus).catch(err => {
@@ -279,6 +303,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         try {
             for await (const event of eventQueue.events()) {
                 await resultManager.processEvent(event); // Update store in background
+                await this._sendPushNotificationIfNeeded(event);
                 yield event; // Stream the event to the client
             }
         } finally {
@@ -362,14 +387,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             pushNotificationConfig.id = taskId;
         }
 
-        const configs = this.pushNotificationConfigs.get(taskId) || [];
-        
-        // Remove existing config with the same ID to replace it
-        const updatedConfigs = configs.filter(c => c.id !== pushNotificationConfig.id);
-        
-        updatedConfigs.push(pushNotificationConfig);
-
-        this.pushNotificationConfigs.set(taskId, updatedConfigs);
+        await this.pushNotificationStore?.save(taskId, pushNotificationConfig);
 
         return params;
     }
@@ -385,7 +403,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             throw A2AError.taskNotFound(params.id);
         }
 
-        const configs = this.pushNotificationConfigs.get(params.id) || [];
+        const configs = await this.pushNotificationStore?.load(params.id) || [];
         if (configs.length === 0) {
             throw A2AError.internalError(`Push notification config not found for task ${params.id}.`);
         }
@@ -417,7 +435,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             throw A2AError.taskNotFound(params.id);
         }
 
-        const configs = this.pushNotificationConfigs.get(params.id) || [];
+        const configs = await this.pushNotificationStore?.load(params.id) || [];
 
         return configs.map(config => ({
             taskId: params.id,
@@ -438,18 +456,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         
         const { id: taskId, pushNotificationConfigId } = params;
 
-        const configs = this.pushNotificationConfigs.get(taskId);
-        if (!configs) {
-            return;
-        }
-
-        const updatedConfigs = configs.filter(c => c.id !== pushNotificationConfigId);
-
-        if (updatedConfigs.length === 0) {
-            this.pushNotificationConfigs.delete(taskId);
-        } else if (updatedConfigs.length < configs.length) {
-            this.pushNotificationConfigs.set(taskId, updatedConfigs);
-        }
+        await this.pushNotificationStore?.delete(taskId, pushNotificationConfigId);
     }
 
     async *resubscribe(
@@ -511,5 +518,33 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         } finally {
             eventQueue.stop();
         }
+    }
+
+    private async _sendPushNotificationIfNeeded(event: AgentExecutionEvent): Promise<void> {
+        if (!this.agentCard.capabilities.pushNotifications) {
+            return;
+        }
+
+        let taskId: string = "";
+        if (event.kind == "task") {
+            const task = event as Task;
+            taskId = task.id;
+        } else {
+            taskId = event.taskId;
+        }
+
+        if (!taskId) {
+            console.error(`Task ID not found for event ${event.kind}.`);
+            return;
+        }
+
+        const task = await this.taskStore.load(taskId);
+        if (!task) {
+            console.error(`Task ${taskId} not found.`);
+            return;
+        }
+        
+        // Send push notification in the background.
+        this.pushNotificationSender?.send(task);
     }
 }
