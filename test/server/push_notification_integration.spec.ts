@@ -1,5 +1,5 @@
 import 'mocha';
-import { assert, expect } from 'chai';
+import { assert } from 'chai';
 import sinon from 'sinon';
 import express, { Request, Response } from 'express';
 import { Server } from 'http';
@@ -360,6 +360,290 @@ describe('Push Notification Integration Tests', () => {
             // Verify the error endpoint was hit
             const errorNotifications = receivedNotifications.filter(n => n.url === '/notify/error');
             assert.lengthOf(errorNotifications, 2, 'Should have attempted to send notifications to error endpoint');
+        });
+    });
+
+    describe('Push Notification Header Configuration Tests', () => {
+        it('should use default header name when tokenHeaderName is not specified', async () => {
+            const pushConfig: PushNotificationConfig = {
+                id: 'default-header-test',
+                url: `${testServerUrl}/notify`,
+                token: 'default-token'
+            };
+
+            const params: MessageSendParams = {
+                message: createTestMessage('Test with default header name'),
+                configuration: {
+                    pushNotificationConfig: pushConfig
+                }
+            };
+
+            // Mock the agent executor to publish completion
+            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+                const taskId = ctx.taskId;
+                const contextId = ctx.contextId;
+                
+                bus.publish({ 
+                    id: taskId, 
+                    contextId, 
+                    status: { state: "submitted" }, 
+                    kind: 'task' 
+                });
+                
+                bus.publish({ 
+                    taskId, 
+                    contextId, 
+                    kind: 'status-update', 
+                    status: { state: "completed" }, 
+                    final: true 
+                });
+                
+                bus.finished();
+            });
+
+            await handler.sendMessage(params);
+
+            // Wait for async push notifications to be sent
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Verify default header name is used
+            assert.lengthOf(receivedNotifications, 2, 'Should send notifications for submitted and completed states');
+            
+            receivedNotifications.forEach(notification => {
+                assert.equal(notification.headers['x-a2a-notification-token'], 'default-token', 
+                    'Should use default header name X-A2A-Notification-Token');
+                assert.equal(notification.headers['content-type'], 'application/json', 
+                    'Should include content-type header');
+            });
+        });
+
+        it('should use custom header name when tokenHeaderName is specified', async () => {
+            // Create a new handler with custom header name
+            const customPushNotificationSender = new DefaultPushNotificationSender(
+                pushNotificationStore, 
+                { tokenHeaderName: 'X-Custom-Auth-Token' }
+            );
+            
+            const customHandler = new DefaultRequestHandler(
+                testAgentCard,
+                taskStore,
+                mockAgentExecutor,
+                new DefaultExecutionEventBusManager(),
+                pushNotificationStore,
+                customPushNotificationSender,
+            );
+
+            const pushConfig: PushNotificationConfig = {
+                id: 'custom-header-test',
+                url: `${testServerUrl}/notify`,
+                token: 'custom-token'
+            };
+
+            const params: MessageSendParams = {
+                message: createTestMessage('Test with custom header name'),
+                configuration: {
+                    pushNotificationConfig: pushConfig
+                }
+            };
+
+            // Mock the agent executor to publish completion
+            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+                const taskId = ctx.taskId;
+                const contextId = ctx.contextId;
+                
+                bus.publish({ 
+                    id: taskId, 
+                    contextId, 
+                    status: { state: "submitted" }, 
+                    kind: 'task' 
+                });
+                
+                bus.publish({ 
+                    taskId, 
+                    contextId, 
+                    kind: 'status-update', 
+                    status: { state: "completed" }, 
+                    final: true 
+                });
+                
+                bus.finished();
+            });
+
+            await customHandler.sendMessage(params);
+
+            // Wait for async push notifications to be sent
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Verify custom header name is used
+            assert.lengthOf(receivedNotifications, 2, 'Should send notifications for submitted and completed states');
+            
+            receivedNotifications.forEach(notification => {
+                assert.equal(notification.headers['x-custom-auth-token'], 'custom-token', 
+                    'Should use custom header name X-Custom-Auth-Token');
+                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                    'Should not use default header name');
+                assert.equal(notification.headers['content-type'], 'application/json', 
+                    'Should include content-type header');
+            });
+        });
+
+        it('should not send token header when token is not provided', async () => {
+            const pushConfig: PushNotificationConfig = {
+                id: 'no-token-test',
+                url: `${testServerUrl}/notify`
+                // No token provided
+            };
+
+            const params: MessageSendParams = {
+                message: createTestMessage('Test without token'),
+                configuration: {
+                    pushNotificationConfig: pushConfig
+                }
+            };
+
+            // Mock the agent executor to publish completion
+            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+                const taskId = ctx.taskId;
+                const contextId = ctx.contextId;
+                
+                bus.publish({ 
+                    id: taskId, 
+                    contextId, 
+                    status: { state: "submitted" }, 
+                    kind: 'task' 
+                });
+                
+                bus.publish({ 
+                    taskId, 
+                    contextId, 
+                    kind: 'status-update', 
+                    status: { state: "completed" }, 
+                    final: true 
+                });
+                
+                bus.finished();
+            });
+
+            await handler.sendMessage(params);
+
+            // Wait for async push notifications to be sent
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Verify no token header is sent
+            assert.lengthOf(receivedNotifications, 2, 'Should send notifications for submitted and completed states');
+            
+            receivedNotifications.forEach(notification => {
+                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                    'Should not include token header when token is not provided');
+                assert.equal(notification.headers['content-type'], 'application/json', 
+                    'Should include content-type header');
+            });
+        });
+
+        it('should handle multiple push configs with different header configurations', async () => {
+            // Create a handler with custom header name
+            const customPushNotificationSender = new DefaultPushNotificationSender(
+                pushNotificationStore, 
+                { tokenHeaderName: 'X-Custom-Token' }
+            );
+            
+            const customHandler = new DefaultRequestHandler(
+                testAgentCard,
+                taskStore,
+                mockAgentExecutor,
+                new DefaultExecutionEventBusManager(),
+                pushNotificationStore,
+                customPushNotificationSender,
+            );
+
+            const pushConfig1: PushNotificationConfig = {
+                id: 'config-with-token',
+                url: `${testServerUrl}/notify`,
+                token: 'token-1'
+            };
+
+            const pushConfig2: PushNotificationConfig = {
+                id: 'config-without-token',
+                url: `${testServerUrl}/notify/second`
+                // No token
+            };
+
+            const params: MessageSendParams = {
+                message: {
+                    ...createTestMessage('Test with multiple configs'),
+                    taskId: 'multi-config-test',
+                    contextId: 'test-context'
+                }
+            };
+
+            // Create task and set multiple push configs
+            const task: Task = {
+                id: 'multi-config-test',
+                contextId: 'test-context',
+                status: { state: 'submitted' },
+                kind: 'task'
+            };
+            await taskStore.save(task);
+
+            await customHandler.setTaskPushNotificationConfig({
+                taskId: task.id,
+                pushNotificationConfig: pushConfig1
+            });
+
+            await customHandler.setTaskPushNotificationConfig({
+                taskId: task.id,
+                pushNotificationConfig: pushConfig2
+            });
+
+            // Mock the agent executor to publish completion
+            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+                const taskId = ctx.taskId;
+                const contextId = ctx.contextId;
+                
+                bus.publish({ 
+                    taskId, 
+                    contextId, 
+                    kind: 'status-update', 
+                    status: { state: "completed" }, 
+                    final: true 
+                });
+                
+                bus.finished();
+            });
+
+            await customHandler.sendMessage(params);
+
+            // Wait for async push notifications to be sent
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // Verify both endpoints received notifications with correct headers
+            const config1Notifications = receivedNotifications.filter(n => n.url === '/notify');
+            const config2Notifications = receivedNotifications.filter(n => n.url === '/notify/second');
+
+            assert.lengthOf(config1Notifications, 1, 'Should send notification to first endpoint');
+            assert.lengthOf(config2Notifications, 1, 'Should send notification to second endpoint');
+
+            // Check headers for config with token
+            config1Notifications.forEach(notification => {
+                assert.equal(notification.headers['x-custom-token'], 'token-1', 
+                    'Should use custom header name for config with token');
+                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                    'Should not use default header name');
+            });
+
+            // Check headers for config without token
+            config2Notifications.forEach(notification => {
+                assert.isUndefined(notification.headers['x-custom-token'], 
+                    'Should not include token header for config without token');
+                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                    'Should not include default token header');
+            });
+
+            // Both should have content-type
+            receivedNotifications.forEach(notification => {
+                assert.equal(notification.headers['content-type'], 'application/json', 
+                    'Should include content-type header');
+            });
         });
     });
 });
