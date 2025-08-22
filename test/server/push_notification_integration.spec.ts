@@ -11,9 +11,7 @@ import { InMemoryPushNotificationStore } from '../../src/server/push_notificatio
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
 import { DefaultExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { AgentCard, Message, MessageSendParams, PushNotificationConfig, Task } from '../../src/index.js';
-import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
-import { RequestContext } from '../../src/server/agent_execution/request_context.js';
-import { ExecutionEventBus } from '../../src/server/events/execution_event_bus.js';
+import { MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
 describe('Push Notification Integration Tests', () => {
     let testServer: Server;
@@ -41,20 +39,6 @@ describe('Push Notification Integration Tests', () => {
         defaultOutputModes: ['text/plain'],
         skills: [],
     };
-
-    // Mock AgentExecutor following the pattern from default_request_handler.spec.ts
-    class MockAgentExecutor implements AgentExecutor {
-        // Stubs to control and inspect calls to execute
-        public execute: sinon.SinonStub<
-            [RequestContext, ExecutionEventBus],
-            Promise<void>
-        > = sinon.stub();
-        
-        public cancelTask: sinon.SinonStub<
-            [string, ExecutionEventBus],
-            Promise<void>
-        > = sinon.stub();
-    }
 
     // Create test Express server to receive push notifications
     const createTestServer = (): Promise<{ server: Server; port: number; url: string }> => {

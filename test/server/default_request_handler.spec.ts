@@ -3,59 +3,13 @@ import { assert, expect } from 'chai';
 import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
-import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError, InMemoryPushNotificationStore, PushNotificationStore } from '../../src/server/index.js';
+import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError, InMemoryPushNotificationStore, PushNotificationStore, PushNotificationSender } from '../../src/server/index.js';
 import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { PushNotificationSender } from '../../src/server/push_notification/push_notification_sender.js';
+import { MockAgentExecutor, CancellableMockAgentExecutor } from './mocks/agent-executor.mock.js';
+import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 
-/**
- * A realistic mock of AgentExecutor for cancellation tests.
- */
-class CancellableMockAgentExecutor implements AgentExecutor {
-    private cancelledTasks = new Set<string>();
-    private clock: SinonFakeTimers;
-
-    constructor(clock: SinonFakeTimers) {
-        this.clock = clock;
-    }
-
-    public execute = async (
-        requestContext: RequestContext,
-        eventBus: ExecutionEventBus,
-    ): Promise<void> => {
-        const taskId = requestContext.taskId;
-        const contextId = requestContext.contextId;
-        
-        eventBus.publish({ id: taskId, contextId, status: { state: "submitted" }, kind: 'task' });
-        eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "working" }, final: false });
-        
-        // Simulate a long-running process
-        for (let i = 0; i < 5; i++) {
-            if (this.cancelledTasks.has(taskId)) {
-                eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "canceled" }, final: true });
-                eventBus.finished();
-                return;
-            }
-            // Use fake timers to simulate work
-            await this.clock.tickAsync(100); 
-        }
-
-        eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "completed" }, final: true });
-        eventBus.finished();
-    };
-    
-    public cancelTask = async (
-        taskId: string,
-        eventBus: ExecutionEventBus,
-    ): Promise<void> => {
-        this.cancelledTasks.add(taskId);
-        // The execute loop is responsible for publishing the final state
-    };
-    
-    // Stub for spying on cancelTask calls
-    public cancelTaskSpy = sinon.spy(this, 'cancelTask');
-}
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let handler: A2ARequestHandler;
@@ -117,23 +71,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         parts: [{ kind: 'text', text }],
         kind: 'message',
     });
-    
-    /**
-     * A mock implementation of AgentExecutor to control agent behavior during tests.
-     */
-    class MockAgentExecutor implements AgentExecutor {
-        // Stubs to control and inspect calls to execute and cancelTask
-        public execute: SinonStub<
-            [RequestContext, ExecutionEventBus],
-            Promise<void>
-        > = sinon.stub();
-        public cancelTask: SinonStub<[string, ExecutionEventBus], Promise<void>> =
-            sinon.stub();
-    }
-
-    class MockPushNotificationSender implements PushNotificationSender {
-        public send: SinonStub<[Task], Promise<void>> = sinon.stub();
-    }
 
     it('sendMessage: should return a simple message response', async () => {
         const params: MessageSendParams = {
