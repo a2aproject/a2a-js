@@ -69,9 +69,6 @@ describe('Push Notification Integration Tests', () => {
                 });
 
                 switch (scenario) {
-                    case 'slow':
-                        setTimeout(() => res.status(200).json({ received: true }), 50);
-                        break;
                     case 'error':
                         res.status(500).json({ error: 'Internal Server Error' });
                         break;
@@ -192,6 +189,8 @@ describe('Push Notification Integration Tests', () => {
             // Wait for async push notifications to be sent
             await new Promise(resolve => setTimeout(resolve, 200));
 
+            const taskResult = await taskStore.load(task.id);
+
             // Verify push notifications were sent
             assert.lengthOf(receivedNotifications, 3, 'Should send notifications for submitted, working, and completed states');
             
@@ -207,7 +206,22 @@ describe('Push Notification Integration Tests', () => {
             assert.equal(firstNotification.url, '/notify');
             assert.equal(firstNotification.headers['content-type'], 'application/json');
             assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
-            assert.equal(firstNotification.body.id, task.id);
+            assert.deepEqual(firstNotification.body, {
+                ...taskResult,
+                status: { state: 'submitted' }
+            });
+
+            const secondNotification = receivedNotifications[1];
+            assert.deepEqual(secondNotification.body, {
+                ...taskResult,
+                status: { state: 'working' }
+            });
+
+            const thirdNotification = receivedNotifications[2];
+            assert.deepEqual(thirdNotification.body, {
+                ...taskResult,
+                status: { state: 'completed' }
+            });
         });
 
         it('should handle multiple push notification endpoints for the same task', async () => {
@@ -288,21 +302,21 @@ describe('Push Notification Integration Tests', () => {
             assert.include(allEndpoints, '/notify/second', 'Should notify second endpoint');
         });
 
-        it('should handle slow push notification endpoints gracefully', async () => {
-            const slowConfig: PushNotificationConfig = {
-                id: 'slow-config',
-                url: `${testServerUrl}/notify/slow`,
-                token: 'slow-token'
+        it('should complete task successfully even when push notification endpoint returns an error', async () => {
+            const pushConfig: PushNotificationConfig = {
+                id: 'error-endpoint-config',
+                url: `${testServerUrl}/notify/error`,
+                token: 'test-auth-token'
             };
 
             const params: MessageSendParams = {
-                message: createTestMessage('Test task with slow push notifications'),
+                message: createTestMessage('Test task with error endpoint'),
                 configuration: {
-                    pushNotificationConfig: slowConfig
+                    pushNotificationConfig: pushConfig
                 }
             };
 
-            // Mock the agent executor to publish only completed state
+            // Mock the agent executor to publish task states
             mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
                 const taskId = ctx.taskId;
                 const contextId = ctx.contextId;
@@ -315,7 +329,7 @@ describe('Push Notification Integration Tests', () => {
                     kind: 'task' 
                 });
                 
-                // Publish completion directly
+                // Publish completion
                 bus.publish({ 
                     taskId, 
                     contextId, 
@@ -327,18 +341,25 @@ describe('Push Notification Integration Tests', () => {
                 bus.finished();
             });
 
-            // Send message
-            await handler.sendMessage(params);
+            // Send message and wait for completion - this should not throw an error
+            const result = await handler.sendMessage(params);
+            const task = result as Task;
 
-            // Wait for slow push notifications
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // Wait for async push notifications to be sent
+            await new Promise(resolve => setTimeout(resolve, 200));
 
-            // Should receive notifications even from slow endpoint
-            assert.isTrue(receivedNotifications.length >= 2, 'Should receive notifications from slow endpoint');
+            // Load the task from the store
+            const taskResult = await taskStore.load(task.id);
+
+            // Verify the task payload
+            assert.deepEqual(task, taskResult);
             
-            // Verify all notifications were received
-            const slowNotifications = receivedNotifications.filter(n => n.url === '/notify/slow');
-            assert.isTrue(slowNotifications.length >= 2, 'Slow endpoint should receive all status updates');
+            // Verify push notification was attempted (even though it failed)
+            assert.lengthOf(receivedNotifications, 2, 'Should attempt to send notifications for submitted and completed states');
+            
+            // Verify the error endpoint was hit
+            const errorNotifications = receivedNotifications.filter(n => n.url === '/notify/error');
+            assert.lengthOf(errorNotifications, 2, 'Should have attempted to send notifications to error endpoint');
         });
     });
 });
