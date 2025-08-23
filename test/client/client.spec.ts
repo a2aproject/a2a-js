@@ -52,6 +52,33 @@ describe('A2AClient Basic Tests', () => {
       expect(clientWithCustomFetch).to.be.instanceOf(A2AClient);
     });
 
+    it('should throw an error if no fetch implementation is available', async () => {
+      const originalFetch = global.fetch;
+      const expectedErrorMsg =
+        'A `fetch` implementation was not provided and is not available in the global scope. ' +
+        'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+        'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.';
+
+      try {
+        // Arrange: Ensure no global fetch is defined for this test
+        // @ts-ignore
+        global.fetch = undefined;
+
+        // Act: Instantiate the client without providing a custom fetch implementation.
+        // The constructor kicks off an async operation that will fail.
+        const clientWithoutFetch = new A2AClient('https://test-agent.example.com');
+        // Assert: Check that any method relying on the agent card fetch rejects with the expected error.
+        await clientWithoutFetch.getAgentCard();
+        expect.fail('Expected an error to be thrown but it was not.');
+      } catch (error) {
+        expect(error).to.be.instanceOf(Error);
+        expect((error as Error).message).to.equal(expectedErrorMsg);
+      } finally {
+        // Cleanup to not affect other tests
+        global.fetch = originalFetch;
+      }
+    });
+
     it('should fetch agent card during initialization', async () => {
       // Wait for agent card to be fetched
       await client.getAgentCard();
