@@ -5,8 +5,8 @@ import { A2AClient } from '../../src/client/client.js';
 import { AuthenticationHandler, HttpHeaders, createAuthenticatingFetchWithRetry } from '../../src/client/auth-handler.js';
 import {SendMessageResponse, SendMessageSuccessResponse } from '../../src/types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
-import {
-  createMessageParams,
+import { 
+  createMessageParams, 
   createMockFetch
 } from './util.js';
 
@@ -62,7 +62,7 @@ class MockAuthHandler implements AuthenticationHandler {
 
     // Use the ChallengeManager to sign the challenge
     const token = ChallengeManager.signChallenge(challenge);
-
+      
     // have the client try the token, BUT don't save it in case the client doesn't accept it
     return { 'Authorization': `Bearer ${token}` };
   }
@@ -146,6 +146,7 @@ describe('A2AClient Authentication Tests', () => {
         }
       });
       expect(mockFetch.secondCall.args[1].body).to.include('"method":"message/send"');
+
       // Third call: RPC request with auth header
       expect(mockFetch.thirdCall.args[0]).to.equal('https://test-agent.example.com/api');
       expect(mockFetch.thirdCall.args[1]).to.deep.include({
@@ -155,6 +156,7 @@ describe('A2AClient Authentication Tests', () => {
       expect(mockFetch.thirdCall.args[1].headers).to.have.property('Content-Type', 'application/json');
       expect(mockFetch.thirdCall.args[1].headers).to.have.property('Accept', 'application/json');
       expect(mockFetch.thirdCall.args[1].headers).to.have.property('Authorization');
+
       expect(mockFetch.thirdCall.args[1].headers['Authorization']).to.match(/^Bearer .+$/);
       expect(mockFetch.thirdCall.args[1].body).to.include('"method":"message/send"');
 
@@ -173,18 +175,23 @@ describe('A2AClient Authentication Tests', () => {
 
       // First request - should trigger auth flow
       const result1 = await client.sendMessage(messageParams);
+
       // Capture the token from the first request
       const firstRequestAuthCall = mockFetch.getCalls().find(call =>
         call.args[0].includes('/api') &&
         call.args[1]?.headers?.['Authorization']
       );
       const firstRequestToken = firstRequestAuthCall?.args[1]?.headers?.['Authorization'];
+
       // Second request - should use existing token
       const result2 = await client.sendMessage(messageParams);
+
       // Total calls should be 4: 3 for first request + 1 for second request (both agent card and auth token cached)
       expect(mockFetch.callCount).to.equal(4);
+
       // Second request should start from call #4 (after the first 3 calls)
       const secondRequestCalls = mockFetch.getCalls().slice(3);
+
       // Only one call for second request: RPC request with auth header (agent card and token cached)
       expect(secondRequestCalls[0].args[0]).to.equal('https://test-agent.example.com/api');
       expect(secondRequestCalls[0].args[1].headers).to.have.property('Authorization');
@@ -335,6 +342,7 @@ describe('A2AClient Authentication Tests', () => {
 
       // The client should return a JSON-RPC error response rather than throwing an error
       const result = await clientNoAuthHandler.sendMessage(messageParams);
+
       // Verify that the result is a JSON-RPC error response
       expect(result).to.have.property('jsonrpc', '2.0');
       expect(result).to.have.property('error');
@@ -385,6 +393,7 @@ describe('AuthHandlingFetch Tests', () => {
     it('should merge auth headers with provided headers when auth headers exist', async () => {
       // Create an auth handler that has stored authorization headers
       const authHandlerWithHeaders = new MockAuthHandler();
+
       // Simulate a successful authentication by calling onSuccessfulRetry
       // This will store the Authorization header in the auth handler
       await authHandlerWithHeaders.onSuccessfulRetry({
@@ -403,12 +412,14 @@ describe('AuthHandlingFetch Tests', () => {
       // Verify that the fetch was called with merged headers including auth headers
       const fetchCall = mockFetch.getCall(0);
       const headers = fetchCall.args[1]?.headers as Record<string, string>;
+
       // Should include both user headers and auth headers
       expect(headers).to.include({
         'Content-Type': 'application/json',
         'Custom-Header': 'custom-value',
         'Authorization': 'Bearer test-token-123'
       });
+
       // Verify the auth handler's headers method returns the stored authorization
       const storedHeaders = await authHandlerWithHeaders.headers();
       expect(storedHeaders['Authorization']).to.equal('Bearer test-token-123');
@@ -417,7 +428,9 @@ describe('AuthHandlingFetch Tests', () => {
     it('should handle empty headers gracefully', async () => {
       const emptyAuthHandler = new MockAuthHandler();
       const emptyAuthFetch = createAuthenticatingFetchWithRetry(mockFetch, emptyAuthHandler);
+
       await emptyAuthFetch('https://test.example.com/api');
+
       const fetchCall = mockFetch.getCall(0);
       expect(fetchCall.args[1]).to.exist;
     });
@@ -427,6 +440,7 @@ describe('AuthHandlingFetch Tests', () => {
     it('should call onSuccessfulRetry when retry succeeds', async () => {
       const successAuthHandler = new MockAuthHandler();
       const onSuccessSpy = sinon.spy(successAuthHandler, 'onSuccessfulRetry');
+
       // Create a modified version of the existing mockFetch that returns 401 first, then 200
       const successMockFetch = createMockFetch({
         messageConfig: {
@@ -435,8 +449,11 @@ describe('AuthHandlingFetch Tests', () => {
         },
         behavior: 'authRetry'
       });
+
       const successAuthFetch = createAuthenticatingFetchWithRetry(successMockFetch, successAuthHandler);
+
       await successAuthFetch('https://test.example.com/api');
+
       expect(onSuccessSpy.called).to.be.true;
       expect(onSuccessSpy.firstCall.args[0]).to.deep.include({
         'Authorization': 'Bearer challenge123.challenge123'
@@ -446,13 +463,18 @@ describe('AuthHandlingFetch Tests', () => {
     it('should not call onSuccessfulRetry when retry fails', async () => {
       const failAuthHandler = new MockAuthHandler();
       const onSuccessSpy = sinon.spy(failAuthHandler, 'onSuccessfulRetry');
+
       const failFetch = createAuthenticatingFetchWithRetry(mockFetch, failAuthHandler);
+
       // Mock fetch to return 401 first, then 401 again
       const failMockFetch = createMockFetch({
         behavior: 'alwaysFail'
       });
+
       const failAuthFetch = createAuthenticatingFetchWithRetry(failMockFetch, failAuthHandler);
+
       const response = await failAuthFetch('https://test.example.com/api');
+
       expect(onSuccessSpy.called).to.be.false;
       expect(response.status).to.equal(401);
     });
@@ -462,6 +484,7 @@ describe('AuthHandlingFetch Tests', () => {
     it('should propagate fetch errors', async () => {
       const errorFetch = sinon.stub().rejects(new Error('Network error'));
       const errorAuthFetch = createAuthenticatingFetchWithRetry(errorFetch, authHandler);
+
       try {
         await errorAuthFetch('https://test.example.com/api');
         expect.fail('Expected error to be thrown');
@@ -475,7 +498,9 @@ describe('AuthHandlingFetch Tests', () => {
       const errorAuthHandler = new MockAuthHandler();
       const shouldRetrySpy = sinon.stub(errorAuthHandler, 'shouldRetryWithHeaders');
       shouldRetrySpy.rejects(new Error('Auth handler error'));
+
       const errorAuthFetch = createAuthenticatingFetchWithRetry(mockFetch, errorAuthHandler);
+
       try {
         await errorAuthFetch('https://test.example.com/api');
         expect.fail('Expected error to be thrown');
