@@ -56,7 +56,6 @@ describe('A2AClient Basic Tests', () => {
     it('should fetch agent card during initialization', async () => {
       // Wait for agent card to be fetched
       await client.getAgentCard();
-
       expect(mockFetch.callCount).to.be.greaterThan(0);
       const agentCardCall = mockFetch.getCalls().find(call =>
         call.args[0].includes(AGENT_CARD_PATH)
@@ -68,7 +67,6 @@ describe('A2AClient Basic Tests', () => {
   describe('Agent Card Handling', () => {
     it('should fetch and parse agent card correctly', async () => {
       const agentCard = await client.getAgentCard();
-
       expect(agentCard).to.have.property('name', 'Test Agent');
       expect(agentCard).to.have.property('description', 'A test agent for basic client testing');
       expect(agentCard).to.have.property('url', 'https://test-agent.example.com/api');
@@ -80,10 +78,8 @@ describe('A2AClient Basic Tests', () => {
     it('should cache agent card for subsequent requests', async () => {
       // First call
       await client.getAgentCard();
-
       // Second call - should not fetch agent card again
       await client.getAgentCard();
-
       const agentCardCalls = mockFetch.getCalls().filter(call =>
         call.args[0].includes(AGENT_CARD_PATH)
       );
@@ -132,7 +128,6 @@ describe('A2AClient Basic Tests', () => {
 
       // Verify fetch was called
       expect(mockFetch.callCount).to.be.greaterThan(0);
-
       // Verify RPC call was made
       const rpcCall = mockFetch.getCalls().find(call =>
         call.args[0].includes('/api')
@@ -163,11 +158,9 @@ describe('A2AClient Basic Tests', () => {
           });
           return createAgentCardResponse(mockAgentCard);
         }
-
         if (url.includes('/api')) {
           // Extract request ID from the request body
           const requestId = extractRequestId(options);
-
           return createResponse(requestId, undefined, {
             code: -32603,
             message: 'Internal error'
@@ -205,7 +198,6 @@ describe('A2AClient Basic Tests', () => {
   describe('Error Handling', () => {
     it('should handle network errors gracefully', async () => {
       const networkErrorFetch = sinon.stub().rejects(new Error('Network error'));
-
       const networkErrorClient = new A2AClient(agentCardUrl, {
         fetchImpl: networkErrorFetch
       });
