@@ -15,15 +15,16 @@ describe('A2AClient Basic Tests', () => {
   let client: A2AClient;
   let mockFetch: sinon.SinonStub;
   let originalConsoleError: typeof console.error;
+  const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
 
-  beforeEach(() => {    
+  beforeEach(() => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
     console.error = () => {};
-    
+
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
-    client = new A2AClient('https://test-agent.example.com', {
+    client = new A2AClient(agentCardUrl, {
       fetchImpl: mockFetch
     });
   });
@@ -38,7 +39,7 @@ describe('A2AClient Basic Tests', () => {
     it('should initialize client with default options', () => {
       // Use a mock fetch to avoid real HTTP requests during testing
       const mockFetchForDefault = createMockFetch();
-      const basicClient = new A2AClient('https://test-agent.example.com', {
+      const basicClient = new A2AClient(agentCardUrl, {
         fetchImpl: mockFetchForDefault
       });
       expect(basicClient).to.be.instanceOf(A2AClient);
@@ -46,7 +47,7 @@ describe('A2AClient Basic Tests', () => {
 
     it('should initialize client with custom fetch implementation', () => {
       const customFetch = sinon.stub();
-      const clientWithCustomFetch = new A2AClient('https://test-agent.example.com', {
+      const clientWithCustomFetch = new A2AClient(agentCardUrl, {
         fetchImpl: customFetch
       });
       expect(clientWithCustomFetch).to.be.instanceOf(A2AClient);
@@ -55,9 +56,9 @@ describe('A2AClient Basic Tests', () => {
     it('should fetch agent card during initialization', async () => {
       // Wait for agent card to be fetched
       await client.getAgentCard();
-      
+
       expect(mockFetch.callCount).to.be.greaterThan(0);
-      const agentCardCall = mockFetch.getCalls().find(call => 
+      const agentCardCall = mockFetch.getCalls().find(call =>
         call.args[0].includes(AGENT_CARD_PATH)
       );
       expect(agentCardCall).to.exist;
@@ -67,7 +68,7 @@ describe('A2AClient Basic Tests', () => {
   describe('Agent Card Handling', () => {
     it('should fetch and parse agent card correctly', async () => {
       const agentCard = await client.getAgentCard();
-      
+
       expect(agentCard).to.have.property('name', 'Test Agent');
       expect(agentCard).to.have.property('description', 'A test agent for basic client testing');
       expect(agentCard).to.have.property('url', 'https://test-agent.example.com/api');
@@ -79,14 +80,14 @@ describe('A2AClient Basic Tests', () => {
     it('should cache agent card for subsequent requests', async () => {
       // First call
       await client.getAgentCard();
-      
+
       // Second call - should not fetch agent card again
       await client.getAgentCard();
-      
-      const agentCardCalls = mockFetch.getCalls().filter(call => 
+
+      const agentCardCalls = mockFetch.getCalls().filter(call =>
         call.args[0].includes(AGENT_CARD_PATH)
       );
-      
+
       expect(agentCardCalls).to.have.length(1);
     });
 
@@ -99,7 +100,7 @@ describe('A2AClient Basic Tests', () => {
       });
 
       // Create client after setting up the mock to avoid console.error during construction
-      const errorClient = new A2AClient('https://test-agent.example.com', {
+      const errorClient = new A2AClient(agentCardUrl, {
         fetchImpl: errorFetch
       });
 
@@ -131,9 +132,9 @@ describe('A2AClient Basic Tests', () => {
 
       // Verify fetch was called
       expect(mockFetch.callCount).to.be.greaterThan(0);
-      
+
       // Verify RPC call was made
-      const rpcCall = mockFetch.getCalls().find(call => 
+      const rpcCall = mockFetch.getCalls().find(call =>
         call.args[0].includes('/api')
       );
       expect(rpcCall).to.exist;
@@ -162,21 +163,21 @@ describe('A2AClient Basic Tests', () => {
           });
           return createAgentCardResponse(mockAgentCard);
         }
-        
+
         if (url.includes('/api')) {
           // Extract request ID from the request body
           const requestId = extractRequestId(options);
-          
+
           return createResponse(requestId, undefined, {
             code: -32603,
             message: 'Internal error'
           }, 500);
         }
-        
+
         return new Response('Not found', { status: 404 });
       });
 
-      const errorClient = new A2AClient('https://test-agent.example.com', {
+      const errorClient = new A2AClient(agentCardUrl, {
         fetchImpl: errorFetch
       });
 
@@ -204,8 +205,8 @@ describe('A2AClient Basic Tests', () => {
   describe('Error Handling', () => {
     it('should handle network errors gracefully', async () => {
       const networkErrorFetch = sinon.stub().rejects(new Error('Network error'));
-      
-      const networkErrorClient = new A2AClient('https://test-agent.example.com', {
+
+      const networkErrorClient = new A2AClient(agentCardUrl, {
         fetchImpl: networkErrorFetch
       });
 
@@ -229,7 +230,7 @@ describe('A2AClient Basic Tests', () => {
         return new Response('Not found', { status: 404 });
       });
 
-      const malformedClient = new A2AClient('https://test-agent.example.com', {
+      const malformedClient = new A2AClient(agentCardUrl, {
         fetchImpl: malformedFetch
       });
 
@@ -263,7 +264,7 @@ describe('A2AClient Basic Tests', () => {
         return new Response('Not found', { status: 404 });
       });
 
-      const missingUrlClient = new A2AClient('https://test-agent.example.com', {
+      const missingUrlClient = new A2AClient(agentCardUrl, {
         fetchImpl: missingUrlFetch
       });
 

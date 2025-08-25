@@ -31,13 +31,11 @@ import {
   A2AError,
   SendMessageSuccessResponse
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
-import { AGENT_CARD_PATH } from "../constants.js";
 
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
 export interface A2AClientOptions {
-  agentCardPath?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -52,27 +50,24 @@ export class A2AClient {
 
   /**
    * Constructs an A2AClient instance.
-   * It initiates fetching the agent card from the provided agent baseUrl.
-   * The Agent Card is fetched from a path relative to the agentBaseUrl, which defaults to '.well-known/agent-card.json'.
+   * It initiates fetching the agent card from the provided agent card URL.
    * The `url` field from the Agent Card will be used as the RPC service endpoint.
-   * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
-   * @param options Optional. The options for the A2AClient including the fetch implementation, agent card path, and authentication handler.
+   * @param agentCardUrl The URL of the agent card (e.g., https://agent.example.com/.well-known/agent-card.json)
+   * @param options Optional. The options for the A2AClient including the fetch implementation and authentication handler.
    */
-  constructor(agentBaseUrl: string, options?: A2AClientOptions) {
+  constructor(agentCardUrl: string, options?: A2AClientOptions) {
     this.fetchImpl = options?.fetchImpl ?? fetch;
-    this.agentCardPromise = this._fetchAndCacheAgentCard( agentBaseUrl, options?.agentCardPath );
+    this.agentCardPromise = this._fetchAndCacheAgentCard(agentCardUrl);
   }
 
   /**
    * Fetches the Agent Card from the agent's well-known URI and caches its service endpoint URL.
    * This method is called by the constructor.
-   * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
-   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * @param agentCardUrl The URL of the agent card.
    * @returns A Promise that resolves to the AgentCard.
    */
-  private async _fetchAndCacheAgentCard( agentBaseUrl: string, agentCardPath?: string ): Promise<AgentCard> {
+  private async _fetchAndCacheAgentCard(agentCardUrl: string): Promise<AgentCard> {
     try {
-      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
       const response = await this.fetchImpl(agentCardUrl, {
         headers: { 'Accept': 'application/json' },
       });
@@ -94,17 +89,14 @@ export class A2AClient {
 
   /**
    * Retrieves the Agent Card.
-   * If an `agentBaseUrl` is provided, it fetches the card from that specific URL.
+   * If an `agentCardUrl` is provided, it fetches the card from that specific URL.
    * Otherwise, it returns the card fetched and cached during client construction.
-   * @param agentBaseUrl Optional. The base URL of the agent to fetch the card from.
-   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * @param agentCardUrl Optional. The URL of the agent to fetch the card from.
    * If provided, this will fetch a new card, not use the cached one from the constructor's URL.
    * @returns A Promise that resolves to the AgentCard.
    */
-  public async getAgentCard(agentBaseUrl?: string, agentCardPath?: string): Promise<AgentCard> {
-    if (agentBaseUrl) {
-      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
-
+  public async getAgentCard(agentCardUrl?: string): Promise<AgentCard> {
+    if (agentCardUrl) {
       const response = await this.fetchImpl(agentCardUrl, {
         headers: { 'Accept': 'application/json' },
       });
@@ -115,15 +107,6 @@ export class A2AClient {
     }
     // If no specific URL is given, return the promise for the initially configured agent's card.
     return this.agentCardPromise;
-  }
-
-  /**
-   * Determines the agent card URL based on the agent URL.
-   * @param agentBaseUrl The agent URL.
-   * @param agentCardPath Optional relative path to the agent card, defaults to .well-known/agent-card.json
-   */
-  private resolveAgentCardUrl( agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH ): string {
-    return `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`;
   }
 
   /**
