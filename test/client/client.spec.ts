@@ -277,4 +277,65 @@ describe('A2AClient Basic Tests', () => {
       }
     });
   });
+
+  describe('Static Methods', () => {
+    it('should create a client from an agent card using fromAgentCard', async () => {
+      const mockAgentCard = createMockAgentCard({
+        name: 'Static Agent',
+        description: 'An agent created from a static method',
+        url: 'https://static-agent.example.com/api'
+      });
+      const mockFetchForStatic = createMockFetch();
+
+      const clientFromCard = A2AClient.fromAgentCard(mockAgentCard, {
+        fetchImpl: mockFetchForStatic
+      });
+
+      expect(clientFromCard).to.be.instanceOf(A2AClient);
+
+      // Getting the card should return the provided card without a fetch call
+      const agentCard = await clientFromCard.getAgentCard();
+      expect(agentCard).to.deep.equal(mockAgentCard);
+      expect(mockFetchForStatic.called).to.be.false;
+
+      // Test sending a message to ensure serviceEndpointUrl is set
+      const messageParams: MessageSendParams = {
+        message: {
+          kind: 'message',
+          messageId: 'test-msg-static',
+          role: 'user',
+          parts: [{
+            kind: 'text',
+            text: 'Hello, static agent!'
+          } as TextPart]
+        }
+      };
+
+      const result = await clientFromCard.sendMessage(messageParams);
+
+      // Verify fetch was called for the RPC request
+      expect(mockFetchForStatic.calledOnce).to.be.true;
+      const rpcCall = mockFetchForStatic.getCall(0);
+      expect(rpcCall.args[0]).to.equal('https://static-agent.example.com/api');
+      expect(isSuccessResponse(result)).to.be.true;
+    });
+
+    it('should throw an error if agent card is missing url in fromAgentCard', () => {
+        const mockAgentCard = {
+            name: 'Test Agent',
+            description: 'A test agent without URL',
+            protocolVersion: '1.0.0',
+            version: '1.0.0',
+            // Missing url field
+            defaultInputModes: ['text'],
+            defaultOutputModes: ['text'],
+            capabilities: {
+              streaming: true,
+              pushNotifications: true
+            },
+            skills: []
+          };
+        expect(() => A2AClient.fromAgentCard(mockAgentCard as any)).to.throw("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
+    });
+  });
 });

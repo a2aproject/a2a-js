@@ -61,6 +61,31 @@ export class A2AClient {
   }
 
   /**
+   * Creates an A2AClient instance from an already-fetched AgentCard.
+   * This method is useful when the AgentCard is obtained through means other than
+   * the client's own fetching mechanism (e.g., from a discovery service).
+   * @param agentCard The AgentCard object.
+   * @param options Optional. The options for the A2AClient including the fetch implementation.
+   * @returns A new A2AClient instance.
+   */
+  public static fromAgentCard(agentCard: AgentCard, options?: A2AClientOptions): A2AClient {
+    if (!agentCard.url) {
+      throw new Error("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
+    }
+
+    // Create an instance without calling the constructor to avoid initial fetch
+    const client = Object.create(A2AClient.prototype) as A2AClient;
+
+    // Set necessary properties
+    client.fetchImpl = options?.fetchImpl ?? fetch;
+    client.agentCardPromise = Promise.resolve(agentCard);
+    client.serviceEndpointUrl = agentCard.url;
+    client.requestIdCounter = 1;
+
+    return client;
+  }
+
+  /**
    * Fetches the Agent Card from the agent's well-known URI and caches its service endpoint URL.
    * This method is called by the constructor.
    * @param agentCardUrl The URL of the agent card.
