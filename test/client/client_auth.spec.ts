@@ -5,8 +5,8 @@ import { A2AClient } from '../../src/client/client.js';
 import { AuthenticationHandler, HttpHeaders, createAuthenticatingFetchWithRetry } from '../../src/client/auth-handler.js';
 import {SendMessageResponse, SendMessageSuccessResponse } from '../../src/types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
-import { 
-  createMessageParams, 
+import {
+  createMessageParams,
   createMockFetch
 } from './util.js';
 
@@ -62,7 +62,7 @@ class MockAuthHandler implements AuthenticationHandler {
 
     // Use the ChallengeManager to sign the challenge
     const token = ChallengeManager.signChallenge(challenge);
-      
+
     // have the client try the token, BUT don't save it in case the client doesn't accept it
     return { 'Authorization': `Bearer ${token}` };
   }
@@ -87,7 +87,7 @@ describe('A2AClient Authentication Tests', () => {
   let originalConsoleError: typeof console.error;
   const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
     console.error = () => {};
@@ -106,7 +106,7 @@ describe('A2AClient Authentication Tests', () => {
     authHandler = new MockAuthHandler();
     // Use AuthHandlingFetch to wrap the mock fetch with authentication handling
     const authHandlingFetch = createAuthenticatingFetchWithRetry(mockFetch, authHandler);
-    client = new A2AClient(agentCardUrl, {
+    client = await A2AClient.fromCardUrl(agentCardUrl, {
       fetchImpl: authHandlingFetch
     });
   });
@@ -230,7 +230,7 @@ describe('A2AClient Authentication Tests', () => {
       const originalShouldRetry = noRetryHandler.shouldRetryWithHeaders.bind(noRetryHandler);
       noRetryHandler.shouldRetryWithHeaders = sinon.stub().resolves(undefined);
 
-      const clientNoRetry = new A2AClient(agentCardUrl, {
+      const clientNoRetry = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: mockFetch
       });
 
@@ -262,7 +262,7 @@ describe('A2AClient Authentication Tests', () => {
       const { capturedAuthHeaders } = authRetryTestFetch;
 
       const authHandlingFetch = createAuthenticatingFetchWithRetry(authRetryTestFetch, authHandler);
-      const clientAuthTest = new A2AClient(agentCardUrl, {
+      const clientAuthTest = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: authHandlingFetch
       });
 
@@ -297,7 +297,7 @@ describe('A2AClient Authentication Tests', () => {
       });
       const { capturedAuthHeaders } = noAuthRequiredFetch;
 
-      const clientNoAuth = new A2AClient(agentCardUrl, {
+      const clientNoAuth = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: noAuthRequiredFetch
       });
 
@@ -331,7 +331,7 @@ describe('A2AClient Authentication Tests', () => {
       });
 
       // Create client WITHOUT authHandler
-      const clientNoAuthHandler = new A2AClient(agentCardUrl, {
+      const clientNoAuthHandler = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: fetchWithApiError
       });
 

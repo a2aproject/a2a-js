@@ -17,14 +17,14 @@ describe('A2AClient Basic Tests', () => {
   let originalConsoleError: typeof console.error;
   const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
     console.error = () => {};
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
-    client = new A2AClient(agentCardUrl, {
+    client = await A2AClient.fromCardUrl(agentCardUrl, {
       fetchImpl: mockFetch
     });
   });
@@ -36,18 +36,18 @@ describe('A2AClient Basic Tests', () => {
   });
 
   describe('Client Initialization', () => {
-    it('should initialize client with default options', () => {
+    it('should initialize client with default options', async () => {
       // Use a mock fetch to avoid real HTTP requests during testing
       const mockFetchForDefault = createMockFetch();
-      const basicClient = new A2AClient(agentCardUrl, {
+      const basicClient = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: mockFetchForDefault
       });
       expect(basicClient).to.be.instanceOf(A2AClient);
     });
 
-    it('should initialize client with custom fetch implementation', () => {
-      const customFetch = sinon.stub();
-      const clientWithCustomFetch = new A2AClient(agentCardUrl, {
+    it('should initialize client with custom fetch implementation', async () => {
+      const customFetch = sinon.stub().resolves(new Response(JSON.stringify(createMockAgentCard()), { status: 200 }));
+      const clientWithCustomFetch = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: customFetch
       });
       expect(clientWithCustomFetch).to.be.instanceOf(A2AClient);
@@ -55,7 +55,7 @@ describe('A2AClient Basic Tests', () => {
 
     it('should fetch agent card during initialization', async () => {
       // Wait for agent card to be fetched
-      await client.getAgentCard();
+      client.getAgentCard();
 
       expect(mockFetch.callCount).to.be.greaterThan(0);
       const agentCardCall = mockFetch.getCalls().find(call =>
@@ -67,7 +67,7 @@ describe('A2AClient Basic Tests', () => {
 
   describe('Agent Card Handling', () => {
     it('should fetch and parse agent card correctly', async () => {
-      const agentCard = await client.getAgentCard();
+      const agentCard = client.getAgentCard();
 
       expect(agentCard).to.have.property('name', 'Test Agent');
       expect(agentCard).to.have.property('description', 'A test agent for basic client testing');
@@ -79,10 +79,10 @@ describe('A2AClient Basic Tests', () => {
 
     it('should cache agent card for subsequent requests', async () => {
       // First call
-      await client.getAgentCard();
+      client.getAgentCard();
 
       // Second call - should not fetch agent card again
-      await client.getAgentCard();
+      client.getAgentCard();
 
       const agentCardCalls = mockFetch.getCalls().filter(call =>
         call.args[0].includes(AGENT_CARD_PATH)
@@ -100,12 +100,10 @@ describe('A2AClient Basic Tests', () => {
       });
 
       // Create client after setting up the mock to avoid console.error during construction
-      const errorClient = new A2AClient(agentCardUrl, {
-        fetchImpl: errorFetch
-      });
-
       try {
-        await errorClient.getAgentCard();
+        await A2AClient.fromCardUrl(agentCardUrl, {
+          fetchImpl: errorFetch
+        });
         expect.fail('Expected error to be thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(Error);
@@ -177,7 +175,7 @@ describe('A2AClient Basic Tests', () => {
         return new Response('Not found', { status: 404 });
       });
 
-      const errorClient = new A2AClient(agentCardUrl, {
+      const errorClient = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: errorFetch
       });
 
@@ -206,12 +204,10 @@ describe('A2AClient Basic Tests', () => {
     it('should handle network errors gracefully', async () => {
       const networkErrorFetch = sinon.stub().rejects(new Error('Network error'));
 
-      const networkErrorClient = new A2AClient(agentCardUrl, {
-        fetchImpl: networkErrorFetch
-      });
-
       try {
-        await networkErrorClient.getAgentCard();
+        await A2AClient.fromCardUrl(agentCardUrl, {
+          fetchImpl: networkErrorFetch
+        });
         expect.fail('Expected error to be thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(Error);
@@ -230,12 +226,10 @@ describe('A2AClient Basic Tests', () => {
         return new Response('Not found', { status: 404 });
       });
 
-      const malformedClient = new A2AClient(agentCardUrl, {
-        fetchImpl: malformedFetch
-      });
-
       try {
-        await malformedClient.getAgentCard();
+        await A2AClient.fromCardUrl(agentCardUrl, {
+          fetchImpl: malformedFetch
+        });
         expect.fail('Expected error to be thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(Error);
@@ -264,12 +258,10 @@ describe('A2AClient Basic Tests', () => {
         return new Response('Not found', { status: 404 });
       });
 
-      const missingUrlClient = new A2AClient(agentCardUrl, {
-        fetchImpl: missingUrlFetch
-      });
-
       try {
-        await missingUrlClient.getAgentCard();
+        await A2AClient.fromCardUrl(agentCardUrl, {
+          fetchImpl: missingUrlFetch
+        });
         expect.fail('Expected error to be thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(Error);
@@ -279,7 +271,7 @@ describe('A2AClient Basic Tests', () => {
   });
 
   describe('Static Methods', () => {
-    it('should create a client from an agent card using fromAgentCard', async () => {
+    it('should create a client from an agent card using the constructor', async () => {
       const mockAgentCard = createMockAgentCard({
         name: 'Static Agent',
         description: 'An agent created from a static method',
@@ -287,7 +279,7 @@ describe('A2AClient Basic Tests', () => {
       });
       const mockFetchForStatic = createMockFetch();
 
-      const clientFromCard = A2AClient.fromAgentCard(mockAgentCard, {
+      const clientFromCard = new A2AClient(mockAgentCard, {
         fetchImpl: mockFetchForStatic
       });
 
@@ -320,7 +312,7 @@ describe('A2AClient Basic Tests', () => {
       expect(isSuccessResponse(result)).to.be.true;
     });
 
-    it('should throw an error if agent card is missing url in fromAgentCard', () => {
+    it('should throw an error if agent card is missing url in constructor', () => {
         const mockAgentCard = {
             name: 'Test Agent',
             description: 'A test agent without URL',
@@ -335,7 +327,7 @@ describe('A2AClient Basic Tests', () => {
             },
             skills: []
           };
-        expect(() => A2AClient.fromAgentCard(mockAgentCard as any)).to.throw("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
+        expect(() => new A2AClient(mockAgentCard as any)).to.throw("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
     });
   });
 });
