@@ -16,6 +16,7 @@ describe('A2AClient Basic Tests', () => {
   let mockFetch: sinon.SinonStub;
   let originalConsoleError: typeof console.error;
   const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
+  const agentBaseUrl = 'https://test-agent.example.com';
 
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
@@ -55,7 +56,7 @@ describe('A2AClient Basic Tests', () => {
 
     it('should fetch agent card during initialization', async () => {
       // Wait for agent card to be fetched
-      client.getAgentCard();
+      await client.getAgentCard();
 
       expect(mockFetch.callCount).to.be.greaterThan(0);
       const agentCardCall = mockFetch.getCalls().find(call =>
@@ -65,9 +66,26 @@ describe('A2AClient Basic Tests', () => {
     });
   });
 
+  describe('Backward Compatibility', () => {
+    it('should construct with a URL and log a warning', async () => {
+      const consoleWarnSpy = sinon.spy(console, 'warn');
+      const backwardCompatibleClient = new A2AClient(agentBaseUrl, {
+        fetchImpl: mockFetch
+      });
+
+      expect(consoleWarnSpy.calledOnce).to.be.true;
+      expect(consoleWarnSpy.calledWith("Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.")).to.be.true;
+
+      const agentCard = await backwardCompatibleClient.getAgentCard();
+      expect(agentCard).to.have.property('name', 'Test Agent');
+
+      consoleWarnSpy.restore();
+    });
+  });
+
   describe('Agent Card Handling', () => {
     it('should fetch and parse agent card correctly', async () => {
-      const agentCard = client.getAgentCard();
+      const agentCard = await client.getAgentCard();
 
       expect(agentCard).to.have.property('name', 'Test Agent');
       expect(agentCard).to.have.property('description', 'A test agent for basic client testing');
@@ -79,10 +97,10 @@ describe('A2AClient Basic Tests', () => {
 
     it('should cache agent card for subsequent requests', async () => {
       // First call
-      client.getAgentCard();
+      await client.getAgentCard();
 
       // Second call - should not fetch agent card again
-      client.getAgentCard();
+      await client.getAgentCard();
 
       const agentCardCalls = mockFetch.getCalls().filter(call =>
         call.args[0].includes(AGENT_CARD_PATH)

@@ -31,11 +31,13 @@ import {
   A2AError,
   SendMessageSuccessResponse
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
+import { AGENT_CARD_PATH } from "../constants.js";
 
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
 export interface A2AClientOptions {
+  agentCardPath?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -43,9 +45,9 @@ export interface A2AClientOptions {
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
  */
 export class A2AClient {
-  private agentCard: AgentCard;
+  private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
-  private serviceEndpointUrl: string;
+  private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
   private fetchImpl: typeof fetch;
 
   /**
@@ -53,14 +55,19 @@ export class A2AClient {
    * @param agentCard The AgentCard object.
    * @param options Optional. The options for the A2AClient including the fetch/auth implementation.
    */
-  constructor(agentCard: AgentCard, options?: A2AClientOptions) {
-    if (!agentCard.url) {
-      throw new Error("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
-    }
+  constructor(agentCard: AgentCard | string, options?: A2AClientOptions) {
     this.fetchImpl = options?.fetchImpl ?? fetch;
-    this.agentCard = agentCard;
-    this.serviceEndpointUrl = agentCard.url;
-}
+    if (typeof agentCard === 'string') {
+      console.warn("Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.");
+      this.agentCardPromise = this._fetchAndCacheAgentCard( agentCard, options?.agentCardPath );
+    } else {
+        if (!agentCard.url) {
+            throw new Error("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
+        }
+        this.serviceEndpointUrl = agentCard.url;
+        this.agentCardPromise = Promise.resolve(agentCard);
+    }
+  }
 
   /**
    * Creates an A2AClient instance by fetching the AgentCard from a URL then constructing the A2AClient.
@@ -89,22 +96,6 @@ export class A2AClient {
   }
 
   /**
-   * Retrieves the Agent Card.
-   * @returns The AgentCard object used to construct the client.
-   */
-  public getAgentCard(): AgentCard {
-    return this.agentCard;
-  }
-
-  /**
-   * Gets the RPC service endpoint URL.
-   * @returns The service endpoint URL string.
-   */
-  private _getServiceEndpoint(): string {
-    return this.serviceEndpointUrl;
-  }
-
-  /**
    * Helper method to make a generic JSON-RPC POST request.
    * @param method The RPC method name.
    * @param params The parameters for the RPC method.
@@ -114,7 +105,7 @@ export class A2AClient {
     method: string,
     params: TParams
   ): Promise<TResponse> {
-    const endpoint = this._getServiceEndpoint();
+    const endpoint = await this._getServiceEndpoint();
     const requestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: "2.0",
@@ -200,11 +191,12 @@ export class A2AClient {
    * The generator throws an error if streaming is not supported or if an HTTP/SSE error occurs.
    */
   public async *sendMessageStream(params: MessageSendParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    if (!this.agentCard.capabilities?.streaming) {
+    const agentCard = await this.agentCardPromise; // Ensure agent card is fetched
+    if (!agentCard.capabilities?.streaming) {
       throw new Error("Agent does not support streaming (AgentCard.capabilities.streaming is not true).");
     }
 
-    const endpoint = this._getServiceEndpoint();
+    const endpoint = await this._getServiceEndpoint();
     const clientRequestId = this.requestIdCounter++; // Use a unique ID for this stream request
     const rpcRequest: JSONRPCRequest = { // This is the initial JSON-RPC request to establish the stream
       jsonrpc: "2.0",
@@ -248,7 +240,8 @@ export class A2AClient {
    * @returns A Promise resolving to SetTaskPushNotificationConfigResponse.
    */
   public async setTaskPushNotificationConfig(params: TaskPushNotificationConfig): Promise<SetTaskPushNotificationConfigResponse> {
-    if (!this.agentCard.capabilities?.pushNotifications) {
+    const agentCard = await this.agentCardPromise;
+    if (!agentCard.capabilities?.pushNotifications) {
       throw new Error("Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).");
     }
     // The 'params' directly matches the structure expected by the RPC method.
@@ -298,11 +291,12 @@ export class A2AClient {
    * @returns An AsyncGenerator yielding A2AStreamEventData (Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent).
    */
   public async *resubscribeTask(params: TaskIdParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    if (!this.agentCard.capabilities?.streaming) {
+    const agentCard = await this.agentCardPromise;
+    if (!agentCard.capabilities?.streaming) {
       throw new Error("Agent does not support streaming (required for tasks/resubscribe).");
     }
 
-    const endpoint = this._getServiceEndpoint();
+    const endpoint = await this._getServiceEndpoint();
     const clientRequestId = this.requestIdCounter++; // Unique ID for this resubscribe request
     const rpcRequest: JSONRPCRequest = { // Initial JSON-RPC request to establish the stream
       jsonrpc: "2.0",
@@ -461,5 +455,97 @@ export class A2AClient {
 
   isErrorResponse(response: JSONRPCResponse): response is JSONRPCErrorResponse {
     return "error" in response;
+  }
+
+////////////////////////////////////////////////////////////////////////////////
+// Functions used to support old A2AClient Constructor to be deprecated soon
+// TODOs:
+// * remove `agentCardPromise`, and just use agentCard initialized
+// * _getServiceEndpoint can be made synchronous or deleted and accessed via
+//   agentCard.url
+// * getAgentCard changed to this.agentCard
+// * delete resolveAgentCardUrl(), _fetchAndCacheAgentCard(),
+//   agentCardPath from A2AClientOptions
+////////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Fetches the Agent Card from the agent's well-known URI and caches its service endpoint URL.
+   * This method is called by the constructor.
+   * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
+   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * @returns A Promise that resolves to the AgentCard.
+   */
+  private async _fetchAndCacheAgentCard( agentBaseUrl: string, agentCardPath?: string ): Promise<AgentCard> {
+    try {
+      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
+      const response = await this.fetchImpl(agentCardUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+      }
+      const agentCard: AgentCard = await response.json();
+      if (!agentCard.url) {
+        throw new Error("Fetched Agent Card does not contain a valid 'url' for the service endpoint.");
+      }
+      this.serviceEndpointUrl = agentCard.url; // Cache the service endpoint URL from the agent card
+      return agentCard;
+    } catch (error) {
+      console.error("Error fetching or parsing Agent Card:", error);
+      // Allow the promise to reject so users of agentCardPromise can handle it.
+      throw error;
+    }
+  }
+
+    /**
+   * Retrieves the Agent Card.
+   * If an `agentBaseUrl` is provided, it fetches the card from that specific URL.
+   * Otherwise, it returns the card fetched and cached during client construction.
+   * @param agentBaseUrl Optional. The base URL of the agent to fetch the card from.
+   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * If provided, this will fetch a new card, not use the cached one from the constructor's URL.
+   * @returns A Promise that resolves to the AgentCard.
+   */
+  public async getAgentCard(agentBaseUrl?: string, agentCardPath?: string): Promise<AgentCard> {
+    if (agentBaseUrl) {
+      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
+
+      const response = await this.fetchImpl(agentCardUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+      }
+      return await response.json() as AgentCard;
+    }
+    // If no specific URL is given, return the promise for the initially configured agent's card.
+    return this.agentCardPromise;
+  }
+
+  /**
+   * Determines the agent card URL based on the agent URL.
+   * @param agentBaseUrl The agent URL.
+   * @param agentCardPath Optional relative path to the agent card, defaults to .well-known/agent-card.json
+   */
+  private resolveAgentCardUrl( agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH ): string {
+    return `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`;
+  }
+
+  /**
+   * Gets the RPC service endpoint URL. Ensures the agent card has been fetched first.
+   * @returns A Promise that resolves to the service endpoint URL string.
+   */
+  private async _getServiceEndpoint(): Promise<string> {
+    if (this.serviceEndpointUrl) {
+      return this.serviceEndpointUrl;
+    }
+    // If serviceEndpointUrl is not set, it means the agent card fetch is pending or failed.
+    // Awaiting agentCardPromise will either resolve it or throw if fetching failed.
+    await this.agentCardPromise;
+    if (!this.serviceEndpointUrl) {
+      // This case should ideally be covered by the error handling in _fetchAndCacheAgentCard
+      throw new Error("Agent Card URL for RPC endpoint is not available. Fetching might have failed.");
+    }
+    return this.serviceEndpointUrl;
   }
 }
