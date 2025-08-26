@@ -288,12 +288,11 @@ For advanced authentication scenarios, the SDK includes a higher-order function 
 Here's how to use it to manage a Bearer token:
 
 ```typescript
-import { A2AClient } from "@a2a-js/sdk/client";
 import {
+  A2AClient,
   AuthenticationHandler,
   createAuthenticatingFetchWithRetry,
-  HttpHeaders,
-} from "@a2a-js/sdk/auth";
+} from "@a2a-js/sdk/client";
 
 // A simple token provider that simulates fetching a new token.
 const tokenProvider = {
