@@ -52,8 +52,8 @@ import {
   ExecutionEventBus,
   DefaultRequestHandler,
   InMemoryTaskStore,
-  A2AExpressApp,
 } from "@a2a-js/sdk/server";
+import { A2AExpressApp } from "@a2a-js/sdk/server/express";
 
 // 1. Define your agent's identity card.
 const helloAgentCard: AgentCard = {
