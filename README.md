@@ -218,7 +218,7 @@ import { Message, MessageSendParams, Task } from "@a2a-js/sdk";
 
 const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
 
-const response = await client.sendMessage({ /* ... MessageSendParams ... */ });
+const response = await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "Do something." }], kind: "message" } });
 
 if ("error" in response) {
   console.error("Error:", response.error.message);
@@ -278,7 +278,7 @@ const client = await A2AClient.fromCardUrl(
 );
 
 // Now, all requests made by this client instance will include the X-Request-ID header.
-await client.sendMessage({ /* ... */ });
+await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "A message requiring custom headers." }], kind: "message" } });
 ```
 
 ### Using the Provided `AuthenticationHandler`
@@ -404,13 +404,19 @@ The `sendMessageStream` method returns an `AsyncGenerator` that yields events as
 // client.ts
 import { A2AClient } from "@a2a-js/sdk/client";
 import { MessageSendParams } from "@a2a-js/sdk";
+import { v4 as uuidv4 } from "uuid";
 // ... other imports ...
 
 const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
 
 async function streamTask() {
   const streamParams: MessageSendParams = {
-    message: { /* ... your message ... */ },
+    message: {
+      messageId: uuidv4(),
+      role: "user",
+      parts: [{ kind: "text", text: "Stream me some updates!" }],
+      kind: "message",
+    },
   };
 
   try {
