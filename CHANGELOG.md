@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.3](https://github.com/a2aproject/a2a-js/compare/v0.3.2...v0.3.3) (2025-08-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* Update A2AClient constructor to initialize with full agentCardUrl ([#121](https://github.com/a2aproject/a2a-js/issues/121))
+
+### Features
+
+* Update A2AClient constructor to initialize with full agentCardUrl ([#121](https://github.com/a2aproject/a2a-js/issues/121)) ([755044c](https://github.com/a2aproject/a2a-js/commit/755044c6c610991b5c86747da72b24e1fff9ade3))
+
+
+### Bug Fixes
+
+* Improve fetch implementation handling ([#117](https://github.com/a2aproject/a2a-js/issues/117)) ([09adbd3](https://github.com/a2aproject/a2a-js/commit/09adbd31d1ef7a73e4c8c87045af84bb1280226f))
+
+
+### Miscellaneous Chores
+
+* release 0.3.3 ([#124](https://github.com/a2aproject/a2a-js/issues/124)) ([ea59193](https://github.com/a2aproject/a2a-js/commit/ea591932901742af76afb5aeee4cf8d27cc9a6c2))
+
 ## [0.3.2](https://github.com/a2aproject/a2a-js/compare/v0.3.1...v0.3.2) (2025-08-17)
 
 
