@@ -39,8 +39,6 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
                     console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error);
                 });
         });
-        // Return a resolved promise to indicate success
-        return Promise.resolve();
     }
 
     private async _dispatchNotification(
