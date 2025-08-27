@@ -72,9 +72,6 @@ describe('Push Notification Integration Tests', () => {
                     case 'error':
                         res.status(500).json({ error: 'Internal Server Error' });
                         break;
-                    case 'unauthorized':
-                        res.status(401).json({ error: 'Unauthorized' });
-                        break;
                     default:
                         res.status(200).json({ received: true });
                 }
