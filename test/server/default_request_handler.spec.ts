@@ -7,7 +7,7 @@ import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, Defaul
 import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { MockAgentExecutor, CancellableMockAgentExecutor } from './mocks/agent-executor.mock.js';
+import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute } from './mocks/agent-executor.mock.js';
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 
 
@@ -534,35 +534,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const contextId = 'ctx-push-1';
 
         const params: MessageSendParams = {
-            message: createTestMessage('msg-push-1', 'Work on task with push notification'),
+            message: {
+                ...createTestMessage('msg-push-1', 'Work on task with push notification'),
+                contextId: contextId,
+            },
             configuration: {
                 pushNotificationConfig: pushNotificationConfig
             }
         };
 
-        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
-            bus.publish({
-                id: ctx.taskId,
-                contextId,
-                status: { state: "submitted" },
-                kind: 'task'
-            });
-            bus.publish({
-                taskId: ctx.taskId,
-                contextId,
-                kind: 'status-update',
-                status: { state: "working" },   
-                final: false
-            });
-            bus.publish({
-                taskId: ctx.taskId,
-                contextId,
-                kind: 'status-update',
-                status: { state: "completed" },
-                final: true
-            });
-            bus.finished();
-        });
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(fakeTaskExecute);
 
         const result = await handler.sendMessage(params);
         const taskResult = result as Task;
@@ -614,38 +595,20 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const pushNotificationConfig: PushNotificationConfig = {
             url: 'https://push-stream-1.com'
         };
+
         const contextId = 'ctx-push-stream-1';
 
         const params: MessageSendParams = {
-            message: createTestMessage('msg-push-stream-1', 'Work on task with push notification via stream'),
+            message: {
+                ...createTestMessage('msg-push-stream-1', 'Work on task with push notification via stream'),
+                contextId: contextId,
+            },
             configuration: {
                 pushNotificationConfig: pushNotificationConfig
             }
         };
 
-        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
-            bus.publish({
-                id: ctx.taskId,
-                contextId,
-                status: { state: "submitted" },
-                kind: 'task'
-            });
-            bus.publish({
-                taskId: ctx.taskId,
-                contextId,
-                kind: 'status-update',
-                status: { state: "working" },   
-                final: false
-            });
-            bus.publish({
-                taskId: ctx.taskId,
-                contextId,
-                kind: 'status-update',
-                status: { state: "completed" },
-                final: true
-            });
-            bus.finished();
-        });
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(fakeTaskExecute);
 
         const eventGenerator = handler.sendMessageStream(params);
         const events = [];

@@ -17,6 +17,42 @@ export class MockAgentExecutor implements AgentExecutor {
 }
 
 /**
+ * Fake implementation of the task execution events.
+ */
+export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBus) => {
+    const taskId = ctx.taskId;
+    const contextId = ctx.contextId;
+    
+    // Publish task creation
+    bus.publish({ 
+        id: taskId, 
+        contextId, 
+        status: { state: "submitted" }, 
+        kind: 'task' 
+    });
+    
+    // Publish working status
+    bus.publish({ 
+        taskId, 
+        contextId, 
+        kind: 'status-update', 
+        status: { state: "working" }, 
+        final: false 
+    });
+    
+    // Publish completion
+    bus.publish({ 
+        taskId, 
+        contextId, 
+        kind: 'status-update', 
+        status: { state: "completed" }, 
+        final: true 
+    });
+    
+    bus.finished();
+}
+
+/**
  * A realistic mock of AgentExecutor for cancellation tests.
  */
 export class CancellableMockAgentExecutor implements AgentExecutor {

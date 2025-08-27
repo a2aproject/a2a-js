@@ -11,7 +11,7 @@ import { InMemoryPushNotificationStore } from '../../src/server/push_notificatio
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
 import { DefaultExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { AgentCard, Message, MessageSendParams, PushNotificationConfig, Task } from '../../src/index.js';
-import { MockAgentExecutor } from './mocks/agent-executor.mock.js';
+import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
 describe('Push Notification Integration Tests', () => {
     let testServer: Server;
@@ -144,38 +144,7 @@ describe('Push Notification Integration Tests', () => {
             };
 
             // Mock the agent executor to publish all three states for this test only
-            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
-                const taskId = ctx.taskId;
-                const contextId = ctx.contextId;
-                
-                // Publish task creation
-                bus.publish({ 
-                    id: taskId, 
-                    contextId, 
-                    status: { state: "submitted" }, 
-                    kind: 'task' 
-                });
-                
-                // Publish working status
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "working" }, 
-                    final: false 
-                });
-                
-                // Publish completion
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "completed" }, 
-                    final: true 
-                });
-                
-                bus.finished();
-            });
+            mockAgentExecutor.execute.callsFake(fakeTaskExecute);
 
             // Send message and wait for completion
             const result = await handler.sendMessage(params);
@@ -292,9 +261,16 @@ describe('Push Notification Integration Tests', () => {
             await new Promise(resolve => setTimeout(resolve, 300));
 
             // Should now have notifications from both endpoints
-            const allEndpoints = receivedNotifications.map(n => n.url);
-            assert.include(allEndpoints, '/notify', 'Should notify primary endpoint');
-            assert.include(allEndpoints, '/notify/second', 'Should notify second endpoint');
+            const notificationsByEndpoint = receivedNotifications.reduce((acc, n) => {
+                acc[n.url] = acc[n.url] || 0;
+                acc[n.url]++;
+                return acc;
+            }, {} as Record<string, number>);
+
+            // Verify push notification was attempted (even though it failed)
+            assert.lengthOf(receivedNotifications, 4, 'Should have 4 notifications 2 for each endpoint');
+            assert.equal(notificationsByEndpoint['/notify'], 2, 'Should have 2 notifications for primary endpoint');
+            assert.equal(notificationsByEndpoint['/notify/second'], 2, 'Should have 2 notifications for second endpoint');
         });
 
         it('should complete task successfully even when push notification endpoint returns an error', async () => {
@@ -312,29 +288,7 @@ describe('Push Notification Integration Tests', () => {
             };
 
             // Mock the agent executor to publish task states
-            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
-                const taskId = ctx.taskId;
-                const contextId = ctx.contextId;
-                
-                // Publish task creation
-                bus.publish({ 
-                    id: taskId, 
-                    contextId, 
-                    status: { state: "submitted" }, 
-                    kind: 'task' 
-                });
-                
-                // Publish completion
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "completed" }, 
-                    final: true 
-                });
-                
-                bus.finished();
-            });
+            mockAgentExecutor.execute.callsFake(fakeTaskExecute);
 
             // Send message and wait for completion - this should not throw an error
             const result = await handler.sendMessage(params);
@@ -349,12 +303,9 @@ describe('Push Notification Integration Tests', () => {
             // Verify the task payload
             assert.deepEqual(task, taskResult);
             
-            // Verify push notification was attempted (even though it failed)
-            assert.lengthOf(receivedNotifications, 2, 'Should attempt to send notifications for submitted and completed states');
-            
             // Verify the error endpoint was hit
             const errorNotifications = receivedNotifications.filter(n => n.url === '/notify/error');
-            assert.lengthOf(errorNotifications, 2, 'Should have attempted to send notifications to error endpoint');
+            assert.lengthOf(errorNotifications, 3, 'Should have attempted to send notifications to error endpoint');
         });
     });
 
