@@ -271,6 +271,108 @@ Developers are expected to implement this interface and provide two methods: `ex
 
 Executors should implement cancellation mechanism for an ongoing task.
 
+### Push Notifications
+
+The A2A JavaScript SDK supports push notifications, allowing clients to receive real-time updates about task status changes without polling. This feature is optional and can be enabled by setting `pushNotifications: true` in the agent card capabilities.
+
+#### Server-Side Configuration
+
+To enable push notifications, your agent card must declare support:
+
+```typescript
+const movieAgentCard: AgentCard = {
+  // ... other properties
+  capabilities: {
+    streaming: true,
+    pushNotifications: true, // Enable push notifications
+    stateTransitionHistory: true,
+  },
+  // ... rest of agent card
+};
+```
+
+When creating the `DefaultRequestHandler`, you can optionally provide custom push notification components:
+
+```typescript
+import { 
+  DefaultRequestHandler, 
+  InMemoryPushNotificationStore,
+  DefaultPushNotificationSender 
+} from "@a2a-js/sdk/server";
+
+// Optional: Custom push notification store and sender
+const pushNotificationStore = new InMemoryPushNotificationStore();
+const pushNotificationSender = new DefaultPushNotificationSender(
+  pushNotificationStore,
+  {
+    timeout: 5000, // 5 second timeout
+    tokenHeaderName: 'X-A2A-Notification-Token' // Custom header name
+  }
+);
+
+const requestHandler = new DefaultRequestHandler(
+  movieAgentCard,
+  taskStore,
+  agentExecutor,
+  undefined, // eventBusManager (optional)
+  pushNotificationStore, // custom store
+  pushNotificationSender, // custom sender
+  undefined // extendedAgentCard (optional)
+);
+```
+
+#### Client-Side Usage
+
+Configure push notifications when sending messages:
+
+```typescript
+// Configure push notification for a message
+const pushConfig: PushNotificationConfig = {
+  id: "my-notification-config", // Optional, defaults to task ID
+  url: "https://my-app.com/webhook/task-updates",
+  token: "your-auth-token" // Optional authentication token
+};
+
+const sendParams: MessageSendParams = {
+  message: {
+    messageId: uuidv4(),
+    role: "user",
+    parts: [{ kind: "text", text: "Hello, agent!" }],
+    kind: "message",
+  },
+  configuration: {
+    blocking: true,
+    acceptedOutputModes: ["text/plain"],
+    pushNotificationConfig: pushConfig // Add push notification config
+  },
+};
+```
+
+
+#### Webhook Endpoint Implementation
+
+Your webhook endpoint should expect POST requests with the task data:
+
+```typescript
+// Example Express.js webhook endpoint
+app.post('/webhook/task-updates', (req, res) => {
+  const task = req.body; // The complete task object
+  
+  // Verify the token if provided
+  const token = req.headers['x-a2a-notification-token'];
+  if (token !== 'your-auth-token') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  console.log(`Task ${task.id} status: ${task.status.state}`);
+  
+  // Process the task update
+  // ...
+  
+  res.status(200).json({ received: true });
+});
+```
+
 ## A2A Client
 
 There's a `A2AClient` class, which provides methods for interacting with an A2A server over HTTP using JSON-RPC.
