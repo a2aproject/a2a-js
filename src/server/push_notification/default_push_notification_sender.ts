@@ -30,7 +30,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     async send(task: Task): Promise<void> {
         const pushConfigs = await this.pushNotificationStore.load(task.id);
         if (!pushConfigs || pushConfigs.length === 0) {
-            return Promise.resolve();
+            return;
         }
 
         pushConfigs.forEach(pushConfig => {
@@ -77,6 +77,5 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         } finally {
             clearTimeout(timeoutId);
         }
-        return Promise.resolve();
     }
 }
