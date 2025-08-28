@@ -539,7 +539,7 @@ class CancellableExecutor implements AgentExecutor {
 
 For very long-running tasks (e.g., lasting minutes, hours, or even days) or when clients cannot or prefer not to maintain persistent connections (like mobile clients or serverless functions), A2A supports asynchronous updates via push notifications. This mechanism allows the A2A Server to actively notify a client-provided webhook when a significant task update occurs.
 
-#### Server-Side Configuration
+### Server-Side Configuration
 
 To enable push notifications, your agent card must declare support:
 
@@ -585,7 +585,7 @@ const requestHandler = new DefaultRequestHandler(
 );
 ```
 
-#### Client-Side Usage
+### Client-Side Usage
 
 Configure push notifications when sending messages:
 
@@ -612,7 +612,7 @@ const sendParams: MessageSendParams = {
 };
 ```
 
-#### Webhook Endpoint Implementation
+### Webhook Endpoint Implementation
 
 Your webhook endpoint should expect POST requests with the task data:
 
