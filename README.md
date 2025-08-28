@@ -15,7 +15,7 @@
 
 ## Installation
 
-You can install the A2A SDK using either `npm`.
+You can install the A2A SDK using `npm`.
 
 ```bash
 npm install @a2a-js/sdk
@@ -23,7 +23,7 @@ npm install @a2a-js/sdk
 
 ### For Server Usage
 
-If you plan to use the A2A server functionality (A2AExpressApp), you'll also need to install Express as it's a peer dependency:
+If you plan to use the A2A server functionality (`A2AExpressApp`), you'll also need to install Express as it's a peer dependency:
 
 ```bash
 npm install express
@@ -31,245 +31,218 @@ npm install express
 
 You can also find JavaScript samples [here](https://github.com/google-a2a/a2a-samples/tree/main/samples/js).
 
-## A2A Server
+-----
 
-This directory contains a TypeScript server implementation for the Agent-to-Agent (A2A) communication protocol, built using Express.js.
+## Quickstart
 
-**Note:** Express is a peer dependency for server functionality. Make sure to install it separately:
-```bash
-npm install express
-```
+This example shows how to create a simple "Hello World" agent server and a client to interact with it.
 
-### 1. Define Agent Card
+### Server: Hello World Agent
 
-```typescript
-import type { AgentCard } from "@a2a-js/sdk";
-
-const movieAgentCard: AgentCard = {
-  name: "Movie Agent",
-  description:
-    "An agent that can answer questions about movies and actors using TMDB.",
-  // Adjust the base URL and port as needed.
-  url: "http://localhost:41241/",
-  provider: {
-    organization: "A2A Agents",
-    url: "https://example.com/a2a-agents", // Added provider URL
-  },
-  protocolVersion: "0.3.0", // A2A protocol this agent supports.
-  version: "0.0.2", // Incremented version
-  capabilities: {
-    streaming: true, // Supports streaming
-    pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
-  },
-  securitySchemes: undefined, // Or define actual security schemes if any
-  security: undefined,
-  defaultInputModes: ["text/plain"],
-  defaultOutputModes: ["text/plain"],
-  skills: [
-    {
-      id: "general_movie_chat",
-      name: "General Movie Chat",
-      description:
-        "Answer general questions or chat about movies, actors, directors.",
-      tags: ["movies", "actors", "directors"],
-      examples: [
-        "Tell me about the plot of Inception.",
-        "Recommend a good sci-fi movie.",
-        "Who directed The Matrix?",
-        "What other movies has Scarlett Johansson been in?",
-        "Find action movies starring Keanu Reeves",
-        "Which came out first, Jurassic Park or Terminator 2?",
-      ],
-      inputModes: ["text/plain"], // Explicitly defining for skill
-      outputModes: ["text/plain"], // Explicitly defining for skill
-    },
-  ],
-  supportsAuthenticatedExtendedCard: false,
-};
-```
-
-### 2. Define Agent Executor
+The core of an A2A server is the `AgentExecutor`, which contains your agent's logic.
 
 ```typescript
+// server.ts
+import express from "express";
+import { v4 as uuidv4 } from "uuid";
+import type { AgentCard, Message } from "@a2a-js/sdk";
 import {
-  InMemoryTaskStore,
-  TaskStore,
   AgentExecutor,
   RequestContext,
   ExecutionEventBus,
   DefaultRequestHandler,
+  InMemoryTaskStore,
 } from "@a2a-js/sdk/server";
 import { A2AExpressApp } from "@a2a-js/sdk/server/express";
 
-// 1. Define your agent's logic as a AgentExecutor
-class MyAgentExecutor implements AgentExecutor {
-  private cancelledTasks = new Set<string>();
+// 1. Define your agent's identity card.
+const helloAgentCard: AgentCard = {
+  name: "Hello Agent",
+  description: "A simple agent that says hello.",
+  protocolVersion: "0.3.0",
+  version: "0.1.0",
+  url: "http://localhost:4000/", // The public URL of your agent server
+  skills: [ { id: "chat", name: "Chat", description: "Say hello", tags: ["chat"] } ],
+  // --- Other AgentCard fields omitted for brevity ---
+};
 
-  public cancelTask = async (
-    taskId: string,
-    eventBus: ExecutionEventBus
-  ): Promise<void> => {
-    this.cancelledTasks.add(taskId);
-    // The execute loop is responsible for publishing the final state
-  };
-
+// 2. Implement the agent's logic.
+class HelloExecutor implements AgentExecutor {
   async execute(
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const userMessage = requestContext.userMessage;
-    const existingTask = requestContext.task;
+    // Create a direct message response.
+    const responseMessage: Message = {
+      kind: "message",
+      messageId: uuidv4(),
+      role: "agent",
+      parts: [{ kind: "text", text: "Hello, world!" }],
+      // Associate the response with the incoming request's context.
+      contextId: requestContext.contextId,
+    };
 
-    // Determine IDs for the task and context, from requestContext.
-    const taskId = requestContext.taskId;
-    const contextId = requestContext.contextId;
+    // Publish the message and signal that the interaction is finished.
+    eventBus.publish(responseMessage);
+    eventBus.finished();
+  }
+  
+  // cancelTask is not needed for this simple, non-stateful agent.
+  cancelTask = async (): Promise<void> => {};
+}
 
-    console.log(
-      `[MyAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
-    );
+// 3. Set up and run the server.
+const agentExecutor = new HelloExecutor();
+const requestHandler = new DefaultRequestHandler(
+  helloAgentCard,
+  new InMemoryTaskStore(),
+  agentExecutor
+);
 
-    // 1. Publish initial Task event if it's a new task
-    if (!existingTask) {
-      const initialTask: Task = {
-        kind: "task",
-        id: taskId,
-        contextId: contextId,
-        status: {
-          state: "submitted",
-          timestamp: new Date().toISOString(),
-        },
-        history: [userMessage],
-        metadata: userMessage.metadata,
-        artifacts: [], // Initialize artifacts array
-      };
-      eventBus.publish(initialTask);
-    }
+const appBuilder = new A2AExpressApp(requestHandler);
+const expressApp = appBuilder.setupRoutes(express());
 
-    // 2. Publish "working" status update
-    const workingStatusUpdate: TaskStatusUpdateEvent = {
-      kind: "status-update",
-      taskId: taskId,
+expressApp.listen(4000, () => {
+  console.log(`🚀 Server started on http://localhost:4000`);
+});
+```
+
+### Client: Sending a Message
+
+The `A2AClient` makes it easy to communicate with any A2A-compliant agent.
+
+```typescript
+// client.ts
+import { A2AClient, SendMessageSuccessResponse } from "@a2a-js/sdk/client";
+import { Message, MessageSendParams } from "@a2a-js/sdk";
+import { v4 as uuidv4 } from "uuid";
+
+async function run() {
+  // Create a client pointing to the agent's Agent Card URL.
+  const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
+
+  const sendParams: MessageSendParams = {
+    message: {
+      messageId: uuidv4(),
+      role: "user",
+      parts: [{ kind: "text", text: "Hi there!" }],
+      kind: "message",
+    },
+  };
+
+  const response = await client.sendMessage(sendParams);
+
+  if ("error" in response) {
+    console.error("Error:", response.error.message);
+  } else {
+    const result = (response as SendMessageSuccessResponse).result as Message;
+    console.log("Agent response:", result.parts[0].text); // "Hello, world!"
+  }
+}
+
+await run();
+```
+
+-----
+
+## A2A `Task` Support
+
+For operations that are stateful or long-running, agents create a `Task`. A task has a state (e.g., `working`, `completed`) and can produce `Artifacts` (e.g., files, data).
+
+### Server: Creating a Task
+
+This agent creates a task, attaches a file artifact to it, and marks it as complete.
+
+```typescript
+// server.ts
+import { Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from "@a2a-js/sdk";
+// ... other imports from the quickstart server ...
+
+class TaskExecutor implements AgentExecutor {
+  async execute(
+    requestContext: RequestContext,
+    eventBus: ExecutionEventBus
+  ): Promise<void> {
+    const { taskId, contextId } = requestContext;
+
+    // 1. Create and publish the initial task object.
+    const initialTask: Task = {
+      kind: "task",
+      id: taskId,
       contextId: contextId,
       status: {
-        state: "working",
-        message: {
-          kind: "message",
-          role: "agent",
-          messageId: uuidv4(),
-          parts: [{ kind: "text", text: "Generating code..." }],
-          taskId: taskId,
-          contextId: contextId,
-        },
+        state: "submitted",
         timestamp: new Date().toISOString(),
       },
-      final: false,
     };
-    eventBus.publish(workingStatusUpdate);
+    eventBus.publish(initialTask);
 
-    // Simulate work...
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Check for request cancellation
-    if (this.cancelledTasks.has(taskId)) {
-      console.log(`[MyAgentExecutor] Request cancelled for task: ${taskId}`);
-      const cancelledUpdate: TaskStatusUpdateEvent = {
-        kind: "status-update",
-        taskId: taskId,
-        contextId: contextId,
-        status: {
-          state: "canceled",
-          timestamp: new Date().toISOString(),
-        },
-        final: true,
-      };
-      eventBus.publish(cancelledUpdate);
-      eventBus.finished();
-      return;
-    }
-
-    // 3. Publish artifact update
+    // 2. Create and publish an artifact.
     const artifactUpdate: TaskArtifactUpdateEvent = {
       kind: "artifact-update",
       taskId: taskId,
       contextId: contextId,
       artifact: {
-        artifactId: "artifact-1",
-        name: "artifact-1",
-        parts: [{ kind: "text", text: `Task ${taskId} completed.` }],
+        artifactId: "report-1",
+        name: "analysis_report.txt",
+        parts: [{ kind: "text", text: `This is the analysis for task ${taskId}.` }],
       },
-      append: false, // Each emission is a complete file snapshot
-      lastChunk: true, // True for this file artifact
     };
     eventBus.publish(artifactUpdate);
 
-    // 4. Publish final status update
+    // 3. Publish the final status and mark the event as 'final'.
     const finalUpdate: TaskStatusUpdateEvent = {
       kind: "status-update",
       taskId: taskId,
       contextId: contextId,
-      status: {
-        state: "completed",
-        message: {
-          kind: "message",
-          role: "agent",
-          messageId: uuidv4(),
-          taskId: taskId,
-          contextId: contextId,
-        },
-        timestamp: new Date().toISOString(),
-      },
+      status: { state: "completed", timestamp: new Date().toISOString() },
       final: true,
     };
     eventBus.publish(finalUpdate);
     eventBus.finished();
   }
+
+  cancelTask = async (): Promise<void> => {};
 }
 ```
 
-### 3. Start the server
+### Client: Receiving a Task
+
+The client sends a message and receives a `Task` object as the result.
 
 ```typescript
-const taskStore: TaskStore = new InMemoryTaskStore();
-const agentExecutor: AgentExecutor = new MyAgentExecutor();
+// client.ts
+import { A2AClient, SendMessageSuccessResponse } from "@a2a-js/sdk/client";
+import { Message, MessageSendParams, Task } from "@a2a-js/sdk";
+// ... other imports ...
 
-const requestHandler = new DefaultRequestHandler(
-  coderAgentCard,
-  taskStore,
-  agentExecutor
-);
+const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
 
-const appBuilder = new A2AExpressApp(requestHandler);
-const expressApp = appBuilder.setupRoutes(express(), "");
+const response = await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "Do something." }], kind: "message" } });
 
-const PORT = process.env.CODER_AGENT_PORT || 41242; // Different port for coder agent
-expressApp.listen(PORT, () => {
-  console.log(
-    `[MyAgent] Server using new framework started on http://localhost:${PORT}`
-  );
-  console.log(
-    `[MyAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`
-  );
-  console.log("[MyAgent] Press Ctrl+C to stop the server");
-});
+if ("error" in response) {
+  console.error("Error:", response.error.message);
+} else {
+  const result = (response as SendMessageSuccessResponse).result;
+
+  // Check if the agent's response is a Task or a direct Message.
+  if (result.kind === "task") {
+    const task = result as Task;
+    console.log(`Task [${task.id}] completed with status: ${task.status.state}`);
+
+    if (task.artifacts && task.artifacts.length > 0) {
+      console.log(`Artifact found: ${task.artifacts[0].name}`);
+      console.log(`Content: ${task.artifacts[0].parts[0].text}`);
+    }
+  } else {
+    const message = result as Message;
+    console.log("Received direct message:", message.parts[0].text);
+  }
+}
 ```
 
-### Agent Executor
+-----
 
-Developers are expected to implement this interface and provide two methods: `execute` and `cancelTask`.
-
-#### `execute`
-
-- This method is provided with a `RequestContext` and an `EventBus` to publish execution events.
-- Executor can either respond by publishing a Message or Task.
-- For a task, check if there's an existing task in `RequestContext`. If not, publish an initial Task event using `taskId` & `contextId` from `RequestContext`.
-- Executor can subsequently publish `TaskStatusUpdateEvent` or `TaskArtifactUpdateEvent`.
-- Executor should indicate which is the `final` event and also call `finished()` method of event bus.
-- Executor should also check if an ongoing task has been cancelled. If yes, cancel the execution and emit an `TaskStatusUpdateEvent` with cancelled state.
-
-#### `cancelTask`
-
-Executors should implement cancellation mechanism for an ongoing task.
 
 ### Push Notifications
 
@@ -375,175 +348,296 @@ app.post('/webhook/task-updates', (req, res) => {
 
 ## A2A Client
 
-There's a `A2AClient` class, which provides methods for interacting with an A2A server over HTTP using JSON-RPC.
+## Client Customization
 
-### Key Features:
+You can provide a custom `fetch` implementation to the `A2AClient` to modify its HTTP request behavior. Common use cases include:
 
-- **JSON-RPC Communication:** Handles sending requests and receiving responses (both standard and streaming via Server-Sent Events) according to the JSON-RPC 2.0 specification.
-- **A2A Methods:** Implements standard A2A methods like `sendMessage`, `sendMessageStream`, `getTask`, `cancelTask`, `setTaskPushNotificationConfig`, `getTaskPushNotificationConfig`, and `resubscribeTask`.
-- **Error Handling:** Provides basic error handling for network issues and JSON-RPC errors.
-- **Streaming Support:** Manages Server-Sent Events (SSE) for real-time task updates (`sendMessageStream`, `resubscribeTask`).
-- **Extensibility:** Allows providing a custom `fetch` implementation for different environments (e.g., Node.js).
+  * **Request Interception**: Log outgoing requests or collect metrics.
+  * **Header Injection**: Add custom headers for authentication, tracing, or routing.
+  * **Retry Mechanisms**: Implement custom logic for retrying failed requests.
 
-### Basic Usage
+### Example: Injecting a Custom Header
+
+This example creates a `fetch` wrapper that adds a unique `X-Request-ID` to every outgoing request.
 
 ```typescript
 import { A2AClient } from "@a2a-js/sdk/client";
-import type {
-  Message,
-  MessageSendParams,
-  Task,
-  TaskQueryParams,
-  SendMessageResponse,
-  GetTaskResponse,
-  SendMessageSuccessResponse,
-  GetTaskSuccessResponse,
-} from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
 
-const client = new A2AClient("http://localhost:41241"); // Replace with your server URL
+// 1. Create a wrapper around the global fetch function.
+const fetchWithCustomHeader: typeof fetch = async (url, init) => {
+  const headers = new Headers(init?.headers);
+  headers.set("X-Request-ID", uuidv4());
 
-async function run() {
-  const messageId = uuidv4();
-  let taskId: string | undefined;
+  const newInit = { ...init, headers };
+  
+  console.log(`Sending request to ${url} with X-Request-ID: ${headers.get("X-Request-ID")}`);
+  
+  return fetch(url, newInit);
+};
+
+// 2. Provide the custom fetch implementation to the client.
+const client = await A2AClient.fromCardUrl(
+  "http://localhost:4000/.well-known/agent-card.json",
+  { fetchImpl: fetchWithCustomHeader }
+);
+
+// Now, all requests made by this client instance will include the X-Request-ID header.
+await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "A message requiring custom headers." }], kind: "message" } });
+```
+
+### Using the Provided `AuthenticationHandler`
+
+For advanced authentication scenarios, the SDK includes a higher-order function `createAuthenticatingFetchWithRetry` and an `AuthenticationHandler` interface. This utility automatically adds authorization headers and can retry requests that fail with authentication errors (e.g., 401 Unauthorized).
+
+Here's how to use it to manage a Bearer token:
+
+```typescript
+import {
+  A2AClient,
+  AuthenticationHandler,
+  createAuthenticatingFetchWithRetry,
+} from "@a2a-js/sdk/client";
+
+// A simple token provider that simulates fetching a new token.
+const tokenProvider = {
+  token: "initial-stale-token",
+  getNewToken: async () => {
+    console.log("Refreshing auth token...");
+    tokenProvider.token = `new-token-${Date.now()}`;
+    return tokenProvider.token;
+  },
+};
+
+// 1. Implement the AuthenticationHandler interface.
+const handler: AuthenticationHandler = {
+  // headers() is called on every request to get the current auth headers.
+  headers: async () => ({
+    Authorization: `Bearer ${tokenProvider.token}`,
+  }),
+
+  // shouldRetryWithHeaders() is called after a request fails.
+  // It decides if a retry is needed and provides new headers.
+  shouldRetryWithHeaders: async (req: RequestInit, res: Response) => {
+    if (res.status === 401) { // Unauthorized
+      const newToken = await tokenProvider.getNewToken();
+      // Return new headers to trigger a single retry.
+      return { Authorization: `Bearer ${newToken}` };
+    }
+
+    // Return undefined to not retry for other errors.
+    return undefined;
+  },
+};
+
+// 2. Create the authenticated fetch function.
+const authFetch = createAuthenticatingFetchWithRetry(fetch, handler);
+
+// 3. Initialize the client with the new fetch implementation.
+const client = await A2AClient.fromCardUrl(
+  "http://localhost:4000/.well-known/agent-card.json",
+  { fetchImpl: authFetch }
+);
+```
+
+-----
+
+## Streaming
+
+For real-time updates, A2A supports streaming responses over Server-Sent Events (SSE).
+
+### Server: Streaming Task Updates
+
+The agent publishes events as it works on the task. The client receives these events in real-time.
+
+```typescript
+// server.ts
+// ... imports ...
+
+class StreamingExecutor implements AgentExecutor {
+  async execute(
+    requestContext: RequestContext,
+    eventBus: ExecutionEventBus
+  ): Promise<void> {
+    const { taskId, contextId } = requestContext;
+
+    // 1. Publish initial 'submitted' state.
+    eventBus.publish({
+      kind: "task",
+      id: taskId,
+      contextId,
+      status: { state: "submitted", timestamp: new Date().toISOString() },
+    });
+
+    // 2. Publish 'working' state.
+    eventBus.publish({
+      kind: "status-update",
+      taskId,
+      contextId,
+      status: { state: "working", timestamp: new Date().toISOString() },
+      final: false
+    });
+
+    // 3. Simulate work and publish an artifact.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    eventBus.publish({
+      kind: "artifact-update",
+      taskId,
+      contextId,
+      artifact: { artifactId: "result.txt", parts: [{ kind: "text", text: "First result." }] },
+    });
+
+    // 4. Publish final 'completed' state.
+    eventBus.publish({
+      kind: "status-update",
+      taskId,
+      contextId,
+      status: { state: "completed", timestamp: new Date().toISOString() },
+      final: true,
+    });
+    eventBus.finished();
+  }
+  cancelTask = async (): Promise<void> => {};
+}
+```
+
+### Client: Consuming a Stream
+
+The `sendMessageStream` method returns an `AsyncGenerator` that yields events as they arrive from the server.
+
+```typescript
+// client.ts
+import { A2AClient } from "@a2a-js/sdk/client";
+import { MessageSendParams } from "@a2a-js/sdk";
+import { v4 as uuidv4 } from "uuid";
+// ... other imports ...
+
+const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
+
+async function streamTask() {
+  const streamParams: MessageSendParams = {
+    message: {
+      messageId: uuidv4(),
+      role: "user",
+      parts: [{ kind: "text", text: "Stream me some updates!" }],
+      kind: "message",
+    },
+  };
 
   try {
-    // 1. Send a message to the agent.
-    const sendParams: MessageSendParams = {
-      message: {
-        messageId: messageId,
-        role: "user",
-        parts: [{ kind: "text", text: "Hello, agent!" }],
-        kind: "message",
-      },
-      configuration: {
-        blocking: true,
-        acceptedOutputModes: ["text/plain"],
-      },
-    };
+    const stream = client.sendMessageStream(streamParams);
 
-    const sendResponse: SendMessageResponse =
-      await client.sendMessage(sendParams);
-
-    if (sendResponse.error) {
-      console.error("Error sending message:", sendResponse.error);
-      return;
+    for await (const event of stream) {
+      if (event.kind === "task") {
+        console.log(`[${event.id}] Task created. Status: ${event.status.state}`);
+      } else if (event.kind === "status-update") {
+        console.log(`[${event.taskId}] Status Updated: ${event.status.state}`);
+      } else if (event.kind === "artifact-update") {
+        console.log(`[${event.taskId}] Artifact Received: ${event.artifact.artifactId}`);
+      }
     }
+    console.log("--- Stream finished ---");
+  } catch (error) {
+    console.error("Error during streaming:", error);
+  }
+}
 
-    // On success, the result can be a Task or a Message. Check which one it is.
-    const result = (sendResponse as SendMessageSuccessResponse).result;
+await streamTask();
+```
 
-    if (result.kind === "task") {
-      // The agent created a task.
-      const taskResult = result as Task;
-      console.log("Send Message Result (Task):", taskResult);
-      taskId = taskResult.id; // Save the task ID for the next call
-    } else if (result.kind === "message") {
-      // The agent responded with a direct message.
-      const messageResult = result as Message;
-      console.log("Send Message Result (Direct Message):", messageResult);
-      // No task was created, so we can't get task status.
-    }
+## Handling Task Cancellation
 
-    // 2. If a task was created, get its status.
-    if (taskId) {
-      const getParams: TaskQueryParams = { id: taskId };
-      const getResponse: GetTaskResponse = await client.getTask(getParams);
+To support user-initiated cancellations, you must implement the `cancelTask` method in your **`AgentExecutor`**. The executor is responsible for gracefully stopping the ongoing work and publishing a final `canceled` status event.
 
-      if (getResponse.error) {
-        console.error(`Error getting task ${taskId}:`, getResponse.error);
+A straightforward way to manage this is by maintaining an in-memory set of canceled task IDs. The `execute` method can then periodically check this set to see if it should terminate its process.
+
+### Server: Implementing a Cancellable Executor
+
+This example demonstrates an agent that simulates a multi-step process. In each step of its work, it checks if a cancellation has been requested. If so, it stops the work and updates the task's state accordingly.
+
+```typescript
+// server.ts
+import {
+  AgentExecutor,
+  RequestContext,
+  ExecutionEventBus,
+  TaskStatusUpdateEvent,
+} from "@a2a-js/sdk/server";
+// ... other imports ...
+
+class CancellableExecutor implements AgentExecutor {
+  // Use a Set to track the IDs of tasks that have been requested to be canceled.
+  private cancelledTasks = new Set<string>();
+
+  /**
+   * When a cancellation is requested, add the taskId to our tracking set.
+   * The `execute` loop will handle the rest.
+   */
+  public async cancelTask(
+    taskId: string,
+    eventBus: ExecutionEventBus,
+  ): Promise<void> {
+    console.log(`[Executor] Received cancellation request for task: ${taskId}`);
+    this.cancelledTasks.add(taskId);
+  }
+
+  public async execute(
+    requestContext: RequestContext,
+    eventBus: ExecutionEventBus,
+  ): Promise<void> {
+    const { taskId, contextId } = requestContext;
+
+    // Start the task
+    eventBus.publish({
+      kind: "status-update",
+      taskId,
+      contextId,
+      status: { state: "working", timestamp: new Date().toISOString() },
+      final: false,
+    });
+
+    // Simulate a multi-step, long-running process
+    for (let i = 0; i < 5; i++) {
+      // **Cancellation Checkpoint**
+      // Before each step, check if the task has been canceled.
+      if (this.cancelledTasks.has(taskId)) {
+        console.log(`[Executor] Aborting task ${taskId} due to cancellation.`);
+        
+        // Publish the final 'canceled' status.
+        const cancelledUpdate: TaskStatusUpdateEvent = {
+          kind: "status-update",
+          taskId: taskId,
+          contextId: contextId,
+          status: { state: "canceled", timestamp: new Date().toISOString() },
+          final: true,
+        };
+        eventBus.publish(cancelledUpdate);
+        eventBus.finished();
+        
+        // Clean up and exit.
+        this.cancelledTasks.delete(taskId);
         return;
       }
 
-      const getTaskResult = (getResponse as GetTaskSuccessResponse).result;
-      console.log("Get Task Result:", getTaskResult);
+      // Simulate one step of work.
+      console.log(`[Executor] Working on step ${i + 1} for task ${taskId}...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-  } catch (error) {
-    console.error("A2A Client Communication Error:", error);
-  }
-}
 
-run();
-```
+    console.log(`[Executor] Task ${taskId} finished all steps without cancellation.`);
 
-### Streaming Usage
-
-```typescript
-import { A2AClient } from "@a2a-js/sdk/client";
-import type {
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
-  MessageSendParams,
-  Task,
-  Message,
-} from "@a2a-js/sdk";
-import { v4 as uuidv4 } from "uuid";
-
-const client = new A2AClient("http://localhost:41241");
-
-async function streamTask() {
-  const messageId = uuidv4();
-  try {
-    console.log(`\n--- Starting streaming task for message ${messageId} ---`);
-
-    // Construct the `MessageSendParams` object.
-    const streamParams: MessageSendParams = {
-      message: {
-        messageId: messageId,
-        role: "user",
-        parts: [{ kind: "text", text: "Stream me some updates!" }],
-        kind: "message",
-      },
+    // If not canceled, finish the work and publish the completed state.
+    const finalUpdate: TaskStatusUpdateEvent = {
+      kind: "status-update",
+      taskId,
+      contextId,
+      status: { state: "completed", timestamp: new Date().toISOString() },
+      final: true,
     };
-
-    // Use the `sendMessageStream` method.
-    const stream = client.sendMessageStream(streamParams);
-    let currentTaskId: string | undefined;
-
-    for await (const event of stream) {
-      // The first event is often the Task object itself, establishing the ID.
-      if ((event as Task).kind === "task") {
-        currentTaskId = (event as Task).id;
-        console.log(
-          `[${currentTaskId}] Task created. Status: ${(event as Task).status.state}`
-        );
-        continue;
-      }
-
-      // Differentiate subsequent stream events.
-      if ((event as TaskStatusUpdateEvent).kind === "status-update") {
-        const statusEvent = event as TaskStatusUpdateEvent;
-        console.log(
-          `[${statusEvent.taskId}] Status Update: ${statusEvent.status.state} - ${
-            statusEvent.status.message?.parts[0]?.text ?? ""
-          }`
-        );
-        if (statusEvent.final) {
-          console.log(`[${statusEvent.taskId}] Stream marked as final.`);
-          break; // Exit loop when server signals completion
-        }
-      } else if (
-        (event as TaskArtifactUpdateEvent).kind === "artifact-update"
-      ) {
-        const artifactEvent = event as TaskArtifactUpdateEvent;
-        // Use artifact.name or artifact.artifactId for identification
-        console.log(
-          `[${artifactEvent.taskId}] Artifact Update: ${
-            artifactEvent.artifact.name ?? artifactEvent.artifact.artifactId
-          } - Part Count: ${artifactEvent.artifact.parts.length}`
-        );
-      } else {
-        // This could be a direct Message response if the agent doesn't create a task.
-        console.log("Received direct message response in stream:", event);
-      }
-    }
-    console.log(`--- Streaming for message ${messageId} finished ---`);
-  } catch (error) {
-    console.error(`Error during streaming for message ${messageId}:`, error);
+    eventBus.publish(finalUpdate);
+    eventBus.finished();
   }
 }
-
-streamTask();
 ```
 
 ## License

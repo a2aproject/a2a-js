@@ -48,7 +48,7 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
-  private fetchImpl: typeof fetch;
+  private customFetchImpl?: typeof fetch;
 
   /**
    * Constructs an A2AClient instance from an AgentCard.
@@ -56,7 +56,7 @@ export class A2AClient {
    * @param options Optional. The options for the A2AClient including the fetch/auth implementation.
    */
   constructor(agentCard: AgentCard | string, options?: A2AClientOptions) {
-    this.fetchImpl = options?.fetchImpl ?? fetch;
+    this.customFetchImpl = options?.fetchImpl;
     if (typeof agentCard === 'string') {
       console.warn("Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.");
       this.agentCardPromise = this._fetchAndCacheAgentCard( agentCard, options?.agentCardPath );
@@ -70,16 +70,52 @@ export class A2AClient {
   }
 
   /**
+   * Dynamically resolves the fetch implementation to use for requests. 
+   * Prefers a custom implementation if provided, otherwise falls back to the global fetch.
+   * @returns The fetch implementation.
+   * @param args Arguments to pass to the fetch implementation.
+   * @throws If no fetch implementation is available.
+   */
+  private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
+    if (this.customFetchImpl) {
+      return this.customFetchImpl(...args);
+    }
+    if (typeof fetch === 'function') {
+      return fetch(...args);
+    }
+    throw new Error(
+      'A `fetch` implementation was not provided and is not available in the global scope. ' +
+      'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+      'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+    );
+  }
+
+  /**
    * Creates an A2AClient instance by fetching the AgentCard from a URL then constructing the A2AClient.
    * @param agentCardUrl The URL of the agent card.
    * @param options Optional. The options for the A2AClient including the fetch/auth implementation.
    * @returns A Promise that resolves to a new A2AClient instance.
    */
   public static async fromCardUrl(agentCardUrl: string, options?: A2AClientOptions): Promise<A2AClient> {
-    const fetchImpl = options?.fetchImpl ?? fetch;
-    const response = await fetchImpl(agentCardUrl, {
+    const fetchImpl = options?.fetchImpl;
+    const requestInit = {
       headers: { 'Accept': 'application/json' },
-    });
+    };
+
+    let response: Response;
+    if (fetchImpl) {
+      response = await fetchImpl(agentCardUrl, requestInit);
+    } else if (typeof fetch === 'function') {
+      // Use the global fetch implementation if no custom one is provided.
+      response = await fetch(agentCardUrl, requestInit);
+    } else {
+      throw new Error(
+        'A `fetch` implementation was not provided and is not available in the global scope. ' +
+        'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+        'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+      );
+    }
+
     if (!response.ok) {
       throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
     }
@@ -87,9 +123,9 @@ export class A2AClient {
     let agentCard: AgentCard;
     try {
       agentCard = await response.json();
-    }  catch (error) {
-      console.error("Error parsing Agent Card:", error);
-      throw error;
+    } catch (error) {
+      console.error("Failed to parse Agent Card JSON:", error);
+      throw new Error(`Failed to parse Agent Card JSON from ${agentCardUrl}. Original error: ${(error as Error).message}`);
     }
 
     return new A2AClient(agentCard, options);
@@ -166,7 +202,7 @@ export class A2AClient {
       body: JSON.stringify(rpcRequest)
     };
 
-    return this.fetchImpl(url, requestInit);
+    return this._fetch(url, requestInit);
   }
 
   /**
@@ -305,7 +341,7 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await this.fetchImpl(endpoint, {
+    const response = await this._fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -478,7 +514,7 @@ export class A2AClient {
   private async _fetchAndCacheAgentCard( agentBaseUrl: string, agentCardPath?: string ): Promise<AgentCard> {
     try {
       const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
-      const response = await this.fetchImpl(agentCardUrl, {
+      const response = await this._fetch(agentCardUrl, {
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
@@ -510,7 +546,7 @@ export class A2AClient {
     if (agentBaseUrl) {
       const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
 
-      const response = await this.fetchImpl(agentCardUrl, {
+      const response = await this._fetch(agentCardUrl, {
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
