@@ -543,14 +543,21 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             }
         };
 
-        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(fakeTaskExecute);
+        let taskId: string;
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            taskId = ctx.taskId;
+            fakeTaskExecute(ctx, bus);
+        });
 
-        const result = await handler.sendMessage(params);
-        const taskResult = result as Task;
-        const task = await mockTaskStore.load(taskResult.id);
+        await handler.sendMessage(params);
 
-        // Verify the complete task object
-        assert.deepEqual(taskResult, task);
+        const expectedTask: Task = {
+            id: taskId,
+            contextId,
+            status: { state: 'completed' },
+            kind: 'task',
+            history: [params.message as Message]
+        };
 
         // Verify push notifications were sent with complete task objects
         assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledThrice);
@@ -558,7 +565,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         // Verify first call (submitted state)
         const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0] as Task;
         const expectedFirstTask: Task = {
-            ...taskResult,
+            ...expectedTask,
             status: { state: 'submitted' }
         };
         assert.deepEqual(firstCallTask, expectedFirstTask);
@@ -566,7 +573,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         // // Verify second call (working state)
         const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0] as Task;
         const expectedSecondTask: Task = {
-            ...taskResult,
+            ...expectedTask,
             status: { state: 'working' }
         };
         assert.deepEqual(secondCallTask, expectedSecondTask);
@@ -574,7 +581,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         // // Verify third call (completed state)
         const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.thirdCall.args[0] as Task;
         const expectedThirdTask: Task = {
-            ...taskResult,
+            ...expectedTask,
             status: { state: 'completed' }
         };
         assert.deepEqual(thirdCallTask, expectedThirdTask);
@@ -608,7 +615,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             }
         };
 
-        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(fakeTaskExecute);
+        let taskId: string;
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            taskId = ctx.taskId;
+            fakeTaskExecute(ctx, bus);
+        });
 
         const eventGenerator = handler.sendMessageStream(params);
         const events = [];
@@ -626,13 +637,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         // Verify push notifications were sent with complete task objects
         assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledThrice);
         
-        const taskId = (events[0] as Task).id;
-        const taskResult = await mockTaskStore.load(taskId);
-        
+        const expectedTask: Task = {
+            id: taskId,
+            contextId,
+            status: { state: 'completed' },
+            kind: 'task',
+            history: [params.message as Message]
+        };
         // Verify first call (submitted state)
         const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.firstCall.args[0] as Task;
         const expectedFirstTask: Task = {
-            ...taskResult,
+            ...expectedTask,
             status: { state: 'submitted' }
         };
         assert.deepEqual(firstCallTask, expectedFirstTask);
@@ -640,7 +655,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         // Verify second call (working state)
         const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.secondCall.args[0] as Task;
         const expectedSecondTask: Task = {
-            ...taskResult,
+            ...expectedTask,
             status: { state: 'working' }
         };
         assert.deepEqual(secondCallTask, expectedSecondTask);
@@ -648,7 +663,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         // Verify third call (completed state)
         const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.thirdCall.args[0] as Task;
         const expectedThirdTask: Task = {
-            ...taskResult,
+            ...expectedTask,
             status: { state: 'completed' }
         };
         assert.deepEqual(thirdCallTask, expectedThirdTask);

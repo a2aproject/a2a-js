@@ -136,24 +136,38 @@ describe('Push Notification Integration Tests', () => {
                 token: 'test-auth-token'
             };
 
+            let contextId = 'test-push-context';
             const params: MessageSendParams = {
-                message: createTestMessage('Test task with push notifications'),
+                message: {
+                    ...createTestMessage('Test task with push notifications'),
+                    contextId: contextId,
+                },
                 configuration: {
                     pushNotificationConfig: pushConfig
                 }
             };
 
+            let taskId: string;
             // Mock the agent executor to publish all three states for this test only
-            mockAgentExecutor.execute.callsFake(fakeTaskExecute);
+            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+                taskId = ctx.taskId;
+                fakeTaskExecute(ctx, bus);
+            });
 
             // Send message and wait for completion
-            const result = await handler.sendMessage(params);
-            const task = result as Task;
+            await handler.sendMessage(params);
 
             // Wait for async push notifications to be sent
             await new Promise(resolve => setTimeout(resolve, 200));
 
-            const taskResult = await taskStore.load(task.id);
+            // Load the task from the store
+            const expectedTaskResult: Task = {
+                id: taskId,
+                contextId,
+                history: [params.message as Message],
+                status: { state: 'completed' },
+                kind: 'task'
+            };
 
             // Verify push notifications were sent
             assert.lengthOf(receivedNotifications, 3, 'Should send notifications for submitted, working, and completed states');
@@ -171,19 +185,19 @@ describe('Push Notification Integration Tests', () => {
             assert.equal(firstNotification.headers['content-type'], 'application/json');
             assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
             assert.deepEqual(firstNotification.body, {
-                ...taskResult,
+                ...expectedTaskResult,
                 status: { state: 'submitted' }
             });
 
             const secondNotification = receivedNotifications[1];
             assert.deepEqual(secondNotification.body, {
-                ...taskResult,
+                ...expectedTaskResult,
                 status: { state: 'working' }
             });
 
             const thirdNotification = receivedNotifications[2];
             assert.deepEqual(thirdNotification.body, {
-                ...taskResult,
+                ...expectedTaskResult,
                 status: { state: 'completed' }
             });
         });
@@ -280,15 +294,23 @@ describe('Push Notification Integration Tests', () => {
                 token: 'test-auth-token'
             };
 
+            let contextId = 'test-error-context';
             const params: MessageSendParams = {
-                message: createTestMessage('Test task with error endpoint'),
+                message: {
+                    ...createTestMessage('Test task with error endpoint'),
+                    contextId: contextId,
+                },
                 configuration: {
                     pushNotificationConfig: pushConfig
                 }
             };
 
+            let taskId: string;
             // Mock the agent executor to publish task states
-            mockAgentExecutor.execute.callsFake(fakeTaskExecute);
+            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+                taskId = ctx.taskId;
+                fakeTaskExecute(ctx, bus);
+            });
 
             // Send message and wait for completion - this should not throw an error
             const result = await handler.sendMessage(params);
@@ -298,10 +320,16 @@ describe('Push Notification Integration Tests', () => {
             await new Promise(resolve => setTimeout(resolve, 200));
 
             // Load the task from the store
-            const taskResult = await taskStore.load(task.id);
+            const expectedTaskResult: Task = {
+                id: taskId,
+                contextId,
+                history: [params.message as Message],
+                status: { state: 'completed' },
+                kind: 'task'
+            };
 
             // Verify the task payload
-            assert.deepEqual(task, taskResult);
+            assert.deepEqual(task, expectedTaskResult);
             
             // Verify the error endpoint was hit
             const errorNotifications = receivedNotifications.filter(n => n.url === '/notify/error');
