@@ -498,20 +498,20 @@ describe('Extension Methods', () => {
         JSONRPCResponse
       >(extensionMethod, customParams);
       
-      // Verify the result - type assertion since we know this is a success response
       expect(response).to.have.property('result');
       
-      // Type assertion since we know this is a success case
+      // Check if we got a success response
       if ('result' in response) {
-        const result = response.result as unknown as {
-          items: Array<{ id: string, name: string }>,
-          totalCount: number
+        const expectedResponseResult = {
+          items: [
+            { id: '1', name: 'Item 1' },
+            { id: '2', name: 'Item 2' },
+            { id: '3', name: 'Item 3' }
+          ],
+          totalCount: 3
         };
         
-        expect(result).to.have.property('items').that.is.an('array').with.length(3);
-        expect(result).to.have.property('totalCount', 3);
-        expect(result.items[0]).to.have.property('id', '1');
-        expect(result.items[0]).to.have.property('name', 'Item 1');
+        expect(response.result).to.deep.equal(expectedResponseResult);
       } else {
         expect.fail('Expected success response but got error response');
       }
@@ -550,16 +550,22 @@ describe('Extension Methods', () => {
         fetchImpl: errorFetch
       });
       
-      // Call the extension method and expect it to handle the error
-      try {
-        await errorClient.callExtensionMethod(extensionMethod, customParams);
-        expect.fail('Expected error to be thrown');
-      } catch (error) {
-        expect(error).to.be.instanceOf(Error);
-        // Log the actual error message for debugging
-        console.log('Actual error message:', (error as Error).message);
-        // Check for any error message
-        expect((error as Error).message).to.not.be.empty;
+      // Define the error we expect to get from the server
+      const expectedError = {
+        code: -32603,
+        message: 'Extension method error: Invalid parameters'
+      };
+      
+      const response = await errorClient.callExtensionMethod(extensionMethod, customParams);
+      
+      // Check that we got a JSON-RPC error response
+      expect(isErrorResponse(response)).to.be.true;
+      if (isErrorResponse(response)) {
+        // Verify the error details match what we expect
+        expect(response.error.code).to.equal(expectedError.code);
+        expect(response.error.message).to.equal(expectedError.message);
+      } else {
+        expect.fail('Expected JSON-RPC error response but got success response');
       }
     });
   });
@@ -651,12 +657,28 @@ describe('Push Notification Config Operations', () => {
       // Verify the result is a success response
       expect(isListConfigSuccessResponse(result)).to.be.true;
       if (isListConfigSuccessResponse(result)) {
-        // Result should be an array of TaskPushNotificationConfig objects
-        expect(result.result).to.be.an('array').with.length(2);
-        expect(result.result[0]).to.have.property('taskId', params.id);
-        expect(result.result[0]).to.have.property('pushNotificationConfig');
-        expect(result.result[0].pushNotificationConfig).to.have.property('id', 'config-1');
-        expect(result.result[1].pushNotificationConfig).to.have.property('id', 'config-2');
+        // Define expected result structure
+        const expectedConfigs = [
+          {
+            taskId: params.id,
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://notify1.example.com/webhook',
+              token: 'token-1'
+            }
+          },
+          {
+            taskId: params.id,
+            pushNotificationConfig: {
+              id: 'config-2',
+              url: 'https://notify2.example.com/webhook',
+              token: 'token-2'
+            }
+          }
+        ];
+        
+        // Use deep.equal for more readable assertion
+        expect(result.result).to.deep.equal(expectedConfigs);
       }
     });
   });
@@ -710,9 +732,15 @@ describe('Push Notification Config Operations', () => {
       // Verify the result is a success response
       expect(isDeleteConfigSuccessResponse(result)).to.be.true;
       if (isDeleteConfigSuccessResponse(result)) {
-        expect(result.result).to.have.property('taskId', params.id);
-        expect(result.result).to.have.property('success', true);
-        expect(result.result).to.have.property('pushNotificationConfigId', params.pushNotificationConfigId);
+        // Define expected result structure
+        const expectedResult = {
+          success: true,
+          taskId: params.id,
+          pushNotificationConfigId: params.pushNotificationConfigId
+        };
+        
+        // Use deep.equal for more readable assertion
+        expect(result.result).to.deep.equal(expectedResult);
       }
     });
   });
