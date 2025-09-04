@@ -29,7 +29,11 @@ import {
   GetTaskPushNotificationConfigSuccessResponse,
   TaskResubscriptionRequest,
   A2AError,
-  SendMessageSuccessResponse
+  SendMessageSuccessResponse,
+  ListTaskPushNotificationConfigParams,
+  ListTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigParams
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from "../constants.js";
 
@@ -300,6 +304,30 @@ export class A2AClient {
     );
   }
 
+  /**
+   * Lists the push notification configurations for a given task.
+   * @param params Parameters containing the taskId.
+   * @returns A Promise resolving to ListTaskPushNotificationConfigResponse.
+   */
+  public async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams): Promise<ListTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>(
+      "tasks/pushNotificationConfig/list",
+      params
+    );
+  }
+
+  /**
+   * Deletes the push notification configuration for a given task.
+   * @param params Parameters containing the taskId and push notification configuration ID.
+   * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
+   */
+  public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(
+      "tasks/pushNotificationConfig/delete",
+      params
+    );
+  }
+
 
   /**
    * Retrieves a task by its ID.
@@ -318,6 +346,19 @@ export class A2AClient {
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
     return this._postRpcRequest<TaskIdParams, CancelTaskResponse>("tasks/cancel", params);
   }
+
+  /**
+   * @template TExtensionParams The type of parameters for the custom extension method.
+   * @template TExtensionResponse The type of response expected from the custom extension method. 
+   * This should extend JSONRPCResponse. This ensures the extension response is still a valid A2A response.
+   * @param method Custom JSON-RPC method defined in the AgentCard's extensions.
+   * @param params Extension paramters defined in the AgentCard's extensions.
+   * @returns A Promise that resolves to the RPC response.
+   */
+  public async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams) {
+    return this._postRpcRequest<TExtensionParams, TExtensionResponse>(method, params);
+  }
+
 
   /**
    * Resubscribes to a task's event stream using Server-Sent Events (SSE).

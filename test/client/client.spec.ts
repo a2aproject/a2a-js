@@ -2,13 +2,37 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { A2AClient } from '../../src/client/client.js';
-import { MessageSendParams, TextPart, SendMessageResponse, SendMessageSuccessResponse } from '../../src/types.js';
+import {
+  MessageSendParams,
+  TextPart,
+  SendMessageResponse,
+  SendMessageSuccessResponse,
+  ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigSuccessResponse,
+  DeleteTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigSuccessResponse,
+  JSONRPCErrorResponse,
+  JSONRPCResponse,
+  JSONRPCSuccessResponse
+} from '../../src/types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { extractRequestId, createResponse, createAgentCardResponse, createMockAgentCard, createMockFetch } from './util.js';
 
-// Helper function to check if response is a success response
+// Helper functions to check if responses are success responses
 function isSuccessResponse(response: SendMessageResponse): response is SendMessageSuccessResponse {
   return 'result' in response;
+}
+
+function isListConfigSuccessResponse(response: ListTaskPushNotificationConfigResponse): response is ListTaskPushNotificationConfigSuccessResponse {
+  return 'result' in response;
+}
+
+function isDeleteConfigSuccessResponse(response: DeleteTaskPushNotificationConfigResponse): response is DeleteTaskPushNotificationConfigSuccessResponse {
+  return 'result' in response;
+}
+
+function isErrorResponse(response: any): response is JSONRPCErrorResponse {
+  return 'error' in response;
 }
 
 describe('A2AClient Basic Tests', () => {
@@ -378,3 +402,322 @@ describe('A2AClient Basic Tests', () => {
     });
   });
 });
+
+describe('Extension Methods', () => {
+  let client: A2AClient;
+  let mockFetch: sinon.SinonStub;
+  let originalConsoleError: typeof console.error;
+  const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
+
+  beforeEach(async () => {
+    // Suppress console.error during tests to avoid noise
+    originalConsoleError = console.error;
+    console.error = () => {};
+
+    // Create a fresh mock fetch for each test
+    mockFetch = createMockFetch();
+    client = await A2AClient.fromCardUrl(agentCardUrl, {
+      fetchImpl: mockFetch
+    });
+  });
+
+  afterEach(() => {
+    // Restore console.error
+    console.error = originalConsoleError;
+    sinon.restore();
+  });
+
+  describe('callExtensionMethod', () => {
+    it('should call a custom extension method successfully', async () => {
+      // Define a custom extension method name
+      const extensionMethod = 'custom/extension/method';
+      
+      // Define custom params for the extension method
+      interface CustomExtensionParams {
+        query: string;
+        limit: number;
+      }
+      
+      // Define the expected response type
+      // Define custom extension result type
+      interface CustomExtensionResult {
+        result: {
+          items: Array<{
+            id: string;
+            name: string;
+          }>;
+          totalCount: number;
+        };
+      }
+      
+      // Set up custom params for the test
+      const customParams: CustomExtensionParams = {
+        query: 'test query',
+        limit: 5
+      };
+      
+      // Create expected response data
+      const expectedResult = {
+        items: [
+          { id: '1', name: 'Item 1' },
+          { id: '2', name: 'Item 2' },
+          { id: '3', name: 'Item 3' }
+        ],
+        totalCount: 3
+      };
+      
+      // Setup custom fetch mock for this specific test
+      const customFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+        if (url.includes(AGENT_CARD_PATH)) {
+          return createAgentCardResponse(createMockAgentCard());
+        }
+        
+        if (url.includes('/api')) {
+          const requestId = extractRequestId(options);
+          const requestBody = JSON.parse(options?.body as string);
+          
+          // Verify the request was made correctly
+          expect(requestBody.method).to.equal(extensionMethod);
+          expect(requestBody.params).to.deep.equal(customParams);
+          
+          // Return the expected result
+          return createResponse(requestId, expectedResult);
+        }
+        
+        return new Response('Not found', { status: 404 });
+      });
+      
+      // Create a client with our custom fetch
+      const extensionClient = new A2AClient('https://test-agent.example.com', {
+        fetchImpl: customFetch
+      });
+      
+      // Call the extension method
+      const response = await extensionClient.callExtensionMethod<
+        CustomExtensionParams,
+        JSONRPCResponse
+      >(extensionMethod, customParams);
+      
+      // Verify the result - type assertion since we know this is a success response
+      expect(response).to.have.property('result');
+      
+      // Type assertion since we know this is a success case
+      if ('result' in response) {
+        const result = response.result as unknown as {
+          items: Array<{ id: string, name: string }>,
+          totalCount: number
+        };
+        
+        expect(result).to.have.property('items').that.is.an('array').with.length(3);
+        expect(result).to.have.property('totalCount', 3);
+        expect(result.items[0]).to.have.property('id', '1');
+        expect(result.items[0]).to.have.property('name', 'Item 1');
+      } else {
+        expect.fail('Expected success response but got error response');
+      }
+    });
+    
+    it('should handle errors from extension methods', async () => {
+      // Define a custom extension method name
+      const extensionMethod = 'custom/failing/method';
+      
+      // Define custom params for the extension method
+      const customParams = {
+        invalid: true
+      };
+      
+      // Setup custom fetch mock for this specific test
+      const errorFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+        if (url.includes(AGENT_CARD_PATH)) {
+          return createAgentCardResponse(createMockAgentCard());
+        }
+        
+        if (url.includes('/api')) {
+          const requestId = extractRequestId(options);
+          
+          // Return an error response
+          return createResponse(requestId, undefined, {
+            code: -32603,
+            message: 'Extension method error: Invalid parameters'
+          }, 500);
+        }
+        
+        return new Response('Not found', { status: 404 });
+      });
+      
+      // Create a client with our error fetch
+      const errorClient = new A2AClient('https://test-agent.example.com', {
+        fetchImpl: errorFetch
+      });
+      
+      // Call the extension method and expect it to handle the error
+      try {
+        await errorClient.callExtensionMethod(extensionMethod, customParams);
+        expect.fail('Expected error to be thrown');
+      } catch (error) {
+        expect(error).to.be.instanceOf(Error);
+        // Log the actual error message for debugging
+        console.log('Actual error message:', (error as Error).message);
+        // Check for any error message
+        expect((error as Error).message).to.not.be.empty;
+      }
+    });
+  });
+});
+
+describe('Push Notification Config Operations', () => {
+  let client: A2AClient;
+  let mockFetch: sinon.SinonStub;
+  let originalConsoleError: typeof console.error;
+
+  beforeEach(() => {
+    // Suppress console.error during tests to avoid noise
+    originalConsoleError = console.error;
+    console.error = () => {};
+    
+    // Create a fresh mock fetch for each test
+    mockFetch = createMockFetch();
+    client = new A2AClient('https://test-agent.example.com', {
+      fetchImpl: mockFetch
+    });
+  });
+
+  afterEach(() => {
+    // Restore console.error
+    console.error = originalConsoleError;
+    sinon.restore();
+  });
+
+  describe('listTaskPushNotificationConfig', () => {
+    it('should list push notification configurations successfully', async () => {
+      // Define mock params
+      const params = {
+        id: 'test-task-123'
+      };
+
+      // Define mock response data for the push notification configs
+      const mockConfigsData = [
+        {
+          id: 'config-1',
+          url: 'https://notify1.example.com/webhook',
+          token: 'token-1'
+        },
+        {
+          id: 'config-2',
+          url: 'https://notify2.example.com/webhook',
+          token: 'token-2'
+        }
+      ];
+
+      // Setup custom mock fetch for this specific test
+      const customFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+        if (url.includes(AGENT_CARD_PATH)) {
+          const mockAgentCard = createMockAgentCard({
+            capabilities: { pushNotifications: true }
+          });
+          return createAgentCardResponse(mockAgentCard);
+        }
+        
+        if (url.includes('/api')) {
+          const requestId = extractRequestId(options);
+          
+          // Check if the request is for the list operation
+          const body = JSON.parse(options?.body as string);
+          if (body.method === 'tasks/pushNotificationConfig/list') {
+            // Verify the params were sent correctly
+            expect(body.params).to.deep.equal(params);
+            
+            // Return a successful response with mock configs
+            // The result is an array of TaskPushNotificationConfig objects
+            const configs = mockConfigsData.map(config => ({
+              taskId: params.id,
+              pushNotificationConfig: config
+            }));
+            return createResponse(requestId, configs);
+          }
+        }
+        
+        return new Response('Not found', { status: 404 });
+      });
+
+      // Use the custom fetch implementation for this test
+      const testClient = new A2AClient('https://test-agent.example.com', {
+        fetchImpl: customFetch
+      });
+
+      // Call the method and verify the result
+      const result = await testClient.listTaskPushNotificationConfig(params);
+      
+      // Verify the result is a success response
+      expect(isListConfigSuccessResponse(result)).to.be.true;
+      if (isListConfigSuccessResponse(result)) {
+        // Result should be an array of TaskPushNotificationConfig objects
+        expect(result.result).to.be.an('array').with.length(2);
+        expect(result.result[0]).to.have.property('taskId', params.id);
+        expect(result.result[0]).to.have.property('pushNotificationConfig');
+        expect(result.result[0].pushNotificationConfig).to.have.property('id', 'config-1');
+        expect(result.result[1].pushNotificationConfig).to.have.property('id', 'config-2');
+      }
+    });
+  });
+
+  describe('deleteTaskPushNotificationConfig', () => {
+    it('should delete push notification configuration successfully', async () => {
+      // Define mock params
+      const params = {
+        id: 'test-task-123',
+        pushNotificationConfigId: 'config-to-delete'
+      };
+
+      // Setup custom mock fetch for this specific test
+      const customFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+        if (url.includes(AGENT_CARD_PATH)) {
+          const mockAgentCard = createMockAgentCard({
+            capabilities: { pushNotifications: true }
+          });
+          return createAgentCardResponse(mockAgentCard);
+        }
+        
+        if (url.includes('/api')) {
+          const requestId = extractRequestId(options);
+          
+          // Check if the request is for the delete operation
+          const body = JSON.parse(options?.body as string);
+          if (body.method === 'tasks/pushNotificationConfig/delete') {
+            // Verify the params were sent correctly
+            expect(body.params).to.deep.equal(params);
+            
+            // Return a successful response
+            return createResponse(requestId, {
+              success: true,
+              taskId: params.id,
+              pushNotificationConfigId: params.pushNotificationConfigId
+            });
+          }
+        }
+        
+        return new Response('Not found', { status: 404 });
+      });
+
+      // Use the custom fetch implementation for this test
+      const testClient = new A2AClient('https://test-agent.example.com', {
+        fetchImpl: customFetch
+      });
+
+      // Call the method and verify the result
+      const result = await testClient.deleteTaskPushNotificationConfig(params);
+      
+      // Verify the result is a success response
+      expect(isDeleteConfigSuccessResponse(result)).to.be.true;
+      if (isDeleteConfigSuccessResponse(result)) {
+        expect(result.result).to.have.property('taskId', params.id);
+        expect(result.result).to.have.property('success', true);
+        expect(result.result).to.have.property('pushNotificationConfigId', params.pushNotificationConfigId);
+      }
+    });
+  });
+});
+
+describe('Call Custom JSON RPC Method', () => {
+  
+})
