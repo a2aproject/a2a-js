@@ -746,6 +746,3 @@ describe('Push Notification Config Operations', () => {
   });
 });
 
-describe('Call Custom JSON RPC Method', () => {
-  
-})
