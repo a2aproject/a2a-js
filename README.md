@@ -113,30 +113,37 @@ The `A2AClient` makes it easy to communicate with any A2A-compliant agent.
 
 ```typescript
 // client.ts
-import { A2AClient, SendMessageSuccessResponse } from "@a2a-js/sdk/client";
+import { A2AClient, A2AClientError, isMessage, withResultType } from "@a2a-js/sdk/client";
 import { Message, MessageSendParams } from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
 
 async function run() {
-  // Create a client pointing to the agent's Agent Card URL.
-  const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
+  try {
+    // Create a client pointing to the agent's Agent Card URL.
+    const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
 
-  const sendParams: MessageSendParams = {
-    message: {
-      messageId: uuidv4(),
-      role: "user",
-      parts: [{ kind: "text", text: "Hi there!" }],
-      kind: "message",
-    },
-  };
+    const sendParams: MessageSendParams = {
+      message: {
+        messageId: uuidv4(),
+        role: "user",
+        parts: [{ kind: "text", text: "Hi there!" }],
+        kind: "message",
+      },
+    };
 
-  const response = await client.sendMessage(sendParams);
-
-  if ("error" in response) {
-    console.error("Error:", response.error.message);
-  } else {
-    const result = (response as SendMessageSuccessResponse).result as Message;
-    console.log("Agent response:", result.parts[0].text); // "Hello, world!"
+    // Type-safe response handling - no manual error checking needed
+    const response = await client.sendMessage(sendParams);
+    
+    // Type guards for automatic type inference
+    if (isMessage(response.result)) {
+      console.log("Agent response:", response.result.parts[0].text); // "Hello, world!"
+    }
+  } catch (error) {
+    if (error instanceof A2AClientError) {
+      console.error(`A2A Error (${error.rpcError.code}): ${error.rpcError.message}`);
+    } else {
+      console.error("Unexpected error:", error);
+    }
   }
 }
 
@@ -212,33 +219,48 @@ The client sends a message and receives a `Task` object as the result.
 
 ```typescript
 // client.ts
-import { A2AClient, SendMessageSuccessResponse } from "@a2a-js/sdk/client";
-import { Message, MessageSendParams, Task } from "@a2a-js/sdk";
-// ... other imports ...
+import { A2AClient, A2AClientError, isTask, isMessage, withResultType } from "@a2a-js/sdk/client";
+import { MessageSendParams } from "@a2a-js/sdk";
+import { v4 as uuidv4 } from "uuid";
 
-const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
+async function run() {
+  try {
+    const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
 
-const response = await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "Do something." }], kind: "message" } });
+    const response = await client.sendMessage({ 
+      message: { 
+        messageId: uuidv4(), 
+        role: "user", 
+        parts: [{ kind: "text", text: "Do something." }], 
+        kind: "message" 
+      } 
+    });
 
-if ("error" in response) {
-  console.error("Error:", response.error.message);
-} else {
-  const result = (response as SendMessageSuccessResponse).result;
+    // Pattern-based result processing with automatic type inference
+    withResultType(response.result, {
+      task: (task) => {
+        console.log(`Task [${task.id}] completed with status: ${task.status.state}`);
 
-  // Check if the agent's response is a Task or a direct Message.
-  if (result.kind === "task") {
-    const task = result as Task;
-    console.log(`Task [${task.id}] completed with status: ${task.status.state}`);
+        if (task.artifacts && task.artifacts.length > 0) {
+          console.log(`Artifact found: ${task.artifacts[0].name}`);
+          console.log(`Content: ${task.artifacts[0].parts[0].text}`);
+        }
+      },
+      message: (message) => {
+        console.log("Received direct message:", message.parts[0].text);
+      }
+    });
 
-    if (task.artifacts && task.artifacts.length > 0) {
-      console.log(`Artifact found: ${task.artifacts[0].name}`);
-      console.log(`Content: ${task.artifacts[0].parts[0].text}`);
+  } catch (error) {
+    if (error instanceof A2AClientError) {
+      console.error(`A2A Error (${error.rpcError.code}): ${error.rpcError.message}`);
+    } else {
+      console.error("Unexpected error:", error);
     }
-  } else {
-    const message = result as Message;
-    console.log("Received direct message:", message.parts[0].text);
   }
 }
+
+await run();
 ```
 
 -----
@@ -278,7 +300,20 @@ const client = await A2AClient.fromCardUrl(
 );
 
 // Now, all requests made by this client instance will include the X-Request-ID header.
-await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "A message requiring custom headers." }], kind: "message" } });
+try {
+  await client.sendMessage({ 
+    message: { 
+      messageId: uuidv4(), 
+      role: "user", 
+      parts: [{ kind: "text", text: "A message requiring custom headers." }], 
+      kind: "message" 
+    } 
+  });
+} catch (error) {
+  if (error instanceof A2AClientError) {
+    console.error(`Request failed: ${error.rpcError.message}`);
+  }
+}
 ```
 
 ### Using the Provided `AuthenticationHandler`
