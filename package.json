@@ -1,6 +1,6 @@
 {
   "name": "@a2a-js/sdk",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Server & Client SDK for Agent2Agent protocol",
   "repository": {
     "type": "git",

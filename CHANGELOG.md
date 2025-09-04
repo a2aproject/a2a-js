@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.4](https://github.com/a2aproject/a2a-js/compare/v0.3.3...v0.3.4) (2025-09-04)
+
+
+### Features
+
+* add list and delete task push notification config rpc method and custom rpc methods for extensions  ([#119](https://github.com/a2aproject/a2a-js/issues/119)) ([26c4e7d](https://github.com/a2aproject/a2a-js/commit/26c4e7df48e0cd1088a9340ddc34bfbed320664c))
+* Added push notifications support ([#108](https://github.com/a2aproject/a2a-js/issues/108)) ([45a211a](https://github.com/a2aproject/a2a-js/commit/45a211a738ea7770ec5ee8b10a1238060ba7a471))
+
+
+### Miscellaneous Chores
+
+* release 0.3.4 ([#128](https://github.com/a2aproject/a2a-js/issues/128)) ([41791d9](https://github.com/a2aproject/a2a-js/commit/41791d99a4c7776ac3ee183d3e834df31a2020ac))
+
 ## [0.3.3](https://github.com/a2aproject/a2a-js/compare/v0.3.2...v0.3.3) (2025-08-27)
 
 
