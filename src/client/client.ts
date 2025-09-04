@@ -32,10 +32,19 @@ import {
   SendMessageSuccessResponse,
   ListTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigSuccessResponse,
   DeleteTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigSuccessResponse,
   DeleteTaskPushNotificationConfigParams
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from "../constants.js";
+import { 
+  parseSuccessResponse, 
+  A2AClientError, 
+  FilterSuccessResponse,
+  A2ASuccessResponse,
+  isErrorResponse 
+} from "./response-utils.js";
 
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
@@ -215,10 +224,12 @@ export class A2AClient {
    * are specified within the `params.configuration` object.
    * Optionally, `params.message.contextId` or `params.message.taskId` can be provided.
    * @param params The parameters for sending the message, including the message content and configuration.
-   * @returns A Promise resolving to SendMessageResponse, which can be a Message, Task, or an error.
+   * @returns A Promise resolving to SendMessageSuccessResponse (Message or Task). Throws A2AClientError for error responses.
+   * @throws A2AClientError if the response contains an error.
    */
-  public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
-    return this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
+  public async sendMessage(params: MessageSendParams): Promise<SendMessageSuccessResponse> {
+    const response = await this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
+    return parseSuccessResponse(response);
   }
 
   /**
@@ -277,74 +288,86 @@ export class A2AClient {
    * Sets or updates the push notification configuration for a given task.
    * Requires the agent to support push notifications (`capabilities.pushNotifications: true` in AgentCard).
    * @param params Parameters containing the taskId and the TaskPushNotificationConfig.
-   * @returns A Promise resolving to SetTaskPushNotificationConfigResponse.
+   * @returns A Promise resolving to SetTaskPushNotificationConfigSuccessResponse. Throws A2AClientError for error responses.
+   * @throws A2AClientError if the response contains an error.
    */
-  public async setTaskPushNotificationConfig(params: TaskPushNotificationConfig): Promise<SetTaskPushNotificationConfigResponse> {
+  public async setTaskPushNotificationConfig(params: TaskPushNotificationConfig): Promise<SetTaskPushNotificationConfigSuccessResponse> {
     const agentCard = await this.agentCardPromise;
     if (!agentCard.capabilities?.pushNotifications) {
       throw new Error("Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).");
     }
     // The 'params' directly matches the structure expected by the RPC method.
-    return this._postRpcRequest<TaskPushNotificationConfig, SetTaskPushNotificationConfigResponse>(
+    const response = await this._postRpcRequest<TaskPushNotificationConfig, SetTaskPushNotificationConfigResponse>(
       "tasks/pushNotificationConfig/set",
       params
     );
+    return parseSuccessResponse(response);
   }
 
   /**
    * Gets the push notification configuration for a given task.
    * @param params Parameters containing the taskId.
-   * @returns A Promise resolving to GetTaskPushNotificationConfigResponse.
+   * @returns A Promise resolving to GetTaskPushNotificationConfigSuccessResponse. Throws A2AClientError for error responses.
+   * @throws A2AClientError if the response contains an error.
    */
-  public async getTaskPushNotificationConfig(params: TaskIdParams): Promise<GetTaskPushNotificationConfigResponse> {
+  public async getTaskPushNotificationConfig(params: TaskIdParams): Promise<GetTaskPushNotificationConfigSuccessResponse> {
     // The 'params' (TaskIdParams) directly matches the structure expected by the RPC method.
-    return this._postRpcRequest<TaskIdParams, GetTaskPushNotificationConfigResponse>(
+    const response = await this._postRpcRequest<TaskIdParams, GetTaskPushNotificationConfigResponse>(
       "tasks/pushNotificationConfig/get",
       params
     );
+    return parseSuccessResponse(response);
   }
 
   /**
    * Lists the push notification configurations for a given task.
    * @param params Parameters containing the taskId.
-   * @returns A Promise resolving to ListTaskPushNotificationConfigResponse.
+   * @returns A Promise resolving to ListTaskPushNotificationConfigSuccessResponse. Throws A2AClientError for error responses.
+   * @throws A2AClientError if the response contains an error.
    */
-  public async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams): Promise<ListTaskPushNotificationConfigResponse> {
-    return this._postRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>(
+  public async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams): Promise<ListTaskPushNotificationConfigSuccessResponse> {
+    const response = await this._postRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>(
       "tasks/pushNotificationConfig/list",
       params
     );
+    return parseSuccessResponse(response);
   }
 
   /**
    * Deletes the push notification configuration for a given task.
    * @param params Parameters containing the taskId and push notification configuration ID.
-   * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
+   * @returns A Promise resolving to DeleteTaskPushNotificationConfigSuccessResponse. Throws A2AClientError for error responses.
+   * @throws A2AClientError if the response contains an error.
    */
-  public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
-    return this._postRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(
+  public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigSuccessResponse> {
+    const response = await this._postRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(
       "tasks/pushNotificationConfig/delete",
       params
     );
+    return parseSuccessResponse(response);
   }
 
 
   /**
    * Retrieves a task by its ID.
    * @param params Parameters containing the taskId and optional historyLength.
-   * @returns A Promise resolving to GetTaskResponse, which contains the Task object or an error.
+   * @returns A Promise resolving to GetTaskSuccessResponse containing the Task object. Throws A2AClientError for error responses.
+   * @throws A2AClientError if the response contains an error.
    */
-  public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
-    return this._postRpcRequest<TaskQueryParams, GetTaskResponse>("tasks/get", params);
+  public async getTask(params: TaskQueryParams): Promise<GetTaskSuccessResponse> {
+    const response = await this._postRpcRequest<TaskQueryParams, GetTaskResponse>("tasks/get", params);
+    return parseSuccessResponse(response);
   }
 
   /**
    * Cancels a task by its ID.
    * @param params Parameters containing the taskId.
-   * @returns A Promise resolving to CancelTaskResponse, which contains the updated Task object or an error.
+   * @returns A Promise resolving to CancelTaskSuccessResponse containing the updated Task object. Throws A2AClientError for error responses.
+   * @throws A2AClientError if the response contains an error.
    */
-  public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
-    return this._postRpcRequest<TaskIdParams, CancelTaskResponse>("tasks/cancel", params);
+  public async cancelTask(params: TaskIdParams): Promise<CancelTaskSuccessResponse> {
+    const response = await this._postRpcRequest<TaskIdParams, CancelTaskResponse>("tasks/cancel", params);
+    return parseSuccessResponse(response);
   }
 
   /**
@@ -507,32 +530,21 @@ export class A2AClient {
         // Depending on strictness, this could be an error. For now, it's a warning.
       }
 
-      if (this.isErrorResponse(a2aStreamResponse)) {
-        const err = a2aStreamResponse.error as (JSONRPCError | A2AError);
-        throw new Error(`SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`);
-      }
-
-      // Check if 'result' exists, as it's mandatory for successful JSON-RPC responses
-      if (!('result' in a2aStreamResponse) || typeof (a2aStreamResponse as SendStreamingMessageSuccessResponse).result === 'undefined') {
-        throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
-      }
-
-      const successResponse = a2aStreamResponse as SendStreamingMessageSuccessResponse;
+      // Use the type-safe parseSuccessResponse to handle error responses and extract result
+      const successResponse = parseSuccessResponse(a2aStreamResponse);
       return successResponse.result as TStreamItem;
     } catch (e: any) {
-      // Catch errors from JSON.parse or if it's an error response that was thrown by this function
-      if (e.message.startsWith("SSE event contained an error") || e.message.startsWith("SSE event JSON-RPC response is missing 'result' field")) {
-        throw e; // Re-throw errors already processed/identified by this function
+      // Re-throw A2AClientError (from parseSuccessResponse) without modification
+      if (e instanceof A2AClientError) {
+        throw e;
       }
-      // For other parsing errors or unexpected structures:
+      
+      // For JSON parsing errors or other unexpected structures:
       console.error("Failed to parse SSE event data string or unexpected JSON-RPC structure:", jsonData, e);
       throw new Error(`Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`);
     }
   }
 
-  isErrorResponse(response: JSONRPCResponse): response is JSONRPCErrorResponse {
-    return "error" in response;
-  }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Functions used to support old A2AClient Constructor to be deprecated soon
