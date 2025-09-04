@@ -256,6 +256,7 @@ const movieAgentCard: AgentCard = {
   description: 'An agent that can answer questions about movies and actors using TMDB.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp 
+  protocolVersion: '1.0',
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples' // Added provider URL
