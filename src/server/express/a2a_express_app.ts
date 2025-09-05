@@ -20,7 +20,7 @@ export class A2AExpressApp {
      * @param app Optional existing Express app.
      * @param baseUrl The base URL for A2A endpoints (e.g., "/a2a/api").
      * @param middlewares Optional array of Express middlewares to apply to the A2A routes.
-     * @param agentCardPath Optional custom path for the agent card endpoint (defaults to /.well-known/agent-card.json).
+     * @param agentCardPath Optional custom path for the agent card endpoint (defaults to .well-known/agent-card.json).
      * @returns The Express app with A2A routes.
      */
     public setupRoutes(
