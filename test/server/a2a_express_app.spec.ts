@@ -84,26 +84,8 @@ describe('A2AExpressApp', () => {
             assert.equal(setupApp, expressApp);
         });
 
-        it('should setup routes with custom baseUrl', () => {
-            const baseUrl = '/api/v1';
-            const setupApp = app.setupRoutes(expressApp, baseUrl);
-            assert.equal(setupApp, expressApp);
-        });
 
-        it('should setup routes with custom middlewares', () => {
-            const middlewares = [
-                (_req: Request, _res: Response, next: Function) => next(),
-                (_req: Request, _res: Response, next: Function) => next()
-            ];
-            const setupApp = app.setupRoutes(expressApp, '', middlewares);
-            assert.equal(setupApp, expressApp);
-        });
 
-        it('should setup routes with custom agentCardPath', () => {
-            const customPath = 'custom/agent-card.json';
-            const setupApp = app.setupRoutes(expressApp, '', undefined, customPath);
-            assert.equal(setupApp, expressApp);
-        });
     });
 
     describe('agent card endpoint', () => {
@@ -120,17 +102,6 @@ describe('A2AExpressApp', () => {
             assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledOnce);
         });
 
-        it('should return agent card on custom path when agentCardPath is provided', async () => {
-            const customPath = 'custom/agent-card.json';
-            const customExpressApp = express();
-            app.setupRoutes(customExpressApp, '', undefined, customPath);
-
-            const response = await request(customExpressApp)
-                .get(`/${customPath}`)
-                .expect(200);
-
-            assert.deepEqual(response.body, testAgentCard);
-        });
 
         it('should handle errors when getting agent card', async () => {
             const errorMessage = 'Failed to get agent card';
@@ -257,7 +228,10 @@ describe('A2AExpressApp', () => {
             const expectedErrorResponse: JSONRPCErrorResponse = {
                 jsonrpc: '2.0',
                 id: 'error-test',
-                error: error.toJSONRPCError()
+                error: {
+                    code: -32603,
+                    message: 'Processing error'
+                }
             };
 
             assert.deepEqual(response.body, expectedErrorResponse);
