@@ -20,3 +20,9 @@ export { InMemoryTaskStore } from "./store.js";
 
 export { JsonRpcTransportHandler } from "./transports/jsonrpc_transport_handler.js";
 export { A2AError } from "./error.js";
+
+export type { PushNotificationSender } from "./push_notification/push_notification_sender.js";
+export { DefaultPushNotificationSender } from "./push_notification/default_push_notification_sender.js";
+export type { DefaultPushNotificationSenderOptions } from "./push_notification/default_push_notification_sender.js";
+export type { PushNotificationStore } from "./push_notification/push_notification_store.js";
+export { InMemoryPushNotificationStore } from "./push_notification/push_notification_store.js";

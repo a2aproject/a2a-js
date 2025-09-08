@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.3.4](https://github.com/a2aproject/a2a-js/compare/v0.3.3...v0.3.4) (2025-09-04)
+
+
+### Features
+
+* add list and delete task push notification config rpc method and custom rpc methods for extensions  ([#119](https://github.com/a2aproject/a2a-js/issues/119)) ([26c4e7d](https://github.com/a2aproject/a2a-js/commit/26c4e7df48e0cd1088a9340ddc34bfbed320664c))
+* Added push notifications support ([#108](https://github.com/a2aproject/a2a-js/issues/108)) ([45a211a](https://github.com/a2aproject/a2a-js/commit/45a211a738ea7770ec5ee8b10a1238060ba7a471))
+
+
+### Miscellaneous Chores
+
+* release 0.3.4 ([#128](https://github.com/a2aproject/a2a-js/issues/128)) ([41791d9](https://github.com/a2aproject/a2a-js/commit/41791d99a4c7776ac3ee183d3e834df31a2020ac))
+
+## [0.3.3](https://github.com/a2aproject/a2a-js/compare/v0.3.2...v0.3.3) (2025-08-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* Update A2AClient constructor to initialize with full agentCardUrl ([#121](https://github.com/a2aproject/a2a-js/issues/121))
+
+### Features
+
+* Update A2AClient constructor to initialize with full agentCardUrl ([#121](https://github.com/a2aproject/a2a-js/issues/121)) ([755044c](https://github.com/a2aproject/a2a-js/commit/755044c6c610991b5c86747da72b24e1fff9ade3))
+
+
+### Bug Fixes
+
+* Improve fetch implementation handling ([#117](https://github.com/a2aproject/a2a-js/issues/117)) ([09adbd3](https://github.com/a2aproject/a2a-js/commit/09adbd31d1ef7a73e4c8c87045af84bb1280226f))
+
+
+### Miscellaneous Chores
+
+* release 0.3.3 ([#124](https://github.com/a2aproject/a2a-js/issues/124)) ([ea59193](https://github.com/a2aproject/a2a-js/commit/ea591932901742af76afb5aeee4cf8d27cc9a6c2))
+
+## [0.3.2](https://github.com/a2aproject/a2a-js/compare/v0.3.1...v0.3.2) (2025-08-17)
+
+
+### Features
+
+* Added generic client hooks for HTTP based authentication, and improved agent.json resolution ([#33](https://github.com/a2aproject/a2a-js/issues/33)) ([a9826ac](https://github.com/a2aproject/a2a-js/commit/a9826acde3bb1f741153407e6179fd21f2e7a4bb))
+
+
+### Bug Fixes
+
+* fix Incorrect Well-Known Path for Agent Card ([#102](https://github.com/a2aproject/a2a-js/issues/102)) ([3a0f1d0](https://github.com/a2aproject/a2a-js/commit/3a0f1d07843b725c9beaf1078bc43418ff2871ed))
+
+
+### Miscellaneous Chores
+
+* release 0.3.2 ([#111](https://github.com/a2aproject/a2a-js/issues/111)) ([03f35e0](https://github.com/a2aproject/a2a-js/commit/03f35e0ed29d2b24df7eddb2a7fe21d0690f503e))
+
 ## [0.3.1](https://github.com/a2aproject/a2a-js/compare/v0.3.0...v0.3.1) (2025-08-06)
 
 

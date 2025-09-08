@@ -29,105 +29,110 @@ import {
   GetTaskPushNotificationConfigSuccessResponse,
   TaskResubscriptionRequest,
   A2AError,
-  SendMessageSuccessResponse
+  SendMessageSuccessResponse,
+  ListTaskPushNotificationConfigParams,
+  ListTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigResponse,
+  DeleteTaskPushNotificationConfigParams
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from "../constants.js";
 
 // Helper type for the data yielded by streaming methods
 type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
+export interface A2AClientOptions {
+  agentCardPath?: string;
+  fetchImpl?: typeof fetch;
+}
 
 /**
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
  */
 export class A2AClient {
-  private agentBaseUrl: string;
-  private agentCardPath: string;
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
+  private customFetchImpl?: typeof fetch;
 
   /**
-   * Constructs an A2AClient instance.
-   * It initiates fetching the agent card from the provided agent baseUrl.
-   * The Agent Card is fetched from a path relative to the agentBaseUrl, which defaults to '.well-known/agent-card.json'.
-   * The `url` field from the Agent Card will be used as the RPC service endpoint.
-   * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
-   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * Constructs an A2AClient instance from an AgentCard.
+   * @param agentCard The AgentCard object.
+   * @param options Optional. The options for the A2AClient including the fetch/auth implementation.
    */
-  constructor(agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH) {
-    this.agentBaseUrl = agentBaseUrl.replace(/\/$/, ""); // Remove trailing slash if any
-    this.agentCardPath = agentCardPath.replace(/^\//, ""); // Remove leading slash if any
-    this.agentCardPromise = this._fetchAndCacheAgentCard();
+  constructor(agentCard: AgentCard | string, options?: A2AClientOptions) {
+    this.customFetchImpl = options?.fetchImpl;
+    if (typeof agentCard === 'string') {
+      console.warn("Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.");
+      this.agentCardPromise = this._fetchAndCacheAgentCard( agentCard, options?.agentCardPath );
+    } else {
+        if (!agentCard.url) {
+            throw new Error("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
+        }
+        this.serviceEndpointUrl = agentCard.url;
+        this.agentCardPromise = Promise.resolve(agentCard);
+    }
   }
 
   /**
-   * Fetches the Agent Card from the agent's well-known URI and caches its service endpoint URL.
-   * This method is called by the constructor.
-   * @returns A Promise that resolves to the AgentCard.
+   * Dynamically resolves the fetch implementation to use for requests. 
+   * Prefers a custom implementation if provided, otherwise falls back to the global fetch.
+   * @returns The fetch implementation.
+   * @param args Arguments to pass to the fetch implementation.
+   * @throws If no fetch implementation is available.
    */
-  private async _fetchAndCacheAgentCard(): Promise<AgentCard> {
-    const agentCardUrl = `${this.agentBaseUrl}/${this.agentCardPath}`
+  private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
+    if (this.customFetchImpl) {
+      return this.customFetchImpl(...args);
+    }
+    if (typeof fetch === 'function') {
+      return fetch(...args);
+    }
+    throw new Error(
+      'A `fetch` implementation was not provided and is not available in the global scope. ' +
+      'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+      'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+    );
+  }
+
+  /**
+   * Creates an A2AClient instance by fetching the AgentCard from a URL then constructing the A2AClient.
+   * @param agentCardUrl The URL of the agent card.
+   * @param options Optional. The options for the A2AClient including the fetch/auth implementation.
+   * @returns A Promise that resolves to a new A2AClient instance.
+   */
+  public static async fromCardUrl(agentCardUrl: string, options?: A2AClientOptions): Promise<A2AClient> {
+    const fetchImpl = options?.fetchImpl;
+    const requestInit = {
+      headers: { 'Accept': 'application/json' },
+    };
+
+    let response: Response;
+    if (fetchImpl) {
+      response = await fetchImpl(agentCardUrl, requestInit);
+    } else if (typeof fetch === 'function') {
+      // Use the global fetch implementation if no custom one is provided.
+      response = await fetch(agentCardUrl, requestInit);
+    } else {
+      throw new Error(
+        'A `fetch` implementation was not provided and is not available in the global scope. ' +
+        'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+        'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+    }
+
+    let agentCard: AgentCard;
     try {
-      const response = await fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
-      }
-      const agentCard: AgentCard = await response.json();
-      if (!agentCard.url) {
-        throw new Error("Fetched Agent Card does not contain a valid 'url' for the service endpoint.");
-      }
-      this.serviceEndpointUrl = agentCard.url; // Cache the service endpoint URL from the agent card
-      return agentCard;
+      agentCard = await response.json();
     } catch (error) {
-      console.error("Error fetching or parsing Agent Card:");
-      // Allow the promise to reject so users of agentCardPromise can handle it.
-      throw error;
+      console.error("Failed to parse Agent Card JSON:", error);
+      throw new Error(`Failed to parse Agent Card JSON from ${agentCardUrl}. Original error: ${(error as Error).message}`);
     }
-  }
 
-  /**
-   * Retrieves the Agent Card.
-   * If an `agentBaseUrl` is provided, it fetches the card from that specific URL.
-   * Otherwise, it returns the card fetched and cached during client construction.
-   * @param agentBaseUrl Optional. The base URL of the agent to fetch the card from.
-   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
-   * If provided, this will fetch a new card, not use the cached one from the constructor's URL.
-   * @returns A Promise that resolves to the AgentCard.
-   */
-  public async getAgentCard(agentBaseUrl?: string, agentCardPath: string = AGENT_CARD_PATH): Promise<AgentCard> {
-    if (agentBaseUrl) {
-      const agentCardUrl = `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`
-      const response = await fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
-      }
-      return await response.json() as AgentCard;
-    }
-    // If no specific URL is given, return the promise for the initially configured agent's card.
-    return this.agentCardPromise;
-  }
-
-  /**
-   * Gets the RPC service endpoint URL. Ensures the agent card has been fetched first.
-   * @returns A Promise that resolves to the service endpoint URL string.
-   */
-  private async _getServiceEndpoint(): Promise<string> {
-    if (this.serviceEndpointUrl) {
-      return this.serviceEndpointUrl;
-    }
-    // If serviceEndpointUrl is not set, it means the agent card fetch is pending or failed.
-    // Awaiting agentCardPromise will either resolve it or throw if fetching failed.
-    await this.agentCardPromise;
-    if (!this.serviceEndpointUrl) {
-      // This case should ideally be covered by the error handling in _fetchAndCacheAgentCard
-      throw new Error("Agent Card URL for RPC endpoint is not available. Fetching might have failed.");
-    }
-    return this.serviceEndpointUrl;
+    return new A2AClient(agentCard, options);
   }
 
   /**
@@ -149,23 +154,17 @@ export class A2AClient {
       id: requestId,
     };
 
-    const httpResponse = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json", // Expect JSON response for non-streaming requests
-      },
-      body: JSON.stringify(rpcRequest),
-    });
+    const httpResponse = await this._fetchRpc( endpoint, rpcRequest );
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
       try {
         errorBodyText = await httpResponse.text();
         const errorJson = JSON.parse(errorBodyText);
-        // If the body is a valid JSON-RPC error response, let it be handled by the standard parsing below.
-        // However, if it's not even a JSON-RPC structure but still an error, throw based on HTTP status.
-        if (!errorJson.jsonrpc && errorJson.error) { // Check if it's a JSON-RPC error structure
+        // If the body is a valid JSON-RPC error response, return it as a proper JSON-RPC error response.
+        if (errorJson.jsonrpc && errorJson.error) {
+          return errorJson as TResponse;
+        } else if (!errorJson.jsonrpc && errorJson.error) { // Check if it's a JSON-RPC error structure
           throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
         } else if (!errorJson.jsonrpc) {
           throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
@@ -190,6 +189,25 @@ export class A2AClient {
     return rpcResponse as TResponse;
   }
 
+  /**
+   * Internal helper method to fetch the RPC service endpoint.
+   * @param url The URL to fetch.
+   * @param rpcRequest The JSON-RPC request to send.
+   * @param acceptHeader The Accept header to use.  Defaults to "application/json".
+   * @returns A Promise that resolves to the fetch HTTP response.
+   */
+  private async _fetchRpc( url: string, rpcRequest: JSONRPCRequest, acceptHeader: string = "application/json" ): Promise<Response> {
+    const requestInit: RequestInit = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": acceptHeader, // Expect JSON response for non-streaming requests
+      },
+      body: JSON.stringify(rpcRequest)
+    };
+
+    return this._fetch(url, requestInit);
+  }
 
   /**
    * Sends a message to the agent.
@@ -227,14 +245,7 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "text/event-stream", // Crucial for SSE
-      },
-      body: JSON.stringify(rpcRequest),
-    });
+    const response = await this._fetchRpc( endpoint, rpcRequest, "text/event-stream" );
 
     if (!response.ok) {
       // Attempt to read error body for more details
@@ -293,6 +304,30 @@ export class A2AClient {
     );
   }
 
+  /**
+   * Lists the push notification configurations for a given task.
+   * @param params Parameters containing the taskId.
+   * @returns A Promise resolving to ListTaskPushNotificationConfigResponse.
+   */
+  public async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams): Promise<ListTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>(
+      "tasks/pushNotificationConfig/list",
+      params
+    );
+  }
+
+  /**
+   * Deletes the push notification configuration for a given task.
+   * @param params Parameters containing the taskId and push notification configuration ID.
+   * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
+   */
+  public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(
+      "tasks/pushNotificationConfig/delete",
+      params
+    );
+  }
+
 
   /**
    * Retrieves a task by its ID.
@@ -311,6 +346,19 @@ export class A2AClient {
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
     return this._postRpcRequest<TaskIdParams, CancelTaskResponse>("tasks/cancel", params);
   }
+
+  /**
+   * @template TExtensionParams The type of parameters for the custom extension method.
+   * @template TExtensionResponse The type of response expected from the custom extension method. 
+   * This should extend JSONRPCResponse. This ensures the extension response is still a valid A2A response.
+   * @param method Custom JSON-RPC method defined in the AgentCard's extensions.
+   * @param params Extension paramters defined in the AgentCard's extensions.
+   * @returns A Promise that resolves to the RPC response.
+   */
+  public async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams) {
+    return this._postRpcRequest<TExtensionParams, TExtensionResponse>(method, params);
+  }
+
 
   /**
    * Resubscribes to a task's event stream using Server-Sent Events (SSE).
@@ -334,7 +382,7 @@ export class A2AClient {
       id: clientRequestId,
     };
 
-    const response = await fetch(endpoint, {
+    const response = await this._fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -482,8 +530,99 @@ export class A2AClient {
     }
   }
 
-
   isErrorResponse(response: JSONRPCResponse): response is JSONRPCErrorResponse {
     return "error" in response;
+  }
+
+////////////////////////////////////////////////////////////////////////////////
+// Functions used to support old A2AClient Constructor to be deprecated soon
+// TODOs:
+// * remove `agentCardPromise`, and just use agentCard initialized
+// * _getServiceEndpoint can be made synchronous or deleted and accessed via
+//   agentCard.url
+// * getAgentCard changed to this.agentCard
+// * delete resolveAgentCardUrl(), _fetchAndCacheAgentCard(),
+//   agentCardPath from A2AClientOptions
+////////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Fetches the Agent Card from the agent's well-known URI and caches its service endpoint URL.
+   * This method is called by the constructor.
+   * @param agentBaseUrl The base URL of the A2A agent (e.g., https://agent.example.com)
+   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * @returns A Promise that resolves to the AgentCard.
+   */
+  private async _fetchAndCacheAgentCard( agentBaseUrl: string, agentCardPath?: string ): Promise<AgentCard> {
+    try {
+      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
+      const response = await this._fetch(agentCardUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+      }
+      const agentCard: AgentCard = await response.json();
+      if (!agentCard.url) {
+        throw new Error("Fetched Agent Card does not contain a valid 'url' for the service endpoint.");
+      }
+      this.serviceEndpointUrl = agentCard.url; // Cache the service endpoint URL from the agent card
+      return agentCard;
+    } catch (error) {
+      console.error("Error fetching or parsing Agent Card:", error);
+      // Allow the promise to reject so users of agentCardPromise can handle it.
+      throw error;
+    }
+  }
+
+    /**
+   * Retrieves the Agent Card.
+   * If an `agentBaseUrl` is provided, it fetches the card from that specific URL.
+   * Otherwise, it returns the card fetched and cached during client construction.
+   * @param agentBaseUrl Optional. The base URL of the agent to fetch the card from.
+   * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
+   * If provided, this will fetch a new card, not use the cached one from the constructor's URL.
+   * @returns A Promise that resolves to the AgentCard.
+   */
+  public async getAgentCard(agentBaseUrl?: string, agentCardPath?: string): Promise<AgentCard> {
+    if (agentBaseUrl) {
+      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
+
+      const response = await this._fetch(agentCardUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+      }
+      return await response.json() as AgentCard;
+    }
+    // If no specific URL is given, return the promise for the initially configured agent's card.
+    return this.agentCardPromise;
+  }
+
+  /**
+   * Determines the agent card URL based on the agent URL.
+   * @param agentBaseUrl The agent URL.
+   * @param agentCardPath Optional relative path to the agent card, defaults to .well-known/agent-card.json
+   */
+  private resolveAgentCardUrl( agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH ): string {
+    return `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`;
+  }
+
+  /**
+   * Gets the RPC service endpoint URL. Ensures the agent card has been fetched first.
+   * @returns A Promise that resolves to the service endpoint URL string.
+   */
+  private async _getServiceEndpoint(): Promise<string> {
+    if (this.serviceEndpointUrl) {
+      return this.serviceEndpointUrl;
+    }
+    // If serviceEndpointUrl is not set, it means the agent card fetch is pending or failed.
+    // Awaiting agentCardPromise will either resolve it or throw if fetching failed.
+    await this.agentCardPromise;
+    if (!this.serviceEndpointUrl) {
+      // This case should ideally be covered by the error handling in _fetchAndCacheAgentCard
+      throw new Error("Agent Card URL for RPC endpoint is not available. Fetching might have failed.");
+    }
+    return this.serviceEndpointUrl;
   }
 }
