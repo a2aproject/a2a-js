@@ -102,6 +102,17 @@ describe('A2AExpressApp', () => {
             assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledOnce);
         });
 
+        it('should return agent card on custom path when agentCardPath is provided', async () => {
+            const customPath = 'custom/agent-card.json';
+            const customExpressApp = express();
+            app.setupRoutes(customExpressApp, '', undefined, customPath);
+
+            const response = await request(customExpressApp)
+                .get(`/${customPath}`)
+                .expect(200);
+
+            assert.deepEqual(response.body, testAgentCard);
+        });
 
         it('should handle errors when getting agent card', async () => {
             const errorMessage = 'Failed to get agent card';
