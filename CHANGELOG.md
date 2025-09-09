@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/a2aproject/a2a-js/compare/v0.3.4...v0.3.5) (2025-09-09)
+
+
+### Bug Fixes
+
+* correct the default value in the agentCardPath comment ([#130](https://github.com/a2aproject/a2a-js/issues/130)) ([3279c7b](https://github.com/a2aproject/a2a-js/commit/3279c7bf4de088950c81aaeccb1cfaca5ee26284))
+
 ## [0.3.4](https://github.com/a2aproject/a2a-js/compare/v0.3.3...v0.3.4) (2025-09-04)
 
 
