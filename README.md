@@ -113,8 +113,8 @@ The `A2AClient` makes it easy to communicate with any A2A-compliant agent.
 
 ```typescript
 // client.ts
-import { A2AClient, SendMessageSuccessResponse } from "@a2a-js/sdk/client";
-import { Message, MessageSendParams } from "@a2a-js/sdk";
+import { A2AClient } from "@a2a-js/sdk/client";
+import { Message, MessageSendParams, SendMessageSuccessResponse } from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
 
 async function run() {
@@ -212,8 +212,8 @@ The client sends a message and receives a `Task` object as the result.
 
 ```typescript
 // client.ts
-import { A2AClient, SendMessageSuccessResponse } from "@a2a-js/sdk/client";
-import { Message, MessageSendParams, Task } from "@a2a-js/sdk";
+import { A2AClient } from "@a2a-js/sdk/client";
+import { Message, MessageSendParams, Task, SendMessageSuccessResponse } from "@a2a-js/sdk";
 // ... other imports ...
 
 const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
