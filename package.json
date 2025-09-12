@@ -69,7 +69,9 @@
     "coverage": "c8 npm run test",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
     "sample:cli": "tsx src/samples/cli.ts",
-    "sample:movie-agent": "tsx src/samples/agents/movie-agent/index.ts"
+    "sample:movie-agent": "tsx src/samples/agents/movie-agent/index.ts",
+    "sample:dynamic-agents": "tsx src/samples/servers/dynamic_agents/index.ts",
+    "sample:single_agent": "tsx src/samples/servers/single_agent/index.ts"
   },
   "dependencies": {
     "uuid": "^11.1.0"
