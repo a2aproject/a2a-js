@@ -242,6 +242,133 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.include((nonBlockingTask.status.message?.parts[0] as any).text, errorMessage, 'Error message should be in the status');
     });
 
+    it('sendMessage: should return second task with full history if message is sent to an existing, non-terminal task', async () => {
+        const contextId = 'ctx-history-abc';
+        
+        // First message
+        const firstMessage = createTestMessage('msg-1', 'Message 1');
+        firstMessage.contextId = contextId;
+        const firstParams: MessageSendParams = {
+            message: firstMessage
+        };
+
+        let taskId: string;
+
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            taskId = ctx.taskId;
+            
+            // Publish task creation
+            bus.publish({
+                id: taskId,
+                contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+
+            // Publish working status
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },
+                final: false
+            });
+
+            // Mark as input-required with agent response message
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { 
+                    state: "input-required",
+                    message: {
+                        messageId: 'agent-msg-1',
+                        role: 'agent',
+                        parts: [{ kind: 'text', text: 'Response to message 1' }],
+                        kind: 'message',
+                        taskId,
+                        contextId
+                    }
+                },
+                final: true
+            });
+            bus.finished();
+        });
+
+        const firstResult = await handler.sendMessage(firstParams);
+        const firstTask = firstResult as Task;
+        
+        // Check the first result is a task with `input-required` status
+        assert.equal(firstTask.kind, 'task');
+        assert.equal(firstTask.status.state, 'input-required');
+
+        // Check the history
+        assert.isDefined(firstTask.history, 'First task should have history');
+        assert.lengthOf(firstTask.history!, 2, 'First task history should contain user message and agent message');
+        assert.equal(firstTask.history![0].messageId, 'msg-1', 'First history item should be user message');
+        assert.equal(firstTask.history![1].messageId, 'agent-msg-1', 'Second history item should be agent message');
+
+        // Second message
+        const secondMessage = createTestMessage('msg-2', 'Message 2');
+        secondMessage.contextId = contextId;
+        secondMessage.taskId = firstTask.id;
+
+        const secondParams: MessageSendParams = {
+            message: secondMessage
+        };
+
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            // Publish working status update
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },
+                final: false
+            });
+
+            // Mark as completed with agent response message
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { 
+                    state: "completed",
+                    message: {
+                        messageId: 'agent-msg-2',
+                        role: 'agent',
+                        parts: [{ kind: 'text', text: 'Response to message 2' }],
+                        kind: 'message',
+                        taskId,
+                        contextId
+                    }
+                },
+                final: true
+            });
+            bus.finished();
+        });
+
+        const secondResult = await handler.sendMessage(secondParams);
+        const secondTask = secondResult as Task;
+
+        // Check the second result is a task with `completed` status
+        assert.equal(secondTask.kind, 'task');
+        assert.equal(secondTask.id, taskId, 'Should be the same task');
+        assert.equal(secondTask.status.state, 'completed');
+        
+        // Check the history
+        assert.isDefined(secondTask.history, 'Second task should have history');
+        assert.lengthOf(secondTask.history!, 4, 'Second task history should contain all 4 messages (user1, agent1, user2, agent2)');
+        assert.equal(secondTask.history![0].messageId, 'msg-1', 'First message should be first user message');
+        assert.equal((secondTask.history![0].parts[0] as any).text, 'Message 1');
+        assert.equal(secondTask.history![1].messageId, 'agent-msg-1', 'Second message should be first agent message');
+        assert.equal((secondTask.history![1].parts[0] as any).text, 'Response to message 1');
+        assert.equal(secondTask.history![2].messageId, 'msg-2', 'Third message should be second user message');
+        assert.equal((secondTask.history![2].parts[0] as any).text, 'Message 2');
+        assert.equal(secondTask.history![3].messageId, 'agent-msg-2', 'Fourth message should be second agent message');
+        assert.equal((secondTask.history![3].parts[0] as any).text, 'Response to message 2');
+    });
+
     it('sendMessageStream: should stream submitted, working, and completed events', async () => {
         const params: MessageSendParams = { 
             message: createTestMessage('msg-3', 'Stream a task') 

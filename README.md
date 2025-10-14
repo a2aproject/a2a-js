@@ -163,19 +163,21 @@ class TaskExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const { taskId, contextId } = requestContext;
+    const { taskId, contextId, task } = requestContext;
 
-    // 1. Create and publish the initial task object.
-    const initialTask: Task = {
-      kind: "task",
-      id: taskId,
-      contextId: contextId,
-      status: {
-        state: "submitted",
-        timestamp: new Date().toISOString(),
-      },
-    };
-    eventBus.publish(initialTask);
+    // 1. Create and publish the initial task object if it doesn't exist.
+    if (!task) {
+      const initialTask: Task = {
+        kind: "task",
+        id: taskId,
+        contextId: contextId,
+        status: {
+          state: "submitted",
+          timestamp: new Date().toISOString(),
+        },
+      };
+      eventBus.publish(initialTask);
+    }
 
     // 2. Create and publish an artifact.
     const artifactUpdate: TaskArtifactUpdateEvent = {
@@ -354,15 +356,21 @@ class StreamingExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const { taskId, contextId } = requestContext;
+    const { taskId, contextId, task } = requestContext;
 
-    // 1. Publish initial 'submitted' state.
-    eventBus.publish({
-      kind: "task",
-      id: taskId,
-      contextId,
-      status: { state: "submitted", timestamp: new Date().toISOString() },
-    });
+    // 1. Create and publish the initial task object if it doesn't exist.
+    if (!task) {
+      const initialTask: Task = {
+        kind: "task",
+        id: taskId,
+        contextId: contextId,
+        status: {
+          state: "submitted",
+          timestamp: new Date().toISOString(),
+        },
+      };
+      eventBus.publish(initialTask);
+    }
 
     // 2. Publish 'working' state.
     eventBus.publish({
