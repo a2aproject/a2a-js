@@ -207,7 +207,7 @@ export class A2AClient {
    * @returns An AsyncGenerator yielding A2AStreamEventData (Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent).
    * The generator throws an error if streaming is not supported or if an HTTP/SSE error occurs.
    */
-  public async *sendMessageStream(params: MessageSendParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  public async *sendMessageStream(params: MessageSendParams, abortSignal?: AbortSignal): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const agentCard = await this.agentCardPromise; // Ensure agent card is fetched
     if (!agentCard.capabilities?.streaming) {
       throw new Error("Agent does not support streaming (AgentCard.capabilities.streaming is not true).");
@@ -229,6 +229,7 @@ export class A2AClient {
         "Accept": "text/event-stream", // Crucial for SSE
       },
       body: JSON.stringify(rpcRequest),
+      signal: abortSignal,
     });
 
     if (!response.ok) {
@@ -314,7 +315,7 @@ export class A2AClient {
    * @param params Parameters containing the taskId.
    * @returns An AsyncGenerator yielding A2AStreamEventData (Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent).
    */
-  public async *resubscribeTask(params: TaskIdParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  public async *resubscribeTask(params: TaskIdParams, abortSignal?: AbortSignal): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const agentCard = await this.agentCardPromise;
     if (!agentCard.capabilities?.streaming) {
       throw new Error("Agent does not support streaming (required for tasks/resubscribe).");
@@ -336,6 +337,7 @@ export class A2AClient {
         "Accept": "text/event-stream",
       },
       body: JSON.stringify(rpcRequest),
+      signal: abortSignal,
     });
 
     if (!response.ok) {
