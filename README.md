@@ -163,7 +163,7 @@ class TaskExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const { taskId, contextId, task } = requestContext;
+    const { taskId, contextId, userMessage, task } = requestContext;
 
     // 1. Create and publish the initial task object if it doesn't exist.
     if (!task) {
@@ -175,6 +175,7 @@ class TaskExecutor implements AgentExecutor {
           state: "submitted",
           timestamp: new Date().toISOString(),
         },
+        history: [userMessage]
       };
       eventBus.publish(initialTask);
     }
@@ -356,7 +357,7 @@ class StreamingExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const { taskId, contextId, task } = requestContext;
+    const { taskId, contextId, userMessage, task } = requestContext;
 
     // 1. Create and publish the initial task object if it doesn't exist.
     if (!task) {
@@ -368,6 +369,7 @@ class StreamingExecutor implements AgentExecutor {
           state: "submitted",
           timestamp: new Date().toISOString(),
         },
+        history: [userMessage]
       };
       eventBus.publish(initialTask);
     }
