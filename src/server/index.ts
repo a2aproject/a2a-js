@@ -14,6 +14,8 @@ export { ExecutionEventQueue } from "./events/execution_event_queue.js";
 
 export type { A2ARequestHandler } from "./request_handler/a2a_request_handler.js";
 export { DefaultRequestHandler } from "./request_handler/default_request_handler.js";
+export { DynamicAgentRequestHandler } from "./request_handler/dynamic_request_handler.js";
+export type { RouteContext, AgentCardResolver, TaskStoreResolver, AgentExecutorResolver } from "./request_handler/dynamic_request_handler.js";
 export { ResultManager } from "./result_manager.js";
 export type { TaskStore } from "./store.js";
 export { InMemoryTaskStore } from "./store.js";
