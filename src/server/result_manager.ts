@@ -35,6 +35,7 @@ export class ResultManager {
         } else if (event.kind === 'task') {
             const taskEvent = event as Task;
             this.currentTask = { ...taskEvent }; // Make a copy
+            
             // Ensure the latest user message is in history if not already present
             if (this.latestUserMessage) {
                 if (!this.currentTask.history?.find(msg => msg.messageId === this.latestUserMessage!.messageId)) {

@@ -318,7 +318,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         };
 
         (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
-            // Publish working status update
+            // Publish a status update with working state
             bus.publish({
                 taskId,
                 contextId,
@@ -327,13 +327,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
                 final: false
             });
 
-            // Mark as completed with agent response message
+            // Publish a status update with working state and message
             bus.publish({
                 taskId,
                 contextId,
                 kind: 'status-update',
-                status: { 
-                    state: "completed",
+                status: {
+                    state: "working",
                     message: {
                         messageId: 'agent-msg-2',
                         role: 'agent',
@@ -343,8 +343,33 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
                         contextId
                     }
                 },
+                final: false
+            });
+
+            // Publish an artifact update
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'artifact-update',
+                artifact: {
+                    artifactId: 'artifact-1',
+                    name: 'Test Document',
+                    description: 'A test artifact.',
+                    parts: [{ kind: 'text', text: 'This is the content of the artifact.' }]
+                }
+            });
+
+            // Mark as completed
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: {
+                    state: "completed"
+                },
                 final: true
             });
+            
             bus.finished();
         });
 
@@ -367,6 +392,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.equal((secondTask.history![2].parts[0] as any).text, 'Message 2');
         assert.equal(secondTask.history![3].messageId, 'agent-msg-2', 'Fourth message should be second agent message');
         assert.equal((secondTask.history![3].parts[0] as any).text, 'Response to message 2');
+        assert.equal(secondTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
+        assert.equal(secondTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
+        assert.equal(secondTask.artifacts![0].description, 'A test artifact.', 'Artifact description should be the same');
+        assert.equal((secondTask.artifacts![0].parts[0] as any).text, 'This is the content of the artifact.', 'Artifact content should be the same');
     });
 
     it('sendMessageStream: should stream submitted, working, and completed events', async () => {
