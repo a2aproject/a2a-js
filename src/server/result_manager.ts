@@ -35,7 +35,6 @@ export class ResultManager {
         } else if (event.kind === 'task') {
             const taskEvent = event as Task;
             this.currentTask = { ...taskEvent }; // Make a copy
-
             // Ensure the latest user message is in history if not already present
             if (this.latestUserMessage) {
                 if (!this.currentTask.history?.find(msg => msg.messageId === this.latestUserMessage!.messageId)) {
@@ -60,12 +59,6 @@ export class ResultManager {
                 const loaded = await this.taskStore.load(updateEvent.taskId);
                 if (loaded) {
                     this.currentTask = loaded;
-                    // Ensure the latest user message is in history if not already present
-                    if (this.latestUserMessage) {
-                        if (!this.currentTask.history?.find(msg => msg.messageId === this.latestUserMessage!.messageId)) {
-                            this.currentTask.history = [...(this.currentTask.history || []), this.latestUserMessage];
-                        }
-                    }
                     this.currentTask.status = updateEvent.status;
                     if (updateEvent.status.message) {
                         if (!this.currentTask.history?.find(msg => msg.messageId === updateEvent.status.message!.messageId)) {
@@ -110,12 +103,6 @@ export class ResultManager {
                 const loaded = await this.taskStore.load(artifactEvent.taskId);
                 if (loaded) {
                     this.currentTask = loaded;
-                    // Ensure the latest user message is in history if not already present
-                    if (this.latestUserMessage) {
-                        if (!this.currentTask.history?.find(msg => msg.messageId === this.latestUserMessage!.messageId)) {
-                            this.currentTask.history = [...(this.currentTask.history || []), this.latestUserMessage];
-                        }
-                    }
                     if (!this.currentTask.artifacts) this.currentTask.artifacts = [];
                     // Apply artifact update logic (as above)
                     const existingArtifactIndex = this.currentTask.artifacts.findIndex(
