@@ -18,7 +18,7 @@ describe('Push Notification Integration Tests', () => {
     let testServerPort: number;
     let testServerUrl: string;
     let receivedNotifications: Array<{ body: any; headers: any; url: string; method: string }> = [];
-    
+
     let taskStore: InMemoryTaskStore;
     let handler: DefaultRequestHandler;
     let mockAgentExecutor: MockAgentExecutor;
@@ -60,7 +60,7 @@ describe('Push Notification Integration Tests', () => {
             // Endpoint to simulate different response scenarios
             app.post('/notify/:scenario', (req: Request, res: Response) => {
                 const scenario = req.params.scenario;
-                
+
                 receivedNotifications.push({
                     body: req.body,
                     headers: req.headers,
@@ -88,7 +88,7 @@ describe('Push Notification Integration Tests', () => {
     beforeEach(async () => {
         // Reset state
         receivedNotifications = [];
-        
+
         // Create and start test server
         const serverInfo = await createTestServer();
         testServer = serverInfo.server;
@@ -115,7 +115,7 @@ describe('Push Notification Integration Tests', () => {
     afterEach(async () => {
         // Clean up test server
         if (testServer) {
-           await testServer.close();
+            await testServer.close();
         }
         sinon.restore();
     });
@@ -129,78 +129,80 @@ describe('Push Notification Integration Tests', () => {
     });
 
     describe('End-to-End Push Notification Flow', () => {
-        it('should send push notifications for task status updates', async () => {
-            const pushConfig: PushNotificationConfig = {
-                id: 'test-push-config',
-                url: `${testServerUrl}/notify`,
-                token: 'test-auth-token'
-            };
+        for (let i = 0; i < 100; i++) {
+            it('should send push notifications for task status updates', async () => {
+                const pushConfig: PushNotificationConfig = {
+                    id: 'test-push-config',
+                    url: `${testServerUrl}/notify`,
+                    token: 'test-auth-token'
+                };
 
-            let contextId = 'test-push-context';
-            const params: MessageSendParams = {
-                message: {
-                    ...createTestMessage('Test task with push notifications'),
-                    contextId: contextId,
-                },
-                configuration: {
-                    pushNotificationConfig: pushConfig
-                }
-            };
+                let contextId = 'test-push-context';
+                const params: MessageSendParams = {
+                    message: {
+                        ...createTestMessage('Test task with push notifications'),
+                        contextId: contextId,
+                    },
+                    configuration: {
+                        pushNotificationConfig: pushConfig
+                    }
+                };
 
-            let taskId: string;
-            // Mock the agent executor to publish all three states for this test only
-            mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
-                taskId = ctx.taskId;
-                fakeTaskExecute(ctx, bus);
+                let taskId: string;
+                // Mock the agent executor to publish all three states for this test only
+                mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+                    taskId = ctx.taskId;
+                    fakeTaskExecute(ctx, bus);
+                });
+
+                // Send message and wait for completion
+                await handler.sendMessage(params);
+
+                // Wait for async push notifications to be sent
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                // Load the task from the store
+                const expectedTaskResult: Task = {
+                    id: taskId,
+                    contextId,
+                    history: [params.message as Message],
+                    status: { state: 'completed' },
+                    kind: 'task'
+                };
+
+                // Verify push notifications were sent
+                assert.lengthOf(receivedNotifications, 3, 'Should send notifications for submitted, working, and completed states');
+
+                // Verify all three states are present (order may vary)
+                const states = receivedNotifications.map(n => n.body.status.state);
+                assert.include(states, 'submitted', 'Should include submitted state');
+                assert.include(states, 'working', 'Should include working state');
+                assert.include(states, 'completed', 'Should include completed state');
+
+                // Verify first notification has correct format
+                const firstNotification = receivedNotifications[0];
+                assert.equal(firstNotification.method, 'POST');
+                assert.equal(firstNotification.url, '/notify');
+                assert.equal(firstNotification.headers['content-type'], 'application/json');
+                assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
+                assert.deepEqual(firstNotification.body, {
+                    ...expectedTaskResult,
+                    status: { state: 'submitted' }
+                });
+
+                const secondNotification = receivedNotifications[1];
+                assert.deepEqual(secondNotification.body, {
+                    ...expectedTaskResult,
+                    status: { state: 'working' }
+                });
+
+                const thirdNotification = receivedNotifications[2];
+                assert.deepEqual(thirdNotification.body, {
+                    ...expectedTaskResult,
+                    status: { state: 'completed' }
+                });
             });
-
-            // Send message and wait for completion
-            await handler.sendMessage(params);
-
-            // Wait for async push notifications to be sent
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // Load the task from the store
-            const expectedTaskResult: Task = {
-                id: taskId,
-                contextId,
-                history: [params.message as Message],
-                status: { state: 'completed' },
-                kind: 'task'
-            };
-
-            // Verify push notifications were sent
-            assert.lengthOf(receivedNotifications, 3, 'Should send notifications for submitted, working, and completed states');
-            
-            // Verify all three states are present (order may vary)
-            const states = receivedNotifications.map(n => n.body.status.state);
-            assert.include(states, 'submitted', 'Should include submitted state');
-            assert.include(states, 'working', 'Should include working state');
-            assert.include(states, 'completed', 'Should include completed state');
-            
-            // Verify first notification has correct format
-            const firstNotification = receivedNotifications[0];
-            assert.equal(firstNotification.method, 'POST');
-            assert.equal(firstNotification.url, '/notify');
-            assert.equal(firstNotification.headers['content-type'], 'application/json');
-            assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
-            assert.deepEqual(firstNotification.body, {
-                ...expectedTaskResult,
-                status: { state: 'submitted' }
-            });
-
-            const secondNotification = receivedNotifications[1];
-            assert.deepEqual(secondNotification.body, {
-                ...expectedTaskResult,
-                status: { state: 'working' }
-            });
-
-            const thirdNotification = receivedNotifications[2];
-            assert.deepEqual(thirdNotification.body, {
-                ...expectedTaskResult,
-                status: { state: 'completed' }
-            });
-        });
+        }
 
         it('should handle multiple push notification endpoints for the same task', async () => {
             const pushConfig1: PushNotificationConfig = {
@@ -208,7 +210,7 @@ describe('Push Notification Integration Tests', () => {
                 url: `${testServerUrl}/notify`,
                 token: 'token-1'
             };
-            
+
             const pushConfig2: PushNotificationConfig = {
                 id: 'config-2',
                 url: `${testServerUrl}/notify/second`,
@@ -247,24 +249,24 @@ describe('Push Notification Integration Tests', () => {
             mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
                 const taskId = ctx.taskId;
                 const contextId = ctx.contextId;
-                
+
                 // Publish working status
-                bus.publish({ 
-                    id: taskId, 
-                    contextId, 
-                    status: { state: "working" }, 
-                    kind: 'task' 
+                bus.publish({
+                    id: taskId,
+                    contextId,
+                    status: { state: "working" },
+                    kind: 'task'
                 });
-                
+
                 // Publish completion directly
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "completed" }, 
-                    final: true 
+                bus.publish({
+                    taskId,
+                    contextId,
+                    kind: 'status-update',
+                    status: { state: "completed" },
+                    final: true
                 });
-                
+
                 bus.finished();
             });
 
@@ -330,7 +332,7 @@ describe('Push Notification Integration Tests', () => {
 
             // Verify the task payload
             assert.deepEqual(task, expectedTaskResult);
-            
+
             // Verify the error endpoint was hit
             const errorNotifications = receivedNotifications.filter(n => n.url === '/notify/error');
             assert.lengthOf(errorNotifications, 3, 'Should have attempted to send notifications to error endpoint');
@@ -356,22 +358,22 @@ describe('Push Notification Integration Tests', () => {
             mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
                 const taskId = ctx.taskId;
                 const contextId = ctx.contextId;
-                
-                bus.publish({ 
-                    id: taskId, 
-                    contextId, 
-                    status: { state: "submitted" }, 
-                    kind: 'task' 
+
+                bus.publish({
+                    id: taskId,
+                    contextId,
+                    status: { state: "submitted" },
+                    kind: 'task'
                 });
-                
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "completed" }, 
-                    final: true 
+
+                bus.publish({
+                    taskId,
+                    contextId,
+                    kind: 'status-update',
+                    status: { state: "completed" },
+                    final: true
                 });
-                
+
                 bus.finished();
             });
 
@@ -382,11 +384,11 @@ describe('Push Notification Integration Tests', () => {
 
             // Verify default header name is used
             assert.lengthOf(receivedNotifications, 2, 'Should send notifications for submitted and completed states');
-            
+
             receivedNotifications.forEach(notification => {
-                assert.equal(notification.headers['x-a2a-notification-token'], 'default-token', 
+                assert.equal(notification.headers['x-a2a-notification-token'], 'default-token',
                     'Should use default header name X-A2A-Notification-Token');
-                assert.equal(notification.headers['content-type'], 'application/json', 
+                assert.equal(notification.headers['content-type'], 'application/json',
                     'Should include content-type header');
             });
         });
@@ -394,10 +396,10 @@ describe('Push Notification Integration Tests', () => {
         it('should use custom header name when tokenHeaderName is specified', async () => {
             // Create a new handler with custom header name
             const customPushNotificationSender = new DefaultPushNotificationSender(
-                pushNotificationStore, 
+                pushNotificationStore,
                 { tokenHeaderName: 'X-Custom-Auth-Token' }
             );
-            
+
             const customHandler = new DefaultRequestHandler(
                 testAgentCard,
                 taskStore,
@@ -424,22 +426,22 @@ describe('Push Notification Integration Tests', () => {
             mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
                 const taskId = ctx.taskId;
                 const contextId = ctx.contextId;
-                
-                bus.publish({ 
-                    id: taskId, 
-                    contextId, 
-                    status: { state: "submitted" }, 
-                    kind: 'task' 
+
+                bus.publish({
+                    id: taskId,
+                    contextId,
+                    status: { state: "submitted" },
+                    kind: 'task'
                 });
-                
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "completed" }, 
-                    final: true 
+
+                bus.publish({
+                    taskId,
+                    contextId,
+                    kind: 'status-update',
+                    status: { state: "completed" },
+                    final: true
                 });
-                
+
                 bus.finished();
             });
 
@@ -450,13 +452,13 @@ describe('Push Notification Integration Tests', () => {
 
             // Verify custom header name is used
             assert.lengthOf(receivedNotifications, 2, 'Should send notifications for submitted and completed states');
-            
+
             receivedNotifications.forEach(notification => {
-                assert.equal(notification.headers['x-custom-auth-token'], 'custom-token', 
+                assert.equal(notification.headers['x-custom-auth-token'], 'custom-token',
                     'Should use custom header name X-Custom-Auth-Token');
-                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                assert.isUndefined(notification.headers['x-a2a-notification-token'],
                     'Should not use default header name');
-                assert.equal(notification.headers['content-type'], 'application/json', 
+                assert.equal(notification.headers['content-type'], 'application/json',
                     'Should include content-type header');
             });
         });
@@ -479,22 +481,22 @@ describe('Push Notification Integration Tests', () => {
             mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
                 const taskId = ctx.taskId;
                 const contextId = ctx.contextId;
-                
-                bus.publish({ 
-                    id: taskId, 
-                    contextId, 
-                    status: { state: "submitted" }, 
-                    kind: 'task' 
+
+                bus.publish({
+                    id: taskId,
+                    contextId,
+                    status: { state: "submitted" },
+                    kind: 'task'
                 });
-                
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "completed" }, 
-                    final: true 
+
+                bus.publish({
+                    taskId,
+                    contextId,
+                    kind: 'status-update',
+                    status: { state: "completed" },
+                    final: true
                 });
-                
+
                 bus.finished();
             });
 
@@ -505,11 +507,11 @@ describe('Push Notification Integration Tests', () => {
 
             // Verify no token header is sent
             assert.lengthOf(receivedNotifications, 2, 'Should send notifications for submitted and completed states');
-            
+
             receivedNotifications.forEach(notification => {
-                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                assert.isUndefined(notification.headers['x-a2a-notification-token'],
                     'Should not include token header when token is not provided');
-                assert.equal(notification.headers['content-type'], 'application/json', 
+                assert.equal(notification.headers['content-type'], 'application/json',
                     'Should include content-type header');
             });
         });
@@ -517,10 +519,10 @@ describe('Push Notification Integration Tests', () => {
         it('should handle multiple push configs with different header configurations', async () => {
             // Create a handler with custom header name
             const customPushNotificationSender = new DefaultPushNotificationSender(
-                pushNotificationStore, 
+                pushNotificationStore,
                 { tokenHeaderName: 'X-Custom-Token' }
             );
-            
+
             const customHandler = new DefaultRequestHandler(
                 testAgentCard,
                 taskStore,
@@ -573,15 +575,15 @@ describe('Push Notification Integration Tests', () => {
             mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
                 const taskId = ctx.taskId;
                 const contextId = ctx.contextId;
-                
-                bus.publish({ 
-                    taskId, 
-                    contextId, 
-                    kind: 'status-update', 
-                    status: { state: "completed" }, 
-                    final: true 
+
+                bus.publish({
+                    taskId,
+                    contextId,
+                    kind: 'status-update',
+                    status: { state: "completed" },
+                    final: true
                 });
-                
+
                 bus.finished();
             });
 
@@ -599,23 +601,23 @@ describe('Push Notification Integration Tests', () => {
 
             // Check headers for config with token
             config1Notifications.forEach(notification => {
-                assert.equal(notification.headers['x-custom-token'], 'token-1', 
+                assert.equal(notification.headers['x-custom-token'], 'token-1',
                     'Should use custom header name for config with token');
-                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                assert.isUndefined(notification.headers['x-a2a-notification-token'],
                     'Should not use default header name');
             });
 
             // Check headers for config without token
             config2Notifications.forEach(notification => {
-                assert.isUndefined(notification.headers['x-custom-token'], 
+                assert.isUndefined(notification.headers['x-custom-token'],
                     'Should not include token header for config without token');
-                assert.isUndefined(notification.headers['x-a2a-notification-token'], 
+                assert.isUndefined(notification.headers['x-a2a-notification-token'],
                     'Should not include default token header');
             });
 
             // Both should have content-type
             receivedNotifications.forEach(notification => {
-                assert.equal(notification.headers['content-type'], 'application/json', 
+                assert.equal(notification.headers['content-type'], 'application/json',
                     'Should include content-type header');
             });
         });
