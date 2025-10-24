@@ -30,9 +30,9 @@ class SampleAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
 
   public cancelTask = async (
-        taskId: string,
-        eventBus: ExecutionEventBus,
-    ): Promise<void> => {};
+    taskId: string,
+    eventBus: ExecutionEventBus,
+  ): Promise<void> => { };
 
   async execute(
     requestContext: RequestContext,
@@ -87,80 +87,52 @@ class SampleAgentExecutor implements AgentExecutor {
     eventBus.publish(workingStatusUpdate);
 
     // 3. Retrieve and update context history
-    try {
-      const agentReplyText = "The sample agent correctly processed your request.";
-      console.info(`[MovieAgentExecutor] Prompt response: ${agentReplyText}`);
-      let finalA2AState: TaskState = "completed";
+    const agentReplyText = "The sample agent correctly processed your request.";
+    console.info(`[MovieAgentExecutor] Prompt response: ${agentReplyText}`);
+    let finalA2AState: TaskState = "completed";
 
-      // 5. Publish final task status update
-      const agentMessage: Message = {
-        kind: 'message',
-        role: 'agent',
-        messageId: uuidv4(),
-        parts: [{ kind: 'text', text: agentReplyText || "Completed." }], // Ensure some text
-        taskId: taskId,
-        contextId: contextId,
-      };
-      historyForGenkit.push(agentMessage);
-      contexts.set(contextId, historyForGenkit)
+    // 5. Publish final task status update
+    const agentMessage: Message = {
+      kind: 'message',
+      role: 'agent',
+      messageId: uuidv4(),
+      parts: [{ kind: 'text', text: agentReplyText }],
+      taskId: taskId,
+      contextId: contextId,
+    };
 
-      const finalUpdate: TaskStatusUpdateEvent = {
-        kind: 'status-update',
-        taskId: taskId,
-        contextId: contextId,
-        status: {
-          state: finalA2AState,
-          message: agentMessage,
-          timestamp: new Date().toISOString(),
-        },
-        final: true,
-      };
-      eventBus.publish(finalUpdate);
+    const finalUpdate: TaskStatusUpdateEvent = {
+      kind: 'status-update',
+      taskId: taskId,
+      contextId: contextId,
+      status: {
+        state: finalA2AState,
+        message: agentMessage,
+        timestamp: new Date().toISOString(),
+      },
+      final: true,
+    };
+    eventBus.publish(finalUpdate);
 
-      console.log(
-        `[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`
-      );
-
-    } catch (error: any) {
-      console.error(
-        `[MovieAgentExecutor] Error processing task ${taskId}:`,
-        error
-      );
-      const errorUpdate: TaskStatusUpdateEvent = {
-        kind: 'status-update',
-        taskId: taskId,
-        contextId: contextId,
-        status: {
-          state: 'failed',
-          message: {
-            kind: 'message',
-            role: 'agent',
-            messageId: uuidv4(),
-            parts: [{ kind: 'text', text: `Agent error: ${error.message}` }],
-            taskId: taskId,
-            contextId: contextId,
-          },
-          timestamp: new Date().toISOString(),
-        },
-        final: true,
-      };
-      eventBus.publish(errorUpdate);
-    }
+    console.log(
+      `[SampleAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`
+    );
   }
 }
 
 // --- Server Setup ---
 
-const movieAgentCard: AgentCard = {
-  name: 'Movie Agent',
+const sampleAgentCard: AgentCard = {
+  name: 'Sample Agent',
   description: 'An agent that can answer questions about movies and actors using TMDB.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
-  url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp 
+  url: 'http://localhost:41242/', // Example: if baseUrl in A2AExpressApp 
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples' // Added provider URL
   },
   version: '0.0.2', // Incremented version
+  protocolVersion: '0.0.0',
   capabilities: {
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
@@ -173,17 +145,12 @@ const movieAgentCard: AgentCard = {
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [
     {
-      id: 'general_movie_chat',
-      name: 'General Movie Chat',
+      id: 'sample_agent',
+      name: 'Sample Agent',
       description: 'Answer general questions or chat about movies, actors, directors.',
-      tags: ['movies', 'actors', 'directors'],
+      tags: ['sample'],
       examples: [
-        'Tell me about the plot of Inception.',
-        'Recommend a good sci-fi movie.',
-        'Who directed The Matrix?',
-        'What other movies has Scarlett Johansson been in?',
-        'Find action movies starring Keanu Reeves',
-        'Which came out first, Jurassic Park or Terminator 2?',
+        'What can you do?',
       ],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'] // Explicitly defining for skill
@@ -197,11 +164,11 @@ async function main() {
   const taskStore: TaskStore = new InMemoryTaskStore();
 
   // 2. Create AgentExecutor
-  const agentExecutor: AgentExecutor = new MovieAgentExecutor();
+  const agentExecutor: AgentExecutor = new SampleAgentExecutor();
 
   // 3. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(
-    movieAgentCard,
+    sampleAgentCard,
     taskStore,
     agentExecutor
   );
@@ -211,11 +178,11 @@ async function main() {
   const expressApp = appBuilder.setupRoutes(express());
 
   // 5. Start the server
-  const PORT = process.env.PORT || 41241;
+  const PORT = process.env.PORT || 41242;
   expressApp.listen(PORT, () => {
-    console.log(`[MovieAgent] Server using new framework started on http://localhost:${PORT}`);
-    console.log(`[MovieAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
-    console.log('[MovieAgent] Press Ctrl+C to stop the server');
+    console.log(`[SampleAgent] Server using new framework started on http://localhost:${PORT}`);
+    console.log(`[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log('[SampleAgent] Press Ctrl+C to stop the server');
   });
 }
 
