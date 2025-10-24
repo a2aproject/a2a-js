@@ -178,11 +178,9 @@ describe('Push Notification Integration Tests', () => {
             // Verify push notifications were sent
             assert.lengthOf(receivedNotifications, 3, 'Should send notifications for submitted, working, and completed states');
 
-            // Verify all three states are present (order may vary)
+            // Verify the notifications were received in the correct order.
             const states = receivedNotifications.map(n => n.body.status.state);
-            assert.include(states, 'submitted', 'Should include submitted state');
-            assert.include(states, 'working', 'Should include working state');
-            assert.include(states, 'completed', 'Should include completed state');
+            assert.deepEqual(states, ['submitted', 'working', 'completed'], 'Notifications should be in submitted, working, completed order');
 
             // Verify first notification has correct format
             const firstNotification = receivedNotifications[0];
