@@ -34,7 +34,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             return;
         }
 
-        // Ensures that notification are sent sequentially.
+        // Ensures that notification are delivered in the same order they are sent.
         this.notificationChain = this.notificationChain.then(async () => {
             const dispatches = pushConfigs.map(pushConfig => this._dispatchNotification(task, pushConfig).catch((error) => { 
                 console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error);
