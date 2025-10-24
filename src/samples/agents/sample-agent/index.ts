@@ -6,7 +6,6 @@ import {
   Task,
   TaskState,
   TaskStatusUpdateEvent,
-  TextPart,
   Message
 } from "../../../index.js";
 import {
@@ -18,10 +17,6 @@ import {
   DefaultRequestHandler
 } from "../../../server/index.js";
 import { A2AExpressApp } from "../../../server/express/index.js";
-import { MessageData } from "genkit";
-
-// Simple store for contexts
-const contexts: Map<string, Message[]> = new Map();
 
 /**
  * SampleAgentExecutor implements the agent's core logic.
@@ -88,7 +83,7 @@ class SampleAgentExecutor implements AgentExecutor {
 
     // 3. Retrieve and update context history
     const agentReplyText = "The sample agent correctly processed your request.";
-    console.info(`[MovieAgentExecutor] Prompt response: ${agentReplyText}`);
+    console.info(`[SampleAgentExecutor] Prompt response: ${agentReplyText}`);
     let finalA2AState: TaskState = "completed";
 
     // 5. Publish final task status update
@@ -124,7 +119,7 @@ class SampleAgentExecutor implements AgentExecutor {
 
 const sampleAgentCard: AgentCard = {
   name: 'Sample Agent',
-  description: 'An agent that can answer questions about movies and actors using TMDB.',
+  description: 'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41242/', // Example: if baseUrl in A2AExpressApp 
   provider: {
@@ -147,7 +142,7 @@ const sampleAgentCard: AgentCard = {
     {
       id: 'sample_agent',
       name: 'Sample Agent',
-      description: 'Answer general questions or chat about movies, actors, directors.',
+      description: 'Simulate the general flow of a streaming agent.',
       tags: ['sample'],
       examples: [
         'What can you do?',
