@@ -25,6 +25,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     private readonly pushNotificationStore ?: PushNotificationStore;
     private readonly pushNotificationSender ?: PushNotificationSender;
 
+
     constructor(
         agentCard: AgentCard,
         taskStore: TaskStore,
@@ -546,7 +547,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             console.error(`Task ${taskId} not found.`);
             return;
         }
-
+        
         // Send push notification in the background.
         this.pushNotificationSender?.send(task);
     }
