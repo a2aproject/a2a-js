@@ -16,6 +16,7 @@ export interface DefaultPushNotificationSenderOptions {
 export class DefaultPushNotificationSender implements PushNotificationSender {
 
     private readonly pushNotificationStore: PushNotificationStore;
+    private notificationChain: Promise<unknown> = Promise.resolve();
     private readonly options: Required<DefaultPushNotificationSenderOptions>;
     
     constructor(pushNotificationStore: PushNotificationStore, options: DefaultPushNotificationSenderOptions = {}) {
@@ -33,7 +34,11 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             return;
         }
 
-        await Promise.all(pushConfigs.map(pushConfig => this._dispatchNotification(task, pushConfig)));
+        // Ensures that notification are sent sequentially.
+        this.notificationChain = this.notificationChain.then(async () => {
+            const dispatches = pushConfigs.map(pushConfig => this._dispatchNotification(task, pushConfig));
+            await Promise.all(dispatches);
+        });
     }
 
     private async _dispatchNotification(

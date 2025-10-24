@@ -24,8 +24,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     private readonly eventBusManager: ExecutionEventBusManager;
     private readonly pushNotificationStore ?: PushNotificationStore;
     private readonly pushNotificationSender ?: PushNotificationSender;
-    private readonly notificationSendPromises = new Map<string, Promise<unknown>>();
-
 
     constructor(
         agentCard: AgentCard,
@@ -549,15 +547,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             return;
         }
 
-        // To avoid race conditions, chain notification sends per task.
-        const previousPromise = this.notificationSendPromises.get(taskId) || Promise.resolve();
-        const newPromise = (async () => {
-            // Wait for the previous operation to complete.
-            await previousPromise;
-            // Perform the new operation.
-            await this.pushNotificationSender!.send(task);
-        })();
-
-        this.notificationSendPromises.set(taskId, newPromise);
+        // Send push notification in the background.
+        this.pushNotificationSender?.send(task);
     }
 }
