@@ -36,7 +36,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
         // Ensures that notification are sent sequentially.
         this.notificationChain = this.notificationChain.then(async () => {
-            const dispatches = pushConfigs.map(pushConfig => this._dispatchNotification(task, pushConfig));
+            const dispatches = pushConfigs.map(pushConfig => this._dispatchNotification(task, pushConfig).catch((error) => { 
+                console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error);
+             }));
             await Promise.all(dispatches);
         });
     }
@@ -71,9 +73,6 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             }
 
             console.info(`Push notification sent for task_id=${task.id} to URL: ${url}`);
-        } catch (error) {
-            // Ignore errors
-            console.error(`Error sending push notification for task_id=${task.id} to URL: ${url}. Error:`, error);
         } finally {
             clearTimeout(timeoutId);
         }
