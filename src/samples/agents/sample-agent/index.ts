@@ -71,7 +71,7 @@ class SampleAgentExecutor implements AgentExecutor {
           kind: 'message',
           role: 'agent',
           messageId: uuidv4(),
-          parts: [{ kind: 'text', text: 'Processing your question, hang tight!' }],
+          parts: [{ kind: 'text', text: 'Processing your question' }],
           taskId: taskId,
           contextId: contextId,
         },
@@ -81,12 +81,10 @@ class SampleAgentExecutor implements AgentExecutor {
     };
     eventBus.publish(workingStatusUpdate);
 
-    // 3. Retrieve and update context history
+    // 3. Publish final task status update
     const agentReplyText = "The sample agent correctly processed your request.";
     console.info(`[SampleAgentExecutor] Prompt response: ${agentReplyText}`);
-    let finalA2AState: TaskState = "completed";
-
-    // 5. Publish final task status update
+ 
     const agentMessage: Message = {
       kind: 'message',
       role: 'agent',
@@ -101,7 +99,7 @@ class SampleAgentExecutor implements AgentExecutor {
       taskId: taskId,
       contextId: contextId,
       status: {
-        state: finalA2AState,
+        state: 'completed',
         message: agentMessage,
         timestamp: new Date().toISOString(),
       },
@@ -110,7 +108,7 @@ class SampleAgentExecutor implements AgentExecutor {
     eventBus.publish(finalUpdate);
 
     console.log(
-      `[SampleAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`
+      `[SampleAgentExecutor] Task ${taskId} finished with state: completed`
     );
   }
 }
