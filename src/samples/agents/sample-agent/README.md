@@ -1,4 +1,4 @@
-# Movie Info Agent
+# Sample Agent
 
 This agent is a sample to emulate the task flow in a streaming scenario. To run:
 
