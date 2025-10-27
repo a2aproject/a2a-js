@@ -1,6 +1,6 @@
 # JavaScript Samples
 
-The provided samples are used to provide samples on A2A-js usage.
+The provided samples demonstrate how to use A2A-js.
 
 ## Agents
 
