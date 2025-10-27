@@ -9,7 +9,7 @@ The provided samples are used to provide samples on A2A-js usage.
 
 ## Testing the Agents
 
-First, follow the instructions in the agent's README file, to check details on specific agents. 
+First, follow the instructions in the agent's README file, to check details on specific agents (you may need to manually change the `serverUrl` address used in the `cli.ts`, based on the agent you are testing).
 Example:
 
 1. Navigate to the `a2a-js` directory:
