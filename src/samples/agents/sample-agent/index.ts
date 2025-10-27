@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 import {
   AgentCard,
   Task,
-  TaskState,
   TaskStatusUpdateEvent,
   Message
 } from "../../../index.js";
@@ -22,7 +21,6 @@ import { A2AExpressApp } from "../../../server/express/index.js";
  * SampleAgentExecutor implements the agent's core logic.
  */
 class SampleAgentExecutor implements AgentExecutor {
-  private cancelledTasks = new Set<string>();
 
   public cancelTask = async (
     taskId: string,
