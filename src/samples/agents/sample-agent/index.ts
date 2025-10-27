@@ -116,7 +116,7 @@ class SampleAgentExecutor implements AgentExecutor {
   parseInputMessage(message: Message): string {
     /** Process the user query and return a response. */
     const textPart = message.parts.find(part => part.kind === 'text');
-    const query = textPart && 'text' in textPart ? textPart.text.trim() : '';
+    const query = textPart ? textPart.text.trim() : '';
 
     if (!query) {
       return "Hello! Please provide a message for me to respond to.";
