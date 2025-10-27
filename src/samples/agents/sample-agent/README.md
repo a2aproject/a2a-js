@@ -6,4 +6,4 @@ This agent is a sample to emulate the task flow in a streaming scenario. To run:
 npm run agents:sample-agent
 ```
 
-The agent will start on `http://localhost:41242`.
+The agent will start on `http://localhost:41241`.

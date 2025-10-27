@@ -82,7 +82,7 @@ class SampleAgentExecutor implements AgentExecutor {
     eventBus.publish(workingStatusUpdate);
 
     // 3. Publish final task status update
-    const agentReplyText = "The sample agent correctly processed your request.";
+    const agentReplyText = this.parseInputMessage(userMessage);
     console.info(`[SampleAgentExecutor] Prompt response: ${agentReplyText}`);
  
     const agentMessage: Message = {
@@ -105,11 +105,34 @@ class SampleAgentExecutor implements AgentExecutor {
       },
       final: true,
     };
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing delay
     eventBus.publish(finalUpdate);
 
     console.log(
       `[SampleAgentExecutor] Task ${taskId} finished with state: completed`
     );
+  }
+
+  parseInputMessage(message: Message): string {
+    /** Process the user query and return a response. */
+    const textPart = message.parts.find(part => part.kind === 'text');
+    const query = textPart && 'text' in textPart ? textPart.text.trim() : '';
+
+    if (!query) {
+      return "Hello! Please provide a message for me to respond to.";
+    }
+
+    // Simple responses based on input
+    const queryLower = query.toLowerCase();
+    if (queryLower.includes("hello") || queryLower.includes("hi")) {
+      return "Hello World! Nice to meet you!";
+    } else if (queryLower.includes("how are you")) {
+      return "I'm doing great! Thanks for asking. How can I help you today?";
+    } else if (queryLower.includes("goodbye") || queryLower.includes("bye")) {
+      return "Goodbye! Have a wonderful day!";
+    } else {
+      return `Hello World! You said: '${query}'. Thanks for your message!`;
+    }
   }
 }
 
@@ -119,21 +142,18 @@ const sampleAgentCard: AgentCard = {
   name: 'Sample Agent',
   description: 'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
-  url: 'http://localhost:41242/', // Example: if baseUrl in A2AExpressApp 
+  url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples' // Added provider URL
   },
-  version: '0.0.2', // Incremented version
-  protocolVersion: '0.0.0',
+  version: '1.0.0', // Incremented version
+  protocolVersion: '0.3.0',
   capabilities: {
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
     stateTransitionHistory: true, // Agent uses history
   },
-  // authentication: null, // Property 'authentication' does not exist on type 'AgentCard'.
-  securitySchemes: undefined, // Or define actual security schemes if any
-  security: undefined,
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [
@@ -142,9 +162,7 @@ const sampleAgentCard: AgentCard = {
       name: 'Sample Agent',
       description: 'Simulate the general flow of a streaming agent.',
       tags: ['sample'],
-      examples: [
-        'What can you do?',
-      ],
+      examples: ["hi", "hello world", "how are you", "goodbye"],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'] // Explicitly defining for skill
     },
@@ -171,7 +189,7 @@ async function main() {
   const expressApp = appBuilder.setupRoutes(express());
 
   // 5. Start the server
-  const PORT = process.env.PORT || 41242;
+  const PORT = process.env.PORT || 41241;
   expressApp.listen(PORT, () => {
     console.log(`[SampleAgent] Server using new framework started on http://localhost:${PORT}`);
     console.log(`[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
