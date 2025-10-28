@@ -33,15 +33,16 @@ export class A2AExpressApp {
         router.use(express.json(), ...(middlewares ?? []));
 
         router.use((err, req, res, next) => {
-            // Check if it's the specific JSON parsing error
+            // This is a bit hacky, but it's the recommended way to catch JSON parsing errors from the `express.json()` middleware.
+            // Express throws a generic SyntaxError and adds a `body` property to it, so we check for both.
             if (err instanceof SyntaxError && 'body' in err) {
                 const a2aError = A2AError.parseError('Failed to parse JSON request.');
                 const errorResponse: JSONRPCErrorResponse = {
                                 jsonrpc: '2.0',
-                                id: req.body?.id || null, // Use original request ID if available
+                                id: null,
                                 error: a2aError.toJSONRPCError(),
                             };
-                return res.status(500).json(errorResponse);
+                return res.status(400).json(errorResponse);
             }
             next(err);
         });

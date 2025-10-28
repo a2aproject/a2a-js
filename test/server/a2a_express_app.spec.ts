@@ -24,6 +24,9 @@ describe('A2AExpressApp', () => {
         id,
         params,
     });
+
+    // Helper function to create a malformed JSON-RPC request string
+    const createMalformedRpcRequest = () => '{"jsonrpc": "2.0", "method": "message/send", "id": "1"'; // Missing closing brace
     
     const testAgentCard: AgentCard = {
         protocolVersion: '0.3.0',
@@ -335,11 +338,11 @@ describe('A2AExpressApp', () => {
             const jsonApp = express();
             app.setupRoutes(jsonApp);
 
-            const requestBody = { test: 'data' };
+            const requestBody = createRpcRequest('json-test', 'message/send', { test: 'data' });
             (mockJsonRpcTransportHandler.handle as SinonStub).resolves({ 
                 jsonrpc: '2.0', 
                 id: 'json-test', 
-                result: requestBody 
+                result: { success: true }
             });
 
             await request(jsonApp)
@@ -347,7 +350,29 @@ describe('A2AExpressApp', () => {
                 .send(requestBody)
                 .expect(200);
 
-            assert.isTrue((mockJsonRpcTransportHandler.handle as SinonStub).calledOnce);
+            assert.isTrue((mockJsonRpcTransportHandler.handle as SinonStub).calledOnceWith(requestBody));
+        });
+
+        it('should handle malformed json request', async () => {
+            const jsonApp = express();
+            app.setupRoutes(jsonApp);
+
+            const requestBody = createMalformedRpcRequest();
+            const response = await request(jsonApp)
+                .post('/')
+                .set('Content-Type', 'application/json') // Set header to trigger json parser
+                .send(requestBody)
+                .expect(400);
+
+            const expectedErrorResponse: JSONRPCErrorResponse = {
+                jsonrpc: '2.0',
+                id: null,
+                error: {
+                    code: -32700,
+                    message: 'Failed to parse JSON request.'
+                }
+            };
+            assert.deepEqual(response.body, expectedErrorResponse);
         });
     });
 });
