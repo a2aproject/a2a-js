@@ -746,3 +746,534 @@ describe('Push Notification Config Operations', () => {
   });
 });
 
+describe('A2AClient HTTP+REST Transport Tests', () => {
+  let client: A2AClient;
+  let mockFetch: sinon.SinonStub;
+  let originalConsoleError: typeof console.error;
+  const agentBaseUrl = 'https://test-agent.example.com';
+
+  beforeEach(async () => {
+    originalConsoleError = console.error;
+    console.error = () => {};
+    mockFetch = sinon.stub();
+  });
+
+  afterEach(() => {
+    console.error = originalConsoleError;
+    sinon.restore();
+  });
+
+  describe('Transport Detection', () => {
+    it('should detect HTTP+JSON from preferredTransport', async () => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: 'HTTP+JSON' as const
+      };
+
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+      
+      // Verify it uses REST endpoint by mocking a REST request
+      mockFetch.resolves(new Response(JSON.stringify({ id: 'task-1', kind: 'task' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'test' }],
+        kind: 'message' as const
+      };
+
+      await client.sendMessage({ message });
+
+      // Should call REST endpoint, not JSON-RPC
+      expect(mockFetch.calledOnce).to.be.true;
+      const callUrl = mockFetch.firstCall.args[0];
+      expect(callUrl).to.include('/api/v1/message:send');
+    });
+
+    it('should detect HTTP+JSON from additionalInterfaces', async () => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: undefined,
+        additionalInterfaces: [
+          { transport: 'HTTP+JSON' as const, url: agentBaseUrl }
+        ]
+      };
+
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+      
+      mockFetch.resolves(new Response(JSON.stringify({ id: 'task-1', kind: 'task' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'test' }],
+        kind: 'message' as const
+      };
+
+      await client.sendMessage({ message });
+
+      const callUrl = mockFetch.firstCall.args[0];
+      expect(callUrl).to.include('/api/v1/message:send');
+    });
+
+    it('should default to JSONRPC when transport not specified', async () => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: undefined,
+        additionalInterfaces: undefined
+      };
+
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+      
+      mockFetch.resolves(new Response(JSON.stringify({
+        jsonrpc: '2.0',
+        id: '1',
+        result: { id: 'task-1', kind: 'task' }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'test' }],
+        kind: 'message' as const
+      };
+
+      await client.sendMessage({ message });
+
+      // Should use JSON-RPC format
+      const callInit = mockFetch.firstCall.args[1];
+      const body = JSON.parse(callInit.body);
+      expect(body).to.have.property('jsonrpc', '2.0');
+      expect(body).to.have.property('method', 'message/send');
+    });
+  });
+
+  describe('HTTP+REST Requests', () => {
+    beforeEach(() => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: 'HTTP+JSON' as const
+      };
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+    });
+
+    it('should send message via POST /v1/message:send', async () => {
+      const mockTask = { id: 'task-1', kind: 'task' as const };
+      mockFetch.resolves(new Response(JSON.stringify(mockTask), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'Hello' }],
+        kind: 'message' as const
+      };
+
+      const result = await client.sendMessage({ message });
+
+      expect(mockFetch.calledOnce).to.be.true;
+      const [url, init] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/message:send`);
+      expect(init.method).to.equal('POST');
+      expect(JSON.parse(init.body)).to.deep.include({ message });
+    });
+
+    it('should get task with historyLength query parameter', async () => {
+      const mockTask = { id: 'task-123', kind: 'task' as const, history: [] };
+      mockFetch.resolves(new Response(JSON.stringify(mockTask), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTask({ id: 'task-123', historyLength: 5 });
+
+      expect(mockFetch.calledOnce).to.be.true;
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.include('/api/v1/tasks/task-123');
+      expect(url).to.include('historyLength=5');
+    });
+
+    it('should get task without historyLength query parameter', async () => {
+      const mockTask = { id: 'task-123', kind: 'task' as const, history: [] };
+      mockFetch.resolves(new Response(JSON.stringify(mockTask), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTask({ id: 'task-123' });
+
+      expect(mockFetch.calledOnce).to.be.true;
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123`);
+      expect(url).to.not.include('historyLength');
+    });
+
+    it('should cancel task via POST /v1/tasks/:taskId:cancel', async () => {
+      const mockTask = { id: 'task-123', kind: 'task' as const, status: { state: 'cancelled' } };
+      mockFetch.resolves(new Response(JSON.stringify(mockTask), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.cancelTask({ id: 'task-123' });
+
+      expect(mockFetch.calledOnce).to.be.true;
+      const [url, init] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123:cancel`);
+      expect(init.method).to.equal('POST');
+    });
+
+    it('should handle 204 No Content responses', async () => {
+      mockFetch.resolves(new Response(null, { status: 204 }));
+
+      const result = await client.deleteTaskPushNotificationConfig({
+        id: 'task-123',
+        pushNotificationConfigId: 'config-1'
+      });
+
+      expect(result).to.be.null;
+    });
+
+    it('should handle HTTP error responses', async () => {
+      const errorBody = {
+        code: -32602,
+        message: 'Invalid parameters'
+      };
+      mockFetch.resolves(new Response(JSON.stringify(errorBody), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      try {
+        await client.sendMessage({
+          message: {
+            messageId: 'msg-1',
+            role: 'user',
+            parts: [{ kind: 'text', text: 'test' }],
+            kind: 'message'
+          }
+        });
+        expect.fail('Should have thrown an error');
+      } catch (error: any) {
+        expect(error.message).to.include('Invalid parameters');
+      }
+    });
+  });
+
+  describe('Push Notification Config Routes', () => {
+    beforeEach(() => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: 'HTTP+JSON' as const
+      };
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+    });
+
+    it('should create config via POST /v1/tasks/:taskId/pushNotificationConfigs', async () => {
+      const mockConfig = { taskId: 'task-123', pushNotificationConfig: { id: 'config-1' } };
+      mockFetch.resolves(new Response(JSON.stringify(mockConfig), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.setTaskPushNotificationConfig({
+        taskId: 'task-123',
+        pushNotificationConfig: {
+          url: 'http://example.com/notify',
+          token: 'token123'
+        }
+      });
+
+      const [url, init] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123/pushNotificationConfigs`);
+      expect(init.method).to.equal('POST');
+    });
+
+    it('should list configs via GET /v1/tasks/:taskId/pushNotificationConfigs', async () => {
+      const mockConfigs = [{ taskId: 'task-123', pushNotificationConfig: { id: 'config-1' } }];
+      mockFetch.resolves(new Response(JSON.stringify(mockConfigs), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.listTaskPushNotificationConfig({ id: 'task-123' });
+
+      const [url, init] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123/pushNotificationConfigs`);
+      expect(init.method).to.equal('GET');
+    });
+
+    it('should get specific config via GET with configId', async () => {
+      const mockConfig = { taskId: 'task-123', pushNotificationConfig: { id: 'config-1' } };
+      mockFetch.resolves(new Response(JSON.stringify(mockConfig), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTaskPushNotificationConfig({
+        id: 'task-123',
+        pushNotificationConfigId: 'config-1'
+      });
+
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123/pushNotificationConfigs/config-1`);
+    });
+
+    it('should delete config via DELETE', async () => {
+      mockFetch.resolves(new Response(null, { status: 204 }));
+
+      await client.deleteTaskPushNotificationConfig({
+        id: 'task-123',
+        pushNotificationConfigId: 'config-1'
+      });
+
+      const [url, init] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123/pushNotificationConfigs/config-1`);
+      expect(init.method).to.equal('DELETE');
+    });
+  });
+
+  describe('SSE Streaming (HTTP+REST)', () => {
+    beforeEach(() => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: 'HTTP+JSON' as const
+      };
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+    });
+
+    it('should stream messages via POST /v1/message:stream', async () => {
+      const sseData = `data: ${JSON.stringify({ kind: 'status-update', taskId: 'task-1' })}\n\n`;
+      
+      mockFetch.resolves(new Response(sseData, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' }
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'test' }],
+        kind: 'message' as const
+      };
+
+      const stream = await client.sendMessageStream({ message });
+      const events = [];
+      for await (const event of stream) {
+        events.push(event);
+      }
+
+      expect(events).to.have.lengthOf(1);
+      expect(events[0]).to.have.property('kind', 'status-update');
+    });
+
+    it('should resubscribe to task stream via POST /v1/tasks/:taskId:subscribe', async () => {
+      const sseData = `data: ${JSON.stringify({ kind: 'status-update', taskId: 'task-123' })}\n\n`;
+      
+      mockFetch.resolves(new Response(sseData, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' }
+      }));
+
+      const stream = await client.resubscribeTask({ id: 'task-123' });
+      const events = [];
+      for await (const event of stream) {
+        events.push(event);
+      }
+
+      expect(mockFetch.calledOnce).to.be.true;
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123:subscribe`);
+      expect(events).to.have.lengthOf(1);
+    });
+
+    it('should handle multi-line SSE data', async () => {
+      const event1 = { kind: 'status-update', taskId: 'task-1', status: { state: 'submitted' } };
+      const event2 = { kind: 'status-update', taskId: 'task-1', status: { state: 'completed' } };
+      const sseData = `data: ${JSON.stringify(event1)}\n\ndata: ${JSON.stringify(event2)}\n\n`;
+      
+      mockFetch.resolves(new Response(sseData, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' }
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'test' }],
+        kind: 'message' as const
+      };
+
+      const stream = await client.sendMessageStream({ message });
+      const events = [];
+      for await (const event of stream) {
+        events.push(event);
+      }
+
+      expect(events).to.have.lengthOf(2);
+      expect(events[0].status.state).to.equal('submitted');
+      expect(events[1].status.state).to.equal('completed');
+    });
+
+    it('should handle SSE with event IDs', async () => {
+      const eventData = { kind: 'status-update', taskId: 'task-1' };
+      const sseData = `id: 12345\ndata: ${JSON.stringify(eventData)}\n\n`;
+      
+      mockFetch.resolves(new Response(sseData, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' }
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'test' }],
+        kind: 'message' as const
+      };
+
+      const stream = await client.sendMessageStream({ message });
+      const events = [];
+      for await (const event of stream) {
+        events.push(event);
+      }
+
+      expect(events).to.have.lengthOf(1);
+      expect(events[0]).to.have.property('kind', 'status-update');
+    });
+
+    it('should validate Content-Type for SSE streams', async () => {
+      mockFetch.resolves(new Response('data: test\n\n', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' } // Wrong content type!
+      }));
+
+      const message = {
+        messageId: 'msg-1',
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text: 'test' }],
+        kind: 'message' as const
+      };
+
+      try {
+        const stream = await client.sendMessageStream({ message });
+        for await (const event of stream) {
+          // Should not get here
+        }
+        expect.fail('Should have thrown an error for wrong Content-Type');
+      } catch (error: any) {
+        expect(error.message).to.include('text/event-stream');
+      }
+    });
+  });
+
+  describe('Query Parameter Handling', () => {
+    beforeEach(() => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: 'HTTP+JSON' as const
+      };
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+    });
+
+    it('should properly encode query params in GET requests', async () => {
+      mockFetch.resolves(new Response(JSON.stringify({ id: 'task-1', kind: 'task' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTask({ id: 'task-123', historyLength: 10 });
+
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.include('historyLength=10');
+      expect(url).to.not.include('historyLength=undefined');
+    });
+
+    it('should handle undefined query params', async () => {
+      mockFetch.resolves(new Response(JSON.stringify({ id: 'task-1', kind: 'task' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTask({ id: 'task-123' });
+
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.not.include('historyLength');
+      expect(url).to.not.include('undefined');
+    });
+
+    it('should handle zero as valid query param value', async () => {
+      mockFetch.resolves(new Response(JSON.stringify({ id: 'task-1', kind: 'task' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTask({ id: 'task-123', historyLength: 0 });
+
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.include('historyLength=0');
+    });
+  });
+
+  describe('Path Parameter Substitution', () => {
+    beforeEach(() => {
+      const agentCard = {
+        ...createMockAgentCard(),
+        preferredTransport: 'HTTP+JSON' as const
+      };
+      client = new A2AClient(agentCard, { fetchImpl: mockFetch });
+    });
+
+    it('should substitute taskId path parameter', async () => {
+      mockFetch.resolves(new Response(JSON.stringify({ id: 'task-abc', kind: 'task' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTask({ id: 'task-abc' });
+
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-abc`);
+      expect(url).to.not.include(':taskId');
+    });
+
+    it('should substitute multiple path parameters', async () => {
+      mockFetch.resolves(new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTaskPushNotificationConfig({
+        id: 'task-123',
+        pushNotificationConfigId: 'config-456'
+      });
+
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.equal(`${agentBaseUrl}/api/v1/tasks/task-123/pushNotificationConfigs/config-456`);
+      expect(url).to.not.include(':taskId');
+      expect(url).to.not.include(':configId');
+    });
+
+    it('should handle special characters in path parameters', async () => {
+      mockFetch.resolves(new Response(JSON.stringify({ id: 'task-123-abc', kind: 'task' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+
+      await client.getTask({ id: 'task-123-abc' });
+
+      const [url] = mockFetch.firstCall.args;
+      expect(url).to.include('task-123-abc');
+    });
+  });
+});

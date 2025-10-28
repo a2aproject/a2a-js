@@ -4,7 +4,15 @@ import { A2AError } from "../error.js";
 import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from "../../index.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
+import { createHttpRestRouter } from "./http_rest_routes.js";
 import { AGENT_CARD_PATH } from "../../constants.js";
+
+export interface A2AExpressOptions {
+    baseUrl?: string;
+    middlewares?: Array<RequestHandler | ErrorRequestHandler>;
+    agentCardPath?: string;
+    transport?: "jsonrpc" | "http-rest" | "both";
+}
 
 export class A2AExpressApp {
     private requestHandler: A2ARequestHandler; // Kept for getAgentCard
@@ -17,22 +25,45 @@ export class A2AExpressApp {
 
     /**
      * Adds A2A routes to an existing Express app.
-     * @param app Optional existing Express app.
-     * @param baseUrl The base URL for A2A endpoints (e.g., "/a2a/api").
-     * @param middlewares Optional array of Express middlewares to apply to the A2A routes.
-     * @param agentCardPath Optional custom path for the agent card endpoint (defaults to .well-known/agent-card.json).
+     * Supports both old signature (for backward compatibility) and new options-based signature.
+     * @param app Express app instance.
+     * @param baseUrlOrOptions Base URL string (old signature) or options object (new signature).
+     * @param middlewares Optional middlewares (old signature only).
+     * @param agentCardPath Optional agent card path (old signature only).
      * @returns The Express app with A2A routes.
      */
     public setupRoutes(
         app: Express,
-        baseUrl: string = "",
+        baseUrlOrOptions?: string | A2AExpressOptions,
         middlewares?: Array<RequestHandler | ErrorRequestHandler>,
-        agentCardPath: string = AGENT_CARD_PATH
+        agentCardPath?: string
     ): Express {
-        const router = express.Router();
-        router.use(express.json(), ...(middlewares ?? []));
+        // Handle both old and new signatures
+        let options: A2AExpressOptions;
+        if (typeof baseUrlOrOptions === 'string') {
+            // Old signature: setupRoutes(app, baseUrl, middlewares, agentCardPath)
+            options = {
+                baseUrl: baseUrlOrOptions,
+                middlewares,
+                agentCardPath: agentCardPath || AGENT_CARD_PATH,
+                transport: "both" // Default to both for backward compatibility
+            };
+        } else {
+            // New signature: setupRoutes(app, options)
+            options = {
+                baseUrl: "",
+                agentCardPath: AGENT_CARD_PATH,
+                transport: "both",
+                ...baseUrlOrOptions
+            };
+        }
 
-        router.get(`/${agentCardPath}`, async (req: Request, res: Response) => {
+        const { baseUrl = "", middlewares: mws, agentCardPath: cardPath = AGENT_CARD_PATH, transport = "both" } = options;
+        const router = express.Router();
+        router.use(express.json(), ...(mws ?? []));
+
+        // Agent card route (shared by both transports)
+        router.get(`/${cardPath}`, async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
                 const agentCard = await this.requestHandler.getAgentCard();
@@ -43,7 +74,9 @@ export class A2AExpressApp {
             }
         });
 
-        router.post("/", async (req: Request, res: Response) => {
+        // JSON-RPC routes
+        if (transport === "jsonrpc" || transport === "both") {
+            router.post("/", async (req: Request, res: Response) => {
             try {
                 const rpcResponseOrStream = await this.jsonRpcTransportHandler.handle(req.body);
 
@@ -103,10 +136,16 @@ export class A2AExpressApp {
                     res.end();
                 }
             }
-        });
+            });
+        }
+
+        // HTTP+REST routes
+        if (transport === "http-rest" || transport === "both") {
+            const httpRestRouter = createHttpRestRouter(this.requestHandler);
+            router.use(httpRestRouter);
+        }
 
         app.use(baseUrl, router);
-        // The separate /stream endpoint is no longer needed.
         return app;
     }
 }
