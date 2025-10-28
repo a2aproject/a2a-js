@@ -35,16 +35,18 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             return;
         }
 
-        if (!this.notificationChain.has(task.id)) {
-            this.notificationChain.set(task.id, Promise.resolve());
-        }
+        const lastPromise = this.notificationChain.get(task.id) ?? Promise.resolve();
         // Chain promises to ensure notifications for the same task are sent sequentially.
         // The `finally` block below will clean up the entry from the map once the
         // promise chain for this task is complete.
-        const newPromise = this.notificationChain.get(task.id)!.then(async () => {
-            const dispatches = pushConfigs.map(pushConfig => this._dispatchNotification(task, pushConfig).catch((error) => { 
-                console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error);
-             }));
+        const newPromise = lastPromise.then(async () => {
+            const dispatches = pushConfigs.map(async pushConfig => {
+                try {
+                    await this._dispatchNotification(task, pushConfig)
+                } catch (error) {
+                    console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error)
+                }
+            });
             await Promise.all(dispatches);
         })
         this.notificationChain.set(task.id, newPromise);
