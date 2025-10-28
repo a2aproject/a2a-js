@@ -32,6 +32,20 @@ export class A2AExpressApp {
         const router = express.Router();
         router.use(express.json(), ...(middlewares ?? []));
 
+        router.use((err, req, res, next) => {
+            // Check if it's the specific JSON parsing error
+            if (err instanceof SyntaxError) {
+                const a2aError = A2AError.parseError('Failed to parse JSON request.');
+                const errorResponse: JSONRPCErrorResponse = {
+                                jsonrpc: '2.0',
+                                id: req.body?.id || null, // Use original request ID if available
+                                error: a2aError.toJSONRPCError(),
+                            };
+                return res.status(500).json(errorResponse);
+            }
+            next(err);
+        });
+
         router.get(`/${agentCardPath}`, async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
