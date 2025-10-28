@@ -5,3 +5,5 @@
 export { A2AClient } from "./client.js";
 export type { A2AClientOptions } from "./client.js";
 export * from "./auth-handler.js";
+export * from "./response-utils.js";
+export * from "./type-guards.js";

@@ -340,14 +340,15 @@ describe('A2AClient Authentication Tests', () => {
         text: 'Test without auth handler'
       });
 
-      // The client should return a JSON-RPC error response rather than throwing an error
-      const result = await clientNoAuthHandler.sendMessage(messageParams);
-
-      // Verify that the result is a JSON-RPC error response
-      expect(result).to.have.property('jsonrpc', '2.0');
-      expect(result).to.have.property('error');
-      expect((result as any).error).to.have.property('code', -32001);
-      expect((result as any).error).to.have.property('message', 'Authentication required');
+      // The client should throw an A2AClientError for error responses
+      try {
+        await clientNoAuthHandler.sendMessage(messageParams);
+        expect.fail('Should have thrown A2AClientError');
+      } catch (error) {
+        expect(error.name).to.equal('A2AClientError');
+        expect(error.rpcError).to.have.property('code', -32001);
+        expect(error.message).to.include('Authentication required');
+      }
 
       // Verify that fetch was called only once (no retry attempted)
       expect(fetchWithApiError.callCount).to.equal(2); // One for agent card, one for API call
