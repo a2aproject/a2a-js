@@ -284,6 +284,28 @@ const client = await A2AClient.fromCardUrl(
 await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "A message requiring custom headers." }], kind: "message" } });
 ```
 
+### Example: Specifying a Timeout
+
+This example creates a `fetch` wrapper that sets a timeout for every outgoing request.
+
+```typescript
+import { A2AClient } from "@a2a-js/sdk/client";
+
+// 1. Create a wrapper around the global fetch function.
+const fetchWithTimeout: typeof fetch = async (url, init) => {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(5000)});
+};
+
+// 2. Provide the custom fetch implementation to the client.
+const client = await A2AClient.fromCardUrl(
+  "http://localhost:4000/.well-known/agent-card.json",
+  { fetchImpl: fetchWithTimeout }
+);
+
+// Now, all requests made by this client instance will have a configured timeout.
+await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "A message requiring custom headers." }], kind: "message" } });
+```
+
 ### Using the Provided `AuthenticationHandler`
 
 For advanced authentication scenarios, the SDK includes a higher-order function `createAuthenticatingFetchWithRetry` and an `AuthenticationHandler` interface. This utility automatically adds authorization headers and can retry requests that fail with authentication errors (e.g., 401 Unauthorized).

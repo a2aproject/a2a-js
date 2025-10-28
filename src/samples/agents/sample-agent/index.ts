@@ -188,7 +188,10 @@ async function main() {
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
-  expressApp.listen(PORT, () => {
+  expressApp.listen(PORT, (err) => {
+    if (err) {
+      throw err;
+    }
     console.log(`[SampleAgent] Server using new framework started on http://localhost:${PORT}`);
     console.log(`[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
     console.log('[SampleAgent] Press Ctrl+C to stop the server');
