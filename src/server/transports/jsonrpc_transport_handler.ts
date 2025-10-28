@@ -149,11 +149,15 @@ export class JsonRpcTransportHandler {
         if (rpcRequest.jsonrpc !== '2.0') {
             return false;
         }
-        if (rpcRequest.id! && (typeof rpcRequest.id !== 'string' && typeof rpcRequest.id !== 'number' && rpcRequest.id !== null)) {
-            return false;
-        }
-        if (typeof rpcRequest.id === 'number' && !Number.isInteger(rpcRequest.id)) {
-            return false;
+        if ('id' in rpcRequest) {
+            const id = rpcRequest.id;
+            const isString = typeof id === 'string';
+            const isInteger = typeof id === 'number' && Number.isInteger(id);
+            const isNull = id === null;
+
+            if (!isString && !isInteger && !isNull) {
+                return false;
+            }
         }
         if (!rpcRequest.method || typeof rpcRequest.method !== 'string') {
             return false;
