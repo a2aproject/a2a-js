@@ -34,7 +34,7 @@ export class A2AExpressApp {
 
         router.use((err, req, res, next) => {
             // Check if it's the specific JSON parsing error
-            if (err instanceof SyntaxError) {
+            if (err instanceof SyntaxError && 'body' in err) {
                 const a2aError = A2AError.parseError('Failed to parse JSON request.');
                 const errorResponse: JSONRPCErrorResponse = {
                                 jsonrpc: '2.0',
