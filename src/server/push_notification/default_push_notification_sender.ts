@@ -1,4 +1,5 @@
 import { Task, PushNotificationConfig } from "../../types.js";
+import { Task, PushNotificationConfig, TaskState } from "../../types.js";
 import { PushNotificationSender } from "./push_notification_sender.js";
 import { PushNotificationStore } from "./push_notification_store.js";
 
@@ -16,11 +17,12 @@ export interface DefaultPushNotificationSenderOptions {
 export class DefaultPushNotificationSender implements PushNotificationSender {
 
     private readonly pushNotificationStore: PushNotificationStore;
-    private notificationChain: Promise<unknown> = Promise.resolve();
+    private notificationChain: Map<string,Promise<unknown>>;
     private readonly options: Required<DefaultPushNotificationSenderOptions>;
     
     constructor(pushNotificationStore: PushNotificationStore, options: DefaultPushNotificationSenderOptions = {}) {
         this.pushNotificationStore = pushNotificationStore;
+        this.notificationChain = new Map();
         this.options = {
             timeout: 5000,
             tokenHeaderName: 'X-A2A-Notification-Token',
@@ -34,12 +36,25 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             return;
         }
 
-        // Ensures that notification are delivered in the same order they are sent.
-        this.notificationChain = this.notificationChain.then(async () => {
+        if (!this.notificationChain.has(task.id)) {
+            this.notificationChain.set(task.id, Promise.resolve());
+        }
+        // Chain promises to ensure notifications for the same task are sent sequentially.
+        // The `finally` block below will clean up the entry from the map once the
+        // promise chain for this task is complete.
+        const newPromise = this.notificationChain.get(task.id)!.then(async () => {
             const dispatches = pushConfigs.map(pushConfig => this._dispatchNotification(task, pushConfig).catch((error) => { 
                 console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error);
              }));
             await Promise.all(dispatches);
+        })
+        this.notificationChain.set(task.id, newPromise);
+
+        newPromise.finally(() => {
+            // Clean up the chain if it's the last notification
+            if (this.notificationChain.get(task.id) === newPromise) {
+                this.notificationChain.delete(task.id);
+            }
         });
     }
 

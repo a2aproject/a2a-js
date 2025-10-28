@@ -62,7 +62,7 @@ describe('Push Notification Integration Tests', () => {
                 const scenario = req.params.scenario;
                 // Simulate delay for 'submitted' status to test correct ordering of notifications
                 if (scenario === 'delay_on_submitted' && req.body.status.state === 'submitted') {
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise(resolve => setTimeout(resolve, 10));
                 }
 
                 receivedNotifications.push({
@@ -162,7 +162,7 @@ describe('Push Notification Integration Tests', () => {
             await handler.sendMessage(params);
 
             // Wait for async push notifications to be sent
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 200));
 
             // Load the task from the store
             const expectedTaskResult: Task = {
