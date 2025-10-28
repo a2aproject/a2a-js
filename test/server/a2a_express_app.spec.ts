@@ -25,9 +25,6 @@ describe('A2AExpressApp', () => {
         id,
         params,
     });
-
-    // Helper function to create a malformed JSON-RPC request string
-    const createMalformedRpcRequest = () => '{"jsonrpc": "2.0", "method": "message/send", "id": "1"'; // Missing closing brace
     
     const testAgentCard: AgentCard = {
         protocolVersion: '0.3.0',
@@ -353,10 +350,11 @@ describe('A2AExpressApp', () => {
             const jsonApp = express();
             app.setupRoutes(jsonApp);
 
+            const requestBody = '{"jsonrpc": "2.0", "method": "message/send", "id": "1"'; // Missing closing brace
             const response = await request(jsonApp)
                 .post('/')
                 .set('Content-Type', 'application/json') // Set header to trigger json parser
-                .send(createMalformedRpcRequest())
+                .send(requestBody)
                 .expect(400);
 
             const expectedErrorResponse: JSONRPCErrorResponse = {
