@@ -32,6 +32,20 @@ export class A2AExpressApp {
         const router = express.Router();
         router.use(express.json(), ...(middlewares ?? []));
 
+        router.use((err, req, res, next) => {
+            // Handle JSON parse errors from express.json() (https://github.com/expressjs/body-parser/issues/122)
+            if (err instanceof SyntaxError && 'body' in err) {
+                const a2aError = A2AError.parseError('Invalid JSON payload.');
+                const errorResponse: JSONRPCErrorResponse = {
+                                jsonrpc: '2.0',
+                                id: null,
+                                error: a2aError.toJSONRPCError(),
+                            };
+                return res.status(400).json(errorResponse);
+            }
+            next(err);
+        });
+
         router.get(`/${agentCardPath}`, async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements
