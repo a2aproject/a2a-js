@@ -56,7 +56,7 @@ export class JsonRpcTransportHandler {
             }
 
             if (!this.isParamsValid(rpcRequest.params)) {
-                throw A2AError.invalidParams(`'params' is required for '${method}'`);
+                throw A2AError.invalidParams(`Invalid 'params' for method '${method}'.`);
             }
 
             if (method === 'message/stream' || method === 'tasks/resubscribe') {
