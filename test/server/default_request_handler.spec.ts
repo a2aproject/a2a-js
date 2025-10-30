@@ -539,14 +539,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const secondTask = secondResult as Task;
         assert.equal(secondTask.kind, 'task');
         assert.equal(secondTask.id, taskId, 'Should be the same task');
-        assert.equal(secondTask.status.state, 'working');
+        assert.equal(secondTask.status.state, 'working'); // The furst staus update by the follow up task is received
         
         await clock.runAllAsync(); // give time to the second task to publish all the updates
 
         const finalTask = await mockTaskStore.load(taskId);
 
         // Check the history
-        assert.equal(secondTask.status.state, 'completed');
+        assert.equal(finalTask.status.state, 'completed');
         assert.isDefined(finalTask.history, 'Second task should have history');
         assert.lengthOf(finalTask.history!, 4, 'Second task history should contain all 4 messages (user1, agent1, user2, agent2)');
         assert.equal(finalTask.history![0].messageId, 'msg-1', 'First message should be first user message');
