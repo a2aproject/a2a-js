@@ -137,7 +137,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
                     if (event.kind === 'message') {
                         firstResult = event as Message;
                     } else {
-                        firstResult = await this.taskStore.load(taskId);
+                        firstResult = resultManager.getCurrentTask();
                     }
                     if (firstResult) {
                         options.firstResultResolver(firstResult);

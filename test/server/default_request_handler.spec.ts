@@ -539,7 +539,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const secondTask = secondResult as Task;
         assert.equal(secondTask.kind, 'task');
         assert.equal(secondTask.id, taskId, 'Should be the same task');
-        assert.equal(secondTask.status.state, 'working'); // The furst staus update by the follow up task is received
+        assert.equal(secondTask.status.state, 'working'); // It will receive the Task in the status of the first published event
         
         await clock.runAllAsync(); // give time to the second task to publish all the updates
 
