@@ -916,10 +916,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const finalTask = await handler.getTask({ id: taskId });
         assert.equal(finalTask.status.state, "canceled");
 
-        // Canceled API issues cancel request to executor and returns latest task state.
-        // In this scenario, executor is waiting on clock to detect that task has been cancelled.
-        // While the cancel API has returned with latest task state => Working.
-        assert.equal(cancelResponse.status.state, "working");
+        assert.equal(cancelResponse.status.state, "canceled");
     });
 
     it('cancelTask: should fail for tasks in a terminal state', async () => {
