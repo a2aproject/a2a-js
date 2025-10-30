@@ -115,7 +115,7 @@ describe('JsonRpcTransportHandler', () => {
             const request = { jsonrpc: '2.0', method: 'message/send', id: 1 };
             const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
             expect(response.error.code).to.equal(-32602); // Invalid Params
-            expect(response.error.message).to.equal("'params' is required for 'message/send'");
+            expect(response.error.message).to.equal("Invalid 'params' for method 'message/send'.");
             expect(response.id).to.equal(1);
         });
 
@@ -123,7 +123,7 @@ describe('JsonRpcTransportHandler', () => {
             const request = { jsonrpc: '2.0', method: 'message/send', id: 1, params: "invalid" };
             const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
             expect(response.error.code).to.equal(-32602); // Invalid Params
-            expect(response.error.message).to.equal("'params' is required for 'message/send'");
+            expect(response.error.message).to.equal("Invalid 'params' for method 'message/send'.");
             expect(response.id).to.equal(1);
         });
 
@@ -131,7 +131,7 @@ describe('JsonRpcTransportHandler', () => {
             const request = { jsonrpc: '2.0', method: 'message/send', id: 1, params: [1, 2, 3] };
             const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
             expect(response.error.code).to.equal(-32602); // Invalid Params
-            expect(response.error.message).to.equal("'params' is required for 'message/send'");
+            expect(response.error.message).to.equal("Invalid 'params' for method 'message/send'.");
             expect(response.id).to.equal(1);
         });
 
@@ -139,7 +139,7 @@ describe('JsonRpcTransportHandler', () => {
             const request = { jsonrpc: '2.0', method: 'message/send', id: 1, params: { "": "invalid" } };
             const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
             expect(response.error.code).to.equal(-32602); // Invalid Params
-            expect(response.error.message).to.equal("'params' is required for 'message/send'");
+            expect(response.error.message).to.equal("Invalid 'params' for method 'message/send'.");
             expect(response.id).to.equal(1);
         });
 
