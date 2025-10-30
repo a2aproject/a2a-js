@@ -400,7 +400,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     it('sendMessage: should return second task with full history if message is sent to an existing, non-terminal task, in non-blocking mode', async () => {
         const contextId = 'ctx-history-abc';
-        
+        clock = sinon.useFakeTimers();
+
         // First message
         const firstMessage = createTestMessage('msg-1', 'Message 1');
         firstMessage.contextId = contextId;
@@ -475,7 +476,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         };
 
         (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
-            clock = sinon.useFakeTimers();
             // Publish a status update with working state
             bus.publish({
                 taskId,
