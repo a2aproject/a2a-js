@@ -1,4 +1,3 @@
-import { error } from "node:console";
 import * as schema from "../types.js";
 
 /**
