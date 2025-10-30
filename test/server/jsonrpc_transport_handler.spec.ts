@@ -118,5 +118,35 @@ describe('JsonRpcTransportHandler', () => {
             expect(response.error.message).to.equal("'params' is required for 'message/send'");
             expect(response.id).to.equal(1);
         });
+
+        it('should return an invalid params error if params are a string', async () => {
+            const request = { jsonrpc: '2.0', method: 'message/send', id: 1, params: "invalid" };
+            const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
+            expect(response.error.code).to.equal(-32602); // Invalid Params
+            expect(response.error.message).to.equal("'params' is required for 'message/send'");
+            expect(response.id).to.equal(1);
+        });
+
+        it('should return an invalid params error if params are an array', async () => {
+            const request = { jsonrpc: '2.0', method: 'message/send', id: 1, params: [1, 2, 3] };
+            const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
+            expect(response.error.code).to.equal(-32602); // Invalid Params
+            expect(response.error.message).to.equal("'params' is required for 'message/send'");
+            expect(response.id).to.equal(1);
+        });
+
+        it('should return an invalid params error if params have an empty string key', async () => {
+            const request = { jsonrpc: '2.0', method: 'message/send', id: 1, params: { "": "invalid" } };
+            const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
+            expect(response.error.code).to.equal(-32602); // Invalid Params
+            expect(response.error.message).to.equal("'params' is required for 'message/send'");
+            expect(response.id).to.equal(1);
+        });
+
+        it('should handle valid request with params as dict', async () => {
+            const request = { jsonrpc: '2.0', method: 'message/send', id: 456, params: {"this": "is a dict"} };
+            const response = await transportHandler.handle(request);
+            expect(response).to.have.property('result');
+        });
     });
 });

@@ -55,7 +55,7 @@ export class JsonRpcTransportHandler {
                 } as JSONRPCResponse;
             }
 
-            if (!rpcRequest.params) {
+            if (!this.isParamsValid(rpcRequest.params)) {
                 throw A2AError.invalidParams(`'params' is required for '${method}'`);
             }
 
@@ -163,6 +163,24 @@ export class JsonRpcTransportHandler {
             return false;
         }
 
+        return true;
+    }
+
+    // Validates that params is an object with non-empty string keys
+    private isParamsValid(params: any): boolean {
+        if (typeof params !== 'object' || params === null) {
+            return false;
+        }
+
+        if (Array.isArray(params)) { // In js arrays are objects too
+            return false;
+        }
+
+        for (const key of Object.keys(params)) {
+            if (key === "") {
+                return false;
+            }
+        }
         return true;
     }
 }
