@@ -1,3 +1,4 @@
+import { error } from "node:console";
 import * as schema from "../types.js";
 
 /**
@@ -71,10 +72,10 @@ export class A2AError extends Error {
     );
   }
 
-  static taskNotCancelable(errorMessage: string): A2AError {
+  static taskNotCancelable(errorMessage: string, taskId: string): A2AError {
     return new A2AError(
       -32002,
-      `Task not cancelable: ${taskId}`,
+      `Task not cancelable: ${errorMessage}`,
       undefined,
       taskId
     );

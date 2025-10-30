@@ -7,7 +7,7 @@ import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, Defaul
 import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute } from './mocks/agent-executor.mock.js';
+import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute, FailingCancellableMockAgentExecutor } from './mocks/agent-executor.mock.js';
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 
 
@@ -913,6 +913,50 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.equal(finalTask.status.state, "canceled");
 
         assert.equal(cancelResponse.status.state, "canceled");
+    });
+
+    it('cancelTask: should fail when it fails to cancel a task', async () => {
+        clock = sinon.useFakeTimers();
+        // Use the more advanced mock for this specific test
+        const failingCancellableExecutor = new FailingCancellableMockAgentExecutor(clock);
+        
+        handler = new DefaultRequestHandler(
+            testAgentCard,
+            mockTaskStore,
+            failingCancellableExecutor,
+            executionEventBusManager,
+        );
+
+        const streamParams: MessageSendParams = { message: createTestMessage('msg-9', 'Start and cancel') };
+        const streamGenerator = handler.sendMessageStream(streamParams);
+        
+        const streamEvents: any[] = [];
+        (async () => {
+            for await (const event of streamGenerator) {
+                streamEvents.push(event);
+            }
+        })();
+
+        // Allow the task to be created and enter the 'working' state
+        await clock.tickAsync(150); 
+        
+        const createdTask = streamEvents.find(e => e.kind === 'task') as Task;
+        assert.isDefined(createdTask, 'Task creation event should have been received');
+        const taskId = createdTask.id;
+        
+        let cancelResponse : Task;
+        let thrownError : any;
+        try {
+            cancelResponse = await handler.cancelTask({ id: taskId });
+        } catch (error: any) {
+            thrownError = error
+        } finally {
+            assert.isDefined(thrownError);
+            assert.isUndefined(cancelResponse);
+            assert.equal(thrownError.code, -32002);
+            expect(thrownError.message).to.contain('Task not cancelable');
+            assert.isTrue(failingCancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any));
+        }
     });
 
     it('cancelTask: should fail for tasks in a terminal state', async () => {
