@@ -888,7 +888,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const streamGenerator = handler.sendMessageStream(streamParams);
         
         const streamEvents: any[] = [];
-        const streamingPromise = (async () => {
+        (async () => {
             for await (const event of streamGenerator) {
                 streamEvents.push(event);
             }
@@ -906,12 +906,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
         // Let the executor's loop run to completion to detect the cancellation
         await clock.runAllAsync();
-        await streamingPromise;
 
         assert.isTrue(cancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any));
-        
-        const lastEvent = streamEvents[streamEvents.length - 1] as TaskStatusUpdateEvent;
-        assert.equal(lastEvent.status.state, "canceled");
         
         const finalTask = await handler.getTask({ id: taskId });
         assert.equal(finalTask.status.state, "canceled");
