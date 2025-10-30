@@ -377,7 +377,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             throw A2AError.internalError(`Task ${params.id} not found after cancellation.`);
         }
         if (latestTask.status.state != "canceled") {
-            throw A2AError.taskNotCancelable(params.id);
+            throw A2AError.taskNotCancelable(`${params.id} was not canceled - current state: ${latestTask.status.state}.}`);
         }
         return latestTask;
     }

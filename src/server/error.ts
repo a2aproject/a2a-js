@@ -71,7 +71,7 @@ export class A2AError extends Error {
     );
   }
 
-  static taskNotCancelable(taskId: string): A2AError {
+  static taskNotCancelable(errorMessage: string): A2AError {
     return new A2AError(
       -32002,
       `Task not cancelable: ${taskId}`,
