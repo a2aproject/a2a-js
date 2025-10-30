@@ -1,4 +1,4 @@
-import express, { Request, Response, Express, RequestHandler, ErrorRequestHandler } from 'express';
+import express, { Request, Response, Express, RequestHandler, ErrorRequestHandler, NextFunction } from 'express';
 
 import { A2AError } from "../error.js";
 import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from "../../index.js";
@@ -32,7 +32,7 @@ export class A2AExpressApp {
         const router = express.Router();
         router.use(express.json(), ...(middlewares ?? []));
 
-        router.use((err, req, res, next) => {
+        router.use((err: any, req: Request, res: Response, next: NextFunction) => {
             // Handle JSON parse errors from express.json() (https://github.com/expressjs/body-parser/issues/122)
             if (err instanceof SyntaxError && 'body' in err) {
                 const a2aError = A2AError.parseError('Invalid JSON payload.');

@@ -8,7 +8,8 @@
     "sourceMap": true,
     "declaration": true,
     "esModuleInterop": true, // Often helpful with NodeNext
-    "resolveJsonModule": true // Good practice for importing JSON if needed
+    "resolveJsonModule": true, // Good practice for importing JSON if needed
+    "noImplicitAny": true,
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

@@ -58,9 +58,13 @@ describe('Push Notification Integration Tests', () => {
             });
 
             // Endpoint to simulate different response scenarios
-            app.post('/notify/:scenario', (req: Request, res: Response) => {
+            app.post('/notify/:scenario', async (req: Request, res: Response) => {
                 const scenario = req.params.scenario;
-                
+                // Simulate delay for 'submitted' status to test correct ordering of notifications
+                if (scenario === 'delay_on_submitted' && req.body.status.state === 'submitted') {
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
                 receivedNotifications.push({
                     body: req.body,
                     headers: req.headers,
@@ -132,7 +136,7 @@ describe('Push Notification Integration Tests', () => {
         it('should send push notifications for task status updates', async () => {
             const pushConfig: PushNotificationConfig = {
                 id: 'test-push-config',
-                url: `${testServerUrl}/notify`,
+                url: `${testServerUrl}/notify/delay_on_submitted`,
                 token: 'test-auth-token'
             };
 
@@ -172,7 +176,7 @@ describe('Push Notification Integration Tests', () => {
             // Verify push notifications were sent
             assert.lengthOf(receivedNotifications, 3, 'Should send notifications for submitted, working, and completed states');
             
-            // Verify all three states are present (order may vary)
+            // Verify all three states are present
             const states = receivedNotifications.map(n => n.body.status.state);
             assert.include(states, 'submitted', 'Should include submitted state');
             assert.include(states, 'working', 'Should include working state');
@@ -181,7 +185,7 @@ describe('Push Notification Integration Tests', () => {
             // Verify first notification has correct format
             const firstNotification = receivedNotifications[0];
             assert.equal(firstNotification.method, 'POST');
-            assert.equal(firstNotification.url, '/notify');
+            assert.equal(firstNotification.url, '/notify/delay_on_submitted');
             assert.equal(firstNotification.headers['content-type'], 'application/json');
             assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
             assert.deepEqual(firstNotification.body, {
