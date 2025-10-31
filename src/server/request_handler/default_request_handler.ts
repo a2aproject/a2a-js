@@ -135,7 +135,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
                 if (options?.firstResultResolver && !firstResultSent) {
                     let firstResult: Message | Task | undefined;
                     if (event.kind === 'message') {
-                        firstResult = event as Message;
+                        firstResult = event;
                     } else {
                         firstResult = resultManager.getCurrentTask();
                     }
