@@ -353,7 +353,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         const eventBus = this.eventBusManager.getByTaskId(params.id);
         
         if(eventBus) {
+            const eventQueue = new ExecutionEventQueue(eventBus);
             await this.agentExecutor.cancelTask(params.id, eventBus);
+            // Consume all the events until the task reaches a terminal state.
+            await this._processEvents(params.id, new ResultManager(this.taskStore), eventQueue);
         }
         else {
             // Here we are marking task as cancelled. We are not waiting for the executor to actually cancel processing.
@@ -376,6 +379,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
 
         const latestTask = await this.taskStore.load(params.id);
+        if (!latestTask) {
+            throw A2AError.internalError(`Task ${params.id} not found after cancellation.`);
+        }
+        if (latestTask.status.state != "canceled") {
+            throw A2AError.taskNotCancelable(params.id);
+        }
         return latestTask;
     }
 

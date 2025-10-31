@@ -99,3 +99,51 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
     // Stub for spying on cancelTask calls
     public cancelTaskSpy = sinon.spy(this, 'cancelTask');
 }
+
+
+/**
+ * A realistic mock of AgentExecutor for failed cancellation tests.
+ */
+export class FailingCancellableMockAgentExecutor implements AgentExecutor {
+    private cancelledTasks = new Set<string>();
+    private clock: SinonFakeTimers;
+
+    constructor(clock: SinonFakeTimers) {
+        this.clock = clock;
+    }
+
+    public execute = async (
+        requestContext: RequestContext,
+        eventBus: ExecutionEventBus,
+    ): Promise<void> => {
+        const taskId = requestContext.taskId;
+        const contextId = requestContext.contextId;
+        
+        eventBus.publish({ id: taskId, contextId, status: { state: "submitted" }, kind: 'task' });
+        eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "working" }, final: false });
+        
+        // Simulate a long-running process
+        for (let i = 0; i < 5; i++) {
+            if (this.cancelledTasks.has(taskId)) {
+                eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "canceled" }, final: true });
+                eventBus.finished();
+                return;
+            }
+            // Use fake timers to simulate work
+            await this.clock.tickAsync(100); 
+        }
+
+        eventBus.publish({ taskId, contextId, kind: 'status-update', status: { state: "completed" }, final: true });
+        eventBus.finished();
+    };
+    
+    public cancelTask = async (
+        taskId: string,
+        eventBus: ExecutionEventBus,
+    ): Promise<void> => {
+        // No operation: simulates the failure of task cancellation
+    };
+    
+    // Stub for spying on cancelTask calls
+    public cancelTaskSpy = sinon.spy(this, 'cancelTask');
+}
