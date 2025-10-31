@@ -341,7 +341,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // Check if task is in a cancelable state
         const nonCancelableStates = ["completed", "failed", "canceled", "rejected"];
         if (nonCancelableStates.includes(task.status.state)) {
-            throw A2AError.taskNotCancelable(`${params.id} - current state: ${task.status.state}`, params.id);
+            throw A2AError.taskNotCancelable(params.id);
         }
 
         const eventBus = this.eventBusManager.getByTaskId(params.id);
@@ -377,7 +377,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             throw A2AError.internalError(`Task ${params.id} not found after cancellation.`);
         }
         if (latestTask.status.state != "canceled") {
-            throw A2AError.taskNotCancelable(`${params.id} - current state: ${latestTask.status.state}`, params.id);
+            throw A2AError.taskNotCancelable(params.id);
         }
         return latestTask;
     }
