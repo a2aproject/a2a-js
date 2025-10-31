@@ -133,8 +133,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
                 await this._sendPushNotificationIfNeeded(event);
 
                 if (options?.firstResultResolver && !firstResultSent) {
-                    if (event.kind === 'message' || event.kind === 'task') {
-                        options.firstResultResolver(event as Message | Task);
+                    let firstResult: Message | Task | undefined;
+                    if (event.kind === 'message') {
+                        firstResult = event;
+                    } else {
+                        firstResult = resultManager.getCurrentTask();
+                    }
+                    if (firstResult) {
+                        options.firstResultResolver(firstResult);
                         firstResultSent = true;
                     }
                 }
