@@ -111,12 +111,28 @@ describe('JsonRpcTransportHandler', () => {
             expect(response).to.have.property('result');
         });
 
-        it('should return an invalid params error if params are missing for a method that requires them', async () => {
-            const request = { jsonrpc: '2.0', method: 'message/send', id: 1 };
-            const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
-            expect(response.error.code).to.equal(-32602); // Invalid Params
-            expect(response.error.message).to.equal("'params' is required for 'message/send'");
-            expect(response.id).to.equal(1);
+        const invalidParamsCases = [
+            { name: 'null', params: null },
+            { name: 'undefined', params: undefined },
+            { name: 'a string', params: 'invalid' },
+            { name: 'an array', params: [1, 2, 3] },
+            { name: 'an object with an empty string key', params: { '': 'invalid' } },
+        ];
+
+        invalidParamsCases.forEach(({ name, params }) => {
+            it(`should return an invalid params error if params are ${name}`, async () => {
+                const request = { jsonrpc: '2.0', method: 'message/send', id: 1, params };
+                const response = await transportHandler.handle(request) as JSONRPCErrorResponse;
+                expect(response.error.code).to.equal(-32602); // Invalid Params
+                expect(response.error.message).to.equal("Invalid method parameters.");
+                expect(response.id).to.equal(1);
+            });
+        });
+
+        it('should handle valid request with params as dict', async () => {
+            const request = { jsonrpc: '2.0', method: 'message/send', id: 456, params: {"this": "is a dict"} };
+            const response = await transportHandler.handle(request);
+            expect(response).to.have.property('result');
         });
     });
 });

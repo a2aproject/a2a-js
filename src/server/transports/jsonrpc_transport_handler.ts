@@ -55,8 +55,8 @@ export class JsonRpcTransportHandler {
                 } as JSONRPCResponse;
             }
 
-            if (!rpcRequest.params) {
-                throw A2AError.invalidParams(`'params' is required for '${method}'`);
+            if (!this.paramsAreValid(rpcRequest.params)) {
+                throw A2AError.invalidParams(`Invalid method parameters.`);
             }
 
             if (method === 'message/stream' || method === 'tasks/resubscribe') {
@@ -163,6 +163,20 @@ export class JsonRpcTransportHandler {
             return false;
         }
 
+        return true;
+    }
+
+    // Validates that params is an object with non-empty string keys
+    private paramsAreValid(params: any): boolean {
+        if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+            return false;
+        }
+
+        for (const key of Object.keys(params)) {
+            if (key === "") {
+                return false;
+            }
+        }
         return true;
     }
 }
