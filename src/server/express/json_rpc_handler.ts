@@ -5,7 +5,7 @@ import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
 
 export interface JsonRpcHandlerOptions {
-    requestHandler: A2ARequestHandler | JsonRpcTransportHandler;
+    requestHandler: A2ARequestHandler;
 }
 
 /**
@@ -17,12 +17,7 @@ export interface JsonRpcHandlerOptions {
  * app.use('/a2a/json-rpc', jsonRpcHandler({ requestHandler: a2aRequestHandler }));
  */
 export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
-    // Accept JsonRpcTransportHandler mainly to be compatible with existing tests.
-    // JsonRpcTransportHandler is an implementation detail to extract Express.js agnostic logic and is not an extension point.
-    const jsonRpcTransportHandler =
-        options.requestHandler instanceof JsonRpcTransportHandler
-            ? options.requestHandler
-            : new JsonRpcTransportHandler(options.requestHandler);
+    const jsonRpcTransportHandler = new JsonRpcTransportHandler(options.requestHandler);
 
     const router = express.Router()
 

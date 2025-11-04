@@ -7,12 +7,10 @@ import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
 
 export class A2AExpressApp {
-    private requestHandler: A2ARequestHandler; // Kept for getAgentCard
-    private jsonRpcTransportHandler: JsonRpcTransportHandler;
+    private requestHandler: A2ARequestHandler;
 
     constructor(requestHandler: A2ARequestHandler) {
-        this.requestHandler = requestHandler; // DefaultRequestHandler instance
-        this.jsonRpcTransportHandler = new JsonRpcTransportHandler(requestHandler);
+        this.requestHandler = requestHandler;
     }
 
     /**
@@ -39,7 +37,7 @@ export class A2AExpressApp {
             router.use(middlewares);
         }
 
-        router.use(jsonRpcHandler({ requestHandler: this.jsonRpcTransportHandler }));
+        router.use(jsonRpcHandler({ requestHandler: this.requestHandler }));
         router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
 
         app.use(baseUrl, router);
