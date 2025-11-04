@@ -3,9 +3,8 @@ import express, { Express, RequestHandler, ErrorRequestHandler } from 'express';
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
 import { AGENT_CARD_PATH } from "../../constants.js";
-import { jsonRpcHandler } from './json_rpc_handler.js';
+import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
-import { jsonErrorHandler } from './utils.js';
 
 export class A2AExpressApp {
     private requestHandler: A2ARequestHandler; // Kept for getAgentCard
@@ -40,9 +39,8 @@ export class A2AExpressApp {
             router.use(middlewares);
         }
 
-        router.use(jsonRpcHandler(this.jsonRpcTransportHandler));
-        router.use(`/${agentCardPath}`, agentCardHandler(this.requestHandler));
-        
+        router.use(jsonRpcHandler({ requestHandler: this.jsonRpcTransportHandler }));
+        router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
 
         app.use(baseUrl, router);
         return app;

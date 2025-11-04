@@ -1,25 +1,28 @@
-import express, { Router, Request, Response } from "express";
+import express, { Router, Request, Response, ErrorRequestHandler, NextFunction, RequestHandler } from "express";
 import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from "../../types.js";
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
-import { jsonErrorHandler } from "./utils.js";
+
+export interface JsonRpcHandlerOptions {
+    requestHandler: A2ARequestHandler | JsonRpcTransportHandler;
+}
 
 /**
- * Creates Express.js router to handle A2A JSON-RPC requests.
+ * Creates Express.js middleware to handle A2A JSON-RPC requests.
  * @example
  * // Handle at root
  * app.use(jsonRpcHandler(a2aRequestHandler));
  * // or
  * app.use('/a2a/json-rpc', jsonRpcHandler(a2aRequestHandler));
  */
-export function jsonRpcHandler(requestHandler: A2ARequestHandler | JsonRpcTransportHandler): Router {
+export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
     // Accept JsonRpcTransportHandler mainly to be compatible with existing tests.
     // JsonRpcTransportHandler is an implementation detail to extract Express.js agnostic logic and is not an extension point.
     const jsonRpcTransportHandler =
-        requestHandler instanceof JsonRpcTransportHandler
-            ? requestHandler
-            : new JsonRpcTransportHandler(requestHandler);
+        options.requestHandler instanceof JsonRpcTransportHandler
+            ? options.requestHandler
+            : new JsonRpcTransportHandler(options.requestHandler);
 
     const router = express.Router()
 
@@ -88,4 +91,18 @@ export function jsonRpcHandler(requestHandler: A2ARequestHandler | JsonRpcTransp
     });
 
     return router
+}
+
+export const jsonErrorHandler: ErrorRequestHandler = (err: any, _req: Request, res: Response, next: NextFunction) => {
+    // Handle JSON parse errors from express.json() (https://github.com/expressjs/body-parser/issues/122)
+    if (err instanceof SyntaxError && 'body' in err) {
+        const a2aError = A2AError.parseError('Invalid JSON payload.');
+        const errorResponse: JSONRPCErrorResponse = {
+            jsonrpc: '2.0',
+            id: null,
+            error: a2aError.toJSONRPCError(),
+        };
+        return res.status(400).json(errorResponse);
+    }
+    next(err);
 }
