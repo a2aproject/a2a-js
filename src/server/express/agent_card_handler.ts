@@ -9,6 +9,11 @@ export interface AgentCardProvider {
     getAgentCard(): Promise<AgentCard>;
 }
 
+/**
+ * Creates Express.js middleware to handle agent card requests.
+ * @example
+ * app.use('/.well-known/agent-card.json', agentCardHandler({ agentCardProvider: a2aRequestHandler }));
+ */
 export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandler {
     const router = express.Router()
 

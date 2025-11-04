@@ -12,9 +12,9 @@ export interface JsonRpcHandlerOptions {
  * Creates Express.js middleware to handle A2A JSON-RPC requests.
  * @example
  * // Handle at root
- * app.use(jsonRpcHandler(a2aRequestHandler));
+ * app.use(jsonRpcHandler({ requestHandler: a2aRequestHandler }));
  * // or
- * app.use('/a2a/json-rpc', jsonRpcHandler(a2aRequestHandler));
+ * app.use('/a2a/json-rpc', jsonRpcHandler({ requestHandler: a2aRequestHandler }));
  */
 export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
     // Accept JsonRpcTransportHandler mainly to be compatible with existing tests.
