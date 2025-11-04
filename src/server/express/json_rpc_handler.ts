@@ -74,7 +74,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
                 res.status(200).json(rpcResponse);
             }
         } catch (error: any) { // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
-            console.error("Unhandled error in A2AExpressApp POST handler:", error);
+            console.error("Unhandled error in JSON-RPC POST handler:", error);
             const a2aError = error instanceof A2AError ? error : A2AError.internalError('General processing error.');
             const errorResponse: JSONRPCErrorResponse = {
                 jsonrpc: '2.0',
