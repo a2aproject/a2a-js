@@ -46,6 +46,7 @@ The core of an A2A server is the `AgentExecutor`, which contains your agent's lo
 import express from "express";
 import { v4 as uuidv4 } from "uuid";
 import type { AgentCard, Message } from "@a2a-js/sdk";
+
 import {
   AgentExecutor,
   RequestContext,
@@ -62,8 +63,16 @@ const helloAgentCard: AgentCard = {
   protocolVersion: "0.3.0",
   version: "0.1.0",
   url: "http://localhost:4000/", // The public URL of your agent server
-  skills: [ { id: "chat", name: "Chat", description: "Say hello", tags: ["chat"] } ],
-  // --- Other AgentCard fields omitted for brevity ---
+  skills: [
+    { id: "chat", name: "Chat", description: "Say hello", tags: ["chat"] },
+  ],
+  capabilities: {
+    streaming: true, // The new framework supports streaming
+    pushNotifications: false, // Assuming not implemented for this agent yet
+    stateTransitionHistory: true, // Agent uses history
+  },
+  defaultInputModes: ["text"],
+  defaultOutputModes: ["text"],
 };
 
 // 2. Implement the agent's logic.
@@ -86,7 +95,7 @@ class HelloExecutor implements AgentExecutor {
     eventBus.publish(responseMessage);
     eventBus.finished();
   }
-  
+
   // cancelTask is not needed for this simple, non-stateful agent.
   cancelTask = async (): Promise<void> => {};
 }
@@ -113,34 +122,51 @@ The `A2AClient` makes it easy to communicate with any A2A-compliant agent.
 
 ```typescript
 // client.ts
-import { A2AClient, SendMessageSuccessResponse } from "@a2a-js/sdk/client";
-import { Message, MessageSendParams } from "@a2a-js/sdk";
+import { A2AClient } from "@a2a-js/sdk/client";
+import {
+  Message,
+  SendMessageSuccessResponse,
+  Task,
+  TextPart,
+} from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
+const client = await A2AClient.fromCardUrl(
+  "http://localhost:4000/.well-known/agent-card.json"
+);
 
-async function run() {
-  // Create a client pointing to the agent's Agent Card URL.
-  const client = await A2AClient.fromCardUrl("http://localhost:4000/.well-known/agent-card.json");
+const response = await client.sendMessage({
+  message: {
+    messageId: uuidv4(),
+    role: "user",
+    parts: [{ kind: "text", text: "Do something." }],
+    kind: "message",
+  },
+});
 
-  const sendParams: MessageSendParams = {
-    message: {
-      messageId: uuidv4(),
-      role: "user",
-      parts: [{ kind: "text", text: "Hi there!" }],
-      kind: "message",
-    },
-  };
+if ("error" in response) {
+  console.error("Error:", response.error.message);
+} else {
+  const result = (response as SendMessageSuccessResponse).result;
 
-  const response = await client.sendMessage(sendParams);
+  // Check if the agent's response is a Task or a direct Message.
+  if (result.kind === "task") {
+    const task = result as Task;
+    console.log(
+      `Task [${task.id}] completed with status: ${task.status.state}`
+    );
 
-  if ("error" in response) {
-    console.error("Error:", response.error.message);
+    if (task.artifacts && task.artifacts.length > 0) {
+      console.log(`Artifact found: ${task.artifacts[0].name}`);
+      console.log(`Content: ${(task.artifacts[0].parts[0] as TextPart).text}`);
+    }
   } else {
-    const result = (response as SendMessageSuccessResponse).result as Message;
-    console.log("Agent response:", result.parts[0].text); // "Hello, world!"
+    const message = result as Message;
+    console.log(
+      "Received direct message:",
+      (message.parts[0] as TextPart).text
+    );
   }
 }
-
-await run();
 ```
 
 -----
