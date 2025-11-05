@@ -10,7 +10,7 @@ on:
 env:
   # TODO once we have the TCK for 0.4.0 we will need to look at the branch to decide which TCK version to run.
   # Tag of the TCK
-  TCK_VERSION: 0.3.0.Final
+  TCK_VERSION: 0.3.0.beta3
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
   # SUT_JSONRPC_URL to use for the TCK and the server agent
