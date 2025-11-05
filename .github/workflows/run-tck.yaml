@@ -94,30 +94,11 @@ jobs:
         id: run-tck
         timeout-minutes: 5
         run: |
-          set -o pipefail
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --compliance-report report.json 2>&1 | tee tck-output.log
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory
         working-directory: tck/a2a-tck
-      - name: Capture Diagnostics on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tck-diagnostics-node
-          path: |
-            tck/a2a-tck/tck-output.log
-            npm-debug.log
-          retention-days: 7
-          if-no-files-found: warn
       - name: Stop SUT
         if: always()
         run: |
           # Find and kill the SUT process
           pkill -f "npm run agents:sample-agent" || true
           sleep 2
-      - name: Upload TCK Compliance Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tck-compliance-report-node
-          path: tck/a2a-tck/report.json
-          retention-days: 14
-          if-no-files-found: ignore
