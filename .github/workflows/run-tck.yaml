@@ -10,7 +10,7 @@ on:
 env:
   # TODO once we have the TCK for 0.4.0 we will need to look at the branch to decide which TCK version to run.
   # Tag of the TCK
-  TCK_VERSION: main
+  TCK_VERSION: 0.3.0.Final
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
   # SUT_JSONRPC_URL to use for the TCK and the server agent
@@ -55,7 +55,7 @@ jobs:
       - name: Start SUT
         run: |
           cd tck
-          npm run tck:sample-agent &
+          npm run tck:sut-agent &
       - name: Wait for SUT to start
         run: |
           URL="${{ env.SUT_JSONRPC_URL }}/.well-known/agent-card.json"
@@ -100,5 +100,5 @@ jobs:
         if: always()
         run: |
           # Find and kill the SUT process
-          pkill -f "npm run agents:sample-agent" || true
+          pkill -f "npm run tck:sut-agent" || true
           sleep 2

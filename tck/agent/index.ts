@@ -18,9 +18,9 @@ import {
 import { A2AExpressApp } from "../../src/server/express/index.js";
 
 /**
- * SampleAgentExecutor implements the agent's core logic.
+ * SUTAgentExecutor implements the agent's core logic.
  */
-class SampleAgentExecutor implements AgentExecutor {
+class SUTAgentExecutor implements AgentExecutor {
   private runningTask: Set<string> = new Set();
   private lastContextId?: string;
 
@@ -57,7 +57,7 @@ class SampleAgentExecutor implements AgentExecutor {
     this.runningTask.add(taskId);
 
     console.log(
-      `[SampleAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
+      `[SUTAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
     );
 
     // 1. Publish initial Task event if it's a new task
@@ -102,11 +102,11 @@ class SampleAgentExecutor implements AgentExecutor {
     await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate processing delay
     if (!this.runningTask.has(taskId)) {
       console.log(
-        `[SampleAgentExecutor] Task ${taskId} was cancelled before processing could complete.`
+        `[SUTAgentExecutor] Task ${taskId} was cancelled before processing could complete.`
       );
       return;
     }
-    console.info(`[SampleAgentExecutor] Prompt response: ${agentReplyText}`);
+    console.info(`[SUTAgentExecutor] Prompt response: ${agentReplyText}`);
 
     const agentMessage: Message = {
       kind: 'message',
@@ -154,8 +154,8 @@ class SampleAgentExecutor implements AgentExecutor {
 
 // --- Server Setup ---
 
-const sampleAgentCard: AgentCard = {
-  name: 'Sample Agent',
+const SUTAgentCard: AgentCard = {
+  name: 'SUT Agent',
   description: 'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
@@ -174,8 +174,8 @@ const sampleAgentCard: AgentCard = {
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [
     {
-      id: 'sample_agent',
-      name: 'Sample Agent',
+      id: 'sut_agent',
+      name: 'SUT Agent',
       description: 'Simulate the general flow of a streaming agent.',
       tags: ['sample'],
       examples: ["hi", "hello world", "how are you", "goodbye"],
@@ -193,11 +193,11 @@ async function main() {
   const taskStore: TaskStore = new InMemoryTaskStore();
 
   // 2. Create AgentExecutor
-  const agentExecutor: AgentExecutor = new SampleAgentExecutor();
+  const agentExecutor: AgentExecutor = new SUTAgentExecutor();
 
   // 3. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(
-    sampleAgentCard,
+    SUTAgentCard,
     taskStore,
     agentExecutor
   );
@@ -212,9 +212,9 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(`[SampleAgent] Server using new framework started on http://localhost:${PORT}`);
-    console.log(`[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
-    console.log('[SampleAgent] Press Ctrl+C to stop the server');
+    console.log(`[SUTAgent] Server using new framework started on http://localhost:${PORT}`);
+    console.log(`[SUTAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log('[SUTAgent] Press Ctrl+C to stop the server');
   });
 }
 
