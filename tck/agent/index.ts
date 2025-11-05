@@ -184,6 +184,8 @@ const sampleAgentCard: AgentCard = {
     },
   ],
   supportsAuthenticatedExtendedCard: false,
+  preferredTransport: 'JSONRPC',
+  additionalInterfaces: [{url: 'http://localhost:41241', transport: 'JSONRPC'}],
 };
 
 async function main() {
