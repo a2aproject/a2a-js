@@ -156,7 +156,7 @@ class SUTAgentExecutor implements AgentExecutor {
 
 const SUTAgentCard: AgentCard = {
   name: 'SUT Agent',
-  description: 'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
+  description: 'A sample agent to be used as SUT against tck tests.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
@@ -177,7 +177,7 @@ const SUTAgentCard: AgentCard = {
       id: 'sut_agent',
       name: 'SUT Agent',
       description: 'Simulate the general flow of a streaming agent.',
-      tags: ['sample'],
+      tags: ['sut'],
       examples: ["hi", "hello world", "how are you", "goodbye"],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'] // Explicitly defining for skill

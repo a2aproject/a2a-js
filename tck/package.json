@@ -1,7 +1,7 @@
 {
   "name": "tck",
   "version": "1.0.0",
-  "description": "Sample agent for tck tests CI",
+  "description": "SUT agent for tck tests CI",
   "scripts": {
     "tck:sut-agent": "tsx agent/index.ts"
 
