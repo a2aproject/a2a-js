@@ -1,0 +1,9 @@
+{
+  "name": "tck",
+  "version": "1.0.0",
+  "description": "Sample agent for tck tests CI",
+  "scripts": {
+    "tck:sample-agent": "tsx agent/index.ts"
+
+  }
+}

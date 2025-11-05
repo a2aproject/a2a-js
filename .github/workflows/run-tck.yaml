@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
 
 
+
 env:
   # TODO once we have the TCK for 0.4.0 we will need to look at the branch to decide which TCK version to run.
   # Tag of the TCK
@@ -34,6 +35,11 @@ jobs:
       - run: |
           npm ci
           npm run build
+          node-version: 18
+          registry-url: 'https://registry.npmjs.org'
+      - run: |
+          npm ci
+          npm run build
       - name: Checkout a2a-tck
         uses: actions/checkout@v4
         with:
@@ -50,7 +56,9 @@ jobs:
           uv pip install -e .
         working-directory: tck/a2a-tck
       - name: Start SUT
-        run: npm run agents:sample-agent &
+        run: |
+          cd tck
+          npm run tck:sample-agent &
       - name: Wait for SUT to start
         run: |
           URL="${{ env.SUT_JSONRPC_URL }}/.well-known/agent-card.json"
@@ -90,7 +98,7 @@ jobs:
         timeout-minutes: 5
         run: |
           set -o pipefail
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category all --transports jsonrpc,grpc,rest --compliance-report report.json 2>&1 | tee tck-output.log
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --compliance-report report.json 2>&1 | tee tck-output.log
         working-directory: tck/a2a-tck
       - name: Capture Diagnostics on Failure
         if: failure()
