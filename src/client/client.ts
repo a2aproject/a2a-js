@@ -18,22 +18,11 @@ import {
   Task,
   TaskArtifactUpdateEvent,
   TaskStatusUpdateEvent,
-  JSONRPCSuccessResponse,
-  SendMessageSuccessResponse,
   JSONRPCErrorResponse,
-  SetTaskPushNotificationConfigSuccessResponse,
-  GetTaskPushNotificationConfigSuccessResponse,
-  ListTaskPushNotificationConfigSuccessResponse,
-  DeleteTaskPushNotificationConfigSuccessResponse,
-  GetTaskSuccessResponse,
-  CancelTaskSuccessResponse,
   A2ARequest,
-  GetAuthenticatedExtendedCardRequest,
-  JSONRPCRequest
-} from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
+  GetAuthenticatedExtendedCardRequest} from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from "../constants.js";
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
-import { A2ATransport } from './transports/transport.js';
 
 export type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
@@ -205,10 +194,10 @@ export class A2AClient {
    * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
    */
   public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(params, (t, p, id) => t.deleteTaskPushNotificationConfig(p, id))
-    const transport = await this._getOrCreateTransport();
-    await transport.deleteTaskPushNotificationConfig(params)
-    return A2AClient.toJSONRPCResponse<DeleteTaskPushNotificationConfigSuccessResponse>(null, transport);
+    return await this.invokeJsonRpc<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(params, (t, p, id) => {
+      t.deleteTaskPushNotificationConfig(p, id);
+      return null;
+    })
   }
 
 
@@ -218,9 +207,7 @@ export class A2AClient {
    * @returns A Promise resolving to GetTaskResponse, which contains the Task object or an error.
    */
   public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
-    const transport = await this._getOrCreateTransport();
-    const result = await transport.getTask(params);
-    return A2AClient.toJSONRPCResponse<GetTaskSuccessResponse>(result, transport);
+    return await this.invokeJsonRpc<TaskQueryParams, GetTaskResponse>(params, (t, p, id) => t.getTask(p, id))
   }
 
   /**
@@ -229,9 +216,7 @@ export class A2AClient {
    * @returns A Promise resolving to CancelTaskResponse, which contains the updated Task object or an error.
    */
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
-    const transport = await this._getOrCreateTransport();
-    const result = await transport.cancelTask(params);
-    return A2AClient.toJSONRPCResponse<CancelTaskSuccessResponse>(result, transport);
+    return await this.invokeJsonRpc<TaskIdParams, CancelTaskResponse>(params, (t, p, id) => t.cancelTask(p, id))
   }
 
   /**
@@ -243,9 +228,8 @@ export class A2AClient {
    * @returns A Promise that resolves to the RPC response.
    */
   public async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams) {
-    throw new Error('not implemented')
-    // const endpoint = await this._getServiceEndpoint();
-    // return this.transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(endpoint, method, params);
+    const transport = await this._getOrCreateTransport();
+    return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(method, params, this.requestIdCounter++);
   }
 
 

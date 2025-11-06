@@ -18,8 +18,6 @@ import {
   GetTaskSuccessResponse,
   CancelTaskSuccessResponse,
   JSONRPCSuccessResponse,
-  JSONRPCError,
-  A2ARequest,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { A2ATransport } from './transport.js';
@@ -81,6 +79,10 @@ export class JsonRpcTransport implements A2ATransport {
     yield* this._sendStreamingRequest("tasks/resubscribe", params);
   }
 
+  async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams, idOverride: number) {
+    return await this._sendRpcRequest<TExtensionParams, TExtensionResponse>(method, params, idOverride);
+  }
+
   private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
     if (this.customFetchImpl) {
       return this.customFetchImpl(...args);
@@ -97,7 +99,7 @@ export class JsonRpcTransport implements A2ATransport {
   private async _sendRpcRequest<TParams, TResponse extends JSONRPCResponse>(
     method: string,
     params: TParams,
-    idOverride: Id | undefined,
+    idOverride: number | undefined,
   ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
     
