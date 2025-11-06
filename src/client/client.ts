@@ -194,8 +194,8 @@ export class A2AClient {
    * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
    */
   public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(params, (t, p, id) => {
-      t.deleteTaskPushNotificationConfig(p, id);
+    return await this.invokeJsonRpc<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(params, async (t, p, id) => {
+      await t.deleteTaskPushNotificationConfig(p, id);
       return null;
     })
   }
