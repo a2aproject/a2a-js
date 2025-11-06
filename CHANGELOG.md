@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.5](https://github.com/a2aproject/a2a-js/compare/v0.3.4...v0.3.5) (2025-11-05)
+
+
+### Bug Fixes
+
+* cancel/task now returns the expected 'cancelled' task status ([#158](https://github.com/a2aproject/a2a-js/issues/158)) ([3eec0bd](https://github.com/a2aproject/a2a-js/commit/3eec0bd98ab02f8d76c4b01dc8ea8351bc8f1a07))
+* correct the default value in the agentCardPath comment ([#130](https://github.com/a2aproject/a2a-js/issues/130)) ([3279c7b](https://github.com/a2aproject/a2a-js/commit/3279c7bf4de088950c81aaeccb1cfaca5ee26284))
+* enable follow up task issue on non blocking request ([#160](https://github.com/a2aproject/a2a-js/issues/160)) ([352dc05](https://github.com/a2aproject/a2a-js/commit/352dc0585122db341da93b5fbd2f8cf7acf7fcca))
+* ensure push notifications order ([#141](https://github.com/a2aproject/a2a-js/issues/141)) ([22360e6](https://github.com/a2aproject/a2a-js/commit/22360e6ba735b10c611b5881ea8f98c898622117))
+* ensure user messages are added to existing tasks ([#138](https://github.com/a2aproject/a2a-js/issues/138)) ([00fb916](https://github.com/a2aproject/a2a-js/commit/00fb916ca4b877b11b3153d67593027e508c3d64))
+* validate JSON-RPC params ([#155](https://github.com/a2aproject/a2a-js/issues/155)) ([5b39f4d](https://github.com/a2aproject/a2a-js/commit/5b39f4dd96b619e1683c0f2226279d20572f2a27))
+* validate JSON-RPC request id according to the spec ([#152](https://github.com/a2aproject/a2a-js/issues/152)) ([9558c36](https://github.com/a2aproject/a2a-js/commit/9558c3613a0e5c8c48743412b0c47f9480345666))
+
 ## [0.3.4](https://github.com/a2aproject/a2a-js/compare/v0.3.3...v0.3.4) (2025-09-04)
 
 
