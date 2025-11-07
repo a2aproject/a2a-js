@@ -163,7 +163,7 @@ export class A2AClient {
         errorBodyText = await httpResponse.text();
         errorJson = JSON.parse(errorBodyText);
       } catch (e: any) {
-        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
+        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`, {cause: e});
       }
       // If the body is a valid JSON-RPC error response, return it as a proper JSON-RPC error response.
       if (errorJson.jsonrpc && errorJson.error) {
