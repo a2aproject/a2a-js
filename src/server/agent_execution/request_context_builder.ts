@@ -28,8 +28,9 @@ export class RequestContextBuilder {
     ): Promise<RequestContext> {
         let task: Task | undefined;
         let referenceTasks: Task[] | undefined;
+        let incomingParams: MessageSendParams = {...params};
+        let incomingMessage: Message = incomingParams.message;
 
-        const incomingMessage = params.message;
         // incomingMessage would contain taskId, if a task already exists.
         if (incomingMessage.taskId) {
             task = await this.taskStore.load(incomingMessage.taskId);
@@ -48,7 +49,7 @@ export class RequestContextBuilder {
         }
         // Ensure taskId is present
         const taskId = incomingMessage.taskId || uuidv4();
-        params.message.taskId = taskId;
+        incomingMessage.taskId = taskId;
 
         if (this.shouldPopulateReferredTasks && incomingMessage.referenceTaskIds?.length) {
             const refTaskPromises = incomingMessage.referenceTaskIds.map(async (refId) => {
@@ -63,9 +64,9 @@ export class RequestContextBuilder {
         }
         // Ensure contextId is present
         const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
-        params.message.contextId = contextId;
+        incomingMessage.contextId = contextId;
 
-        return new RequestContext(params, taskId, contextId, context, task, referenceTasks);
+        return new RequestContext(incomingParams, taskId, contextId, context, task, referenceTasks);
     }
 
 

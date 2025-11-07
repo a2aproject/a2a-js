@@ -11,7 +11,7 @@ export class RequestContext {
     private readonly _contextId: string;
     private readonly context: ServerCallContext;
     private readonly _task?: Task;
-    private readonly _relatedTasks?: Task[]; 
+    private readonly _referenceTasks?: Task[]; 
 
     constructor(
         request: MessageSendParams,
@@ -19,13 +19,13 @@ export class RequestContext {
         contextId: string,
         context: ServerCallContext,
         task?: Task,
-        relatedTasks?: Task[],
+        referenceTasks?: Task[],
     ) {
         this._params = request;
         this._taskId = taskId;
         this._contextId = contextId;
         this._task = task;
-        this._relatedTasks = relatedTasks;
+        this._referenceTasks = referenceTasks;
         this.context = context;
     }
 
@@ -49,8 +49,8 @@ export class RequestContext {
         return this._task;
     }
 
-    get relatedTasks(): Task[] | undefined {
-        return this._relatedTasks;
+    get referenceTasks(): Task[] | undefined {
+        return this._referenceTasks;
     }
 
     public addActivatedExtension(uri: string) {

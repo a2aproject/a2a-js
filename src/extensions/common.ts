@@ -1,13 +1,9 @@
-// Assuming types exist in a similar location
-import { AgentCard, AgentExtension } from "../types.js";
-
 export const HTTP_EXTENSION_HEADER = 'X-A2A-Extensions';
 
 /**
- * Get the set of requested extensions from an input list.
+ * Get the set of requested extensions from an input string.
  *
- * This handles the list containing potentially comma-separated values, as
- * occurs when using a list in an HTTP header.
+ * This handles the string containing potentially comma-separated values.
  */
 export function getRequestedExtensions(values: string | undefined): Set<string> {
     if (!values) {
