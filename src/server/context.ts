@@ -4,7 +4,7 @@ export class ServerCallContext {
   private _method: string;
 
   constructor(
-    requestedExtensions: Set<string>,
+    requestedExtensions: Set<string> = new Set(),
   ) {
     this._requestedExtensions = requestedExtensions;
     this._activatedExtensions = new Set<string>();
