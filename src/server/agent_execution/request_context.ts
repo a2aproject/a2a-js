@@ -1,11 +1,8 @@
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
-
 import {
     Message,
     MessageSendParams,
     Task,
 } from "../../types.js";
-import { TaskStore } from "../store.js";
 import { ServerCallContext } from '../context.js';
 
 export class RequestContext {
@@ -15,7 +12,7 @@ export class RequestContext {
     private readonly context: ServerCallContext;
     private readonly _task?: Task;
     private readonly _relatedTasks?: Task[]; 
-   
+
     constructor(
         request: MessageSendParams,
         taskId: string,
@@ -23,7 +20,7 @@ export class RequestContext {
         context: ServerCallContext,
         task?: Task,
         relatedTasks?: Task[],
-        ){
+    ) {
         this._params = request;
         this._taskId = taskId;
         this._contextId = contextId;
@@ -36,7 +33,7 @@ export class RequestContext {
         return this._params.message;
     }
 
-    get params(): MessageSendParams | undefined {
+    get params(): MessageSendParams {
         return this._params;
     }
 

@@ -5,8 +5,6 @@ import sinon from 'sinon';
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { JSONRPCErrorResponse } from '../../src/index.js';
-import { unescape } from 'querystring';
-import { ServerCallContext } from '../../src/server/context.js';
 
 describe('JsonRpcTransportHandler', () => {
     let mockRequestHandler: A2ARequestHandler;

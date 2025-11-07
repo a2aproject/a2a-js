@@ -16,19 +16,19 @@ const terminalStates: TaskState[] = ["completed", "failed", "canceled", "rejecte
 export class RequestContextBuilder {
     private readonly shouldPopulateReferredTasks: boolean = false;
     private readonly taskStore: TaskStore;
-    
-    constructor(shouldPopulateReferredTasks: boolean = false, taskStore: TaskStore){
+
+    constructor(shouldPopulateReferredTasks: boolean = false, taskStore: TaskStore) {
         this.shouldPopulateReferredTasks = shouldPopulateReferredTasks;
         this.taskStore = taskStore;
     }
-    
-    public async build (
+
+    public async build(
         params: MessageSendParams,
         context: ServerCallContext
     ): Promise<RequestContext> {
         let task: Task | undefined;
         let referenceTasks: Task[] | undefined;
-        
+
         const incomingMessage = params.message;
         // incomingMessage would contain taskId, if a task already exists.
         if (incomingMessage.taskId) {
@@ -36,7 +36,7 @@ export class RequestContextBuilder {
             if (!task) {
                 throw A2AError.taskNotFound(incomingMessage.taskId);
             }
-            
+
             if (terminalStates.includes(task.status.state)) {
                 // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
                 throw A2AError.invalidRequest(`Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`)
@@ -50,17 +50,16 @@ export class RequestContextBuilder {
         const taskId = incomingMessage.taskId || uuidv4();
         params.message.taskId = taskId;
 
-        if (this.shouldPopulateReferredTasks && incomingMessage.referenceTaskIds && incomingMessage.referenceTaskIds.length > 0) {
-            referenceTasks = [];
-            for (const refId of incomingMessage.referenceTaskIds) {
+        if (this.shouldPopulateReferredTasks && incomingMessage.referenceTaskIds?.length) {
+            const refTaskPromises = incomingMessage.referenceTaskIds.map(async (refId) => {
                 const refTask = await this.taskStore.load(refId);
-                if (refTask) {
-                    referenceTasks.push(refTask);
-                } else {
+                if (!refTask) {
                     console.warn(`Reference task ${refId} not found.`);
-                    // Optionally, throw an error or handle as per specific requirements
                 }
-            }
+                return refTask;
+            });
+            const loadedTasks = await Promise.all(refTaskPromises);
+            referenceTasks = loadedTasks.filter((task): task is Task => !!task);
         }
         // Ensure contextId is present
         const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
@@ -69,5 +68,5 @@ export class RequestContextBuilder {
         return new RequestContext(params, taskId, contextId, context, task, referenceTasks);
     }
 
-    
+
 }
