@@ -51,7 +51,6 @@ export class A2AClient {
    */
   constructor(agentCard: AgentCard | string, options?: A2AClientOptions) {
     this.customFetchImpl = options?.fetchImpl;
-
     if (typeof agentCard === 'string') {
       console.warn("Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.");
       this.agentCardPromise = this._fetchAndCacheAgentCard( agentCard, options?.agentCardPath );
