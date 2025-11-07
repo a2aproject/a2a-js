@@ -1,3 +1,4 @@
+import { response } from 'express';
 import { AuthenticatedExtendedCardNotConfiguredError, ContentTypeNotSupportedError, InvalidAgentResponseError, PushNotificationNotSupportedError, TaskNotCancelableError, TaskNotFoundError, UnsupportedOperationError } from '../../server/error.js';
 import {
   JSONRPCRequest,
@@ -21,6 +22,7 @@ import {
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { A2ATransport } from './transport.js';
+import { error } from 'console';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
@@ -114,18 +116,18 @@ export class JsonRpcTransport implements A2ATransport {
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
+      let errorJson: JSONRPCErrorResponse;
       try {
         errorBodyText = await httpResponse.text();
-        const errorJson: JSONRPCErrorResponse = JSON.parse(errorBodyText);
-        if (errorJson.jsonrpc && errorJson.error) {
-          throw JsonRpcTransport.mapToError(errorJson);
-        } else if (!errorJson.jsonrpc && errorJson.error) {
-          throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
-        } else {
-          throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
-        }
-      } catch (e: any) {
-        if (e.message.startsWith('RPC error for') || e.message.startsWith('HTTP error for')) throw e;
+        errorJson = JSON.parse(errorBodyText);
+      } catch {
+        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
+      }
+      if (errorJson.jsonrpc && errorJson.error) {
+        throw JsonRpcTransport.mapToError(errorJson);
+      } else if (!errorJson.jsonrpc && errorJson.error) {
+        throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
+      } else {
         throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
       }
     }
@@ -270,21 +272,70 @@ export class JsonRpcTransport implements A2ATransport {
   private static mapToError(response: JSONRPCErrorResponse): Error {
     switch (response.error.code) {
       case -32001:
-        return new TaskNotFoundError();
+        return new TaskNotFoundJSONRPCError(response);
       case -32002:
-        return new TaskNotCancelableError();
+        return new TaskNotCancelableJSONRPCError(response);
       case -32003:
-        return new PushNotificationNotSupportedError();
+        return new PushNotificationNotSupportedJSONRPCError(response);
       case -32004:
-        return new UnsupportedOperationError();
+        return new UnsupportedOperationJSONRPCError(response);
       case -32005:
-        return new ContentTypeNotSupportedError();
+        return new ContentTypeNotSupportedJSONRPCError(response);
       case -32006:
-        return new InvalidAgentResponseError();
+        return new InvalidAgentResponseJSONRPCError(response);
       case -32007:
-        return new AuthenticatedExtendedCardNotConfiguredError();
+        return new AuthenticatedExtendedCardNotConfiguredJSONRPCError(response);
       default:
-        return new Error(`Unknown JSON-RPC error: ${response.error.message} (Code: ${response.error.code}) Data: ${JSON.stringify(response.error.data || {})}`)
+        return new JSONRPCTransportError(response);
     }
+  }
+}
+
+export class JSONRPCTransportError extends Error {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super(`JSON-RPC error: ${errorResponse.error.message} (Code: ${errorResponse.error.code}) Data: ${JSON.stringify(errorResponse.error.data || {})}`);
+  }
+}
+
+// Redeclare domain errors with the original JSON-RPC response as a field to be compatible
+// with the legacy A2AClient built around JSON-RPC interface.
+
+export class TaskNotFoundJSONRPCError extends TaskNotFoundError {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super()
+  }
+}export class TaskNotCancelableJSONRPCError extends TaskNotCancelableError {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super()
+  }
+}
+
+export class PushNotificationNotSupportedJSONRPCError extends PushNotificationNotSupportedError {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super()
+  }
+}
+
+export class UnsupportedOperationJSONRPCError extends UnsupportedOperationError {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super()
+  }
+}
+
+export class ContentTypeNotSupportedJSONRPCError extends ContentTypeNotSupportedError {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super()
+  }
+}
+
+export class InvalidAgentResponseJSONRPCError extends InvalidAgentResponseError {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super()
+  }
+}
+
+export class AuthenticatedExtendedCardNotConfiguredJSONRPCError extends AuthenticatedExtendedCardNotConfiguredError {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super()
   }
 }

@@ -21,7 +21,7 @@ import {
   JSONRPCErrorResponse,
   A2ARequest,
   GetAuthenticatedExtendedCardRequest} from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
-import { AGENT_CARD_PATH } from "../constants.js";
+import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 
 export type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
@@ -357,19 +357,19 @@ export class A2AClient {
     TResponse extends JSONRPCResponse>(params: TParams, caller: (transport: JsonRpcTransport, params: TParams, idOverride: number) => Promise<Exclude<TResponse, JSONRPCErrorResponse>['result']>): Promise<TResponse> {
     const transport = await this._getOrCreateTransport();
     const requestId = this.requestIdCounter++;
-    const result = await caller(transport, params, requestId);
-    return {
-      'id': requestId,
-      'jsonrpc': '2.0',
-      'result': result
-    } as TResponse
-  }
-
-  private static toJSONRPCResponse<TResponse extends Exclude<JSONRPCResponse, JSONRPCErrorResponse>>(id: number, result: TResponse['result'], transport: JsonRpcTransport): TResponse {
-    return {
-      'jsonrpc': '2.0',
-      'id': id,
-      'result': result,
-    } as TResponse
+    try {
+      const result = await caller(transport, params, requestId);
+      return {
+        'id': requestId,
+        'jsonrpc': '2.0',
+        'result': result
+      } as TResponse
+    } catch (e: any) {
+      // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors.
+      if ('errorResponse' in e && e.errorResponse && e.errorResponse.jsonrpc === '2.0' && e.errorResponse.error) {
+        return e.errorResponse as TResponse;
+      }
+      throw e;
+    }
   }
 }
