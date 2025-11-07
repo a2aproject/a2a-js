@@ -66,7 +66,7 @@ export class RequestContextBuilder {
         const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
         params.message.contextId = contextId;
 
-        return new RequestContext(params, taskId, contextId, task, referenceTasks, context);
+        return new RequestContext(params, taskId, contextId, context, task, referenceTasks);
     }
 
     

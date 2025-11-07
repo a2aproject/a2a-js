@@ -12,18 +12,18 @@ export class RequestContext {
     private readonly _params: MessageSendParams;
     private readonly _taskId: string;
     private readonly _contextId: string;
+    private readonly context: ServerCallContext;
     private readonly _task?: Task;
     private readonly _relatedTasks?: Task[]; 
-    private readonly context: ServerCallContext;
    
     constructor(
         request: MessageSendParams,
         taskId: string,
         contextId: string,
+        context: ServerCallContext,
         task?: Task,
         relatedTasks?: Task[],
-        context: ServerCallContext
-    ){
+        ){
         this._params = request;
         this._taskId = taskId;
         this._contextId = contextId;
