@@ -9,20 +9,20 @@ import { TaskStore } from "../store.js";
 import { ServerCallContext } from '../context.js';
 
 export class RequestContext {
-    private readonly _params?: MessageSendParams;
-    private readonly _taskId?: string;
-    private readonly _contextId?: string;
+    private readonly _params: MessageSendParams;
+    private readonly _taskId: string;
+    private readonly _contextId: string;
     private readonly _task?: Task;
     private readonly _relatedTasks?: Task[]; 
-    private readonly context?: ServerCallContext;
+    private readonly context: ServerCallContext;
    
     constructor(
-        request?: MessageSendParams,
-        taskId?: string,
-        contextId?: string,
+        request: MessageSendParams,
+        taskId: string,
+        contextId: string,
         task?: Task,
         relatedTasks?: Task[],
-        context?: ServerCallContext
+        context: ServerCallContext
     ){
         this._params = request;
         this._taskId = taskId;
@@ -32,8 +32,8 @@ export class RequestContext {
         this.context = context;
     }
 
-    get userMessage(): Message | undefined {
-        return this._params?.message;
+    get userMessage(): Message {
+        return this._params.message;
     }
 
     get params(): MessageSendParams | undefined {
@@ -41,11 +41,11 @@ export class RequestContext {
     }
 
     get taskId(): string {
-        return this._taskId || uuidv4();
+        return this._taskId;
     }
 
     get contextId(): string {
-        return this._contextId || uuidv4();
+        return this._contextId;
     }
 
     get task(): Task | undefined {
@@ -57,17 +57,17 @@ export class RequestContext {
     }
 
     public addActivatedExtension(uri: string) {
-        if (!this.context?.activatedExtensions) {
+        if (!this.context.activatedExtensions) {
             this.context.activatedExtensions = new Set<string>();
         }
         this.context.activatedExtensions.add(uri);
     }
 
     get requestedExtensions(): Set<string> {
-        return this.context?.requestedExtensions || new Set<string>();
+        return this.context.requestedExtensions || new Set<string>();
     }
 
     get activatedExtensions(): Set<string> {
-        return this.context?.activatedExtensions || new Set<string>();
+        return this.context.activatedExtensions || new Set<string>();
     }
 }

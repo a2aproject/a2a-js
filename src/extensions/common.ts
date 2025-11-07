@@ -14,14 +14,9 @@ export function getRequestedExtensions(values: string): Set<string> {
     if (!values) {
         return extensions;
     }
-
     // Split by comma, trim whitespace, and filter out empty strings
     const parts = values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0);
-    for (const part of parts) {
-        extensions.add(part);
-    }
-
-    return extensions;
+    return new Set(parts);
 }
 
 /**
@@ -31,12 +26,5 @@ export function findExtensionByUri(card: AgentCard, uri: string): AgentExtension
     // Optional chaining (?.) safely handles if card.capabilities.extensions is null/undefined.
     // If it is missing, it returns undefined, falling back to an empty array [].
     const extensions = card.capabilities.extensions ?? [];
-
-    for (const ext of extensions) {
-        if (ext.uri === uri) {
-            return ext;
-        }
-    }
-
-    return null;
+    return extensions.find(ext => ext.uri === uri) ?? null;
 }

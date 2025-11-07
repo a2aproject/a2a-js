@@ -15,16 +15,16 @@ const terminalStates: TaskState[] = ["completed", "failed", "canceled", "rejecte
 
 export class RequestContextBuilder {
     private readonly shouldPopulateReferredTasks: boolean = false;
-    private readonly taskStore?: TaskStore;
+    private readonly taskStore: TaskStore;
     
-    constructor(shouldPopulateReferredTasks: boolean = false, taskStore?: TaskStore){
+    constructor(shouldPopulateReferredTasks: boolean = false, taskStore: TaskStore){
         this.shouldPopulateReferredTasks = shouldPopulateReferredTasks;
         this.taskStore = taskStore;
     }
     
     public async build (
-        params?: MessageSendParams,
-        context?: ServerCallContext
+        params: MessageSendParams,
+        context: ServerCallContext
     ): Promise<RequestContext> {
         let task: Task | undefined;
         let referenceTasks: Task[] | undefined;
