@@ -22,7 +22,6 @@ import {
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { A2ATransport } from './transport.js';
-import { error } from 'console';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
@@ -116,12 +115,12 @@ export class JsonRpcTransport implements A2ATransport {
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
-      let errorJson: JSONRPCErrorResponse;
+      let errorJson: any = {};
       try {
         errorBodyText = await httpResponse.text();
         errorJson = JSON.parse(errorBodyText);
-      } catch {
-        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
+      } catch (e: any) {
+        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`, {cause: e});
       }
       if (errorJson.jsonrpc && errorJson.error) {
         throw JsonRpcTransport.mapToError(errorJson);
