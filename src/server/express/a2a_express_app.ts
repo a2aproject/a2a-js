@@ -5,6 +5,8 @@ import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from ".
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
 import { AGENT_CARD_PATH } from "../../constants.js";
+import { ServerCallContext } from "../context.js";
+import { HTTP_EXTENSION_HEADER, getRequestedExtensions } from "../../extensions/common.js";
 
 export class A2AExpressApp {
     private requestHandler: A2ARequestHandler; // Kept for getAgentCard
@@ -59,7 +61,8 @@ export class A2AExpressApp {
 
         router.post("/", async (req: Request, res: Response) => {
             try {
-                const rpcResponseOrStream = await this.jsonRpcTransportHandler.handle(req.body);
+                const serverCallContext = new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)));
+                const rpcResponseOrStream = await this.jsonRpcTransportHandler.handle(req.body, serverCallContext);
 
                 // Check if it's an AsyncGenerator (stream)
                 if (typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] === 'function') {

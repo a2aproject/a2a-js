@@ -11,6 +11,7 @@ import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../s
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
 import { parseArgs } from 'util';
+import { ServerCallContext } from '../../src/server/context.js';
 
 describe('A2AExpressApp', () => {
     let mockRequestHandler: A2ARequestHandler;
@@ -277,6 +278,30 @@ describe('A2AExpressApp', () => {
                 .expect(500);
 
             assert.equal(response.body.id, null);
+        });
+
+        it('should handle extensions headers', async () => {
+            const mockResponse: JSONRPCSuccessResponse = {
+                jsonrpc: '2.0',
+                id: 'test-id',
+                result: { message: 'success' }
+            };
+            (mockJsonRpcTransportHandler.handle as SinonStub).resolves(mockResponse);
+
+            const requestBody = createRpcRequest('test-id');
+            const uriExtensionsValues = 'test-extension-uri, another-extension';
+
+            await request(expressApp)
+                .post('/')
+                .set('X-A2A-Extensions', uriExtensionsValues)
+                .set('Not-Relevant-Header', 'unused-value')
+                .send(requestBody)
+                .expect(200);
+
+            assert.isTrue((mockJsonRpcTransportHandler.handle as SinonStub).calledOnce);
+            const serverCallContext = (mockJsonRpcTransportHandler.handle as SinonStub).getCall(0).args[1];
+            expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+            expect(serverCallContext.requestedExtensions).to.deep.equal(new Set(['test-extension-uri', 'another-extension']));
         });
     });
 

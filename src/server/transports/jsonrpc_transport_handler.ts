@@ -1,4 +1,5 @@
 import { JSONRPCErrorResponse, MessageSendParams, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, A2ARequest, JSONRPCResponse, DeleteTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
+import { ServerCallContext } from "../context.js";
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 
@@ -18,7 +19,7 @@ export class JsonRpcTransportHandler {
      * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
      */
     public async handle(
-        requestBody: any
+        requestBody: any, context: ServerCallContext
     ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
         let rpcRequest: A2ARequest;
 
@@ -66,7 +67,7 @@ export class JsonRpcTransportHandler {
                     throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
                 }
                 const agentEventStream = method === 'message/stream'
-                    ? this.requestHandler.sendMessageStream(params as MessageSendParams)
+                    ? this.requestHandler.sendMessageStream(params as MessageSendParams, context)
                     : this.requestHandler.resubscribe(params as TaskIdParams);
 
                 // Wrap the agent event stream into a JSON-RPC result stream
@@ -96,7 +97,7 @@ export class JsonRpcTransportHandler {
                 let result: any;
                 switch (method) {
                     case 'message/send':
-                        result = await this.requestHandler.sendMessage(rpcRequest.params);
+                        result = await this.requestHandler.sendMessage(rpcRequest.params, context);
                         break;
                     case 'tasks/get':
                         result = await this.requestHandler.getTask(rpcRequest.params);

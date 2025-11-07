@@ -13,8 +13,9 @@ import { A2ARequestHandler } from "./a2a_request_handler.js";
 import { InMemoryPushNotificationStore, PushNotificationStore } from '../push_notification/push_notification_store.js';
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
+import { RequestContextBuilder } from '../agent_execution/request_context_builder.js';
+import { ServerCallContext } from '../context.js';
 
-const terminalStates: TaskState[] = ["completed", "failed", "canceled", "rejected"];
 
 export class DefaultRequestHandler implements A2ARequestHandler {
     private readonly agentCard: AgentCard;
@@ -24,6 +25,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     private readonly eventBusManager: ExecutionEventBusManager;
     private readonly pushNotificationStore ?: PushNotificationStore;
     private readonly pushNotificationSender ?: PushNotificationSender;
+    private readonly requestContextBuilder ?: RequestContextBuilder;
 
 
     constructor(
@@ -34,12 +36,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         pushNotificationStore?: PushNotificationStore,
         pushNotificationSender?: PushNotificationSender,
         extendedAgentCard?: AgentCard,
+        requestContextBuilder?: RequestContextBuilder,
     ) {
         this.agentCard = agentCard;
         this.taskStore = taskStore;
         this.agentExecutor = agentExecutor;
         this.eventBusManager = eventBusManager;
         this.extendedAgentCard = extendedAgentCard;
+        this.requestContextBuilder = requestContextBuilder || new RequestContextBuilder(false, this.taskStore);
 
         // If push notifications are supported, use the provided store and sender.
         // Otherwise, use the default in-memory store and sender.
@@ -59,61 +63,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
 
         return this.extendedAgentCard;
-    }
-
-    private async _createRequestContext(
-        incomingMessage: Message,
-        taskId: string,
-        isStream: boolean,
-    ): Promise<RequestContext> {
-        let task: Task | undefined;
-        let referenceTasks: Task[] | undefined;
-
-        // incomingMessage would contain taskId, if a task already exists.
-        if (incomingMessage.taskId) {
-            task = await this.taskStore.load(incomingMessage.taskId);
-            if (!task) {
-                throw A2AError.taskNotFound(incomingMessage.taskId);
-            }
-            
-            if (terminalStates.includes(task.status.state)) {
-                // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
-                throw A2AError.invalidRequest(`Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`)
-            }
-
-            // Add incomingMessage to history and save the task.
-            task.history = [...(task.history || []), incomingMessage];
-            await this.taskStore.save(task);
-        }
-
-        if (incomingMessage.referenceTaskIds && incomingMessage.referenceTaskIds.length > 0) {
-            referenceTasks = [];
-            for (const refId of incomingMessage.referenceTaskIds) {
-                const refTask = await this.taskStore.load(refId);
-                if (refTask) {
-                    referenceTasks.push(refTask);
-                } else {
-                    console.warn(`Reference task ${refId} not found.`);
-                    // Optionally, throw an error or handle as per specific requirements
-                }
-            }
-        }
-
-        // Ensure contextId is present
-        const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
-
-        const messageForContext = {
-          ...incomingMessage,
-          contextId,
-        };
-
-        return new RequestContext(
-            messageForContext,
-            taskId,
-            contextId,
-            task,
-            referenceTasks
-        );
     }
 
     private async _processEvents(
@@ -161,7 +110,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     async sendMessage(
-        params: MessageSendParams
+        params: MessageSendParams,
+        context: ServerCallContext
     ): Promise<Message | Task> {
         const incomingMessage = params.message;
         if (!incomingMessage.messageId) {
@@ -170,13 +120,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         // Default to blocking behavior if 'blocking' is not explicitly false.
         const isBlocking = params.configuration?.blocking !== false;
-        const taskId = incomingMessage.taskId || uuidv4();
-
         // Instantiate ResultManager before creating RequestContext
         const resultManager = new ResultManager(this.taskStore);
         resultManager.setContext(incomingMessage); // Set context for ResultManager
 
-        const requestContext = await this._createRequestContext(incomingMessage, taskId, false);
+        const requestContext = await this.requestContextBuilder.build(params, context);
+        const taskId = requestContext.taskId;
+
         // Use the (potentially updated) contextId from requestContext
         const finalMessageForAgent = requestContext.userMessage;
 
@@ -184,7 +134,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         if (params.configuration?.pushNotificationConfig && this.agentCard.capabilities.pushNotifications) {
             await this.pushNotificationStore?.save(taskId, params.configuration.pushNotificationConfig);
         }
-
 
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
         // EventQueue should be attached to the bus, before the agent execution begins.
@@ -251,7 +200,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     async *sendMessageStream(
-        params: MessageSendParams
+        params: MessageSendParams,
+        context: ServerCallContext
     ): AsyncGenerator<
         | Message
         | Task
@@ -267,13 +217,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             throw A2AError.invalidParams('message.messageId is required for streaming.');
         }
 
-        const taskId = incomingMessage.taskId || uuidv4();
-
         // Instantiate ResultManager before creating RequestContext
         const resultManager = new ResultManager(this.taskStore);
         resultManager.setContext(incomingMessage); // Set context for ResultManager
 
-        const requestContext = await this._createRequestContext(incomingMessage, taskId, true);
+        const requestContext = await this.requestContextBuilder.build(params, context);
+        const taskId = requestContext.taskId;
         const finalMessageForAgent = requestContext.userMessage;
 
         const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);

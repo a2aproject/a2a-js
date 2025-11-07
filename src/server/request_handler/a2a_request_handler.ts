@@ -1,3 +1,4 @@
+import { Server } from "http";
 import {
     Message,
     AgentCard,
@@ -12,6 +13,7 @@ import {
     ListTaskPushNotificationConfigParams,
     DeleteTaskPushNotificationConfigParams,
 } from "../../types.js";
+import { ServerCallContext } from "../context.js";
 
 export interface A2ARequestHandler {
     getAgentCard(): Promise<AgentCard>;
@@ -19,11 +21,13 @@ export interface A2ARequestHandler {
     getAuthenticatedExtendedAgentCard(): Promise<AgentCard>;
 
     sendMessage(
-        params: MessageSendParams
+        params: MessageSendParams,
+        context: ServerCallContext,
     ): Promise<Message | Task>;
 
     sendMessageStream(
-        params: MessageSendParams
+        params: MessageSendParams,
+        context: ServerCallContext,
     ): AsyncGenerator<
         | Message
         | Task
