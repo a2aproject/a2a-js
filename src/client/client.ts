@@ -40,6 +40,7 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetchin
   private customFetchImpl?: typeof fetch;
+  // A2AClient is built around JSON-RPC types, so it will only support JSON-RPC transport.
   private transport?: JsonRpcTransport;
   private requestIdCounter: number = 1;
 
@@ -232,13 +233,14 @@ export class A2AClient {
     try {
       return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(method, params, this.requestIdCounter++);
     } catch (e: any) {
+      // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
+      // produced by JsonRpcTransport.
       if (isJSONRPCError(e)) {
         return e.errorResponse as TExtensionResponse;
       }
       throw e;
     }
   }
-
 
   /**
    * Resubscribes to a task's event stream using Server-Sent Events (SSE).
@@ -276,7 +278,7 @@ export class A2AClient {
 
     const endpoint = await this._getServiceEndpoint();
     this.transport = new JsonRpcTransport({fetchImpl: this.customFetchImpl, endpoint: endpoint});
-    return this.transport
+    return this.transport;
   }
 
   /**
@@ -372,7 +374,8 @@ export class A2AClient {
         'result': result
       } as TResponse
     } catch (e: any) {
-      // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors.
+      // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
+      // produced by JsonRpcTransport.
       if (isJSONRPCError(e)) {
         return e.errorResponse as TResponse;
       }
