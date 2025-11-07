@@ -158,21 +158,19 @@ export class A2AClient {
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
+      let errorJson: any = {};
       try {
         errorBodyText = await httpResponse.text();
-        const errorJson = JSON.parse(errorBodyText);
-        // If the body is a valid JSON-RPC error response, return it as a proper JSON-RPC error response.
-        if (errorJson.jsonrpc && errorJson.error) {
-          return errorJson as TResponse;
-        } else if (!errorJson.jsonrpc && errorJson.error) { // Check if it's a JSON-RPC error structure
-          throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
-        } else if (!errorJson.jsonrpc) {
-          throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
-        }
+        errorJson = JSON.parse(errorBodyText);
       } catch (e: any) {
-        // If parsing the error body fails or it's not a JSON-RPC error, throw a generic HTTP error.
-        // If it was already an error thrown from within the try block, rethrow it.
-        if (e.message.startsWith('RPC error for') || e.message.startsWith('HTTP error for')) throw e;
+        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
+      }
+      // If the body is a valid JSON-RPC error response, return it as a proper JSON-RPC error response.
+      if (errorJson.jsonrpc && errorJson.error) {
+        return errorJson as TResponse;
+      } else if (!errorJson.jsonrpc && errorJson.error) { // Check if it's a JSON-RPC error structure
+        throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
+      } else if (!errorJson.jsonrpc) {
         throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
       }
     }
