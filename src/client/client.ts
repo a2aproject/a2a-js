@@ -229,7 +229,14 @@ export class A2AClient {
    */
   public async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams) {
     const transport = await this._getOrCreateTransport();
-    return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(method, params, this.requestIdCounter++);
+    try {
+      return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(method, params, this.requestIdCounter++);
+    } catch (e: any) {
+      if (isJSONRPCError(e)) {
+        return e.errorResponse as TExtensionResponse;
+      }
+      throw e;
+    }
   }
 
 
@@ -366,10 +373,14 @@ export class A2AClient {
       } as TResponse
     } catch (e: any) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors.
-      if ('errorResponse' in e && e.errorResponse && e.errorResponse.jsonrpc === '2.0' && e.errorResponse.error) {
+      if (isJSONRPCError(e)) {
         return e.errorResponse as TResponse;
       }
       throw e;
     }
   }
+}
+
+function isJSONRPCError(error: any): boolean {
+  return 'errorResponse' in error && error.errorResponse && error.errorResponse.jsonrpc === '2.0' && error.errorResponse.error;
 }
