@@ -18,9 +18,7 @@ import {
   Task,
   TaskArtifactUpdateEvent,
   TaskStatusUpdateEvent,
-  JSONRPCErrorResponse,
-  A2ARequest,
-  GetAuthenticatedExtendedCardRequest} from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
+  A2ARequest} from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 
@@ -134,7 +132,7 @@ export class A2AClient {
    * @returns A Promise resolving to SendMessageResponse, which can be a Message, Task, or an error.
    */
   public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
-    return await this.invokeJsonRpc<MessageSendParams, SendMessageResponse>(params, (t, p, id) => t.sendMessage(p, id))
+    return await this.invokeJsonRpc<MessageSendParams, SendMessageResponse>((t, p, id) => t.sendMessage(p, id), params)
   }
 
   /**
@@ -167,7 +165,7 @@ export class A2AClient {
     if (!agentCard.capabilities?.pushNotifications) {
       throw new Error("Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).");
     }
-    return await this.invokeJsonRpc<TaskPushNotificationConfig, SetTaskPushNotificationConfigResponse>(params, (t, p, id) => t.setTaskPushNotificationConfig(p, id))
+    return await this.invokeJsonRpc<TaskPushNotificationConfig, SetTaskPushNotificationConfigResponse>((t, p, id) => t.setTaskPushNotificationConfig(p, id), params)
   }
 
   /**
@@ -176,7 +174,7 @@ export class A2AClient {
    * @returns A Promise resolving to GetTaskPushNotificationConfigResponse.
    */
   public async getTaskPushNotificationConfig(params: TaskIdParams): Promise<GetTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<TaskIdParams, GetTaskPushNotificationConfigResponse>(params, (t, p, id) => t.getTaskPushNotificationConfig(p, id))
+    return await this.invokeJsonRpc<TaskIdParams, GetTaskPushNotificationConfigResponse>((t, p, id) => t.getTaskPushNotificationConfig(p, id), params)
   }
 
   /**
@@ -185,7 +183,7 @@ export class A2AClient {
    * @returns A Promise resolving to ListTaskPushNotificationConfigResponse.
    */
   public async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams): Promise<ListTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>(params, (t, p, id) => t.listTaskPushNotificationConfig(p, id))
+    return await this.invokeJsonRpc<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>((t, p, id) => t.listTaskPushNotificationConfig(p, id), params)
   }
 
   /**
@@ -194,12 +192,8 @@ export class A2AClient {
    * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
    */
   public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(params, async (t, p, id) => {
-      await t.deleteTaskPushNotificationConfig(p, id);
-      return null;
-    })
+    return await this.invokeJsonRpc<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>((t, p, id) => t.deleteTaskPushNotificationConfig(p, id), params)
   }
-
 
   /**
    * Retrieves a task by its ID.
@@ -207,7 +201,7 @@ export class A2AClient {
    * @returns A Promise resolving to GetTaskResponse, which contains the Task object or an error.
    */
   public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
-    return await this.invokeJsonRpc<TaskQueryParams, GetTaskResponse>(params, (t, p, id) => t.getTask(p, id))
+    return await this.invokeJsonRpc<TaskQueryParams, GetTaskResponse>((t, p, id) => t.getTask(p, id), params)
   }
 
   /**
@@ -216,7 +210,7 @@ export class A2AClient {
    * @returns A Promise resolving to CancelTaskResponse, which contains the updated Task object or an error.
    */
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
-    return await this.invokeJsonRpc<TaskIdParams, CancelTaskResponse>(params, (t, p, id) => t.cancelTask(p, id))
+    return await this.invokeJsonRpc<TaskIdParams, CancelTaskResponse>((t, p, id) => t.cancelTask(p, id), params)
   }
 
   /**
@@ -361,8 +355,7 @@ export class A2AClient {
     return this.serviceEndpointUrl;
   }
 
-  private async invokeJsonRpc<TParams extends Exclude<A2ARequest, GetAuthenticatedExtendedCardRequest>['params'],
-    TResponse extends JSONRPCResponse>(params: TParams, caller: (transport: JsonRpcTransport, params: TParams, idOverride: number) => Promise<Exclude<TResponse, JSONRPCErrorResponse>['result']>): Promise<TResponse> {
+  private async invokeJsonRpc<TParams extends JsonRpcParams, TResponse extends JSONRPCResponse>(caller: JsonRpcCaller<TParams, TResponse>, params?: TParams): Promise<TResponse> {
     const transport = await this._getOrCreateTransport();
     const requestId = this.requestIdCounter++;
     try {
@@ -370,7 +363,7 @@ export class A2AClient {
       return {
         'id': requestId,
         'jsonrpc': '2.0',
-        'result': result
+        'result': result ?? null, // JSON-RPC requires result property on success, it will be null for "void" methods.
       } as TResponse
     } catch (e: any) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
@@ -378,10 +371,15 @@ export class A2AClient {
       if (isJSONRPCError(e)) {
         return e.errorResponse as TResponse;
       }
-      throw e;
+      throw e; 
     }
   }
 }
+
+type ParamsOf<T> = T extends { params: unknown } ? T['params'] : undefined;
+type ResultOf<T> = T extends { result: unknown } ? T['result'] : void;
+type JsonRpcParams = ParamsOf<A2ARequest>;
+type JsonRpcCaller<TParams extends JsonRpcParams, TResponse extends JSONRPCResponse> = (transport: JsonRpcTransport, params: TParams, idOverride: number) => Promise<ResultOf<TResponse>>
 
 function isJSONRPCError(error: any): boolean {
   return 'errorResponse' in error && error.errorResponse && error.errorResponse.jsonrpc === '2.0' && error.errorResponse.error;
