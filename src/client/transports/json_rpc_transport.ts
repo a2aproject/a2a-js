@@ -168,16 +168,16 @@ export class JsonRpcTransport implements A2ATransport {
 
     if (!response.ok) {
       let errorBody = "";
+      let errorJson: any = {};
       try {
         errorBody = await response.text();
-        const errorJson = JSON.parse(errorBody);
-        if (errorJson.error) {
-          throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
-        }
+        errorJson = JSON.parse(errorBody);
       } catch (e: any) {
-        if (e.message.startsWith('HTTP error establishing stream')) throw e;
-        throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`);
+        throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`, {cause: e});
       }
+      if (errorJson.error) {
+        throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
+      }      
       throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}`);
     }
     if (!response.headers.get("Content-Type")?.startsWith("text/event-stream")) {
