@@ -54,17 +54,16 @@ export class RequestContext {
     }
 
     public addActivatedExtension(uri: string) {
-        if (!this.context.activatedExtensions) {
-            this.context.activatedExtensions = new Set<string>();
+        if (this.context.requestedExtensions.has(uri)) {
+            this.context.activatedExtensions.add(uri);
         }
-        this.context.activatedExtensions.add(uri);
     }
 
     get requestedExtensions(): Set<string> {
-        return this.context.requestedExtensions || new Set<string>();
+        return this.context.requestedExtensions;
     }
 
     get activatedExtensions(): Set<string> {
-        return this.context.activatedExtensions || new Set<string>();
+        return this.context.activatedExtensions;
     }
 }

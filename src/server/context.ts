@@ -1,12 +1,28 @@
 export class ServerCallContext {
-  public requestedExtensions?: Set<string>;
-  public activatedExtensions?: Set<string>;
-  public state?: Map<string, any>;
-
+  private readonly _requestedExtensions: Set<string>;
+  private readonly _activatedExtensions: Set<string>;
+  private _method: string;
 
   constructor(
-    requestedExtensions = new Set<string>(),
+    requestedExtensions: Set<string>,
   ) {
-    this.requestedExtensions = requestedExtensions;
+    this._requestedExtensions = requestedExtensions;
+    this._activatedExtensions = new Set<string>();
+  }
+
+  get activatedExtensions(): Set<string> {
+    return this._activatedExtensions;
+  }
+
+  get requestedExtensions(): Set<string> {
+    return this._requestedExtensions;
+  }
+
+  set method(value: string) {
+    this._method = value;
+  }
+
+  get method(): string {
+    return this._method;
   }
 }

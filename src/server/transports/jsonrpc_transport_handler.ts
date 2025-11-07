@@ -1,4 +1,5 @@
 import { JSONRPCErrorResponse, MessageSendParams, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, A2ARequest, JSONRPCResponse, DeleteTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
+import { RequestContext } from "../agent_execution/request_context.js";
 import { ServerCallContext } from "../context.js";
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
@@ -45,7 +46,7 @@ export class JsonRpcTransportHandler {
         }
 
         const { method, id: requestId = null } = rpcRequest;
-
+        context.method = method;
         try {
             if(method === 'agent/getAuthenticatedExtendedCard') {
                 const result = await this.requestHandler.getAuthenticatedExtendedAgentCard();

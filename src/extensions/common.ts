@@ -16,13 +16,3 @@ export function getRequestedExtensions(values: string | undefined): Set<string> 
     // Split by comma, trim whitespace, and filter out empty strings
     return new Set(values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0));
 }
-
-/**
- * Find an AgentExtension in an AgentCard given a uri.
- */
-export function findExtensionByUri(card: AgentCard, uri: string): AgentExtension | null {
-    // Optional chaining (?.) safely handles if card.capabilities.extensions is null/undefined.
-    // If it is missing, it returns undefined, falling back to an empty array [].
-    const extensions = card.capabilities.extensions ?? [];
-    return extensions.find(ext => ext.uri === uri) ?? null;
-}
