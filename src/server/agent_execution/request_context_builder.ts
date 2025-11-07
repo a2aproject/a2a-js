@@ -28,8 +28,7 @@ export class RequestContextBuilder {
     ): Promise<RequestContext> {
         let task: Task | undefined;
         let referenceTasks: Task[] | undefined;
-        let incomingParams: MessageSendParams = {...params};
-        let incomingMessage: Message = incomingParams.message;
+        const incomingMessage: Message = {...params.message};
 
         // incomingMessage would contain taskId, if a task already exists.
         if (incomingMessage.taskId) {
@@ -66,7 +65,7 @@ export class RequestContextBuilder {
         const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
         incomingMessage.contextId = contextId;
 
-        return new RequestContext(incomingParams, taskId, contextId, context, task, referenceTasks);
+        return new RequestContext({...params, message: incomingMessage}, taskId, contextId, context, task, referenceTasks);
     }
 
 
