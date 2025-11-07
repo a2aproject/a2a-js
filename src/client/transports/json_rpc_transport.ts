@@ -1,4 +1,4 @@
-import { AuthenticatedExtendedCardNotConfiguredError, ContentTypeNotSupportedError, InvalidAgentResponseError, PushNotificationNotSupportedError, TaskNotCancelableError, TaskNotFoundError, UnsupportedOperationError } from '../../server/error.js';
+import { AuthenticatedExtendedCardNotConfiguredError, ContentTypeNotSupportedError, InvalidAgentResponseError, PushNotificationNotSupportedError, TaskNotCancelableError, TaskNotFoundError, UnsupportedOperationError } from '../../errors.js';
 import {
   JSONRPCRequest,
   JSONRPCResponse,
