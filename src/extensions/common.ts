@@ -9,14 +9,12 @@ export const HTTP_EXTENSION_HEADER = 'X-A2A-Extensions';
  * This handles the list containing potentially comma-separated values, as
  * occurs when using a list in an HTTP header.
  */
-export function getRequestedExtensions(values: string): Set<string> {
-    const extensions = new Set<string>();
+export function getRequestedExtensions(values: string | undefined): Set<string> {
     if (!values) {
-        return extensions;
+        return new Set();
     }
     // Split by comma, trim whitespace, and filter out empty strings
-    const parts = values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0);
-    return new Set(parts);
+    return new Set(values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0));
 }
 
 /**
