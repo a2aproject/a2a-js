@@ -16,10 +16,12 @@ export interface DefaultPushNotificationSenderOptions {
 export class DefaultPushNotificationSender implements PushNotificationSender {
 
     private readonly pushNotificationStore: PushNotificationStore;
+    private notificationChain: Map<string,Promise<unknown>>;
     private readonly options: Required<DefaultPushNotificationSenderOptions>;
     
     constructor(pushNotificationStore: PushNotificationStore, options: DefaultPushNotificationSenderOptions = {}) {
         this.pushNotificationStore = pushNotificationStore;
+        this.notificationChain = new Map();
         this.options = {
             timeout: 5000,
             tokenHeaderName: 'X-A2A-Notification-Token',
@@ -33,11 +35,27 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             return;
         }
 
-        pushConfigs.forEach(pushConfig => {
-            this._dispatchNotification(task, pushConfig)
-                .catch(error => {
-                    console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error);
-                });
+        const lastPromise = this.notificationChain.get(task.id) ?? Promise.resolve();
+        // Chain promises to ensure notifications for the same task are sent sequentially.
+        // Once the promise is resolved, the Garbage Collector will clean it up if there are no other references to it.
+        // This will prevent memory to linearly grow with the number of notifications sent.
+        const newPromise = lastPromise.then(async () => {
+            const dispatches = pushConfigs.map(async pushConfig => {
+                try {
+                    await this._dispatchNotification(task, pushConfig)
+                } catch (error) {
+                    console.error(`Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`, error)
+                }
+            });
+            await Promise.all(dispatches);
+        })
+        this.notificationChain.set(task.id, newPromise);
+
+        newPromise.finally(() => {
+            // Clean up the chain if it's the last notification
+            if (this.notificationChain.get(task.id) === newPromise) {
+                this.notificationChain.delete(task.id);
+            }
         });
     }
 
@@ -71,9 +89,6 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             }
 
             console.info(`Push notification sent for task_id=${task.id} to URL: ${url}`);
-        } catch (error) {
-            // Ignore errors
-            console.error(`Error sending push notification for task_id=${task.id} to URL: ${url}. Error:`, error);
         } finally {
             clearTimeout(timeoutId);
         }

@@ -31,14 +31,8 @@ export class JsonRpcTransportHandler {
                 throw A2AError.parseError('Invalid request body type.');
             }
 
-            if (
-                rpcRequest.jsonrpc !== '2.0' ||
-                !rpcRequest.method ||
-                typeof rpcRequest.method !== 'string'
-            ) {
-                throw A2AError.invalidRequest(
-                    'Invalid JSON-RPC request structure.'
-                );
+            if (!this.isRequestValid(rpcRequest)) {
+                throw A2AError.invalidRequest('Invalid JSON-RPC Request.');
             }
         } catch (error: any) {
             const a2aError = error instanceof A2AError ? error : A2AError.parseError(error.message || 'Failed to parse JSON request.');
@@ -61,8 +55,8 @@ export class JsonRpcTransportHandler {
                 } as JSONRPCResponse;
             }
 
-            if (!rpcRequest.params) {
-                throw A2AError.invalidParams(`'params' is required for '${method}'`);
+            if (!this.paramsAreValid(rpcRequest.params)) {
+                throw A2AError.invalidParams(`Invalid method parameters.`);
             }
 
             if (method === 'message/stream' || method === 'tasks/resubscribe') {
@@ -148,5 +142,41 @@ export class JsonRpcTransportHandler {
                 error: a2aError.toJSONRPCError(),
             } as JSONRPCErrorResponse;
         }
+    }
+
+    // Validates the basic structure of a JSON-RPC request
+    private isRequestValid(rpcRequest: A2ARequest): boolean {
+        if (rpcRequest.jsonrpc !== '2.0') {
+            return false;
+        }
+        if ('id' in rpcRequest) {
+            const id = rpcRequest.id;
+            const isString = typeof id === 'string';
+            const isInteger = typeof id === 'number' && Number.isInteger(id);
+            const isNull = id === null;
+
+            if (!isString && !isInteger && !isNull) {
+                return false;
+            }
+        }
+        if (!rpcRequest.method || typeof rpcRequest.method !== 'string') {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Validates that params is an object with non-empty string keys
+    private paramsAreValid(params: any): boolean {
+        if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+            return false;
+        }
+
+        for (const key of Object.keys(params)) {
+            if (key === "") {
+                return false;
+            }
+        }
+        return true;
     }
 }

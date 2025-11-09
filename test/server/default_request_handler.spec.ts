@@ -7,7 +7,7 @@ import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, Defaul
 import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute } from './mocks/agent-executor.mock.js';
+import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute, FailingCancellableMockAgentExecutor } from './mocks/agent-executor.mock.js';
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 
 
@@ -240,6 +240,327 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.equal(nonBlockingTask.kind, 'task', 'Result should be a task');
         assert.equal(nonBlockingTask.status.state, 'failed', 'Task status should be failed');
         assert.include((nonBlockingTask.status.message?.parts[0] as any).text, errorMessage, 'Error message should be in the status');
+    });
+
+    it('sendMessage: should return second task with full history if message is sent to an existing, non-terminal task', async () => {
+        const contextId = 'ctx-history-abc';
+        
+        // First message
+        const firstMessage = createTestMessage('msg-1', 'Message 1');
+        firstMessage.contextId = contextId;
+        const firstParams: MessageSendParams = {
+            message: firstMessage
+        };
+
+        let taskId: string;
+
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            taskId = ctx.taskId;
+            
+            // Publish task creation
+            bus.publish({
+                id: taskId,
+                contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+
+            // Publish working status
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },
+                final: false
+            });
+
+            // Mark as input-required with agent response message
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { 
+                    state: "input-required",
+                    message: {
+                        messageId: 'agent-msg-1',
+                        role: 'agent',
+                        parts: [{ kind: 'text', text: 'Response to message 1' }],
+                        kind: 'message',
+                        taskId,
+                        contextId
+                    }
+                },
+                final: true
+            });
+            bus.finished();
+        });
+
+        const firstResult = await handler.sendMessage(firstParams);
+        const firstTask = firstResult as Task;
+        
+        // Check the first result is a task with `input-required` status
+        assert.equal(firstTask.kind, 'task');
+        assert.equal(firstTask.status.state, 'input-required');
+
+        // Check the history
+        assert.isDefined(firstTask.history, 'First task should have history');
+        assert.lengthOf(firstTask.history!, 2, 'First task history should contain user message and agent message');
+        assert.equal(firstTask.history![0].messageId, 'msg-1', 'First history item should be user message');
+        assert.equal(firstTask.history![1].messageId, 'agent-msg-1', 'Second history item should be agent message');
+
+        // Second message
+        const secondMessage = createTestMessage('msg-2', 'Message 2');
+        secondMessage.contextId = contextId;
+        secondMessage.taskId = firstTask.id;
+
+        const secondParams: MessageSendParams = {
+            message: secondMessage
+        };
+
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            // Publish a status update with working state
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },
+                final: false
+            });
+
+            // Publish a status update with working state and message
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: {
+                    state: "working",
+                    message: {
+                        messageId: 'agent-msg-2',
+                        role: 'agent',
+                        parts: [{ kind: 'text', text: 'Response to message 2' }],
+                        kind: 'message',
+                        taskId,
+                        contextId
+                    }
+                },
+                final: false
+            });
+
+            // Publish an artifact update
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'artifact-update',
+                artifact: {
+                    artifactId: 'artifact-1',
+                    name: 'Test Document',
+                    description: 'A test artifact.',
+                    parts: [{ kind: 'text', text: 'This is the content of the artifact.' }]
+                }
+            });
+
+            // Mark as completed
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: {
+                    state: "completed"
+                },
+                final: true
+            });
+            
+            bus.finished();
+        });
+
+        const secondResult = await handler.sendMessage(secondParams);
+        const secondTask = secondResult as Task;
+
+        // Check the second result is a task with `completed` status
+        assert.equal(secondTask.kind, 'task');
+        assert.equal(secondTask.id, taskId, 'Should be the same task');
+        assert.equal(secondTask.status.state, 'completed');
+        
+        // Check the history
+        assert.isDefined(secondTask.history, 'Second task should have history');
+        assert.lengthOf(secondTask.history!, 4, 'Second task history should contain all 4 messages (user1, agent1, user2, agent2)');
+        assert.equal(secondTask.history![0].messageId, 'msg-1', 'First message should be first user message');
+        assert.equal((secondTask.history![0].parts[0] as any).text, 'Message 1');
+        assert.equal(secondTask.history![1].messageId, 'agent-msg-1', 'Second message should be first agent message');
+        assert.equal((secondTask.history![1].parts[0] as any).text, 'Response to message 1');
+        assert.equal(secondTask.history![2].messageId, 'msg-2', 'Third message should be second user message');
+        assert.equal((secondTask.history![2].parts[0] as any).text, 'Message 2');
+        assert.equal(secondTask.history![3].messageId, 'agent-msg-2', 'Fourth message should be second agent message');
+        assert.equal((secondTask.history![3].parts[0] as any).text, 'Response to message 2');
+        assert.equal(secondTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
+        assert.equal(secondTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
+        assert.equal(secondTask.artifacts![0].description, 'A test artifact.', 'Artifact description should be the same');
+        assert.equal((secondTask.artifacts![0].parts[0] as any).text, 'This is the content of the artifact.', 'Artifact content should be the same');
+    });
+
+    it('sendMessage: should return second task with full history if message is sent to an existing, non-terminal task, in non-blocking mode', async () => {
+        const contextId = 'ctx-history-abc';
+        clock = sinon.useFakeTimers();
+
+        // First message
+        const firstMessage = createTestMessage('msg-1', 'Message 1');
+        firstMessage.contextId = contextId;
+        const firstParams: MessageSendParams = {
+            message: firstMessage
+        };
+
+        let taskId: string;
+
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            taskId = ctx.taskId;
+            
+            // Publish task creation
+            bus.publish({
+                id: taskId,
+                contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+
+            // Publish working status
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },
+                final: false
+            });
+
+            // Mark as input-required with agent response message
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { 
+                    state: "input-required",
+                    message: {
+                        messageId: 'agent-msg-1',
+                        role: 'agent',
+                        parts: [{ kind: 'text', text: 'Response to message 1' }],
+                        kind: 'message',
+                        taskId,
+                        contextId
+                    }
+                },
+                final: true
+            });
+            bus.finished();
+        });
+
+        const firstResult = await handler.sendMessage(firstParams);
+        const firstTask = firstResult as Task;
+        
+        // Check the first result is a task with `input-required` status
+        assert.equal(firstTask.kind, 'task');
+        assert.equal(firstTask.status.state, 'input-required');
+
+        // Check the history
+        assert.isDefined(firstTask.history, 'First task should have history');
+        assert.lengthOf(firstTask.history!, 2, 'First task history should contain user message and agent message');
+        assert.equal(firstTask.history![0].messageId, 'msg-1', 'First history item should be user message');
+        assert.equal(firstTask.history![1].messageId, 'agent-msg-1', 'Second history item should be agent message');
+
+        // Second message
+        const secondMessage = createTestMessage('msg-2', 'Message 2');
+        secondMessage.contextId = contextId;
+        secondMessage.taskId = firstTask.id;
+
+        const secondParams: MessageSendParams = {
+            message: secondMessage,
+            configuration: { blocking: false }
+        };
+
+        (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+            // Publish a status update with working state
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: { state: "working" },
+                final: false
+            });
+
+            await clock.tickAsync(10);
+
+            // Publish a status update with working state and message
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: {
+                    state: "working",
+                    message: {
+                        messageId: 'agent-msg-2',
+                        role: 'agent',
+                        parts: [{ kind: 'text', text: 'Response to message 2' }],
+                        kind: 'message',
+                        taskId,
+                        contextId
+                    }
+                },
+                final: false
+            });
+
+            // Publish an artifact update
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'artifact-update',
+                artifact: {
+                    artifactId: 'artifact-1',
+                    name: 'Test Document',
+                    description: 'A test artifact.',
+                    parts: [{ kind: 'text', text: 'This is the content of the artifact.' }]
+                }
+            });
+
+            // Mark as completed
+            bus.publish({
+                taskId,
+                contextId,
+                kind: 'status-update',
+                status: {
+                    state: "completed"
+                },
+                final: true
+            });
+            
+            bus.finished();
+        });
+
+        const secondResult = await handler.sendMessage(secondParams);
+        
+        // Check the second result is a task with `completed` status
+        const secondTask = secondResult as Task;
+        assert.equal(secondTask.kind, 'task');
+        assert.equal(secondTask.id, taskId, 'Should be the same task');
+        assert.equal(secondTask.status.state, 'working'); // It will receive the Task in the status of the first published event
+        
+        await clock.runAllAsync(); // give time to the second task to publish all the updates
+
+        const finalTask = await mockTaskStore.load(taskId);
+
+        // Check the history
+        assert.equal(finalTask.status.state, 'completed');
+        assert.isDefined(finalTask.history, 'Second task should have history');
+        assert.lengthOf(finalTask.history!, 4, 'Second task history should contain all 4 messages (user1, agent1, user2, agent2)');
+        assert.equal(finalTask.history![0].messageId, 'msg-1', 'First message should be first user message');
+        assert.equal((finalTask.history![0].parts[0] as any).text, 'Message 1');
+        assert.equal(finalTask.history![1].messageId, 'agent-msg-1', 'Second message should be first agent message');
+        assert.equal((finalTask.history![1].parts[0] as any).text, 'Response to message 1');
+        assert.equal(finalTask.history![2].messageId, 'msg-2', 'Third message should be second user message');
+        assert.equal((finalTask.history![2].parts[0] as any).text, 'Message 2');
+        assert.equal(finalTask.history![3].messageId, 'agent-msg-2', 'Fourth message should be second agent message');
+        assert.equal((finalTask.history![3].parts[0] as any).text, 'Response to message 2');
+        assert.equal(finalTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
+        assert.equal(finalTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
+        assert.equal(finalTask.artifacts![0].description, 'A test artifact.', 'Artifact description should be the same');
+        assert.equal((finalTask.artifacts![0].parts[0] as any).text, 'This is the content of the artifact.', 'Artifact content should be the same');
     });
 
     it('sendMessageStream: should stream submitted, working, and completed events', async () => {
@@ -732,7 +1053,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const streamGenerator = handler.sendMessageStream(streamParams);
         
         const streamEvents: any[] = [];
-        const streamingPromise = (async () => {
+        (async () => {
             for await (const event of streamGenerator) {
                 streamEvents.push(event);
             }
@@ -750,20 +1071,57 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
         // Let the executor's loop run to completion to detect the cancellation
         await clock.runAllAsync();
-        await streamingPromise;
 
         assert.isTrue(cancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any));
-        
-        const lastEvent = streamEvents[streamEvents.length - 1] as TaskStatusUpdateEvent;
-        assert.equal(lastEvent.status.state, "canceled");
         
         const finalTask = await handler.getTask({ id: taskId });
         assert.equal(finalTask.status.state, "canceled");
 
-        // Canceled API issues cancel request to executor and returns latest task state.
-        // In this scenario, executor is waiting on clock to detect that task has been cancelled.
-        // While the cancel API has returned with latest task state => Working.
-        assert.equal(cancelResponse.status.state, "working");
+        assert.equal(cancelResponse.status.state, "canceled");
+    });
+
+    it('cancelTask: should fail when it fails to cancel a task', async () => {
+        clock = sinon.useFakeTimers();
+        // Use the more advanced mock for this specific test
+        const failingCancellableExecutor = new FailingCancellableMockAgentExecutor(clock);
+        
+        handler = new DefaultRequestHandler(
+            testAgentCard,
+            mockTaskStore,
+            failingCancellableExecutor,
+            executionEventBusManager,
+        );
+
+        const streamParams: MessageSendParams = { message: createTestMessage('msg-9', 'Start and cancel') };
+        const streamGenerator = handler.sendMessageStream(streamParams);
+        
+        const streamEvents: any[] = [];
+        (async () => {
+            for await (const event of streamGenerator) {
+                streamEvents.push(event);
+            }
+        })();
+
+        // Allow the task to be created and enter the 'working' state
+        await clock.tickAsync(150); 
+        
+        const createdTask = streamEvents.find(e => e.kind === 'task') as Task;
+        assert.isDefined(createdTask, 'Task creation event should have been received');
+        const taskId = createdTask.id;
+        
+        let cancelResponse : Task;
+        let thrownError : any;
+        try {
+            cancelResponse = await handler.cancelTask({ id: taskId });
+        } catch (error: any) {
+            thrownError = error
+        } finally {
+            assert.isDefined(thrownError);
+            assert.isUndefined(cancelResponse);
+            assert.equal(thrownError.code, -32002);
+            expect(thrownError.message).to.contain('Task not cancelable');
+            assert.isTrue(failingCancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any));
+        }
     });
 
     it('cancelTask: should fail for tasks in a terminal state', async () => {

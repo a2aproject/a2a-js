@@ -10,6 +10,7 @@ import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_tra
 import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../src/index.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
+import { parseArgs } from 'util';
 
 describe('A2AExpressApp', () => {
     let mockRequestHandler: A2ARequestHandler;
@@ -335,19 +336,36 @@ describe('A2AExpressApp', () => {
             const jsonApp = express();
             app.setupRoutes(jsonApp);
 
-            const requestBody = { test: 'data' };
-            (mockJsonRpcTransportHandler.handle as SinonStub).resolves({ 
-                jsonrpc: '2.0', 
-                id: 'json-test', 
-                result: requestBody 
-            });
+            const requestBody = createRpcRequest("test-id", "message/send", { test: 'data' });
 
             await request(jsonApp)
                 .post('/')
                 .send(requestBody)
                 .expect(200);
 
-            assert.isTrue((mockJsonRpcTransportHandler.handle as SinonStub).calledOnce);
+            assert.isTrue((mockJsonRpcTransportHandler.handle as SinonStub).calledOnceWith(requestBody));
+        });
+
+        it('should handle malformed json request', async () => {
+            const jsonApp = express();
+            app.setupRoutes(jsonApp);
+
+            const requestBody = '{"jsonrpc": "2.0", "method": "message/send", "id": "1"'; // Missing closing brace
+            const response = await request(jsonApp)
+                .post('/')
+                .set('Content-Type', 'application/json') // Set header to trigger json parser
+                .send(requestBody)
+                .expect(400);
+
+            const expectedErrorResponse: JSONRPCErrorResponse = {
+                jsonrpc: '2.0',
+                id: null,
+                error: {
+                    code: -32700,
+                    message: 'Invalid JSON payload.'
+                }
+            };
+            assert.deepEqual(response.body, expectedErrorResponse);
         });
     });
 });

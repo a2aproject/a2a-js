@@ -170,19 +170,22 @@ class TaskExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const { taskId, contextId } = requestContext;
+    const { taskId, contextId, userMessage, task } = requestContext;
 
-    // 1. Create and publish the initial task object.
-    const initialTask: Task = {
-      kind: "task",
-      id: taskId,
-      contextId: contextId,
-      status: {
-        state: "submitted",
-        timestamp: new Date().toISOString(),
-      },
-    };
-    eventBus.publish(initialTask);
+    // 1. Create and publish the initial task object if it doesn't exist.
+    if (!task) {
+      const initialTask: Task = {
+        kind: "task",
+        id: taskId,
+        contextId: contextId,
+        status: {
+          state: "submitted",
+          timestamp: new Date().toISOString(),
+        },
+        history: [userMessage]
+      };
+      eventBus.publish(initialTask);
+    }
 
     // 2. Create and publish an artifact.
     const artifactUpdate: TaskArtifactUpdateEvent = {
@@ -316,6 +319,28 @@ try {
 }
 ```
 
+### Example: Specifying a Timeout
+
+This example creates a `fetch` wrapper that sets a timeout for every outgoing request.
+
+```typescript
+import { A2AClient } from "@a2a-js/sdk/client";
+
+// 1. Create a wrapper around the global fetch function.
+const fetchWithTimeout: typeof fetch = async (url, init) => {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(5000)});
+};
+
+// 2. Provide the custom fetch implementation to the client.
+const client = await A2AClient.fromCardUrl(
+  "http://localhost:4000/.well-known/agent-card.json",
+  { fetchImpl: fetchWithTimeout }
+);
+
+// Now, all requests made by this client instance will have a configured timeout.
+await client.sendMessage({ message: { messageId: uuidv4(), role: "user", parts: [{ kind: "text", text: "A message requiring custom headers." }], kind: "message" } });
+```
+
 ### Using the Provided `AuthenticationHandler`
 
 For advanced authentication scenarios, the SDK includes a higher-order function `createAuthenticatingFetchWithRetry` and an `AuthenticationHandler` interface. This utility automatically adds authorization headers and can retry requests that fail with authentication errors (e.g., 401 Unauthorized).
@@ -389,15 +414,22 @@ class StreamingExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const { taskId, contextId } = requestContext;
+    const { taskId, contextId, userMessage, task } = requestContext;
 
-    // 1. Publish initial 'submitted' state.
-    eventBus.publish({
-      kind: "task",
-      id: taskId,
-      contextId,
-      status: { state: "submitted", timestamp: new Date().toISOString() },
-    });
+    // 1. Create and publish the initial task object if it doesn't exist.
+    if (!task) {
+      const initialTask: Task = {
+        kind: "task",
+        id: taskId,
+        contextId: contextId,
+        status: {
+          state: "submitted",
+          timestamp: new Date().toISOString(),
+        },
+        history: [userMessage]
+      };
+      eventBus.publish(initialTask);
+    }
 
     // 2. Publish 'working' state.
     eventBus.publish({

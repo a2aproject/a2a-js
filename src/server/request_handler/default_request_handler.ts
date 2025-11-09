@@ -80,6 +80,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
                 // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
                 throw A2AError.invalidRequest(`Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`)
             }
+
+            // Add incomingMessage to history and save the task.
+            task.history = [...(task.history || []), incomingMessage];
+            await this.taskStore.save(task);
         }
 
         if (incomingMessage.referenceTaskIds && incomingMessage.referenceTaskIds.length > 0) {
@@ -129,8 +133,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
                 await this._sendPushNotificationIfNeeded(event);
 
                 if (options?.firstResultResolver && !firstResultSent) {
-                    if (event.kind === 'message' || event.kind === 'task') {
-                        options.firstResultResolver(event as Message | Task);
+                    let firstResult: Message | Task | undefined;
+                    if (event.kind === 'message') {
+                        firstResult = event;
+                    } else {
+                        firstResult = resultManager.getCurrentTask();
+                    }
+                    if (firstResult) {
+                        options.firstResultResolver(firstResult);
                         firstResultSent = true;
                     }
                 }
@@ -343,7 +353,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         const eventBus = this.eventBusManager.getByTaskId(params.id);
         
         if(eventBus) {
+            const eventQueue = new ExecutionEventQueue(eventBus);
             await this.agentExecutor.cancelTask(params.id, eventBus);
+            // Consume all the events until the task reaches a terminal state.
+            await this._processEvents(params.id, new ResultManager(this.taskStore), eventQueue);
         }
         else {
             // Here we are marking task as cancelled. We are not waiting for the executor to actually cancel processing.
@@ -366,6 +379,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
 
         const latestTask = await this.taskStore.load(params.id);
+        if (!latestTask) {
+            throw A2AError.internalError(`Task ${params.id} not found after cancellation.`);
+        }
+        if (latestTask.status.state != "canceled") {
+            throw A2AError.taskNotCancelable(params.id);
+        }
         return latestTask;
     }
 
