@@ -31,6 +31,8 @@ export class A2AExpressApp {
 
         // Doing it here to maintain previous behaviour of invoking provided middlewares
         // after JSON body is parsed, jsonRpcHandler registers JSON parsing on the local router.
+        // body-parser used by express.json() ignores subsequent calls and is safe to be added twice:
+        // https://github.com/expressjs/body-parser/blob/168afff3470302aa28050a8ae6681fa1fdaf71a2/lib/read.js#L41.
         router.use(express.json(), jsonErrorHandler);
 
         if (middlewares && middlewares.length > 0) {
