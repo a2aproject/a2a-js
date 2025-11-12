@@ -4,9 +4,8 @@ import { A2AError } from "../error.js";
 import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from "../../index.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
-import { AGENT_CARD_PATH } from "../../constants.js";
+import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from "../../constants.js";
 import { ServerCallContext } from "../context.js";
-import { HTTP_EXTENSION_HEADER, getRequestedExtensions } from "../../extensions/common.js";
 
 export class A2AExpressApp {
     private requestHandler: A2ARequestHandler; // Kept for getAgentCard
@@ -61,7 +60,7 @@ export class A2AExpressApp {
 
         router.post("/", async (req: Request, res: Response) => {
             try {
-                const serverCallContext = new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)));
+                const serverCallContext = new ServerCallContext(this.getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)));
                 const rpcResponseOrStream = await this.jsonRpcTransportHandler.handle(req.body, serverCallContext);
 
                 // Check if it's an AsyncGenerator (stream)
@@ -126,4 +125,12 @@ export class A2AExpressApp {
         // The separate /stream endpoint is no longer needed.
         return app;
     }
+
+    private getRequestedExtensions(values: string | undefined): Set<string> {
+        if (!values) {
+            return new Set();
+        }
+    // Split by comma, trim whitespace, and filter out empty strings
+    return new Set(values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0));
+}
 }
