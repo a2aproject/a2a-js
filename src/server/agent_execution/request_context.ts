@@ -7,20 +7,20 @@ import { ServerCallContext } from '../context.js';
 
 export class RequestContext {
     private readonly _params: MessageSendParams;
-    private readonly context: ServerCallContext;
+    private readonly context?: ServerCallContext;
     private readonly _task?: Task;
     private readonly _referenceTasks?: Task[]; 
 
     constructor(
         request: MessageSendParams,
-        context: ServerCallContext,
+        context?: ServerCallContext,
         task?: Task,
         referenceTasks?: Task[],
     ) {
         this._params = request;
+        this.context = context;
         this._task = task;
         this._referenceTasks = referenceTasks;
-        this.context = context;
     }
 
     get userMessage(): Message {
@@ -48,16 +48,16 @@ export class RequestContext {
     }
 
     public addActivatedExtension(uri: string) {
-        if (this.context.requestedExtensions.has(uri)) {
+        if (this.context?.requestedExtensions.has(uri)) {
             this.context.activatedExtensions.add(uri);
         }
     }
 
     get requestedExtensions(): Set<string> {
-        return this.context.requestedExtensions;
+        return this.context?.requestedExtensions;
     }
 
     get activatedExtensions(): Set<string> {
-        return this.context.activatedExtensions;
+        return this.context?.activatedExtensions;
     }
 }

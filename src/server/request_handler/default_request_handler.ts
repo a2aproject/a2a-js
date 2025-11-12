@@ -111,7 +111,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     async sendMessage(
         params: MessageSendParams,
-        context: ServerCallContext
+        context?: ServerCallContext,
     ): Promise<Message | Task> {
         const incomingMessage = params.message;
         if (!incomingMessage.messageId) {
@@ -201,7 +201,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     async *sendMessageStream(
         params: MessageSendParams,
-        context: ServerCallContext
+        context?: ServerCallContext
     ): AsyncGenerator<
         | Message
         | Task

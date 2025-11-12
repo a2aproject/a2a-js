@@ -21,12 +21,12 @@ export interface A2ARequestHandler {
 
     sendMessage(
         params: MessageSendParams,
-        context: ServerCallContext,
+        context?: ServerCallContext,
     ): Promise<Message | Task>;
 
     sendMessageStream(
         params: MessageSendParams,
-        context: ServerCallContext,
+        context?: ServerCallContext,
     ): AsyncGenerator<
         | Message
         | Task

@@ -24,7 +24,7 @@ export class RequestContextBuilder {
 
     public async build(
         params: MessageSendParams,
-        context: ServerCallContext
+        context?: ServerCallContext
     ): Promise<RequestContext> {
         let task: Task | undefined;
         let referenceTasks: Task[] | undefined;
@@ -67,6 +67,4 @@ export class RequestContextBuilder {
 
         return new RequestContext({...params, message: incomingMessage}, context, task, referenceTasks);
     }
-
-
 }
