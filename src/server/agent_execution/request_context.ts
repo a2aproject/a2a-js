@@ -55,11 +55,11 @@ export class RequestContext {
         }
     }
 
-    get requestedExtensions(): Set<string> {
+    get requestedExtensions(): ReadonlySet<string> {
         return this.context?.requestedExtensions;
     }
 
-    get activatedExtensions(): Set<string> {
+    get activatedExtensions(): ReadonlySet<string> {
         return this.context?.activatedExtensions;
     }
 }
