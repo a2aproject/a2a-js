@@ -56,10 +56,10 @@ export class RequestContext {
     }
 
     get requestedExtensions(): ReadonlySet<string> {
-        return this.context?.requestedExtensions;
+        return this.context?.requestedExtensions ?? new Set();
     }
 
     get activatedExtensions(): ReadonlySet<string> {
-        return this.context?.activatedExtensions;
+        return this.context?.activatedExtensions ?? new Set();
     }
 }
