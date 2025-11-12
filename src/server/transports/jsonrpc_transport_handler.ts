@@ -20,7 +20,7 @@ export class JsonRpcTransportHandler {
      * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
      */
     public async handle(
-        requestBody: any, context: ServerCallContext
+        requestBody: any, context?: ServerCallContext
     ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
         let rpcRequest: A2ARequest;
 
