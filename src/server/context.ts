@@ -10,11 +10,11 @@ export class ServerCallContext {
     this._activatedExtensions = new Set<string>();
   }
 
-  get activatedExtensions(): Set<string> {
+  get activatedExtensions(): ReadonlySet<string> {
     return this._activatedExtensions;
   }
 
-  get requestedExtensions(): Set<string> {
+  get requestedExtensions(): ReadonlySet<string> {
     return this._requestedExtensions;
   }
 
