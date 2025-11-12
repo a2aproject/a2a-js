@@ -6,37 +6,39 @@ import {
 import { ServerCallContext } from '../context.js';
 
 export class RequestContext {
-    private readonly _params: MessageSendParams;
+    private readonly _userMessage: Message;
+    private readonly _taskId: string;
+    private readonly _contextId: string;
     private readonly context?: ServerCallContext;
     private readonly _task?: Task;
     private readonly _referenceTasks?: Task[]; 
 
     constructor(
-        request: MessageSendParams,
+        userMessage: Message,
+        taskId: string,
+        contextId: string,
         context?: ServerCallContext,
         task?: Task,
         referenceTasks?: Task[],
     ) {
-        this._params = request;
+        this._userMessage = userMessage;
+        this._taskId = taskId;
+        this._contextId = contextId;
         this.context = context;
         this._task = task;
         this._referenceTasks = referenceTasks;
     }
 
     get userMessage(): Message {
-        return this._params.message;
-    }
-
-    get params(): MessageSendParams {
-        return this._params;
+        return this._userMessage;
     }
 
     get taskId(): string {
-        return this._params.message.taskId;
+        return this._taskId;
     }
 
     get contextId(): string {
-        return this._params.message.contextId;
+        return this._contextId;
     }
 
     get task(): Task | undefined {
