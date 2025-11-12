@@ -35,11 +35,13 @@ export interface A2AClientOptions {
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
  */
 export class A2AClient {
-  private agentCardPromise: Promise<AgentCard>;
+  private readonly agentCardPromise: Promise<AgentCard>;
+  private readonly customFetchImpl?: typeof fetch;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetchin
-  private customFetchImpl?: typeof fetch;
-  // A2AClient is built around JSON-RPC types, so it will only support JSON-RPC transport.
-  private transport?: JsonRpcTransport;
+  private transport?: JsonRpcTransport; // A2AClient is built around JSON-RPC types, so it will only support JSON-RPC transport.
+  
+  // New transport abstraction isn't going to expose individual transport specific fields, so to keep returning JSON-RPC IDs here for compatibility,
+  // keep counter here and pass it to JsonRpcTransport via an optional idOverride parameter (which is not visible via transport-agnostic A2ATransport interface).
   private requestIdCounter: number = 1;
 
   /**
@@ -376,11 +378,12 @@ export class A2AClient {
   }
 }
 
+function isJSONRPCError(error: any): boolean {
+  return 'errorResponse' in error && error.errorResponse && error.errorResponse.jsonrpc === '2.0' && error.errorResponse.error;
+}
+
+// Utility unexported types to properly factor out common "compatibility" logic via invokeJsonRpc.
 type ParamsOf<T> = T extends { params: unknown } ? T['params'] : undefined;
 type ResultOf<T> = T extends { result: unknown } ? T['result'] : void;
 type JsonRpcParams = ParamsOf<A2ARequest>;
 type JsonRpcCaller<TParams extends JsonRpcParams, TResponse extends JSONRPCResponse> = (transport: JsonRpcTransport, params: TParams, idOverride: number) => Promise<ResultOf<TResponse>>
-
-function isJSONRPCError(error: any): boolean {
-  return 'errorResponse' in error && error.errorResponse && error.errorResponse.jsonrpc === '2.0' && error.errorResponse.error;
-}
