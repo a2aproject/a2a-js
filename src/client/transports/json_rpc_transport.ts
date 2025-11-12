@@ -17,7 +17,6 @@ import {
   ListTaskPushNotificationConfigSuccessResponse,
   GetTaskSuccessResponse,
   CancelTaskSuccessResponse,
-  JSONRPCSuccessResponse,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { A2ATransport } from './transport.js';
@@ -28,9 +27,9 @@ export interface JsonRpcTransportOptions {
 }
 
 export class JsonRpcTransport implements A2ATransport {
+  private readonly customFetchImpl?: typeof fetch;
+  private readonly endpoint: string
   private requestIdCounter: number = 1;
-  private customFetchImpl?: typeof fetch;
-  private endpoint: string
 
   constructor(options: JsonRpcTransportOptions) {
     this.endpoint = options.endpoint;
@@ -96,7 +95,7 @@ export class JsonRpcTransport implements A2ATransport {
     );
   }
 
-  private async _sendRpcRequest<TParams, TResponse extends JSONRPCResponse>(
+  private async _sendRpcRequest<TParams extends { [key: string]: any; }, TResponse extends JSONRPCResponse>(
     method: string,
     params: TParams,
     idOverride: number | undefined,
@@ -106,7 +105,7 @@ export class JsonRpcTransport implements A2ATransport {
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: "2.0",
       method,
-      params: params as { [key: string]: any; },
+      params: params,
       id: requestId,
     };
 
@@ -123,17 +122,18 @@ export class JsonRpcTransport implements A2ATransport {
       }
       if (errorJson.jsonrpc && errorJson.error) {
         throw JsonRpcTransport.mapToError(errorJson);
-      } else if (!errorJson.jsonrpc && errorJson.error) {
-        throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
       } else {
         throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
       }
     }
 
-    const rpcResponse: JSONRPCSuccessResponse = await httpResponse.json();
-
+    const rpcResponse: JSONRPCResponse = await httpResponse.json();
     if (rpcResponse.id !== requestId) {
       console.error(`CRITICAL: RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}.`);
+    }
+
+    if ('error' in rpcResponse) {
+        throw JsonRpcTransport.mapToError(rpcResponse);
     }
 
     return rpcResponse as TResponse;
