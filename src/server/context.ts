@@ -18,10 +18,6 @@ export class ServerCallContext {
     return this._requestedExtensions;
   }
 
-  set method(value: string) {
-    this._method = value;
-  }
-
   get method(): string | undefined {
     return this._method;
   }

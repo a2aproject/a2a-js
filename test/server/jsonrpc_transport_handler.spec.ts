@@ -135,12 +135,5 @@ describe('JsonRpcTransportHandler', () => {
             const response = await transportHandler.handle(request);
             expect(response).to.have.property('result');
         });
-
-        it('should correctly populate the ServerCallContext with the method name', async () => {
-            const request = { jsonrpc: '2.0', method: 'message/send', id: 456, params: {} };
-            const context = new ServerCallContext();
-            await transportHandler.handle(request, context);
-            expect(context.method).to.equal('message/send');
-        })
     });
 });

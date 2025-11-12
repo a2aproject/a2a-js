@@ -46,7 +46,6 @@ export class JsonRpcTransportHandler {
         }
 
         const { method, id: requestId = null } = rpcRequest;
-        context.method = method;
         try {
             if(method === 'agent/getAuthenticatedExtendedCard') {
                 const result = await this.requestHandler.getAuthenticatedExtendedAgentCard();
