@@ -1,6 +1,5 @@
 import {
     Message,
-    MessageSendParams,
     Task,
 } from "../../types.js";
 import { ServerCallContext } from '../context.js';
