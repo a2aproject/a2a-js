@@ -78,14 +78,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
                 // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
                 throw A2AError.invalidRequest(`Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`)
             }
-
             // Add incomingMessage to history and save the task.
             task.history = [...(task.history || []), incomingMessage];
             await this.taskStore.save(task);
         }
         // Ensure taskId is present
         const taskId = incomingMessage.taskId || uuidv4();
-        incomingMessage.taskId = taskId;
 
         if (incomingMessage.referenceTaskIds && incomingMessage.referenceTaskIds.length > 0) {
             referenceTasks = [];
@@ -101,9 +99,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
         // Ensure contextId is present
         const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
-        incomingMessage.contextId = contextId;
 
-        return new RequestContext(incomingMessage, taskId, contextId, context, task, referenceTasks);
+        const messageForContext = {
+          ...incomingMessage,
+          contextId,
+          taskId
+        };
+        return new RequestContext(messageForContext, taskId, contextId, context, task, referenceTasks);
     }
 
     private async _processEvents(
