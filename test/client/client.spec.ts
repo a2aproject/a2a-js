@@ -709,12 +709,10 @@ describe('Push Notification Config Operations', () => {
             // Verify the params were sent correctly
             expect(body.params).to.deep.equal(params);
             
-            // Return a successful response
-            return createResponse(requestId, {
-              success: true,
-              taskId: params.id,
-              pushNotificationConfigId: params.pushNotificationConfigId
-            });
+            // Return a successful response,
+            // 'result' should just be 'null' according to the spec:
+            // https://a2a-protocol.org/latest/specification/#79-taskspushnotificationconfigdelete
+            return createResponse(requestId, null);
           }
         }
         
@@ -732,15 +730,7 @@ describe('Push Notification Config Operations', () => {
       // Verify the result is a success response
       expect(isDeleteConfigSuccessResponse(result)).to.be.true;
       if (isDeleteConfigSuccessResponse(result)) {
-        // Define expected result structure
-        const expectedResult = {
-          success: true,
-          taskId: params.id,
-          pushNotificationConfigId: params.pushNotificationConfigId
-        };
-        
-        // Use deep.equal for more readable assertion
-        expect(result.result).to.deep.equal(expectedResult);
+        expect(result.result).to.be.null;
       }
     });
   });
