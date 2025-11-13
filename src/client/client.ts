@@ -38,10 +38,11 @@ export class A2AClient {
   private readonly agentCardPromise: Promise<AgentCard>;
   private readonly customFetchImpl?: typeof fetch;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetchin
-  private transport?: JsonRpcTransport; // A2AClient is built around JSON-RPC types, so it will only support JSON-RPC transport.
   
+  // A2AClient is built around JSON-RPC types, so it will only support JSON-RPC transport, new client with transport agnostic interface is going to be created for multi-transport.
   // New transport abstraction isn't going to expose individual transport specific fields, so to keep returning JSON-RPC IDs here for compatibility,
   // keep counter here and pass it to JsonRpcTransport via an optional idOverride parameter (which is not visible via transport-agnostic A2ATransport interface).
+  private transport?: JsonRpcTransport;
   private requestIdCounter: number = 1;
 
   /**
