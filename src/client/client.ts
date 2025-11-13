@@ -158,23 +158,20 @@ export class A2AClient {
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
+      let errorJson: any = {};
       try {
         errorBodyText = await httpResponse.text();
-        const errorJson = JSON.parse(errorBodyText);
-        // If the body is a valid JSON-RPC error response, return it as a proper JSON-RPC error response.
-        if (errorJson.jsonrpc && errorJson.error) {
-          return errorJson as TResponse;
-        } else if (!errorJson.jsonrpc && errorJson.error) { // Check if it's a JSON-RPC error structure
-          throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
-        } else if (!errorJson.jsonrpc) {
-          throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
-        }
+        errorJson = JSON.parse(errorBodyText);
       } catch (e: any) {
-        // If parsing the error body fails or it's not a JSON-RPC error, throw a generic HTTP error.
-        // If it was already an error thrown from within the try block, rethrow it.
-        if (e.message.startsWith('RPC error for') || e.message.startsWith('HTTP error for')) throw e;
-        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
+        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`, {cause: e});
       }
+      // If the body is a valid JSON-RPC error response, return it as a proper JSON-RPC error response.
+      if (errorJson.jsonrpc && errorJson.error) {
+        return errorJson as TResponse;
+      } else if (!errorJson.jsonrpc && errorJson.error) { // Check if it's a JSON-RPC error structure
+        throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
+      }
+      throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
     }
 
     const rpcResponse = await httpResponse.json();
@@ -250,16 +247,15 @@ export class A2AClient {
     if (!response.ok) {
       // Attempt to read error body for more details
       let errorBody = "";
+      let errorJson: any = {};
       try {
         errorBody = await response.text();
-        const errorJson = JSON.parse(errorBody);
-        if (errorJson.error) {
-          throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
-        }
+        errorJson = JSON.parse(errorBody);
       } catch (e: any) {
-        if (e.message.startsWith('HTTP error establishing stream')) throw e;
-        // Fallback if body is not JSON or parsing fails
-        throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`);
+        throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`, {cause: e});
+      }
+      if (errorJson.error) {
+        throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
       }
       throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}`);
     }
@@ -393,15 +389,16 @@ export class A2AClient {
 
     if (!response.ok) {
       let errorBody = "";
+      let errorJson: any = {};
       try {
         errorBody = await response.text();
-        const errorJson = JSON.parse(errorBody);
-        if (errorJson.error) {
-          throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
-        }
+        errorJson = JSON.parse(errorBody);
       } catch (e: any) {
         if (e.message.startsWith('HTTP error establishing stream')) throw e;
-        throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`);
+        throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`, {cause: e});
+      }
+      if (errorJson.error) {
+        throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
       }
       throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}`);
     }
