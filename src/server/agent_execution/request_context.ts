@@ -29,9 +29,7 @@ export class RequestContext {
     }
 
     public addActivatedExtension(uri: string) {
-        if (this.context?.requestedExtensions.has(uri)) {
-            this.context.activatedExtensions.add(uri);
-        }
+        this.context?.addActivatedExtension(uri);
     }
 
     get requestedExtensions(): ReadonlySet<string> {

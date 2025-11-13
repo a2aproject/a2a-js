@@ -109,9 +109,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             messageForContext, 
             taskId, 
             contextId, 
-            context, 
             task, 
-            referenceTasks
+            referenceTasks,
+            context
         );
     }
 

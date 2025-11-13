@@ -21,4 +21,14 @@ export class ServerCallContext {
   get method(): string | undefined {
     return this._method;
   }
+
+  set method(value: string) {
+    this._method = value;
+  }
+
+  public addActivatedExtension(uri: string) {
+    if (this._requestedExtensions.has(uri)) {
+      this._activatedExtensions.add(uri);
+    }
+  }
 }
