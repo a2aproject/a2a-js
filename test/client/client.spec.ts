@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { A2AClient } from '../../src/client/client.js';
+import { A2AClientError } from '../../src/client/response-utils.js';
 import {
   MessageSendParams,
   TextPart,
@@ -11,9 +12,7 @@ import {
   ListTaskPushNotificationConfigSuccessResponse,
   DeleteTaskPushNotificationConfigResponse,
   DeleteTaskPushNotificationConfigSuccessResponse,
-  JSONRPCErrorResponse,
-  JSONRPCResponse,
-  JSONRPCSuccessResponse
+  JSONRPCResponse
 } from '../../src/types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { extractRequestId, createResponse, createAgentCardResponse, createMockAgentCard, createMockFetch } from './util.js';
@@ -29,10 +28,6 @@ function isListConfigSuccessResponse(response: ListTaskPushNotificationConfigRes
 
 function isDeleteConfigSuccessResponse(response: DeleteTaskPushNotificationConfigResponse): response is DeleteTaskPushNotificationConfigSuccessResponse {
   return 'result' in response;
-}
-
-function isErrorResponse(response: any): response is JSONRPCErrorResponse {
-  return 'error' in response;
 }
 
 describe('A2AClient Basic Tests', () => {
@@ -438,18 +433,6 @@ describe('Extension Methods', () => {
         limit: number;
       }
       
-      // Define the expected response type
-      // Define custom extension result type
-      interface CustomExtensionResult {
-        result: {
-          items: Array<{
-            id: string;
-            name: string;
-          }>;
-          totalCount: number;
-        };
-      }
-      
       // Set up custom params for the test
       const customParams: CustomExtensionParams = {
         query: 'test query',
@@ -556,16 +539,14 @@ describe('Extension Methods', () => {
         message: 'Extension method error: Invalid parameters'
       };
       
-      const response = await errorClient.callExtensionMethod(extensionMethod, customParams);
-      
-      // Check that we got a JSON-RPC error response
-      expect(isErrorResponse(response)).to.be.true;
-      if (isErrorResponse(response)) {
-        // Verify the error details match what we expect
-        expect(response.error.code).to.equal(expectedError.code);
-        expect(response.error.message).to.equal(expectedError.message);
-      } else {
-        expect.fail('Expected JSON-RPC error response but got success response');
+      // The method should throw A2AClientError for error responses
+      try {
+        await errorClient.callExtensionMethod(extensionMethod, customParams);
+        expect.fail('Should have thrown A2AClientError');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(A2AClientError);
+        expect(error.rpcError.code).to.equal(expectedError.code);
+        expect(error.rpcError.message).to.equal(expectedError.message);
       }
     });
   });
