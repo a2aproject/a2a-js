@@ -20,7 +20,7 @@ import { A2AExpressApp } from "../../../server/express/index.js";
 /**
  * SampleAgentExecutor implements the agent's core logic.
  */
-class SampleAgentExecutor implements AgentExecutor {
+export class SampleAgentExecutor implements AgentExecutor {
 
   public cancelTask = async (
     taskId: string,
