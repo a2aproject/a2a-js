@@ -29,8 +29,8 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
     router.post("/", async (req: Request, res: Response) => {
         try {
-            const headers = req.header(HTTP_EXTENSION_HEADER);
-            const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, new ServerCallContext(getRequestedExtensions(headers)));
+            const context = new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)));
+            const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
             // Check if it's an AsyncGenerator (stream)
             if (typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] === 'function') {
@@ -39,6 +39,8 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
                 res.setHeader('Content-Type', 'text/event-stream');
                 res.setHeader('Cache-Control', 'no-cache');
                 res.setHeader('Connection', 'keep-alive');
+                res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
+
                 res.flushHeaders();
 
                 try {
@@ -71,6 +73,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
                 }
             } else { // Single JSON-RPC response
                 const rpcResponse = rpcResponseOrStream as JSONRPCResponse;
+                res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
                 res.status(200).json(rpcResponse);
             }
         } catch (error: any) { // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
