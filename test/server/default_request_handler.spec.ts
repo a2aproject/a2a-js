@@ -1274,7 +1274,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         expect(capturedRequestContext?.userMessage.messageId).to.equal(messageId, 'userMessage.messageId should match');
         expect(capturedRequestContext?.taskId).to.equal(incomingTaskId, 'taskId should match');
         expect(capturedRequestContext?.contextId).to.equal(incomingContextId, 'contextId should match');
-        expect(capturedRequestContext?.requestedExtensions).to.deep.equal(new Set([expectedExtension]), 'requestedExtensions should contain the expected extension');
+        expect(capturedRequestContext?.context?.requestedExtensions).to.deep.equal(new Set([expectedExtension]), 'requestedExtensions should contain the expected extension');
     });
     
 });
