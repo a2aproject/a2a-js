@@ -1,8 +1,7 @@
-import express, { Express, RequestHandler, ErrorRequestHandler } from 'express';
+import express, { Express, RequestHandler, ErrorRequestHandler, NextFunction, Request, Response } from 'express';
 
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
-import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
-import { AGENT_CARD_PATH } from "../../constants.js";
+import { AGENT_CARD_PATH} from "../../constants.js";
 import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
 
@@ -45,12 +44,4 @@ export class A2AExpressApp {
         app.use(baseUrl, router);
         return app;
     }
-
-    private getRequestedExtensions(values: string | undefined): Set<string> {
-        if (!values) {
-            return new Set();
-        }
-    // Split by comma, trim whitespace, and filter out empty strings
-    return new Set(values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0));
-}
 }

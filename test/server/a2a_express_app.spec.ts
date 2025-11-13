@@ -1,5 +1,5 @@
 import 'mocha';
-import { assert } from 'chai';
+import { assert, expect } from 'chai';
 import sinon, { SinonStub } from 'sinon';
 import express, { Express, Request, Response } from 'express';
 import request from 'supertest';
@@ -10,6 +10,7 @@ import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_tra
 import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../src/index.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
+import { ServerCallContext } from '../../src/server/context.js';
 
 describe('A2AExpressApp', () => {
     let mockRequestHandler: A2ARequestHandler;
@@ -280,7 +281,7 @@ describe('A2AExpressApp', () => {
                 id: 'test-id',
                 result: { message: 'success' }
             };
-            (mockJsonRpcTransportHandler.handle as SinonStub).resolves(mockResponse);
+            handleStub.resolves(mockResponse);
 
             const requestBody = createRpcRequest('test-id');
             const uriExtensionsValues = 'test-extension-uri, another-extension';
@@ -292,8 +293,8 @@ describe('A2AExpressApp', () => {
                 .send(requestBody)
                 .expect(200);
 
-            assert.isTrue((mockJsonRpcTransportHandler.handle as SinonStub).calledOnce);
-            const serverCallContext = (mockJsonRpcTransportHandler.handle as SinonStub).getCall(0).args[1];
+            assert.isTrue(handleStub.calledOnce);
+            const serverCallContext = handleStub.getCall(0).args[1];
             expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
             expect(serverCallContext.requestedExtensions).to.deep.equal(new Set(['test-extension-uri', 'another-extension']));
         });
