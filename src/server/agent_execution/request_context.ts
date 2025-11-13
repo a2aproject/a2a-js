@@ -27,16 +27,4 @@ export class RequestContext {
         this.referenceTasks = referenceTasks;
         this.context = context;
     }
-
-    public addActivatedExtension(uri: string) {
-        this.context?.addActivatedExtension(uri);
-    }
-
-    get requestedExtensions(): ReadonlySet<string> {
-        return this.context?.requestedExtensions ?? new Set();
-    }
-
-    get activatedExtensions(): ReadonlySet<string> {
-        return this.context?.activatedExtensions ?? new Set();
-    }
 }

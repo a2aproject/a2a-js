@@ -36,27 +36,32 @@ export interface A2ARequestHandler {
         undefined
     >;
 
-    getTask(params: TaskQueryParams): Promise<Task>;
+    getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task>;
     cancelTask(params: TaskIdParams): Promise<Task>;
 
     setTaskPushNotificationConfig(
-        params: TaskPushNotificationConfig
+        params: TaskPushNotificationConfig,
+        context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig>;
 
     getTaskPushNotificationConfig(
-        params: TaskIdParams | GetTaskPushNotificationConfigParams
+        params: TaskIdParams | GetTaskPushNotificationConfigParams,
+        context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig>;
 
     listTaskPushNotificationConfigs(
-        params: ListTaskPushNotificationConfigParams
+        params: ListTaskPushNotificationConfigParams,
+        context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig[]>;
 
     deleteTaskPushNotificationConfig(
-        params: DeleteTaskPushNotificationConfigParams
+        params: DeleteTaskPushNotificationConfigParams,
+        context?: ServerCallContext
     ): Promise<void>;
 
     resubscribe(
-        params: TaskIdParams
+        params: TaskIdParams,
+        context?: ServerCallContext
     ): AsyncGenerator<
         | Task
         | TaskStatusUpdateEvent
