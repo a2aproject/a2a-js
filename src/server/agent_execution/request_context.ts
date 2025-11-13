@@ -5,11 +5,11 @@ import {
 import { ServerCallContext } from '../context.js';
 
 export class RequestContext {
-    public readonly _userMessage: Message;
-    public readonly _taskId: string;
-    public readonly _contextId: string;
-    public readonly _task?: Task;
-    public readonly _referenceTasks?: Task[]; 
+    public readonly userMessage: Message;
+    public readonly taskId: string;
+    public readonly contextId: string;
+    public readonly task?: Task;
+    public readonly referenceTasks?: Task[]; 
     public readonly context?: ServerCallContext;
 
     constructor(
@@ -20,11 +20,11 @@ export class RequestContext {
         referenceTasks?: Task[],
         context?: ServerCallContext
     ) {
-        this._userMessage = userMessage;
-        this._taskId = taskId;
-        this._contextId = contextId,
-        this._task = task;
-        this._referenceTasks = referenceTasks;
+        this.userMessage = userMessage;
+        this.taskId = taskId;
+        this.contextId = contextId,
+        this.task = task;
+        this.referenceTasks = referenceTasks;
         this.context = context;
     }
 
