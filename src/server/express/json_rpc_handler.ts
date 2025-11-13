@@ -32,6 +32,9 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             const context = new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)));
             const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
+            if (context.activatedExtensions.size > 0){
+                res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
+            }
             // Check if it's an AsyncGenerator (stream)
             if (typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] === 'function') {
                 const stream = rpcResponseOrStream as AsyncGenerator<JSONRPCSuccessResponse, void, undefined>;
@@ -39,7 +42,6 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
                 res.setHeader('Content-Type', 'text/event-stream');
                 res.setHeader('Cache-Control', 'no-cache');
                 res.setHeader('Connection', 'keep-alive');
-                res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
 
                 res.flushHeaders();
 
@@ -73,7 +75,6 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
                 }
             } else { // Single JSON-RPC response
                 const rpcResponse = rpcResponseOrStream as JSONRPCResponse;
-                res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
                 res.status(200).json(rpcResponse);
             }
         } catch (error: any) { // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)

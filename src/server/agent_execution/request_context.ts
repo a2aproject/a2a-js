@@ -22,7 +22,7 @@ export class RequestContext {
     ) {
         this.userMessage = userMessage;
         this.taskId = taskId;
-        this.contextId = contextId,
+        this.contextId = contextId;
         this.task = task;
         this.referenceTasks = referenceTasks;
         this.context = context;
