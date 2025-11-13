@@ -5,47 +5,27 @@ import {
 import { ServerCallContext } from '../context.js';
 
 export class RequestContext {
-    private readonly _userMessage: Message;
-    private readonly _taskId: string;
-    private readonly _contextId: string;
-    private readonly context?: ServerCallContext;
-    private readonly _task?: Task;
-    private readonly _referenceTasks?: Task[]; 
+    public readonly _userMessage: Message;
+    public readonly _taskId: string;
+    public readonly _contextId: string;
+    public readonly _task?: Task;
+    public readonly _referenceTasks?: Task[]; 
+    public readonly context?: ServerCallContext;
 
     constructor(
         userMessage: Message,
         taskId: string,
         contextId: string,
-        context?: ServerCallContext,
         task?: Task,
         referenceTasks?: Task[],
+        context?: ServerCallContext
     ) {
         this._userMessage = userMessage;
         this._taskId = taskId;
-        this._contextId = contextId;
-        this.context = context;
+        this._contextId = contextId,
         this._task = task;
         this._referenceTasks = referenceTasks;
-    }
-
-    get userMessage(): Message {
-        return this._userMessage;
-    }
-
-    get taskId(): string {
-        return this._taskId;
-    }
-
-    get contextId(): string {
-        return this._contextId;
-    }
-
-    get task(): Task | undefined {
-        return this._task;
-    }
-
-    get referenceTasks(): Task[] | undefined {
-        return this._referenceTasks;
+        this.context = context;
     }
 
     public addActivatedExtension(uri: string) {
