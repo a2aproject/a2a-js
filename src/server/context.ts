@@ -1,12 +1,11 @@
 export class ServerCallContext {
   private readonly _requestedExtensions?: Set<string>;
-  private readonly _activatedExtensions?: Set<string>;
+  private _activatedExtensions?: Set<string>;
 
   constructor(
     requestedExtensions?: Set<string>,
   ) {
     this._requestedExtensions = requestedExtensions;
-    this._activatedExtensions = new Set<string>();
   }
 
   get activatedExtensions(): ReadonlySet<string> | undefined {
@@ -19,6 +18,9 @@ export class ServerCallContext {
 
   public addActivatedExtension(uri: string) {
     if (this._requestedExtensions?.has(uri)) {
+      if (!this._activatedExtensions) {
+        this._activatedExtensions = new Set<string>();
+      }
       this._activatedExtensions.add(uri);
     }
   }
