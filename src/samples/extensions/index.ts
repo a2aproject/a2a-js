@@ -1,23 +1,17 @@
 import express from "express";
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
   AgentCard,
-  Task,
-  TaskStatusUpdateEvent,
-  Message
 } from "../../index.js";
 import {
   InMemoryTaskStore,
   TaskStore,
   AgentExecutor,
-  RequestContext,
-  ExecutionEventBus,
   DefaultRequestHandler
 } from "../../server/index.js";
 import { A2AExpressApp } from "../../server/express/index.js";
 import { TimestampingAgentExecutor } from "./extensions.js";
-import { SampleAgentExecutor } from "../agents/sample-agent/index.js";
+import { SampleAgentExecutor } from "../agents/sample-agent/agent_executor.js";
 
 // --- Server Setup ---
 
@@ -34,7 +28,7 @@ const extensionAgentCard: AgentCard = {
   protocolVersion: '0.3.0',
   capabilities: {
     extensions: [
-      { uri: 'timestamp-extension' }
+      { uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1' }
     ],
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
