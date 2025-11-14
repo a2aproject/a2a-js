@@ -34,6 +34,7 @@ export type A2ARequest =
   | SendMessageRequest
   | SendStreamingMessageRequest
   | GetTaskRequest
+  | ListTasksRequest
   | CancelTaskRequest
   | SetTaskPushNotificationConfigRequest
   | GetTaskPushNotificationConfigRequest
@@ -112,6 +113,7 @@ export type JSONRPCResponse =
   | SendStreamingMessageSuccessResponse
   | GetTaskSuccessResponse
   | CancelTaskSuccessResponse
+  | ListTasksSuccessResponse
   | SetTaskPushNotificationConfigSuccessResponse
   | GetTaskPushNotificationConfigSuccessResponse
   | ListTaskPushNotificationConfigSuccessResponse
@@ -126,6 +128,13 @@ export type JSONRPCResponse =
 export type ListTaskPushNotificationConfigResponse =
   | JSONRPCErrorResponse
   | ListTaskPushNotificationConfigSuccessResponse;
+/**
+ * JSON-RPC response for the 'tasks/list' method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTasksResponse".
+ */
+export type ListTasksResponse = JSONRPCErrorResponse | ListTasksSuccessResponse;
 /**
  * Represents a JSON-RPC response for the `message/send` method.
  *
@@ -510,7 +519,7 @@ export interface MessageSendConfiguration {
 export interface PushNotificationConfig {
   authentication?: PushNotificationAuthenticationInfo;
   /**
-   * A unique ID for the push notification configuration, set by the client
+   * A unique identifier (e.g. UUID) for the push notification configuration, set by the client
    * to support multiple notification callbacks.
    */
   id?: string;
@@ -541,7 +550,7 @@ export interface PushNotificationAuthenticationInfo {
  */
 export interface Message {
   /**
-   * The context identifier for this message, used to group related interactions.
+   * The context ID for this message, used to group related interactions.
    */
   contextId?: string;
   /**
@@ -576,7 +585,7 @@ export interface Message {
    */
   role: "agent" | "user";
   /**
-   * The identifier of the task this message is part of. Can be omitted for the first message of a new task.
+   * The ID of the task this message is part of. Can be omitted for the first message of a new task.
    */
   taskId?: string;
 }
@@ -753,7 +762,7 @@ export interface TaskQueryParams {
    */
   historyLength?: number;
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -762,6 +771,76 @@ export interface TaskQueryParams {
   metadata?: {
     [k: string]: unknown;
   };
+}
+/**
+ * JSON-RPC request model for the 'tasks/list' method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTasksRequest".
+ */
+export interface ListTasksRequest {
+  /**
+   * A unique identifier established by the client. It must be a String, a Number, or null.
+   * The server must reply with the same value in the response. This property is omitted for notifications.
+   */
+  id: string | number;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  /**
+   * A String containing the name of the method to be invoked.
+   */
+  method: "tasks/list";
+  params?: ListTasksParams;
+}
+/**
+ * A Structured value that holds the parameter values to be used during the invocation of the method.
+ */
+export interface ListTasksParams {
+  /**
+   * Filter tasks by context ID to get tasks from a specific conversation or session.
+   */
+  contextId?: string;
+  /**
+   * Number of recent messages to include in each task's history. Must be non-negative. Defaults to 0 if not specified.
+   */
+  historyLength?: number;
+  /**
+   * Whether to include artifacts in the returned tasks. Defaults to false to reduce payload size.
+   */
+  includeArtifacts?: boolean;
+  /**
+   * Filter tasks updated after this timestamp (milliseconds since epoch). Only tasks with a last updated time greater than or equal to this value will be returned.
+   */
+  lastUpdatedAfter?: number;
+  /**
+   * Request-specific metadata.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Maximum number of tasks to return. Must be between 1 and 100. Defaults to 50 if not specified.
+   */
+  pageSize?: number;
+  /**
+   * Token for pagination. Use the nextPageToken from a previous ListTasksResult response.
+   */
+  pageToken?: string;
+  /**
+   * Filter tasks by their current status state.
+   */
+  status?:
+    | "submitted"
+    | "working"
+    | "input-required"
+    | "completed"
+    | "canceled"
+    | "failed"
+    | "rejected"
+    | "auth-required"
+    | "unknown";
 }
 /**
  * Represents a JSON-RPC request for the `tasks/cancel` method.
@@ -789,7 +868,7 @@ export interface CancelTaskRequest {
  */
 export interface TaskIdParams {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -826,7 +905,7 @@ export interface SetTaskPushNotificationConfigRequest {
 export interface TaskPushNotificationConfig {
   pushNotificationConfig: PushNotificationConfig1;
   /**
-   * The ID of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   taskId: string;
 }
@@ -836,7 +915,7 @@ export interface TaskPushNotificationConfig {
 export interface PushNotificationConfig1 {
   authentication?: PushNotificationAuthenticationInfo;
   /**
-   * A unique ID for the push notification configuration, set by the client
+   * A unique identifier (e.g. UUID) for the push notification configuration, set by the client
    * to support multiple notification callbacks.
    */
   id?: string;
@@ -881,7 +960,7 @@ export interface GetTaskPushNotificationConfigRequest {
  */
 export interface TaskIdParams1 {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -899,7 +978,7 @@ export interface TaskIdParams1 {
  */
 export interface GetTaskPushNotificationConfigParams {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -939,7 +1018,7 @@ export interface TaskResubscriptionRequest {
  */
 export interface TaskIdParams2 {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -975,7 +1054,7 @@ export interface ListTaskPushNotificationConfigRequest {
  */
 export interface ListTaskPushNotificationConfigParams {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -1011,7 +1090,7 @@ export interface DeleteTaskPushNotificationConfigRequest {
  */
 export interface DeleteTaskPushNotificationConfigParams {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -1552,7 +1631,7 @@ export interface AgentProvider1 {
  */
 export interface Artifact {
   /**
-   * A unique identifier for the artifact within the scope of the task.
+   * A unique identifier (e.g. UUID) for the artifact within the scope of the task.
    */
   artifactId: string;
   /**
@@ -1690,7 +1769,7 @@ export interface Task {
    */
   artifacts?: Artifact[];
   /**
-   * A server-generated identifier for maintaining context across multiple related tasks or interactions.
+   * A server-generated unique identifier (e.g. UUID) for maintaining context across multiple related tasks or interactions.
    */
   contextId: string;
   /**
@@ -1698,7 +1777,7 @@ export interface Task {
    */
   history?: Message1[];
   /**
-   * A unique identifier for the task, generated by the server for a new task.
+   * A unique identifier (e.g. UUID) for the task, generated by the server for a new task.
    */
   id: string;
   /**
@@ -1721,7 +1800,7 @@ export interface Task {
  */
 export interface Message1 {
   /**
-   * The context identifier for this message, used to group related interactions.
+   * The context ID for this message, used to group related interactions.
    */
   contextId?: string;
   /**
@@ -1756,7 +1835,7 @@ export interface Message1 {
    */
   role: "agent" | "user";
   /**
-   * The identifier of the task this message is part of. Can be omitted for the first message of a new task.
+   * The ID of the task this message is part of. Can be omitted for the first message of a new task.
    */
   taskId?: string;
 }
@@ -1788,7 +1867,7 @@ export interface TaskStatus {
  */
 export interface Message2 {
   /**
-   * The context identifier for this message, used to group related interactions.
+   * The context ID for this message, used to group related interactions.
    */
   contextId?: string;
   /**
@@ -1823,7 +1902,7 @@ export interface Message2 {
    */
   role: "agent" | "user";
   /**
-   * The identifier of the task this message is part of. Can be omitted for the first message of a new task.
+   * The ID of the task this message is part of. Can be omitted for the first message of a new task.
    */
   taskId?: string;
 }
@@ -1858,7 +1937,7 @@ export interface ClientCredentialsOAuthFlow1 {
  */
 export interface DeleteTaskPushNotificationConfigParams1 {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -2048,7 +2127,7 @@ export interface GetTaskPushNotificationConfigSuccessResponse {
 export interface TaskPushNotificationConfig1 {
   pushNotificationConfig: PushNotificationConfig1;
   /**
-   * The ID of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   taskId: string;
 }
@@ -2078,7 +2157,7 @@ export interface Task1 {
    */
   artifacts?: Artifact[];
   /**
-   * A server-generated identifier for maintaining context across multiple related tasks or interactions.
+   * A server-generated unique identifier (e.g. UUID) for maintaining context across multiple related tasks or interactions.
    */
   contextId: string;
   /**
@@ -2086,7 +2165,7 @@ export interface Task1 {
    */
   history?: Message1[];
   /**
-   * A unique identifier for the task, generated by the server for a new task.
+   * A unique identifier (e.g. UUID) for the task, generated by the server for a new task.
    */
   id: string;
   /**
@@ -2200,7 +2279,7 @@ export interface Task2 {
    */
   artifacts?: Artifact[];
   /**
-   * A server-generated identifier for maintaining context across multiple related tasks or interactions.
+   * A server-generated unique identifier (e.g. UUID) for maintaining context across multiple related tasks or interactions.
    */
   contextId: string;
   /**
@@ -2208,7 +2287,7 @@ export interface Task2 {
    */
   history?: Message1[];
   /**
-   * A unique identifier for the task, generated by the server for a new task.
+   * A unique identifier (e.g. UUID) for the task, generated by the server for a new task.
    */
   id: string;
   /**
@@ -2340,7 +2419,7 @@ export interface TaskArtifactUpdateEvent {
  */
 export interface Artifact1 {
   /**
-   * A unique identifier for the artifact within the scope of the task.
+   * A unique identifier (e.g. UUID) for the artifact within the scope of the task.
    */
   artifactId: string;
   /**
@@ -2367,6 +2446,44 @@ export interface Artifact1 {
   parts: Part[];
 }
 /**
+ * JSON-RPC success response model for the 'tasks/list' method.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTasksSuccessResponse".
+ */
+export interface ListTasksSuccessResponse {
+  /**
+   * The identifier established by the client.
+   */
+  id: string | number | null;
+  /**
+   * The version of the JSON-RPC protocol. MUST be exactly "2.0".
+   */
+  jsonrpc: "2.0";
+  result: ListTasksResult;
+}
+/**
+ * The result object on success.
+ */
+export interface ListTasksResult {
+  /**
+   * Token for retrieving the next page. Empty string if no more results.
+   */
+  nextPageToken: string;
+  /**
+   * Maximum number of tasks returned in this response.
+   */
+  pageSize: number;
+  /**
+   * Array of tasks matching the specified criteria.
+   */
+  tasks: Task2[];
+  /**
+   * Total number of tasks available (before pagination).
+   */
+  totalSize: number;
+}
+/**
  * Represents a successful JSON-RPC response for the `tasks/pushNotificationConfig/set` method.
  *
  * This interface was referenced by `MySchema`'s JSON-Schema
@@ -2389,7 +2506,7 @@ export interface SetTaskPushNotificationConfigSuccessResponse {
 export interface TaskPushNotificationConfig2 {
   pushNotificationConfig: PushNotificationConfig1;
   /**
-   * The ID of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   taskId: string;
 }
@@ -2422,7 +2539,7 @@ export interface ListTaskPushNotificationConfigSuccessResponse {
 export interface TaskPushNotificationConfig3 {
   pushNotificationConfig: PushNotificationConfig1;
   /**
-   * The ID of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   taskId: string;
 }
@@ -2456,7 +2573,7 @@ export interface JSONRPCSuccessResponse {
  */
 export interface ListTaskPushNotificationConfigParams1 {
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**
@@ -2465,6 +2582,81 @@ export interface ListTaskPushNotificationConfigParams1 {
   metadata?: {
     [k: string]: unknown;
   };
+}
+/**
+ * Parameters for listing tasks with optional filtering criteria.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTasksParams".
+ */
+export interface ListTasksParams1 {
+  /**
+   * Filter tasks by context ID to get tasks from a specific conversation or session.
+   */
+  contextId?: string;
+  /**
+   * Number of recent messages to include in each task's history. Must be non-negative. Defaults to 0 if not specified.
+   */
+  historyLength?: number;
+  /**
+   * Whether to include artifacts in the returned tasks. Defaults to false to reduce payload size.
+   */
+  includeArtifacts?: boolean;
+  /**
+   * Filter tasks updated after this timestamp (milliseconds since epoch). Only tasks with a last updated time greater than or equal to this value will be returned.
+   */
+  lastUpdatedAfter?: number;
+  /**
+   * Request-specific metadata.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Maximum number of tasks to return. Must be between 1 and 100. Defaults to 50 if not specified.
+   */
+  pageSize?: number;
+  /**
+   * Token for pagination. Use the nextPageToken from a previous ListTasksResult response.
+   */
+  pageToken?: string;
+  /**
+   * Filter tasks by their current status state.
+   */
+  status?:
+    | "submitted"
+    | "working"
+    | "input-required"
+    | "completed"
+    | "canceled"
+    | "failed"
+    | "rejected"
+    | "auth-required"
+    | "unknown";
+}
+/**
+ * Result object for tasks/list method containing an array of tasks and pagination information.
+ *
+ * This interface was referenced by `MySchema`'s JSON-Schema
+ * via the `definition` "ListTasksResult".
+ */
+export interface ListTasksResult1 {
+  /**
+   * Token for retrieving the next page. Empty string if no more results.
+   */
+  nextPageToken: string;
+  /**
+   * Maximum number of tasks returned in this response.
+   */
+  pageSize: number;
+  /**
+   * Array of tasks matching the specified criteria.
+   */
+  tasks: Task2[];
+  /**
+   * Total number of tasks available (before pagination).
+   */
+  totalSize: number;
 }
 /**
  * Defines configuration options for a `message/send` or `message/stream` request.
@@ -2578,7 +2770,7 @@ export interface PushNotificationAuthenticationInfo1 {
 export interface PushNotificationConfig2 {
   authentication?: PushNotificationAuthenticationInfo;
   /**
-   * A unique ID for the push notification configuration, set by the client
+   * A unique identifier (e.g. UUID) for the push notification configuration, set by the client
    * to support multiple notification callbacks.
    */
   id?: string;
@@ -2615,7 +2807,7 @@ export interface TaskQueryParams1 {
    */
   historyLength?: number;
   /**
-   * The unique identifier of the task.
+   * The unique identifier (e.g. UUID) of the task.
    */
   id: string;
   /**

@@ -4,7 +4,7 @@ import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError, InMemoryPushNotificationStore, PushNotificationStore, PushNotificationSender } from '../../src/server/index.js';
-import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
+import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, ListTasksParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute, FailingCancellableMockAgentExecutor } from './mocks/agent-executor.mock.js';
@@ -1228,5 +1228,409 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         } as any;
         const queue = new ExecutionEventQueue(fakeBus);
         expect(queue).to.be.instanceOf(ExecutionEventQueue);
+    });
+
+    describe('validation of tasks/list api', () => {
+        describe('tasks/list params validation', () => {
+            let listTasksStub: SinonStub;
+
+            beforeEach(() => {
+                // Stub the actual list method on the mockTaskStore
+                listTasksStub = sinon.stub(mockTaskStore, 'list').resolves({
+                    tasks: [],
+                    totalSize: 0,
+                    pageSize: 0,
+                    nextPageToken: ''
+                });
+            });
+
+            afterEach(() => {
+                listTasksStub.restore(); // Restore the stub after each test
+            });
+
+            // Test cases for pageSize
+            it('should return an invalid params error for pageSize less than 1', async () => {
+                const params: ListTasksParams = { pageSize: -1 };
+                let catchedError: A2AError | undefined;
+                try {           
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should return an invalid params error for pageSize greater than 100', async () => {
+                const params: ListTasksParams = { pageSize: 101 };
+                let catchedError: A2AError | undefined;
+                try {
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should allow valid pageSize (1 to 100)', async () => {
+                const params: ListTasksParams = { pageSize: 50 };
+                await handler.listTasks(params);
+                expect(listTasksStub.calledOnceWith(params)).to.be.true;
+            });
+
+            // Test cases for pageToken
+            it('should return an invalid params error for invalid base64 pageToken', async () => {
+                const params: ListTasksParams = { pageToken: 'not-base64!' };
+                let catchedError: A2AError | undefined;
+                try {
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should allow valid base64 pageToken', async () => {
+                const validBase64Token = Buffer.from('some-timestamp').toString('base64');
+                const params: ListTasksParams = { pageToken: validBase64Token };
+                await handler.listTasks(params);
+                expect(listTasksStub.calledOnceWith(params)).to.be.true;
+            });
+
+            // Test cases for historyLength
+            it('should return an invalid params error for negative historyLength', async () => {
+                const params: ListTasksParams = { historyLength: -1 };
+                let catchedError: A2AError | undefined;
+                try {
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should allow valid non-negative historyLength', async () => {
+                const params: ListTasksParams = { historyLength: 0 };
+                await handler.listTasks(params);
+                expect(listTasksStub.calledOnceWith(params)).to.be.true;
+            });
+
+            // Test cases for lastUpdatedAfter
+            it('should return an invalid params error for invalid lastUpdatedAfter (negative)', async () => {
+                const params: ListTasksParams = { lastUpdatedAfter: -1000 };
+                let catchedError: A2AError | undefined;
+                try {
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should return an invalid params error for invalid lastUpdatedAfter (float)', async () => {
+                const params: ListTasksParams = { lastUpdatedAfter: 12345.67 };
+                let catchedError: A2AError | undefined;
+                try {
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should return an invalid params error for invalid lastUpdatedAfter (non-number)', async () => {
+                const params: ListTasksParams = { lastUpdatedAfter: 'not-a-number' as any };
+                let catchedError: A2AError | undefined;
+                try {
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should allow valid lastUpdatedAfter (positive integer)', async () => {
+                const params: ListTasksParams = { lastUpdatedAfter: 1678886400000 }; // March 15, 2023 12:00:00 AM UTC
+                await handler.listTasks(params);
+                expect(listTasksStub.calledOnceWith(params)).to.be.true;
+            });
+
+            // Test cases for status
+            it('should return an invalid params error for invalid status string', async () => {
+                const params: ListTasksParams = { status: 'running' as any };
+                let catchedError: A2AError | undefined;
+                try {
+                    await handler.listTasks(params);
+                } catch (error: any) {
+                    catchedError = error;
+                } finally {
+                    expect(catchedError).to.be.instanceOf(A2AError);
+                    expect(catchedError.code).to.equal(-32602); // Invalid Params
+                    expect(catchedError.message).to.equal('Invalid method parameters.');
+                    expect(listTasksStub.notCalled).to.be.true;
+                }
+            });
+
+            it('should allow valid status (e.g., "completed")', async () => {
+                const params: ListTasksParams = { status: 'completed' };
+                await handler.listTasks(params);
+                expect(listTasksStub.calledOnceWith(params)).to.be.true;
+            });
+
+            // Combined valid case
+            it('should allow a valid tasks/list request with multiple valid parameters', async () => {
+                const validBase64Token = Buffer.from('another-timestamp').toString('base64');
+                const params: ListTasksParams = { pageSize: 20, pageToken: validBase64Token, historyLength: 5, lastUpdatedAfter: 1678886400000, status: 'failed' };
+                await handler.listTasks(params);
+                expect(listTasksStub.calledOnceWith(params)).to.be.true;
+            });
+
+            // Valid case with no params
+            it('should allow a valid tasks/list request with no parameters', async () => {
+                const params: ListTasksParams = {};
+                await handler.listTasks(params);
+                expect(listTasksStub.calledOnceWith(params)).to.be.true;
+            });
+        });
+
+        describe('tasks/list core method validation', () => {
+            const task1: Task = {
+                id: 'task-1', contextId: 'ctx-a', kind: 'task',
+                status: { state: 'completed', timestamp: '2023-01-01T10:00:00.000Z' },
+                history: [{ messageId: 'msg-1', role: 'user', parts: [{ kind: 'text', text: 'h1' }], kind: 'message' }],
+                artifacts: [{ artifactId: 'art-1', parts: [{ kind: 'text', text: 'a1' }] }]
+            };
+            const task2: Task = {
+                id: 'task-2', contextId: 'ctx-a', kind: 'task',
+                status: { state: 'working', timestamp: '2023-01-01T11:00:00.000Z' },
+                history: [{ messageId: 'msg-2', role: 'user', parts: [{ kind: 'text', text: 'h2' }], kind: 'message' }],
+                artifacts: [{ artifactId: 'art-2', parts: [{ kind: 'text', text: 'a2' }] }]
+            };
+            const task3: Task = {
+                id: 'task-3', contextId: 'ctx-b', kind: 'task',
+                status: { state: 'failed', timestamp: '2023-01-01T12:00:00.000Z' },
+                history: [{ messageId: 'msg-3', role: 'user', parts: [{ kind: 'text', text: 'h3' }], kind: 'message' }],
+                artifacts: [{ artifactId: 'art-3', parts: [{ kind: 'text', text: 'a3' }] }]
+            };
+            const task4: Task = {
+                id: 'task-4', contextId: 'ctx-a', kind: 'task',
+                status: { state: 'completed', timestamp: '2023-01-01T13:00:00.000Z' },
+                history: [{ messageId: 'msg-4', role: 'user', parts: [{ kind: 'text', text: 'h4' }], kind: 'message' }],
+                artifacts: [{ artifactId: 'art-4', parts: [{ kind: 'text', text: 'a4' }] }]
+            };
+            const task5: Task = { // Task with no timestamp for testing edge cases
+                id: 'task-5', contextId: 'ctx-c', kind: 'task',
+                status: { state: 'working' }, // No timestamp
+                history: [{ messageId: 'msg-5', role: 'user', parts: [{ kind: 'text', text: 'h5' }], kind: 'message' }],
+                artifacts: [{ artifactId: 'art-5', parts: [{ kind: 'text', text: 'a5' }] }]
+            };
+
+            beforeEach(async () => {
+                // Re-initialize mockTaskStore and handler for each test
+                mockTaskStore = new InMemoryTaskStore();
+                handler = new DefaultRequestHandler(
+                    testAgentCard,
+                    mockTaskStore,
+                    mockAgentExecutor,
+                    executionEventBusManager,
+                );
+
+                // Populate the store with test tasks
+                await mockTaskStore.save(task1);
+                await mockTaskStore.save(task2);
+                await mockTaskStore.save(task3);
+                await mockTaskStore.save(task4);
+                await mockTaskStore.save(task5); // Add task with no timestamp
+            });
+
+            it('should return all tasks sorted by timestamp descending when no parameters are provided', async () => {
+                const params: ListTasksParams = {};
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(5);
+                expect(result.tasks.map(t => t.id)).to.deep.equal(['task-4', 'task-3', 'task-2', 'task-1', 'task-5']);
+                expect(result.totalSize).to.equal(5);
+                expect(result.pageSize).to.equal(5);
+                expect(result.nextPageToken).to.be.empty;
+            });
+
+            it('should filter tasks by contextId', async () => {
+                const params: ListTasksParams = { contextId: 'ctx-a' };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(3);
+                expect(result.tasks.map(t => t.id)).to.deep.equal(['task-4', 'task-2', 'task-1']);
+                expect(result.totalSize).to.equal(3);
+            });
+
+            it('should filter tasks by status', async () => {
+                const params: ListTasksParams = { status: 'completed' };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(2);
+                expect(result.tasks.map(t => t.id)).to.deep.equal(['task-4', 'task-1']);
+                expect(result.totalSize).to.equal(2);
+            });
+
+            it('should filter tasks by lastUpdatedAfter', async () => {
+                const timestamp = new Date('2023-01-01T11:30:00.000Z').getTime(); // Between task2 and task3
+                const params: ListTasksParams = { lastUpdatedAfter: timestamp };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(2);
+                expect(result.tasks.map(t => t.id)).to.deep.equal(['task-4', 'task-3']);
+                expect(result.totalSize).to.equal(2);
+            });
+
+            it('should filter tasks by pageToken', async () => {
+                // pageToken is base64 encoded timestamp, so we want tasks *older* than this timestamp
+                const pageTokenTimestamp = '2023-01-01T12:00:00.000Z'; // task3's timestamp
+                const encodedPageToken = Buffer.from(pageTokenTimestamp).toString('base64');
+                const params: ListTasksParams = { pageToken: encodedPageToken };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(2);
+                expect(result.tasks.map(t => t.id)).to.deep.equal(['task-2', 'task-1']); // Should be tasks older than task3
+                expect(result.totalSize).to.equal(2);
+            });
+
+            it('should apply pageSize limit and generate nextPageToken', async () => {
+                const params: ListTasksParams = { pageSize: 2 };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(2);
+                expect(result.tasks.map(t => t.id)).to.deep.equal(['task-4', 'task-3']);
+                expect(result.totalSize).to.equal(5); // Total tasks in store
+                expect(result.pageSize).to.equal(2);
+                const expectedNextPageToken = Buffer.from(task3.status.timestamp!).toString('base64');
+                expect(result.nextPageToken).to.equal(expectedNextPageToken);
+            });
+
+            it('should return empty nextPageToken if all tasks fit on one page', async () => {
+                const params: ListTasksParams = { pageSize: 5 }; // Exactly all tasks
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(5);
+                expect(result.nextPageToken).to.be.empty;
+            });
+
+            it('should limit historyLength in returned tasks', async () => {
+                const params: ListTasksParams = { historyLength: 0 };
+                const result = await handler.listTasks(params);
+                expect(result.tasks[0].history).to.have.lengthOf(0);
+
+                const params2: ListTasksParams = { historyLength: 1 };
+                const result2 = await handler.listTasks(params2);
+                expect(result2.tasks[0].history).to.have.lengthOf(1);
+            });
+
+            it('should remove artifacts if includeArtifacts is false', async () => {
+                const params: ListTasksParams = { includeArtifacts: false };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks[0].artifacts).to.have.lengthOf(0);
+            });
+
+            it('should include artifacts if includeArtifacts is true', async () => {
+                const params: ListTasksParams = { includeArtifacts: true };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks[0].artifacts).to.have.lengthOf(1);
+                expect(result.tasks[0].artifacts![0].artifactId).to.equal('art-4');
+            });
+
+            it('should handle combined filters and pagination', async () => {
+                const params: ListTasksParams = {
+                    contextId: 'ctx-a',
+                    status: 'completed',
+                    lastUpdatedAfter: new Date('2023-01-01T09:00:00.000Z').getTime(), // All ctx-a completed tasks are after this
+                    pageSize: 1,
+                    historyLength: 0,
+                    includeArtifacts: false,
+                };
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.have.lengthOf(1);
+                expect(result.tasks[0].id).to.equal('task-4');
+                expect(result.tasks[0].history).to.have.lengthOf(0);
+                expect(result.tasks[0].artifacts).to.have.lengthOf(0);
+                expect(result.totalSize).to.equal(2); // task-4 and task-1 match filters
+                expect(result.pageSize).to.equal(1);
+                const expectedNextPageToken = Buffer.from(task4.status.timestamp!).toString('base64');
+                expect(result.nextPageToken).to.equal(expectedNextPageToken);
+            });
+
+            it('should handle empty task store', async () => {
+                mockTaskStore = new InMemoryTaskStore(); // Empty store
+                handler = new DefaultRequestHandler(
+                    testAgentCard,
+                    mockTaskStore,
+                    mockAgentExecutor,
+                    executionEventBusManager,
+                );
+                const params: ListTasksParams = {};
+                const result = await handler.listTasks(params);
+
+                expect(result.tasks).to.be.empty;
+                expect(result.totalSize).to.equal(0);
+                expect(result.pageSize).to.equal(0);
+                expect(result.nextPageToken).to.be.empty;
+            });
+
+            it('should handle tasks with no timestamp when filtering by lastUpdatedAfter', async () => {
+                const params: ListTasksParams = { lastUpdatedAfter: new Date('2023-01-01T09:00:00.000Z').getTime() };
+                const result = await handler.listTasks(params);
+                // task5 has no timestamp, so it should be excluded from results when lastUpdatedAfter is present
+                expect(result.tasks.map(t => t.id)).to.not.include('task-5');
+                expect(result.tasks).to.have.lengthOf(4);
+            });
+
+            it('should handle tasks with no timestamp when filtering by pageToken', async () => {
+                const pageTokenTimestamp = '2023-01-01T12:00:00.000Z';
+                const encodedPageToken = Buffer.from(pageTokenTimestamp).toString('base64');
+                const params: ListTasksParams = { pageToken: encodedPageToken };
+                const result = await handler.listTasks(params);
+                // task5 has no timestamp, so it should be excluded from results when pageToken is present
+                expect(result.tasks.map(t => t.id)).to.not.include('task-5');
+                expect(result.tasks).to.have.lengthOf(2);
+            });
+
+            it('should handle tasks with no timestamp when no timestamp-based filters are present', async () => {
+                // If no timestamp-based filters, task5 should be included, but its sort position is undefined
+                // The current sort logic `ts2 - ts1` will treat `undefined` timestamps as `0`.
+                // So task5 will appear at the end of the sorted list.
+                const params: ListTasksParams = { pageSize: 5 }; // Get all tasks
+                const result = await handler.listTasks(params);
+                expect(result.tasks).to.have.lengthOf(5);
+                expect(result.tasks.map(t => t.id)).to.deep.equal(['task-4', 'task-3', 'task-2', 'task-1', 'task-5']);
+            });
+        });
     });
 });

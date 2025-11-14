@@ -22,6 +22,7 @@ describe('JsonRpcTransportHandler', () => {
             getTaskPushNotificationConfig: sinon.stub(),
             listTaskPushNotificationConfigs: sinon.stub(),
             deleteTaskPushNotificationConfig: sinon.stub(),
+            listTasks: sinon.stub(),
             resubscribe: sinon.stub(),
         };
         transportHandler = new JsonRpcTransportHandler(mockRequestHandler);

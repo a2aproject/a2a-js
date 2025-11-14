@@ -38,3 +38,19 @@ export function isArtifactUpdate(
   // Check if it has 'parts'
   return isObject(update) && "parts" in update;
 }
+
+/**
+ * Checks if a given number is a valid Unix timestamp in milliseconds.
+ * A valid timestamp is a positive integer representing milliseconds since the Unix epoch.
+ * @param timestamp The number to validate.
+ * @returns True if the number is a valid Unix timestamp in milliseconds, false otherwise.
+ */
+export function isValidUnixTimestampMs(timestamp: number): boolean {
+  if (typeof timestamp !== 'number' || !Number.isInteger(timestamp)) {
+    return false;
+  }
+  if (timestamp <= 0) {
+    return false;
+  }
+  return true;
+}

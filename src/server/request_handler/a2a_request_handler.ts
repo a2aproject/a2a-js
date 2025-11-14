@@ -11,6 +11,8 @@ import {
     GetTaskPushNotificationConfigParams,
     ListTaskPushNotificationConfigParams,
     DeleteTaskPushNotificationConfigParams,
+    ListTasksParams,
+    ListTasksResult,
 } from "../../types.js";
 
 export interface A2ARequestHandler {
@@ -61,4 +63,9 @@ export interface A2ARequestHandler {
         void,
         undefined
     >;
+
+    listTasks(
+        params: ListTasksParams
+    ): Promise<ListTasksResult>;
+
 }

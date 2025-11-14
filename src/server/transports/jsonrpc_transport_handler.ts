@@ -1,4 +1,4 @@
-import { JSONRPCErrorResponse, MessageSendParams, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, A2ARequest, JSONRPCResponse, DeleteTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
+import { JSONRPCErrorResponse, MessageSendParams, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, A2ARequest, JSONRPCResponse, DeleteTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, ListTasksParams, TaskState } from "../../types.js";
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 
@@ -100,6 +100,9 @@ export class JsonRpcTransportHandler {
                         break;
                     case 'tasks/get':
                         result = await this.requestHandler.getTask(rpcRequest.params);
+                        break;
+                    case 'tasks/list':
+                        result = await this.requestHandler.listTasks(rpcRequest.params);
                         break;
                     case 'tasks/cancel':
                         result = await this.requestHandler.cancelTask(rpcRequest.params);
