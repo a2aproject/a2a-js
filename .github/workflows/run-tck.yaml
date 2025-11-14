@@ -13,8 +13,12 @@ env:
   TCK_VERSION: 0.3.0.beta3
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
-  # SUT_JSONRPC_URL to use for the TCK and the server agent
-  SUT_JSONRPC_URL: http://localhost:41241
+  # Base URL for the SUT agent
+  SUT_BASE_URL: http://localhost:41241
+  # SUT_JSONRPC_URL to use for the TCK (JSON-RPC transport)
+  SUT_JSONRPC_URL: http://localhost:41241/a2a/jsonrpc
+  # SUT_REST_URL to use for the TCK (HTTP+REST transport)
+  SUT_REST_URL: http://localhost:41241/a2a/api
   # Slow system on CI
   TCK_STREAMING_TIMEOUT: 5.0
 
@@ -58,7 +62,7 @@ jobs:
           npm run tck:sut-agent &
       - name: Wait for SUT to start
         run: |
-          URL="${{ env.SUT_JSONRPC_URL }}/.well-known/agent-card.json"
+          URL="${{ env.SUT_BASE_URL }}/.well-known/agent-card.json"
           EXPECTED_STATUS=200
           TIMEOUT=120
           RETRY_INTERVAL=2
@@ -90,11 +94,17 @@ jobs:
             sleep "$RETRY_INTERVAL"
           done
           
-      - name: Run TCK
-        id: run-tck
+      - name: Run TCK (JSON-RPC Transport)
+        id: run-tck-jsonrpc
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc --transport-strategy prefer_jsonrpc
+        working-directory: tck/a2a-tck
+      - name: Run TCK (HTTP+REST Transport)
+        id: run-tck-rest
+        timeout-minutes: 5
+        run: |
+          ./run_tck.py --sut-url ${{ env.SUT_REST_URL }} --category mandatory --transports rest --transport-strategy prefer_rest
         working-directory: tck/a2a-tck
       - name: Stop SUT
         if: always()

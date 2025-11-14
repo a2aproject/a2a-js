@@ -9,6 +9,18 @@ import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_
 import { AgentCard, Task, Message } from '../../src/types.js';
 import { A2AError } from '../../src/server/error.js';
 
+/**
+ * Test suite for httpRestHandler - HTTP+REST transport implementation
+ * 
+ * This suite tests the REST API endpoints following the A2A specification:
+ * - GET /v1/card - Agent card retrieval
+ * - POST /v1/message:send - Send message (non-streaming)
+ * - POST /v1/message:stream - Send message with SSE streaming
+ * - GET /v1/tasks/:taskId - Get task status
+ * - POST /v1/tasks/:taskId:cancel - Cancel task
+ * - POST /v1/tasks/:taskId:subscribe - Resubscribe to task updates
+ * - Push notification config CRUD operations
+ */
 describe('httpRestHandler', () => {
     let mockRequestHandler: A2ARequestHandler;
     let app: Express;
@@ -312,26 +324,26 @@ describe('httpRestHandler', () => {
                 assert.deepEqual(response.body, mockConfig);
             });
 
-        it('should return 501 if push notifications not supported', async () => {
-            // Create new app with handler that has capabilities without push notifications
-            const noPNRequestHandler = {
-                ...mockRequestHandler,
-                getAgentCard: sinon.stub().resolves({ 
-                    ...testAgentCard, 
-                    capabilities: { streaming: false, pushNotifications: false } 
-                })
-            };
-            const noPNApp = express();
-            noPNApp.use(httpRestHandler({ requestHandler: noPNRequestHandler as any }));
+            it('should return 501 if push notifications not supported', async () => {
+                // Create new app with handler that has capabilities without push notifications
+                const noPNRequestHandler = {
+                    ...mockRequestHandler,
+                    getAgentCard: sinon.stub().resolves({ 
+                        ...testAgentCard, 
+                        capabilities: { streaming: false, pushNotifications: false } 
+                    })
+                };
+                const noPNApp = express();
+                noPNApp.use(httpRestHandler({ requestHandler: noPNRequestHandler as any }));
 
-            const response = await request(noPNApp)
-                .post('/v1/tasks/task-1/pushNotificationConfigs')
-                .send({ url: 'https://example.com/webhook', events: ['message'] })
-                .expect(501);
+                const response = await request(noPNApp)
+                    .post('/v1/tasks/task-1/pushNotificationConfigs')
+                    .send({ url: 'https://example.com/webhook', events: ['message'] })
+                    .expect(501);
 
-            assert.property(response.body, 'code');
-            assert.property(response.body, 'message');
-        });
+                assert.property(response.body, 'code');
+                assert.property(response.body, 'message');
+            });
         });
 
         describe('GET /v1/tasks/:taskId/pushNotificationConfigs', () => {
@@ -419,6 +431,21 @@ describe('httpRestHandler', () => {
             await request(app)
                 .post('/v1/tasks/task-1:unknown')
                 .expect(404);
+        });
+
+        it('should handle internal server errors gracefully', async () => {
+            (mockRequestHandler.sendMessage as SinonStub).rejects(
+                new Error('Unexpected internal error')
+            );
+
+            const response = await request(app)
+                .post('/v1/message:send')
+                .send({ message: testMessage })
+                .expect(500);
+
+            assert.property(response.body, 'code');
+            assert.property(response.body, 'message');
+            assert.equal(response.body.code, -32603); // Internal error code
         });
     });
 });
