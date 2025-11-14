@@ -174,9 +174,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         params: MessageSendParams,
         context?: ServerCallContext,
     ): Promise<Message | Task> {
-        if (context) {
-            context.method = 'sendMessage';
-        }
         const incomingMessage = params.message;
         if (!incomingMessage.messageId) {
             throw A2AError.invalidParams('message.messageId is required.');
@@ -274,9 +271,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         void,
         undefined
     > { 
-        if (context) {
-            context.method = 'sendMessageStream';
-        }
         const incomingMessage = params.message;
         if (!incomingMessage.messageId) {
             // For streams, messageId might be set by client, or server can generate if not present.
@@ -339,9 +333,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     async getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task> {
-        if (context) {
-            context.method = 'getTask';
-        }
         const task = await this.taskStore.load(params.id);
         if (!task) {
             throw A2AError.taskNotFound(params.id);
@@ -358,9 +349,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     async cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task> {
-        if (context) {
-            context.method = 'cancelTask';
-        }
         const task = await this.taskStore.load(params.id);
         if (!task) {
             throw A2AError.taskNotFound(params.id);
@@ -414,9 +402,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         params: TaskPushNotificationConfig,
         context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig> {
-        if (context) {
-            context.method = 'setTaskPushNotificationConfig';
-        }
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
         }
@@ -441,9 +426,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         params: TaskIdParams | GetTaskPushNotificationConfigParams,
         context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig> {
-        if (context) {
-            context.method = 'getTaskPushNotificationConfig';
-        }
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
         }
@@ -477,9 +459,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         params: ListTaskPushNotificationConfigParams,
         context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig[]> { 
-        if (context) {
-            context.method = 'listTaskPushNotificationConfigs';
-        }
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
         }
@@ -500,9 +479,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         params: DeleteTaskPushNotificationConfigParams,
         context?: ServerCallContext
     ): Promise<void> { 
-        if (context) {
-            context.method = 'deleteTaskPushNotificationConfig';
-        }
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
         }
@@ -526,9 +502,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         void,
         undefined
     > {
-        if (context) {
-            context.method = 'resubscribe';
-        }
         if (!this.agentCard.capabilities.streaming) {
             throw A2AError.unsupportedOperation("Streaming (and thus resubscription) is not supported.");
         }

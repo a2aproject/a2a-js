@@ -1,7 +1,6 @@
 export class ServerCallContext {
   private readonly _requestedExtensions: Set<string>;
   private readonly _activatedExtensions: Set<string>;
-  private _method?: string;
 
   constructor(
     requestedExtensions: Set<string> = new Set(),
@@ -16,14 +15,6 @@ export class ServerCallContext {
 
   get requestedExtensions(): ReadonlySet<string> {
     return this._requestedExtensions;
-  }
-
-  get method(): string | undefined {
-    return this._method;
-  }
-
-  set method(value: string) {
-    this._method = value;
   }
 
   public addActivatedExtension(uri: string) {
