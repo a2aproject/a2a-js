@@ -67,7 +67,7 @@ export class JsonRpcTransportHandler {
                 }
                 const agentEventStream = method === 'message/stream'
                     ? this.requestHandler.sendMessageStream(params as MessageSendParams, context)
-                    : this.requestHandler.resubscribe(params as TaskIdParams);
+                    : this.requestHandler.resubscribe(params as TaskIdParams, context);
 
                 // Wrap the agent event stream into a JSON-RPC result stream
                 return (async function* jsonRpcEventStream(): AsyncGenerator<JSONRPCResponse, void, undefined> {

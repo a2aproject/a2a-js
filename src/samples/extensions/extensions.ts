@@ -20,7 +20,7 @@ class TimeStampExtension {
     return false
   }
 
-  timestamp_event(event: AgentExecutionEvent): void {
+  timestampEvent(event: AgentExecutionEvent): void {
     if (event.kind === 'status-update') {
         const statusUpdateEvent = event as TaskStatusUpdateEvent;
         if (statusUpdateEvent.status.message) {
@@ -74,7 +74,7 @@ class TimestampingEventQueue implements ExecutionEventBus {
     }
 
     publish(event: AgentExecutionEvent): void {
-        this._ext.timestamp_event(event);
+        this._ext.timestampEvent(event);
         this._delegate.publish(event);
     }
 

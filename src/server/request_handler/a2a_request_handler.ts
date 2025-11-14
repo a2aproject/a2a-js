@@ -37,7 +37,7 @@ export interface A2ARequestHandler {
     >;
 
     getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task>;
-    cancelTask(params: TaskIdParams): Promise<Task>;
+    cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task>;
 
     setTaskPushNotificationConfig(
         params: TaskPushNotificationConfig,

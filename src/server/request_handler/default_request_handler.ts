@@ -101,15 +101,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
         // Validate requested extensions against agent capabilities
-        const agentCard = await this.getAgentCard();
         if (context?.requestedExtensions) {
-            const supportedUris = agentCard.capabilities.extensions?.map(ext => ext.uri) || [];
-            Array.from(context.requestedExtensions.values()).forEach((extension) => {
-                    if (!supportedUris.includes(extension)){
-                        context.removeRequestedExtension(extension);
-                    }
+            const agentCard = await this.getAgentCard();
+            const exposedExtensions = new Set(agentCard.capabilities.extensions?.map(ext => ext.uri) || []);
+            for (const extension of context.requestedExtensions) {
+                if (!exposedExtensions.has(extension)) {
+                    context.removeRequestedExtension(extension);
                 }
-            );
+            }
         }
 
         const messageForContext = {
