@@ -8,9 +8,9 @@ import {
   AgentExecutor,
   RequestContext,
   ExecutionEventBus,
-  DefaultRequestHandler,
-} from '../../src/server/index.js';
-import { A2AExpressApp } from '../../src/server/express/index.js';
+  DefaultRequestHandler
+} from "../../src/server/index.js";
+import { A2AExpressApp, jsonRpcHandler, agentCardHandler, httpRestHandler } from "../../src/server/express/index.js";
 
 /**
  * SUTAgentExecutor implements the agent's core logic.
@@ -174,7 +174,10 @@ const SUTAgentCard: AgentCard = {
   ],
   supportsAuthenticatedExtendedCard: false,
   preferredTransport: 'JSONRPC',
-  additionalInterfaces: [{ url: 'http://localhost:41241', transport: 'JSONRPC' }],
+  additionalInterfaces: [
+    {url: 'http://localhost:41241', transport: 'JSONRPC'},
+    {url: 'http://localhost:41241/v1', transport: 'HTTP+JSON'}
+  ],
 };
 
 async function main() {
@@ -187,9 +190,17 @@ async function main() {
   // 3. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(SUTAgentCard, taskStore, agentExecutor);
 
-  // 4. Create and setup A2AExpressApp
-  const appBuilder = new A2AExpressApp(requestHandler);
-  const expressApp = appBuilder.setupRoutes(express());
+  // 4. Setup Express app with modular handlers
+  const expressApp = express();
+  
+  // Register agent card handler
+  expressApp.use('/.well-known/agent-card.json', agentCardHandler({ agentCardProvider: requestHandler }));
+  
+  // Register JSON-RPC handler at root
+  expressApp.use('/', jsonRpcHandler({ requestHandler }));
+  
+  // Register HTTP+REST handler at /v1
+  expressApp.use('/v1', httpRestHandler({ requestHandler }));
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
@@ -199,6 +210,8 @@ async function main() {
     }
     console.log(`[SUTAgent] Server using new framework started on http://localhost:${PORT}`);
     console.log(`[SUTAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log(`[SUTAgent] JSON-RPC endpoint: http://localhost:${PORT}/`);
+    console.log(`[SUTAgent] HTTP+REST endpoint: http://localhost:${PORT}/v1`);
     console.log('[SUTAgent] Press Ctrl+C to stop the server');
   });
 }
