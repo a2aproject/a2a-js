@@ -14,6 +14,7 @@ import { InMemoryPushNotificationStore, PushNotificationStore } from '../push_no
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
+import { Server } from 'http';
 
 const terminalStates: TaskState[] = ["completed", "failed", "canceled", "rejected"];
 
@@ -101,14 +102,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
         // Validate requested extensions against agent capabilities
-        if (context?.requestedExtensions) {
+        let newServerCallContext: ServerCallContext;
+        if (context?.requestedExtensions && context.requestedExtensions.size > 0) {
             const agentCard = await this.getAgentCard();
             const exposedExtensions = new Set(agentCard.capabilities.extensions?.map(ext => ext.uri) || []);
-            for (const extension of context.requestedExtensions) {
-                if (!exposedExtensions.has(extension)) {
-                    context.removeRequestedExtension(extension);
-                }
-            }
+            const validExtensions = new Set(
+                Array.from(context.requestedExtensions).filter(extension => exposedExtensions.has(extension))
+            );
+            newServerCallContext = new ServerCallContext(validExtensions);
         }
 
         const messageForContext = {
@@ -122,7 +123,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             contextId, 
             task, 
             referenceTasks,
-            context
+            newServerCallContext
         );
     }
 

@@ -9,7 +9,7 @@ import {
 } from "../../server/index.js";
 import { TaskStatusUpdateEvent } from "../../types.js";
 
-const URI = 'timestamp-extension'
+const URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1'
 
 class TimeStampExtension {
   activate(context: RequestContext): boolean {
