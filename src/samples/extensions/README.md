@@ -1,7 +1,7 @@
-# Sample Agent
+# Extension
 
-This agent is a sample to test the extension feature. It uses the sample agent executor, with a modified agent card which includes the support for extensions.
-The `extensions.ts` adds a timestamp in the metadata of the `TaskStatusUpdateEvent`.
+This configuration is using a sample agent to test the extension feature integration. It uses the sample agent executor defined in `agents/sample-agent`, with a modified agent card which includes the support for extensions.
+The `extensions.ts` adds a timestamp in the metadata of the `TaskStatusUpdateEvent` Message.
 
 To run the agent:
 
