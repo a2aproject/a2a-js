@@ -31,7 +31,7 @@ curl -X POST http://localhost:41241/
                 }
             ],
             "messageId": "9229e770-767c-417b-a0b0-f0741243c589"
-            },
+            }
         }
     }'
 ```
