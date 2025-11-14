@@ -70,7 +70,8 @@
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
     "a2a:cli": "tsx src/samples/cli.ts",
     "agents:movie-agent": "tsx src/samples/agents/movie-agent/index.ts",
-    "agents:sample-agent": "tsx src/samples/agents/sample-agent/index.ts"
+    "agents:sample-agent": "tsx src/samples/agents/sample-agent/index.ts",
+    "agents:extension-agent": "tsx src/samples/extensions/index.ts"
   },
   "dependencies": {
     "uuid": "^11.1.0"

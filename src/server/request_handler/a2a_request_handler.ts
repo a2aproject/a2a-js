@@ -12,6 +12,7 @@ import {
     ListTaskPushNotificationConfigParams,
     DeleteTaskPushNotificationConfigParams,
 } from "../../types.js";
+import { ServerCallContext } from "../context.js";
 
 export interface A2ARequestHandler {
     getAgentCard(): Promise<AgentCard>;
@@ -19,11 +20,13 @@ export interface A2ARequestHandler {
     getAuthenticatedExtendedAgentCard(): Promise<AgentCard>;
 
     sendMessage(
-        params: MessageSendParams
+        params: MessageSendParams,
+        context?: ServerCallContext,
     ): Promise<Message | Task>;
 
     sendMessageStream(
-        params: MessageSendParams
+        params: MessageSendParams,
+        context?: ServerCallContext,
     ): AsyncGenerator<
         | Message
         | Task
@@ -33,27 +36,32 @@ export interface A2ARequestHandler {
         undefined
     >;
 
-    getTask(params: TaskQueryParams): Promise<Task>;
-    cancelTask(params: TaskIdParams): Promise<Task>;
+    getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task>;
+    cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task>;
 
     setTaskPushNotificationConfig(
-        params: TaskPushNotificationConfig
+        params: TaskPushNotificationConfig,
+        context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig>;
 
     getTaskPushNotificationConfig(
-        params: TaskIdParams | GetTaskPushNotificationConfigParams
+        params: TaskIdParams | GetTaskPushNotificationConfigParams,
+        context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig>;
 
     listTaskPushNotificationConfigs(
-        params: ListTaskPushNotificationConfigParams
+        params: ListTaskPushNotificationConfigParams,
+        context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig[]>;
 
     deleteTaskPushNotificationConfig(
-        params: DeleteTaskPushNotificationConfigParams
+        params: DeleteTaskPushNotificationConfigParams,
+        context?: ServerCallContext
     ): Promise<void>;
 
     resubscribe(
-        params: TaskIdParams
+        params: TaskIdParams,
+        context?: ServerCallContext
     ): AsyncGenerator<
         | Task
         | TaskStatusUpdateEvent
