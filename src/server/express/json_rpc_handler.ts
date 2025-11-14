@@ -32,7 +32,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             const context = new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)));
             const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
-            if (context.activatedExtensions.size > 0){
+            if (context.activatedExtensions){
                 res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
             }
             // Check if it's an AsyncGenerator (stream)

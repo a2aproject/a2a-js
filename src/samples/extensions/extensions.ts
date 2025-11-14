@@ -13,7 +13,7 @@ const URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1'
 
 class TimeStampExtension {
   activate(context: RequestContext): boolean {
-    if (context.context?.requestedExtensions.has(URI)) {
+    if (context.context?.requestedExtensions?.has(URI)) {
         context.context?.addActivatedExtension(URI)
         return true
     }

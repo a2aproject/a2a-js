@@ -310,7 +310,7 @@ describe('A2AExpressApp', () => {
             const uriExtensionsValues = 'activated-extension, non-activated-extension';
 
             handleStub.callsFake(async (requestBody: any, serverCallContext: ServerCallContext) => {
-                const firstRequestedExtension = serverCallContext.requestedExtensions.values().next().value;
+                const firstRequestedExtension = serverCallContext.requestedExtensions?.values().next().value;
                 serverCallContext.addActivatedExtension(firstRequestedExtension);                
                 return mockResponse;
             });
