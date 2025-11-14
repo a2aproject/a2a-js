@@ -36,19 +36,40 @@ curl -X POST http://localhost:41241/
     }'
 ```
 
-Expected response:
+Expected simplified response:
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{
-    "kind":"task",
-    "status":{"state":"completed","message":{"kind":"message","role":"agent",
-    "parts":[{"kind":"text","text":"Hello World! Nice to meet you!"}],
-    "metadata":{"timestamp":"2025-11-14T15:51:36.725Z"}}, // Timestamp added to metadata on the 'completed' TaskStatusUpdateEvent
-    "timestamp":"2025-11-14T15:51:35.723Z"},
-    "history":[
-        {"role":"user","parts":[{"kind":"text","text":"Hello how are you?"}]},
-        {"kind":"message","role":"agent","parts":[{"kind":"text","text":"Processing your question"}],
-        "metadata":{"timestamp":"2025-11-14T15:51:35.722Z"}}, // Timestamp added to metadata on the 'running' TaskStatusUpdateEvent
-        {"kind":"message","role":"agent","parts":[{"kind":"text","text":"Hello World! Nice to meet you!"}],
-        "metadata":{"timestamp":"2025-11-14T15:51:36.725Z"}}]}} // Timestamp added to metadata on the 'completed' TaskStatusUpdateEvent
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "kind": "task",
+        "status": {
+            "state": "completed",
+            "message": {
+                ...
+                "metadata": {
+                    "timestamp": "2025-11-14T15:51:36.725Z" // Timestamp added to metadata on the 'completed' TaskStatusUpdateEvent
+                }
+            }, 
+        },
+        "history": [
+            {
+                ...
+            },
+            {
+                ...
+                "metadata": {
+                    "timestamp": "2025-11-14T15:51:35.722Z" // Timestamp added to metadata on the 'running' TaskStatusUpdateEvent
+                }
+            }, 
+            {
+                ...
+                "metadata": {
+                    "timestamp": "2025-11-14T15:51:36.725Z" // Timestamp added to metadata on the 'completed' TaskStatusUpdateEvent
+                }
+            } 
+        ]
+    }
+}
 ```
