@@ -8,9 +8,13 @@ import {
   AgentExecutor,
   RequestContext,
   ExecutionEventBus,
-  DefaultRequestHandler
-} from "../../src/server/index.js";
-import { A2AExpressApp, jsonRpcHandler, agentCardHandler, httpRestHandler } from "../../src/server/express/index.js";
+  DefaultRequestHandler,
+} from '../../src/server/index.js';
+import {
+  jsonRpcHandler,
+  agentCardHandler,
+  httpRestHandler,
+} from '../../src/server/express/index.js';
 
 /**
  * SUTAgentExecutor implements the agent's core logic.
@@ -24,7 +28,7 @@ class SUTAgentExecutor implements AgentExecutor {
     const cancelledUpdate: TaskStatusUpdateEvent = {
       kind: 'status-update',
       taskId: taskId,
-      contextId: this.lastContextId,
+      contextId: this.lastContextId ?? uuidv4(),
       status: {
         state: 'canceled',
         timestamp: new Date().toISOString(),
@@ -146,8 +150,8 @@ class SUTAgentExecutor implements AgentExecutor {
 const SUTAgentCard: AgentCard = {
   name: 'SUT Agent',
   description: 'A sample agent to be used as SUT against tck tests.',
-  // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
-  url: 'http://localhost:41241/',
+  // Main URL points to JSON-RPC endpoint (preferred transport)
+  url: 'http://localhost:41241/a2a/jsonrpc',
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples', // Added provider URL
@@ -174,9 +178,10 @@ const SUTAgentCard: AgentCard = {
   ],
   supportsAuthenticatedExtendedCard: false,
   preferredTransport: 'JSONRPC',
+  // All supported transports (including preferred)
   additionalInterfaces: [
-    {url: 'http://localhost:41241', transport: 'JSONRPC'},
-    {url: 'http://localhost:41241/v1', transport: 'HTTP+JSON'}
+    { url: 'http://localhost:41241/a2a/jsonrpc', transport: 'JSONRPC' },
+    { url: 'http://localhost:41241/a2a/rest', transport: 'HTTP+JSON' },
   ],
 };
 
@@ -192,15 +197,18 @@ async function main() {
 
   // 4. Setup Express app with modular handlers
   const expressApp = express();
-  
-  // Register agent card handler
-  expressApp.use('/.well-known/agent-card.json', agentCardHandler({ agentCardProvider: requestHandler }));
-  
-  // Register JSON-RPC handler at root
-  expressApp.use('/', jsonRpcHandler({ requestHandler }));
-  
-  // Register HTTP+REST handler at /v1
-  expressApp.use('/v1', httpRestHandler({ requestHandler }));
+
+  // Register agent card handler at well-known location (shared by all transports)
+  expressApp.use(
+    '/.well-known/agent-card.json',
+    agentCardHandler({ agentCardProvider: requestHandler })
+  );
+
+  // Register JSON-RPC handler (preferred transport, backward compatible)
+  expressApp.use('/a2a/jsonrpc', jsonRpcHandler({ requestHandler }));
+
+  // Register HTTP+REST handler (new feature - additional transport)
+  expressApp.use('/a2a/rest', httpRestHandler({ requestHandler }));
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
@@ -210,8 +218,6 @@ async function main() {
     }
     console.log(`[SUTAgent] Server using new framework started on http://localhost:${PORT}`);
     console.log(`[SUTAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
-    console.log(`[SUTAgent] JSON-RPC endpoint: http://localhost:${PORT}/`);
-    console.log(`[SUTAgent] HTTP+REST endpoint: http://localhost:${PORT}/v1`);
     console.log('[SUTAgent] Press Ctrl+C to stop the server');
   });
 }
