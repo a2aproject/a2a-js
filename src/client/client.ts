@@ -33,6 +33,7 @@ export interface A2AClientOptions {
 
 /**
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
+ * Only JSON-RPC transport is supported.
  */
 export class A2AClient {
   private readonly agentCardPromise: Promise<AgentCard>;
@@ -369,7 +370,7 @@ export class A2AClient {
         'result': result ?? null, // JSON-RPC requires result property on success, it will be null for "void" methods.
       } as TResponse
     } catch (e: any) {
-      // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
+      // For compatibility, return JSON-RPC errors as response objects instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
       if (isJSONRPCError(e)) {
         return e.errorResponse as TResponse;
