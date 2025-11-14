@@ -99,30 +99,30 @@ export class JsonRpcTransportHandler {
                         result = await this.requestHandler.sendMessage(rpcRequest.params, context);
                         break;
                     case 'tasks/get':
-                        result = await this.requestHandler.getTask(rpcRequest.params);
+                        result = await this.requestHandler.getTask(rpcRequest.params, context);
                         break;
                     case 'tasks/cancel':
-                        result = await this.requestHandler.cancelTask(rpcRequest.params);
+                        result = await this.requestHandler.cancelTask(rpcRequest.params, context);
                         break;
                     case 'tasks/pushNotificationConfig/set':
                         result = await this.requestHandler.setTaskPushNotificationConfig(
-                            rpcRequest.params
+                            rpcRequest.params, context
                         );
                         break;
                     case 'tasks/pushNotificationConfig/get':
                         result = await this.requestHandler.getTaskPushNotificationConfig(
-                            rpcRequest.params
+                            rpcRequest.params, context
                         );
                         break;
                     case 'tasks/pushNotificationConfig/delete':
                         await this.requestHandler.deleteTaskPushNotificationConfig(
-                            rpcRequest.params
+                            rpcRequest.params, context
                         );
                         result = null;
                         break;
                     case 'tasks/pushNotificationConfig/list':
                         result = await this.requestHandler.listTaskPushNotificationConfigs(
-                            rpcRequest.params
+                            rpcRequest.params, context
                         );
                         break;
                     default:

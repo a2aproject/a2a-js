@@ -21,9 +21,9 @@ import { SampleAgentExecutor } from "../agents/sample-agent/index.js";
 
 // --- Server Setup ---
 
-const sampleAgentCard: AgentCard = {
-  name: 'Sample Agent',
-  description: 'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
+const extensionAgentCard: AgentCard = {
+  name: 'Sample Agent with timestamp extensions',
+  description: 'A sample agent to test the stream functionality and simulate the flow of tasks statuses, with extensions integration.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
@@ -45,8 +45,8 @@ const sampleAgentCard: AgentCard = {
   skills: [
     {
       id: 'sample_agent',
-      name: 'Sample Agent',
-      description: 'Simulate the general flow of a streaming agent.',
+      name: 'Sample Agent with extensions',
+      description: 'Simulate the general flow of a streaming agent with extensions integration.',
       tags: ['sample'],
       examples: ["hi", "hello world", "how are you", "goodbye"],
       inputModes: ['text'], // Explicitly defining for skill
@@ -68,7 +68,7 @@ async function main() {
 
   // 4. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(
-    sampleAgentCard,
+    extensionAgentCard,
     taskStore,
     timestampAgentExecutor
   );
@@ -83,9 +83,9 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(`[SampleAgent] Server using new framework started on http://localhost:${PORT}`);
-    console.log(`[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
-    console.log('[SampleAgent] Press Ctrl+C to stop the server');
+    console.log(`[ExtensionsSampleAgent] Server using new framework started on http://localhost:${PORT}`);
+    console.log(`[ExtensionsSampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log('[ExtensionsSampleAgent] Press Ctrl+C to stop the server');
   });
 }
 
