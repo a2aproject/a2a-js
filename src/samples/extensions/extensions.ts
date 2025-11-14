@@ -13,11 +13,12 @@ const URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1'
 
 class TimeStampExtension {
   activate(context: RequestContext): boolean {
-    if (context.context?.requestedExtensions?.has(URI)) {
-        context.context.addActivatedExtension(URI)
-        return true
+    const serverContext = context.context;
+    if (serverContext?.requestedExtensions?.has(URI)) {
+        serverContext.addActivatedExtension(URI);
+        return true;
     }
-    return false
+    return false;
   }
 
   timestampEvent(event: AgentExecutionEvent): void {
