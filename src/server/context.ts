@@ -31,4 +31,8 @@ export class ServerCallContext {
       this._activatedExtensions.add(uri);
     }
   }
+
+  public removeRequestedExtension(uri: string) {
+    this._requestedExtensions.delete(uri);
+  }
 }

@@ -28,6 +28,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         version: '1.0.0',
         protocolVersion: '0.3.0',
         capabilities: {
+            extensions: [{ 'uri': 'requested-extension-uri' }],
             streaming: true,
             pushNotifications: true,
         },
@@ -1236,7 +1237,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const userMessageText = 'Verify RequestContext content.';
         const incomingContextId = 'custom-context-id';
         const incomingTaskId = 'custom-task-id';
-        const expectedExtension = 'a2a.google.com/test-extension';
+        const expectedExtension = 'requested-extension-uri';
 
         const params: MessageSendParams = {
             message: {
@@ -1268,7 +1269,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
                 kind: 'task'
             };
         await mockTaskStore.save(fakeTask);
-        await handler.sendMessage(params, new ServerCallContext(new Set([expectedExtension])));
+        await handler.sendMessage(params, new ServerCallContext(new Set([expectedExtension, 'not-available-extension-by-agent-card'])));
 
         expect(capturedRequestContext).to.be.instanceOf(RequestContext, 'Captured context should be an instance of RequestContext');
         expect(capturedRequestContext?.userMessage.messageId).to.equal(messageId, 'userMessage.messageId should match');
