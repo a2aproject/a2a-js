@@ -1,4 +1,4 @@
-name: Run linter Tests
+name: Run Linter
 
 on:
   push:
