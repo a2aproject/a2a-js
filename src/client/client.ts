@@ -151,7 +151,7 @@ export class A2AClient {
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
-      params: params as { [key: string]: any }, // Cast because TParams structure varies per method
+      params: params as { [key: string]: unknown }, // Cast because TParams structure varies per method
       id: requestId,
     };
 
@@ -159,11 +159,11 @@ export class A2AClient {
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
-      let errorJson: any = {};
+      let errorJson: JSONRPCErrorResponse;
       try {
         errorBodyText = await httpResponse.text();
         errorJson = JSON.parse(errorBodyText);
-      } catch (e: any) {
+      } catch (e) {
         throw new Error(
           `HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`,
           { cause: e }
@@ -258,7 +258,7 @@ export class A2AClient {
       // This is the initial JSON-RPC request to establish the stream
       jsonrpc: '2.0',
       method: 'message/stream',
-      params: params as { [key: string]: any },
+      params: params as unknown as { [key: string]: unknown },
       id: clientRequestId,
     };
 
@@ -267,11 +267,11 @@ export class A2AClient {
     if (!response.ok) {
       // Attempt to read error body for more details
       let errorBody = '';
-      let errorJson: any = {};
+      let errorJson: JSONRPCErrorResponse;
       try {
         errorBody = await response.text();
         errorJson = JSON.parse(errorBody);
-      } catch (e: any) {
+      } catch (e) {
         throw new Error(
           `HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`,
           { cause: e }
@@ -417,7 +417,7 @@ export class A2AClient {
       // Initial JSON-RPC request to establish the stream
       jsonrpc: '2.0',
       method: 'tasks/resubscribe',
-      params: params as { [key: string]: any },
+      params: params as unknown as { [key: string]: unknown },
       id: clientRequestId,
     };
 
@@ -432,12 +432,12 @@ export class A2AClient {
 
     if (!response.ok) {
       let errorBody = '';
-      let errorJson: any = {};
+      let errorJson: JSONRPCErrorResponse;
       try {
         errorBody = await response.text();
         errorJson = JSON.parse(errorBody);
-      } catch (e: any) {
-        if (e.message.startsWith('HTTP error establishing stream')) throw e;
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith('HTTP error establishing stream')) throw e;
         throw new Error(
           `HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`,
           { cause: e }
@@ -527,9 +527,12 @@ export class A2AClient {
           }
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       // Log and re-throw errors encountered during stream processing
-      console.error('Error reading or parsing SSE stream:', error.message);
+      console.error(
+        'Error reading or parsing SSE stream:',
+        error instanceof Error && error.message
+      );
       throw error;
     } finally {
       reader.releaseLock(); // Ensure the reader lock is released
@@ -584,11 +587,12 @@ export class A2AClient {
 
       const successResponse = a2aStreamResponse as SendStreamingMessageSuccessResponse;
       return successResponse.result as TStreamItem;
-    } catch (e: any) {
+    } catch (e) {
       // Catch errors from JSON.parse or if it's an error response that was thrown by this function
       if (
-        e.message.startsWith('SSE event contained an error') ||
-        e.message.startsWith("SSE event JSON-RPC response is missing 'result' field")
+        e instanceof Error &&
+        (e.message.startsWith('SSE event contained an error') ||
+          e.message.startsWith("SSE event JSON-RPC response is missing 'result' field"))
       ) {
         throw e; // Re-throw errors already processed/identified by this function
       }
@@ -599,7 +603,7 @@ export class A2AClient {
         e
       );
       throw new Error(
-        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`
+        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e instanceof SyntaxError && e.message}`
       );
     }
   }

@@ -4,10 +4,19 @@ import {
   TaskIdParams,
   A2ARequest,
   JSONRPCResponse,
+  Task,
+  Message,
+  TaskPushNotificationConfig,
 } from '../../types.js';
 import { ServerCallContext } from '../context.js';
 import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
+
+type RequestHandlerResponse =
+  | Task
+  | Message
+  | TaskPushNotificationConfig
+  | TaskPushNotificationConfig[];
 
 /**
  * Handles JSON-RPC transport layer, routing requests to A2ARequestHandler.
@@ -25,7 +34,7 @@ export class JsonRpcTransportHandler {
    * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
    */
   public async handle(
-    requestBody: any,
+    requestBody: string | A2ARequest,
     context?: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
     let rpcRequest: A2ARequest;
@@ -111,7 +120,7 @@ export class JsonRpcTransportHandler {
         })();
       } else {
         // Handle non-streaming methods
-        let result: any;
+        let result: RequestHandlerResponse;
         switch (method) {
           case 'message/send':
             result = await this.requestHandler.sendMessage(rpcRequest.params, context);

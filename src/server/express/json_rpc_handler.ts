@@ -43,7 +43,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
       }
       // Check if it's an AsyncGenerator (stream)
-      if (typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] === 'function') {
+      if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
         const stream = rpcResponseOrStream as AsyncGenerator<
           JSONRPCSuccessResponse,
           void,
@@ -93,7 +93,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         const rpcResponse = rpcResponseOrStream as JSONRPCResponse;
         res.status(200).json(rpcResponse);
       }
-    } catch (error: any) {
+    } catch (error) {
       // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
       console.error('Unhandled error in JSON-RPC POST handler:', error);
       const a2aError =
