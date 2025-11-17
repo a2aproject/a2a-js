@@ -5,11 +5,7 @@ import express, {
   NextFunction,
   RequestHandler,
 } from 'express';
-import {
-  JSONRPCErrorResponse,
-  JSONRPCSuccessResponse,
-  JSONRPCResponse,
-} from '../../types.js';
+import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from '../../types.js';
 import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc_transport_handler.js';
@@ -30,9 +26,7 @@ export interface JsonRpcHandlerOptions {
  * app.use('/a2a/json-rpc', jsonRpcHandler({ requestHandler: a2aRequestHandler }));
  */
 export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
-  const jsonRpcTransportHandler = new JsonRpcTransportHandler(
-    options.requestHandler,
-  );
+  const jsonRpcTransportHandler = new JsonRpcTransportHandler(options.requestHandler);
 
   const router = express.Router();
 
@@ -41,24 +35,15 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   router.post('/', async (req: Request, res: Response) => {
     try {
       const context = new ServerCallContext(
-        getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)),
+        getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER))
       );
-      const rpcResponseOrStream = await jsonRpcTransportHandler.handle(
-        req.body,
-        context,
-      );
+      const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
       if (context.activatedExtensions) {
-        res.setHeader(
-          HTTP_EXTENSION_HEADER,
-          Array.from(context.activatedExtensions),
-        );
+        res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
       }
       // Check if it's an AsyncGenerator (stream)
-      if (
-        typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] ===
-        'function'
-      ) {
+      if (typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] === 'function') {
         const stream = rpcResponseOrStream as AsyncGenerator<
           JSONRPCSuccessResponse,
           void,
@@ -78,17 +63,12 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             res.write(`data: ${JSON.stringify(event)}\n\n`);
           }
         } catch (streamError: any) {
-          console.error(
-            `Error during SSE streaming (request ${req.body?.id}):`,
-            streamError,
-          );
+          console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
           // If the stream itself throws an error, send a final JSONRPCErrorResponse
           const a2aError =
             streamError instanceof A2AError
               ? streamError
-              : A2AError.internalError(
-                  streamError.message || 'Streaming error.',
-                );
+              : A2AError.internalError(streamError.message || 'Streaming error.');
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
             id: req.body?.id || null, // Use original request ID if available
@@ -117,9 +97,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
       console.error('Unhandled error in JSON-RPC POST handler:', error);
       const a2aError =
-        error instanceof A2AError
-          ? error
-          : A2AError.internalError('General processing error.');
+        error instanceof A2AError ? error : A2AError.internalError('General processing error.');
       const errorResponse: JSONRPCErrorResponse = {
         jsonrpc: '2.0',
         id: req.body?.id || null,
@@ -141,7 +119,7 @@ export const jsonErrorHandler: ErrorRequestHandler = (
   err: any,
   _req: Request,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ) => {
   // Handle JSON parse errors from express.json() (https://github.com/expressjs/body-parser/issues/122)
   if (err instanceof SyntaxError && 'body' in err) {

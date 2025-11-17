@@ -67,9 +67,7 @@ export type SecurityScheme =
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "CancelTaskResponse".
  */
-export type CancelTaskResponse =
-  | JSONRPCErrorResponse
-  | CancelTaskSuccessResponse;
+export type CancelTaskResponse = JSONRPCErrorResponse | CancelTaskSuccessResponse;
 /**
  * Represents a JSON-RPC response for the `tasks/pushNotificationConfig/delete` method.
  *
@@ -137,9 +135,7 @@ export type ListTaskPushNotificationConfigResponse =
  * This interface was referenced by `MySchema`'s JSON-Schema
  * via the `definition` "SendMessageResponse".
  */
-export type SendMessageResponse =
-  | JSONRPCErrorResponse
-  | SendMessageSuccessResponse;
+export type SendMessageResponse = JSONRPCErrorResponse | SendMessageSuccessResponse;
 /**
  * Represents a JSON-RPC response for the `message/stream` method.
  *

@@ -7,10 +7,7 @@ export interface AgentExecutor {
    * @param requestContext The context of the current request.
    * @param eventBus The bus to publish execution events to.
    */
-  execute: (
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus,
-  ) => Promise<void>;
+  execute: (requestContext: RequestContext, eventBus: ExecutionEventBus) => Promise<void>;
 
   /**
    * Method to explicitly cancel a running task.

@@ -25,8 +25,7 @@ class TimeStampExtension {
         if (!statusUpdateEvent.status.message.metadata) {
           statusUpdateEvent.status.message.metadata = {};
         }
-        statusUpdateEvent.status.message.metadata['timestamp'] =
-          new Date().toISOString();
+        statusUpdateEvent.status.message.metadata['timestamp'] = new Date().toISOString();
       }
     }
   }
@@ -36,28 +35,16 @@ export class TimestampingAgentExecutor implements AgentExecutor {
   private readonly _delegate: AgentExecutor;
   private readonly _ext: TimeStampExtension;
 
-  constructor(
-    delegate: AgentExecutor,
-    ext: TimeStampExtension = new TimeStampExtension(),
-  ) {
+  constructor(delegate: AgentExecutor, ext: TimeStampExtension = new TimeStampExtension()) {
     this._delegate = delegate;
     this._ext = ext;
   }
 
-  async execute(
-    context: RequestContext,
-    eventBus: ExecutionEventBus,
-  ): Promise<void> {
-    return await this._delegate.execute(
-      context,
-      this._maybeWrapQueue(context, eventBus),
-    );
+  async execute(context: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
+    return await this._delegate.execute(context, this._maybeWrapQueue(context, eventBus));
   }
 
-  _maybeWrapQueue(
-    context: RequestContext,
-    eventBus: ExecutionEventBus,
-  ): ExecutionEventBus {
+  _maybeWrapQueue(context: RequestContext, eventBus: ExecutionEventBus): ExecutionEventBus {
     if (this._ext.activate(context)) {
       return new TimestampingEventQueue(eventBus, this._ext);
     }
@@ -87,26 +74,17 @@ class TimestampingEventQueue implements ExecutionEventBus {
     this._delegate.finished();
   }
 
-  on(
-    eventName: 'event' | 'finished',
-    listener: (event: AgentExecutionEvent) => void,
-  ): this {
+  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
     this._delegate.on(eventName, listener);
     return this;
   }
 
-  off(
-    eventName: 'event' | 'finished',
-    listener: (event: AgentExecutionEvent) => void,
-  ): this {
+  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
     this._delegate.off(eventName, listener);
     return this;
   }
 
-  once(
-    eventName: 'event' | 'finished',
-    listener: (event: AgentExecutionEvent) => void,
-  ): this {
+  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
     this._delegate.once(eventName, listener);
     return this;
   }

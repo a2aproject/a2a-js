@@ -26,9 +26,7 @@ const extensionAgentCard: AgentCard = {
   version: '1.0.0', // Incremented version
   protocolVersion: '0.3.0',
   capabilities: {
-    extensions: [
-      { uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1' },
-    ],
+    extensions: [{ uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1' }],
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
     stateTransitionHistory: true, // Agent uses history
@@ -39,8 +37,7 @@ const extensionAgentCard: AgentCard = {
     {
       id: 'sample_agent',
       name: 'Sample Agent with extensions',
-      description:
-        'Simulate the general flow of a streaming agent with extensions integration.',
+      description: 'Simulate the general flow of a streaming agent with extensions integration.',
       tags: ['sample'],
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
@@ -58,15 +55,13 @@ async function main() {
   const agentExecutor: AgentExecutor = new SampleAgentExecutor();
 
   // 3. Use the TimestampingAgentExecutor to wrap the AgentExecutor
-  const timestampAgentExecutor: AgentExecutor = new TimestampingAgentExecutor(
-    agentExecutor,
-  );
+  const timestampAgentExecutor: AgentExecutor = new TimestampingAgentExecutor(agentExecutor);
 
   // 4. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(
     extensionAgentCard,
     taskStore,
-    timestampAgentExecutor,
+    timestampAgentExecutor
   );
 
   // 5. Create and setup A2AExpressApp
@@ -80,10 +75,10 @@ async function main() {
       throw err;
     }
     console.log(
-      `[ExtensionsSampleAgent] Server using new framework started on http://localhost:${PORT}`,
+      `[ExtensionsSampleAgent] Server using new framework started on http://localhost:${PORT}`
     );
     console.log(
-      `[ExtensionsSampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`,
+      `[ExtensionsSampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`
     );
     console.log('[ExtensionsSampleAgent] Press Ctrl+C to stop the server');
   });

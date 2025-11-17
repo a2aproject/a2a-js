@@ -19,14 +19,11 @@ export interface A2ARequestHandler {
 
   getAuthenticatedExtendedAgentCard(): Promise<AgentCard>;
 
-  sendMessage(
-    params: MessageSendParams,
-    context?: ServerCallContext,
-  ): Promise<Message | Task>;
+  sendMessage(params: MessageSendParams, context?: ServerCallContext): Promise<Message | Task>;
 
   sendMessageStream(
     params: MessageSendParams,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): AsyncGenerator<
     Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
     void,
@@ -38,30 +35,26 @@ export interface A2ARequestHandler {
 
   setTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
     params: TaskIdParams | GetTaskPushNotificationConfigParams,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig>;
 
   listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigParams,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): Promise<void>;
 
   resubscribe(
     params: TaskIdParams,
-    context?: ServerCallContext,
-  ): AsyncGenerator<
-    Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-    void,
-    undefined
-  >;
+    context?: ServerCallContext
+  ): AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>;
 }

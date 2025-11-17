@@ -5,9 +5,7 @@ export interface AgentCardHandlerOptions {
   agentCardProvider: AgentCardProvider;
 }
 
-export type AgentCardProvider =
-  | { getAgentCard(): Promise<AgentCard> }
-  | (() => Promise<AgentCard>);
+export type AgentCardProvider = { getAgentCard(): Promise<AgentCard> } | (() => Promise<AgentCard>);
 
 /**
  * Creates Express.js middleware to handle agent card requests.
@@ -17,9 +15,7 @@ export type AgentCardProvider =
  * // or with a factory lambda:
  * app.use('/.well-known/agent-card.json', agentCardHandler({ agentCardProvider: async () => agentCard }));
  */
-export function agentCardHandler(
-  options: AgentCardHandlerOptions,
-): RequestHandler {
+export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandler {
   const router = express.Router();
 
   const provider =

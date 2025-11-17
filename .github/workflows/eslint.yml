@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  linter:
+  eslint:
 
     runs-on: ubuntu-latest
 

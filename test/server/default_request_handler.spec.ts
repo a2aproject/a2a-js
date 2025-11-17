@@ -81,7 +81,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       testAgentCard,
       mockTaskStore,
       mockAgentExecutor,
-      executionEventBusManager,
+      executionEventBusManager
     );
   });
 
@@ -113,23 +113,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       kind: 'message',
     };
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        bus.publish(agentResponse);
-        bus.finished();
-      },
-    );
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      bus.publish(agentResponse);
+      bus.finished();
+    });
 
     const result = await handler.sendMessage(params);
 
-    assert.deepEqual(
-      result,
-      agentResponse,
-      "The result should be the agent's message",
-    );
+    assert.deepEqual(result, agentResponse, "The result should be the agent's message");
     assert.isTrue(
       (mockAgentExecutor as MockAgentExecutor).execute.calledOnce,
-      'AgentExecutor.execute should be called once',
+      'AgentExecutor.execute should be called once'
     );
   });
 
@@ -147,45 +141,43 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       parts: [{ kind: 'text', text: 'This is the content of the artifact.' }],
     };
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'working' },
-          final: false,
-        });
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'artifact-update',
-          artifact: testArtifact,
-        });
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: {
-            state: 'completed',
-            message: {
-              role: 'agent',
-              parts: [{ kind: 'text', text: 'Done!' }],
-              messageId: 'agent-msg-2',
-              kind: 'message',
-            },
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'working' },
+        final: false,
+      });
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'artifact-update',
+        artifact: testArtifact,
+      });
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'completed',
+          message: {
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Done!' }],
+            messageId: 'agent-msg-2',
+            kind: 'message',
           },
-          final: true,
-        });
-        bus.finished();
-      },
-    );
+        },
+        final: true,
+      });
+      bus.finished();
+    });
 
     const result = await handler.sendMessage(params);
     const taskResult = result as Task;
@@ -201,9 +193,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('sendMessage: should handle agent execution failure for blocking calls', async () => {
     const errorMessage = 'Agent failed!';
-    (mockAgentExecutor as MockAgentExecutor).execute.rejects(
-      new Error(errorMessage),
-    );
+    (mockAgentExecutor as MockAgentExecutor).execute.rejects(new Error(errorMessage));
 
     // Test blocking case
     const blockingParams: MessageSendParams = {
@@ -213,15 +203,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const blockingResult = await handler.sendMessage(blockingParams);
     const blockingTask = blockingResult as Task;
     assert.equal(blockingTask.kind, 'task', 'Result should be a task');
-    assert.equal(
-      blockingTask.status.state,
-      'failed',
-      'Task status should be failed',
-    );
+    assert.equal(blockingTask.status.state, 'failed', 'Task status should be failed');
     assert.include(
       (blockingTask.status.message?.parts[0] as any).text,
       errorMessage,
-      'Error message should be in the status',
+      'Error message should be in the status'
     );
   });
 
@@ -237,29 +223,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const taskId = 'task-nonblock-123';
     const contextId = 'ctx-nonblock-abc';
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        // First event is the task creation, which should be returned immediately
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      // First event is the task creation, which should be returned immediately
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
 
-        // Simulate work before publishing more events
-        await clock.tickAsync(500);
+      // Simulate work before publishing more events
+      await clock.tickAsync(500);
 
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'completed' },
-          final: true,
-        });
-        bus.finished();
-      },
-    );
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'completed' },
+        final: true,
+      });
+      bus.finished();
+    });
 
     // This call should return as soon as the first 'task' event is published
     const immediateResult = await handler.sendMessage(params);
@@ -271,14 +255,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(
       taskResult.status.state,
       'submitted',
-      "Should return immediately with 'submitted' state",
+      "Should return immediately with 'submitted' state"
     );
 
     // The background processing should not have completed yet
-    assert.isTrue(
-      saveSpy.calledOnce,
-      'Save should be called for the initial task creation',
-    );
+    assert.isTrue(saveSpy.calledOnce, 'Save should be called for the initial task creation');
     assert.equal(saveSpy.firstCall.args[0].status.state, 'submitted');
 
     // Allow the background processing to complete
@@ -290,42 +271,30 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(
       finalTask!.status.state,
       'completed',
-      "Task should be 'completed' in the store after background processing",
+      "Task should be 'completed' in the store after background processing"
     );
-    assert.isTrue(
-      saveSpy.calledTwice,
-      'Save should be called twice (submitted and completed)',
-    );
+    assert.isTrue(saveSpy.calledTwice, 'Save should be called twice (submitted and completed)');
     assert.equal(saveSpy.secondCall.args[0].status.state, 'completed');
   });
 
   it('sendMessage: should handle agent execution failure for non-blocking calls', async () => {
     const errorMessage = 'Agent failed!';
-    (mockAgentExecutor as MockAgentExecutor).execute.rejects(
-      new Error(errorMessage),
-    );
+    (mockAgentExecutor as MockAgentExecutor).execute.rejects(new Error(errorMessage));
 
     // Test non-blocking case
     const nonBlockingParams: MessageSendParams = {
-      message: createTestMessage(
-        'msg-fail-nonblock',
-        'Test failure non-blocking',
-      ),
+      message: createTestMessage('msg-fail-nonblock', 'Test failure non-blocking'),
       configuration: { blocking: false, acceptedOutputModes: [] },
     };
 
     const nonBlockingResult = await handler.sendMessage(nonBlockingParams);
     const nonBlockingTask = nonBlockingResult as Task;
     assert.equal(nonBlockingTask.kind, 'task', 'Result should be a task');
-    assert.equal(
-      nonBlockingTask.status.state,
-      'failed',
-      'Task status should be failed',
-    );
+    assert.equal(nonBlockingTask.status.state, 'failed', 'Task status should be failed');
     assert.include(
       (nonBlockingTask.status.message?.parts[0] as any).text,
       errorMessage,
-      'Error message should be in the status',
+      'Error message should be in the status'
     );
   });
 
@@ -341,48 +310,46 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     let taskId: string;
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        taskId = ctx.taskId;
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      taskId = ctx.taskId;
 
-        // Publish task creation
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
+      // Publish task creation
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
 
-        // Publish working status
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'working' },
-          final: false,
-        });
+      // Publish working status
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'working' },
+        final: false,
+      });
 
-        // Mark as input-required with agent response message
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: {
-            state: 'input-required',
-            message: {
-              messageId: 'agent-msg-1',
-              role: 'agent',
-              parts: [{ kind: 'text', text: 'Response to message 1' }],
-              kind: 'message',
-              taskId,
-              contextId,
-            },
+      // Mark as input-required with agent response message
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'input-required',
+          message: {
+            messageId: 'agent-msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Response to message 1' }],
+            kind: 'message',
+            taskId,
+            contextId,
           },
-          final: true,
-        });
-        bus.finished();
-      },
-    );
+        },
+        final: true,
+      });
+      bus.finished();
+    });
 
     const firstResult = await handler.sendMessage(firstParams);
     const firstTask = firstResult as Task;
@@ -396,17 +363,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(
       firstTask.history!,
       2,
-      'First task history should contain user message and agent message',
+      'First task history should contain user message and agent message'
     );
     assert.equal(
       firstTask.history![0].messageId,
       'msg-1',
-      'First history item should be user message',
+      'First history item should be user message'
     );
     assert.equal(
       firstTask.history![1].messageId,
       'agent-msg-1',
-      'Second history item should be agent message',
+      'Second history item should be agent message'
     );
 
     // Second message
@@ -418,65 +385,61 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       message: secondMessage,
     };
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        // Publish a status update with working state
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'working' },
-          final: false,
-        });
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      // Publish a status update with working state
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'working' },
+        final: false,
+      });
 
-        // Publish a status update with working state and message
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: {
-            state: 'working',
-            message: {
-              messageId: 'agent-msg-2',
-              role: 'agent',
-              parts: [{ kind: 'text', text: 'Response to message 2' }],
-              kind: 'message',
-              taskId,
-              contextId,
-            },
+      // Publish a status update with working state and message
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'working',
+          message: {
+            messageId: 'agent-msg-2',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Response to message 2' }],
+            kind: 'message',
+            taskId,
+            contextId,
           },
-          final: false,
-        });
+        },
+        final: false,
+      });
 
-        // Publish an artifact update
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'artifact-update',
-          artifact: {
-            artifactId: 'artifact-1',
-            name: 'Test Document',
-            description: 'A test artifact.',
-            parts: [
-              { kind: 'text', text: 'This is the content of the artifact.' },
-            ],
-          },
-        });
+      // Publish an artifact update
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'artifact-update',
+        artifact: {
+          artifactId: 'artifact-1',
+          name: 'Test Document',
+          description: 'A test artifact.',
+          parts: [{ kind: 'text', text: 'This is the content of the artifact.' }],
+        },
+      });
 
-        // Mark as completed
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: {
-            state: 'completed',
-          },
-          final: true,
-        });
+      // Mark as completed
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'completed',
+        },
+        final: true,
+      });
 
-        bus.finished();
-      },
-    );
+      bus.finished();
+    });
 
     const secondResult = await handler.sendMessage(secondParams);
     const secondTask = secondResult as Task;
@@ -491,57 +454,47 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(
       secondTask.history!,
       4,
-      'Second task history should contain all 4 messages (user1, agent1, user2, agent2)',
+      'Second task history should contain all 4 messages (user1, agent1, user2, agent2)'
     );
     assert.equal(
       secondTask.history![0].messageId,
       'msg-1',
-      'First message should be first user message',
+      'First message should be first user message'
     );
     assert.equal((secondTask.history![0].parts[0] as any).text, 'Message 1');
     assert.equal(
       secondTask.history![1].messageId,
       'agent-msg-1',
-      'Second message should be first agent message',
+      'Second message should be first agent message'
     );
-    assert.equal(
-      (secondTask.history![1].parts[0] as any).text,
-      'Response to message 1',
-    );
+    assert.equal((secondTask.history![1].parts[0] as any).text, 'Response to message 1');
     assert.equal(
       secondTask.history![2].messageId,
       'msg-2',
-      'Third message should be second user message',
+      'Third message should be second user message'
     );
     assert.equal((secondTask.history![2].parts[0] as any).text, 'Message 2');
     assert.equal(
       secondTask.history![3].messageId,
       'agent-msg-2',
-      'Fourth message should be second agent message',
+      'Fourth message should be second agent message'
     );
-    assert.equal(
-      (secondTask.history![3].parts[0] as any).text,
-      'Response to message 2',
-    );
-    assert.equal(
-      secondTask.artifacts![0].artifactId,
-      'artifact-1',
-      'Artifact should be the same',
-    );
+    assert.equal((secondTask.history![3].parts[0] as any).text, 'Response to message 2');
+    assert.equal(secondTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(
       secondTask.artifacts![0].name,
       'Test Document',
-      'Artifact name should be the same',
+      'Artifact name should be the same'
     );
     assert.equal(
       secondTask.artifacts![0].description,
       'A test artifact.',
-      'Artifact description should be the same',
+      'Artifact description should be the same'
     );
     assert.equal(
       (secondTask.artifacts![0].parts[0] as any).text,
       'This is the content of the artifact.',
-      'Artifact content should be the same',
+      'Artifact content should be the same'
     );
   });
 
@@ -558,48 +511,46 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     let taskId: string;
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        taskId = ctx.taskId;
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      taskId = ctx.taskId;
 
-        // Publish task creation
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
+      // Publish task creation
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
 
-        // Publish working status
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'working' },
-          final: false,
-        });
+      // Publish working status
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'working' },
+        final: false,
+      });
 
-        // Mark as input-required with agent response message
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: {
-            state: 'input-required',
-            message: {
-              messageId: 'agent-msg-1',
-              role: 'agent',
-              parts: [{ kind: 'text', text: 'Response to message 1' }],
-              kind: 'message',
-              taskId,
-              contextId,
-            },
+      // Mark as input-required with agent response message
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'input-required',
+          message: {
+            messageId: 'agent-msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Response to message 1' }],
+            kind: 'message',
+            taskId,
+            contextId,
           },
-          final: true,
-        });
-        bus.finished();
-      },
-    );
+        },
+        final: true,
+      });
+      bus.finished();
+    });
 
     const firstResult = await handler.sendMessage(firstParams);
     const firstTask = firstResult as Task;
@@ -613,17 +564,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(
       firstTask.history!,
       2,
-      'First task history should contain user message and agent message',
+      'First task history should contain user message and agent message'
     );
     assert.equal(
       firstTask.history![0].messageId,
       'msg-1',
-      'First history item should be user message',
+      'First history item should be user message'
     );
     assert.equal(
       firstTask.history![1].messageId,
       'agent-msg-1',
-      'Second history item should be agent message',
+      'Second history item should be agent message'
     );
 
     // Second message
@@ -636,67 +587,63 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       configuration: { blocking: false },
     };
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        // Publish a status update with working state
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'working' },
-          final: false,
-        });
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      // Publish a status update with working state
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'working' },
+        final: false,
+      });
 
-        await clock.tickAsync(10);
+      await clock.tickAsync(10);
 
-        // Publish a status update with working state and message
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: {
-            state: 'working',
-            message: {
-              messageId: 'agent-msg-2',
-              role: 'agent',
-              parts: [{ kind: 'text', text: 'Response to message 2' }],
-              kind: 'message',
-              taskId,
-              contextId,
-            },
+      // Publish a status update with working state and message
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'working',
+          message: {
+            messageId: 'agent-msg-2',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Response to message 2' }],
+            kind: 'message',
+            taskId,
+            contextId,
           },
-          final: false,
-        });
+        },
+        final: false,
+      });
 
-        // Publish an artifact update
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'artifact-update',
-          artifact: {
-            artifactId: 'artifact-1',
-            name: 'Test Document',
-            description: 'A test artifact.',
-            parts: [
-              { kind: 'text', text: 'This is the content of the artifact.' },
-            ],
-          },
-        });
+      // Publish an artifact update
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'artifact-update',
+        artifact: {
+          artifactId: 'artifact-1',
+          name: 'Test Document',
+          description: 'A test artifact.',
+          parts: [{ kind: 'text', text: 'This is the content of the artifact.' }],
+        },
+      });
 
-        // Mark as completed
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: {
-            state: 'completed',
-          },
-          final: true,
-        });
+      // Mark as completed
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'completed',
+        },
+        final: true,
+      });
 
-        bus.finished();
-      },
-    );
+      bus.finished();
+    });
 
     const secondResult = await handler.sendMessage(secondParams);
 
@@ -716,57 +663,43 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(
       finalTask.history!,
       4,
-      'Second task history should contain all 4 messages (user1, agent1, user2, agent2)',
+      'Second task history should contain all 4 messages (user1, agent1, user2, agent2)'
     );
     assert.equal(
       finalTask.history![0].messageId,
       'msg-1',
-      'First message should be first user message',
+      'First message should be first user message'
     );
     assert.equal((finalTask.history![0].parts[0] as any).text, 'Message 1');
     assert.equal(
       finalTask.history![1].messageId,
       'agent-msg-1',
-      'Second message should be first agent message',
+      'Second message should be first agent message'
     );
-    assert.equal(
-      (finalTask.history![1].parts[0] as any).text,
-      'Response to message 1',
-    );
+    assert.equal((finalTask.history![1].parts[0] as any).text, 'Response to message 1');
     assert.equal(
       finalTask.history![2].messageId,
       'msg-2',
-      'Third message should be second user message',
+      'Third message should be second user message'
     );
     assert.equal((finalTask.history![2].parts[0] as any).text, 'Message 2');
     assert.equal(
       finalTask.history![3].messageId,
       'agent-msg-2',
-      'Fourth message should be second agent message',
+      'Fourth message should be second agent message'
     );
-    assert.equal(
-      (finalTask.history![3].parts[0] as any).text,
-      'Response to message 2',
-    );
-    assert.equal(
-      finalTask.artifacts![0].artifactId,
-      'artifact-1',
-      'Artifact should be the same',
-    );
-    assert.equal(
-      finalTask.artifacts![0].name,
-      'Test Document',
-      'Artifact name should be the same',
-    );
+    assert.equal((finalTask.history![3].parts[0] as any).text, 'Response to message 2');
+    assert.equal(finalTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
+    assert.equal(finalTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
     assert.equal(
       finalTask.artifacts![0].description,
       'A test artifact.',
-      'Artifact description should be the same',
+      'Artifact description should be the same'
     );
     assert.equal(
       (finalTask.artifacts![0].parts[0] as any).text,
       'This is the content of the artifact.',
-      'Artifact content should be the same',
+      'Artifact content should be the same'
     );
   });
 
@@ -777,33 +710,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const taskId = 'task-stream-1';
     const contextId = 'ctx-stream-1';
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
-        await new Promise((res) => setTimeout(res, 10));
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'working' },
-          final: false,
-        });
-        await new Promise((res) => setTimeout(res, 10));
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'completed' },
-          final: true,
-        });
-        bus.finished();
-      },
-    );
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
+      await new Promise((res) => setTimeout(res, 10));
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'working' },
+        final: false,
+      });
+      await new Promise((res) => setTimeout(res, 10));
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'completed' },
+        final: true,
+      });
+      bus.finished();
+    });
 
     const eventGenerator = handler.sendMessageStream(params);
     const events = [];
@@ -814,21 +745,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
     assert.equal((events[0] as Task).status.state, 'submitted');
     assert.equal((events[1] as TaskStatusUpdateEvent).status.state, 'working');
-    assert.equal(
-      (events[2] as TaskStatusUpdateEvent).status.state,
-      'completed',
-    );
+    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, 'completed');
     assert.isTrue((events[2] as TaskStatusUpdateEvent).final);
   });
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
     const taskId = 'task-terminal-1';
-    const terminalStates: TaskState[] = [
-      'completed',
-      'failed',
-      'canceled',
-      'rejected',
-    ];
+    const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
 
     for (const state of terminalStates) {
       const fakeTask: Task = {
@@ -849,7 +772,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } catch (error: any) {
         expect(error.code).to.equal(-32600); // Invalid Request
         expect(error.message).to.contain(
-          `Task ${taskId} is in a terminal state (${state}) and cannot be modified.`,
+          `Task ${taskId} is in a terminal state (${state}) and cannot be modified.`
         );
       }
     }
@@ -877,7 +800,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     } catch (error: any) {
       expect(error.code).to.equal(-32600);
       expect(error.message).to.contain(
-        `Task ${taskId} is in a terminal state (completed) and cannot be modified.`,
+        `Task ${taskId} is in a terminal state (completed) and cannot be modified.`
       );
     }
   });
@@ -889,24 +812,22 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const taskId = 'task-input';
     const contextId = 'ctx-input';
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'input-required' },
-          final: true,
-        });
-        bus.finished();
-      },
-    );
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'input-required' },
+        final: true,
+      });
+      bus.finished();
+    });
 
     const eventGenerator = handler.sendMessageStream(params);
     const events = [];
@@ -930,35 +851,33 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let taskId;
     let contextId;
 
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        taskId = ctx.taskId;
-        contextId = ctx.contextId;
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      contextId = ctx.contextId;
 
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'working' },
-          final: false,
-        });
-        await clock.tickAsync(100);
-        bus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'completed' },
-          final: true,
-        });
-        bus.finished();
-      },
-    );
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'working' },
+        final: false,
+      });
+      await clock.tickAsync(100);
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'completed' },
+        final: true,
+      });
+      bus.finished();
+    });
 
     const stream1_generator = handler.sendMessageStream(params);
     const stream1_iterator = stream1_generator[Symbol.asyncIterator]();
@@ -969,11 +888,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const secondEventResult = await stream1_iterator.next();
     const secondEvent = secondEventResult.value as TaskStatusUpdateEvent;
-    assert.equal(
-      secondEvent.taskId,
-      taskId,
-      'Should get the task status update event second',
-    );
+    assert.equal(secondEvent.taskId, taskId, 'Should get the task status update event second');
 
     const stream2_generator = handler.resubscribe({ id: taskId });
 
@@ -992,30 +907,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await clock.runAllAsync();
     await Promise.all([p1, p2]);
 
-    assert.equal(
-      (results1[0] as TaskStatusUpdateEvent).status.state,
-      'submitted',
-    );
-    assert.equal(
-      (results1[1] as TaskStatusUpdateEvent).status.state,
-      'working',
-    );
-    assert.equal(
-      (results1[2] as TaskStatusUpdateEvent).status.state,
-      'completed',
-    );
+    assert.equal((results1[0] as TaskStatusUpdateEvent).status.state, 'submitted');
+    assert.equal((results1[1] as TaskStatusUpdateEvent).status.state, 'working');
+    assert.equal((results1[2] as TaskStatusUpdateEvent).status.state, 'completed');
 
     // First event of resubscribe is always a task.
     assert.equal((results2[0] as Task).status.state, 'working');
-    assert.equal(
-      (results2[1] as TaskStatusUpdateEvent).status.state,
-      'completed',
-    );
+    assert.equal((results2[1] as TaskStatusUpdateEvent).status.state, 'completed');
 
-    assert.isTrue(
-      saveSpy.calledThrice,
-      'TaskStore.save should be called 3 times',
-    );
+    assert.isTrue(saveSpy.calledThrice, 'TaskStore.save should be called 3 times');
     const lastSaveCall = saveSpy.lastCall.args[0];
     assert.equal(lastSaveCall.id, taskId);
     assert.equal(lastSaveCall.status.state, 'completed');
@@ -1059,7 +959,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(
       setResponse.pushNotificationConfig,
       pushConfig,
-      'Set response should return the config',
+      'Set response should return the config'
     );
 
     const getParams: GetTaskPushNotificationConfigParams = {
@@ -1070,7 +970,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(
       getResponse.pushNotificationConfig,
       pushConfig,
-      'Get response should return the saved config',
+      'Get response should return the saved config'
     );
   });
 
@@ -1158,8 +1058,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const listParams: ListTaskPushNotificationConfigParams = { id: taskId };
-    const listResponse =
-      await handler.listTaskPushNotificationConfigs(listParams);
+    const listResponse = await handler.listTaskPushNotificationConfigs(listParams);
 
     expect(listResponse).to.be.an('array').with.lengthOf(2);
     assert.deepInclude(listResponse, {
@@ -1248,7 +1147,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockAgentExecutor,
       executionEventBusManager,
       mockPushNotificationStore,
-      mockPushNotificationSender,
+      mockPushNotificationSender
     );
     const pushNotificationConfig: PushNotificationConfig = {
       url: 'https://push-1.com',
@@ -1257,10 +1156,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const params: MessageSendParams = {
       message: {
-        ...createTestMessage(
-          'msg-push-1',
-          'Work on task with push notification',
-        ),
+        ...createTestMessage('msg-push-1', 'Work on task with push notification'),
         contextId: contextId,
       },
       configuration: {
@@ -1269,12 +1165,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
 
     let taskId: string;
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        taskId = ctx.taskId;
-        fakeTaskExecute(ctx, bus);
-      },
-    );
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      fakeTaskExecute(ctx, bus);
+    });
 
     await handler.sendMessage(params);
 
@@ -1287,15 +1181,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
 
     // Verify push notifications were sent with complete task objects
-    assert.isTrue(
-      (mockPushNotificationSender as MockPushNotificationSender).send
-        .calledThrice,
-    );
+    assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledThrice);
 
     // Verify first call (submitted state)
-    const firstCallTask = (
-      mockPushNotificationSender as MockPushNotificationSender
-    ).send.firstCall.args[0] as Task;
+    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.firstCall
+      .args[0] as Task;
     const expectedFirstTask: Task = {
       ...expectedTask,
       status: { state: 'submitted' },
@@ -1303,9 +1193,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(firstCallTask, expectedFirstTask);
 
     // // Verify second call (working state)
-    const secondCallTask = (
-      mockPushNotificationSender as MockPushNotificationSender
-    ).send.secondCall.args[0] as Task;
+    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send
+      .secondCall.args[0] as Task;
     const expectedSecondTask: Task = {
       ...expectedTask,
       status: { state: 'working' },
@@ -1313,9 +1202,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(secondCallTask, expectedSecondTask);
 
     // // Verify third call (completed state)
-    const thirdCallTask = (
-      mockPushNotificationSender as MockPushNotificationSender
-    ).send.thirdCall.args[0] as Task;
+    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.thirdCall
+      .args[0] as Task;
     const expectedThirdTask: Task = {
       ...expectedTask,
       status: { state: 'completed' },
@@ -1333,7 +1221,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockAgentExecutor,
       executionEventBusManager,
       mockPushNotificationStore,
-      mockPushNotificationSender,
+      mockPushNotificationSender
     );
     const pushNotificationConfig: PushNotificationConfig = {
       url: 'https://push-stream-1.com',
@@ -1343,10 +1231,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const params: MessageSendParams = {
       message: {
-        ...createTestMessage(
-          'msg-push-stream-1',
-          'Work on task with push notification via stream',
-        ),
+        ...createTestMessage('msg-push-stream-1', 'Work on task with push notification via stream'),
         contextId: contextId,
       },
       configuration: {
@@ -1355,12 +1240,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
 
     let taskId: string;
-    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(
-      async (ctx, bus) => {
-        taskId = ctx.taskId;
-        fakeTaskExecute(ctx, bus);
-      },
-    );
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      fakeTaskExecute(ctx, bus);
+    });
 
     const eventGenerator = handler.sendMessageStream(params);
     const events = [];
@@ -1372,17 +1255,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
     assert.equal((events[0] as Task).status.state, 'submitted');
     assert.equal((events[1] as TaskStatusUpdateEvent).status.state, 'working');
-    assert.equal(
-      (events[2] as TaskStatusUpdateEvent).status.state,
-      'completed',
-    );
+    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, 'completed');
     assert.isTrue((events[2] as TaskStatusUpdateEvent).final);
 
     // Verify push notifications were sent with complete task objects
-    assert.isTrue(
-      (mockPushNotificationSender as MockPushNotificationSender).send
-        .calledThrice,
-    );
+    assert.isTrue((mockPushNotificationSender as MockPushNotificationSender).send.calledThrice);
 
     const expectedTask: Task = {
       id: taskId,
@@ -1392,9 +1269,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       history: [params.message as Message],
     };
     // Verify first call (submitted state)
-    const firstCallTask = (
-      mockPushNotificationSender as MockPushNotificationSender
-    ).send.firstCall.args[0] as Task;
+    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.firstCall
+      .args[0] as Task;
     const expectedFirstTask: Task = {
       ...expectedTask,
       status: { state: 'submitted' },
@@ -1402,9 +1278,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(firstCallTask, expectedFirstTask);
 
     // Verify second call (working state)
-    const secondCallTask = (
-      mockPushNotificationSender as MockPushNotificationSender
-    ).send.secondCall.args[0] as Task;
+    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send
+      .secondCall.args[0] as Task;
     const expectedSecondTask: Task = {
       ...expectedTask,
       status: { state: 'working' },
@@ -1412,9 +1287,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(secondCallTask, expectedSecondTask);
 
     // Verify third call (completed state)
-    const thirdCallTask = (
-      mockPushNotificationSender as MockPushNotificationSender
-    ).send.thirdCall.args[0] as Task;
+    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.thirdCall
+      .args[0] as Task;
     const expectedThirdTask: Task = {
       ...expectedTask,
       status: { state: 'completed' },
@@ -1451,9 +1325,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     for (const method of methodsToTest) {
       try {
         await (handler as any)[method.name](method.params);
-        assert.fail(
-          `Method ${method.name} should have thrown for non-existent task.`,
-        );
+        assert.fail(`Method ${method.name} should have thrown for non-existent task.`);
       } catch (error: any) {
         expect(error).to.be.instanceOf(A2AError);
         expect(error.code).to.equal(-32001); // Task Not Found
@@ -1470,7 +1342,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       unsupportedAgentCard,
       mockTaskStore,
       mockAgentExecutor,
-      executionEventBusManager,
+      executionEventBusManager
     );
 
     const taskId = 'task-unsupported';
@@ -1504,9 +1376,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     for (const method of methodsToTest) {
       try {
         await (handler as any)[method.name](method.params);
-        assert.fail(
-          `Method ${method.name} should have thrown for unsupported push notifications.`,
-        );
+        assert.fail(`Method ${method.name} should have thrown for unsupported push notifications.`);
       } catch (error: any) {
         expect(error).to.be.instanceOf(A2AError);
         expect(error.code).to.equal(-32003); // Push Notification Not Supported
@@ -1522,7 +1392,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       testAgentCard,
       mockTaskStore,
       cancellableExecutor,
-      executionEventBusManager,
+      executionEventBusManager
     );
 
     const streamParams: MessageSendParams = {
@@ -1541,10 +1411,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await clock.tickAsync(150);
 
     const createdTask = streamEvents.find((e) => e.kind === 'task') as Task;
-    assert.isDefined(
-      createdTask,
-      'Task creation event should have been received',
-    );
+    assert.isDefined(createdTask, 'Task creation event should have been received');
     const taskId = createdTask.id;
 
     // Now, issue the cancel request
@@ -1553,9 +1420,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Let the executor's loop run to completion to detect the cancellation
     await clock.runAllAsync();
 
-    assert.isTrue(
-      cancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any),
-    );
+    assert.isTrue(cancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any));
 
     const finalTask = await handler.getTask({ id: taskId });
     assert.equal(finalTask.status.state, 'canceled');
@@ -1566,15 +1431,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   it('cancelTask: should fail when it fails to cancel a task', async () => {
     clock = sinon.useFakeTimers();
     // Use the more advanced mock for this specific test
-    const failingCancellableExecutor = new FailingCancellableMockAgentExecutor(
-      clock,
-    );
+    const failingCancellableExecutor = new FailingCancellableMockAgentExecutor(clock);
 
     handler = new DefaultRequestHandler(
       testAgentCard,
       mockTaskStore,
       failingCancellableExecutor,
-      executionEventBusManager,
+      executionEventBusManager
     );
 
     const streamParams: MessageSendParams = {
@@ -1593,10 +1456,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await clock.tickAsync(150);
 
     const createdTask = streamEvents.find((e) => e.kind === 'task') as Task;
-    assert.isDefined(
-      createdTask,
-      'Task creation event should have been received',
-    );
+    assert.isDefined(createdTask, 'Task creation event should have been received');
     const taskId = createdTask.id;
 
     let cancelResponse: Task;
@@ -1611,10 +1471,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       assert.equal(thrownError.code, -32002);
       expect(thrownError.message).to.contain('Task not cancelable');
       assert.isTrue(
-        failingCancellableExecutor.cancelTaskSpy.calledOnceWith(
-          taskId,
-          sinon.match.any,
-        ),
+        failingCancellableExecutor.cancelTaskSpy.calledOnceWith(taskId, sinon.match.any)
       );
     }
   });
@@ -1759,7 +1616,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           kind: 'task',
         });
         bus.finished();
-      },
+      }
     );
 
     const fakeTask: Task = {
@@ -1771,30 +1628,22 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask);
     await handler.sendMessage(
       params,
-      new ServerCallContext(
-        new Set([expectedExtension, 'not-available-extension-by-agent-card']),
-      ),
+      new ServerCallContext(new Set([expectedExtension, 'not-available-extension-by-agent-card']))
     );
 
     expect(capturedRequestContext).to.be.instanceOf(
       RequestContext,
-      'Captured context should be an instance of RequestContext',
+      'Captured context should be an instance of RequestContext'
     );
     expect(capturedRequestContext?.userMessage.messageId).to.equal(
       messageId,
-      'userMessage.messageId should match',
+      'userMessage.messageId should match'
     );
-    expect(capturedRequestContext?.taskId).to.equal(
-      incomingTaskId,
-      'taskId should match',
-    );
-    expect(capturedRequestContext?.contextId).to.equal(
-      incomingContextId,
-      'contextId should match',
-    );
+    expect(capturedRequestContext?.taskId).to.equal(incomingTaskId, 'taskId should match');
+    expect(capturedRequestContext?.contextId).to.equal(incomingContextId, 'contextId should match');
     expect(capturedRequestContext?.context?.requestedExtensions).to.deep.equal(
       new Set([expectedExtension]),
-      'requestedExtensions should contain the expected extension',
+      'requestedExtensions should contain the expected extension'
     );
   });
 });

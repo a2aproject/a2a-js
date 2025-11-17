@@ -1,31 +1,21 @@
 import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 import { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
-import {
-  RequestContext,
-  ExecutionEventBus,
-} from '../../../src/server/index.js';
+import { RequestContext, ExecutionEventBus } from '../../../src/server/index.js';
 
 /**
  * A mock implementation of AgentExecutor to control agent behavior during tests.
  */
 export class MockAgentExecutor implements AgentExecutor {
   // Stubs to control and inspect calls to execute and cancelTask
-  public execute: SinonStub<
-    [RequestContext, ExecutionEventBus],
-    Promise<void>
-  > = sinon.stub();
+  public execute: SinonStub<[RequestContext, ExecutionEventBus], Promise<void>> = sinon.stub();
 
-  public cancelTask: SinonStub<[string, ExecutionEventBus], Promise<void>> =
-    sinon.stub();
+  public cancelTask: SinonStub<[string, ExecutionEventBus], Promise<void>> = sinon.stub();
 }
 
 /**
  * Fake implementation of the task execution events.
  */
-export const fakeTaskExecute = async (
-  ctx: RequestContext,
-  bus: ExecutionEventBus,
-) => {
+export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBus) => {
   const taskId = ctx.taskId;
   const contextId = ctx.contextId;
 
@@ -71,7 +61,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
 
   public execute = async (
     requestContext: RequestContext,
-    eventBus: ExecutionEventBus,
+    eventBus: ExecutionEventBus
   ): Promise<void> => {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
@@ -117,10 +107,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
     eventBus.finished();
   };
 
-  public cancelTask = async (
-    taskId: string,
-    _eventBus: ExecutionEventBus,
-  ): Promise<void> => {
+  public cancelTask = async (taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {
     this.cancelledTasks.add(taskId);
     // The execute loop is responsible for publishing the final state
   };
@@ -142,7 +129,7 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
 
   public execute = async (
     requestContext: RequestContext,
-    eventBus: ExecutionEventBus,
+    eventBus: ExecutionEventBus
   ): Promise<void> => {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
@@ -188,10 +175,7 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
     eventBus.finished();
   };
 
-  public cancelTask = async (
-    _taskId: string,
-    _eventBus: ExecutionEventBus,
-  ): Promise<void> => {
+  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {
     // No operation: simulates the failure of task cancellation
   };
 

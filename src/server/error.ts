@@ -8,12 +8,7 @@ export class A2AError extends Error {
   public data?: Record<string, unknown>;
   public taskId?: string; // Optional task ID context
 
-  constructor(
-    code: number,
-    message: string,
-    data?: Record<string, unknown>,
-    taskId?: string,
-  ) {
+  constructor(code: number, message: string, data?: Record<string, unknown>, taskId?: string) {
     super(message);
     this.name = 'A2AError';
     this.code = code;
@@ -43,10 +38,7 @@ export class A2AError extends Error {
     return new A2AError(-32700, message, data);
   }
 
-  static invalidRequest(
-    message: string,
-    data?: Record<string, unknown>,
-  ): A2AError {
+  static invalidRequest(message: string, data?: Record<string, unknown>): A2AError {
     return new A2AError(-32600, message, data);
   }
 
@@ -54,17 +46,11 @@ export class A2AError extends Error {
     return new A2AError(-32601, `Method not found: ${method}`);
   }
 
-  static invalidParams(
-    message: string,
-    data?: Record<string, unknown>,
-  ): A2AError {
+  static invalidParams(message: string, data?: Record<string, unknown>): A2AError {
     return new A2AError(-32602, message, data);
   }
 
-  static internalError(
-    message: string,
-    data?: Record<string, unknown>,
-  ): A2AError {
+  static internalError(message: string, data?: Record<string, unknown>): A2AError {
     return new A2AError(-32603, message, data);
   }
 
@@ -73,12 +59,7 @@ export class A2AError extends Error {
   }
 
   static taskNotCancelable(taskId: string): A2AError {
-    return new A2AError(
-      -32002,
-      `Task not cancelable: ${taskId}`,
-      undefined,
-      taskId,
-    );
+    return new A2AError(-32002, `Task not cancelable: ${taskId}`, undefined, taskId);
   }
 
   static pushNotificationNotSupported(): A2AError {

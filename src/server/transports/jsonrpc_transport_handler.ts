@@ -26,10 +26,8 @@ export class JsonRpcTransportHandler {
    */
   public async handle(
     requestBody: any,
-    context?: ServerCallContext,
-  ): Promise<
-    JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>
-  > {
+    context?: ServerCallContext
+  ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
     let rpcRequest: A2ARequest;
 
     try {
@@ -48,9 +46,7 @@ export class JsonRpcTransportHandler {
       const a2aError =
         error instanceof A2AError
           ? error
-          : A2AError.parseError(
-              error.message || 'Failed to parse JSON request.',
-            );
+          : A2AError.parseError(error.message || 'Failed to parse JSON request.');
       return {
         jsonrpc: '2.0',
         id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
@@ -61,8 +57,7 @@ export class JsonRpcTransportHandler {
     const { method, id: requestId = null } = rpcRequest;
     try {
       if (method === 'agent/getAuthenticatedExtendedCard') {
-        const result =
-          await this.requestHandler.getAuthenticatedExtendedAgentCard();
+        const result = await this.requestHandler.getAuthenticatedExtendedAgentCard();
         return {
           jsonrpc: '2.0',
           id: requestId,
@@ -78,16 +73,11 @@ export class JsonRpcTransportHandler {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();
         if (!agentCard.capabilities.streaming) {
-          throw A2AError.unsupportedOperation(
-            `Method ${method} requires streaming capability.`,
-          );
+          throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
         }
         const agentEventStream =
           method === 'message/stream'
-            ? this.requestHandler.sendMessageStream(
-                params as MessageSendParams,
-                context,
-              )
+            ? this.requestHandler.sendMessageStream(params as MessageSendParams, context)
             : this.requestHandler.resubscribe(params as TaskIdParams, context);
 
         // Wrap the agent event stream into a JSON-RPC result stream
@@ -111,7 +101,7 @@ export class JsonRpcTransportHandler {
             // For now, log it. The Express layer will handle the generator ending.
             console.error(
               `Error in agent event stream for ${method} (request ${requestId}):`,
-              streamError,
+              streamError
             );
             // Ideally, the Express layer should catch this and send a final error to the client if the stream breaks.
             // Or, the agentEventStream itself should yield a final error event that gets wrapped.
@@ -124,46 +114,34 @@ export class JsonRpcTransportHandler {
         let result: any;
         switch (method) {
           case 'message/send':
-            result = await this.requestHandler.sendMessage(
-              rpcRequest.params,
-              context,
-            );
+            result = await this.requestHandler.sendMessage(rpcRequest.params, context);
             break;
           case 'tasks/get':
-            result = await this.requestHandler.getTask(
-              rpcRequest.params,
-              context,
-            );
+            result = await this.requestHandler.getTask(rpcRequest.params, context);
             break;
           case 'tasks/cancel':
-            result = await this.requestHandler.cancelTask(
-              rpcRequest.params,
-              context,
-            );
+            result = await this.requestHandler.cancelTask(rpcRequest.params, context);
             break;
           case 'tasks/pushNotificationConfig/set':
             result = await this.requestHandler.setTaskPushNotificationConfig(
               rpcRequest.params,
-              context,
+              context
             );
             break;
           case 'tasks/pushNotificationConfig/get':
             result = await this.requestHandler.getTaskPushNotificationConfig(
               rpcRequest.params,
-              context,
+              context
             );
             break;
           case 'tasks/pushNotificationConfig/delete':
-            await this.requestHandler.deleteTaskPushNotificationConfig(
-              rpcRequest.params,
-              context,
-            );
+            await this.requestHandler.deleteTaskPushNotificationConfig(rpcRequest.params, context);
             result = null;
             break;
           case 'tasks/pushNotificationConfig/list':
             result = await this.requestHandler.listTaskPushNotificationConfigs(
               rpcRequest.params,
-              context,
+              context
             );
             break;
           default:
@@ -179,9 +157,7 @@ export class JsonRpcTransportHandler {
       const a2aError =
         error instanceof A2AError
           ? error
-          : A2AError.internalError(
-              error.message || 'An unexpected error occurred.',
-            );
+          : A2AError.internalError(error.message || 'An unexpected error occurred.');
       return {
         jsonrpc: '2.0',
         id: requestId,
@@ -214,11 +190,7 @@ export class JsonRpcTransportHandler {
 
   // Validates that params is an object with non-empty string keys
   private paramsAreValid(params: any): boolean {
-    if (
-      typeof params !== 'object' ||
-      params === null ||
-      Array.isArray(params)
-    ) {
+    if (typeof params !== 'object' || params === null || Array.isArray(params)) {
       return false;
     }
 

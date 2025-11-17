@@ -60,9 +60,7 @@ const rl = readline.createInterface({
 
 // --- Response Handling ---
 // Function now accepts the unwrapped event payload directly
-function printAgentEvent(
-  event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-) {
+function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent) {
   const timestamp = new Date().toLocaleTimeString();
   const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
@@ -101,7 +99,7 @@ function printAgentEvent(
     }
 
     console.log(
-      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, state)} (Task: ${update.taskId}, Context: ${update.contextId}) ${update.final ? colorize('bright', '[FINAL]') : ''}`,
+      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, state)} (Task: ${update.taskId}, Context: ${update.contextId}) ${update.final ? colorize('bright', '[FINAL]') : ''}`
     );
 
     if (update.status.message) {
@@ -114,7 +112,7 @@ function printAgentEvent(
     console.log(
       `${prefix} 📄 Artifact Received: ${
         update.artifact.name || '(unnamed)'
-      } (ID: ${update.artifact.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`,
+      } (ID: ${update.artifact.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
     );
     // Create a temporary message-like structure to reuse printMessageContent
     printMessageContent({
@@ -130,7 +128,7 @@ function printAgentEvent(
     console.log(
       prefix,
       colorize('yellow', 'Received unknown event type in printAgentEvent:'),
-      event,
+      event
     );
   }
 }
@@ -150,20 +148,17 @@ function printMessageContent(message: Message) {
           filePart.file.name || 'N/A'
         }, Type: ${filePart.file.mimeType || 'N/A'}, Source: ${
           'bytes' in filePart.file ? 'Inline (bytes)' : filePart.file.uri
-        }`,
+        }`
       );
     } else if (part.kind === 'data') {
       // Check kind property
       const dataPart = part as DataPart;
       console.log(
         `${partPrefix} ${colorize('yellow', '📊 Data:')}`,
-        JSON.stringify(dataPart.data, null, 2),
+        JSON.stringify(dataPart.data, null, 2)
       );
     } else {
-      console.log(
-        `${partPrefix} ${colorize('yellow', 'Unsupported part kind:')}`,
-        part,
-      );
+      console.log(`${partPrefix} ${colorize('yellow', 'Unsupported part kind:')}`, part);
     }
   });
 }
@@ -172,12 +167,7 @@ function printMessageContent(message: Message) {
 async function fetchAndDisplayAgentCard() {
   // Use the client's getAgentCard method.
   // The client was initialized with serverUrl, which is the agent's base URL.
-  console.log(
-    colorize(
-      'dim',
-      `Attempting to fetch agent card from agent at: ${serverUrl}`,
-    ),
-  );
+  console.log(colorize('dim', `Attempting to fetch agent card from agent at: ${serverUrl}`));
   try {
     // client.getAgentCard() uses the agentBaseUrl provided during client construction
     const card: AgentCard = await client.getAgentCard();
@@ -191,9 +181,7 @@ async function fetchAndDisplayAgentCard() {
     if (card.capabilities?.streaming) {
       console.log(`  Streaming:   ${colorize('green', 'Supported')}`);
     } else {
-      console.log(
-        `  Streaming:   ${colorize('yellow', 'Not Supported (or not specified)')}`,
-      );
+      console.log(`  Streaming:   ${colorize('yellow', 'Not Supported (or not specified)')}`);
     }
     // Update prompt prefix to use the fetched name
     // The prompt is set dynamically before each rl.prompt() call in the main loop
@@ -214,14 +202,11 @@ async function main() {
   console.log(
     colorize(
       'dim',
-      `No active task or context initially. Use '/new' to start a fresh session or send a message.`,
-    ),
+      `No active task or context initially. Use '/new' to start a fresh session or send a message.`
+    )
   );
   console.log(
-    colorize(
-      'green',
-      `Enter messages, or use '/new' to start a new session. '/exit' to quit.`,
-    ),
+    colorize('green', `Enter messages, or use '/new' to start a new session. '/exit' to quit.`)
   );
 
   rl.setPrompt(colorize('cyan', `${agentName} > You: `)); // Set initial prompt
@@ -239,12 +224,7 @@ async function main() {
     if (input.toLowerCase() === '/new') {
       currentTaskId = undefined;
       currentContextId = undefined; // Reset contextId on /new
-      console.log(
-        colorize(
-          'bright',
-          `✨ Starting new session. Task and Context IDs are cleared.`,
-        ),
-      );
+      console.log(colorize('bright', `✨ Starting new session. Task and Context IDs are cleared.`));
       rl.prompt();
       return;
     }
@@ -297,27 +277,18 @@ async function main() {
         const timestamp = new Date().toLocaleTimeString(); // Get fresh timestamp for each event
         const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
-        if (
-          event.kind === 'status-update' ||
-          event.kind === 'artifact-update'
-        ) {
-          const typedEvent = event as
-            | TaskStatusUpdateEvent
-            | TaskArtifactUpdateEvent;
+        if (event.kind === 'status-update' || event.kind === 'artifact-update') {
+          const typedEvent = event as TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
           printAgentEvent(typedEvent);
 
           // If the event is a TaskStatusUpdateEvent and it's final, reset currentTaskId
           if (
             typedEvent.kind === 'status-update' &&
             (typedEvent as TaskStatusUpdateEvent).final &&
-            (typedEvent as TaskStatusUpdateEvent).status.state !==
-              'input-required'
+            (typedEvent as TaskStatusUpdateEvent).status.state !== 'input-required'
           ) {
             console.log(
-              colorize(
-                'yellow',
-                `   Task ${typedEvent.taskId} is final. Clearing current task ID.`,
-              ),
+              colorize('yellow', `   Task ${typedEvent.taskId} is final. Clearing current task ID.`)
             );
             currentTaskId = undefined;
             // Optionally, you might want to clear currentContextId as well if a task ending implies context ending.
@@ -326,39 +297,28 @@ async function main() {
           }
         } else if (event.kind === 'message') {
           const msg = event as Message;
-          console.log(
-            `${prefix} ${colorize('green', '✉️ Message Stream Event:')}`,
-          );
+          console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
           printMessageContent(msg);
           if (msg.taskId && msg.taskId !== currentTaskId) {
             console.log(
-              colorize(
-                'dim',
-                `   Task ID context updated to ${msg.taskId} based on message event.`,
-              ),
+              colorize('dim', `   Task ID context updated to ${msg.taskId} based on message event.`)
             );
             currentTaskId = msg.taskId;
           }
           if (msg.contextId && msg.contextId !== currentContextId) {
             console.log(
-              colorize(
-                'dim',
-                `   Context ID updated to ${msg.contextId} based on message event.`,
-              ),
+              colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
             );
             currentContextId = msg.contextId;
           }
         } else if (event.kind === 'task') {
           const task = event as Task;
           console.log(
-            `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${task.status.state}`,
+            `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${task.status.state}`
           );
           if (task.id !== currentTaskId) {
             console.log(
-              colorize(
-                'dim',
-                `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`,
-              ),
+              colorize('dim', `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`)
             );
             currentTaskId = task.id;
           }
@@ -366,8 +326,8 @@ async function main() {
             console.log(
               colorize(
                 'dim',
-                `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`,
-              ),
+                `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`
+              )
             );
             currentContextId = task.contextId;
           }
@@ -376,44 +336,29 @@ async function main() {
             printMessageContent(task.status.message);
           }
           if (task.artifacts && task.artifacts.length > 0) {
-            console.log(
-              colorize(
-                'gray',
-                `   Task includes ${task.artifacts.length} artifact(s).`,
-              ),
-            );
+            console.log(colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`));
           }
         } else {
           console.log(
             prefix,
             colorize('yellow', 'Received unknown event structure from stream:'),
-            event,
+            event
           );
         }
       }
-      console.log(
-        colorize('dim', `--- End of response stream for this input ---`),
-      );
+      console.log(colorize('dim', `--- End of response stream for this input ---`));
     } catch (error: any) {
       const timestamp = new Date().toLocaleTimeString();
       const prefix = colorize('red', `\n${agentName} [${timestamp}] ERROR:`);
-      console.error(
-        prefix,
-        `Error communicating with agent:`,
-        error.message || error,
-      );
+      console.error(prefix, `Error communicating with agent:`, error.message || error);
       if (error.code) {
         console.error(colorize('gray', `   Code: ${error.code}`));
       }
       if (error.data) {
-        console.error(
-          colorize('gray', `   Data: ${JSON.stringify(error.data)}`),
-        );
+        console.error(colorize('gray', `   Data: ${JSON.stringify(error.data)}`));
       }
       if (!(error.code || error.data) && error.stack) {
-        console.error(
-          colorize('gray', error.stack.split('\n').slice(1, 3).join('\n')),
-        );
+        console.error(colorize('gray', error.stack.split('\n').slice(1, 3).join('\n')));
       }
     } finally {
       rl.prompt();

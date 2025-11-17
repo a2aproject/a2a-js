@@ -17,10 +17,7 @@ import {
   PushNotificationConfig,
   Task,
 } from '../../src/index.js';
-import {
-  fakeTaskExecute,
-  MockAgentExecutor,
-} from './mocks/agent-executor.mock.js';
+import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
 describe('Push Notification Integration Tests', () => {
   let testServer: Server;
@@ -71,19 +68,14 @@ describe('Push Notification Integration Tests', () => {
           url: req.url,
           method: req.method,
         });
-        res
-          .status(200)
-          .json({ received: true, timestamp: new Date().toISOString() });
+        res.status(200).json({ received: true, timestamp: new Date().toISOString() });
       });
 
       // Endpoint to simulate different response scenarios
       app.post('/notify/:scenario', async (req: Request, res: Response) => {
         const scenario = req.params.scenario;
         // Simulate delay for 'submitted' status to test correct ordering of notifications
-        if (
-          scenario === 'delay_on_submitted' &&
-          req.body.status.state === 'submitted'
-        ) {
+        if (scenario === 'delay_on_submitted' && req.body.status.state === 'submitted') {
           await new Promise((resolve) => setTimeout(resolve, 10));
         }
 
@@ -125,9 +117,7 @@ describe('Push Notification Integration Tests', () => {
     mockAgentExecutor = new MockAgentExecutor();
     const executionEventBusManager = new DefaultExecutionEventBusManager();
     pushNotificationStore = new InMemoryPushNotificationStore();
-    pushNotificationSender = new DefaultPushNotificationSender(
-      pushNotificationStore,
-    );
+    pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
 
     handler = new DefaultRequestHandler(
       testAgentCard,
@@ -135,7 +125,7 @@ describe('Push Notification Integration Tests', () => {
       mockAgentExecutor,
       executionEventBusManager,
       pushNotificationStore,
-      pushNotificationSender,
+      pushNotificationSender
     );
   });
 
@@ -200,7 +190,7 @@ describe('Push Notification Integration Tests', () => {
       assert.lengthOf(
         receivedNotifications,
         3,
-        'Should send notifications for submitted, working, and completed states',
+        'Should send notifications for submitted, working, and completed states'
       );
 
       // Verify all three states are present
@@ -213,14 +203,8 @@ describe('Push Notification Integration Tests', () => {
       const firstNotification = receivedNotifications[0];
       assert.equal(firstNotification.method, 'POST');
       assert.equal(firstNotification.url, '/notify/delay_on_submitted');
-      assert.equal(
-        firstNotification.headers['content-type'],
-        'application/json',
-      );
-      assert.equal(
-        firstNotification.headers['x-a2a-notification-token'],
-        'test-auth-token',
-      );
+      assert.equal(firstNotification.headers['content-type'], 'application/json');
+      assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
       assert.deepEqual(firstNotification.body, {
         ...expectedTaskResult,
         status: { state: 'submitted' },
@@ -318,24 +302,20 @@ describe('Push Notification Integration Tests', () => {
           acc[n.url]++;
           return acc;
         },
-        {} as Record<string, number>,
+        {} as Record<string, number>
       );
 
       // Verify push notification was attempted (even though it failed)
-      assert.lengthOf(
-        receivedNotifications,
-        4,
-        'Should have 4 notifications 2 for each endpoint',
-      );
+      assert.lengthOf(receivedNotifications, 4, 'Should have 4 notifications 2 for each endpoint');
       assert.equal(
         notificationsByEndpoint['/notify'],
         2,
-        'Should have 2 notifications for primary endpoint',
+        'Should have 2 notifications for primary endpoint'
       );
       assert.equal(
         notificationsByEndpoint['/notify/second'],
         2,
-        'Should have 2 notifications for second endpoint',
+        'Should have 2 notifications for second endpoint'
       );
     });
 
@@ -384,13 +364,11 @@ describe('Push Notification Integration Tests', () => {
       assert.deepEqual(task, expectedTaskResult);
 
       // Verify the error endpoint was hit
-      const errorNotifications = receivedNotifications.filter(
-        (n) => n.url === '/notify/error',
-      );
+      const errorNotifications = receivedNotifications.filter((n) => n.url === '/notify/error');
       assert.lengthOf(
         errorNotifications,
         3,
-        'Should have attempted to send notifications to error endpoint',
+        'Should have attempted to send notifications to error endpoint'
       );
     });
   });
@@ -442,19 +420,19 @@ describe('Push Notification Integration Tests', () => {
       assert.lengthOf(
         receivedNotifications,
         2,
-        'Should send notifications for submitted and completed states',
+        'Should send notifications for submitted and completed states'
       );
 
       receivedNotifications.forEach((notification) => {
         assert.equal(
           notification.headers['x-a2a-notification-token'],
           'default-token',
-          'Should use default header name X-A2A-Notification-Token',
+          'Should use default header name X-A2A-Notification-Token'
         );
         assert.equal(
           notification.headers['content-type'],
           'application/json',
-          'Should include content-type header',
+          'Should include content-type header'
         );
       });
     });
@@ -463,7 +441,9 @@ describe('Push Notification Integration Tests', () => {
       // Create a new handler with custom header name
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
-        { tokenHeaderName: 'X-Custom-Auth-Token' },
+        {
+          tokenHeaderName: 'X-Custom-Auth-Token',
+        }
       );
 
       const customHandler = new DefaultRequestHandler(
@@ -472,7 +452,7 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender,
+        customPushNotificationSender
       );
 
       const pushConfig: PushNotificationConfig = {
@@ -520,23 +500,23 @@ describe('Push Notification Integration Tests', () => {
       assert.lengthOf(
         receivedNotifications,
         2,
-        'Should send notifications for submitted and completed states',
+        'Should send notifications for submitted and completed states'
       );
 
       receivedNotifications.forEach((notification) => {
         assert.equal(
           notification.headers['x-custom-auth-token'],
           'custom-token',
-          'Should use custom header name X-Custom-Auth-Token',
+          'Should use custom header name X-Custom-Auth-Token'
         );
         assert.isUndefined(
           notification.headers['x-a2a-notification-token'],
-          'Should not use default header name',
+          'Should not use default header name'
         );
         assert.equal(
           notification.headers['content-type'],
           'application/json',
-          'Should include content-type header',
+          'Should include content-type header'
         );
       });
     });
@@ -587,18 +567,18 @@ describe('Push Notification Integration Tests', () => {
       assert.lengthOf(
         receivedNotifications,
         2,
-        'Should send notifications for submitted and completed states',
+        'Should send notifications for submitted and completed states'
       );
 
       receivedNotifications.forEach((notification) => {
         assert.isUndefined(
           notification.headers['x-a2a-notification-token'],
-          'Should not include token header when token is not provided',
+          'Should not include token header when token is not provided'
         );
         assert.equal(
           notification.headers['content-type'],
           'application/json',
-          'Should include content-type header',
+          'Should include content-type header'
         );
       });
     });
@@ -607,7 +587,9 @@ describe('Push Notification Integration Tests', () => {
       // Create a handler with custom header name
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
-        { tokenHeaderName: 'X-Custom-Token' },
+        {
+          tokenHeaderName: 'X-Custom-Token',
+        }
       );
 
       const customHandler = new DefaultRequestHandler(
@@ -616,7 +598,7 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender,
+        customPushNotificationSender
       );
 
       const pushConfig1: PushNotificationConfig = {
@@ -680,34 +662,22 @@ describe('Push Notification Integration Tests', () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Verify both endpoints received notifications with correct headers
-      const config1Notifications = receivedNotifications.filter(
-        (n) => n.url === '/notify',
-      );
-      const config2Notifications = receivedNotifications.filter(
-        (n) => n.url === '/notify/second',
-      );
+      const config1Notifications = receivedNotifications.filter((n) => n.url === '/notify');
+      const config2Notifications = receivedNotifications.filter((n) => n.url === '/notify/second');
 
-      assert.lengthOf(
-        config1Notifications,
-        1,
-        'Should send notification to first endpoint',
-      );
-      assert.lengthOf(
-        config2Notifications,
-        1,
-        'Should send notification to second endpoint',
-      );
+      assert.lengthOf(config1Notifications, 1, 'Should send notification to first endpoint');
+      assert.lengthOf(config2Notifications, 1, 'Should send notification to second endpoint');
 
       // Check headers for config with token
       config1Notifications.forEach((notification) => {
         assert.equal(
           notification.headers['x-custom-token'],
           'token-1',
-          'Should use custom header name for config with token',
+          'Should use custom header name for config with token'
         );
         assert.isUndefined(
           notification.headers['x-a2a-notification-token'],
-          'Should not use default header name',
+          'Should not use default header name'
         );
       });
 
@@ -715,11 +685,11 @@ describe('Push Notification Integration Tests', () => {
       config2Notifications.forEach((notification) => {
         assert.isUndefined(
           notification.headers['x-custom-token'],
-          'Should not include token header for config without token',
+          'Should not include token header for config without token'
         );
         assert.isUndefined(
           notification.headers['x-a2a-notification-token'],
-          'Should not include default token header',
+          'Should not include default token header'
         );
       });
 
@@ -728,7 +698,7 @@ describe('Push Notification Integration Tests', () => {
         assert.equal(
           notification.headers['content-type'],
           'application/json',
-          'Should include content-type header',
+          'Should include content-type header'
         );
       });
     });

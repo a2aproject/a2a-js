@@ -1,25 +1,15 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import { Task, TaskStatusUpdateEvent, Message } from '../../../index.js';
-import {
-  AgentExecutor,
-  RequestContext,
-  ExecutionEventBus,
-} from '../../../server/index.js';
+import { AgentExecutor, RequestContext, ExecutionEventBus } from '../../../server/index.js';
 
 /**
  * SampleAgentExecutor implements the agent's core logic.
  */
 export class SampleAgentExecutor implements AgentExecutor {
-  public cancelTask = async (
-    _taskId: string,
-    _eventBus: ExecutionEventBus,
-  ): Promise<void> => {};
+  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {};
 
-  async execute(
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus,
-  ): Promise<void> {
+  async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const userMessage = requestContext.userMessage;
     const existingTask = requestContext.task;
 
@@ -28,7 +18,7 @@ export class SampleAgentExecutor implements AgentExecutor {
     const contextId = requestContext.contextId;
 
     console.log(
-      `[SampleAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`,
+      `[SampleAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
     );
 
     // 1. Publish initial Task event if it's a new task
@@ -95,9 +85,7 @@ export class SampleAgentExecutor implements AgentExecutor {
     await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing delay
     eventBus.publish(finalUpdate);
 
-    console.log(
-      `[SampleAgentExecutor] Task ${taskId} finished with state: completed`,
-    );
+    console.log(`[SampleAgentExecutor] Task ${taskId} finished with state: completed`);
   }
 
   parseInputMessage(message: Message): string {

@@ -24,7 +24,7 @@ export class A2AExpressApp {
     app: Express,
     baseUrl: string = '',
     middlewares?: Array<RequestHandler | ErrorRequestHandler>,
-    agentCardPath: string = AGENT_CARD_PATH,
+    agentCardPath: string = AGENT_CARD_PATH
   ): Express {
     const router = express.Router();
 
@@ -39,10 +39,7 @@ export class A2AExpressApp {
     }
 
     router.use(jsonRpcHandler({ requestHandler: this.requestHandler }));
-    router.use(
-      `/${agentCardPath}`,
-      agentCardHandler({ agentCardProvider: this.requestHandler }),
-    );
+    router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
 
     app.use(baseUrl, router);
     return app;

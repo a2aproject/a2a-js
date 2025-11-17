@@ -1,8 +1,5 @@
 import { TaskStatusUpdateEvent } from '../../types.js';
-import {
-  ExecutionEventBus,
-  AgentExecutionEvent,
-} from './execution_event_bus.js';
+import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
 
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
@@ -45,8 +42,7 @@ export class ExecutionEventQueue {
         yield event;
         if (
           event.kind === 'message' ||
-          (event.kind === 'status-update' &&
-            (event as TaskStatusUpdateEvent).final)
+          (event.kind === 'status-update' && (event as TaskStatusUpdateEvent).final)
         ) {
           this.handleFinished();
           break;

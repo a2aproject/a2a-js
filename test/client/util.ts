@@ -38,7 +38,7 @@ export function extractRequestId(options?: RequestInit): number {
 export function createAgentCardResponse(
   data: any,
   status: number = 200,
-  headers: Record<string, string> = {},
+  headers: Record<string, string> = {}
 ): Response {
   const defaultHeaders = { 'Content-Type': 'application/json' };
   const responseHeaders = { ...defaultHeaders, ...headers };
@@ -68,7 +68,7 @@ export function createResponse(
   result?: any,
   error?: { code: number; message: string; data?: any },
   status: number = 200,
-  headers: Record<string, string> = {},
+  headers: Record<string, string> = {}
 ): Response {
   const defaultHeaders = { 'Content-Type': 'application/json' };
   const responseHeaders = { ...defaultHeaders, ...headers };
@@ -123,7 +123,7 @@ export function createMockAgentCard(
       pushNotifications?: boolean;
     };
     skills?: any[];
-  } = {},
+  } = {}
 ): any {
   return {
     name: options.name ?? 'Test Agent',
@@ -158,7 +158,7 @@ export function createMessageParams(
     messageId?: string;
     text?: string;
     role?: 'user' | 'assistant';
-  } = {},
+  } = {}
 ): any {
   const messageId = options.messageId ?? 'test-msg';
   const text = options.text ?? 'Hello, agent!';
@@ -195,7 +195,7 @@ export function createMockMessage(
     messageId?: string;
     text?: string;
     role?: 'user' | 'assistant';
-  } = {},
+  } = {}
 ): any {
   const messageId = options.messageId ?? 'msg-123';
   const text = options.text ?? 'Hello, agent!';
@@ -247,7 +247,7 @@ export interface MockFetchConfig {
  * @returns A sinon stub that can be used as a mock fetch implementation, with capturedAuthHeaders attached as a property
  */
 export function createMockFetch(
-  config: MockFetchConfig = {},
+  config: MockFetchConfig = {}
 ): sinon.SinonStub & { capturedAuthHeaders: string[] } {
   const {
     requiresAuth = false, // Default to no auth required for basic testing
@@ -268,32 +268,45 @@ export function createMockFetch(
   let callCount = 0;
   const capturedAuthHeaders: string[] = [];
 
-  const mockFetch = sinon
-    .stub()
-    .callsFake(async (url: string, options?: RequestInit) => {
-      // Handle agent card requests
-      if (url.includes(AGENT_CARD_PATH)) {
-        const mockAgentCard = createMockAgentCard({
-          description: agentDescription,
-        });
-        return createAgentCardResponse(mockAgentCard);
+  const mockFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+    // Handle agent card requests
+    if (url.includes(AGENT_CARD_PATH)) {
+      const mockAgentCard = createMockAgentCard({
+        description: agentDescription,
+      });
+      return createAgentCardResponse(mockAgentCard);
+    }
+
+    // Handle API requests
+    if (url.includes('/api')) {
+      const authHeader = options?.headers?.['Authorization'] as string;
+
+      // Capture auth headers if requested
+      if (captureAuthHeaders) {
+        capturedAuthHeaders.push(authHeader || '');
       }
 
-      // Handle API requests
-      if (url.includes('/api')) {
-        const authHeader = options?.headers?.['Authorization'] as string;
+      const requestId = extractRequestId(options);
 
-        // Capture auth headers if requested
-        if (captureAuthHeaders) {
-          capturedAuthHeaders.push(authHeader || '');
-        }
+      // Determine response based on behavior
+      switch (behavior) {
+        case 'alwaysFail':
+          // Always return 401 for API calls
+          return createResponse(
+            requestId,
+            undefined,
+            {
+              code: authErrorConfig.code!,
+              message: authErrorConfig.message!,
+            },
+            401,
+            { 'WWW-Authenticate': `Bearer ${authErrorConfig.challenge}` }
+          );
 
-        const requestId = extractRequestId(options);
-
-        // Determine response based on behavior
-        switch (behavior) {
-          case 'alwaysFail':
-            // Always return 401 for API calls
+        case 'authRetry':
+          // First call: return 401 to trigger auth flow
+          if (callCount === 0) {
+            callCount++;
             return createResponse(
               requestId,
               undefined,
@@ -302,57 +315,42 @@ export function createMockFetch(
                 message: authErrorConfig.message!,
               },
               401,
-              { 'WWW-Authenticate': `Bearer ${authErrorConfig.challenge}` },
+              { 'WWW-Authenticate': `Bearer ${authErrorConfig.challenge}` }
             );
+          }
+          // Subsequent calls: return success
+          break;
 
-          case 'authRetry':
-            // First call: return 401 to trigger auth flow
-            if (callCount === 0) {
-              callCount++;
-              return createResponse(
-                requestId,
-                undefined,
-                {
-                  code: authErrorConfig.code!,
-                  message: authErrorConfig.message!,
-                },
-                401,
-                { 'WWW-Authenticate': `Bearer ${authErrorConfig.challenge}` },
-              );
-            }
-            // Subsequent calls: return success
-            break;
-
-          case 'standard':
-          default:
-            // If authentication is required and no valid header is present
-            if (requiresAuth && !authHeader) {
-              return createResponse(
-                requestId,
-                undefined,
-                {
-                  code: authErrorConfig.code!,
-                  message: authErrorConfig.message!,
-                },
-                401,
-                { 'WWW-Authenticate': `Bearer ${authErrorConfig.challenge}` },
-              );
-            }
-            break;
-        }
-
-        // Return success response
-        const mockMessage = createMockMessage({
-          messageId: messageConfig.messageId || 'msg-123',
-          text: messageConfig.text || 'Hello, agent!',
-        });
-
-        return createResponse(requestId, mockMessage);
+        case 'standard':
+        default:
+          // If authentication is required and no valid header is present
+          if (requiresAuth && !authHeader) {
+            return createResponse(
+              requestId,
+              undefined,
+              {
+                code: authErrorConfig.code!,
+                message: authErrorConfig.message!,
+              },
+              401,
+              { 'WWW-Authenticate': `Bearer ${authErrorConfig.challenge}` }
+            );
+          }
+          break;
       }
 
-      // Default: return 404 for unknown endpoints
-      return new Response('Not found', { status: 404 });
-    });
+      // Return success response
+      const mockMessage = createMockMessage({
+        messageId: messageConfig.messageId || 'msg-123',
+        text: messageConfig.text || 'Hello, agent!',
+      });
+
+      return createResponse(requestId, mockMessage);
+    }
+
+    // Default: return 404 for unknown endpoints
+    return new Response('Not found', { status: 404 });
+  });
 
   // Attach the capturedAuthHeaders as a property to the mock fetch function
   (mockFetch as any).capturedAuthHeaders = capturedAuthHeaders;

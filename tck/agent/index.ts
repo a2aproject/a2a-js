@@ -1,12 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import {
-  AgentCard,
-  Task,
-  TaskStatusUpdateEvent,
-  Message,
-} from '../../src/index.js';
+import { AgentCard, Task, TaskStatusUpdateEvent, Message } from '../../src/index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -24,10 +19,7 @@ class SUTAgentExecutor implements AgentExecutor {
   private runningTask: Set<string> = new Set();
   private lastContextId?: string;
 
-  public cancelTask = async (
-    taskId: string,
-    eventBus: ExecutionEventBus,
-  ): Promise<void> => {
+  public cancelTask = async (taskId: string, eventBus: ExecutionEventBus): Promise<void> => {
     this.runningTask.delete(taskId);
     const cancelledUpdate: TaskStatusUpdateEvent = {
       kind: 'status-update',
@@ -42,10 +34,7 @@ class SUTAgentExecutor implements AgentExecutor {
     eventBus.publish(cancelledUpdate);
   };
 
-  async execute(
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus,
-  ): Promise<void> {
+  async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const userMessage = requestContext.userMessage;
     const existingTask = requestContext.task;
 
@@ -57,7 +46,7 @@ class SUTAgentExecutor implements AgentExecutor {
     this.runningTask.add(taskId);
 
     console.log(
-      `[SUTAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`,
+      `[SUTAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
     );
 
     // 1. Publish initial Task event if it's a new task
@@ -102,7 +91,7 @@ class SUTAgentExecutor implements AgentExecutor {
     await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate processing delay
     if (!this.runningTask.has(taskId)) {
       console.log(
-        `[SUTAgentExecutor] Task ${taskId} was cancelled before processing could complete.`,
+        `[SUTAgentExecutor] Task ${taskId} was cancelled before processing could complete.`
       );
       return;
     }
@@ -185,9 +174,7 @@ const SUTAgentCard: AgentCard = {
   ],
   supportsAuthenticatedExtendedCard: false,
   preferredTransport: 'JSONRPC',
-  additionalInterfaces: [
-    { url: 'http://localhost:41241', transport: 'JSONRPC' },
-  ],
+  additionalInterfaces: [{ url: 'http://localhost:41241', transport: 'JSONRPC' }],
 };
 
 async function main() {
@@ -198,11 +185,7 @@ async function main() {
   const agentExecutor: AgentExecutor = new SUTAgentExecutor();
 
   // 3. Create DefaultRequestHandler
-  const requestHandler = new DefaultRequestHandler(
-    SUTAgentCard,
-    taskStore,
-    agentExecutor,
-  );
+  const requestHandler = new DefaultRequestHandler(SUTAgentCard, taskStore, agentExecutor);
 
   // 4. Create and setup A2AExpressApp
   const appBuilder = new A2AExpressApp(requestHandler);
@@ -214,12 +197,8 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(
-      `[SUTAgent] Server using new framework started on http://localhost:${PORT}`,
-    );
-    console.log(
-      `[SUTAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`,
-    );
+    console.log(`[SUTAgent] Server using new framework started on http://localhost:${PORT}`);
+    console.log(`[SUTAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
     console.log('[SUTAgent] Press Ctrl+C to stop the server');
   });
 }

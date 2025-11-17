@@ -1,10 +1,7 @@
 import { PushNotificationConfig } from '../../types.js';
 
 export interface PushNotificationStore {
-  save(
-    taskId: string,
-    pushNotificationConfig: PushNotificationConfig,
-  ): Promise<void>;
+  save(taskId: string, pushNotificationConfig: PushNotificationConfig): Promise<void>;
   load(taskId: string): Promise<PushNotificationConfig[]>;
   delete(taskId: string, configId?: string): Promise<void>;
 }
@@ -12,10 +9,7 @@ export interface PushNotificationStore {
 export class InMemoryPushNotificationStore implements PushNotificationStore {
   private store: Map<string, PushNotificationConfig[]> = new Map();
 
-  async save(
-    taskId: string,
-    pushNotificationConfig: PushNotificationConfig,
-  ): Promise<void> {
+  async save(taskId: string, pushNotificationConfig: PushNotificationConfig): Promise<void> {
     const configs = this.store.get(taskId) || [];
 
     // Set ID if it's not already set
@@ -24,9 +18,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     }
 
     // Remove existing config with the same ID if it exists
-    const existingIndex = configs.findIndex(
-      (config) => config.id === pushNotificationConfig.id,
-    );
+    const existingIndex = configs.findIndex((config) => config.id === pushNotificationConfig.id);
     if (existingIndex !== -1) {
       configs.splice(existingIndex, 1);
     }

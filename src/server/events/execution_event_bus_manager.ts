@@ -1,7 +1,4 @@
-import {
-  DefaultExecutionEventBus,
-  ExecutionEventBus,
-} from './execution_event_bus.js';
+import { DefaultExecutionEventBus, ExecutionEventBus } from './execution_event_bus.js';
 
 export interface ExecutionEventBusManager {
   createOrGetByTaskId(taskId: string): ExecutionEventBus;
@@ -9,9 +6,7 @@ export interface ExecutionEventBusManager {
   cleanupByTaskId(taskId: string): void;
 }
 
-export class DefaultExecutionEventBusManager
-  implements ExecutionEventBusManager
-{
+export class DefaultExecutionEventBusManager implements ExecutionEventBusManager {
   private taskIdToBus: Map<string, ExecutionEventBus> = new Map();
 
   /**

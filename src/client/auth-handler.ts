@@ -36,10 +36,7 @@ export interface AuthenticationHandler {
    * @returns If the HTTP request should be retried then returns the HTTP headers to use,
    * 	or returns undefined if no retry should be made.
    */
-  shouldRetryWithHeaders: (
-    req: RequestInit,
-    res: Response,
-  ) => Promise<HttpHeaders | undefined>;
+  shouldRetryWithHeaders: (req: RequestInit, res: Response) => Promise<HttpHeaders | undefined>;
 
   /**
    * If the last HTTP request using the headers from shouldRetryWithHeaders() was successful, and
@@ -67,7 +64,7 @@ export interface AuthenticationHandler {
  */
 export function createAuthenticatingFetchWithRetry(
   fetchImpl: typeof fetch,
-  authHandler: AuthenticationHandler,
+  authHandler: AuthenticationHandler
 ): typeof fetch {
   /**
    * Executes a fetch request with authentication handling.
@@ -77,10 +74,7 @@ export function createAuthenticatingFetchWithRetry(
    * @param init The fetch request options
    * @returns A Promise that resolves to the Response
    */
-  async function authFetch(
-    url: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Response> {
+  async function authFetch(url: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     // Merge auth headers with provided headers
     const authHeaders = (await authHandler.headers()) || {};
     const mergedInit: RequestInit = {
@@ -94,10 +88,7 @@ export function createAuthenticatingFetchWithRetry(
     let response = await fetchImpl(url, mergedInit);
 
     // Check if the auth handler wants to retry the request with new headers
-    const updatedHeaders = await authHandler.shouldRetryWithHeaders(
-      mergedInit,
-      response,
-    );
+    const updatedHeaders = await authHandler.shouldRetryWithHeaders(mergedInit, response);
     if (updatedHeaders) {
       // Retry request with revised headers
       const retryInit: RequestInit = {
@@ -119,10 +110,7 @@ export function createAuthenticatingFetchWithRetry(
 
   // Copy fetch properties to maintain compatibility
   Object.setPrototypeOf(authFetch, Object.getPrototypeOf(fetchImpl));
-  Object.defineProperties(
-    authFetch,
-    Object.getOwnPropertyDescriptors(fetchImpl),
-  );
+  Object.defineProperties(authFetch, Object.getOwnPropertyDescriptors(fetchImpl));
 
   return authFetch;
 }

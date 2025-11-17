@@ -34,7 +34,7 @@ export const searchMovies = ai.defineTool(
       // Re-throwing allows Genkit/the caller to handle it appropriately
       throw error;
     }
-  },
+  }
 );
 
 export const searchPeople = ai.defineTool(
@@ -81,5 +81,5 @@ export const searchPeople = ai.defineTool(
       // Re-throwing allows Genkit/the caller to handle it appropriately
       throw error;
     }
-  },
+  }
 );

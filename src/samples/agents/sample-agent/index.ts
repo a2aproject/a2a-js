@@ -52,11 +52,7 @@ async function main() {
   const agentExecutor: AgentExecutor = new SampleAgentExecutor();
 
   // 3. Create DefaultRequestHandler
-  const requestHandler = new DefaultRequestHandler(
-    sampleAgentCard,
-    taskStore,
-    agentExecutor,
-  );
+  const requestHandler = new DefaultRequestHandler(sampleAgentCard, taskStore, agentExecutor);
 
   // 4. Create and setup A2AExpressApp
   const appBuilder = new A2AExpressApp(requestHandler);
@@ -68,12 +64,8 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(
-      `[SampleAgent] Server using new framework started on http://localhost:${PORT}`,
-    );
-    console.log(
-      `[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`,
-    );
+    console.log(`[SampleAgent] Server using new framework started on http://localhost:${PORT}`);
+    console.log(`[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
     console.log('[SampleAgent] Press Ctrl+C to stop the server');
   });
 }

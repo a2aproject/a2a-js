@@ -21,9 +21,7 @@ export function isObject(value: unknown): value is Record<string, any> {
  * Type guard to check if an object is a TaskStatus update (lacks 'parts').
  * Used to differentiate yielded updates from the handler.
  */
-export function isTaskStatusUpdate(
-  update: any,
-): update is Omit<TaskStatus, 'timestamp'> {
+export function isTaskStatusUpdate(update: any): update is Omit<TaskStatus, 'timestamp'> {
   // Check if it has 'state' and NOT 'parts' (which Artifacts have)
   return isObject(update) && 'state' in update && !('parts' in update);
 }
@@ -40,9 +38,7 @@ export function isArtifactUpdate(update: any): update is Artifact {
 /**
  * Used to parse the extensions extracted from the request header
  */
-export function getRequestedExtensions(
-  values: string | undefined,
-): Set<string> {
+export function getRequestedExtensions(values: string | undefined): Set<string> {
   if (!values) {
     return new Set();
   }
@@ -50,6 +46,6 @@ export function getRequestedExtensions(
     values
       .split(',')
       .map((ext) => ext.trim())
-      .filter((ext) => ext.length > 0),
+      .filter((ext) => ext.length > 0)
   );
 }

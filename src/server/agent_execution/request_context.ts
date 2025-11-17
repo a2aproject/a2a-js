@@ -15,7 +15,7 @@ export class RequestContext {
     contextId: string,
     task?: Task,
     referenceTasks?: Task[],
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ) {
     this.userMessage = userMessage;
     this.taskId = taskId;

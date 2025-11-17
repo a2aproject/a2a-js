@@ -35,12 +35,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 
-const terminalStates: TaskState[] = [
-  'completed',
-  'failed',
-  'canceled',
-  'rejected',
-];
+const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
 
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
@@ -58,7 +53,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventBusManager: ExecutionEventBusManager = new DefaultExecutionEventBusManager(),
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
-    extendedAgentCard?: AgentCard,
+    extendedAgentCard?: AgentCard
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
@@ -69,11 +64,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // If push notifications are supported, use the provided store and sender.
     // Otherwise, use the default in-memory store and sender.
     if (agentCard.capabilities.pushNotifications) {
-      this.pushNotificationStore =
-        pushNotificationStore || new InMemoryPushNotificationStore();
+      this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
       this.pushNotificationSender =
-        pushNotificationSender ||
-        new DefaultPushNotificationSender(this.pushNotificationStore);
+        pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
     }
   }
 
@@ -91,7 +84,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   private async _createRequestContext(
     incomingMessage: Message,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): Promise<RequestContext> {
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
@@ -105,7 +98,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       if (terminalStates.includes(task.status.state)) {
         // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
         throw A2AError.invalidRequest(
-          `Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`,
+          `Task ${task.id} is in a terminal state (${task.status.state}) and cannot be modified.`
         );
       }
       // Add incomingMessage to history and save the task.
@@ -115,10 +108,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Ensure taskId is present
     const taskId = incomingMessage.taskId || uuidv4();
 
-    if (
-      incomingMessage.referenceTaskIds &&
-      incomingMessage.referenceTaskIds.length > 0
-    ) {
+    if (incomingMessage.referenceTaskIds && incomingMessage.referenceTaskIds.length > 0) {
       referenceTasks = [];
       for (const refId of incomingMessage.referenceTaskIds) {
         const refTask = await this.taskStore.load(refId);
@@ -138,12 +128,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (context?.requestedExtensions) {
       const agentCard = await this.getAgentCard();
       const exposedExtensions = new Set(
-        agentCard.capabilities.extensions?.map((ext) => ext.uri) || [],
+        agentCard.capabilities.extensions?.map((ext) => ext.uri) || []
       );
       const validExtensions = new Set(
         Array.from(context.requestedExtensions).filter((extension) =>
-          exposedExtensions.has(extension),
-        ),
+          exposedExtensions.has(extension)
+        )
       );
       newServerCallContext = new ServerCallContext(validExtensions);
     }
@@ -159,7 +149,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       contextId,
       task,
       referenceTasks,
-      newServerCallContext,
+      newServerCallContext
     );
   }
 
@@ -168,11 +158,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     resultManager: ResultManager,
     eventQueue: ExecutionEventQueue,
     options?: {
-      firstResultResolver?: (
-        value: Message | Task | PromiseLike<Message | Task>,
-      ) => void;
+      firstResultResolver?: (value: Message | Task | PromiseLike<Message | Task>) => void;
       firstResultRejector?: (reason?: any) => void;
-    },
+    }
   ): Promise<void> {
     let firstResultSent = false;
     try {
@@ -196,9 +184,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
       if (options?.firstResultRejector && !firstResultSent) {
         options.firstResultRejector(
-          A2AError.internalError(
-            'Execution finished before a message or task was produced.',
-          ),
+          A2AError.internalError('Execution finished before a message or task was produced.')
         );
       }
     } catch (error) {
@@ -215,7 +201,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async sendMessage(
     params: MessageSendParams,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): Promise<Message | Task> {
     const incomingMessage = params.message;
     if (!incomingMessage.messageId) {
@@ -228,10 +214,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const resultManager = new ResultManager(this.taskStore);
     resultManager.setContext(incomingMessage); // Set context for ResultManager
 
-    const requestContext = await this._createRequestContext(
-      incomingMessage,
-      context,
-    );
+    const requestContext = await this._createRequestContext(incomingMessage, context);
     const taskId = requestContext.taskId;
 
     // Use the (potentially updated) contextId from requestContext
@@ -242,10 +225,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.pushNotificationConfig &&
       this.agentCard.capabilities.pushNotifications
     ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        params.configuration.pushNotificationConfig,
-      );
+      await this.pushNotificationStore?.save(taskId, params.configuration.pushNotificationConfig);
     }
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
@@ -255,10 +235,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Start agent execution (non-blocking).
     // It runs in the background and publishes events to the eventBus.
     this.agentExecutor.execute(requestContext, eventBus).catch((err) => {
-      console.error(
-        `Agent execution failed for message ${finalMessageForAgent.messageId}:`,
-        err,
-      );
+      console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
       // Publish a synthetic error event, which will be handled by the ResultManager
       // and will also settle the firstResultPromise for non-blocking calls.
       const errorTask: Task = {
@@ -270,26 +247,18 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             kind: 'message',
             role: 'agent',
             messageId: uuidv4(),
-            parts: [
-              { kind: 'text', text: `Agent execution error: ${err.message}` },
-            ],
+            parts: [{ kind: 'text', text: `Agent execution error: ${err.message}` }],
             taskId: requestContext.task?.id,
             contextId: finalMessageForAgent.contextId!,
           },
           timestamp: new Date().toISOString(),
         },
-        history: requestContext.task?.history
-          ? [...requestContext.task.history]
-          : [],
+        history: requestContext.task?.history ? [...requestContext.task.history] : [],
         kind: 'task',
       };
       if (finalMessageForAgent) {
         // Add incoming message to history
-        if (
-          !errorTask.history?.find(
-            (m) => m.messageId === finalMessageForAgent.messageId,
-          )
-        ) {
+        if (!errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)) {
           errorTask.history?.push(finalMessageForAgent);
         }
       }
@@ -311,7 +280,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       const finalResult = resultManager.getFinalResult();
       if (!finalResult) {
         throw A2AError.internalError(
-          'Agent execution finished without a result, and no task context found.',
+          'Agent execution finished without a result, and no task context found.'
         );
       }
 
@@ -329,7 +298,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async *sendMessageStream(
     params: MessageSendParams,
-    context?: ServerCallContext,
+    context?: ServerCallContext
   ): AsyncGenerator<
     Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
     void,
@@ -339,19 +308,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!incomingMessage.messageId) {
       // For streams, messageId might be set by client, or server can generate if not present.
       // Let's assume client provides it or throw for now.
-      throw A2AError.invalidParams(
-        'message.messageId is required for streaming.',
-      );
+      throw A2AError.invalidParams('message.messageId is required for streaming.');
     }
 
     // Instantiate ResultManager before creating RequestContext
     const resultManager = new ResultManager(this.taskStore);
     resultManager.setContext(incomingMessage); // Set context for ResultManager
 
-    const requestContext = await this._createRequestContext(
-      incomingMessage,
-      context,
-    );
+    const requestContext = await this._createRequestContext(incomingMessage, context);
     const taskId = requestContext.taskId;
     const finalMessageForAgent = requestContext.userMessage;
 
@@ -363,17 +327,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.pushNotificationConfig &&
       this.agentCard.capabilities.pushNotifications
     ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        params.configuration.pushNotificationConfig,
-      );
+      await this.pushNotificationStore?.save(taskId, params.configuration.pushNotificationConfig);
     }
 
     // Start agent execution (non-blocking)
     this.agentExecutor.execute(requestContext, eventBus).catch((err) => {
       console.error(
         `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
-        err,
+        err
       );
       // Publish a synthetic error event if needed
       const errorTaskStatus: TaskStatusUpdateEvent = {
@@ -386,9 +347,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             kind: 'message',
             role: 'agent',
             messageId: uuidv4(),
-            parts: [
-              { kind: 'text', text: `Agent execution error: ${err.message}` },
-            ],
+            parts: [{ kind: 'text', text: `Agent execution error: ${err.message}` }],
             taskId: requestContext.task?.id,
             contextId: finalMessageForAgent.contextId!,
           },
@@ -411,10 +370,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  async getTask(
-    params: TaskQueryParams,
-    _context?: ServerCallContext,
-  ): Promise<Task> {
+  async getTask(params: TaskQueryParams, _context?: ServerCallContext): Promise<Task> {
     const task = await this.taskStore.load(params.id);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
@@ -430,10 +386,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return task;
   }
 
-  async cancelTask(
-    params: TaskIdParams,
-    _context?: ServerCallContext,
-  ): Promise<Task> {
+  async cancelTask(params: TaskIdParams, _context?: ServerCallContext): Promise<Task> {
     const task = await this.taskStore.load(params.id);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
@@ -451,11 +404,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       const eventQueue = new ExecutionEventQueue(eventBus);
       await this.agentExecutor.cancelTask(params.id, eventBus);
       // Consume all the events until the task reaches a terminal state.
-      await this._processEvents(
-        params.id,
-        new ResultManager(this.taskStore),
-        eventQueue,
-      );
+      await this._processEvents(params.id, new ResultManager(this.taskStore), eventQueue);
     } else {
       // Here we are marking task as cancelled. We are not waiting for the executor to actually cancel processing.
       task.status = {
@@ -465,9 +414,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           kind: 'message',
           role: 'agent',
           messageId: uuidv4(),
-          parts: [
-            { kind: 'text', text: 'Task cancellation requested by user.' },
-          ],
+          parts: [{ kind: 'text', text: 'Task cancellation requested by user.' }],
           taskId: task.id,
           contextId: task.contextId,
         },
@@ -481,9 +428,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const latestTask = await this.taskStore.load(params.id);
     if (!latestTask) {
-      throw A2AError.internalError(
-        `Task ${params.id} not found after cancellation.`,
-      );
+      throw A2AError.internalError(`Task ${params.id} not found after cancellation.`);
     }
     if (latestTask.status.state != 'canceled') {
       throw A2AError.taskNotCancelable(params.id);
@@ -493,7 +438,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async setTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
-    _context?: ServerCallContext,
+    _context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
@@ -517,7 +462,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async getTaskPushNotificationConfig(
     params: TaskIdParams | GetTaskPushNotificationConfigParams,
-    _context?: ServerCallContext,
+    _context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
@@ -529,16 +474,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const configs = (await this.pushNotificationStore?.load(params.id)) || [];
     if (configs.length === 0) {
-      throw A2AError.internalError(
-        `Push notification config not found for task ${params.id}.`,
-      );
+      throw A2AError.internalError(`Push notification config not found for task ${params.id}.`);
     }
 
     let configId: string;
-    if (
-      'pushNotificationConfigId' in params &&
-      params.pushNotificationConfigId
-    ) {
+    if ('pushNotificationConfigId' in params && params.pushNotificationConfigId) {
       configId = params.pushNotificationConfigId;
     } else {
       // For backward compatibility, if no config ID is given, assume it's the task ID.
@@ -549,7 +489,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     if (!config) {
       throw A2AError.internalError(
-        `Push notification config with id '${configId}' not found for task ${params.id}.`,
+        `Push notification config with id '${configId}' not found for task ${params.id}.`
       );
     }
     return { taskId: params.id, pushNotificationConfig: config };
@@ -557,7 +497,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigParams,
-    _context?: ServerCallContext,
+    _context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
@@ -577,7 +517,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,
-    _context?: ServerCallContext,
+    _context?: ServerCallContext
   ): Promise<void> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
@@ -594,7 +534,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async *resubscribe(
     params: TaskIdParams,
-    _context?: ServerCallContext,
+    _context?: ServerCallContext
   ): AsyncGenerator<
     | Task // Initial task state
     | TaskStatusUpdateEvent
@@ -603,9 +543,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     undefined
   > {
     if (!this.agentCard.capabilities.streaming) {
-      throw A2AError.unsupportedOperation(
-        'Streaming (and thus resubscription) is not supported.',
-      );
+      throw A2AError.unsupportedOperation('Streaming (and thus resubscription) is not supported.');
     }
 
     const task = await this.taskStore.load(params.id);
@@ -641,10 +579,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // ExecutionEventBusManager tries to give one bus per original message.
         if (event.kind === 'status-update' && event.taskId === params.id) {
           yield event as TaskStatusUpdateEvent;
-        } else if (
-          event.kind === 'artifact-update' &&
-          event.taskId === params.id
-        ) {
+        } else if (event.kind === 'artifact-update' && event.taskId === params.id) {
           yield event as TaskArtifactUpdateEvent;
         } else if (event.kind === 'task' && event.id === params.id) {
           // This implies the task was re-emitted, yield it.
@@ -659,9 +594,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  private async _sendPushNotificationIfNeeded(
-    event: AgentExecutionEvent,
-  ): Promise<void> {
+  private async _sendPushNotificationIfNeeded(event: AgentExecutionEvent): Promise<void> {
     if (!this.agentCard.capabilities.pushNotifications) {
       return;
     }

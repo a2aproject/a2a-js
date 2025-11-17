@@ -7,11 +7,7 @@ import request from 'supertest';
 import { A2AExpressApp } from '../../src/server/express/a2a_express_app.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_transport_handler.js';
-import {
-  AgentCard,
-  JSONRPCSuccessResponse,
-  JSONRPCErrorResponse,
-} from '../../src/index.js';
+import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../src/index.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
 import { ServerCallContext } from '../../src/server/context.js';
@@ -23,11 +19,7 @@ describe('A2AExpressApp', () => {
   let handleStub: SinonStub;
 
   // Helper function to create JSON-RPC request bodies
-  const createRpcRequest = (
-    id: string | null,
-    method = 'message/send',
-    params: object = {},
-  ) => ({
+  const createRpcRequest = (id: string | null, method = 'message/send', params: object = {}) => ({
     jsonrpc: '2.0',
     method,
     id,
@@ -96,9 +88,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should return agent card on GET /.well-known/agent-card.json', async () => {
-      const response = await request(expressApp)
-        .get(`/${AGENT_CARD_PATH}`)
-        .expect(200);
+      const response = await request(expressApp).get(`/${AGENT_CARD_PATH}`).expect(200);
 
       assert.deepEqual(response.body, testAgentCard);
       assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledOnce);
@@ -109,22 +99,16 @@ describe('A2AExpressApp', () => {
       const customExpressApp = express();
       app.setupRoutes(customExpressApp, '', undefined, customPath);
 
-      const response = await request(customExpressApp)
-        .get(`/${customPath}`)
-        .expect(200);
+      const response = await request(customExpressApp).get(`/${customPath}`).expect(200);
 
       assert.deepEqual(response.body, testAgentCard);
     });
 
     it('should handle errors when getting agent card', async () => {
       const errorMessage = 'Failed to get agent card';
-      (mockRequestHandler.getAgentCard as SinonStub).rejects(
-        new Error(errorMessage),
-      );
+      (mockRequestHandler.getAgentCard as SinonStub).rejects(new Error(errorMessage));
 
-      const response = await request(expressApp)
-        .get(`/${AGENT_CARD_PATH}`)
-        .expect(500);
+      const response = await request(expressApp).get(`/${AGENT_CARD_PATH}`).expect(500);
 
       assert.deepEqual(response.body, {
         error: 'Failed to retrieve agent card',
@@ -148,10 +132,7 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('test-id');
 
-      const response = await request(expressApp)
-        .post('/')
-        .send(requestBody)
-        .expect(200);
+      const response = await request(expressApp).post('/').send(requestBody).expect(200);
 
       assert.deepEqual(response.body, mockResponse);
       assert.isTrue(handleStub.calledOnceWith(requestBody));
@@ -169,24 +150,15 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('stream-test', 'message/stream');
 
-      const response = await request(expressApp)
-        .post('/')
-        .send(requestBody)
-        .expect(200);
+      const response = await request(expressApp).post('/').send(requestBody).expect(200);
 
       assert.include(response.headers['content-type'], 'text/event-stream');
       assert.equal(response.headers['cache-control'], 'no-cache');
       assert.equal(response.headers['connection'], 'keep-alive');
 
       const responseText = response.text;
-      assert.include(
-        responseText,
-        'data: {"jsonrpc":"2.0","id":"stream-1","result":{"step":1}}',
-      );
-      assert.include(
-        responseText,
-        'data: {"jsonrpc":"2.0","id":"stream-2","result":{"step":2}}',
-      );
+      assert.include(responseText, 'data: {"jsonrpc":"2.0","id":"stream-1","result":{"step":1}}');
+      assert.include(responseText, 'data: {"jsonrpc":"2.0","id":"stream-2","result":{"step":2}}');
     });
 
     it('should handle streaming error', async () => {
@@ -199,15 +171,9 @@ describe('A2AExpressApp', () => {
 
       handleStub.resolves(mockErrorStream);
 
-      const requestBody = createRpcRequest(
-        'stream-error-test',
-        'message/stream',
-      );
+      const requestBody = createRpcRequest('stream-error-test', 'message/stream');
 
-      const response = await request(expressApp)
-        .post('/')
-        .send(requestBody)
-        .expect(200);
+      const response = await request(expressApp).post('/').send(requestBody).expect(200);
 
       const responseText = response.text;
       assert.include(responseText, 'event: error');
@@ -224,15 +190,9 @@ describe('A2AExpressApp', () => {
 
       handleStub.resolves(mockImmediateErrorStream);
 
-      const requestBody = createRpcRequest(
-        'immediate-stream-error-test',
-        'message/stream',
-      );
+      const requestBody = createRpcRequest('immediate-stream-error-test', 'message/stream');
 
-      const response = await request(expressApp)
-        .post('/')
-        .send(requestBody)
-        .expect(200);
+      const response = await request(expressApp).post('/').send(requestBody).expect(200);
 
       // Assert SSE headers and error event content
       assert.include(response.headers['content-type'], 'text/event-stream');
@@ -250,10 +210,7 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('error-test');
 
-      const response = await request(expressApp)
-        .post('/')
-        .send(requestBody)
-        .expect(500);
+      const response = await request(expressApp).post('/').send(requestBody).expect(500);
 
       const expectedErrorResponse: JSONRPCErrorResponse = {
         jsonrpc: '2.0',
@@ -273,10 +230,7 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('generic-error-test');
 
-      const response = await request(expressApp)
-        .post('/')
-        .send(requestBody)
-        .expect(500);
+      const response = await request(expressApp).post('/').send(requestBody).expect(500);
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.equal(response.body.id, 'generic-error-test');
@@ -289,10 +243,7 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest(null);
 
-      const response = await request(expressApp)
-        .post('/')
-        .send(requestBody)
-        .expect(500);
+      const response = await request(expressApp).post('/').send(requestBody).expect(500);
 
       assert.equal(response.body.id, null);
     });
@@ -319,7 +270,7 @@ describe('A2AExpressApp', () => {
       const serverCallContext = handleStub.getCall(0).args[1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.requestedExtensions).to.deep.equal(
-        new Set(['test-extension-uri', 'another-extension']),
+        new Set(['test-extension-uri', 'another-extension'])
       );
     });
 
@@ -331,18 +282,15 @@ describe('A2AExpressApp', () => {
       };
 
       const requestBody = createRpcRequest('test-id');
-      const uriExtensionsValues =
-        'activated-extension, non-activated-extension';
+      const uriExtensionsValues = 'activated-extension, non-activated-extension';
 
-      handleStub.callsFake(
-        async (requestBody: any, serverCallContext: ServerCallContext) => {
-          const firstRequestedExtension = serverCallContext.requestedExtensions
-            ?.values()
-            .next().value;
-          serverCallContext.addActivatedExtension(firstRequestedExtension);
-          return mockResponse;
-        },
-      );
+      handleStub.callsFake(async (requestBody: any, serverCallContext: ServerCallContext) => {
+        const firstRequestedExtension = serverCallContext.requestedExtensions
+          ?.values()
+          .next().value;
+        serverCallContext.addActivatedExtension(firstRequestedExtension);
+        return mockResponse;
+      });
       const response = await request(expressApp)
         .post('/')
         .set('X-A2A-Extensions', uriExtensionsValues)
@@ -357,11 +305,7 @@ describe('A2AExpressApp', () => {
   describe('middleware integration', () => {
     it('should apply custom middlewares to routes', async () => {
       const middlewareCalled = sinon.spy();
-      const testMiddleware = (
-        _req: Request,
-        _res: Response,
-        next: NextFunction,
-      ) => {
+      const testMiddleware = (_req: Request, _res: Response, next: NextFunction) => {
         middlewareCalled();
         next();
       };
@@ -375,11 +319,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle middleware errors', async () => {
-      const errorMiddleware = (
-        _req: Request,
-        _res: Response,
-        next: NextFunction,
-      ) => {
+      const errorMiddleware = (_req: Request, _res: Response, next: NextFunction) => {
         next(new Error('Middleware error'));
       };
 
@@ -423,8 +363,7 @@ describe('A2AExpressApp', () => {
       const jsonApp = express();
       app.setupRoutes(jsonApp);
 
-      const requestBody =
-        '{"jsonrpc": "2.0", "method": "message/send", "id": "1"'; // Missing closing brace
+      const requestBody = '{"jsonrpc": "2.0", "method": "message/send", "id": "1"'; // Missing closing brace
       const response = await request(jsonApp)
         .post('/')
         .set('Content-Type', 'application/json') // Set header to trigger json parser

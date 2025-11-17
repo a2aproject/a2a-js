@@ -1,9 +1,4 @@
-import {
-  Message,
-  Task,
-  TaskArtifactUpdateEvent,
-  TaskStatusUpdateEvent,
-} from '../types.js';
+import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../types.js';
 import { AgentExecutionEvent } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
 
@@ -39,13 +34,10 @@ export class ResultManager {
       if (this.latestUserMessage) {
         if (
           !this.currentTask.history?.find(
-            (msg) => msg.messageId === this.latestUserMessage!.messageId,
+            (msg) => msg.messageId === this.latestUserMessage!.messageId
           )
         ) {
-          this.currentTask.history = [
-            this.latestUserMessage,
-            ...(this.currentTask.history || []),
-          ];
+          this.currentTask.history = [this.latestUserMessage, ...(this.currentTask.history || [])];
         }
       }
       await this.saveCurrentTask();
@@ -57,7 +49,7 @@ export class ResultManager {
           // Add message to history if not already present
           if (
             !this.currentTask.history?.find(
-              (msg) => msg.messageId === updateEvent.status.message!.messageId,
+              (msg) => msg.messageId === updateEvent.status.message!.messageId
             )
           ) {
             this.currentTask.history = [
@@ -77,8 +69,7 @@ export class ResultManager {
           if (updateEvent.status.message) {
             if (
               !this.currentTask.history?.find(
-                (msg) =>
-                  msg.messageId === updateEvent.status.message!.messageId,
+                (msg) => msg.messageId === updateEvent.status.message!.messageId
               )
             ) {
               this.currentTask.history = [
@@ -90,7 +81,7 @@ export class ResultManager {
           await this.saveCurrentTask();
         } else {
           console.warn(
-            `ResultManager: Received status update for unknown task ${updateEvent.taskId}`,
+            `ResultManager: Received status update for unknown task ${updateEvent.taskId}`
           );
         }
       }
@@ -103,27 +94,24 @@ export class ResultManager {
           this.currentTask.artifacts = [];
         }
         const existingArtifactIndex = this.currentTask.artifacts.findIndex(
-          (art) => art.artifactId === artifactEvent.artifact.artifactId,
+          (art) => art.artifactId === artifactEvent.artifact.artifactId
         );
         if (existingArtifactIndex !== -1) {
           if (artifactEvent.append) {
             // Basic append logic, assuming parts are compatible
             // More sophisticated merging might be needed for specific part types
-            const existingArtifact =
-              this.currentTask.artifacts[existingArtifactIndex];
+            const existingArtifact = this.currentTask.artifacts[existingArtifactIndex];
             existingArtifact.parts.push(...artifactEvent.artifact.parts);
             if (artifactEvent.artifact.description)
               existingArtifact.description = artifactEvent.artifact.description;
-            if (artifactEvent.artifact.name)
-              existingArtifact.name = artifactEvent.artifact.name;
+            if (artifactEvent.artifact.name) existingArtifact.name = artifactEvent.artifact.name;
             if (artifactEvent.artifact.metadata)
               existingArtifact.metadata = {
                 ...existingArtifact.metadata,
                 ...artifactEvent.artifact.metadata,
               };
           } else {
-            this.currentTask.artifacts[existingArtifactIndex] =
-              artifactEvent.artifact;
+            this.currentTask.artifacts[existingArtifactIndex] = artifactEvent.artifact;
           }
         } else {
           this.currentTask.artifacts.push(artifactEvent.artifact);
@@ -137,16 +125,15 @@ export class ResultManager {
           if (!this.currentTask.artifacts) this.currentTask.artifacts = [];
           // Apply artifact update logic (as above)
           const existingArtifactIndex = this.currentTask.artifacts.findIndex(
-            (art) => art.artifactId === artifactEvent.artifact.artifactId,
+            (art) => art.artifactId === artifactEvent.artifact.artifactId
           );
           if (existingArtifactIndex !== -1) {
             if (artifactEvent.append) {
               this.currentTask.artifacts[existingArtifactIndex].parts.push(
-                ...artifactEvent.artifact.parts,
+                ...artifactEvent.artifact.parts
               );
             } else {
-              this.currentTask.artifacts[existingArtifactIndex] =
-                artifactEvent.artifact;
+              this.currentTask.artifacts[existingArtifactIndex] = artifactEvent.artifact;
             }
           } else {
             this.currentTask.artifacts.push(artifactEvent.artifact);
@@ -154,7 +141,7 @@ export class ResultManager {
           await this.saveCurrentTask();
         } else {
           console.warn(
-            `ResultManager: Received artifact update for unknown task ${artifactEvent.taskId}`,
+            `ResultManager: Received artifact update for unknown task ${artifactEvent.taskId}`
           );
         }
       }

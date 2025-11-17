@@ -23,9 +23,7 @@ import { ai } from './genkit.js';
 import { searchMovies, searchPeople } from './tools.js';
 
 if (!process.env.GEMINI_API_KEY || !process.env.TMDB_API_KEY) {
-  console.error(
-    'GEMINI_API_KEY and TMDB_API_KEY environment variables are required',
-  );
+  console.error('GEMINI_API_KEY and TMDB_API_KEY environment variables are required');
   process.exit(1);
 }
 
@@ -41,18 +39,12 @@ const movieAgentPrompt = ai.prompt('movie_agent');
 class MovieAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
 
-  public cancelTask = async (
-    taskId: string,
-    _eventBus: ExecutionEventBus,
-  ): Promise<void> => {
+  public cancelTask = async (taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {
     this.cancelledTasks.add(taskId);
     // The execute loop is responsible for publishing the final state
   };
 
-  async execute(
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus,
-  ): Promise<void> {
+  async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const userMessage = requestContext.userMessage;
     const existingTask = requestContext.task;
 
@@ -61,7 +53,7 @@ class MovieAgentExecutor implements AgentExecutor {
     const contextId = requestContext.contextId;
 
     console.log(
-      `[MovieAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`,
+      `[MovieAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
     );
 
     // 1. Publish initial Task event if it's a new task
@@ -91,9 +83,7 @@ class MovieAgentExecutor implements AgentExecutor {
           kind: 'message',
           role: 'agent',
           messageId: uuidv4(),
-          parts: [
-            { kind: 'text', text: 'Processing your question, hang tight!' },
-          ],
+          parts: [{ kind: 'text', text: 'Processing your question, hang tight!' }],
           taskId: taskId,
           contextId: contextId,
         },
@@ -114,9 +104,7 @@ class MovieAgentExecutor implements AgentExecutor {
       .map((m) => ({
         role: (m.role === 'agent' ? 'model' : 'user') as 'user' | 'model',
         content: m.parts
-          .filter(
-            (p): p is TextPart => p.kind === 'text' && !!(p as TextPart).text,
-          )
+          .filter((p): p is TextPart => p.kind === 'text' && !!(p as TextPart).text)
           .map((p) => ({
             text: (p as TextPart).text,
           })),
@@ -125,7 +113,7 @@ class MovieAgentExecutor implements AgentExecutor {
 
     if (messages.length === 0) {
       console.warn(
-        `[MovieAgentExecutor] No valid text messages found in history for task ${taskId}.`,
+        `[MovieAgentExecutor] No valid text messages found in history for task ${taskId}.`
       );
       const failureUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
@@ -160,14 +148,12 @@ class MovieAgentExecutor implements AgentExecutor {
         {
           messages,
           tools: [searchMovies, searchPeople],
-        },
+        }
       );
 
       // Check if the request has been cancelled
       if (this.cancelledTasks.has(taskId)) {
-        console.log(
-          `[MovieAgentExecutor] Request cancelled for task: ${taskId}`,
-        );
+        console.log(`[MovieAgentExecutor] Request cancelled for task: ${taskId}`);
 
         const cancelledUpdate: TaskStatusUpdateEvent = {
           kind: 'status-update',
@@ -200,7 +186,7 @@ class MovieAgentExecutor implements AgentExecutor {
         finalA2AState = 'input-required';
       } else {
         console.warn(
-          `[MovieAgentExecutor] Unexpected final state line from prompt: ${finalStateLine}. Defaulting to 'completed'.`,
+          `[MovieAgentExecutor] Unexpected final state line from prompt: ${finalStateLine}. Defaulting to 'completed'.`
         );
         finalA2AState = 'completed'; // Default if LLM deviates
       }
@@ -230,14 +216,9 @@ class MovieAgentExecutor implements AgentExecutor {
       };
       eventBus.publish(finalUpdate);
 
-      console.log(
-        `[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`,
-      );
+      console.log(`[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`);
     } catch (error: any) {
-      console.error(
-        `[MovieAgentExecutor] Error processing task ${taskId}:`,
-        error,
-      );
+      console.error(`[MovieAgentExecutor] Error processing task ${taskId}:`, error);
       const errorUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId: taskId,
@@ -265,8 +246,7 @@ class MovieAgentExecutor implements AgentExecutor {
 
 const movieAgentCard: AgentCard = {
   name: 'Movie Agent',
-  description:
-    'An agent that can answer questions about movies and actors using TMDB.',
+  description: 'An agent that can answer questions about movies and actors using TMDB.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp
   provider: {
@@ -288,8 +268,7 @@ const movieAgentCard: AgentCard = {
     {
       id: 'general_movie_chat',
       name: 'General Movie Chat',
-      description:
-        'Answer general questions or chat about movies, actors, directors.',
+      description: 'Answer general questions or chat about movies, actors, directors.',
       tags: ['movies', 'actors', 'directors'],
       examples: [
         'Tell me about the plot of Inception.',
@@ -314,11 +293,7 @@ async function main() {
   const agentExecutor: AgentExecutor = new MovieAgentExecutor();
 
   // 3. Create DefaultRequestHandler
-  const requestHandler = new DefaultRequestHandler(
-    movieAgentCard,
-    taskStore,
-    agentExecutor,
-  );
+  const requestHandler = new DefaultRequestHandler(movieAgentCard, taskStore, agentExecutor);
 
   // 4. Create and setup A2AExpressApp
   const appBuilder = new A2AExpressApp(requestHandler);
@@ -330,12 +305,8 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(
-      `[MovieAgent] Server using new framework started on http://localhost:${PORT}`,
-    );
-    console.log(
-      `[MovieAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`,
-    );
+    console.log(`[MovieAgent] Server using new framework started on http://localhost:${PORT}`);
+    console.log(`[MovieAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
     console.log('[MovieAgent] Press Ctrl+C to stop the server');
   });
 }

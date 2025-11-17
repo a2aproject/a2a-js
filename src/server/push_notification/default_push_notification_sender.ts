@@ -20,7 +20,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
   constructor(
     pushNotificationStore: PushNotificationStore,
-    options: DefaultPushNotificationSenderOptions = {},
+    options: DefaultPushNotificationSenderOptions = {}
   ) {
     this.pushNotificationStore = pushNotificationStore;
     this.notificationChain = new Map();
@@ -37,8 +37,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       return;
     }
 
-    const lastPromise =
-      this.notificationChain.get(task.id) ?? Promise.resolve();
+    const lastPromise = this.notificationChain.get(task.id) ?? Promise.resolve();
     // Chain promises to ensure notifications for the same task are sent sequentially.
     // Once the promise is resolved, the Garbage Collector will clean it up if there are no other references to it.
     // This will prevent memory to linearly grow with the number of notifications sent.
@@ -49,7 +48,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         } catch (error) {
           console.error(
             `Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`,
-            error,
+            error
           );
         }
       });
@@ -67,15 +66,12 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
   private async _dispatchNotification(
     task: Task,
-    pushConfig: PushNotificationConfig,
+    pushConfig: PushNotificationConfig
   ): Promise<void> {
     const url = pushConfig.url;
     const controller = new AbortController();
     // Abort the request if it takes longer than the configured timeout.
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      this.options.timeout,
-    );
+    const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
     try {
       const headers: Record<string, string> = {
@@ -97,9 +93,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      console.info(
-        `Push notification sent for task_id=${task.id} to URL: ${url}`,
-      );
+      console.info(`Push notification sent for task_id=${task.id} to URL: ${url}`);
     } finally {
       clearTimeout(timeoutId);
     }
