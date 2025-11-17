@@ -23,12 +23,16 @@ import {
   ListTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigResponse,
   DeleteTaskPushNotificationConfigResponse,
-  DeleteTaskPushNotificationConfigParams
+  DeleteTaskPushNotificationConfigParams,
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
-import { AGENT_CARD_PATH } from "../constants.js";
+import { AGENT_CARD_PATH } from '../constants.js';
 
 // Helper type for the data yielded by streaming methods
-type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
+type A2AStreamEventData =
+  | Message
+  | Task
+  | TaskStatusUpdateEvent
+  | TaskArtifactUpdateEvent;
 
 export interface A2AClientOptions {
   agentCardPath?: string;
@@ -52,19 +56,26 @@ export class A2AClient {
   constructor(agentCard: AgentCard | string, options?: A2AClientOptions) {
     this.customFetchImpl = options?.fetchImpl;
     if (typeof agentCard === 'string') {
-      console.warn("Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.");
-      this.agentCardPromise = this._fetchAndCacheAgentCard( agentCard, options?.agentCardPath );
+      console.warn(
+        'Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.',
+      );
+      this.agentCardPromise = this._fetchAndCacheAgentCard(
+        agentCard,
+        options?.agentCardPath,
+      );
     } else {
-        if (!agentCard.url) {
-            throw new Error("Provided Agent Card does not contain a valid 'url' for the service endpoint.");
-        }
-        this.serviceEndpointUrl = agentCard.url;
-        this.agentCardPromise = Promise.resolve(agentCard);
+      if (!agentCard.url) {
+        throw new Error(
+          "Provided Agent Card does not contain a valid 'url' for the service endpoint.",
+        );
+      }
+      this.serviceEndpointUrl = agentCard.url;
+      this.agentCardPromise = Promise.resolve(agentCard);
     }
   }
 
   /**
-   * Dynamically resolves the fetch implementation to use for requests. 
+   * Dynamically resolves the fetch implementation to use for requests.
    * Prefers a custom implementation if provided, otherwise falls back to the global fetch.
    * @returns The fetch implementation.
    * @param args Arguments to pass to the fetch implementation.
@@ -79,8 +90,8 @@ export class A2AClient {
     }
     throw new Error(
       'A `fetch` implementation was not provided and is not available in the global scope. ' +
-      'Please provide a `fetchImpl` in the A2AClientOptions. ' +
-      'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+        'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+        'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.',
     );
   }
 
@@ -90,10 +101,13 @@ export class A2AClient {
    * @param options Optional. The options for the A2AClient including the fetch/auth implementation.
    * @returns A Promise that resolves to a new A2AClient instance.
    */
-  public static async fromCardUrl(agentCardUrl: string, options?: A2AClientOptions): Promise<A2AClient> {
+  public static async fromCardUrl(
+    agentCardUrl: string,
+    options?: A2AClientOptions,
+  ): Promise<A2AClient> {
     const fetchImpl = options?.fetchImpl;
     const requestInit = {
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
     };
 
     let response: Response;
@@ -105,21 +119,25 @@ export class A2AClient {
     } else {
       throw new Error(
         'A `fetch` implementation was not provided and is not available in the global scope. ' +
-        'Please provide a `fetchImpl` in the A2AClientOptions. ' +
-        'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+          'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+          'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.',
       );
     }
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`,
+      );
     }
 
     let agentCard: AgentCard;
     try {
       agentCard = await response.json();
     } catch (error) {
-      console.error("Failed to parse Agent Card JSON:", error);
-      throw new Error(`Failed to parse Agent Card JSON from ${agentCardUrl}. Original error: ${(error as Error).message}`);
+      console.error('Failed to parse Agent Card JSON:', error);
+      throw new Error(
+        `Failed to parse Agent Card JSON from ${agentCardUrl}. Original error: ${(error as Error).message}`,
+      );
     }
 
     return new A2AClient(agentCard, options);
@@ -133,18 +151,18 @@ export class A2AClient {
    */
   private async _postRpcRequest<TParams, TResponse extends JSONRPCResponse>(
     method: string,
-    params: TParams
+    params: TParams,
   ): Promise<TResponse> {
     const endpoint = await this._getServiceEndpoint();
     const requestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
-      jsonrpc: "2.0",
+      jsonrpc: '2.0',
       method,
-      params: params as { [key: string]: any; }, // Cast because TParams structure varies per method
+      params: params as { [key: string]: any }, // Cast because TParams structure varies per method
       id: requestId,
     };
 
-    const httpResponse = await this._fetchRpc( endpoint, rpcRequest );
+    const httpResponse = await this._fetchRpc(endpoint, rpcRequest);
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
@@ -153,22 +171,32 @@ export class A2AClient {
         errorBodyText = await httpResponse.text();
         errorJson = JSON.parse(errorBodyText);
       } catch (e: any) {
-        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`, {cause: e});
+        throw new Error(
+          `HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`,
+          { cause: e },
+        );
       }
       // If the body is a valid JSON-RPC error response, return it as a proper JSON-RPC error response.
       if (errorJson.jsonrpc && errorJson.error) {
         return errorJson as TResponse;
-      } else if (!errorJson.jsonrpc && errorJson.error) { // Check if it's a JSON-RPC error structure
-        throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`);
+      } else if (!errorJson.jsonrpc && errorJson.error) {
+        // Check if it's a JSON-RPC error structure
+        throw new Error(
+          `RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code}, HTTP Status: ${httpResponse.status}) Data: ${JSON.stringify(errorJson.error.data || {})}`,
+        );
       }
-      throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
+      throw new Error(
+        `HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`,
+      );
     }
 
     const rpcResponse = await httpResponse.json();
 
     if (rpcResponse.id !== requestId) {
       // This is a significant issue for request-response matching.
-      console.error(`CRITICAL: RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}. This may lead to incorrect response handling.`);
+      console.error(
+        `CRITICAL: RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}. This may lead to incorrect response handling.`,
+      );
       // Depending on strictness, one might throw an error here.
       // throw new Error(`RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}`);
     }
@@ -183,14 +211,18 @@ export class A2AClient {
    * @param acceptHeader The Accept header to use.  Defaults to "application/json".
    * @returns A Promise that resolves to the fetch HTTP response.
    */
-  private async _fetchRpc( url: string, rpcRequest: JSONRPCRequest, acceptHeader: string = "application/json" ): Promise<Response> {
+  private async _fetchRpc(
+    url: string,
+    rpcRequest: JSONRPCRequest,
+    acceptHeader: string = 'application/json',
+  ): Promise<Response> {
     const requestInit: RequestInit = {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "Accept": acceptHeader, // Expect JSON response for non-streaming requests
+        'Content-Type': 'application/json',
+        Accept: acceptHeader, // Expect JSON response for non-streaming requests
       },
-      body: JSON.stringify(rpcRequest)
+      body: JSON.stringify(rpcRequest),
     };
 
     return this._fetch(url, requestInit);
@@ -204,8 +236,13 @@ export class A2AClient {
    * @param params The parameters for sending the message, including the message content and configuration.
    * @returns A Promise resolving to SendMessageResponse, which can be a Message, Task, or an error.
    */
-  public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
-    return this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
+  public async sendMessage(
+    params: MessageSendParams,
+  ): Promise<SendMessageResponse> {
+    return this._postRpcRequest<MessageSendParams, SendMessageResponse>(
+      'message/send',
+      params,
+    );
   }
 
   /**
@@ -217,46 +254,69 @@ export class A2AClient {
    * @returns An AsyncGenerator yielding A2AStreamEventData (Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent).
    * The generator throws an error if streaming is not supported or if an HTTP/SSE error occurs.
    */
-  public async *sendMessageStream(params: MessageSendParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  public async *sendMessageStream(
+    params: MessageSendParams,
+  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const agentCard = await this.agentCardPromise; // Ensure agent card is fetched
     if (!agentCard.capabilities?.streaming) {
-      throw new Error("Agent does not support streaming (AgentCard.capabilities.streaming is not true).");
+      throw new Error(
+        'Agent does not support streaming (AgentCard.capabilities.streaming is not true).',
+      );
     }
 
     const endpoint = await this._getServiceEndpoint();
     const clientRequestId = this.requestIdCounter++; // Use a unique ID for this stream request
-    const rpcRequest: JSONRPCRequest = { // This is the initial JSON-RPC request to establish the stream
-      jsonrpc: "2.0",
-      method: "message/stream",
-      params: params as { [key: string]: any; },
+    const rpcRequest: JSONRPCRequest = {
+      // This is the initial JSON-RPC request to establish the stream
+      jsonrpc: '2.0',
+      method: 'message/stream',
+      params: params as { [key: string]: any },
       id: clientRequestId,
     };
 
-    const response = await this._fetchRpc( endpoint, rpcRequest, "text/event-stream" );
+    const response = await this._fetchRpc(
+      endpoint,
+      rpcRequest,
+      'text/event-stream',
+    );
 
     if (!response.ok) {
       // Attempt to read error body for more details
-      let errorBody = "";
+      let errorBody = '';
       let errorJson: any = {};
       try {
         errorBody = await response.text();
         errorJson = JSON.parse(errorBody);
       } catch (e: any) {
-        throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`, {cause: e});
+        throw new Error(
+          `HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`,
+          { cause: e },
+        );
       }
       if (errorJson.error) {
-        throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
+        throw new Error(
+          `HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`,
+        );
       }
-      throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}`,
+      );
     }
-    if (!response.headers.get("Content-Type")?.startsWith("text/event-stream")) {
+    if (
+      !response.headers.get('Content-Type')?.startsWith('text/event-stream')
+    ) {
       // Server should explicitly set this content type for SSE.
-      throw new Error("Invalid response Content-Type for SSE stream. Expected 'text/event-stream'.");
+      throw new Error(
+        "Invalid response Content-Type for SSE stream. Expected 'text/event-stream'.",
+      );
     }
 
     // Yield events from the parsed SSE stream.
     // Each event's 'data' field is a JSON-RPC response.
-    yield* this._parseA2ASseStream<A2AStreamEventData>(response, clientRequestId);
+    yield* this._parseA2ASseStream<A2AStreamEventData>(
+      response,
+      clientRequestId,
+    );
   }
 
   /**
@@ -265,16 +325,20 @@ export class A2AClient {
    * @param params Parameters containing the taskId and the TaskPushNotificationConfig.
    * @returns A Promise resolving to SetTaskPushNotificationConfigResponse.
    */
-  public async setTaskPushNotificationConfig(params: TaskPushNotificationConfig): Promise<SetTaskPushNotificationConfigResponse> {
+  public async setTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig,
+  ): Promise<SetTaskPushNotificationConfigResponse> {
     const agentCard = await this.agentCardPromise;
     if (!agentCard.capabilities?.pushNotifications) {
-      throw new Error("Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).");
+      throw new Error(
+        'Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).',
+      );
     }
     // The 'params' directly matches the structure expected by the RPC method.
-    return this._postRpcRequest<TaskPushNotificationConfig, SetTaskPushNotificationConfigResponse>(
-      "tasks/pushNotificationConfig/set",
-      params
-    );
+    return this._postRpcRequest<
+      TaskPushNotificationConfig,
+      SetTaskPushNotificationConfigResponse
+    >('tasks/pushNotificationConfig/set', params);
   }
 
   /**
@@ -282,12 +346,14 @@ export class A2AClient {
    * @param params Parameters containing the taskId.
    * @returns A Promise resolving to GetTaskPushNotificationConfigResponse.
    */
-  public async getTaskPushNotificationConfig(params: TaskIdParams): Promise<GetTaskPushNotificationConfigResponse> {
+  public async getTaskPushNotificationConfig(
+    params: TaskIdParams,
+  ): Promise<GetTaskPushNotificationConfigResponse> {
     // The 'params' (TaskIdParams) directly matches the structure expected by the RPC method.
-    return this._postRpcRequest<TaskIdParams, GetTaskPushNotificationConfigResponse>(
-      "tasks/pushNotificationConfig/get",
-      params
-    );
+    return this._postRpcRequest<
+      TaskIdParams,
+      GetTaskPushNotificationConfigResponse
+    >('tasks/pushNotificationConfig/get', params);
   }
 
   /**
@@ -295,11 +361,13 @@ export class A2AClient {
    * @param params Parameters containing the taskId.
    * @returns A Promise resolving to ListTaskPushNotificationConfigResponse.
    */
-  public async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams): Promise<ListTaskPushNotificationConfigResponse> {
-    return this._postRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigResponse>(
-      "tasks/pushNotificationConfig/list",
-      params
-    );
+  public async listTaskPushNotificationConfig(
+    params: ListTaskPushNotificationConfigParams,
+  ): Promise<ListTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<
+      ListTaskPushNotificationConfigParams,
+      ListTaskPushNotificationConfigResponse
+    >('tasks/pushNotificationConfig/list', params);
   }
 
   /**
@@ -307,13 +375,14 @@ export class A2AClient {
    * @param params Parameters containing the taskId and push notification configuration ID.
    * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
    */
-  public async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<DeleteTaskPushNotificationConfigResponse> {
-    return this._postRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>(
-      "tasks/pushNotificationConfig/delete",
-      params
-    );
+  public async deleteTaskPushNotificationConfig(
+    params: DeleteTaskPushNotificationConfigParams,
+  ): Promise<DeleteTaskPushNotificationConfigResponse> {
+    return this._postRpcRequest<
+      DeleteTaskPushNotificationConfigParams,
+      DeleteTaskPushNotificationConfigResponse
+    >('tasks/pushNotificationConfig/delete', params);
   }
-
 
   /**
    * Retrieves a task by its ID.
@@ -321,7 +390,10 @@ export class A2AClient {
    * @returns A Promise resolving to GetTaskResponse, which contains the Task object or an error.
    */
   public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
-    return this._postRpcRequest<TaskQueryParams, GetTaskResponse>("tasks/get", params);
+    return this._postRpcRequest<TaskQueryParams, GetTaskResponse>(
+      'tasks/get',
+      params,
+    );
   }
 
   /**
@@ -330,21 +402,29 @@ export class A2AClient {
    * @returns A Promise resolving to CancelTaskResponse, which contains the updated Task object or an error.
    */
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
-    return this._postRpcRequest<TaskIdParams, CancelTaskResponse>("tasks/cancel", params);
+    return this._postRpcRequest<TaskIdParams, CancelTaskResponse>(
+      'tasks/cancel',
+      params,
+    );
   }
 
   /**
    * @template TExtensionParams The type of parameters for the custom extension method.
-   * @template TExtensionResponse The type of response expected from the custom extension method. 
+   * @template TExtensionResponse The type of response expected from the custom extension method.
    * This should extend JSONRPCResponse. This ensures the extension response is still a valid A2A response.
    * @param method Custom JSON-RPC method defined in the AgentCard's extensions.
    * @param params Extension paramters defined in the AgentCard's extensions.
    * @returns A Promise that resolves to the RPC response.
    */
-  public async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams) {
-    return this._postRpcRequest<TExtensionParams, TExtensionResponse>(method, params);
+  public async callExtensionMethod<
+    TExtensionParams,
+    TExtensionResponse extends JSONRPCResponse,
+  >(method: string, params: TExtensionParams) {
+    return this._postRpcRequest<TExtensionParams, TExtensionResponse>(
+      method,
+      params,
+    );
   }
-
 
   /**
    * Resubscribes to a task's event stream using Server-Sent Events (SSE).
@@ -353,52 +433,71 @@ export class A2AClient {
    * @param params Parameters containing the taskId.
    * @returns An AsyncGenerator yielding A2AStreamEventData (Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent).
    */
-  public async *resubscribeTask(params: TaskIdParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  public async *resubscribeTask(
+    params: TaskIdParams,
+  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const agentCard = await this.agentCardPromise;
     if (!agentCard.capabilities?.streaming) {
-      throw new Error("Agent does not support streaming (required for tasks/resubscribe).");
+      throw new Error(
+        'Agent does not support streaming (required for tasks/resubscribe).',
+      );
     }
 
     const endpoint = await this._getServiceEndpoint();
     const clientRequestId = this.requestIdCounter++; // Unique ID for this resubscribe request
-    const rpcRequest: JSONRPCRequest = { // Initial JSON-RPC request to establish the stream
-      jsonrpc: "2.0",
-      method: "tasks/resubscribe",
-      params: params as { [key: string]: any; },
+    const rpcRequest: JSONRPCRequest = {
+      // Initial JSON-RPC request to establish the stream
+      jsonrpc: '2.0',
+      method: 'tasks/resubscribe',
+      params: params as { [key: string]: any },
       id: clientRequestId,
     };
 
     const response = await this._fetch(endpoint, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "Accept": "text/event-stream",
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
       },
       body: JSON.stringify(rpcRequest),
     });
 
     if (!response.ok) {
-      let errorBody = "";
+      let errorBody = '';
       let errorJson: any = {};
       try {
         errorBody = await response.text();
         errorJson = JSON.parse(errorBody);
       } catch (e: any) {
         if (e.message.startsWith('HTTP error establishing stream')) throw e;
-        throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`, {cause: e});
+        throw new Error(
+          `HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`,
+          { cause: e },
+        );
       }
       if (errorJson.error) {
-        throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
+        throw new Error(
+          `HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`,
+        );
       }
-      throw new Error(`HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `HTTP error establishing stream for tasks/resubscribe: ${response.status} ${response.statusText}`,
+      );
     }
-    if (!response.headers.get("Content-Type")?.startsWith("text/event-stream")) {
-      throw new Error("Invalid response Content-Type for SSE stream on resubscribe. Expected 'text/event-stream'.");
+    if (
+      !response.headers.get('Content-Type')?.startsWith('text/event-stream')
+    ) {
+      throw new Error(
+        "Invalid response Content-Type for SSE stream on resubscribe. Expected 'text/event-stream'.",
+      );
     }
 
     // The events structure for resubscribe is assumed to be the same as message/stream.
     // Each event's 'data' field is a JSON-RPC response.
-    yield* this._parseA2ASseStream<A2AStreamEventData>(response, clientRequestId);
+    yield* this._parseA2ASseStream<A2AStreamEventData>(
+      response,
+      clientRequestId,
+    );
   }
 
   /**
@@ -412,14 +511,16 @@ export class A2AClient {
    */
   private async *_parseA2ASseStream<TStreamItem>(
     response: Response,
-    originalRequestId: number | string | null
+    originalRequestId: number | string | null,
   ): AsyncGenerator<TStreamItem, void, undefined> {
     if (!response.body) {
-      throw new Error("SSE response body is undefined. Cannot read stream.");
+      throw new Error('SSE response body is undefined. Cannot read stream.');
     }
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = ""; // Holds incomplete lines from the stream
-    let eventDataBuffer = ""; // Holds accumulated 'data:' lines for the current event
+    const reader = response.body
+      .pipeThrough(new TextDecoderStream())
+      .getReader();
+    let buffer = ''; // Holds incomplete lines from the stream
+    let eventDataBuffer = ''; // Holds accumulated 'data:' lines for the current event
 
     try {
       while (true) {
@@ -427,7 +528,10 @@ export class A2AClient {
         if (done) {
           // Process any final buffered event data if the stream ends abruptly after a 'data:' line
           if (eventDataBuffer.trim()) {
-            const result = this._processSseEventData<TStreamItem>(eventDataBuffer, originalRequestId);
+            const result = this._processSseEventData<TStreamItem>(
+              eventDataBuffer,
+              originalRequestId,
+            );
             yield result;
           }
           break; // Stream finished
@@ -440,17 +544,22 @@ export class A2AClient {
           const line = buffer.substring(0, lineEndIndex).trim(); // Get and trim the line
           buffer = buffer.substring(lineEndIndex + 1); // Remove processed line from buffer
 
-          if (line === "") { // Empty line: signifies the end of an event
-            if (eventDataBuffer) { // If we have accumulated data for an event
-              const result = this._processSseEventData<TStreamItem>(eventDataBuffer, originalRequestId);
+          if (line === '') {
+            // Empty line: signifies the end of an event
+            if (eventDataBuffer) {
+              // If we have accumulated data for an event
+              const result = this._processSseEventData<TStreamItem>(
+                eventDataBuffer,
+                originalRequestId,
+              );
               yield result;
-              eventDataBuffer = ""; // Reset buffer for the next event
+              eventDataBuffer = ''; // Reset buffer for the next event
             }
-          } else if (line.startsWith("data:")) {
-            eventDataBuffer += line.substring(5).trimStart() + "\n"; // Append data (multi-line data is possible)
-          } else if (line.startsWith(":")) {
+          } else if (line.startsWith('data:')) {
+            eventDataBuffer += line.substring(5).trimStart() + '\n'; // Append data (multi-line data is possible)
+          } else if (line.startsWith(':')) {
             // This is a comment line in SSE, ignore it.
-          } else if (line.includes(":")) {
+          } else if (line.includes(':')) {
             // Other SSE fields like 'event:', 'id:', 'retry:'.
             // The A2A spec primarily focuses on the 'data' field for JSON-RPC payloads.
             // For now, we don't specifically handle these other SSE fields unless required by spec.
@@ -459,7 +568,7 @@ export class A2AClient {
       }
     } catch (error: any) {
       // Log and re-throw errors encountered during stream processing
-      console.error("Error reading or parsing SSE stream:", error.message);
+      console.error('Error reading or parsing SSE stream:', error.message);
       throw error;
     } finally {
       reader.releaseLock(); // Ensure the reader lock is released
@@ -475,62 +584,85 @@ export class A2AClient {
    */
   private _processSseEventData<TStreamItem>(
     jsonData: string,
-    originalRequestId: number | string | null
+    originalRequestId: number | string | null,
   ): TStreamItem {
     if (!jsonData.trim()) {
-      throw new Error("Attempted to process empty SSE event data.");
+      throw new Error('Attempted to process empty SSE event data.');
     }
     try {
       // SSE data can be multi-line, ensure it's treated as a single JSON string.
       const sseJsonRpcResponse = JSON.parse(jsonData.replace(/\n$/, '')); // Remove trailing newline if any
 
       // Type assertion to SendStreamingMessageResponse, as this is the expected structure for A2A streams.
-      const a2aStreamResponse: SendStreamingMessageResponse = sseJsonRpcResponse as SendStreamingMessageResponse;
+      const a2aStreamResponse: SendStreamingMessageResponse =
+        sseJsonRpcResponse as SendStreamingMessageResponse;
 
       if (a2aStreamResponse.id !== originalRequestId) {
         // According to JSON-RPC spec, notifications (which SSE events can be seen as) might not have an ID,
         // or if they do, it should match. A2A spec implies streamed events are tied to the initial request.
-        console.warn(`SSE Event's JSON-RPC response ID mismatch. Client request ID: ${originalRequestId}, event response ID: ${a2aStreamResponse.id}.`);
+        console.warn(
+          `SSE Event's JSON-RPC response ID mismatch. Client request ID: ${originalRequestId}, event response ID: ${a2aStreamResponse.id}.`,
+        );
         // Depending on strictness, this could be an error. For now, it's a warning.
       }
 
       if (this.isErrorResponse(a2aStreamResponse)) {
-        const err = a2aStreamResponse.error as (JSONRPCError | A2AError);
-        throw new Error(`SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`);
+        const err = a2aStreamResponse.error as JSONRPCError | A2AError;
+        throw new Error(
+          `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
+        );
       }
 
       // Check if 'result' exists, as it's mandatory for successful JSON-RPC responses
-      if (!('result' in a2aStreamResponse) || typeof (a2aStreamResponse as SendStreamingMessageSuccessResponse).result === 'undefined') {
-        throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
+      if (
+        !('result' in a2aStreamResponse) ||
+        typeof (a2aStreamResponse as SendStreamingMessageSuccessResponse)
+          .result === 'undefined'
+      ) {
+        throw new Error(
+          `SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`,
+        );
       }
 
-      const successResponse = a2aStreamResponse as SendStreamingMessageSuccessResponse;
+      const successResponse =
+        a2aStreamResponse as SendStreamingMessageSuccessResponse;
       return successResponse.result as TStreamItem;
     } catch (e: any) {
       // Catch errors from JSON.parse or if it's an error response that was thrown by this function
-      if (e.message.startsWith("SSE event contained an error") || e.message.startsWith("SSE event JSON-RPC response is missing 'result' field")) {
+      if (
+        e.message.startsWith('SSE event contained an error') ||
+        e.message.startsWith(
+          "SSE event JSON-RPC response is missing 'result' field",
+        )
+      ) {
         throw e; // Re-throw errors already processed/identified by this function
       }
       // For other parsing errors or unexpected structures:
-      console.error("Failed to parse SSE event data string or unexpected JSON-RPC structure:", jsonData, e);
-      throw new Error(`Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`);
+      console.error(
+        'Failed to parse SSE event data string or unexpected JSON-RPC structure:',
+        jsonData,
+        e,
+      );
+      throw new Error(
+        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`,
+      );
     }
   }
 
   isErrorResponse(response: JSONRPCResponse): response is JSONRPCErrorResponse {
-    return "error" in response;
+    return 'error' in response;
   }
 
-////////////////////////////////////////////////////////////////////////////////
-// Functions used to support old A2AClient Constructor to be deprecated soon
-// TODOs:
-// * remove `agentCardPromise`, and just use agentCard initialized
-// * _getServiceEndpoint can be made synchronous or deleted and accessed via
-//   agentCard.url
-// * getAgentCard changed to this.agentCard
-// * delete resolveAgentCardUrl(), _fetchAndCacheAgentCard(),
-//   agentCardPath from A2AClientOptions
-////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
+  // Functions used to support old A2AClient Constructor to be deprecated soon
+  // TODOs:
+  // * remove `agentCardPromise`, and just use agentCard initialized
+  // * _getServiceEndpoint can be made synchronous or deleted and accessed via
+  //   agentCard.url
+  // * getAgentCard changed to this.agentCard
+  // * delete resolveAgentCardUrl(), _fetchAndCacheAgentCard(),
+  //   agentCardPath from A2AClientOptions
+  ////////////////////////////////////////////////////////////////////////////////
 
   /**
    * Fetches the Agent Card from the agent's well-known URI and caches its service endpoint URL.
@@ -539,29 +671,39 @@ export class A2AClient {
    * @param agentCardPath path to the agent card, defaults to .well-known/agent-card.json
    * @returns A Promise that resolves to the AgentCard.
    */
-  private async _fetchAndCacheAgentCard( agentBaseUrl: string, agentCardPath?: string ): Promise<AgentCard> {
+  private async _fetchAndCacheAgentCard(
+    agentBaseUrl: string,
+    agentCardPath?: string,
+  ): Promise<AgentCard> {
     try {
-      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
+      const agentCardUrl = this.resolveAgentCardUrl(
+        agentBaseUrl,
+        agentCardPath,
+      );
       const response = await this._fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
       });
       if (!response.ok) {
-        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`,
+        );
       }
       const agentCard: AgentCard = await response.json();
       if (!agentCard.url) {
-        throw new Error("Fetched Agent Card does not contain a valid 'url' for the service endpoint.");
+        throw new Error(
+          "Fetched Agent Card does not contain a valid 'url' for the service endpoint.",
+        );
       }
       this.serviceEndpointUrl = agentCard.url; // Cache the service endpoint URL from the agent card
       return agentCard;
     } catch (error) {
-      console.error("Error fetching or parsing Agent Card:", error);
+      console.error('Error fetching or parsing Agent Card:', error);
       // Allow the promise to reject so users of agentCardPromise can handle it.
       throw error;
     }
   }
 
-    /**
+  /**
    * Retrieves the Agent Card.
    * If an `agentBaseUrl` is provided, it fetches the card from that specific URL.
    * Otherwise, it returns the card fetched and cached during client construction.
@@ -570,17 +712,25 @@ export class A2AClient {
    * If provided, this will fetch a new card, not use the cached one from the constructor's URL.
    * @returns A Promise that resolves to the AgentCard.
    */
-  public async getAgentCard(agentBaseUrl?: string, agentCardPath?: string): Promise<AgentCard> {
+  public async getAgentCard(
+    agentBaseUrl?: string,
+    agentCardPath?: string,
+  ): Promise<AgentCard> {
     if (agentBaseUrl) {
-      const agentCardUrl = this.resolveAgentCardUrl( agentBaseUrl, agentCardPath );
+      const agentCardUrl = this.resolveAgentCardUrl(
+        agentBaseUrl,
+        agentCardPath,
+      );
 
       const response = await this._fetch(agentCardUrl, {
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
       });
       if (!response.ok) {
-        throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Failed to fetch Agent Card from ${agentCardUrl}: ${response.status} ${response.statusText}`,
+        );
       }
-      return await response.json() as AgentCard;
+      return (await response.json()) as AgentCard;
     }
     // If no specific URL is given, return the promise for the initially configured agent's card.
     return this.agentCardPromise;
@@ -591,8 +741,11 @@ export class A2AClient {
    * @param agentBaseUrl The agent URL.
    * @param agentCardPath Optional relative path to the agent card, defaults to .well-known/agent-card.json
    */
-  private resolveAgentCardUrl( agentBaseUrl: string, agentCardPath: string = AGENT_CARD_PATH ): string {
-    return `${agentBaseUrl.replace(/\/$/, "")}/${agentCardPath.replace(/^\//, "")}`;
+  private resolveAgentCardUrl(
+    agentBaseUrl: string,
+    agentCardPath: string = AGENT_CARD_PATH,
+  ): string {
+    return `${agentBaseUrl.replace(/\/$/, '')}/${agentCardPath.replace(/^\//, '')}`;
   }
 
   /**
@@ -608,7 +761,9 @@ export class A2AClient {
     await this.agentCardPromise;
     if (!this.serviceEndpointUrl) {
       // This case should ideally be covered by the error handling in _fetchAndCacheAgentCard
-      throw new Error("Agent Card URL for RPC endpoint is not available. Fetching might have failed.");
+      throw new Error(
+        'Agent Card URL for RPC endpoint is not available. Fetching might have failed.',
+      );
     }
     return this.serviceEndpointUrl;
   }

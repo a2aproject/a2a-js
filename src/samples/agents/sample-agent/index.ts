@@ -1,27 +1,25 @@
-import express from "express";
-import {
-  AgentCard,
-} from "../../../index.js";
+import express from 'express';
+import { AgentCard } from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
   AgentExecutor,
-  DefaultRequestHandler
-} from "../../../server/index.js";
-import { A2AExpressApp } from "../../../server/express/index.js";
-import { SampleAgentExecutor } from "./agent_executor.js";
-
+  DefaultRequestHandler,
+} from '../../../server/index.js';
+import { A2AExpressApp } from '../../../server/express/index.js';
+import { SampleAgentExecutor } from './agent_executor.js';
 
 // --- Server Setup ---
 
 const sampleAgentCard: AgentCard = {
   name: 'Sample Agent',
-  description: 'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
+  description:
+    'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples' // Added provider URL
+    url: 'https://example.com/a2a-samples', // Added provider URL
   },
   version: '1.0.0', // Incremented version
   protocolVersion: '0.3.0',
@@ -38,9 +36,9 @@ const sampleAgentCard: AgentCard = {
       name: 'Sample Agent',
       description: 'Simulate the general flow of a streaming agent.',
       tags: ['sample'],
-      examples: ["hi", "hello world", "how are you", "goodbye"],
+      examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
-      outputModes: ['text', 'task-status'] // Explicitly defining for skill
+      outputModes: ['text', 'task-status'], // Explicitly defining for skill
     },
   ],
   supportsAuthenticatedExtendedCard: false,
@@ -57,7 +55,7 @@ async function main() {
   const requestHandler = new DefaultRequestHandler(
     sampleAgentCard,
     taskStore,
-    agentExecutor
+    agentExecutor,
   );
 
   // 4. Create and setup A2AExpressApp
@@ -70,8 +68,12 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(`[SampleAgent] Server using new framework started on http://localhost:${PORT}`);
-    console.log(`[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log(
+      `[SampleAgent] Server using new framework started on http://localhost:${PORT}`,
+    );
+    console.log(
+      `[SampleAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`,
+    );
     console.log('[SampleAgent] Press Ctrl+C to stop the server');
   });
 }

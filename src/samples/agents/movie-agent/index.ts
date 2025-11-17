@@ -1,4 +1,4 @@
-import express from "express";
+import express from 'express';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
@@ -7,23 +7,25 @@ import {
   TaskState,
   TaskStatusUpdateEvent,
   TextPart,
-  Message
-} from "../../../index.js";
+  Message,
+} from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
   AgentExecutor,
   RequestContext,
   ExecutionEventBus,
-  DefaultRequestHandler
-} from "../../../server/index.js";
-import { A2AExpressApp } from "../../../server/express/index.js";
-import { MessageData } from "genkit";
-import { ai } from "./genkit.js";
-import { searchMovies, searchPeople } from "./tools.js";
+  DefaultRequestHandler,
+} from '../../../server/index.js';
+import { A2AExpressApp } from '../../../server/express/index.js';
+import { MessageData } from 'genkit';
+import { ai } from './genkit.js';
+import { searchMovies, searchPeople } from './tools.js';
 
 if (!process.env.GEMINI_API_KEY || !process.env.TMDB_API_KEY) {
-  console.error("GEMINI_API_KEY and TMDB_API_KEY environment variables are required")
+  console.error(
+    'GEMINI_API_KEY and TMDB_API_KEY environment variables are required',
+  );
   process.exit(1);
 }
 
@@ -40,16 +42,16 @@ class MovieAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
 
   public cancelTask = async (
-        taskId: string,
-        _eventBus: ExecutionEventBus,
-    ): Promise<void> => {
-        this.cancelledTasks.add(taskId);
-        // The execute loop is responsible for publishing the final state
-    };
+    taskId: string,
+    _eventBus: ExecutionEventBus,
+  ): Promise<void> => {
+    this.cancelledTasks.add(taskId);
+    // The execute loop is responsible for publishing the final state
+  };
 
   async execute(
     requestContext: RequestContext,
-    eventBus: ExecutionEventBus
+    eventBus: ExecutionEventBus,
   ): Promise<void> {
     const userMessage = requestContext.userMessage;
     const existingTask = requestContext.task;
@@ -59,7 +61,7 @@ class MovieAgentExecutor implements AgentExecutor {
     const contextId = requestContext.contextId;
 
     console.log(
-      `[MovieAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
+      `[MovieAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`,
     );
 
     // 1. Publish initial Task event if it's a new task
@@ -89,7 +91,9 @@ class MovieAgentExecutor implements AgentExecutor {
           kind: 'message',
           role: 'agent',
           messageId: uuidv4(),
-          parts: [{ kind: 'text', text: 'Processing your question, hang tight!' }],
+          parts: [
+            { kind: 'text', text: 'Processing your question, hang tight!' },
+          ],
           taskId: taskId,
           contextId: contextId,
         },
@@ -101,16 +105,18 @@ class MovieAgentExecutor implements AgentExecutor {
 
     // 3. Prepare messages for Genkit prompt
     const historyForGenkit = contexts.get(contextId) || [];
-    if (!historyForGenkit.find(m => m.messageId === userMessage.messageId)) {
+    if (!historyForGenkit.find((m) => m.messageId === userMessage.messageId)) {
       historyForGenkit.push(userMessage);
     }
-    contexts.set(contextId, historyForGenkit)
+    contexts.set(contextId, historyForGenkit);
 
     const messages: MessageData[] = historyForGenkit
       .map((m) => ({
         role: (m.role === 'agent' ? 'model' : 'user') as 'user' | 'model',
         content: m.parts
-          .filter((p): p is TextPart => p.kind === 'text' && !!(p as TextPart).text)
+          .filter(
+            (p): p is TextPart => p.kind === 'text' && !!(p as TextPart).text,
+          )
           .map((p) => ({
             text: (p as TextPart).text,
           })),
@@ -119,7 +125,7 @@ class MovieAgentExecutor implements AgentExecutor {
 
     if (messages.length === 0) {
       console.warn(
-        `[MovieAgentExecutor] No valid text messages found in history for task ${taskId}.`
+        `[MovieAgentExecutor] No valid text messages found in history for task ${taskId}.`,
       );
       const failureUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
@@ -143,7 +149,9 @@ class MovieAgentExecutor implements AgentExecutor {
       return;
     }
 
-    const goal = existingTask?.metadata?.goal as string | undefined || userMessage.metadata?.goal as string | undefined;
+    const goal =
+      (existingTask?.metadata?.goal as string | undefined) ||
+      (userMessage.metadata?.goal as string | undefined);
 
     try {
       // 4. Run the Genkit prompt
@@ -152,12 +160,14 @@ class MovieAgentExecutor implements AgentExecutor {
         {
           messages,
           tools: [searchMovies, searchPeople],
-        }
+        },
       );
 
       // Check if the request has been cancelled
       if (this.cancelledTasks.has(taskId)) {
-        console.log(`[MovieAgentExecutor] Request cancelled for task: ${taskId}`);
+        console.log(
+          `[MovieAgentExecutor] Request cancelled for task: ${taskId}`,
+        );
 
         const cancelledUpdate: TaskStatusUpdateEvent = {
           kind: 'status-update',
@@ -177,9 +187,12 @@ class MovieAgentExecutor implements AgentExecutor {
       console.info(`[MovieAgentExecutor] Prompt response: ${responseText}`);
       const lines = responseText.trim().split('\n');
       const finalStateLine = lines.at(-1)?.trim().toUpperCase();
-      const agentReplyText = lines.slice(0, lines.length - 1).join('\n').trim();
+      const agentReplyText = lines
+        .slice(0, lines.length - 1)
+        .join('\n')
+        .trim();
 
-      let finalA2AState: TaskState = "unknown";
+      let finalA2AState: TaskState = 'unknown';
 
       if (finalStateLine === 'COMPLETED') {
         finalA2AState = 'completed';
@@ -187,7 +200,7 @@ class MovieAgentExecutor implements AgentExecutor {
         finalA2AState = 'input-required';
       } else {
         console.warn(
-          `[MovieAgentExecutor] Unexpected final state line from prompt: ${finalStateLine}. Defaulting to 'completed'.`
+          `[MovieAgentExecutor] Unexpected final state line from prompt: ${finalStateLine}. Defaulting to 'completed'.`,
         );
         finalA2AState = 'completed'; // Default if LLM deviates
       }
@@ -197,12 +210,12 @@ class MovieAgentExecutor implements AgentExecutor {
         kind: 'message',
         role: 'agent',
         messageId: uuidv4(),
-        parts: [{ kind: 'text', text: agentReplyText || "Completed." }], // Ensure some text
+        parts: [{ kind: 'text', text: agentReplyText || 'Completed.' }], // Ensure some text
         taskId: taskId,
         contextId: contextId,
       };
       historyForGenkit.push(agentMessage);
-      contexts.set(contextId, historyForGenkit)
+      contexts.set(contextId, historyForGenkit);
 
       const finalUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
@@ -218,13 +231,12 @@ class MovieAgentExecutor implements AgentExecutor {
       eventBus.publish(finalUpdate);
 
       console.log(
-        `[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`
+        `[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`,
       );
-
     } catch (error: any) {
       console.error(
         `[MovieAgentExecutor] Error processing task ${taskId}:`,
-        error
+        error,
       );
       const errorUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
@@ -253,12 +265,13 @@ class MovieAgentExecutor implements AgentExecutor {
 
 const movieAgentCard: AgentCard = {
   name: 'Movie Agent',
-  description: 'An agent that can answer questions about movies and actors using TMDB.',
+  description:
+    'An agent that can answer questions about movies and actors using TMDB.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
-  url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp 
+  url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples' // Added provider URL
+    url: 'https://example.com/a2a-samples', // Added provider URL
   },
   version: '0.0.2', // Incremented version
   capabilities: {
@@ -275,7 +288,8 @@ const movieAgentCard: AgentCard = {
     {
       id: 'general_movie_chat',
       name: 'General Movie Chat',
-      description: 'Answer general questions or chat about movies, actors, directors.',
+      description:
+        'Answer general questions or chat about movies, actors, directors.',
       tags: ['movies', 'actors', 'directors'],
       examples: [
         'Tell me about the plot of Inception.',
@@ -286,7 +300,7 @@ const movieAgentCard: AgentCard = {
         'Which came out first, Jurassic Park or Terminator 2?',
       ],
       inputModes: ['text'], // Explicitly defining for skill
-      outputModes: ['text', 'task-status'] // Explicitly defining for skill
+      outputModes: ['text', 'task-status'], // Explicitly defining for skill
     },
   ],
   supportsAuthenticatedExtendedCard: false,
@@ -303,7 +317,7 @@ async function main() {
   const requestHandler = new DefaultRequestHandler(
     movieAgentCard,
     taskStore,
-    agentExecutor
+    agentExecutor,
   );
 
   // 4. Create and setup A2AExpressApp
@@ -316,11 +330,14 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(`[MovieAgent] Server using new framework started on http://localhost:${PORT}`);
-    console.log(`[MovieAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log(
+      `[MovieAgent] Server using new framework started on http://localhost:${PORT}`,
+    );
+    console.log(
+      `[MovieAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`,
+    );
     console.log('[MovieAgent] Press Ctrl+C to stop the server');
   });
 }
 
 main().catch(console.error);
-

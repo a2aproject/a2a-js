@@ -2,9 +2,7 @@ export class ServerCallContext {
   private readonly _requestedExtensions?: Set<string>;
   private _activatedExtensions?: Set<string>;
 
-  constructor(
-    requestedExtensions?: Set<string>,
-  ) {
+  constructor(requestedExtensions?: Set<string>) {
     this._requestedExtensions = requestedExtensions;
   }
 
