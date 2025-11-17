@@ -38,3 +38,14 @@ export function isArtifactUpdate(
   // Check if it has 'parts'
   return isObject(update) && "parts" in update;
 }
+
+
+/**
+ * Used to parse the extensions extracted from the request header
+ */
+export function getRequestedExtensions(values: string | undefined): Set<string> {
+  if (!values) {
+      return new Set();
+  }
+  return new Set(values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0));
+}

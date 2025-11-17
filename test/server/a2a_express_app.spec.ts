@@ -1,5 +1,5 @@
 import 'mocha';
-import { assert } from 'chai';
+import { assert, expect } from 'chai';
 import sinon, { SinonStub } from 'sinon';
 import express, { Express, Request, Response } from 'express';
 import request from 'supertest';
@@ -10,6 +10,7 @@ import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_tra
 import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../src/index.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
+import { ServerCallContext } from '../../src/server/context.js';
 
 describe('A2AExpressApp', () => {
     let mockRequestHandler: A2ARequestHandler;
@@ -272,6 +273,55 @@ describe('A2AExpressApp', () => {
                 .expect(500);
 
             assert.equal(response.body.id, null);
+        });
+
+        it('should handle extensions headers in request', async () => {
+            const mockResponse: JSONRPCSuccessResponse = {
+                jsonrpc: '2.0',
+                id: 'test-id',
+                result: { message: 'success' }
+            };
+            handleStub.resolves(mockResponse);
+
+            const requestBody = createRpcRequest('test-id');
+            const uriExtensionsValues = 'test-extension-uri, another-extension';
+
+            await request(expressApp)
+                .post('/')
+                .set('X-A2A-Extensions', uriExtensionsValues)
+                .set('Not-Relevant-Header', 'unused-value')
+                .send(requestBody)
+                .expect(200);
+
+            assert.isTrue(handleStub.calledOnce);
+            const serverCallContext = handleStub.getCall(0).args[1];
+            expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+            expect(serverCallContext.requestedExtensions).to.deep.equal(new Set(['test-extension-uri', 'another-extension']));
+        });
+
+        it('should handle extensions headers in response', async () => {
+            const mockResponse: JSONRPCSuccessResponse = {
+                jsonrpc: '2.0',
+                id: 'test-id',
+                result: { message: 'success' }
+            };
+
+            const requestBody = createRpcRequest('test-id');
+            const uriExtensionsValues = 'activated-extension, non-activated-extension';
+
+            handleStub.callsFake(async (requestBody: any, serverCallContext: ServerCallContext) => {
+                const firstRequestedExtension = serverCallContext.requestedExtensions?.values().next().value;
+                serverCallContext.addActivatedExtension(firstRequestedExtension);                
+                return mockResponse;
+            });
+            const response = await request(expressApp)
+                .post('/')
+                .set('X-A2A-Extensions', uriExtensionsValues)
+                .set('Not-Relevant-Header', 'unused-value')
+                .send(requestBody)
+                .expect(200);
+
+            expect(response.get('X-A2A-Extensions')).to.equal('activated-extension');
         });
     });
 

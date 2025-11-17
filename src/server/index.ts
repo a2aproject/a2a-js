@@ -19,6 +19,7 @@ export type { TaskStore } from "./store.js";
 export { InMemoryTaskStore } from "./store.js";
 
 export { JsonRpcTransportHandler } from "./transports/jsonrpc_transport_handler.js";
+export { ServerCallContext } from "./context.js";
 export { A2AError } from "./error.js";
 
 export type { PushNotificationSender } from "./push_notification/push_notification_sender.js";

@@ -9,6 +9,7 @@ import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../..
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute, FailingCancellableMockAgentExecutor } from './mocks/agent-executor.mock.js';
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
+import { ServerCallContext } from '../../src/server/context.js';
 
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
@@ -27,6 +28,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         version: '1.0.0',
         protocolVersion: '0.3.0',
         capabilities: {
+            extensions: [{ 'uri': 'requested-extension-uri' }],
             streaming: true,
             pushNotifications: true,
         },
@@ -1229,4 +1231,51 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         const queue = new ExecutionEventQueue(fakeBus);
         expect(queue).to.be.instanceOf(ExecutionEventQueue);
     });
+
+    it('should pass a RequestContext with expected content to agentExecutor.execute', async () => {
+        const messageId = 'msg-expected-ctx';
+        const userMessageText = 'Verify RequestContext content.';
+        const incomingContextId = 'custom-context-id';
+        const incomingTaskId = 'custom-task-id';
+        const expectedExtension = 'requested-extension-uri';
+
+        const params: MessageSendParams = {
+            message: {
+                messageId: messageId,
+                role: 'user',
+                parts: [{ kind: 'text', text: userMessageText }],
+                kind: 'message',
+                contextId: incomingContextId,
+                taskId: incomingTaskId,
+            }
+        };
+
+        let capturedRequestContext: RequestContext | undefined;
+        (mockAgentExecutor.execute as SinonStub).callsFake(async (ctx: RequestContext, bus: ExecutionEventBus) => {
+            capturedRequestContext = ctx;
+            bus.publish({
+                id: ctx.taskId,
+                contextId: ctx.contextId,
+                status: { state: "submitted" },
+                kind: 'task'
+            });
+            bus.finished();
+        });
+
+        const fakeTask: Task = {
+                id: params.message.taskId!,
+                contextId: params.message.contextId!,
+                status: { state: 'submitted' as TaskState },
+                kind: 'task'
+            };
+        await mockTaskStore.save(fakeTask);
+        await handler.sendMessage(params, new ServerCallContext(new Set([expectedExtension, 'not-available-extension-by-agent-card'])));
+
+        expect(capturedRequestContext).to.be.instanceOf(RequestContext, 'Captured context should be an instance of RequestContext');
+        expect(capturedRequestContext?.userMessage.messageId).to.equal(messageId, 'userMessage.messageId should match');
+        expect(capturedRequestContext?.taskId).to.equal(incomingTaskId, 'taskId should match');
+        expect(capturedRequestContext?.contextId).to.equal(incomingContextId, 'contextId should match');
+        expect(capturedRequestContext?.context?.requestedExtensions).to.deep.equal(new Set([expectedExtension]), 'requestedExtensions should contain the expected extension');
+    });
+    
 });

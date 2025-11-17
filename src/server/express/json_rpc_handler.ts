@@ -3,6 +3,10 @@ import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from ".
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
 import { JsonRpcTransportHandler } from "../transports/jsonrpc_transport_handler.js";
+import { ServerCallContext } from '../context.js';
+import { getRequestedExtensions } from '../utils.js';
+import { HTTP_EXTENSION_HEADER } from "../../constants.js";
+
 
 export interface JsonRpcHandlerOptions {
     requestHandler: A2ARequestHandler;
@@ -25,8 +29,12 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
     router.post("/", async (req: Request, res: Response) => {
         try {
-            const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body);
+            const context = new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)));
+            const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
+            if (context.activatedExtensions){
+                res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
+            }
             // Check if it's an AsyncGenerator (stream)
             if (typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] === 'function') {
                 const stream = rpcResponseOrStream as AsyncGenerator<JSONRPCSuccessResponse, void, undefined>;
@@ -34,6 +42,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
                 res.setHeader('Content-Type', 'text/event-stream');
                 res.setHeader('Cache-Control', 'no-cache');
                 res.setHeader('Connection', 'keep-alive');
+
                 res.flushHeaders();
 
                 try {
