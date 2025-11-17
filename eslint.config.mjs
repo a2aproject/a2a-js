@@ -28,7 +28,6 @@ export default defineConfig(
     "rules": {
       '@typescript-eslint/no-unused-expressions': 'off', // Allow unused expressions in test files, for compatibility with 'chai'
       '@typescript-eslint/no-unsafe-function-type': 'off', // Allow unsafe Function type in test files
-      'require-yield': 'off' // Allow missing yield in test files
     }
   },
   {
