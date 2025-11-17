@@ -197,14 +197,9 @@ describe('A2AExpressApp', () => {
         });
 
         it('should handle immediate streaming error', async () => {
-            const mockImmediateErrorStream: AsyncIterable<any> = {
-                [Symbol.asyncIterator]() {
-                    return {
-                        async next(): Promise<IteratorResult<any>> {
-                            // The first call to next() immediately throws
-                            throw new A2AError(-32603, 'Immediate streaming error');
-                        }
-                    };
+            const mockImmediateErrorStream = {
+                async *[Symbol.asyncIterator]() {
+                    throw new A2AError(-32603, 'Immediate streaming error');
                 }
             };
 
