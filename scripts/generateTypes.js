@@ -1,4 +1,4 @@
-import { compile, compileFromFile } from 'json-schema-to-typescript'
+import { compile } from 'json-schema-to-typescript'
 import fs from 'fs';
 import path from 'path';
 

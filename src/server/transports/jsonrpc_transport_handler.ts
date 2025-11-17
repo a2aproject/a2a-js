@@ -1,4 +1,4 @@
-import { JSONRPCErrorResponse, MessageSendParams, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, A2ARequest, JSONRPCResponse, DeleteTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
+import { JSONRPCErrorResponse, MessageSendParams, TaskIdParams, A2ARequest, JSONRPCResponse } from "../../types.js";
 import { ServerCallContext } from "../context.js";
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";
@@ -21,7 +21,7 @@ export class JsonRpcTransportHandler {
     public async handle(
         requestBody: any, context?: ServerCallContext
     ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
-        let rpcRequest: A2ARequest;
+        let rpcRequest: A2ARequest | undefined = undefined;
 
         try {
             if (typeof requestBody === 'string') {
@@ -38,8 +38,8 @@ export class JsonRpcTransportHandler {
         } catch (error: any) {
             const a2aError = error instanceof A2AError ? error : A2AError.parseError(error.message || 'Failed to parse JSON request.');
             return {
-                jsonrpc: '2.0',
-                id: (typeof rpcRequest!?.id !== 'undefined' ? rpcRequest!.id : null),
+                jsonrpc: '2.0', 
+                id: (rpcRequest?.id !== undefined ? rpcRequest.id : null),
                 error: a2aError.toJSONRPCError(),
             } as JSONRPCErrorResponse;
         }

@@ -11,7 +11,6 @@ import {
   Message,
   Task, // Added for direct Task events
   // Other types needed for message/part handling
-  TaskState,
   FilePart,
   DataPart,
   // Type for the agent card

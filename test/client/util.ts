@@ -20,7 +20,7 @@ export function extractRequestId(options?: RequestInit): number {
   try {
     const requestBody = JSON.parse(options.body as string);
     return requestBody.id || 1;
-  } catch (e) {
+  } catch (_err) {
     // If parsing fails, use default ID
     return 1;
   }

@@ -90,7 +90,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
     
     public cancelTask = async (
         taskId: string,
-        eventBus: ExecutionEventBus,
+        _eventBus: ExecutionEventBus,
     ): Promise<void> => {
         this.cancelledTasks.add(taskId);
         // The execute loop is responsible for publishing the final state
@@ -138,8 +138,8 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
     };
     
     public cancelTask = async (
-        taskId: string,
-        eventBus: ExecutionEventBus,
+        _taskId: string,
+        _eventBus: ExecutionEventBus,
     ): Promise<void> => {
         // No operation: simulates the failure of task cancellation
     };
