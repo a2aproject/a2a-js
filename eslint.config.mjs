@@ -4,12 +4,14 @@ import eslint from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
+import eslintPluginPrettier from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 
 export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.recommended,
   eslintConfigPrettier, // Disable formatting eslint rules
+  eslintPluginPrettier,
   {
     ignores: ['dist/', 'node_modules/']
   },
