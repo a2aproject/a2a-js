@@ -21,7 +21,7 @@ export class JsonRpcTransportHandler {
     public async handle(
         requestBody: any, context?: ServerCallContext
     ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
-        let rpcRequest: A2ARequest | undefined = undefined;
+        let rpcRequest: A2ARequest;
 
         try {
             if (typeof requestBody === 'string') {
@@ -38,7 +38,7 @@ export class JsonRpcTransportHandler {
         } catch (error: any) {
             const a2aError = error instanceof A2AError ? error : A2AError.parseError(error.message || 'Failed to parse JSON request.');
             return {
-                jsonrpc: '2.0', 
+                jsonrpc: '2.0',
                 id: (rpcRequest?.id !== undefined ? rpcRequest.id : null),
                 error: a2aError.toJSONRPCError(),
             } as JSONRPCErrorResponse;
