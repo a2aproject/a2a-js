@@ -197,8 +197,8 @@ describe('A2AExpressApp', () => {
         });
 
         it('should handle immediate streaming error', async () => {
-            // eslint-disable-next-line require-yield
             const mockImmediateErrorStream = {
+                // eslint-disable-next-line require-yield
                 async *[Symbol.asyncIterator]() {
                     throw new A2AError(-32603, 'Immediate streaming error');
                 }
