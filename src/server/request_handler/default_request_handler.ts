@@ -271,7 +271,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         | TaskArtifactUpdateEvent,
         void,
         undefined
-    > { 
+    > {
         const incomingMessage = params.message;
         if (!incomingMessage.messageId) {
             // For streams, messageId might be set by client, or server can generate if not present.
