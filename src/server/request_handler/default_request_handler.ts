@@ -672,11 +672,49 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         console.error(`Error processing error event: ${error}`);
       }
     } else {
-      // This can happen if the first event was a 'message' and not a 'task'.
-      // The original promise was already resolved, so we can only log.
-      console.error(
-        `Event processing loop failed for task ${taskId}, but couldn't update task state as no task is available in ResultManager.`
-      );
+      const errorTask: Task = this._createArtificialTaskFailure(taskId, error);
+      try {
+        resultManager.processEvent(errorTask);
+        resultManager.processEvent({
+          // And publish a final status update
+          kind: 'status-update',
+          taskId: errorTask.id,
+          contextId: errorTask.contextId,
+          status: errorTask.status,
+          final: true,
+        } as TaskStatusUpdateEvent);
+      } catch (error) {
+        console.error(`Error processing error event: ${error}`);
+      }
     }
+  }
+
+  private _createArtificialTaskFailure(
+    taskId?: string,
+    err?: Error,
+    contextId?: string,
+    history?: Message[]
+  ): Task {
+    // Create a synthetic error event, which will be handled by the ResultManager
+    const errorTask: Task = {
+      id: taskId || uuidv4(), // Use existing task ID or generate new
+      contextId: contextId,
+      status: {
+        state: 'failed',
+        message: {
+          kind: 'message',
+          role: 'agent',
+          messageId: uuidv4(),
+          parts: [{ kind: 'text', text: `Agent execution error: ${err.message}` }],
+          taskId: taskId,
+          contextId: contextId,
+        },
+        timestamp: new Date().toISOString(),
+      },
+      history: history ? [...history] : [],
+      kind: 'task',
+    };
+
+    return errorTask;
   }
 }
