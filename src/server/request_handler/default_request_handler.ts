@@ -159,7 +159,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventQueue: ExecutionEventQueue,
     options?: {
       firstResultResolver?: (value: Message | Task | PromiseLike<Message | Task>) => void;
-      firstResultRejector?: (reason?: any) => void;
+      firstResultRejector?: (reason?: unknown) => void;
     }
   ): Promise<void> {
     let firstResultSent = false;

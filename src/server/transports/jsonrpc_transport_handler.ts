@@ -7,6 +7,10 @@ import {
   Task,
   Message,
   TaskPushNotificationConfig,
+  TaskQueryParams,
+  GetTaskPushNotificationConfigParams,
+  ListTaskPushNotificationConfigParams,
+  DeleteTaskPushNotificationConfigParams,
 } from '../../types.js';
 import { ServerCallContext } from '../context.js';
 import { A2AError } from '../error.js';
@@ -17,6 +21,17 @@ type RequestHandlerResponse =
   | Message
   | TaskPushNotificationConfig
   | TaskPushNotificationConfig[];
+
+type A2AParams =
+  | MessageSendParams
+  | TaskQueryParams
+  | TaskIdParams
+  | TaskPushNotificationConfig
+  | GetTaskPushNotificationConfigParams
+  | ListTaskPushNotificationConfigParams
+  | DeleteTaskPushNotificationConfigParams
+  | MessageSendParams
+  | TaskIdParams;
 
 /**
  * Handles JSON-RPC transport layer, routing requests to A2ARequestHandler.
@@ -51,11 +66,13 @@ export class JsonRpcTransportHandler {
       if (!this.isRequestValid(rpcRequest)) {
         throw A2AError.invalidRequest('Invalid JSON-RPC Request.');
       }
-    } catch (error: any) {
+    } catch (error) {
       const a2aError =
         error instanceof A2AError
           ? error
-          : A2AError.parseError(error.message || 'Failed to parse JSON request.');
+          : A2AError.parseError(
+              (error instanceof SyntaxError && error.message) || 'Failed to parse JSON request.'
+            );
       return {
         jsonrpc: '2.0',
         id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
@@ -103,7 +120,7 @@ export class JsonRpcTransportHandler {
                 result: event,
               };
             }
-          } catch (streamError: any) {
+          } catch (streamError) {
             // If the underlying agent stream throws an error, we need to yield a JSONRPCErrorResponse.
             // However, an AsyncGenerator is expected to yield JSONRPCResult.
             // This indicates an issue with how errors from the agent's stream are propagated.
@@ -162,6 +179,7 @@ export class JsonRpcTransportHandler {
           result: result,
         } as JSONRPCResponse;
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const a2aError =
         error instanceof A2AError
@@ -198,7 +216,7 @@ export class JsonRpcTransportHandler {
   }
 
   // Validates that params is an object with non-empty string keys
-  private paramsAreValid(params: any): boolean {
+  private paramsAreValid(params: A2AParams): boolean {
     if (typeof params !== 'object' || params === null || Array.isArray(params)) {
       return false;
     }

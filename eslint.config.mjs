@@ -26,7 +26,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['test/**/*.ts'],
+    files: ['test/**/*.ts', 'src/samples/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off', // Allow the usage of `any` in test files
       '@typescript-eslint/no-unused-expressions': 'off', // Allow unused expressions in test files, for compatibility with 'chai'

@@ -62,6 +62,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             res.write(`id: ${new Date().getTime()}\n`);
             res.write(`data: ${JSON.stringify(event)}\n\n`);
           }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (streamError: any) {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
           // If the stream itself throws an error, send a final JSONRPCErrorResponse
@@ -116,7 +117,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 }
 
 export const jsonErrorHandler: ErrorRequestHandler = (
-  err: any,
+  err: unknown,
   _req: Request,
   res: Response,
   next: NextFunction
