@@ -1,7 +1,7 @@
 import 'mocha';
 import { assert, expect } from 'chai';
 import sinon, { SinonStub } from 'sinon';
-import express, { Express, Request, Response } from 'express';
+import express, { Express, NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 
 import { A2AExpressApp } from '../../src/server/express/a2a_express_app.js';
@@ -198,6 +198,7 @@ describe('A2AExpressApp', () => {
 
         it('should handle immediate streaming error', async () => {
             const mockImmediateErrorStream = {
+                // eslint-disable-next-line require-yield
                 async *[Symbol.asyncIterator]() {
                     throw new A2AError(-32603, 'Immediate streaming error');
                 }
@@ -328,7 +329,7 @@ describe('A2AExpressApp', () => {
     describe('middleware integration', () => {
         it('should apply custom middlewares to routes', async () => {
             const middlewareCalled = sinon.spy();
-            const testMiddleware = (_req: Request, _res: Response, next: Function) => {
+            const testMiddleware = (_req: Request, _res: Response, next: NextFunction) => {
                 middlewareCalled();
                 next();
             };
@@ -344,7 +345,7 @@ describe('A2AExpressApp', () => {
         });
 
         it('should handle middleware errors', async () => {
-            const errorMiddleware = (_req: Request, _res: Response, next: Function) => {
+            const errorMiddleware = (_req: Request, _res: Response, next: NextFunction) => {
                 next(new Error('Middleware error'));
             };
 

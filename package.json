@@ -40,6 +40,7 @@
     "README.md"
   ],
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@genkit-ai/googleai": "^1.8.0",
     "@genkit-ai/vertexai": "^1.8.0",
     "@types/chai": "^5.2.2",
@@ -50,6 +51,8 @@
     "@types/supertest": "^6.0.3",
     "c8": "^10.1.3",
     "chai": "^5.2.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
     "express": "^5.1.0",
     "genkit": "^1.8.0",
     "gts": "^6.0.2",
@@ -59,13 +62,16 @@
     "supertest": "^7.1.4",
     "tsup": "^8.5.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4"
   },
   "scripts": {
     "clean": "gts clean",
     "build": "tsup",
     "pretest": "npm run build",
     "test": "mocha test/**/*.spec.ts",
+    "lint": "npx eslint .",
+    "lint:fix": "npx eslint . --fix",
     "coverage": "c8 npm run test",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
     "a2a:cli": "tsx src/samples/cli.ts",

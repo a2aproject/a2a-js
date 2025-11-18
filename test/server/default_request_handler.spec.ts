@@ -3,8 +3,8 @@ import { assert, expect } from 'chai';
 import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
-import { RequestContext, ExecutionEventBus, TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError, InMemoryPushNotificationStore, PushNotificationStore, PushNotificationSender } from '../../src/server/index.js';
-import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskIdParams, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
+import { TaskStore, InMemoryTaskStore, DefaultRequestHandler, ExecutionEventQueue, A2AError, InMemoryPushNotificationStore, RequestContext, ExecutionEventBus } from '../../src/server/index.js';
+import { AgentCard, Artifact, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams, Message, MessageSendParams, PushNotificationConfig, Task, TaskPushNotificationConfig, TaskState, TaskStatusUpdateEvent } from '../../src/index.js';
 import { DefaultExecutionEventBusManager, ExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { MockAgentExecutor, CancellableMockAgentExecutor, fakeTaskExecute, FailingCancellableMockAgentExecutor } from './mocks/agent-executor.mock.js';
@@ -17,8 +17,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let mockTaskStore: TaskStore;
     let mockAgentExecutor: AgentExecutor;
     let executionEventBusManager: ExecutionEventBusManager;
-    let mockPushNotificationStore: PushNotificationStore;
-    let mockPushNotificationSender: PushNotificationSender;
     let clock: SinonFakeTimers;
 
     const testAgentCard: AgentCard = {
@@ -1160,7 +1158,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
                 status: { state: "submitted" },
                 kind: 'task'
             });
-            bus && bus.finished && bus.finished();
+            bus.finished();
         });
         await handler.sendMessage(params);
         expect(capturedContextId).to.equal('incoming-ctx-id');
@@ -1193,7 +1191,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
                 status: { state: "submitted" },
                 kind: 'task'
             });
-            bus && bus.finished && bus.finished();
+            bus.finished();
         });
         await handler.sendMessage(params);
         expect(capturedContextId).to.equal(taskContextId);
@@ -1217,7 +1215,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
                 status: { state: "submitted" },
                 kind: 'task'
             });
-            bus && bus.finished && bus.finished();
+            bus.finished();
         });
         await handler.sendMessage(params);
         expect(capturedContextId).to.be.a('string').and.not.empty;

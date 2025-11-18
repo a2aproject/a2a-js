@@ -17,8 +17,8 @@ import {
 export class SampleAgentExecutor implements AgentExecutor {
 
   public cancelTask = async (
-    taskId: string,
-    eventBus: ExecutionEventBus,
+    _taskId: string,
+    _eventBus: ExecutionEventBus,
   ): Promise<void> => { };
 
   async execute(

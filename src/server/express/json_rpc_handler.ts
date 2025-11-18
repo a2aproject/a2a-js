@@ -1,4 +1,4 @@
-import express, { Router, Request, Response, ErrorRequestHandler, NextFunction, RequestHandler } from "express";
+import express, { Request, Response, ErrorRequestHandler, NextFunction, RequestHandler } from "express";
 import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from "../../types.js";
 import { A2AError } from "../error.js";
 import { A2ARequestHandler } from "../request_handler/a2a_request_handler.js";

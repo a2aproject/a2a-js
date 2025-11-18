@@ -41,7 +41,7 @@ class MovieAgentExecutor implements AgentExecutor {
 
   public cancelTask = async (
         taskId: string,
-        eventBus: ExecutionEventBus,
+        _eventBus: ExecutionEventBus,
     ): Promise<void> => {
         this.cancelledTasks.add(taskId);
         // The execute loop is responsible for publishing the final state

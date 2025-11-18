@@ -174,7 +174,7 @@ describe('A2AClient Authentication Tests', () => {
       });
 
       // First request - should trigger auth flow
-      const result1 = await client.sendMessage(messageParams);
+      await client.sendMessage(messageParams);
 
       // Capture the token from the first request
       const firstRequestAuthCall = mockFetch.getCalls().find(call =>
@@ -227,7 +227,7 @@ describe('A2AClient Authentication Tests', () => {
     it('should handle auth handler returning undefined for retry', async () => {
       // Create a mock that doesn't retry
       const noRetryHandler = new MockAuthHandler();
-      const originalShouldRetry = noRetryHandler.shouldRetryWithHeaders.bind(noRetryHandler);
+      noRetryHandler.shouldRetryWithHeaders.bind(noRetryHandler);
       noRetryHandler.shouldRetryWithHeaders = sinon.stub().resolves(undefined);
 
       const clientNoRetry = await A2AClient.fromCardUrl(agentCardUrl, {
@@ -464,7 +464,7 @@ describe('AuthHandlingFetch Tests', () => {
       const failAuthHandler = new MockAuthHandler();
       const onSuccessSpy = sinon.spy(failAuthHandler, 'onSuccessfulRetry');
 
-      const failFetch = createAuthenticatingFetchWithRetry(mockFetch, failAuthHandler);
+      createAuthenticatingFetchWithRetry(mockFetch, failAuthHandler);
 
       // Mock fetch to return 401 first, then 401 again
       const failMockFetch = createMockFetch({

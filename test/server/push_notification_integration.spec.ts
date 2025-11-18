@@ -15,7 +15,6 @@ import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.
 
 describe('Push Notification Integration Tests', () => {
     let testServer: Server;
-    let testServerPort: number;
     let testServerUrl: string;
     let receivedNotifications: Array<{ body: any; headers: any; url: string; method: string }> = [];
     
@@ -96,7 +95,6 @@ describe('Push Notification Integration Tests', () => {
         // Create and start test server
         const serverInfo = await createTestServer();
         testServer = serverInfo.server;
-        testServerPort = serverInfo.port;
         testServerUrl = serverInfo.url;
 
         // Create fresh instances for each test
@@ -140,7 +138,7 @@ describe('Push Notification Integration Tests', () => {
                 token: 'test-auth-token'
             };
 
-            let contextId = 'test-push-context';
+            const contextId = 'test-push-context';
             const params: MessageSendParams = {
                 message: {
                     ...createTestMessage('Test task with push notifications'),
@@ -298,7 +296,7 @@ describe('Push Notification Integration Tests', () => {
                 token: 'test-auth-token'
             };
 
-            let contextId = 'test-error-context';
+            const  contextId = 'test-error-context';
             const params: MessageSendParams = {
                 message: {
                     ...createTestMessage('Test task with error endpoint'),

@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import { Message, AgentCard, PushNotificationConfig, Task, MessageSendParams, TaskState, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
+import { Message, AgentCard, Task, MessageSendParams, TaskState, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskQueryParams, TaskIdParams, TaskPushNotificationConfig, DeleteTaskPushNotificationConfigParams, GetTaskPushNotificationConfigParams, ListTaskPushNotificationConfigParams } from "../../types.js";
 import { AgentExecutor } from "../agent_execution/agent_executor.js";
 import { RequestContext } from "../agent_execution/request_context.js";
 import { A2AError } from "../error.js";
 import { ExecutionEventBusManager, DefaultExecutionEventBusManager } from "../events/execution_event_bus_manager.js";
-import { AgentExecutionEvent, ExecutionEventBus } from "../events/execution_event_bus.js";
+import { AgentExecutionEvent } from "../events/execution_event_bus.js";
 import { ExecutionEventQueue } from "../events/execution_event_queue.js";
 import { ResultManager } from "../result_manager.js";
 import { TaskStore } from "../store.js";
@@ -14,7 +14,6 @@ import { InMemoryPushNotificationStore, PushNotificationStore } from '../push_no
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
-import { Server } from 'http';
 
 const terminalStates: TaskState[] = ["completed", "failed", "canceled", "rejected"];
 
@@ -333,7 +332,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
     }
 
-    async getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task> {
+    async getTask(params: TaskQueryParams, _context?: ServerCallContext): Promise<Task> {
         const task = await this.taskStore.load(params.id);
         if (!task) {
             throw A2AError.taskNotFound(params.id);
@@ -349,7 +348,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         return task;
     }
 
-    async cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task> {
+    async cancelTask(params: TaskIdParams, _context?: ServerCallContext): Promise<Task> {
         const task = await this.taskStore.load(params.id);
         if (!task) {
             throw A2AError.taskNotFound(params.id);
@@ -401,7 +400,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     async setTaskPushNotificationConfig(
         params: TaskPushNotificationConfig,
-        context?: ServerCallContext
+        _context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig> {
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
@@ -425,7 +424,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     async getTaskPushNotificationConfig(
         params: TaskIdParams | GetTaskPushNotificationConfigParams,
-        context?: ServerCallContext
+        _context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig> {
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
@@ -458,7 +457,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     
     async listTaskPushNotificationConfigs(
         params: ListTaskPushNotificationConfigParams,
-        context?: ServerCallContext
+        _context?: ServerCallContext
     ): Promise<TaskPushNotificationConfig[]> { 
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
@@ -478,7 +477,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     async deleteTaskPushNotificationConfig(
         params: DeleteTaskPushNotificationConfigParams,
-        context?: ServerCallContext
+        _context?: ServerCallContext
     ): Promise<void> { 
         if (!this.agentCard.capabilities.pushNotifications) {
             throw A2AError.pushNotificationNotSupported();
@@ -495,7 +494,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     async *resubscribe(
         params: TaskIdParams,
-        context?: ServerCallContext
+        _context?: ServerCallContext
     ): AsyncGenerator<
         | Task // Initial task state
         | TaskStatusUpdateEvent
