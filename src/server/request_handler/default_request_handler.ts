@@ -225,7 +225,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           } else {
             // This can happen if the first event was a 'message' and not a 'task'.
             // The original promise was already resolved, so we can only log.
-            console.error(`Event processing loop failed for task ${taskId}, but couldn't update task state as no task context is available in ResultManager.`);
+            console.error(
+              `Event processing loop failed for task ${taskId}, but couldn't update task state as no task context is available in ResultManager.`
+            );
           }
         }
       } else {
