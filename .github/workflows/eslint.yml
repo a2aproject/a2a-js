@@ -1,4 +1,4 @@
-name: Run Linter
+name: Run Linter & Formatter
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  linter:
+  eslint:
 
     runs-on: ubuntu-latest
 

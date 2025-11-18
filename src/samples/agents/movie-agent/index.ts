@@ -1,4 +1,4 @@
-import express from "express";
+import express from 'express';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
@@ -7,23 +7,23 @@ import {
   TaskState,
   TaskStatusUpdateEvent,
   TextPart,
-  Message
-} from "../../../index.js";
+  Message,
+} from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
   AgentExecutor,
   RequestContext,
   ExecutionEventBus,
-  DefaultRequestHandler
-} from "../../../server/index.js";
-import { A2AExpressApp } from "../../../server/express/index.js";
-import { MessageData } from "genkit";
-import { ai } from "./genkit.js";
-import { searchMovies, searchPeople } from "./tools.js";
+  DefaultRequestHandler,
+} from '../../../server/index.js';
+import { A2AExpressApp } from '../../../server/express/index.js';
+import { MessageData } from 'genkit';
+import { ai } from './genkit.js';
+import { searchMovies, searchPeople } from './tools.js';
 
 if (!process.env.GEMINI_API_KEY || !process.env.TMDB_API_KEY) {
-  console.error("GEMINI_API_KEY and TMDB_API_KEY environment variables are required")
+  console.error('GEMINI_API_KEY and TMDB_API_KEY environment variables are required');
   process.exit(1);
 }
 
@@ -39,18 +39,12 @@ const movieAgentPrompt = ai.prompt('movie_agent');
 class MovieAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
 
-  public cancelTask = async (
-        taskId: string,
-        _eventBus: ExecutionEventBus,
-    ): Promise<void> => {
-        this.cancelledTasks.add(taskId);
-        // The execute loop is responsible for publishing the final state
-    };
+  public cancelTask = async (taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {
+    this.cancelledTasks.add(taskId);
+    // The execute loop is responsible for publishing the final state
+  };
 
-  async execute(
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus
-  ): Promise<void> {
+  async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const userMessage = requestContext.userMessage;
     const existingTask = requestContext.task;
 
@@ -101,10 +95,10 @@ class MovieAgentExecutor implements AgentExecutor {
 
     // 3. Prepare messages for Genkit prompt
     const historyForGenkit = contexts.get(contextId) || [];
-    if (!historyForGenkit.find(m => m.messageId === userMessage.messageId)) {
+    if (!historyForGenkit.find((m) => m.messageId === userMessage.messageId)) {
       historyForGenkit.push(userMessage);
     }
-    contexts.set(contextId, historyForGenkit)
+    contexts.set(contextId, historyForGenkit);
 
     const messages: MessageData[] = historyForGenkit
       .map((m) => ({
@@ -143,7 +137,9 @@ class MovieAgentExecutor implements AgentExecutor {
       return;
     }
 
-    const goal = existingTask?.metadata?.goal as string | undefined || userMessage.metadata?.goal as string | undefined;
+    const goal =
+      (existingTask?.metadata?.goal as string | undefined) ||
+      (userMessage.metadata?.goal as string | undefined);
 
     try {
       // 4. Run the Genkit prompt
@@ -177,9 +173,12 @@ class MovieAgentExecutor implements AgentExecutor {
       console.info(`[MovieAgentExecutor] Prompt response: ${responseText}`);
       const lines = responseText.trim().split('\n');
       const finalStateLine = lines.at(-1)?.trim().toUpperCase();
-      const agentReplyText = lines.slice(0, lines.length - 1).join('\n').trim();
+      const agentReplyText = lines
+        .slice(0, lines.length - 1)
+        .join('\n')
+        .trim();
 
-      let finalA2AState: TaskState = "unknown";
+      let finalA2AState: TaskState = 'unknown';
 
       if (finalStateLine === 'COMPLETED') {
         finalA2AState = 'completed';
@@ -197,12 +196,12 @@ class MovieAgentExecutor implements AgentExecutor {
         kind: 'message',
         role: 'agent',
         messageId: uuidv4(),
-        parts: [{ kind: 'text', text: agentReplyText || "Completed." }], // Ensure some text
+        parts: [{ kind: 'text', text: agentReplyText || 'Completed.' }], // Ensure some text
         taskId: taskId,
         contextId: contextId,
       };
       historyForGenkit.push(agentMessage);
-      contexts.set(contextId, historyForGenkit)
+      contexts.set(contextId, historyForGenkit);
 
       const finalUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
@@ -217,15 +216,9 @@ class MovieAgentExecutor implements AgentExecutor {
       };
       eventBus.publish(finalUpdate);
 
-      console.log(
-        `[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`
-      );
-
+      console.log(`[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`);
     } catch (error: any) {
-      console.error(
-        `[MovieAgentExecutor] Error processing task ${taskId}:`,
-        error
-      );
+      console.error(`[MovieAgentExecutor] Error processing task ${taskId}:`, error);
       const errorUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId: taskId,
@@ -255,10 +248,10 @@ const movieAgentCard: AgentCard = {
   name: 'Movie Agent',
   description: 'An agent that can answer questions about movies and actors using TMDB.',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
-  url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp 
+  url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples' // Added provider URL
+    url: 'https://example.com/a2a-samples', // Added provider URL
   },
   version: '0.0.2', // Incremented version
   capabilities: {
@@ -286,7 +279,7 @@ const movieAgentCard: AgentCard = {
         'Which came out first, Jurassic Park or Terminator 2?',
       ],
       inputModes: ['text'], // Explicitly defining for skill
-      outputModes: ['text', 'task-status'] // Explicitly defining for skill
+      outputModes: ['text', 'task-status'], // Explicitly defining for skill
     },
   ],
   supportsAuthenticatedExtendedCard: false,
@@ -300,11 +293,7 @@ async function main() {
   const agentExecutor: AgentExecutor = new MovieAgentExecutor();
 
   // 3. Create DefaultRequestHandler
-  const requestHandler = new DefaultRequestHandler(
-    movieAgentCard,
-    taskStore,
-    agentExecutor
-  );
+  const requestHandler = new DefaultRequestHandler(movieAgentCard, taskStore, agentExecutor);
 
   // 4. Create and setup A2AExpressApp
   const appBuilder = new A2AExpressApp(requestHandler);
@@ -323,4 +312,3 @@ async function main() {
 }
 
 main().catch(console.error);
-

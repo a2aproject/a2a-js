@@ -14,9 +14,9 @@ The agent will start on `http://localhost:41241`.
 To test the extension:
 
 ```bash
-curl -X POST http://localhost:41241/   
-    -H "X-A2A-Extensions: https://github.com/a2aproject/a2a-js/src/samples/extensions/v1"   
-    -H "Content-Type: application/json"   
+curl -X POST http://localhost:41241/
+    -H "X-A2A-Extensions: https://github.com/a2aproject/a2a-js/src/samples/extensions/v1"
+    -H "Content-Type: application/json"
     -d '{
         "jsonrpc": "2.0",
         "id": 1,
@@ -51,7 +51,7 @@ Expected simplified response:
                 "metadata": {
                     "timestamp": "2025-11-14T15:51:36.725Z" // Timestamp added to metadata on the 'completed' TaskStatusUpdateEvent
                 }
-            }, 
+            },
         },
         "history": [
             {
@@ -62,13 +62,13 @@ Expected simplified response:
                 "metadata": {
                     "timestamp": "2025-11-14T15:51:35.722Z" // Timestamp added to metadata on the 'running' TaskStatusUpdateEvent
                 }
-            }, 
+            },
             {
                 ...
                 "metadata": {
                     "timestamp": "2025-11-14T15:51:36.725Z" // Timestamp added to metadata on the 'completed' TaskStatusUpdateEvent
                 }
-            } 
+            }
         ]
     }
 }

@@ -1,30 +1,15 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import {
-  Task,
-  TaskStatusUpdateEvent,
-  Message
-} from "../../../index.js";
-import {
-  AgentExecutor,
-  RequestContext,
-  ExecutionEventBus,
-} from "../../../server/index.js";
+import { Task, TaskStatusUpdateEvent, Message } from '../../../index.js';
+import { AgentExecutor, RequestContext, ExecutionEventBus } from '../../../server/index.js';
 
 /**
  * SampleAgentExecutor implements the agent's core logic.
  */
 export class SampleAgentExecutor implements AgentExecutor {
+  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {};
 
-  public cancelTask = async (
-    _taskId: string,
-    _eventBus: ExecutionEventBus,
-  ): Promise<void> => { };
-
-  async execute(
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus
-  ): Promise<void> {
+  async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const userMessage = requestContext.userMessage;
     const existingTask = requestContext.task;
 
@@ -76,7 +61,7 @@ export class SampleAgentExecutor implements AgentExecutor {
     // 3. Publish final task status update
     const agentReplyText = this.parseInputMessage(userMessage);
     console.info(`[SampleAgentExecutor] Prompt response: ${agentReplyText}`);
- 
+
     const agentMessage: Message = {
       kind: 'message',
       role: 'agent',
@@ -97,31 +82,29 @@ export class SampleAgentExecutor implements AgentExecutor {
       },
       final: true,
     };
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing delay
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing delay
     eventBus.publish(finalUpdate);
 
-    console.log(
-      `[SampleAgentExecutor] Task ${taskId} finished with state: completed`
-    );
+    console.log(`[SampleAgentExecutor] Task ${taskId} finished with state: completed`);
   }
 
   parseInputMessage(message: Message): string {
     /** Process the user query and return a response. */
-    const textPart = message.parts.find(part => part.kind === 'text');
+    const textPart = message.parts.find((part) => part.kind === 'text');
     const query = textPart ? textPart.text.trim() : '';
 
     if (!query) {
-      return "Hello! Please provide a message for me to respond to.";
+      return 'Hello! Please provide a message for me to respond to.';
     }
 
     // Simple responses based on input
     const queryLower = query.toLowerCase();
-    if (queryLower.includes("hello") || queryLower.includes("hi")) {
-      return "Hello World! Nice to meet you!";
-    } else if (queryLower.includes("how are you")) {
+    if (queryLower.includes('hello') || queryLower.includes('hi')) {
+      return 'Hello World! Nice to meet you!';
+    } else if (queryLower.includes('how are you')) {
       return "I'm doing great! Thanks for asking. How can I help you today?";
-    } else if (queryLower.includes("goodbye") || queryLower.includes("bye")) {
-      return "Goodbye! Have a wonderful day!";
+    } else if (queryLower.includes('goodbye') || queryLower.includes('bye')) {
+      return 'Goodbye! Have a wonderful day!';
     } else {
       return `Hello World! You said: '${query}'. Thanks for your message!`;
     }
