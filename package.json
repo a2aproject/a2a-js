@@ -72,7 +72,7 @@
     "pretest": "npm run build",
     "test": "mocha test/**/*.spec.ts",
     "lint": "npx eslint .",
-    "format": "prettier --write ./README.md",
+    "format:readme": "prettier --write ./README.md",
     "lint:fix": "npx eslint . --fix",
     "coverage": "c8 npm run test",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
