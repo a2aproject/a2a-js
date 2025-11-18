@@ -11,7 +11,7 @@ export default defineConfig(
   tseslint.configs.recommended,
   eslintPluginPrettier, // Automatically disables eslint formatting rules and enables `prettier`
   {
-    ignores: ['dist/', 'node_modules/'],
+    ignores: ['dist/', 'node_modules/', 'src/types.ts'],
   },
   {
     rules: {

@@ -1,4 +1,4 @@
-name: "Conventional Commits"
+name: 'Conventional Commits'
 
 on:
   pull_request:
