@@ -193,47 +193,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     } catch (error: any) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
-      if (options?.firstResultRejector) {
-        if (!firstResultSent) {
-          options.firstResultRejector(error);
-        } else {
-          const currentTask = resultManager.getCurrentTask();
-          if (currentTask) {
-            const errorTask: TaskStatusUpdateEvent = {
-              taskId: currentTask.id,
-              contextId: currentTask.contextId,
-              status: {
-                state: 'failed',
-                message: {
-                  kind: 'message',
-                  role: 'agent',
-                  messageId: uuidv4(),
-                  parts: [{ kind: 'text', text: `Event processing loop failed: ${error.message}` }],
-                  taskId: currentTask.id,
-                  contextId: currentTask.contextId,
-                },
-                timestamp: new Date().toISOString(),
-              },
-              kind: 'status-update',
-              final: true,
-            };
-            try {
-              await resultManager.processEvent(errorTask);
-            } catch (error) {
-              console.error(`Error processing error event: ${error}`);
-            }
-          } else {
-            // This can happen if the first event was a 'message' and not a 'task'.
-            // The original promise was already resolved, so we can only log.
-            console.error(
-              `Event processing loop failed for task ${taskId}, but couldn't update task state as no task context is available in ResultManager.`
-            );
-          }
-        }
-      } else {
-        // re-throw error for blocking case to catch
-        throw error;
-      }
+      this._handleProcessingError(
+        error,
+        resultManager,
+        firstResultSent,
+        taskId,
+        options?.firstResultRejector
+      );
     } finally {
       this.eventBusManager.cleanupByTaskId(taskId);
     }
@@ -660,5 +626,57 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Send push notification in the background.
     this.pushNotificationSender?.send(task);
+  }
+
+  private async _handleProcessingError(
+    error: any,
+    resultManager: ResultManager,
+    firstResultSent: boolean,
+    taskId: string,
+    firstResultRejector?: (reason: any) => void
+  ): Promise<void> {
+    if (firstResultRejector && !firstResultSent) {
+      firstResultRejector(error);
+    }
+
+    if (!firstResultRejector) {
+      // re-throw error for blocking case to catch
+      throw error;
+    }
+
+    // Non-blocking case with first result already sent
+    const currentTask = resultManager.getCurrentTask();
+    if (currentTask) {
+      const errorTask: TaskStatusUpdateEvent = {
+        taskId: currentTask.id,
+        contextId: currentTask.contextId,
+        status: {
+          state: 'failed',
+          message: {
+            kind: 'message',
+            role: 'agent',
+            messageId: uuidv4(),
+            parts: [{ kind: 'text', text: `Event processing loop failed: ${error.message}` }],
+            taskId: currentTask.id,
+            contextId: currentTask.contextId,
+          },
+          timestamp: new Date().toISOString(),
+        },
+        kind: 'status-update',
+        final: true,
+      };
+
+      try {
+        await resultManager.processEvent(errorTask);
+      } catch (error) {
+        console.error(`Error processing error event: ${error}`);
+      }
+    } else {
+      // This can happen if the first event was a 'message' and not a 'task'.
+      // The original promise was already resolved, so we can only log.
+      console.error(
+        `Event processing loop failed for task ${taskId}, but couldn't update task state as no task is available in ResultManager.`
+      );
+    }
   }
 }
