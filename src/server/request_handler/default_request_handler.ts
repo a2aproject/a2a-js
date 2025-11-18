@@ -167,7 +167,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event);
 
-        await this._sendPushNotificationIfNeeded(event);
+        try {
+          await this._sendPushNotificationIfNeeded(event);
+        } catch (error) {
+          console.error(`Error sending push notification: ${error}`);
+        }
 
         if (options?.firstResultResolver && !firstResultSent) {
           let firstResult: Message | Task | undefined;
@@ -193,27 +197,36 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         if (!firstResultSent) {
           options.firstResultRejector(error);
         } else {
-          const contextId = resultManager.getCurrentTask()?.contextId;
-          const taskId = resultManager.getCurrentTask()?.id;
-          const errorTask: TaskStatusUpdateEvent = {
-            taskId: taskId,
-            contextId: contextId,
-            status: {
-              state: 'failed',
-              message: {
-                kind: 'message',
-                role: 'agent',
-                messageId: uuidv4(),
-                parts: [{ kind: 'text', text: `Event processing loop failed: ${error.message}` }],
-                taskId: taskId,
-                contextId: contextId,
+          const currentTask = resultManager.getCurrentTask();
+          if (currentTask) {
+            const errorTask: TaskStatusUpdateEvent = {
+              taskId: currentTask.id,
+              contextId: currentTask.contextId,
+              status: {
+                state: 'failed',
+                message: {
+                  kind: 'message',
+                  role: 'agent',
+                  messageId: uuidv4(),
+                  parts: [{ kind: 'text', text: `Event processing loop failed: ${error.message}` }],
+                  taskId: currentTask.id,
+                  contextId: currentTask.contextId,
+                },
+                timestamp: new Date().toISOString(),
               },
-              timestamp: new Date().toISOString(),
-            },
-            kind: 'status-update',
-            final: true,
-          };
-          await resultManager.processEvent(errorTask);
+              kind: 'status-update',
+              final: true,
+            };
+            try {
+              await resultManager.processEvent(errorTask);
+            } catch (error) {
+              console.error(`Error processing error event: ${error}`);
+            }
+          } else {
+            // This can happen if the first event was a 'message' and not a 'task'.
+            // The original promise was already resolved, so we can only log.
+            console.error(`Event processing loop failed for task ${taskId}, but couldn't update task state as no task context is available in ResultManager.`);
+          }
         }
       } else {
         // re-throw error for blocking case to catch
