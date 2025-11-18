@@ -2,49 +2,49 @@
 
 export class TaskNotFoundError extends Error {
   constructor(message?: string) {
-    super(message ?? "Task not found");
-    this.name = "TaskNotFoundError";
+    super(message ?? 'Task not found');
+    this.name = 'TaskNotFoundError';
   }
 }
 
-export class TaskNotCancelableError	extends Error {
+export class TaskNotCancelableError extends Error {
   constructor(message?: string) {
-    super(message ?? "Task cannot be canceled");
-    this.name = "TaskNotCancelableError";
+    super(message ?? 'Task cannot be canceled');
+    this.name = 'TaskNotCancelableError';
   }
 }
 
 export class PushNotificationNotSupportedError extends Error {
   constructor(message?: string) {
-    super(message ?? "Push Notification is not supported");
-    this.name = "PushNotificationNotSupportedError";
+    super(message ?? 'Push Notification is not supported');
+    this.name = 'PushNotificationNotSupportedError';
   }
 }
 
 export class UnsupportedOperationError extends Error {
   constructor(message?: string) {
-    super(message ?? "This operation is not supported");
-    this.name = "UnsupportedOperationError";
+    super(message ?? 'This operation is not supported');
+    this.name = 'UnsupportedOperationError';
   }
 }
 
 export class ContentTypeNotSupportedError extends Error {
   constructor(message?: string) {
-    super(message ?? "Incompatible content types");
-    this.name = "ContentTypeNotSupportedError";
+    super(message ?? 'Incompatible content types');
+    this.name = 'ContentTypeNotSupportedError';
   }
 }
 
 export class InvalidAgentResponseError extends Error {
   constructor(message?: string) {
-    super(message ?? "Invalid agent response type");
-    this.name = "InvalidAgentResponseError";
+    super(message ?? 'Invalid agent response type');
+    this.name = 'InvalidAgentResponseError';
   }
 }
 
 export class AuthenticatedExtendedCardNotConfiguredError extends Error {
   constructor(message?: string) {
-    super(message ?? "Authenticated Extended Card not configured");
-    this.name = "AuthenticatedExtendedCardNotConfiguredError";
+    super(message ?? 'Authenticated Extended Card not configured');
+    this.name = 'AuthenticatedExtendedCardNotConfiguredError';
   }
 }

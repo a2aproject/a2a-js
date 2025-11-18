@@ -1,4 +1,12 @@
-import { AuthenticatedExtendedCardNotConfiguredError, ContentTypeNotSupportedError, InvalidAgentResponseError, PushNotificationNotSupportedError, TaskNotCancelableError, TaskNotFoundError, UnsupportedOperationError } from '../../errors.js';
+import {
+  AuthenticatedExtendedCardNotConfiguredError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  PushNotificationNotSupportedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+} from '../../errors.js';
 import {
   JSONRPCRequest,
   JSONRPCResponse,
@@ -28,7 +36,7 @@ export interface JsonRpcTransportOptions {
 
 export class JsonRpcTransport implements A2ATransport {
   private readonly customFetchImpl?: typeof fetch;
-  private readonly endpoint: string
+  private readonly endpoint: string;
   private requestIdCounter: number = 1;
 
   constructor(options: JsonRpcTransportOptions) {
@@ -37,49 +45,97 @@ export class JsonRpcTransport implements A2ATransport {
   }
 
   async sendMessage(params: MessageSendParams, idOverride?: number): Promise<SendMessageResult> {
-    const rpcResponse = await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>("message/send", params, idOverride);
+    const rpcResponse = await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>(
+      'message/send',
+      params,
+      idOverride
+    );
     return rpcResponse.result;
   }
 
-  async *sendMessageStream(params: MessageSendParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest("message/stream", params);
+  async *sendMessageStream(
+    params: MessageSendParams
+  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    yield* this._sendStreamingRequest('message/stream', params);
   }
 
-  async setTaskPushNotificationConfig(params: TaskPushNotificationConfig, idOverride?: number): Promise<TaskPushNotificationConfig> {
-    const rpcResponse = await this._sendRpcRequest<TaskPushNotificationConfig, SetTaskPushNotificationConfigSuccessResponse>("tasks/pushNotificationConfig/set", params, idOverride);
+  async setTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig,
+    idOverride?: number
+  ): Promise<TaskPushNotificationConfig> {
+    const rpcResponse = await this._sendRpcRequest<
+      TaskPushNotificationConfig,
+      SetTaskPushNotificationConfigSuccessResponse
+    >('tasks/pushNotificationConfig/set', params, idOverride);
     return rpcResponse.result;
   }
 
-  async getTaskPushNotificationConfig(params: TaskIdParams, idOverride?: number): Promise<TaskPushNotificationConfig> {
-    const rpcResponse = await this._sendRpcRequest<TaskIdParams, GetTaskPushNotificationConfigSuccessResponse>("tasks/pushNotificationConfig/get", params, idOverride);
+  async getTaskPushNotificationConfig(
+    params: TaskIdParams,
+    idOverride?: number
+  ): Promise<TaskPushNotificationConfig> {
+    const rpcResponse = await this._sendRpcRequest<
+      TaskIdParams,
+      GetTaskPushNotificationConfigSuccessResponse
+    >('tasks/pushNotificationConfig/get', params, idOverride);
     return rpcResponse.result;
   }
 
-  async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams, idOverride?: number): Promise<TaskPushNotificationConfig[]> {
-    const rpcResponse = await this._sendRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigSuccessResponse>("tasks/pushNotificationConfig/list", params, idOverride);
+  async listTaskPushNotificationConfig(
+    params: ListTaskPushNotificationConfigParams,
+    idOverride?: number
+  ): Promise<TaskPushNotificationConfig[]> {
+    const rpcResponse = await this._sendRpcRequest<
+      ListTaskPushNotificationConfigParams,
+      ListTaskPushNotificationConfigSuccessResponse
+    >('tasks/pushNotificationConfig/list', params, idOverride);
     return rpcResponse.result;
   }
 
-  async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams, idOverride?: number): Promise<void> {
-    await this._sendRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>("tasks/pushNotificationConfig/delete", params, idOverride);
+  async deleteTaskPushNotificationConfig(
+    params: DeleteTaskPushNotificationConfigParams,
+    idOverride?: number
+  ): Promise<void> {
+    await this._sendRpcRequest<
+      DeleteTaskPushNotificationConfigParams,
+      DeleteTaskPushNotificationConfigResponse
+    >('tasks/pushNotificationConfig/delete', params, idOverride);
   }
 
   async getTask(params: TaskQueryParams, idOverride?: number): Promise<Task> {
-    const rpcResponse = await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>("tasks/get", params, idOverride);
+    const rpcResponse = await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>(
+      'tasks/get',
+      params,
+      idOverride
+    );
     return rpcResponse.result;
   }
 
   async cancelTask(params: TaskIdParams, idOverride?: number): Promise<Task> {
-    const rpcResponse = await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>("tasks/cancel", params, idOverride);
+    const rpcResponse = await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>(
+      'tasks/cancel',
+      params,
+      idOverride
+    );
     return rpcResponse.result;
   }
 
-  async *resubscribeTask(params: TaskIdParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest("tasks/resubscribe", params);
+  async *resubscribeTask(
+    params: TaskIdParams
+  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    yield* this._sendStreamingRequest('tasks/resubscribe', params);
   }
 
-  async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(method: string, params: TExtensionParams, idOverride: number) {
-    return await this._sendRpcRequest<TExtensionParams, TExtensionResponse>(method, params, idOverride);
+  async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(
+    method: string,
+    params: TExtensionParams,
+    idOverride: number
+  ) {
+    return await this._sendRpcRequest<TExtensionParams, TExtensionResponse>(
+      method,
+      params,
+      idOverride
+    );
   }
 
   private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
@@ -91,19 +147,18 @@ export class JsonRpcTransport implements A2ATransport {
     }
     throw new Error(
       'A `fetch` implementation was not provided and is not available in the global scope. ' +
-      'Please provide a `fetchImpl` in the A2ATransportOptions. '
+        'Please provide a `fetchImpl` in the A2ATransportOptions. '
     );
   }
 
-  private async _sendRpcRequest<TParams extends { [key: string]: any; }, TResponse extends JSONRPCResponse>(
-    method: string,
-    params: TParams,
-    idOverride: number | undefined,
-  ): Promise<TResponse> {
+  private async _sendRpcRequest<
+    TParams extends { [key: string]: any },
+    TResponse extends JSONRPCResponse,
+  >(method: string, params: TParams, idOverride: number | undefined): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
-    
+
     const rpcRequest: JSONRPCRequest = {
-      jsonrpc: "2.0",
+      jsonrpc: '2.0',
       method,
       params: params,
       id: requestId,
@@ -118,35 +173,45 @@ export class JsonRpcTransport implements A2ATransport {
         errorBodyText = await httpResponse.text();
         errorJson = JSON.parse(errorBodyText);
       } catch (e: any) {
-        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`, {cause: e});
+        throw new Error(
+          `HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`,
+          { cause: e }
+        );
       }
       if (errorJson.jsonrpc && errorJson.error) {
         throw JsonRpcTransport.mapToError(errorJson);
       } else {
-        throw new Error(`HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`);
+        throw new Error(
+          `HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`
+        );
       }
     }
 
     const rpcResponse: JSONRPCResponse = await httpResponse.json();
     if (rpcResponse.id !== requestId) {
-      console.error(`CRITICAL: RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}.`);
+      console.error(
+        `CRITICAL: RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}.`
+      );
     }
 
     if ('error' in rpcResponse) {
-        throw JsonRpcTransport.mapToError(rpcResponse);
+      throw JsonRpcTransport.mapToError(rpcResponse);
     }
 
     return rpcResponse as TResponse;
   }
 
-  private async _fetchRpc(rpcRequest: JSONRPCRequest, acceptHeader: string = "application/json"): Promise<Response> {
+  private async _fetchRpc(
+    rpcRequest: JSONRPCRequest,
+    acceptHeader: string = 'application/json'
+  ): Promise<Response> {
     const requestInit: RequestInit = {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "Accept": acceptHeader,
+        'Content-Type': 'application/json',
+        Accept: acceptHeader,
       },
-      body: JSON.stringify(rpcRequest)
+      body: JSON.stringify(rpcRequest),
     };
     return this._fetch(this.endpoint, requestInit);
   }
@@ -157,30 +222,39 @@ export class JsonRpcTransport implements A2ATransport {
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
-      jsonrpc: "2.0",
+      jsonrpc: '2.0',
       method,
-      params: params as { [key: string]: any; },
+      params: params as { [key: string]: any },
       id: clientRequestId,
     };
 
-    const response = await this._fetchRpc(rpcRequest, "text/event-stream");
+    const response = await this._fetchRpc(rpcRequest, 'text/event-stream');
 
     if (!response.ok) {
-      let errorBody = "";
+      let errorBody = '';
       let errorJson: any = {};
       try {
         errorBody = await response.text();
         errorJson = JSON.parse(errorBody);
       } catch (e: any) {
-        throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`, {cause: e});
+        throw new Error(
+          `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`,
+          { cause: e }
+        );
       }
       if (errorJson.error) {
-        throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
-      }      
-      throw new Error(`HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`
+        );
+      }
+      throw new Error(
+        `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}`
+      );
     }
-    if (!response.headers.get("Content-Type")?.startsWith("text/event-stream")) {
-      throw new Error(`Invalid response Content-Type for SSE stream for ${method}. Expected 'text/event-stream'.`);
+    if (!response.headers.get('Content-Type')?.startsWith('text/event-stream')) {
+      throw new Error(
+        `Invalid response Content-Type for SSE stream for ${method}. Expected 'text/event-stream'.`
+      );
     }
 
     yield* this._parseA2ASseStream<A2AStreamEventData>(response, clientRequestId);
@@ -191,18 +265,21 @@ export class JsonRpcTransport implements A2ATransport {
     originalRequestId: number | string | null
   ): AsyncGenerator<TStreamItem, void, undefined> {
     if (!response.body) {
-      throw new Error("SSE response body is undefined. Cannot read stream.");
+      throw new Error('SSE response body is undefined. Cannot read stream.');
     }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = "";
-    let eventDataBuffer = "";
+    let buffer = '';
+    let eventDataBuffer = '';
 
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
           if (eventDataBuffer.trim()) {
-            const result = this._processSseEventData<TStreamItem>(eventDataBuffer, originalRequestId);
+            const result = this._processSseEventData<TStreamItem>(
+              eventDataBuffer,
+              originalRequestId
+            );
             yield result;
           }
           break;
@@ -214,19 +291,22 @@ export class JsonRpcTransport implements A2ATransport {
           const line = buffer.substring(0, lineEndIndex).trim();
           buffer = buffer.substring(lineEndIndex + 1);
 
-          if (line === "") {
+          if (line === '') {
             if (eventDataBuffer) {
-              const result = this._processSseEventData<TStreamItem>(eventDataBuffer, originalRequestId);
+              const result = this._processSseEventData<TStreamItem>(
+                eventDataBuffer,
+                originalRequestId
+              );
               yield result;
-              eventDataBuffer = "";
+              eventDataBuffer = '';
             }
-          } else if (line.startsWith("data:")) {
-            eventDataBuffer += line.substring(5).trimStart() + "\n";
+          } else if (line.startsWith('data:')) {
+            eventDataBuffer += line.substring(5).trimStart() + '\n';
           }
         }
       }
     } catch (error: any) {
-      console.error("Error reading or parsing SSE stream:", error.message);
+      console.error('Error reading or parsing SSE stream:', error.message);
       throw error;
     } finally {
       reader.releaseLock();
@@ -238,19 +318,23 @@ export class JsonRpcTransport implements A2ATransport {
     originalRequestId: number | string | null
   ): TStreamItem {
     if (!jsonData.trim()) {
-      throw new Error("Attempted to process empty SSE event data.");
+      throw new Error('Attempted to process empty SSE event data.');
     }
     try {
       const sseJsonRpcResponse = JSON.parse(jsonData.replace(/\n$/, ''));
       const a2aStreamResponse: JSONRPCResponse = sseJsonRpcResponse as JSONRPCResponse;
 
       if (a2aStreamResponse.id !== originalRequestId) {
-        console.warn(`SSE Event's JSON-RPC response ID mismatch. Client request ID: ${originalRequestId}, event response ID: ${a2aStreamResponse.id}.`);
+        console.warn(
+          `SSE Event's JSON-RPC response ID mismatch. Client request ID: ${originalRequestId}, event response ID: ${a2aStreamResponse.id}.`
+        );
       }
 
-      if ("error" in a2aStreamResponse) {
+      if ('error' in a2aStreamResponse) {
         const err = a2aStreamResponse.error;
-        throw new Error(`SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`);
+        throw new Error(
+          `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`
+        );
       }
 
       if (!('result' in a2aStreamResponse) || typeof a2aStreamResponse.result === 'undefined') {
@@ -259,11 +343,20 @@ export class JsonRpcTransport implements A2ATransport {
 
       return a2aStreamResponse.result as TStreamItem;
     } catch (e: any) {
-      if (e.message.startsWith("SSE event contained an error") || e.message.startsWith("SSE event JSON-RPC response is missing 'result' field")) {
+      if (
+        e.message.startsWith('SSE event contained an error') ||
+        e.message.startsWith("SSE event JSON-RPC response is missing 'result' field")
+      ) {
         throw e;
       }
-      console.error("Failed to parse SSE event data string or unexpected JSON-RPC structure:", jsonData, e);
-      throw new Error(`Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`);
+      console.error(
+        'Failed to parse SSE event data string or unexpected JSON-RPC structure:',
+        jsonData,
+        e
+      );
+      throw new Error(
+        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`
+      );
     }
   }
 
@@ -291,7 +384,9 @@ export class JsonRpcTransport implements A2ATransport {
 
 export class JSONRPCTransportError extends Error {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super(`JSON-RPC error: ${errorResponse.error.message} (Code: ${errorResponse.error.code}) Data: ${JSON.stringify(errorResponse.error.data || {})}`);
+    super(
+      `JSON-RPC error: ${errorResponse.error.message} (Code: ${errorResponse.error.code}) Data: ${JSON.stringify(errorResponse.error.data || {})}`
+    );
   }
 }
 
@@ -300,42 +395,42 @@ export class JSONRPCTransportError extends Error {
 
 export class TaskNotFoundJSONRPCError extends TaskNotFoundError {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super()
+    super();
   }
 }
 
 export class TaskNotCancelableJSONRPCError extends TaskNotCancelableError {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super()
+    super();
   }
 }
 
 export class PushNotificationNotSupportedJSONRPCError extends PushNotificationNotSupportedError {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super()
+    super();
   }
 }
 
 export class UnsupportedOperationJSONRPCError extends UnsupportedOperationError {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super()
+    super();
   }
 }
 
 export class ContentTypeNotSupportedJSONRPCError extends ContentTypeNotSupportedError {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super()
+    super();
   }
 }
 
 export class InvalidAgentResponseJSONRPCError extends InvalidAgentResponseError {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super()
+    super();
   }
 }
 
 export class AuthenticatedExtendedCardNotConfiguredJSONRPCError extends AuthenticatedExtendedCardNotConfiguredError {
   constructor(public errorResponse: JSONRPCErrorResponse) {
-    super()
+    super();
   }
 }
