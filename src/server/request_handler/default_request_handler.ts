@@ -189,11 +189,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     } catch (error) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
-      if (options?.firstResultRejector && !firstResultSent) {
-        options.firstResultRejector(error);
+      if (options?.firstResultRejector) {
+        if(!firstResultSent) {
+          options.firstResultRejector(error);
+        }
+      } else {
+        // re-throw error for blocking case to catch
+        throw error;
       }
-      // re-throw error for blocking case to catch
-      throw error;
     } finally {
       this.eventBusManager.cleanupByTaskId(taskId);
     }

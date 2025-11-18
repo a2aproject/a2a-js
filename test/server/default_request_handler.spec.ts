@@ -40,6 +40,8 @@ import {
 } from './mocks/agent-executor.mock.js';
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 import { ServerCallContext } from '../../src/server/context.js';
+import { MockTaskStore } from './mocks/task_store.mock.js';
+import { Mock } from 'node:test';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let handler: A2ARequestHandler;
@@ -47,6 +49,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let mockAgentExecutor: AgentExecutor;
   let executionEventBusManager: ExecutionEventBusManager;
   let clock: SinonFakeTimers;
+  let unhandledRejectionSpy: sinon.SinonSpy;
 
   const testAgentCard: AgentCard = {
     name: 'Test Agent',
@@ -83,6 +86,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockAgentExecutor,
       executionEventBusManager
     );
+
+    unhandledRejectionSpy = sinon.spy();
+    process.on('unhandledRejection', unhandledRejectionSpy);
   });
 
   // After each test, restore any sinon fakes or stubs
@@ -90,6 +96,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     sinon.restore();
     if (clock) {
       clock.restore();
+    }
+    process.off('unhandledRejection', unhandledRejectionSpy);
+    if (unhandledRejectionSpy.called) {
+      throw new Error(`Unhandled promise rejection detected: ${unhandledRejectionSpy.firstCall.args[0]}`);
     }
   });
 
@@ -276,6 +286,74 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isTrue(saveSpy.calledTwice, 'Save should be called twice (submitted and completed)');
     assert.equal(saveSpy.secondCall.args[0].status.state, 'completed');
   });
+
+  it('sendMessage: (non-blocking) should handle failure in sendPushNotification after first task event', async () => {
+    clock = sinon.useFakeTimers();
+
+    const mockTaskStore = new MockTaskStore();
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+    );
+
+    const params: MessageSendParams = {
+      message: createTestMessage('msg-nonblock', 'Do a long task'),
+      configuration: { 
+        blocking: false, 
+        acceptedOutputModes: []
+      },
+    };
+
+    const taskId = 'task-nonblock-123';
+    const contextId = 'ctx-nonblock-abc';
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      // First event is the task creation, which should be returned immediately
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
+
+      // Simulate work before publishing more events
+      await clock.tickAsync(500);
+
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'completed' },
+        final: true,
+      });
+      bus.finished();
+    });
+
+    (mockTaskStore as MockTaskStore).save.callsFake(async (task) => {
+      if( task.status.state == 'completed'){
+        console.log("Throwing the error")
+        throw new Error('Error thrown on second task notification')
+      }
+    });
+
+    // This call should return as soon as the first 'task' event is published
+    const immediateResult = await handler.sendMessage(params);
+
+    // Assert that we got the initial task object back right away
+    const taskResult = immediateResult as Task;
+    assert.equal(taskResult.kind, 'task');
+    assert.equal(taskResult.id, taskId);
+    assert.equal(
+      taskResult.status.state,
+      'submitted',
+      "Should return immediately with 'submitted' state"
+    );
+
+    // Allow the background processing to complete
+    await clock.runAllAsync();
+  });
+
 
   it('sendMessage: should handle agent execution failure for non-blocking calls', async () => {
     const errorMessage = 'Agent failed!';
