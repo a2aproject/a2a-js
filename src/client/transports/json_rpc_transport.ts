@@ -36,45 +36,45 @@ export class JsonRpcTransport implements A2ATransport {
     this.customFetchImpl = options.fetchImpl;
   }
 
-  async sendMessage(params: MessageSendParams, idOverride?: number): Promise<SendMessageResult> {
+  async sendMessage(params: MessageSendParams, signal?: AbortSignal, idOverride?: number): Promise<SendMessageResult> {
     const rpcResponse = await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>("message/send", params, idOverride);
     return rpcResponse.result;
   }
 
-  async *sendMessageStream(params: MessageSendParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest("message/stream", params);
+  async *sendMessageStream(params: MessageSendParams, signal?: AbortSignal): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    yield* this._sendStreamingRequest("message/stream", params, signal);
   }
 
-  async setTaskPushNotificationConfig(params: TaskPushNotificationConfig, idOverride?: number): Promise<TaskPushNotificationConfig> {
+  async setTaskPushNotificationConfig(params: TaskPushNotificationConfig, signal?: AbortSignal, idOverride?: number): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<TaskPushNotificationConfig, SetTaskPushNotificationConfigSuccessResponse>("tasks/pushNotificationConfig/set", params, idOverride);
     return rpcResponse.result;
   }
 
-  async getTaskPushNotificationConfig(params: TaskIdParams, idOverride?: number): Promise<TaskPushNotificationConfig> {
+  async getTaskPushNotificationConfig(params: TaskIdParams, signal?: AbortSignal, idOverride?: number): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<TaskIdParams, GetTaskPushNotificationConfigSuccessResponse>("tasks/pushNotificationConfig/get", params, idOverride);
     return rpcResponse.result;
   }
 
-  async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams, idOverride?: number): Promise<TaskPushNotificationConfig[]> {
+  async listTaskPushNotificationConfig(params: ListTaskPushNotificationConfigParams, signal?: AbortSignal, idOverride?: number): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendRpcRequest<ListTaskPushNotificationConfigParams, ListTaskPushNotificationConfigSuccessResponse>("tasks/pushNotificationConfig/list", params, idOverride);
     return rpcResponse.result;
   }
 
-  async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams, idOverride?: number): Promise<void> {
+  async deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams, signal?: AbortSignal, idOverride?: number): Promise<void> {
     await this._sendRpcRequest<DeleteTaskPushNotificationConfigParams, DeleteTaskPushNotificationConfigResponse>("tasks/pushNotificationConfig/delete", params, idOverride);
   }
 
-  async getTask(params: TaskQueryParams, idOverride?: number): Promise<Task> {
+  async getTask(params: TaskQueryParams, signal?: AbortSignal, idOverride?: number): Promise<Task> {
     const rpcResponse = await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>("tasks/get", params, idOverride);
     return rpcResponse.result;
   }
 
-  async cancelTask(params: TaskIdParams, idOverride?: number): Promise<Task> {
+  async cancelTask(params: TaskIdParams, signal?: AbortSignal, idOverride?: number): Promise<Task> {
     const rpcResponse = await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>("tasks/cancel", params, idOverride);
     return rpcResponse.result;
   }
 
-  async *resubscribeTask(params: TaskIdParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  async *resubscribeTask(params: TaskIdParams, signal?: AbortSignal): AsyncGenerator<A2AStreamEventData, void, undefined> {
     yield* this._sendStreamingRequest("tasks/resubscribe", params);
   }
 
@@ -99,6 +99,7 @@ export class JsonRpcTransport implements A2ATransport {
     method: string,
     params: TParams,
     idOverride: number | undefined,
+    signal?: AbortSignal,
   ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
     
@@ -109,7 +110,7 @@ export class JsonRpcTransport implements A2ATransport {
       id: requestId,
     };
 
-    const httpResponse = await this._fetchRpc(rpcRequest);
+    const httpResponse = await this._fetchRpc(rpcRequest, "application/json", signal);
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
@@ -139,21 +140,23 @@ export class JsonRpcTransport implements A2ATransport {
     return rpcResponse as TResponse;
   }
 
-  private async _fetchRpc(rpcRequest: JSONRPCRequest, acceptHeader: string = "application/json"): Promise<Response> {
+  private async _fetchRpc(rpcRequest: JSONRPCRequest, acceptHeader: string = "application/json", signal?: AbortSignal): Promise<Response> {
     const requestInit: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Accept": acceptHeader,
       },
-      body: JSON.stringify(rpcRequest)
+      body: JSON.stringify(rpcRequest),
+      signal,
     };
     return this._fetch(this.endpoint, requestInit);
   }
 
   private async *_sendStreamingRequest(
     method: string,
-    params: any
+    params: any,
+    signal?: AbortSignal
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
@@ -163,7 +166,7 @@ export class JsonRpcTransport implements A2ATransport {
       id: clientRequestId,
     };
 
-    const response = await this._fetchRpc(rpcRequest, "text/event-stream");
+    const response = await this._fetchRpc(rpcRequest, "text/event-stream", signal);
 
     if (!response.ok) {
       let errorBody = "";
