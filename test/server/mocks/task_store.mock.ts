@@ -1,6 +1,5 @@
 import sinon, { SinonStub } from 'sinon';
 import { Task } from '../../../src/index.js';
-import { PushNotificationSender } from '../../../src/server/push_notification/push_notification_sender.js';
 import { TaskStore } from '../../../src/server/store.js';
 
 export class MockTaskStore implements TaskStore {

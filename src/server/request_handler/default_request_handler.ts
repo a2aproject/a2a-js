@@ -190,7 +190,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     } catch (error: any) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
       if (options?.firstResultRejector) {
-        if(!firstResultSent) {
+        if (!firstResultSent) {
           options.firstResultRejector(error);
         } else {
           const contextId = resultManager.getCurrentTask()?.contextId;

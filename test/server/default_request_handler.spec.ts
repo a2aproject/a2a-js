@@ -41,7 +41,6 @@ import {
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { MockTaskStore } from './mocks/task_store.mock.js';
-import { Mock } from 'node:test';
 import { TextPart } from 'genkit/model';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
@@ -50,7 +49,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let mockAgentExecutor: AgentExecutor;
   let executionEventBusManager: ExecutionEventBusManager;
   let clock: SinonFakeTimers;
-  let unhandledRejectionSpy: sinon.SinonSpy;
 
   const testAgentCard: AgentCard = {
     name: 'Test Agent',
@@ -289,14 +287,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       testAgentCard,
       mockTaskStore,
       mockAgentExecutor,
-      executionEventBusManager,
+      executionEventBusManager
     );
 
     const params: MessageSendParams = {
       message: createTestMessage('msg-nonblock', 'Do a long task'),
-      configuration: { 
-        blocking: false, 
-        acceptedOutputModes: []
+      configuration: {
+        blocking: false,
+        acceptedOutputModes: [],
       },
     };
 
@@ -324,14 +322,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.finished();
     });
 
-    let finalTaskSaved : Task | undefined;
+    let finalTaskSaved: Task | undefined;
     const errorMessage = 'Error thrown on saving completed task notification';
     (mockTaskStore as MockTaskStore).save.callsFake(async (task) => {
-      if(task.status.state == 'completed'){
-        throw new Error(errorMessage)
+      if (task.status.state == 'completed') {
+        throw new Error(errorMessage);
       }
 
-      if(task.status.state == 'failed'){
+      if (task.status.state == 'failed') {
         finalTaskSaved = task;
       }
     });
@@ -353,12 +351,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await clock.runAllAsync();
 
     assert.equal(finalTaskSaved!.status.state, 'failed');
-    assert.equal(finalTaskSaved!.id, taskId)
-    assert.equal(finalTaskSaved!.contextId, contextId)
+    assert.equal(finalTaskSaved!.id, taskId);
+    assert.equal(finalTaskSaved!.contextId, contextId);
     assert.equal(finalTaskSaved!.status.message!.role, 'agent');
-    assert.equal((finalTaskSaved!.status.message!.parts[0] as TextPart).text, `Event processing loop failed: ${errorMessage}`)
+    assert.equal(
+      (finalTaskSaved!.status.message!.parts[0] as TextPart).text,
+      `Event processing loop failed: ${errorMessage}`
+    );
   });
-
 
   it('sendMessage: should handle agent execution failure for non-blocking calls', async () => {
     const errorMessage = 'Agent failed!';
