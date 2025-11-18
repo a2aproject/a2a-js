@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { A2AClient } from '../../src/client/client.js';
+import { A2AClient } from '../../src/client/legacy.js';
 import {
   MessageSendParams,
   TextPart,

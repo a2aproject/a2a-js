@@ -7,7 +7,7 @@ import {
     TaskQueryParams,
     Task
 } from "../../types.js";
-import { A2AStreamEventData, SendMessageResult } from "../client.js";
+import { A2AStreamEventData, SendMessageResult } from "../legacy.js";
 
 export interface A2ATransport {
     sendMessage(params: MessageSendParams): Promise<SendMessageResult>;

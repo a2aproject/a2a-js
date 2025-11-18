@@ -18,7 +18,7 @@ import {
   GetTaskSuccessResponse,
   CancelTaskSuccessResponse,
 } from '../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../client.js';
+import { A2AStreamEventData, SendMessageResult } from '../legacy.js';
 import { A2ATransport } from './transport.js';
 
 export interface JsonRpcTransportOptions {
