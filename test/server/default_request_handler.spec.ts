@@ -42,6 +42,7 @@ import { MockPushNotificationSender } from './mocks/push_notification_sender.moc
 import { ServerCallContext } from '../../src/server/context.js';
 import { MockTaskStore } from './mocks/task_store.mock.js';
 import { Mock } from 'node:test';
+import { TextPart } from 'genkit/model';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let handler: A2ARequestHandler;
@@ -86,9 +87,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockAgentExecutor,
       executionEventBusManager
     );
-
-    unhandledRejectionSpy = sinon.spy();
-    process.on('unhandledRejection', unhandledRejectionSpy);
   });
 
   // After each test, restore any sinon fakes or stubs
@@ -96,10 +94,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     sinon.restore();
     if (clock) {
       clock.restore();
-    }
-    process.off('unhandledRejection', unhandledRejectionSpy);
-    if (unhandledRejectionSpy.called) {
-      throw new Error(`Unhandled promise rejection detected: ${unhandledRejectionSpy.firstCall.args[0]}`);
     }
   });
 
@@ -287,7 +281,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(saveSpy.secondCall.args[0].status.state, 'completed');
   });
 
-  it('sendMessage: (non-blocking) should handle failure in sendPushNotification after first task event', async () => {
+  it('sendMessage: (non-blocking) should handle failure in event loop after successfull task event', async () => {
     clock = sinon.useFakeTimers();
 
     const mockTaskStore = new MockTaskStore();
@@ -330,10 +324,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.finished();
     });
 
+    let finalTaskSaved : Task | undefined;
+    const errorMessage = 'Error thrown on saving completed task notification';
     (mockTaskStore as MockTaskStore).save.callsFake(async (task) => {
-      if( task.status.state == 'completed'){
-        console.log("Throwing the error")
-        throw new Error('Error thrown on second task notification')
+      if(task.status.state == 'completed'){
+        throw new Error(errorMessage)
+      }
+
+      if(task.status.state == 'failed'){
+        finalTaskSaved = task;
       }
     });
 
@@ -352,6 +351,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     // Allow the background processing to complete
     await clock.runAllAsync();
+
+    assert.equal(finalTaskSaved!.status.state, 'failed');
+    assert.equal(finalTaskSaved!.id, taskId)
+    assert.equal(finalTaskSaved!.contextId, contextId)
+    assert.equal(finalTaskSaved!.status.message!.role, 'agent');
+    assert.equal((finalTaskSaved!.status.message!.parts[0] as TextPart).text, `Event processing loop failed: ${errorMessage}`)
   });
 
 

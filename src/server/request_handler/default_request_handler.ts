@@ -187,11 +187,33 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           A2AError.internalError('Execution finished before a message or task was produced.')
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
       if (options?.firstResultRejector) {
         if(!firstResultSent) {
           options.firstResultRejector(error);
+        } else {
+          const contextId = resultManager.getCurrentTask()?.contextId;
+          const taskId = resultManager.getCurrentTask()?.id;
+          const errorTask: TaskStatusUpdateEvent = {
+            taskId: taskId,
+            contextId: contextId,
+            status: {
+              state: 'failed',
+              message: {
+                kind: 'message',
+                role: 'agent',
+                messageId: uuidv4(),
+                parts: [{ kind: 'text', text: `Event processing loop failed: ${error.message}` }],
+                taskId: taskId,
+                contextId: contextId,
+              },
+              timestamp: new Date().toISOString(),
+            },
+            kind: 'status-update',
+            final: true,
+          };
+          await resultManager.processEvent(errorTask);
         }
       } else {
         // re-throw error for blocking case to catch
