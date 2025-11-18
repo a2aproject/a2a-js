@@ -9,7 +9,7 @@
     "declaration": true,
     "esModuleInterop": true, // Often helpful with NodeNext
     "resolveJsonModule": true, // Good practice for importing JSON if needed
-    "noImplicitAny": true
+    "noImplicitAny": true,
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

@@ -21,7 +21,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run build
-
+      
       # Now configure with the publish service for install.
       - uses: actions/setup-node@v4
         with:

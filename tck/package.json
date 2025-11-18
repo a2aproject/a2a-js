@@ -4,5 +4,6 @@
   "description": "SUT agent for tck tests CI",
   "scripts": {
     "tck:sut-agent": "tsx agent/index.ts"
+
   }
 }
