@@ -3,33 +3,11 @@ import {
   MessageSendParams,
   TaskIdParams,
   A2ARequest,
-  JSONRPCResponse,
-  Task,
-  Message,
-  TaskPushNotificationConfig,
-  TaskQueryParams,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  DeleteTaskPushNotificationConfigParams,
+  JSONRPCResponse
 } from '../../types.js';
 import { ServerCallContext } from '../context.js';
 import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-
-type RequestHandlerResponse =
-  | Task
-  | Message
-  | TaskPushNotificationConfig
-  | TaskPushNotificationConfig[];
-
-type A2AParams =
-  | MessageSendParams
-  | TaskQueryParams
-  | TaskIdParams
-  | TaskPushNotificationConfig
-  | GetTaskPushNotificationConfigParams
-  | ListTaskPushNotificationConfigParams
-  | DeleteTaskPushNotificationConfigParams;
 
 /**
  * Handles JSON-RPC transport layer, routing requests to A2ARequestHandler.
@@ -135,7 +113,7 @@ export class JsonRpcTransportHandler {
         })();
       } else {
         // Handle non-streaming methods
-        let result: RequestHandlerResponse;
+        let result: unknown;
         switch (method) {
           case 'message/send':
             result = await this.requestHandler.sendMessage(rpcRequest.params, context);
@@ -181,10 +159,10 @@ export class JsonRpcTransportHandler {
       let a2aError: A2AError;
       if (error instanceof A2AError) {
         a2aError = error;
-      } else if (error instanceof Error && error.message) {
-        a2aError = A2AError.internalError(error.message);
       } else {
-        a2aError = A2AError.internalError('An unexpected error occurred.');
+        a2aError = A2AError.internalError(
+          (error instanceof Error && error.message) || 'An unexpected error occurred.'
+        );
       }
       return {
         jsonrpc: '2.0',
@@ -217,7 +195,7 @@ export class JsonRpcTransportHandler {
   }
 
   // Validates that params is an object with non-empty string keys
-  private paramsAreValid(params: A2AParams): boolean {
+  private paramsAreValid(params: unknown): boolean {
     if (typeof params !== 'object' || params === null || Array.isArray(params)) {
       return false;
     }
