@@ -309,7 +309,7 @@ export class JsonRpcTransport implements A2ATransport {
     } catch (error) {
       console.error(
         'Error reading or parsing SSE stream:',
-        error instanceof Error ? error.message : ''
+        (error instanceof Error && error.message) || 'Error unknown'
       );
       throw error;
     } finally {

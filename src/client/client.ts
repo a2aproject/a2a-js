@@ -287,7 +287,7 @@ export class A2AClient {
     } catch (e) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      const errorResponse = hasJSONRPCError(e);
+      const errorResponse = extractJSONRPCError(e);
       if (errorResponse) {
         return errorResponse as TExtensionResponse;
       }
@@ -447,7 +447,7 @@ export class A2AClient {
     } catch (e) {
       // For compatibility, return JSON-RPC errors as response objects instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      const errorResponse = hasJSONRPCError(e);
+      const errorResponse = extractJSONRPCError(e);
       if (errorResponse) {
         return errorResponse as TResponse;
       }
@@ -456,7 +456,7 @@ export class A2AClient {
   }
 }
 
-function hasJSONRPCError(error: unknown): JSONRPCErrorResponse {
+function extractJSONRPCError(error: unknown): JSONRPCErrorResponse {
   if (
     typeof error === 'object' &&
     error !== null &&
