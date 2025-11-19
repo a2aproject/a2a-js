@@ -635,13 +635,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     taskId: string,
     firstResultRejector?: (reason: any) => void
   ): Promise<void> {
+    // Non-blocking case with with first result not sent
     if (firstResultRejector && !firstResultSent) {
       firstResultRejector(error);
       return;
     }
 
+    // re-throw error for blocking case to catch
     if (!firstResultRejector) {
-      // re-throw error for blocking case to catch
       throw error;
     }
 
@@ -670,10 +671,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       try {
         await resultManager.processEvent(statusUpdateFailed);
       } catch (error) {
-        console.error(`Error processing failure update event: ${error}`);
+        console.error(`Event processing loop failed for task ${taskId}: ${error.message}`);
       }
     } else {
-      console.error(`Event processing loop failed: ${error.message}`);
+      console.error(`Event processing loop failed for task ${taskId}: ${error.message}`);
     }
   }
 }
