@@ -178,7 +178,7 @@ export class JsonRpcTransportHandler {
         } as JSONRPCResponse;
       }
     } catch (error) {
-      let a2aError;
+      let a2aError: A2AError;
       if (error instanceof A2AError) {
         a2aError = error;
       } else if (error instanceof Error && error.message) {

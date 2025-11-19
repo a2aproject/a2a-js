@@ -65,7 +65,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         } catch (streamError) {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
           // If the stream itself throws an error, send a final JSONRPCErrorResponse
-          let a2aError;
+          let a2aError: A2AError;
           if (streamError instanceof A2AError) {
             a2aError = streamError;
           } else if (streamError instanceof Error && streamError.message) {
