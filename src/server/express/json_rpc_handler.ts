@@ -69,7 +69,9 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           if (streamError instanceof A2AError) {
             a2aError = streamError;
           } else {
-            a2aError = A2AError.internalError( (streamError instanceof Error && streamError.message) || 'Streaming error.');
+            a2aError = A2AError.internalError(
+              (streamError instanceof Error && streamError.message) || 'Streaming error.'
+            );
           }
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',

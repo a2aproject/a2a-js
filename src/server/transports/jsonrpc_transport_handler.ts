@@ -3,7 +3,7 @@ import {
   MessageSendParams,
   TaskIdParams,
   A2ARequest,
-  JSONRPCResponse
+  JSONRPCResponse,
 } from '../../types.js';
 import { ServerCallContext } from '../context.js';
 import { A2AError } from '../error.js';
