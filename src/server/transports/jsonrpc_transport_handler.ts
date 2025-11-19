@@ -29,9 +29,7 @@ type A2AParams =
   | TaskPushNotificationConfig
   | GetTaskPushNotificationConfigParams
   | ListTaskPushNotificationConfigParams
-  | DeleteTaskPushNotificationConfigParams
-  | MessageSendParams
-  | TaskIdParams;
+  | DeleteTaskPushNotificationConfigParams;
 
 /**
  * Handles JSON-RPC transport layer, routing requests to A2ARequestHandler.
