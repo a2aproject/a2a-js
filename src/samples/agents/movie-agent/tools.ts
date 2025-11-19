@@ -1,18 +1,18 @@
-import { ai, z } from "./genkit.js";
-import { callTmdbApi } from "./tmdb.js";
+import { ai, z } from './genkit.js';
+import { callTmdbApi } from './tmdb.js';
 
 export const searchMovies = ai.defineTool(
   {
-    name: "searchMovies",
-    description: "search TMDB for movies by title",
+    name: 'searchMovies',
+    description: 'search TMDB for movies by title',
     inputSchema: z.object({
       query: z.string(),
     }),
   },
   async ({ query }) => {
-    console.log("[tmdb:searchMovies]", JSON.stringify(query));
+    console.log('[tmdb:searchMovies]', JSON.stringify(query));
     try {
-      const data = await callTmdbApi("movie", query);
+      const data = await callTmdbApi('movie', query);
 
       // Only modify image paths to be full URLs
       const results = data.results.map((movie: any) => {
@@ -30,7 +30,7 @@ export const searchMovies = ai.defineTool(
         results,
       };
     } catch (error) {
-      console.error("Error searching movies:", error);
+      console.error('Error searching movies:', error);
       // Re-throwing allows Genkit/the caller to handle it appropriately
       throw error;
     }
@@ -39,16 +39,16 @@ export const searchMovies = ai.defineTool(
 
 export const searchPeople = ai.defineTool(
   {
-    name: "searchPeople",
-    description: "search TMDB for people by name",
+    name: 'searchPeople',
+    description: 'search TMDB for people by name',
     inputSchema: z.object({
       query: z.string(),
     }),
   },
   async ({ query }) => {
-    console.log("[tmdb:searchPeople]", JSON.stringify(query));
+    console.log('[tmdb:searchPeople]', JSON.stringify(query));
     try {
-      const data = await callTmdbApi("person", query);
+      const data = await callTmdbApi('person', query);
 
       // Only modify image paths to be full URLs
       const results = data.results.map((person: any) => {
@@ -77,7 +77,7 @@ export const searchPeople = ai.defineTool(
         results,
       };
     } catch (error) {
-      console.error("Error searching people:", error);
+      console.error('Error searching people:', error);
       // Re-throwing allows Genkit/the caller to handle it appropriately
       throw error;
     }

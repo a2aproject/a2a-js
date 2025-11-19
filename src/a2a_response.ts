@@ -1,4 +1,15 @@
-import { SendMessageResponse, SendStreamingMessageResponse, GetTaskResponse, CancelTaskResponse, SetTaskPushNotificationConfigResponse, GetTaskPushNotificationConfigResponse, JSONRPCErrorResponse, ListTaskPushNotificationConfigSuccessResponse, DeleteTaskPushNotificationConfigSuccessResponse, GetAuthenticatedExtendedCardSuccessResponse } from "./types.js";
+import {
+  SendMessageResponse,
+  SendStreamingMessageResponse,
+  GetTaskResponse,
+  CancelTaskResponse,
+  SetTaskPushNotificationConfigResponse,
+  GetTaskPushNotificationConfigResponse,
+  JSONRPCErrorResponse,
+  ListTaskPushNotificationConfigSuccessResponse,
+  DeleteTaskPushNotificationConfigSuccessResponse,
+  GetAuthenticatedExtendedCardSuccessResponse,
+} from './types.js';
 
 /**
  * Represents any valid JSON-RPC response defined in the A2A protocol.
@@ -14,4 +25,3 @@ export type A2AResponse =
   | DeleteTaskPushNotificationConfigSuccessResponse
   | GetAuthenticatedExtendedCardSuccessResponse
   | JSONRPCErrorResponse; // Catch-all for other error responses
-  

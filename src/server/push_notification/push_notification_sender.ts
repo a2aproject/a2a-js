@@ -1,5 +1,5 @@
-import { Task } from "../../types.js";
+import { Task } from '../../types.js';
 
 export interface PushNotificationSender {
-    send(task: Task): Promise<void>;
+  send(task: Task): Promise<void>;
 }

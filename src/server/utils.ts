@@ -1,4 +1,4 @@
-import { TaskStatus, Artifact } from "../types.js";
+import { TaskStatus, Artifact } from '../types.js';
 
 /**
  * Generates a timestamp in ISO 8601 format.
@@ -14,38 +14,38 @@ export function getCurrentTimestamp(): string {
  * @returns True if the value is a plain object, false otherwise.
  */
 export function isObject(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
  * Type guard to check if an object is a TaskStatus update (lacks 'parts').
  * Used to differentiate yielded updates from the handler.
  */
-export function isTaskStatusUpdate(
-  update: any
-): update is Omit<TaskStatus, "timestamp"> {
+export function isTaskStatusUpdate(update: any): update is Omit<TaskStatus, 'timestamp'> {
   // Check if it has 'state' and NOT 'parts' (which Artifacts have)
-  return isObject(update) && "state" in update && !("parts" in update);
+  return isObject(update) && 'state' in update && !('parts' in update);
 }
 
 /**
  * Type guard to check if an object is an Artifact update (has 'parts').
  * Used to differentiate yielded updates from the handler.
  */
-export function isArtifactUpdate(
-  update: any
-): update is Artifact {
+export function isArtifactUpdate(update: any): update is Artifact {
   // Check if it has 'parts'
-  return isObject(update) && "parts" in update;
+  return isObject(update) && 'parts' in update;
 }
-
 
 /**
  * Used to parse the extensions extracted from the request header
  */
 export function getRequestedExtensions(values: string | undefined): Set<string> {
   if (!values) {
-      return new Set();
+    return new Set();
   }
-  return new Set(values.split(',').map(ext => ext.trim()).filter(ext => ext.length > 0));
+  return new Set(
+    values
+      .split(',')
+      .map((ext) => ext.trim())
+      .filter((ext) => ext.length > 0)
+  );
 }
