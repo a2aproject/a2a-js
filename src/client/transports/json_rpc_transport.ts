@@ -52,7 +52,8 @@ export class JsonRpcTransport implements A2ATransport {
     const rpcResponse = await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>(
       'message/send',
       params,
-      idOverride
+      idOverride,
+      signal
     );
     return rpcResponse.result;
   }
@@ -72,7 +73,7 @@ export class JsonRpcTransport implements A2ATransport {
     const rpcResponse = await this._sendRpcRequest<
       TaskPushNotificationConfig,
       SetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/set', params, idOverride);
+    >('tasks/pushNotificationConfig/set', params, idOverride, signal);
     return rpcResponse.result;
   }
 
@@ -84,7 +85,7 @@ export class JsonRpcTransport implements A2ATransport {
     const rpcResponse = await this._sendRpcRequest<
       TaskIdParams,
       GetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/get', params, idOverride);
+    >('tasks/pushNotificationConfig/get', params, idOverride, signal);
     return rpcResponse.result;
   }
 
@@ -96,7 +97,7 @@ export class JsonRpcTransport implements A2ATransport {
     const rpcResponse = await this._sendRpcRequest<
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/list', params, idOverride);
+    >('tasks/pushNotificationConfig/list', params, idOverride, signal);
     return rpcResponse.result;
   }
 
@@ -108,14 +109,15 @@ export class JsonRpcTransport implements A2ATransport {
     await this._sendRpcRequest<
       DeleteTaskPushNotificationConfigParams,
       DeleteTaskPushNotificationConfigResponse
-    >('tasks/pushNotificationConfig/delete', params, idOverride);
+    >('tasks/pushNotificationConfig/delete', params, idOverride, signal);
   }
 
   async getTask(params: TaskQueryParams, signal?: AbortSignal, idOverride?: number): Promise<Task> {
     const rpcResponse = await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>(
       'tasks/get',
       params,
-      idOverride
+      idOverride,
+      signal
     );
     return rpcResponse.result;
   }
@@ -124,7 +126,8 @@ export class JsonRpcTransport implements A2ATransport {
     const rpcResponse = await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>(
       'tasks/cancel',
       params,
-      idOverride
+      idOverride,
+      signal
     );
     return rpcResponse.result;
   }
@@ -133,18 +136,20 @@ export class JsonRpcTransport implements A2ATransport {
     params: TaskIdParams,
     signal?: AbortSignal
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest('tasks/resubscribe', params);
+    yield* this._sendStreamingRequest('tasks/resubscribe', params, signal);
   }
 
   async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(
     method: string,
     params: TExtensionParams,
-    idOverride: number
+    idOverride: number,
+    signal?: AbortSignal
   ) {
     return await this._sendRpcRequest<TExtensionParams, TExtensionResponse>(
       method,
       params,
-      idOverride
+      idOverride,
+      signal
     );
   }
 
@@ -168,7 +173,7 @@ export class JsonRpcTransport implements A2ATransport {
     method: string,
     params: TParams,
     idOverride: number | undefined,
-    signal?: AbortSignal
+    signal: AbortSignal | undefined
   ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
 

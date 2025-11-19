@@ -37,6 +37,8 @@ export interface A2AClientOptions {
  * Only JSON-RPC transport is supported.
  */
 export class A2AClient {
+  private static noAbortSignal: AbortSignal | undefined = undefined;
+
   private readonly agentCardPromise: Promise<AgentCard>;
   private readonly customFetchImpl?: typeof fetch;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetchin
@@ -149,7 +151,7 @@ export class A2AClient {
    */
   public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
     return await this.invokeJsonRpc<MessageSendParams, SendMessageResponse>(
-      (t, p, id) => t.sendMessage(p, id),
+      (t, p, id) => t.sendMessage(p, A2AClient.noAbortSignal, id),
       params
     );
   }
@@ -195,7 +197,7 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       TaskPushNotificationConfig,
       SetTaskPushNotificationConfigResponse
-    >((t, p, id) => t.setTaskPushNotificationConfig(p, id), params);
+    >((t, p, id) => t.setTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id), params);
   }
 
   /**
@@ -207,7 +209,7 @@ export class A2AClient {
     params: TaskIdParams
   ): Promise<GetTaskPushNotificationConfigResponse> {
     return await this.invokeJsonRpc<TaskIdParams, GetTaskPushNotificationConfigResponse>(
-      (t, p, id) => t.getTaskPushNotificationConfig(p, id),
+      (t, p, id) => t.getTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id),
       params
     );
   }
@@ -223,7 +225,7 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigResponse
-    >((t, p, id) => t.listTaskPushNotificationConfig(p, id), params);
+    >((t, p, id) => t.listTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id), params);
   }
 
   /**
@@ -237,7 +239,7 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       DeleteTaskPushNotificationConfigParams,
       DeleteTaskPushNotificationConfigResponse
-    >((t, p, id) => t.deleteTaskPushNotificationConfig(p, id), params);
+    >((t, p, id) => t.deleteTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id), params);
   }
 
   /**
@@ -247,7 +249,7 @@ export class A2AClient {
    */
   public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
     return await this.invokeJsonRpc<TaskQueryParams, GetTaskResponse>(
-      (t, p, id) => t.getTask(p, id),
+      (t, p, id) => t.getTask(p, A2AClient.noAbortSignal, id),
       params
     );
   }
@@ -259,7 +261,7 @@ export class A2AClient {
    */
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
     return await this.invokeJsonRpc<TaskIdParams, CancelTaskResponse>(
-      (t, p, id) => t.cancelTask(p, id),
+      (t, p, id) => t.cancelTask(p, A2AClient.noAbortSignal, id),
       params
     );
   }
@@ -281,7 +283,8 @@ export class A2AClient {
       return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(
         method,
         params,
-        this.requestIdCounter++
+        this.requestIdCounter++,
+        A2AClient.noAbortSignal
       );
     } catch (e: any) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
