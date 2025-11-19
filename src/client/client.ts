@@ -287,8 +287,9 @@ export class A2AClient {
     } catch (e) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isA2AJsonRpcError(e)) {
-        return e.errorResponse as TExtensionResponse;
+      const errorResponse = hasJSONRPCError(e);
+      if (errorResponse) {
+        return errorResponse as TExtensionResponse;
       }
       throw e;
     }
@@ -446,32 +447,31 @@ export class A2AClient {
     } catch (e) {
       // For compatibility, return JSON-RPC errors as response objects instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isA2AJsonRpcError(e)) {
-        return e.errorResponse as TResponse;
+      const errorResponse = hasJSONRPCError(e);
+      if (errorResponse) {
+        return errorResponse as TResponse;
       }
       throw e;
     }
   }
 }
 
-export interface JsonRpcErrorWithResponse {
-  errorResponse: JSONRPCErrorResponse;
-}
-
-function isA2AJsonRpcError(error: unknown): error is JsonRpcErrorWithResponse {
-  return (
+function hasJSONRPCError(error: unknown): JSONRPCErrorResponse {
+  if (
     typeof error === 'object' &&
     error !== null &&
     'errorResponse' in error &&
-    // Further check the structure of errorResponse to be more robust
-    typeof (error as JsonRpcErrorWithResponse).errorResponse === 'object' &&
-    (error as JsonRpcErrorWithResponse).errorResponse !== null &&
-    (error as JsonRpcErrorWithResponse).errorResponse.jsonrpc === '2.0' &&
-    typeof (error as JsonRpcErrorWithResponse).errorResponse.error === 'object' &&
-    (error as JsonRpcErrorWithResponse).errorResponse.error !== null &&
-    typeof (error as JsonRpcErrorWithResponse).errorResponse.error.code === 'number' &&
-    typeof (error as JsonRpcErrorWithResponse).errorResponse.error.message === 'string'
-  );
+    typeof error.errorResponse === 'object' &&
+    error.errorResponse !== null &&
+    'jsonrpc' in error.errorResponse &&
+    error.errorResponse.jsonrpc === '2.0' &&
+    'error' in error.errorResponse &&
+    error.errorResponse.error !== null
+  ) {
+    return error.errorResponse as JSONRPCErrorResponse;
+  } else {
+    return undefined;
+  }
 }
 
 // Utility unexported types to properly factor out common "compatibility" logic via invokeJsonRpc.
