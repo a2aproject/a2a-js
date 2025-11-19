@@ -34,7 +34,6 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
-import { request } from 'http';
 
 const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
 
@@ -246,7 +245,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
       // Publish a synthetic error event, which will be handled by the ResultManager
       // and will also settle the firstResultPromise for non-blocking calls.
-      const errorTask = this._createArtificialTaskFailure(taskId, err, contextId, requestContext.task?.history);
+      const errorTask = this._createArtificialTaskFailure(
+        taskId,
+        err,
+        contextId,
+        requestContext.task?.history
+      );
       if (finalMessageForAgent) {
         // Add incoming message to history
         if (!errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)) {
@@ -341,7 +345,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             messageId: uuidv4(),
             parts: [{ kind: 'text', text: `Agent execution error: ${err.message}` }],
             taskId: taskId,
-            contextId:contextId,
+            contextId: contextId,
           },
           timestamp: new Date().toISOString(),
         },
