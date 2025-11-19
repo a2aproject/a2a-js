@@ -205,7 +205,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-async sendMessage(
+  async sendMessage(
     params: MessageSendParams,
     context?: ServerCallContext
   ): Promise<Message | Task> {
