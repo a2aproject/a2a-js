@@ -34,6 +34,7 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
+import { request } from 'http';
 
 const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
 
@@ -222,6 +223,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const requestContext = await this._createRequestContext(incomingMessage, context);
     const taskId = requestContext.taskId;
+    const contextId = requestContext.contextId;
 
     // Use the (potentially updated) contextId from requestContext
     const finalMessageForAgent = requestContext.userMessage;
@@ -244,24 +246,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
       // Publish a synthetic error event, which will be handled by the ResultManager
       // and will also settle the firstResultPromise for non-blocking calls.
-      const errorTask: Task = {
-        id: requestContext.task?.id || uuidv4(), // Use existing task ID or generate new
-        contextId: finalMessageForAgent.contextId!,
-        status: {
-          state: 'failed',
-          message: {
-            kind: 'message',
-            role: 'agent',
-            messageId: uuidv4(),
-            parts: [{ kind: 'text', text: `Agent execution error: ${err.message}` }],
-            taskId: requestContext.task?.id,
-            contextId: finalMessageForAgent.contextId!,
-          },
-          timestamp: new Date().toISOString(),
-        },
-        history: requestContext.task?.history ? [...requestContext.task.history] : [],
-        kind: 'task',
-      };
+      const errorTask = this._createArtificialTaskFailure(taskId, err, contextId, requestContext.task?.history);
       if (finalMessageForAgent) {
         // Add incoming message to history
         if (!errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)) {
@@ -323,6 +308,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const requestContext = await this._createRequestContext(incomingMessage, context);
     const taskId = requestContext.taskId;
+    const contextId = requestContext.contextId;
     const finalMessageForAgent = requestContext.userMessage;
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
@@ -345,8 +331,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // Publish a synthetic error event if needed
       const errorTaskStatus: TaskStatusUpdateEvent = {
         kind: 'status-update',
-        taskId: requestContext.task?.id || uuidv4(), // Use existing or a placeholder
-        contextId: finalMessageForAgent.contextId!,
+        taskId: taskId, // Use existing or a placeholder
+        contextId: contextId,
         status: {
           state: 'failed',
           message: {
@@ -354,8 +340,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             role: 'agent',
             messageId: uuidv4(),
             parts: [{ kind: 'text', text: `Agent execution error: ${err.message}` }],
-            taskId: requestContext.task?.id,
-            contextId: finalMessageForAgent.contextId!,
+            taskId: taskId,
+            contextId:contextId,
           },
           timestamp: new Date().toISOString(),
         },
@@ -637,6 +623,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   ): Promise<void> {
     if (firstResultRejector && !firstResultSent) {
       firstResultRejector(error);
+      return;
     }
 
     if (!firstResultRejector) {
@@ -647,7 +634,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Non-blocking case with first result already sent
     const currentTask = resultManager.getCurrentTask();
     if (currentTask) {
-      const errorTask: TaskStatusUpdateEvent = {
+      const statusUpdateFailed: TaskStatusUpdateEvent = {
         taskId: currentTask.id,
         contextId: currentTask.contextId,
         status: {
@@ -667,11 +654,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       };
 
       try {
-        await resultManager.processEvent(errorTask);
+        await resultManager.processEvent(statusUpdateFailed);
       } catch (error) {
         console.error(`Error processing error event: ${error}`);
       }
     } else {
+      // This could happen if the first result sent to the user was a message
       const errorTask: Task = this._createArtificialTaskFailure(taskId, error);
       try {
         resultManager.processEvent(errorTask);
