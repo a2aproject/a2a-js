@@ -648,7 +648,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Non-blocking case with first result already sent
     const currentTask = resultManager.getCurrentTask();
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = (error instanceof Error && error.message) ? error.message : 'Unknown error';
     if (currentTask) {
       const statusUpdateFailed: TaskStatusUpdateEvent = {
         taskId: currentTask.id,
@@ -673,7 +673,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(statusUpdateFailed);
       } catch (error) {
         console.error(
-          `Event processing loop failed for task ${taskId}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Event processing loop failed for task ${taskId}: ${ (error instanceof Error && error.message) ? error.message : 'Unknown error'}`
         );
       }
     } else {
