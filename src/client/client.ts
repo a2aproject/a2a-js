@@ -19,6 +19,7 @@ import {
   TaskArtifactUpdateEvent,
   TaskStatusUpdateEvent,
   A2ARequest,
+  JSONRPCErrorResponse,
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
@@ -283,10 +284,10 @@ export class A2AClient {
         params,
         this.requestIdCounter++
       );
-    } catch (e: any) {
+    } catch (e) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isJSONRPCError(e)) {
+      if (isA2AJsonRpcError(e)) {
         return e.errorResponse as TExtensionResponse;
       }
       throw e;
@@ -442,10 +443,10 @@ export class A2AClient {
         jsonrpc: '2.0',
         result: result ?? null, // JSON-RPC requires result property on success, it will be null for "void" methods.
       } as TResponse;
-    } catch (e: any) {
+    } catch (e) {
       // For compatibility, return JSON-RPC errors as response objects instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isJSONRPCError(e)) {
+      if (isA2AJsonRpcError(e)) {
         return e.errorResponse as TResponse;
       }
       throw e;
@@ -453,12 +454,23 @@ export class A2AClient {
   }
 }
 
-function isJSONRPCError(error: any): boolean {
+export interface JsonRpcErrorWithResponse {
+  errorResponse: JSONRPCErrorResponse;
+}
+
+function isA2AJsonRpcError(error: unknown): error is JsonRpcErrorWithResponse {
   return (
+    typeof error === 'object' &&
+    error !== null &&
     'errorResponse' in error &&
-    error.errorResponse &&
-    error.errorResponse.jsonrpc === '2.0' &&
-    error.errorResponse.error
+    // Further check the structure of errorResponse to be more robust
+    typeof (error as JsonRpcErrorWithResponse).errorResponse === 'object' &&
+    (error as JsonRpcErrorWithResponse).errorResponse !== null &&
+    (error as JsonRpcErrorWithResponse).errorResponse.jsonrpc === '2.0' &&
+    typeof (error as JsonRpcErrorWithResponse).errorResponse.error === 'object' &&
+    (error as JsonRpcErrorWithResponse).errorResponse.error !== null &&
+    typeof (error as JsonRpcErrorWithResponse).errorResponse.error.code === 'number' &&
+    typeof (error as JsonRpcErrorWithResponse).errorResponse.error.message === 'string'
   );
 }
 
