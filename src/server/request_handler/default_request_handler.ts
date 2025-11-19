@@ -167,7 +167,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event);
 
-        await this._sendPushNotificationIfNeeded(event);
+        try {
+          await this._sendPushNotificationIfNeeded(event);
+        } catch (error) {
+          console.error(`Error sending push notification: ${error}`);
+        }
 
         if (options?.firstResultResolver && !firstResultSent) {
           let firstResult: Message | Task | undefined;
@@ -187,13 +191,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           A2AError.internalError('Execution finished before a message or task was produced.')
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
-      if (options?.firstResultRejector && !firstResultSent) {
-        options.firstResultRejector(error);
-      }
-      // re-throw error for blocking case to catch
-      throw error;
+      this._handleProcessingError(
+        error,
+        resultManager,
+        firstResultSent,
+        taskId,
+        options?.firstResultRejector
+      );
     } finally {
       this.eventBusManager.cleanupByTaskId(taskId);
     }
@@ -620,5 +626,55 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Send push notification in the background.
     this.pushNotificationSender?.send(task);
+  }
+
+  private async _handleProcessingError(
+    error: any,
+    resultManager: ResultManager,
+    firstResultSent: boolean,
+    taskId: string,
+    firstResultRejector?: (reason: any) => void
+  ): Promise<void> {
+    // Non-blocking case with with first result not sent
+    if (firstResultRejector && !firstResultSent) {
+      firstResultRejector(error);
+      return;
+    }
+
+    // re-throw error for blocking case to catch
+    if (!firstResultRejector) {
+      throw error;
+    }
+
+    // Non-blocking case with first result already sent
+    const currentTask = resultManager.getCurrentTask();
+    if (currentTask) {
+      const statusUpdateFailed: TaskStatusUpdateEvent = {
+        taskId: currentTask.id,
+        contextId: currentTask.contextId,
+        status: {
+          state: 'failed',
+          message: {
+            kind: 'message',
+            role: 'agent',
+            messageId: uuidv4(),
+            parts: [{ kind: 'text', text: `Event processing loop failed: ${error.message}` }],
+            taskId: currentTask.id,
+            contextId: currentTask.contextId,
+          },
+          timestamp: new Date().toISOString(),
+        },
+        kind: 'status-update',
+        final: true,
+      };
+
+      try {
+        await resultManager.processEvent(statusUpdateFailed);
+      } catch (error) {
+        console.error(`Event processing loop failed for task ${taskId}: ${error.message}`);
+      }
+    } else {
+      console.error(`Event processing loop failed for task ${taskId}: ${error.message}`);
+    }
   }
 }
