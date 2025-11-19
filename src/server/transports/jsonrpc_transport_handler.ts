@@ -177,12 +177,15 @@ export class JsonRpcTransportHandler {
           result: result,
         } as JSONRPCResponse;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      const a2aError =
-        error instanceof A2AError
-          ? error
-          : A2AError.internalError(error.message || 'An unexpected error occurred.');
+      let a2aError;
+      if (error instanceof A2AError) {
+        a2aError = error;
+      } else if (error instanceof Error && error.message) {
+        a2aError = A2AError.internalError(error.message);
+      } else {
+        a2aError = A2AError.internalError('An unexpected error occurred.');
+      }
       return {
         jsonrpc: '2.0',
         id: requestId,

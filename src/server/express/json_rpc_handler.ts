@@ -62,14 +62,17 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             res.write(`id: ${new Date().getTime()}\n`);
             res.write(`data: ${JSON.stringify(event)}\n\n`);
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (streamError: any) {
+        } catch (streamError) {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
           // If the stream itself throws an error, send a final JSONRPCErrorResponse
-          const a2aError =
-            streamError instanceof A2AError
-              ? streamError
-              : A2AError.internalError(streamError.message || 'Streaming error.');
+          let a2aError;
+          if(streamError instanceof A2AError){
+            a2aError = streamError;
+          } else if (streamError instanceof Error && streamError.message){
+            a2aError = A2AError.internalError(streamError.message);
+          } else {
+            a2aError = A2AError.internalError('Streaming error.');
+          }
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
             id: req.body?.id || null, // Use original request ID if available
