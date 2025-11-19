@@ -11,10 +11,11 @@ export default defineConfig(
   tseslint.configs.recommended,
   eslintPluginPrettier, // Automatically disables eslint formatting rules and enables `prettier`
   {
-    ignores: ['dist/', 'node_modules/'],
+    ignores: ['dist/', 'node_modules/', 'src/types.ts'],
   },
   {
     rules: {
+      '@typescript-eslint/no-explicit-any': 'off', // Allow the usage of `any` in the project
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -26,9 +27,8 @@ export default defineConfig(
     },
   },
   {
-    files: ['test/**/*.ts', 'src/samples/**/*.ts'],
+    files: ['test/**/*.spec.ts'],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off', // Allow the usage of `any` in test files
       '@typescript-eslint/no-unused-expressions': 'off', // Allow unused expressions in test files, for compatibility with 'chai'
     },
   },
