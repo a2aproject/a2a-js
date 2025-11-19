@@ -8,12 +8,12 @@ import {
   TaskQueryParams,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './legacy.js';
-import { A2ATransport } from './transports/transport.js';
+import { Transport } from './transports/transport.js';
 
 export class Client {
-  private readonly _transport: A2ATransport;
+  private readonly _transport: Transport;
 
-  constructor(transport: A2ATransport) {
+  constructor(transport: Transport) {
     this._transport = transport;
   }
 

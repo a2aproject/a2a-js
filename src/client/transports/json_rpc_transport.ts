@@ -27,14 +27,16 @@ import {
   CancelTaskSuccessResponse,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../legacy.js';
-import { A2ATransport } from './transport.js';
+import { toTransportProtocol, Transport } from './transport.js';
+
+export const JsonRpcTransportProtocol = toTransportProtocol('JSONRPC')
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
 }
 
-export class JsonRpcTransport implements A2ATransport {
+export class JsonRpcTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   private readonly endpoint: string;
   private requestIdCounter: number = 1;

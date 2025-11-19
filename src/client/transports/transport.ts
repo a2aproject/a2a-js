@@ -9,7 +9,7 @@ import {
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../legacy.js';
 
-export interface A2ATransport {
+export interface Transport {
   sendMessage(params: MessageSendParams, signal?: AbortSignal): Promise<SendMessageResult>;
 
   sendMessageStream(
