@@ -12,7 +12,6 @@ import { JsonRpcTransportHandler } from '../transports/jsonrpc_transport_handler
 import { ServerCallContext } from '../context.js';
 import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
-import { checkAuthentication } from '../authentication/auth.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -35,8 +34,6 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
   router.post('/', async (req: Request, res: Response) => {
     try {
-      const agentCard = await options.requestHandler.getAgentCard();
-      checkAuthentication(req.headers, agentCard);
       const context = new ServerCallContext(
         getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER))
       );
