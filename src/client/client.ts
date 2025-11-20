@@ -458,11 +458,9 @@ export class A2AClient {
 
 function extractJSONRPCError(error: unknown): JSONRPCErrorResponse {
   if (
-    typeof error === 'object' &&
-    error !== null &&
+    error instanceof Object &&
     'errorResponse' in error &&
-    typeof error.errorResponse === 'object' &&
-    error.errorResponse !== null &&
+    error.errorResponse instanceof Object &&
     'jsonrpc' in error.errorResponse &&
     error.errorResponse.jsonrpc === '2.0' &&
     'error' in error.errorResponse &&

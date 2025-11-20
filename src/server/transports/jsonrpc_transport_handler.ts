@@ -25,7 +25,9 @@ export class JsonRpcTransportHandler {
    * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
    */
   public async handle(
-    requestBody: string | A2ARequest,
+    // TODO: remove the eslint disable and replace the any (https://github.com/a2aproject/a2a-js/issues/179)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    requestBody: any,
     context?: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
     let rpcRequest: A2ARequest;

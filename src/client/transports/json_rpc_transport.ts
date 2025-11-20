@@ -359,13 +359,9 @@ export class JsonRpcTransport implements A2ATransport {
         jsonData,
         e
       );
-      if (e instanceof SyntaxError) {
-        throw new Error(
-          `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`
-        );
-      } else {
-        throw e;
-      }
+      throw new Error(
+        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof SyntaxError && e.message) || 'Unknown error'}`
+      );
     }
   }
 
