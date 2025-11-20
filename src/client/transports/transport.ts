@@ -6,6 +6,7 @@ import {
   DeleteTaskPushNotificationConfigParams,
   TaskQueryParams,
   Task,
+  AgentCard,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../legacy.js';
 
@@ -45,4 +46,10 @@ export interface Transport {
     params: TaskIdParams,
     signal?: AbortSignal
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
+}
+
+export interface TransportFactory {
+  get name(): string;
+
+  create(url: string, agentCard: AgentCard): Promise<Transport>;
 }

@@ -1,18 +1,27 @@
-import { JsonRpcTransport } from './transports/json_rpc_transport.js';
-import { Transport } from './transports/transport.js';
-import { TransportProtocol } from '../types.js';
+import { AgentCard } from '../types.js';
+import { Client } from './client.js';
+import { Transport, TransportFactory } from './transports/transport.js';
 
 export class ClientFactoryOptions {
-  private readonly transports: Map<TransportProtocol, Transport> = new Map();
+  private readonly _transports: TransportFactory[] = [];
 
-  addTransport(protocol: TransportProtocol, transport: Transport): ClientFactoryOptions {
-    this.transports.set(protocol, transport);
+  get transports(): ReadonlyArray<TransportFactory> {
+    return this._transports;
+  }
+
+  withTransport(transportFactory: TransportFactory): ClientFactoryOptions {
+    this._transports.push(transportFactory);
     return this;
   }
 }
 
 export class ClientFactory {
   constructor(private readonly options: ClientFactoryOptions = new ClientFactoryOptions()) {}
-}
 
-new ClientFactoryOptions().addTransport(
+  async createClient(agentCard: AgentCard): Promise<Client> {
+    const preferred = agentCard.preferredTransport;
+    const transport = agentCard.additionalInterfaces.find((t) => t.transport === preferred);
+    const transportFactory = this.options.transports.find((t) => t.name === preferred);
+    
+  }
+}

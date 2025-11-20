@@ -7,6 +7,7 @@ import {
   TaskNotFoundError,
   UnsupportedOperationError,
 } from '../../errors.js';
+import { toTransportName } from '../../transport.js';
 import {
   JSONRPCRequest,
   JSONRPCResponse,
@@ -25,11 +26,10 @@ import {
   ListTaskPushNotificationConfigSuccessResponse,
   GetTaskSuccessResponse,
   CancelTaskSuccessResponse,
+  AgentCard,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../legacy.js';
-import { toTransportProtocol, Transport } from './transport.js';
-
-export const JsonRpcTransportProtocol = toTransportProtocol('JSONRPC')
+import { Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
@@ -404,6 +404,25 @@ export class JsonRpcTransport implements Transport {
       default:
         return new JSONRPCTransportError(response);
     }
+  }
+}
+
+export class JsonRpcTransportFactoryOptions {
+  fetchImpl?: typeof fetch;
+}
+
+export class JsonRpcTransportFactory implements TransportFactory {
+  constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
+
+  get name(): string {
+    return 'JSONRPC';
+  }
+
+  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
+    return new JsonRpcTransport({
+      endpoint: url,
+      fetchImpl: this.options?.fetchImpl,
+    });
   }
 }
 
