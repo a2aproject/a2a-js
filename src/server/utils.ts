@@ -13,7 +13,7 @@ export function getCurrentTimestamp(): string {
  * @param value The value to check.
  * @returns True if the value is a plain object, false otherwise.
  */
-export function isObject(value: unknown): value is Record<string, any> {
+export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -21,7 +21,7 @@ export function isObject(value: unknown): value is Record<string, any> {
  * Type guard to check if an object is a TaskStatus update (lacks 'parts').
  * Used to differentiate yielded updates from the handler.
  */
-export function isTaskStatusUpdate(update: any): update is Omit<TaskStatus, 'timestamp'> {
+export function isTaskStatusUpdate(update: unknown): update is Omit<TaskStatus, 'timestamp'> {
   // Check if it has 'state' and NOT 'parts' (which Artifacts have)
   return isObject(update) && 'state' in update && !('parts' in update);
 }
@@ -30,7 +30,7 @@ export function isTaskStatusUpdate(update: any): update is Omit<TaskStatus, 'tim
  * Type guard to check if an object is an Artifact update (has 'parts').
  * Used to differentiate yielded updates from the handler.
  */
-export function isArtifactUpdate(update: any): update is Artifact {
+export function isArtifactUpdate(update: unknown): update is Artifact {
   // Check if it has 'parts'
   return isObject(update) && 'parts' in update;
 }

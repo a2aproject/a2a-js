@@ -40,6 +40,8 @@ import {
 } from './mocks/agent-executor.mock.js';
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 import { ServerCallContext } from '../../src/server/context.js';
+import { MockTaskStore } from './mocks/task_store.mock.js';
+import { TextPart } from 'genkit/model';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let handler: A2ARequestHandler;
@@ -275,6 +277,87 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
     assert.isTrue(saveSpy.calledTwice, 'Save should be called twice (submitted and completed)');
     assert.equal(saveSpy.secondCall.args[0].status.state, 'completed');
+  });
+
+  it('sendMessage: (non-blocking) should handle failure in event loop after successfull task event', async () => {
+    clock = sinon.useFakeTimers();
+
+    const mockTaskStore = new MockTaskStore();
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager
+    );
+
+    const params: MessageSendParams = {
+      message: createTestMessage('msg-nonblock', 'Do a long task'),
+      configuration: {
+        blocking: false,
+        acceptedOutputModes: [],
+      },
+    };
+
+    const taskId = 'task-nonblock-123';
+    const contextId = 'ctx-nonblock-abc';
+    (mockAgentExecutor as MockAgentExecutor).execute.callsFake(async (ctx, bus) => {
+      // First event is the task creation, which should be returned immediately
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
+
+      // Simulate work before publishing more events
+      await clock.tickAsync(500);
+
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: { state: 'completed' },
+        final: true,
+      });
+      bus.finished();
+    });
+
+    let finalTaskSaved: Task | undefined;
+    const errorMessage = 'Error thrown on saving completed task notification';
+    (mockTaskStore as MockTaskStore).save.callsFake(async (task) => {
+      if (task.status.state == 'completed') {
+        throw new Error(errorMessage);
+      }
+
+      if (task.status.state == 'failed') {
+        finalTaskSaved = task;
+      }
+    });
+
+    // This call should return as soon as the first 'task' event is published
+    const immediateResult = await handler.sendMessage(params);
+
+    // Assert that we got the initial task object back right away
+    const taskResult = immediateResult as Task;
+    assert.equal(taskResult.kind, 'task');
+    assert.equal(taskResult.id, taskId);
+    assert.equal(
+      taskResult.status.state,
+      'submitted',
+      "Should return immediately with 'submitted' state"
+    );
+
+    // Allow the background processing to complete
+    await clock.runAllAsync();
+
+    assert.equal(finalTaskSaved!.status.state, 'failed');
+    assert.equal(finalTaskSaved!.id, taskId);
+    assert.equal(finalTaskSaved!.contextId, contextId);
+    assert.equal(finalTaskSaved!.status.message!.role, 'agent');
+    assert.equal(
+      (finalTaskSaved!.status.message!.parts[0] as TextPart).text,
+      `Event processing loop failed: ${errorMessage}`
+    );
   });
 
   it('sendMessage: should handle agent execution failure for non-blocking calls', async () => {

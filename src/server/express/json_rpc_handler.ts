@@ -43,7 +43,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
       }
       // Check if it's an AsyncGenerator (stream)
-      if (typeof (rpcResponseOrStream as any)?.[Symbol.asyncIterator] === 'function') {
+      if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
         const stream = rpcResponseOrStream as AsyncGenerator<
           JSONRPCSuccessResponse,
           void,
@@ -62,13 +62,17 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             res.write(`id: ${new Date().getTime()}\n`);
             res.write(`data: ${JSON.stringify(event)}\n\n`);
           }
-        } catch (streamError: any) {
+        } catch (streamError) {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
           // If the stream itself throws an error, send a final JSONRPCErrorResponse
-          const a2aError =
-            streamError instanceof A2AError
-              ? streamError
-              : A2AError.internalError(streamError.message || 'Streaming error.');
+          let a2aError: A2AError;
+          if (streamError instanceof A2AError) {
+            a2aError = streamError;
+          } else {
+            a2aError = A2AError.internalError(
+              (streamError instanceof Error && streamError.message) || 'Streaming error.'
+            );
+          }
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
             id: req.body?.id || null, // Use original request ID if available
@@ -93,7 +97,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         const rpcResponse = rpcResponseOrStream as JSONRPCResponse;
         res.status(200).json(rpcResponse);
       }
-    } catch (error: any) {
+    } catch (error) {
       // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
       console.error('Unhandled error in JSON-RPC POST handler:', error);
       const a2aError =
@@ -116,7 +120,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 }
 
 export const jsonErrorHandler: ErrorRequestHandler = (
-  err: any,
+  err: unknown,
   _req: Request,
   res: Response,
   next: NextFunction
