@@ -1,6 +1,6 @@
 import { AgentCard } from '../types.js';
 import { Client } from './client.js';
-import { Transport, TransportFactory } from './transports/transport.js';
+import { TransportFactory } from './transports/transport.js';
 
 export class ClientFactoryOptions {
   private readonly _transports: TransportFactory[] = [];
@@ -22,6 +22,6 @@ export class ClientFactory {
     const preferred = agentCard.preferredTransport;
     const transport = agentCard.additionalInterfaces.find((t) => t.transport === preferred);
     const transportFactory = this.options.transports.find((t) => t.name === preferred);
-    
+    return new Client(await transportFactory.create(transport.url, agentCard));
   }
 }
