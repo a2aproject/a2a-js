@@ -7,7 +7,6 @@ import {
   TaskNotFoundError,
   UnsupportedOperationError,
 } from '../../errors.js';
-import { toTransportName } from '../../transport.js';
 import {
   JSONRPCRequest,
   JSONRPCResponse,
@@ -243,7 +242,7 @@ export class JsonRpcTransport implements Transport {
 
   private async *_sendStreamingRequest(
     method: string,
-    params: any,
+    params: unknown,
     signal?: AbortSignal
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;

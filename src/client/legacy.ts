@@ -19,6 +19,7 @@ import {
   TaskArtifactUpdateEvent,
   TaskStatusUpdateEvent,
   A2ARequest,
+  JSONRPCErrorResponse,
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
@@ -37,8 +38,6 @@ export interface A2AClientOptions {
  * Only JSON-RPC transport is supported.
  */
 export class A2AClient {
-  private static noAbortSignal: AbortSignal | undefined = undefined;
-
   private readonly agentCardPromise: Promise<AgentCard>;
   private readonly customFetchImpl?: typeof fetch;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetchin
@@ -151,7 +150,7 @@ export class A2AClient {
    */
   public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
     return await this.invokeJsonRpc<MessageSendParams, SendMessageResponse>(
-      (t, p, id) => t.sendMessage(p, A2AClient.noAbortSignal, id),
+      (t, p, id) => t.sendMessage(p, id),
       params
     );
   }
@@ -197,7 +196,7 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       TaskPushNotificationConfig,
       SetTaskPushNotificationConfigResponse
-    >((t, p, id) => t.setTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id), params);
+    >((t, p, id) => t.setTaskPushNotificationConfig(p, id), params);
   }
 
   /**
@@ -209,7 +208,7 @@ export class A2AClient {
     params: TaskIdParams
   ): Promise<GetTaskPushNotificationConfigResponse> {
     return await this.invokeJsonRpc<TaskIdParams, GetTaskPushNotificationConfigResponse>(
-      (t, p, id) => t.getTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id),
+      (t, p, id) => t.getTaskPushNotificationConfig(p, id),
       params
     );
   }
@@ -225,7 +224,7 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigResponse
-    >((t, p, id) => t.listTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id), params);
+    >((t, p, id) => t.listTaskPushNotificationConfig(p, id), params);
   }
 
   /**
@@ -239,7 +238,7 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       DeleteTaskPushNotificationConfigParams,
       DeleteTaskPushNotificationConfigResponse
-    >((t, p, id) => t.deleteTaskPushNotificationConfig(p, A2AClient.noAbortSignal, id), params);
+    >((t, p, id) => t.deleteTaskPushNotificationConfig(p, id), params);
   }
 
   /**
@@ -249,7 +248,7 @@ export class A2AClient {
    */
   public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
     return await this.invokeJsonRpc<TaskQueryParams, GetTaskResponse>(
-      (t, p, id) => t.getTask(p, A2AClient.noAbortSignal, id),
+      (t, p, id) => t.getTask(p, id),
       params
     );
   }
@@ -261,7 +260,7 @@ export class A2AClient {
    */
   public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
     return await this.invokeJsonRpc<TaskIdParams, CancelTaskResponse>(
-      (t, p, id) => t.cancelTask(p, A2AClient.noAbortSignal, id),
+      (t, p, id) => t.cancelTask(p, id),
       params
     );
   }
@@ -283,14 +282,14 @@ export class A2AClient {
       return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(
         method,
         params,
-        this.requestIdCounter++,
-        A2AClient.noAbortSignal
+        this.requestIdCounter++
       );
-    } catch (e: any) {
+    } catch (e) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isJSONRPCError(e)) {
-        return e.errorResponse as TExtensionResponse;
+      const errorResponse = extractJSONRPCError(e);
+      if (errorResponse) {
+        return errorResponse as TExtensionResponse;
       }
       throw e;
     }
@@ -445,24 +444,32 @@ export class A2AClient {
         jsonrpc: '2.0',
         result: result ?? null, // JSON-RPC requires result property on success, it will be null for "void" methods.
       } as TResponse;
-    } catch (e: any) {
+    } catch (e) {
       // For compatibility, return JSON-RPC errors as response objects instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isJSONRPCError(e)) {
-        return e.errorResponse as TResponse;
+      const errorResponse = extractJSONRPCError(e);
+      if (errorResponse) {
+        return errorResponse as TResponse;
       }
       throw e;
     }
   }
 }
 
-function isJSONRPCError(error: any): boolean {
-  return (
+function extractJSONRPCError(error: unknown): JSONRPCErrorResponse {
+  if (
+    error instanceof Object &&
     'errorResponse' in error &&
-    error.errorResponse &&
+    error.errorResponse instanceof Object &&
+    'jsonrpc' in error.errorResponse &&
     error.errorResponse.jsonrpc === '2.0' &&
-    error.errorResponse.error
-  );
+    'error' in error.errorResponse &&
+    error.errorResponse.error !== null
+  ) {
+    return error.errorResponse as JSONRPCErrorResponse;
+  } else {
+    return undefined;
+  }
 }
 
 // Utility unexported types to properly factor out common "compatibility" logic via invokeJsonRpc.

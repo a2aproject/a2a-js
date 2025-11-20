@@ -1,8 +1,13 @@
 import { AgentCard } from '../types.js';
 import { Client } from './client.js';
+import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 import { TransportFactory } from './transports/transport.js';
 
 export class ClientFactoryOptions {
+  public static readonly Default = new ClientFactoryOptions().withTransport(
+    new JsonRpcTransportFactory()
+  );
+
   private readonly _transports: TransportFactory[] = [];
 
   get transports(): ReadonlyArray<TransportFactory> {
