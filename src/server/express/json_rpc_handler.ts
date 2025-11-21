@@ -12,6 +12,7 @@ import { JsonRpcTransportHandler } from '../transports/jsonrpc_transport_handler
 import { ServerCallContext } from '../context.js';
 import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { User } from '../authentication/user.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -35,7 +36,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   router.post('/', async (req: Request, res: Response) => {
     try {
       const context = new ServerCallContext(
-        getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER))
+        getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)), req.user as User
       );
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 

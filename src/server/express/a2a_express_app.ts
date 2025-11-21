@@ -1,16 +1,54 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import express, { Express, RequestHandler, ErrorRequestHandler } from 'express';
 
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
+import * as OpenApiValidator from 'express-openapi-validator';
 import { AGENT_CARD_PATH } from '../../constants.js';
 import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
-import { authHandler } from './auth_handler.js';
+import { verifyBearer } from './auth_handler.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
+  private openApiSecurityConfiguration: Promise<string>;
+
 
   constructor(requestHandler: A2ARequestHandler) {
     this.requestHandler = requestHandler;
+    this.openApiSecurityConfiguration = this.extractOpenAPIRules();
+  }
+
+  private async extractOpenAPIRules(): Promise<string> {
+    const agentCard = await this.requestHandler.getAgentCard();
+
+    const openApiSpec = {
+      openapi: '3.0.0',
+      info: {
+        title: 'A2A API',
+        version: '1.0.0',
+      },
+      components: {
+        securitySchemes: agentCard.securitySchemes || {},
+      },
+      security: agentCard.security || [],
+      paths: {
+        '/': {
+          post: {
+            responses: {
+              '200': {
+                description: 'Success',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const filePath = path.join(os.tmpdir(), 'openapi.json');
+    fs.writeFileSync(filePath, JSON.stringify(openApiSpec, null, 2));
+    return filePath;
   }
 
   /**
@@ -21,12 +59,12 @@ export class A2AExpressApp {
    * @param agentCardPath Optional custom path for the agent card endpoint (defaults to .well-known/agent-card.json).
    * @returns The Express app with A2A routes.
    */
-  public setupRoutes(
+  public async setupRoutes(
     app: Express,
     baseUrl: string = '',
     middlewares?: Array<RequestHandler | ErrorRequestHandler>,
     agentCardPath: string = AGENT_CARD_PATH
-  ): Express {
+  ): Promise<Express> {
     const router = express.Router();
 
     // Doing it here to maintain previous behaviour of invoking provided middlewares
@@ -39,9 +77,30 @@ export class A2AExpressApp {
       router.use(middlewares);
     }
 
-    router.use(authHandler({ requestHandler: this.requestHandler }));
+    const apiSpec = await this.openApiSecurityConfiguration;
+    router.use(
+          OpenApiValidator.middleware({
+          apiSpec,
+          validateRequests: false,
+          validateResponses: false,
+          validateSecurity: {
+              handlers: {
+                  // The name here must match the security scheme in your openapi.yaml
+                  BearerAuth: verifyBearer, 
+              }
+          }
+      })
+    )
     router.use(jsonRpcHandler({ requestHandler: this.requestHandler }));
     router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
+
+    const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+      res.status(err.status || 500).json({
+        message: err.message,
+        errors: err.errors,
+      });
+    };
+    router.use(errorHandler);
 
     app.use(baseUrl, router);
     return app;
