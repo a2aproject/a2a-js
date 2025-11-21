@@ -26,7 +26,8 @@ export class ProxyUser implements A2AUser {
       'isAuthenticated' in this.user &&
       typeof this.user.isAuthenticated === 'function'
     ) {
-      return this.user.isAuthenticated();
+      const result = this.user.isAuthenticated();
+      return typeof result === 'boolean' ? result : false;
     }
     return false;
   }
@@ -37,7 +38,8 @@ export class ProxyUser implements A2AUser {
       'userName' in this.user &&
       typeof this.user.userName === 'function'
     ) {
-      return this.user.userName();
+      const result = this.user.userName();
+      return typeof result === 'string' ? result : 'unknown';
     }
     return 'unknown';
   }
