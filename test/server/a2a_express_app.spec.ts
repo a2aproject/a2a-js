@@ -3,7 +3,6 @@ import { assert, expect } from 'chai';
 import sinon, { SinonStub } from 'sinon';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
 
 import { A2AExpressApp } from '../../src/server/express/a2a_express_app.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
@@ -78,8 +77,8 @@ describe('A2AExpressApp', () => {
   });
 
   describe('setupRoutes', () => {
-    it('should setup routes with default parameters', async () => {
-      const setupApp = await app.setupRoutes(expressApp);
+    it('should setup routes with default parameters', () => {
+      const setupApp = app.setupRoutes(expressApp);
       assert.equal(setupApp, expressApp);
     });
   });
@@ -344,10 +343,7 @@ describe('A2AExpressApp', () => {
       handleStub.resolves(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
-      await request(middlewareApp)
-        .post('/')
-        .send(requestBody)
-        .expect(200);
+      await request(middlewareApp).post('/').send(requestBody).expect(200);
 
       assert.isTrue(handleStub.calledOnce);
       const serverCallContext = handleStub.getCall(0).args[1];
@@ -383,10 +379,7 @@ describe('A2AExpressApp', () => {
       handleStub.resolves(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
-      await request(middlewareApp)
-        .post('/')
-        .send(requestBody)
-        .expect(200);
+      await request(middlewareApp).post('/').send(requestBody).expect(200);
 
       assert.isTrue(handleStub.calledOnce);
       const serverCallContext = handleStub.getCall(0).args[1];
@@ -395,7 +388,6 @@ describe('A2AExpressApp', () => {
       expect(serverCallContext.user.isAuthenticated()).to.be.true;
       expect(serverCallContext.user.userName()).to.equal('custom-user');
     });
-
   });
 
   describe('route configuration', () => {

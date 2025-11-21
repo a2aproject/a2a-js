@@ -12,7 +12,7 @@ import { JsonRpcTransportHandler } from '../transports/jsonrpc_transport_handler
 import { ServerCallContext } from '../context.js';
 import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
-import { ProxyUser, UnAuthenticatedUser, A2AUser } from '../authentication/user.js';
+import { ProxyUser, UnAuthenticatedUser } from '../authentication/user.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;

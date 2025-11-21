@@ -21,17 +21,24 @@ export class ProxyUser implements A2AUser {
   }
 
   public isAuthenticated(): boolean {
-    if (this.user instanceof Object && 'isAuthenticated' in this.user && typeof this.user.isAuthenticated === 'function') {
+    if (
+      this.user instanceof Object &&
+      'isAuthenticated' in this.user &&
+      typeof this.user.isAuthenticated === 'function'
+    ) {
       return this.user.isAuthenticated();
     }
     return false;
   }
 
   public userName(): string {
-    if (this.user instanceof Object && 'userName' in this.user && typeof this.user.userName === 'function') {
+    if (
+      this.user instanceof Object &&
+      'userName' in this.user &&
+      typeof this.user.userName === 'function'
+    ) {
       return this.user.userName();
     }
     return 'unknown';
   }
-  
 }
