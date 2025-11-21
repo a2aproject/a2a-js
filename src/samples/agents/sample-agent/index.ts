@@ -42,8 +42,6 @@ const sampleAgentCard: AgentCard = {
     },
   ],
   supportsAuthenticatedExtendedCard: false,
-  security: [{ BearerAuth: [] }],
-  securitySchemes: { BearerAuth: { type: 'http', scheme: 'bearer' } },
 };
 
 async function main() {
@@ -58,7 +56,7 @@ async function main() {
 
   // 4. Create and setup A2AExpressApp
   const appBuilder = new A2AExpressApp(requestHandler);
-  const expressApp = await appBuilder.setupRoutes(express());
+  const expressApp = appBuilder.setupRoutes(express());
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
