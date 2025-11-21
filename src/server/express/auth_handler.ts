@@ -20,19 +20,27 @@ passport.use(
   )
 );
 
-export const verifyBearer = (req: Request, _scopes: string[], _schema: unknown): Promise<boolean> => {
+export const verifyBearer = (
+  req: Request,
+  _scopes: string[],
+  _schema: unknown
+): Promise<boolean> => {
   return new Promise<boolean>((resolve, reject) => {
-    passport.authenticate('jwt', { session: false }, (err: Error, user: unknown, _info: unknown) => {
-      if (err) {
-        return reject(err);
+    passport.authenticate(
+      'jwt',
+      { session: false },
+      (err: Error, user: unknown, _info: unknown) => {
+        if (err) {
+          return reject(err);
+        }
+        if (!user) {
+          req.user = new unAuthenticatedUser();
+        } else {
+          req.user = new AuthenticatedUser();
+        }
+        resolve(true);
       }
-      if (!user) {
-        req.user = new unAuthenticatedUser();
-      } else {
-        req.user = new AuthenticatedUser();
-      }
-      resolve(true);
-    })(req, null, (err: unknown) => {
+    )(req, null, (err: unknown) => {
       // This callback handles standard middleware errors
       if (err) reject(err);
     });
