@@ -19,6 +19,7 @@ import {
   TaskArtifactUpdateEvent,
   TaskStatusUpdateEvent,
   A2ARequest,
+  JSONRPCErrorResponse,
 } from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
 import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
@@ -283,11 +284,12 @@ export class A2AClient {
         params,
         this.requestIdCounter++
       );
-    } catch (e: any) {
+    } catch (e) {
       // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isJSONRPCError(e)) {
-        return e.errorResponse as TExtensionResponse;
+      const errorResponse = extractJSONRPCError(e);
+      if (errorResponse) {
+        return errorResponse as TExtensionResponse;
       }
       throw e;
     }
@@ -442,24 +444,32 @@ export class A2AClient {
         jsonrpc: '2.0',
         result: result ?? null, // JSON-RPC requires result property on success, it will be null for "void" methods.
       } as TResponse;
-    } catch (e: any) {
+    } catch (e) {
       // For compatibility, return JSON-RPC errors as response objects instead of throwing transport-agnostic errors
       // produced by JsonRpcTransport.
-      if (isJSONRPCError(e)) {
-        return e.errorResponse as TResponse;
+      const errorResponse = extractJSONRPCError(e);
+      if (errorResponse) {
+        return errorResponse as TResponse;
       }
       throw e;
     }
   }
 }
 
-function isJSONRPCError(error: any): boolean {
-  return (
+function extractJSONRPCError(error: unknown): JSONRPCErrorResponse {
+  if (
+    error instanceof Object &&
     'errorResponse' in error &&
-    error.errorResponse &&
+    error.errorResponse instanceof Object &&
+    'jsonrpc' in error.errorResponse &&
     error.errorResponse.jsonrpc === '2.0' &&
-    error.errorResponse.error
-  );
+    'error' in error.errorResponse &&
+    error.errorResponse.error !== null
+  ) {
+    return error.errorResponse as JSONRPCErrorResponse;
+  } else {
+    return undefined;
+  }
 }
 
 // Utility unexported types to properly factor out common "compatibility" logic via invokeJsonRpc.

@@ -27,7 +27,7 @@ export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandl
     try {
       const agentCard = await provider();
       res.json(agentCard);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching agent card:', error);
       res.status(500).json({ error: 'Failed to retrieve agent card' });
     }

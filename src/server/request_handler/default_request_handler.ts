@@ -159,7 +159,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventQueue: ExecutionEventQueue,
     options?: {
       firstResultResolver?: (value: Message | Task | PromiseLike<Message | Task>) => void;
-      firstResultRejector?: (reason?: any) => void;
+      firstResultRejector?: (reason?: unknown) => void;
     }
   ): Promise<void> {
     let firstResultSent = false;
@@ -191,7 +191,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           A2AError.internalError('Execution finished before a message or task was produced.')
         );
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
       this._handleProcessingError(
         error,
@@ -629,11 +629,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   private async _handleProcessingError(
-    error: any,
+    error: unknown,
     resultManager: ResultManager,
     firstResultSent: boolean,
     taskId: string,
-    firstResultRejector?: (reason: any) => void
+    firstResultRejector?: (reason: unknown) => void
   ): Promise<void> {
     // Non-blocking case with with first result not sent
     if (firstResultRejector && !firstResultSent) {
@@ -648,6 +648,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Non-blocking case with first result already sent
     const currentTask = resultManager.getCurrentTask();
+    const errorMessage = (error instanceof Error && error.message) || 'Unknown error';
     if (currentTask) {
       const statusUpdateFailed: TaskStatusUpdateEvent = {
         taskId: currentTask.id,
@@ -658,7 +659,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             kind: 'message',
             role: 'agent',
             messageId: uuidv4(),
-            parts: [{ kind: 'text', text: `Event processing loop failed: ${error.message}` }],
+            parts: [{ kind: 'text', text: `Event processing loop failed: ${errorMessage}` }],
             taskId: currentTask.id,
             contextId: currentTask.contextId,
           },
@@ -671,10 +672,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       try {
         await resultManager.processEvent(statusUpdateFailed);
       } catch (error) {
-        console.error(`Event processing loop failed for task ${taskId}: ${error.message}`);
+        console.error(
+          `Event processing loop failed for task ${taskId}: ${(error instanceof Error && error.message) || 'Unknown error'}`
+        );
       }
     } else {
-      console.error(`Event processing loop failed for task ${taskId}: ${error.message}`);
+      console.error(`Event processing loop failed for task ${taskId}: ${errorMessage}`);
     }
   }
 }

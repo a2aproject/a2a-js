@@ -25,6 +25,8 @@ export class JsonRpcTransportHandler {
    * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
    */
   public async handle(
+    // TODO: remove the eslint disable and replace the any (https://github.com/a2aproject/a2a-js/issues/179)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     requestBody: any,
     context?: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
@@ -42,11 +44,13 @@ export class JsonRpcTransportHandler {
       if (!this.isRequestValid(rpcRequest)) {
         throw A2AError.invalidRequest('Invalid JSON-RPC Request.');
       }
-    } catch (error: any) {
+    } catch (error) {
       const a2aError =
         error instanceof A2AError
           ? error
-          : A2AError.parseError(error.message || 'Failed to parse JSON request.');
+          : A2AError.parseError(
+              (error instanceof SyntaxError && error.message) || 'Failed to parse JSON request.'
+            );
       return {
         jsonrpc: '2.0',
         id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
@@ -94,7 +98,7 @@ export class JsonRpcTransportHandler {
                 result: event,
               };
             }
-          } catch (streamError: any) {
+          } catch (streamError) {
             // If the underlying agent stream throws an error, we need to yield a JSONRPCErrorResponse.
             // However, an AsyncGenerator is expected to yield JSONRPCResult.
             // This indicates an issue with how errors from the agent's stream are propagated.
@@ -111,7 +115,7 @@ export class JsonRpcTransportHandler {
         })();
       } else {
         // Handle non-streaming methods
-        let result: any;
+        let result: unknown;
         switch (method) {
           case 'message/send':
             result = await this.requestHandler.sendMessage(rpcRequest.params, context);
@@ -153,11 +157,15 @@ export class JsonRpcTransportHandler {
           result: result,
         } as JSONRPCResponse;
       }
-    } catch (error: any) {
-      const a2aError =
-        error instanceof A2AError
-          ? error
-          : A2AError.internalError(error.message || 'An unexpected error occurred.');
+    } catch (error) {
+      let a2aError: A2AError;
+      if (error instanceof A2AError) {
+        a2aError = error;
+      } else {
+        a2aError = A2AError.internalError(
+          (error instanceof Error && error.message) || 'An unexpected error occurred.'
+        );
+      }
       return {
         jsonrpc: '2.0',
         id: requestId,
@@ -189,7 +197,7 @@ export class JsonRpcTransportHandler {
   }
 
   // Validates that params is an object with non-empty string keys
-  private paramsAreValid(params: any): boolean {
+  private paramsAreValid(params: unknown): boolean {
     if (typeof params !== 'object' || params === null || Array.isArray(params)) {
       return false;
     }

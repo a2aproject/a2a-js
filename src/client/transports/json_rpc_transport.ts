@@ -152,6 +152,7 @@ export class JsonRpcTransport implements A2ATransport {
   }
 
   private async _sendRpcRequest<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     TParams extends { [key: string]: any },
     TResponse extends JSONRPCResponse,
   >(method: string, params: TParams, idOverride: number | undefined): Promise<TResponse> {
@@ -168,11 +169,11 @@ export class JsonRpcTransport implements A2ATransport {
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
-      let errorJson: any = {};
+      let errorJson: JSONRPCErrorResponse;
       try {
         errorBodyText = await httpResponse.text();
         errorJson = JSON.parse(errorBodyText);
-      } catch (e: any) {
+      } catch (e) {
         throw new Error(
           `HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`,
           { cause: e }
@@ -218,13 +219,13 @@ export class JsonRpcTransport implements A2ATransport {
 
   private async *_sendStreamingRequest(
     method: string,
-    params: any
+    params: unknown
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
-      params: params as { [key: string]: any },
+      params: params as { [key: string]: unknown },
       id: clientRequestId,
     };
 
@@ -232,11 +233,11 @@ export class JsonRpcTransport implements A2ATransport {
 
     if (!response.ok) {
       let errorBody = '';
-      let errorJson: any = {};
+      let errorJson: JSONRPCErrorResponse;
       try {
         errorBody = await response.text();
         errorJson = JSON.parse(errorBody);
-      } catch (e: any) {
+      } catch (e) {
         throw new Error(
           `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`,
           { cause: e }
@@ -305,8 +306,11 @@ export class JsonRpcTransport implements A2ATransport {
           }
         }
       }
-    } catch (error: any) {
-      console.error('Error reading or parsing SSE stream:', error.message);
+    } catch (error) {
+      console.error(
+        'Error reading or parsing SSE stream:',
+        (error instanceof Error && error.message) || 'Error unknown'
+      );
       throw error;
     } finally {
       reader.releaseLock();
@@ -342,10 +346,11 @@ export class JsonRpcTransport implements A2ATransport {
       }
 
       return a2aStreamResponse.result as TStreamItem;
-    } catch (e: any) {
+    } catch (e) {
       if (
-        e.message.startsWith('SSE event contained an error') ||
-        e.message.startsWith("SSE event JSON-RPC response is missing 'result' field")
+        e instanceof Error &&
+        (e.message.startsWith('SSE event contained an error') ||
+          e.message.startsWith("SSE event JSON-RPC response is missing 'result' field"))
       ) {
         throw e;
       }
@@ -355,7 +360,7 @@ export class JsonRpcTransport implements A2ATransport {
         e
       );
       throw new Error(
-        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${e.message}`
+        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof Error && e.message) || 'Unknown error'}`
       );
     }
   }
