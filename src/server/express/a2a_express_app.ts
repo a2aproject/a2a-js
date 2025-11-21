@@ -11,17 +11,17 @@ import { authenticationHandler } from './auth_handler.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
-  private openApiSecurityConfiguration: Promise<string>;
+  private openApiSecurityConfiguration: Promise<object>;
 
   constructor(requestHandler: A2ARequestHandler) {
     this.requestHandler = requestHandler;
-    this.openApiSecurityConfiguration = this.extractOpenAPIRules();
+    this.openApiSecurityConfiguration = this.extractSecurityRules();
   }
 
-  private async extractOpenAPIRules(): Promise<string> {
+    private async extractSecurityRules(): Promise<object> {
     const agentCard = await this.requestHandler.getAgentCard();
 
-    const openApiSpec = {
+    return {
       openapi: '3.0.0',
       info: {
         title: 'A2A API',
@@ -43,10 +43,6 @@ export class A2AExpressApp {
         },
       },
     };
-
-    const filePath = path.join(os.tmpdir(), 'openapi.json');
-    fs.writeFileSync(filePath, JSON.stringify(openApiSpec, null, 2));
-    return filePath;
   }
 
   /**

@@ -5,7 +5,7 @@ import { AuthenticatedUser, unAuthenticatedUser } from '../authentication/user.j
 import * as OpenApiValidator from 'express-openapi-validator';
 
 export interface AuthenticationHandlerOptions {
-  securityConfigurations: Promise<string>;
+  securityConfigurations: Promise<object>;
 }
 
 passport.use(
@@ -52,7 +52,7 @@ export const authenticationHandler = (options: AuthenticationHandlerOptions): Re
     try {
       const apiSpec = await options.securityConfigurations;
       const validatorMiddlewares = OpenApiValidator.middleware({
-        apiSpec,
+        apiSpec: apiSpec as any,
         validateRequests: false,
         validateResponses: false,
         validateSecurity: {
