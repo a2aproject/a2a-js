@@ -61,6 +61,7 @@
     "genkit": "^1.8.0",
     "gts": "^6.0.2",
     "json-schema-to-typescript": "^15.0.4",
+    "jsonwebtoken": "^9.0.2",
     "mocha": "^11.6.0",
     "mongoose": "^8.20.0",
     "passport": "^0.7.0",

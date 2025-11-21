@@ -3,6 +3,7 @@ import { assert, expect } from 'chai';
 import sinon, { SinonStub } from 'sinon';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 
 import { A2AExpressApp } from '../../src/server/express/a2a_express_app.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
@@ -11,7 +12,7 @@ import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../s
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
 import { ServerCallContext } from '../../src/server/context.js';
-import { unAuthenticatedUser } from '../../src/server/authentication/user.js';
+import { AuthenticatedUser, unAuthenticatedUser } from '../../src/server/authentication/user.js';
 
 describe('A2AExpressApp', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -249,47 +250,6 @@ describe('A2AExpressApp', () => {
       assert.equal(response.body.id, null);
     });
 
-    it('should handle authorization headers in request', async () => {
-      const agentCardWithSecurity: AgentCard = {
-        protocolVersion: '0.3.0',
-        name: 'Test Agent',
-        description: 'An agent for testing purposes',
-        url: 'http://localhost:8080',
-        preferredTransport: 'JSONRPC',
-        version: '1.0.0',
-        capabilities: {
-          streaming: true,
-          pushNotifications: true,
-        },
-        defaultInputModes: ['text/plain'],
-        defaultOutputModes: ['text/plain'],
-        skills: [],
-        security: [{ 'BearerAuth': [] }],
-        securitySchemes: { 'BearerAuth': { type: 'http', scheme: 'bearer' } }
-      };
-      mockRequestHandler.getAgentCard = sinon.stub().resolves(agentCardWithSecurity);
-
-      const mockResponse: JSONRPCSuccessResponse = {
-        jsonrpc: '2.0',
-        id: 'test-id',
-        result: { message: 'success' },
-      };
-      handleStub.resolves(mockResponse);
-
-      const requestBody = createRpcRequest('test-security');
-      await request(expressApp)
-        .post('/')
-        .set('Authentication', 'Bearer test-token')
-        .send(requestBody)
-        .expect(200);
-
-      assert.isTrue(handleStub.calledOnce);
-      const serverCallContext = handleStub.getCall(0).args[1];
-      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-      expect(serverCallContext.user).to.be.an.instanceOf(unAuthenticatedUser);
-    });
-
-
     it('should handle extensions headers in request', async () => {
       const mockResponse: JSONRPCSuccessResponse = {
         jsonrpc: '2.0',
@@ -341,6 +301,101 @@ describe('A2AExpressApp', () => {
         .expect(200);
 
       expect(response.get('X-A2A-Extensions')).to.equal('activated-extension');
+    });
+  });
+
+  describe('Authentication handling', () => {
+    it('should create unAuthorizedUser when no securitiy is configured', async () => {
+      app.setupRoutes(expressApp);
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-security');
+      await request(expressApp)
+        .post('/')
+        .set('Authorization', 'Bearer test-fake-token')
+        .send(requestBody)
+        .expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user).to.be.an.instanceOf(unAuthenticatedUser);
+    });
+
+    describe('Authentication handling with bearer token', () => {
+      beforeEach(() => {
+        const agentCardWithSecurity: AgentCard = {
+          protocolVersion: '0.3.0',
+          name: 'Test Agent',
+          description: 'An agent for testing purposes',
+          url: 'http://localhost:8080',
+          preferredTransport: 'JSONRPC',
+          version: '1.0.0',
+          capabilities: {
+            streaming: true,
+            pushNotifications: true,
+          },
+          defaultInputModes: ['text/plain'],
+          defaultOutputModes: ['text/plain'],
+          skills: [],
+          security: [{ BearerAuth: [] }],
+          securitySchemes: { BearerAuth: { type: 'http', scheme: 'bearer' } },
+        };
+        mockRequestHandler.getAgentCard = sinon.stub().resolves(agentCardWithSecurity);
+
+        // Re-setup routes to apply security middleware based on the new agent card
+        app = new A2AExpressApp(mockRequestHandler);
+        expressApp = express();
+        app.setupRoutes(expressApp);
+      });
+
+      it('should handle non valid authorization headers in request', async () => {
+        const mockResponse: JSONRPCSuccessResponse = {
+          jsonrpc: '2.0',
+          id: 'test-id',
+          result: { message: 'success' },
+        };
+        handleStub.resolves(mockResponse);
+
+        const requestBody = createRpcRequest('test-security');
+        await request(expressApp)
+          .post('/')
+          .set('Authorization', 'Bearer test-fake-token')
+          .send(requestBody)
+          .expect(200);
+
+        assert.isTrue(handleStub.calledOnce);
+        const serverCallContext = handleStub.getCall(0).args[1];
+        expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+        expect(serverCallContext.user).to.be.an.instanceOf(unAuthenticatedUser);
+      });
+
+      it('should handle valid authorization headers in request', async () => {
+        const mockResponse: JSONRPCSuccessResponse = {
+          jsonrpc: '2.0',
+          id: 'test-id',
+          result: { message: 'success' },
+        };
+        handleStub.resolves(mockResponse);
+
+        const requestBody = createRpcRequest('test-security');
+        const validToken = jwt.sign({ user: 'test-user' }, 'A2A-SecurityKey');
+        await request(expressApp)
+          .post('/')
+          .set('Authorization', `Bearer ${validToken}`)
+          .send(requestBody)
+          .expect(200);
+
+        assert.isTrue(handleStub.calledOnce);
+        const serverCallContext = handleStub.getCall(0).args[1];
+        expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+        expect(serverCallContext.user).to.be.an.instanceOf(AuthenticatedUser);
+      });
     });
   });
 

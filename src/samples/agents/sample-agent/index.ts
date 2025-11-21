@@ -42,8 +42,8 @@ const sampleAgentCard: AgentCard = {
     },
   ],
   supportsAuthenticatedExtendedCard: false,
-  security: [{ 'BearerAuth': [] }],
-  securitySchemes: { 'BearerAuth': { type: 'http', scheme: 'bearer' } }
+  security: [{ BearerAuth: [] }],
+  securitySchemes: { BearerAuth: { type: 'http', scheme: 'bearer' } },
 };
 
 async function main() {
