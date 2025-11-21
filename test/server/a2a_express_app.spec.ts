@@ -12,7 +12,7 @@ import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../s
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
 import { ServerCallContext } from '../../src/server/context.js';
-import { AuthenticatedUser, unAuthenticatedUser } from '../../src/server/authentication/user.js';
+import { ProxyUser, UnAuthenticatedUser } from '../../src/server/authentication/user.js';
 
 describe('A2AExpressApp', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -93,7 +93,7 @@ describe('A2AExpressApp', () => {
       const response = await request(expressApp).get(`/${AGENT_CARD_PATH}`).expect(200);
 
       assert.deepEqual(response.body, testAgentCard);
-      assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledTwice);
+      assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledOnce);
     });
 
     it('should return agent card on custom path when agentCardPath is provided', async () => {
@@ -304,101 +304,6 @@ describe('A2AExpressApp', () => {
     });
   });
 
-  describe('Authentication handling', () => {
-    it('should create unAuthorizedUser when no securitiy is configured', async () => {
-      app.setupRoutes(expressApp);
-      const mockResponse: JSONRPCSuccessResponse = {
-        jsonrpc: '2.0',
-        id: 'test-id',
-        result: { message: 'success' },
-      };
-      handleStub.resolves(mockResponse);
-
-      const requestBody = createRpcRequest('test-security');
-      await request(expressApp)
-        .post('/')
-        .set('Authorization', 'Bearer test-fake-token')
-        .send(requestBody)
-        .expect(200);
-
-      assert.isTrue(handleStub.calledOnce);
-      const serverCallContext = handleStub.getCall(0).args[1];
-      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-      expect(serverCallContext.user).to.be.an.instanceOf(unAuthenticatedUser);
-    });
-
-    describe('Authentication handling with bearer token', () => {
-      beforeEach(() => {
-        const agentCardWithSecurity: AgentCard = {
-          protocolVersion: '0.3.0',
-          name: 'Test Agent',
-          description: 'An agent for testing purposes',
-          url: 'http://localhost:8080',
-          preferredTransport: 'JSONRPC',
-          version: '1.0.0',
-          capabilities: {
-            streaming: true,
-            pushNotifications: true,
-          },
-          defaultInputModes: ['text/plain'],
-          defaultOutputModes: ['text/plain'],
-          skills: [],
-          security: [{ BearerAuth: [] }],
-          securitySchemes: { BearerAuth: { type: 'http', scheme: 'bearer' } },
-        };
-        mockRequestHandler.getAgentCard = sinon.stub().resolves(agentCardWithSecurity);
-
-        // Re-setup routes to apply security middleware based on the new agent card
-        app = new A2AExpressApp(mockRequestHandler);
-        expressApp = express();
-        app.setupRoutes(expressApp);
-      });
-
-      it('should handle non valid authorization headers in request', async () => {
-        const mockResponse: JSONRPCSuccessResponse = {
-          jsonrpc: '2.0',
-          id: 'test-id',
-          result: { message: 'success' },
-        };
-        handleStub.resolves(mockResponse);
-
-        const requestBody = createRpcRequest('test-security');
-        await request(expressApp)
-          .post('/')
-          .set('Authorization', 'Bearer test-fake-token')
-          .send(requestBody)
-          .expect(200);
-
-        assert.isTrue(handleStub.calledOnce);
-        const serverCallContext = handleStub.getCall(0).args[1];
-        expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-        expect(serverCallContext.user).to.be.an.instanceOf(unAuthenticatedUser);
-      });
-
-      it('should handle valid authorization headers in request', async () => {
-        const mockResponse: JSONRPCSuccessResponse = {
-          jsonrpc: '2.0',
-          id: 'test-id',
-          result: { message: 'success' },
-        };
-        handleStub.resolves(mockResponse);
-
-        const requestBody = createRpcRequest('test-security');
-        const validToken = jwt.sign({ user: 'test-user' }, 'A2A-SecurityKey');
-        await request(expressApp)
-          .post('/')
-          .set('Authorization', `Bearer ${validToken}`)
-          .send(requestBody)
-          .expect(200);
-
-        assert.isTrue(handleStub.calledOnce);
-        const serverCallContext = handleStub.getCall(0).args[1];
-        expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-        expect(serverCallContext.user).to.be.an.instanceOf(AuthenticatedUser);
-      });
-    });
-  });
-
   describe('middleware integration', () => {
     it('should apply custom middlewares to routes', async () => {
       const middlewareCalled = sinon.spy();
@@ -425,6 +330,72 @@ describe('A2AExpressApp', () => {
 
       await request(middlewareApp).get(`/${AGENT_CARD_PATH}`).expect(500);
     });
+
+    it('should handle no authentication middlewares', async () => {
+      app = new A2AExpressApp(mockRequestHandler);
+      const middlewareApp = express();
+      app.setupRoutes(middlewareApp);
+
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-id');
+      await request(middlewareApp)
+        .post('/')
+        .send(requestBody)
+        .expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user).to.be.an.instanceOf(UnAuthenticatedUser);
+      expect(serverCallContext.user.isAuthenticated()).to.be.false;
+    });
+
+    it('should handle successful authentication middlewares', async () => {
+      class CustomUser {
+        public isAuthenticated(): boolean {
+          return true;
+        }
+        public userName(): string {
+          return 'custom-user';
+        }
+      }
+
+      const authenticationMiddleware = (req: Request, _res: Response, next: NextFunction) => {
+        req.user = new CustomUser();
+        next();
+      };
+
+      app = new A2AExpressApp(mockRequestHandler);
+      const middlewareApp = express();
+      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-id');
+      await request(middlewareApp)
+        .post('/')
+        .send(requestBody)
+        .expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user).to.be.an.instanceOf(ProxyUser);
+      expect(serverCallContext.user.isAuthenticated()).to.be.true;
+      expect(serverCallContext.user.userName()).to.equal('custom-user');
+    });
+
   });
 
   describe('route configuration', () => {

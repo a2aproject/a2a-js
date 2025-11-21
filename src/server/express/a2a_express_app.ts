@@ -1,48 +1,15 @@
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import express, { Express, RequestHandler, ErrorRequestHandler } from 'express';
 
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { AGENT_CARD_PATH } from '../../constants.js';
 import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
-import { authenticationHandler } from './auth_handler.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
-  private openApiSecurityConfiguration: Promise<object>;
 
   constructor(requestHandler: A2ARequestHandler) {
     this.requestHandler = requestHandler;
-    this.openApiSecurityConfiguration = this.extractSecurityRules();
-  }
-
-    private async extractSecurityRules(): Promise<object> {
-    const agentCard = await this.requestHandler.getAgentCard();
-
-    return {
-      openapi: '3.0.0',
-      info: {
-        title: 'A2A API',
-        version: '1.0.0',
-      },
-      components: {
-        securitySchemes: agentCard.securitySchemes || {},
-      },
-      security: agentCard.security || [],
-      paths: {
-        '/': {
-          post: {
-            responses: {
-              '200': {
-                description: 'Success',
-              },
-            },
-          },
-        },
-      },
-    };
   }
 
   /**
@@ -71,23 +38,8 @@ export class A2AExpressApp {
       router.use(middlewares);
     }
 
-    router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
-
-    // Apply authentication rules only to the post requests
-    router.use(
-      authenticationHandler({
-        securityConfigurations: this.openApiSecurityConfiguration,
-      })
-    );
     router.use(jsonRpcHandler({ requestHandler: this.requestHandler }));
-
-    const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-      res.status(err.status || 500).json({
-        message: err.message,
-        errors: err.errors,
-      });
-    };
-    router.use(errorHandler);
+    router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
 
     app.use(baseUrl, router);
     return app;

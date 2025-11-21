@@ -12,7 +12,7 @@ import { JsonRpcTransportHandler } from '../transports/jsonrpc_transport_handler
 import { ServerCallContext } from '../context.js';
 import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
-import { unAuthenticatedUser, User } from '../authentication/user.js';
+import { ProxyUser, UnAuthenticatedUser, A2AUser } from '../authentication/user.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -37,7 +37,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
     try {
       const context = new ServerCallContext(
         getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)),
-        req.user ? (req.user as User) : new unAuthenticatedUser()
+        req.user ? new ProxyUser(req.user) : new UnAuthenticatedUser()
       );
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
