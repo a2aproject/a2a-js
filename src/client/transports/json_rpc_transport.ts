@@ -416,10 +416,12 @@ export class JsonRpcTransportFactoryOptions {
 }
 
 export class JsonRpcTransportFactory implements TransportFactory {
+  public static readonly name = 'JSONRPC';
+
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
   get name(): string {
-    return 'JSONRPC';
+    return JsonRpcTransportFactory.name;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {
