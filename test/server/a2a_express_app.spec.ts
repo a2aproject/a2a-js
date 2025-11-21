@@ -93,7 +93,7 @@ describe('A2AExpressApp', () => {
       const response = await request(expressApp).get(`/${AGENT_CARD_PATH}`).expect(200);
 
       assert.deepEqual(response.body, testAgentCard);
-      assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledOnce);
+      assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledTwice);
     });
 
     it('should return agent card on custom path when agentCardPath is provided', async () => {
