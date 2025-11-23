@@ -18,6 +18,10 @@ export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
 }
 
+interface RequestWithUser extends Request {
+  user?: unknown; 
+}
+
 /**
  * Creates Express.js middleware to handle A2A JSON-RPC requests.
  * @example
@@ -35,9 +39,10 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
   router.post('/', async (req: Request, res: Response) => {
     try {
+      const user = (req as RequestWithUser).user;
       const context = new ServerCallContext(
         getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)),
-        req.user ? new ProxyUser(req.user) : new UnAuthenticatedUser()
+        user ? new ProxyUser(user) : new UnAuthenticatedUser()
       );
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
