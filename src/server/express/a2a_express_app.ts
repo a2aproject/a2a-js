@@ -5,7 +5,6 @@ import { AGENT_CARD_PATH } from '../../constants.js';
 import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
 import { UserBuilder } from './common.js';
-import { httpRestHandler } from './http_rest_handler.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
@@ -52,7 +51,6 @@ export class A2AExpressApp {
       })
     );
     router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
-    router.use(httpRestHandler({ requestHandler: this.requestHandler }));
 
     app.use(baseUrl, router);
     return app;

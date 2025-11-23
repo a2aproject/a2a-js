@@ -5,7 +5,7 @@
 
 export { A2AExpressApp } from './a2a_express_app.js';
 export { UserBuilder } from './common.js';
-export { jsonRpcHandler, jsonErrorHandler } from './json_rpc_handler.js';
+export { jsonRpcHandler } from './json_rpc_handler.js';
 export type { JsonRpcHandlerOptions } from './json_rpc_handler.js';
 export { agentCardHandler } from './agent_card_handler.js';
 export type { AgentCardHandlerOptions, AgentCardProvider } from './agent_card_handler.js';

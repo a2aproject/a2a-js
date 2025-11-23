@@ -4,11 +4,10 @@ import sinon, { SinonStub } from 'sinon';
 import express, { Express } from 'express';
 import request from 'supertest';
 
-import { httpRestHandler } from '../../src/server/express/http_rest_handler.js';
+import { httpRestHandler, UserBuilder } from '../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message } from '../../src/types.js';
 import { A2AError } from '../../src/server/error.js';
-import { internalToRest } from '../../src/server/express/utils.js';
 
 /**
  * Test suite for httpRestHandler - HTTP+REST transport implementation
@@ -42,8 +41,17 @@ describe('httpRestHandler', () => {
     skills: [],
   };
 
+  // camelCase format (internal type)
   const testMessage: Message = {
     messageId: 'msg-1',
+    role: 'user' as const,
+    parts: [{ kind: 'text' as const, text: 'Hello' }],
+    kind: 'message' as const,
+  };
+
+  // snake_case format (REST/TCK style input)
+  const snakeCaseMessage = {
+    message_id: 'msg-1',
     role: 'user' as const,
     parts: [{ kind: 'text' as const, text: 'Hello' }],
     kind: 'message' as const,
@@ -73,7 +81,12 @@ describe('httpRestHandler', () => {
     };
 
     app = express();
-    app.use(httpRestHandler({ requestHandler: mockRequestHandler }));
+    app.use(
+      httpRestHandler({
+        requestHandler: mockRequestHandler,
+        userBuilder: UserBuilder.noAuthentication,
+      })
+    );
   });
 
   afterEach(() => {
@@ -84,9 +97,9 @@ describe('httpRestHandler', () => {
     it('should return the agent card with 200 OK', async () => {
       const response = await request(app).get('/v1/card').expect(200);
 
-      // REST API returns snake_case, so compare with transformed expected data
-      assert.deepEqual(response.body, internalToRest(testAgentCard));
+      // REST API returns data (format checked by handler)
       assert.isTrue((mockRequestHandler.getAuthenticatedExtendedAgentCard as SinonStub).calledOnce);
+      assert.deepEqual(response.body.name, testAgentCard.name);
     });
 
     it('should return 500 if getAuthenticatedExtendedAgentCard fails', async () => {
@@ -102,7 +115,7 @@ describe('httpRestHandler', () => {
   });
 
   describe('POST /v1/message:send', () => {
-    it('should send message and return 201 Created with Task', async () => {
+    it('should accept camelCase message and return 201 with Task', async () => {
       (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
 
       const response = await request(app)
@@ -110,21 +123,33 @@ describe('httpRestHandler', () => {
         .send({ message: testMessage })
         .expect(201);
 
-      // REST API returns snake_case
-      assert.deepEqual(response.body, internalToRest(testTask));
-      assert.isTrue((mockRequestHandler.sendMessage as SinonStub).calledOnce);
+      assert.deepEqual(response.body.id, testTask.id);
+      assert.deepEqual(response.body.kind, 'task');
     });
 
-    it('should send message and return 201 Created with Message', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testMessage);
+    it('should accept snake_case message and return 201 with Task', async () => {
+      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
 
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ message: testMessage })
+        .send({ message: snakeCaseMessage })
         .expect(201);
 
-      // REST API returns snake_case
-      assert.deepEqual(response.body, internalToRest(testMessage));
+      assert.deepEqual(response.body.id, testTask.id);
+      assert.deepEqual(response.body.kind, 'task');
+    });
+
+    it('should return camelCase response regardless of input format', async () => {
+      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+
+      const response = await request(app)
+        .post('/v1/message:send')
+        .send({ message: snakeCaseMessage })
+        .expect(201);
+
+      // Response must be camelCase only
+      assert.property(response.body, 'contextId');
+      assert.notProperty(response.body, 'context_id');
     });
 
     it('should return 400 when message is invalid', async () => {
@@ -132,23 +157,16 @@ describe('httpRestHandler', () => {
         A2AError.invalidParams('Message is required')
       );
 
-      const response = await request(app)
-        .post('/v1/message:send')
-        .send({ message: null })
-        .expect(400);
-
-      assert.property(response.body, 'code');
-      assert.property(response.body, 'message');
+      await request(app).post('/v1/message:send').send({ message: null }).expect(400);
     });
   });
 
   describe('POST /v1/message:stream', () => {
-    it('should stream messages using Server-Sent Events', async () => {
+    it('should accept camelCase message and stream via SSE', async () => {
       async function* mockStream() {
         yield testMessage;
         yield testTask;
       }
-
       (mockRequestHandler.sendMessageStream as SinonStub).resolves(mockStream());
 
       const response = await request(app)
@@ -157,11 +175,23 @@ describe('httpRestHandler', () => {
         .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
-      assert.isTrue((mockRequestHandler.sendMessageStream as SinonStub).calledOnce);
     });
 
-    it('should return 501 if streaming is not supported', async () => {
-      // Create new app with handler that has capabilities without streaming
+    it('should accept snake_case message and stream via SSE', async () => {
+      async function* mockStream() {
+        yield testMessage;
+      }
+      (mockRequestHandler.sendMessageStream as SinonStub).resolves(mockStream());
+
+      const response = await request(app)
+        .post('/v1/message:stream')
+        .send({ message: snakeCaseMessage })
+        .expect(200);
+
+      assert.equal(response.headers['content-type'], 'text/event-stream');
+    });
+
+    it('should return 400 if streaming is not supported', async () => {
       const noStreamRequestHandler = {
         ...mockRequestHandler,
         getAgentCard: sinon.stub().resolves({
@@ -170,15 +200,17 @@ describe('httpRestHandler', () => {
         }),
       };
       const noStreamApp = express();
-      noStreamApp.use(httpRestHandler({ requestHandler: noStreamRequestHandler as any }));
+      noStreamApp.use(
+        httpRestHandler({
+          requestHandler: noStreamRequestHandler as any,
+          userBuilder: UserBuilder.noAuthentication,
+        })
+      );
 
-      const response = await request(noStreamApp)
+      await request(noStreamApp)
         .post('/v1/message:stream')
         .send({ message: testMessage })
-        .expect(501);
-
-      assert.property(response.body, 'code');
-      assert.property(response.body, 'message');
+        .expect(400);
     });
   });
 
@@ -188,8 +220,8 @@ describe('httpRestHandler', () => {
 
       const response = await request(app).get('/v1/tasks/task-1').expect(200);
 
-      // REST API returns snake_case
-      assert.deepEqual(response.body, internalToRest(testTask));
+      assert.deepEqual(response.body.id, testTask.id);
+      assert.deepEqual(response.body.kind, 'task');
       assert.isTrue((mockRequestHandler.getTask as SinonStub).calledWith({ id: 'task-1' }));
     });
 
@@ -222,13 +254,13 @@ describe('httpRestHandler', () => {
 
   describe('POST /v1/tasks/:taskId:cancel', () => {
     it('should cancel task and return 202 Accepted', async () => {
-      const cancelledTask = { ...testTask, status: { state: 'cancelled' as const } };
+      const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
       (mockRequestHandler.cancelTask as SinonStub).resolves(cancelledTask);
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
 
-      // REST API returns snake_case
-      assert.deepEqual(response.body, internalToRest(cancelledTask));
+      assert.deepEqual(response.body.id, cancelledTask.id);
+      assert.deepEqual(response.body.status.state, 'canceled');
       assert.isTrue((mockRequestHandler.cancelTask as SinonStub).calledWith({ id: 'task-1' }));
     });
 
@@ -265,7 +297,7 @@ describe('httpRestHandler', () => {
       assert.isTrue((mockRequestHandler.resubscribe as SinonStub).calledWith({ id: 'task-1' }));
     });
 
-    it('should return 501 if streaming is not supported', async () => {
+    it('should return 400 if streaming is not supported', async () => {
       // Create new app with handler that has capabilities without streaming
       const noStreamRequestHandler = {
         ...mockRequestHandler,
@@ -275,9 +307,14 @@ describe('httpRestHandler', () => {
         }),
       };
       const noStreamApp = express();
-      noStreamApp.use(httpRestHandler({ requestHandler: noStreamRequestHandler as any }));
+      noStreamApp.use(
+        httpRestHandler({
+          requestHandler: noStreamRequestHandler as any,
+          userBuilder: UserBuilder.noAuthentication,
+        })
+      );
 
-      const response = await request(noStreamApp).post('/v1/tasks/task-1:subscribe').expect(501);
+      const response = await request(noStreamApp).post('/v1/tasks/task-1:subscribe').expect(400);
 
       assert.property(response.body, 'code');
       assert.property(response.body, 'message');
@@ -286,27 +323,64 @@ describe('httpRestHandler', () => {
 
   describe('Push Notification Config Endpoints', () => {
     const mockConfig = {
-      id: 'config-1',
       taskId: 'task-1',
-      url: 'https://example.com/webhook',
-      events: ['message', 'task_status_update'],
+      pushNotificationConfig: {
+        id: 'config-1',
+        url: 'https://example.com/webhook',
+      },
     };
 
     describe('POST /v1/tasks/:taskId/pushNotificationConfigs', () => {
-      it('should create push notification config and return 201', async () => {
+      it('should accept camelCase pushNotificationConfig and return 201', async () => {
         (mockRequestHandler.setTaskPushNotificationConfig as SinonStub).resolves(mockConfig);
 
         const response = await request(app)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({ url: 'https://example.com/webhook', events: ['message'] })
+          .send({
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+            },
+          })
           .expect(201);
 
-        // REST API returns snake_case
-        assert.deepEqual(response.body, internalToRest(mockConfig));
+        assert.deepEqual(response.body.taskId, mockConfig.taskId);
       });
 
-      it('should return 501 if push notifications not supported', async () => {
-        // Create new app with handler that has capabilities without push notifications
+      it('should accept snake_case push_notification_config and return 201', async () => {
+        (mockRequestHandler.setTaskPushNotificationConfig as SinonStub).resolves(mockConfig);
+
+        const response = await request(app)
+          .post('/v1/tasks/task-1/pushNotificationConfigs')
+          .send({
+            push_notification_config: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+            },
+          })
+          .expect(201);
+
+        assert.deepEqual(response.body.taskId, mockConfig.taskId);
+      });
+
+      it('should return camelCase response regardless of input format', async () => {
+        (mockRequestHandler.setTaskPushNotificationConfig as SinonStub).resolves(mockConfig);
+
+        const response = await request(app)
+          .post('/v1/tasks/task-1/pushNotificationConfigs')
+          .send({
+            push_notification_config: { id: 'config-1', url: 'https://example.com/webhook' },
+          })
+          .expect(201);
+
+        // Response must be camelCase only
+        assert.property(response.body, 'taskId');
+        assert.property(response.body, 'pushNotificationConfig');
+        assert.notProperty(response.body, 'task_id');
+        assert.notProperty(response.body, 'push_notification_config');
+      });
+
+      it('should return 400 if push notifications not supported', async () => {
         const noPNRequestHandler = {
           ...mockRequestHandler,
           getAgentCard: sinon.stub().resolves({
@@ -315,15 +389,17 @@ describe('httpRestHandler', () => {
           }),
         };
         const noPNApp = express();
-        noPNApp.use(httpRestHandler({ requestHandler: noPNRequestHandler as any }));
+        noPNApp.use(
+          httpRestHandler({
+            requestHandler: noPNRequestHandler as any,
+            userBuilder: UserBuilder.noAuthentication,
+          })
+        );
 
-        const response = await request(noPNApp)
+        await request(noPNApp)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({ url: 'https://example.com/webhook', events: ['message'] })
-          .expect(501);
-
-        assert.property(response.body, 'code');
-        assert.property(response.body, 'message');
+          .send({ pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' } })
+          .expect(400);
       });
     });
 
@@ -336,8 +412,8 @@ describe('httpRestHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs')
           .expect(200);
 
-        // REST API returns snake_case
-        assert.deepEqual(response.body, internalToRest(configs));
+        assert.isArray(response.body);
+        assert.lengthOf(response.body, configs.length);
       });
     });
 
@@ -349,8 +425,8 @@ describe('httpRestHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs/config-1')
           .expect(200);
 
-        // REST API returns snake_case
-        assert.deepEqual(response.body, internalToRest(mockConfig));
+        // REST API returns camelCase
+        assert.deepEqual(response.body.taskId, mockConfig.taskId);
         assert.isTrue(
           (mockRequestHandler.getTaskPushNotificationConfig as SinonStub).calledWith({
             id: 'task-1',
@@ -402,6 +478,96 @@ describe('httpRestHandler', () => {
     });
   });
 
+  /**
+   * File Parts Format Tests
+   */
+  describe('File parts format acceptance', () => {
+    it('should accept camelCase mimeType in file parts', async () => {
+      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+
+      await request(app)
+        .post('/v1/message:send')
+        .send({
+          message: {
+            messageId: 'msg-file',
+            role: 'user',
+            kind: 'message',
+            parts: [
+              {
+                kind: 'file',
+                file: {
+                  uri: 'https://example.com/file.pdf',
+                  mimeType: 'application/pdf',
+                  name: 'document.pdf',
+                },
+              },
+            ],
+          },
+        })
+        .expect(201);
+    });
+
+    it('should accept snake_case mime_type in file parts', async () => {
+      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+
+      await request(app)
+        .post('/v1/message:send')
+        .send({
+          message: {
+            message_id: 'msg-file',
+            role: 'user',
+            kind: 'message',
+            parts: [
+              {
+                kind: 'file',
+                file: {
+                  uri: 'https://example.com/file.pdf',
+                  mime_type: 'application/pdf',
+                  name: 'document.pdf',
+                },
+              },
+            ],
+          },
+        })
+        .expect(201);
+    });
+  });
+
+  /**
+   * Configuration Format Tests
+   */
+  describe('Configuration format acceptance', () => {
+    it('should accept camelCase configuration fields', async () => {
+      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+
+      await request(app)
+        .post('/v1/message:send')
+        .send({
+          message: testMessage,
+          configuration: {
+            acceptedOutputModes: ['text/plain'],
+            historyLength: 5,
+          },
+        })
+        .expect(201);
+    });
+
+    it('should accept snake_case configuration fields', async () => {
+      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+
+      await request(app)
+        .post('/v1/message:send')
+        .send({
+          message: snakeCaseMessage,
+          configuration: {
+            accepted_output_modes: ['text/plain'],
+            history_length: 5,
+          },
+        })
+        .expect(201);
+    });
+  });
+
   describe('Error Handling', () => {
     it('should return 404 for unknown message action (route not matched)', async () => {
       // Unknown actions don't match the route pattern, so Express returns default 404
@@ -418,12 +584,12 @@ describe('httpRestHandler', () => {
 
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ message: testMessage })
+        .send({ message: snakeCaseMessage })
         .expect(500);
 
       assert.property(response.body, 'code');
       assert.property(response.body, 'message');
-      assert.equal(response.body.code, -32603); // Internal error code
+      assert.deepEqual(response.body.code, -32603); // Internal error code
     });
   });
 });

@@ -14,6 +14,7 @@ import {
   jsonRpcHandler,
   agentCardHandler,
   httpRestHandler,
+  UserBuilder,
 } from '../../src/server/express/index.js';
 
 /**
@@ -205,10 +206,16 @@ async function main() {
   );
 
   // Register JSON-RPC handler (preferred transport, backward compatible)
-  expressApp.use('/a2a/jsonrpc', jsonRpcHandler({ requestHandler }));
+  expressApp.use(
+    '/a2a/jsonrpc',
+    jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication })
+  );
 
   // Register HTTP+REST handler (new feature - additional transport)
-  expressApp.use('/a2a/rest', httpRestHandler({ requestHandler }));
+  expressApp.use(
+    '/a2a/rest',
+    httpRestHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication })
+  );
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
