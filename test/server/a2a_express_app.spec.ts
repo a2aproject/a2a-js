@@ -391,9 +391,9 @@ describe('A2AExpressApp', () => {
 
     it('should handle successful authentication middlewares with plain object', async () => {
       const authenticationMiddleware = (req: Request, _res: Response, next: NextFunction) => {
-        (req as any).user = { 
-          id: 123, 
-          userName: 'authenticated-user' // Matches one of the candidate keys in ProxyUser
+        (req as any).user = {
+          id: 123,
+          userName: 'authenticated-user', // Matches one of the candidate keys in ProxyUser
         };
         next();
       };

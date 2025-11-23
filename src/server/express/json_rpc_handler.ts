@@ -19,7 +19,7 @@ export interface JsonRpcHandlerOptions {
 }
 
 interface RequestWithUser extends Request {
-  user?: unknown; 
+  user?: unknown;
 }
 
 /**
