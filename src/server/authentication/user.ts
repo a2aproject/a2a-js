@@ -9,7 +9,7 @@ export class UnAuthenticatedUser implements A2AUser {
   }
 
   public userName(): string {
-    return 'unauthenticated';
+    return '';
   }
 }
 
@@ -21,26 +21,18 @@ export class ProxyUser implements A2AUser {
   }
 
   public isAuthenticated(): boolean {
-    if (
-      this.user instanceof Object &&
-      'isAuthenticated' in this.user &&
-      typeof this.user.isAuthenticated === 'function'
-    ) {
-      const result = this.user.isAuthenticated();
-      return typeof result === 'boolean' ? result : false;
-    }
-    return false;
+    return !!this.user;
   }
 
   public userName(): string {
-    if (
-      this.user instanceof Object &&
-      'userName' in this.user &&
-      typeof this.user.userName === 'function'
-    ) {
-      const result = this.user.userName();
-      return typeof result === 'string' ? result : 'unknown';
+    if (this.user instanceof Object && 'userName' in this.user) {
+      if (typeof this.user.userName === 'function') {
+        return this.user.userName();
+      }
+      if (typeof this.user.userName === 'string') {
+        return this.user.userName;
+      }
     }
-    return 'unknown';
+    return '';
   }
 }

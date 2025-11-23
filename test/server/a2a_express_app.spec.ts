@@ -352,13 +352,13 @@ describe('A2AExpressApp', () => {
       expect(serverCallContext.user.isAuthenticated()).to.be.false;
     });
 
-    it('should handle successful authentication middlewares', async () => {
+    it('should handle successful authentication middlewares with class', async () => {
       class CustomUser {
         public isAuthenticated(): boolean {
           return true;
         }
         public userName(): string {
-          return 'custom-user';
+          return 'authenticated-user';
         }
       }
 
@@ -386,7 +386,35 @@ describe('A2AExpressApp', () => {
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user).to.be.an.instanceOf(ProxyUser);
       expect(serverCallContext.user.isAuthenticated()).to.be.true;
-      expect(serverCallContext.user.userName()).to.equal('custom-user');
+      expect(serverCallContext.user.userName()).to.equal('authenticated-user');
+    });
+
+    it('should handle successful authentication middlewares with plain object', async () => {
+      const authenticationMiddleware = (req: Request, _res: Response, next: NextFunction) => {
+        req.user = { id: 123, userName: 'authenticated-user' };
+        next();
+      };
+
+      app = new A2AExpressApp(mockRequestHandler);
+      const middlewareApp = express();
+      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-id');
+      await request(middlewareApp).post('/').send(requestBody).expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user).to.be.an.instanceOf(ProxyUser);
+      expect(serverCallContext.user.isAuthenticated()).to.be.true;
+      expect(serverCallContext.user.userName()).to.equal('authenticated-user');
     });
   });
 
