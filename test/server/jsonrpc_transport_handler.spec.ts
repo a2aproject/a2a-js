@@ -2,7 +2,7 @@ import 'mocha';
 import { expect } from 'chai';
 import sinon from 'sinon';
 
-import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_transport_handler.js';
+import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { JSONRPCErrorResponse, JSONRPCRequest } from '../../src/index.js';
 
