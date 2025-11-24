@@ -7,7 +7,7 @@ export class UnAuthenticatedUser implements A2AUser {
   public isAuthenticated(): boolean {
     return false;
   }
-  
+
   public getUser(): unknown {
     return null;
   }

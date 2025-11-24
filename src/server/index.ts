@@ -28,4 +28,4 @@ export type { DefaultPushNotificationSenderOptions } from './push_notification/d
 export type { PushNotificationStore } from './push_notification/push_notification_store.js';
 export { InMemoryPushNotificationStore } from './push_notification/push_notification_store.js';
 
-export { A2AUser } from './authentication/user.js'
+export { A2AUser } from './authentication/user.js';
