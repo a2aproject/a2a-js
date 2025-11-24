@@ -9,13 +9,6 @@ import {
 } from '../../src/client/auth-handler.js';
 import { SendMessageResponse, SendMessageSuccessResponse } from '../../src/types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
-import {
-  AuthenticationHandler,
-  HttpHeaders,
-  createAuthenticatingFetchWithRetry,
-} from '../../src/client/auth-handler.js';
-import { SendMessageResponse, SendMessageSuccessResponse } from '../../src/types.js';
-import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { createMessageParams, createMockFetch } from './util.js';
 
 // Challenge manager class for authentication testing
