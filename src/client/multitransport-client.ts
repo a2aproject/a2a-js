@@ -93,10 +93,7 @@ export class Client {
     blocking: boolean;
   }): MessageSendParams {
     const { params, blocking } = options;
-    const result = { ...params };
-    if (!result.configuration) {
-      result.configuration = {};
-    }
+    const result = { ...params, configuration: params.configuration ?? {} };
 
     if (this.config?.acceptedOutputModes) {
       result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;

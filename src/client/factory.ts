@@ -36,7 +36,11 @@ export class ClientFactory {
     for (const transport of all) {
       const factory = this.transportsByName.get(transport.transport);
       if (factory) {
-        return new Client(await factory.create(transport.url, agentCard), agentCard);
+        return new Client(
+          await factory.create(transport.url, agentCard),
+          agentCard,
+          this.options.clientConfig
+        );
       }
     }
     throw new Error(
