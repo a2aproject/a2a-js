@@ -74,10 +74,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return this.agentCard;
   }
 
-  async getAuthenticatedExtendedAgentCard(): Promise<AgentCard> {
+  async getAuthenticatedExtendedAgentCard(context?: ServerCallContext): Promise<AgentCard> {
+    if(!this.agentCard.supportsAuthenticatedExtendedCard) {
+      throw A2AError.unsupportedOperation('Agent does not support authenticated extended card.');
+    }
     if (!this.extendedAgentCard) {
       throw A2AError.authenticatedExtendedCardNotConfigured();
     }
+
+
 
     return this.extendedAgentCard;
   }
