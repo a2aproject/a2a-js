@@ -386,14 +386,14 @@ describe('A2AExpressApp', () => {
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user).to.be.an.instanceOf(ProxyUser);
       expect(serverCallContext.user.isAuthenticated()).to.be.true;
-      expect(serverCallContext.user.userName()).to.equal('authenticated-user');
+      expect(serverCallContext.user.getUser()).to.be.an.instanceOf(CustomUser);
     });
 
     it('should handle successful authentication middlewares with plain object', async () => {
       const authenticationMiddleware = (req: Request, _res: Response, next: NextFunction) => {
         (req as any).user = {
           id: 123,
-          userName: 'authenticated-user', // Matches one of the candidate keys in ProxyUser
+          email: 'some_email',
         };
         next();
       };
@@ -417,7 +417,8 @@ describe('A2AExpressApp', () => {
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user).to.be.an.instanceOf(ProxyUser);
       expect(serverCallContext.user.isAuthenticated()).to.be.true;
-      expect(serverCallContext.user.userName()).to.equal('authenticated-user');
+      expect(serverCallContext.user.getUser().id).to.equal(123);
+      expect(serverCallContext.user.getUser().email).to.equal('some_email');
     });
   });
 

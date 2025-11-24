@@ -1,15 +1,15 @@
 export interface A2AUser {
   isAuthenticated(): boolean;
-  userName(): string;
+  getUser(): unknown;
 }
 
 export class UnAuthenticatedUser implements A2AUser {
   public isAuthenticated(): boolean {
     return false;
   }
-
-  public userName(): string {
-    return '';
+  
+  public getUser(): unknown {
+    return null;
   }
 }
 
@@ -24,15 +24,7 @@ export class ProxyUser implements A2AUser {
     return !!this.user;
   }
 
-  public userName(): string {
-    if (this.user instanceof Object && 'userName' in this.user) {
-      if (typeof this.user.userName === 'function') {
-        return this.user.userName();
-      }
-      if (typeof this.user.userName === 'string') {
-        return this.user.userName;
-      }
-    }
-    return '';
+  public getUser(): unknown {
+    return this.user;
   }
 }
