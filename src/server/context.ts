@@ -1,16 +1,16 @@
-import { A2AUser } from './authentication/user.js';
+import { User } from './authentication/user.js';
 
 export class ServerCallContext {
   private readonly _requestedExtensions?: Set<string>;
-  private readonly _user?: A2AUser;
+  private readonly _user?: User;
   private _activatedExtensions?: Set<string>;
 
-  constructor(requestedExtensions?: Set<string>, user?: A2AUser) {
+  constructor(requestedExtensions?: Set<string>, user?: User) {
     this._requestedExtensions = requestedExtensions;
     this._user = user;
   }
 
-  get user(): A2AUser | undefined {
+  get user(): User | undefined {
     return this._user;
   }
 

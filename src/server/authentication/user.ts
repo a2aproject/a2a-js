@@ -1,9 +1,9 @@
-export interface A2AUser {
+export interface User {
   isAuthenticated(): boolean;
   getUser(): unknown;
 }
 
-export class UnAuthenticatedUser implements A2AUser {
+export class UnAuthenticatedUser implements User {
   public isAuthenticated(): boolean {
     return false;
   }
@@ -13,7 +13,7 @@ export class UnAuthenticatedUser implements A2AUser {
   }
 }
 
-export class ProxyUser implements A2AUser {
+export class ProxyUser implements User {
   private user: unknown;
 
   constructor(user: unknown) {
