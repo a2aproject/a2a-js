@@ -1,10 +1,11 @@
 import { AgentCard, AgentInterface } from '../types.js';
-import { Client } from './client.js';
+import { Client, ClientConfig } from './client.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 import { TransportFactory } from './transports/transport.js';
 
 export interface ClientFactoryOptions {
   transports: ReadonlyArray<TransportFactory>;
+  clientConfig?: ClientConfig;
 }
 
 export const ClientFactoryOptions = {
@@ -35,7 +36,7 @@ export class ClientFactory {
     for (const transport of all) {
       const factory = this.transportsByName.get(transport.transport);
       if (factory) {
-        return new Client(await factory.create(transport.url, agentCard));
+        return new Client(await factory.create(transport.url, agentCard), agentCard);
       }
     }
     throw new Error(

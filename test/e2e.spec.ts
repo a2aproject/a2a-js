@@ -1,6 +1,5 @@
 import express, { Express } from 'express';
 import {
-  A2ARequestHandler,
   AgentExecutionEvent,
   AgentExecutor,
   DefaultRequestHandler,
@@ -17,8 +16,6 @@ import { expect } from 'chai';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
 import { A2AStreamEventData } from '../src/client/legacy.js';
-import TestAgent from 'supertest/lib/agent.js';
-import supertest from 'supertest';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
