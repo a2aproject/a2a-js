@@ -8,7 +8,7 @@ import {
   Task,
   AgentCard,
 } from '../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../legacy.js';
+import { A2AStreamEventData, SendMessageResult } from '../client.js';
 
 export interface Transport {
   sendMessage(params: MessageSendParams, signal?: AbortSignal): Promise<SendMessageResult>;

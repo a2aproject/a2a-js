@@ -27,7 +27,7 @@ import {
   CancelTaskSuccessResponse,
   AgentCard,
 } from '../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../legacy.js';
+import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {

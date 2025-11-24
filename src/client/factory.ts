@@ -1,5 +1,5 @@
 import { AgentCard, AgentInterface } from '../types.js';
-import { Client, ClientConfig } from './client.js';
+import { Client, ClientConfig } from './multitransport-client.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 import { TransportFactory } from './transports/transport.js';
 

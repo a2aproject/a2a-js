@@ -15,7 +15,7 @@ import { ClientFactory } from '../src/client/factory.js';
 import { expect } from 'chai';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
-import { A2AStreamEventData } from '../src/client/legacy.js';
+import { A2AStreamEventData } from '../src/client/client.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -83,15 +83,15 @@ describe('Client E2E tests', () => {
 
   describe('sendMessage', () => {
     it('should send a message to the agent', async () => {
-      const want = createTestMessage('1', 'test');
-      agentExecutor.events = [want];
+      const expected = createTestMessage('1', 'test');
+      agentExecutor.events = [expected];
       const client = await clientFactory.createClient(agentCard);
 
-      const got = await client.sendMessage({
+      const actual = await client.sendMessage({
         message: createTestMessage('1', 'test'),
       });
 
-      expect(got).to.deep.equal(want);
+      expect(actual).to.deep.equal(expected);
     });
   });
 
@@ -99,7 +99,7 @@ describe('Client E2E tests', () => {
     it('should send a message to the agent and read event stream', async () => {
       const taskId = '1';
       const contextId = '2';
-      const want: AgentExecutionEvent[] = [
+      const expected: AgentExecutionEvent[] = [
         {
           id: taskId,
           contextId,
@@ -121,17 +121,17 @@ describe('Client E2E tests', () => {
           final: true,
         },
       ];
-      agentExecutor.events = want;
+      agentExecutor.events = expected;
       const client = await clientFactory.createClient(agentCard);
 
-      const got: A2AStreamEventData[] = [];
+      const actual: A2AStreamEventData[] = [];
       for await (const message of client.sendMessageStream({
         message: createTestMessage('1', 'test'),
       })) {
-        got.push(message);
+        actual.push(message);
       }
 
-      expect(got).to.deep.equal(want);
+      expect(actual).to.deep.equal(expected);
     });
   });
 });
