@@ -45,6 +45,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly eventBusManager: ExecutionEventBusManager;
   private readonly pushNotificationStore?: PushNotificationStore;
   private readonly pushNotificationSender?: PushNotificationSender;
+  private readonly extendedCardModifier?: (agentCard: AgentCard, context?: ServerCallContext) => Promise<AgentCard>;
 
   constructor(
     agentCard: AgentCard,
@@ -53,13 +54,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventBusManager: ExecutionEventBusManager = new DefaultExecutionEventBusManager(),
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
-    extendedAgentCard?: AgentCard
+    extendedAgentCard?: AgentCard,
+    extendedCardModifier?: (agentCard: AgentCard, context?: ServerCallContext) => Promise<AgentCard>
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
     this.agentExecutor = agentExecutor;
     this.eventBusManager = eventBusManager;
     this.extendedAgentCard = extendedAgentCard;
+    this.extendedCardModifier = extendedCardModifier;
 
     // If push notifications are supported, use the provided store and sender.
     // Otherwise, use the default in-memory store and sender.
@@ -81,9 +84,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!this.extendedAgentCard) {
       throw A2AError.authenticatedExtendedCardNotConfigured();
     }
-
-
-
+    if (this.extendedCardModifier) {
+      return this.extendedCardModifier(this.extendedAgentCard, context);
+    }
     return this.extendedAgentCard;
   }
 
