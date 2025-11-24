@@ -96,10 +96,8 @@ export class Client {
     const result = { ...params };
     if (!result.configuration) {
       result.configuration = {};
-    } else {
-      result.configuration = { ...result.configuration };
     }
-    
+
     if (this.config?.acceptedOutputModes) {
       result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
     }
