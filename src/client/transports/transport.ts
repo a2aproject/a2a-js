@@ -47,8 +47,6 @@ export interface Transport {
     params: TaskIdParams,
     signal?: AbortSignal
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
-
-  close(): Promise<void>;
 }
 
 export interface TransportFactory {

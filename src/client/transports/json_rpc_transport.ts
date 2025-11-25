@@ -156,10 +156,6 @@ export class JsonRpcTransport implements Transport {
     );
   }
 
-  close(): Promise<void> {
-    return Promise.resolve();
-  }
-
   private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
     if (this.customFetchImpl) {
       return this.customFetchImpl(...args);

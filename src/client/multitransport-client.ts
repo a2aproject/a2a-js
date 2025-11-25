@@ -131,13 +131,6 @@ export class Client {
     yield* this.transport.resubscribeTask(params);
   }
 
-  /**
-   * Closes the underlying transport.
-   */
-  close(): Promise<void> {
-    return this.transport.close();
-  }
-
   private applyClientConfig(options: {
     params: MessageSendParams;
     blocking: boolean;
