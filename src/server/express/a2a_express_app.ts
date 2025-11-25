@@ -1,21 +1,18 @@
-import express, { Express, RequestHandler, ErrorRequestHandler, Request } from 'express';
+import express, { Express, RequestHandler, ErrorRequestHandler } from 'express';
 
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { AGENT_CARD_PATH } from '../../constants.js';
 import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
-import { User } from '../authentication/user.js';
+import { UserBuilder } from './commands.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
-  private authenticathedUserExtractor?: (req: Request) => Promise<User>;
+  private userBuilder?: UserBuilder;
 
-  constructor(
-    requestHandler: A2ARequestHandler,
-    authenticathedUserExtractor?: (req: Request) => Promise<User>
-  ) {
+  constructor(requestHandler: A2ARequestHandler, userBuilder?: UserBuilder) {
     this.requestHandler = requestHandler;
-    this.authenticathedUserExtractor = authenticathedUserExtractor;
+    this.userBuilder = userBuilder;
   }
 
   /**
@@ -47,7 +44,7 @@ export class A2AExpressApp {
     router.use(
       jsonRpcHandler({
         requestHandler: this.requestHandler,
-        authenticatedUserExtractor: this.authenticathedUserExtractor,
+        userBuilder: this.userBuilder,
       })
     );
     router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));

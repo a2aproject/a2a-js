@@ -3,7 +3,7 @@ export interface User {
   userName(): string;
 }
 
-export class UnAuthenticatedUser implements User {
+export class UnauthenticatedUser implements User {
   public isAuthenticated(): boolean {
     return false;
   }

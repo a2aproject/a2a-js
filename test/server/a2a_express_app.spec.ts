@@ -11,7 +11,7 @@ import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../s
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
 import { ServerCallContext } from '../../src/server/context.js';
-import { User, UnAuthenticatedUser } from '../../src/server/authentication/user.js';
+import { User, UnauthenticatedUser } from '../../src/server/authentication/user.js';
 
 describe('A2AExpressApp', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -348,7 +348,7 @@ describe('A2AExpressApp', () => {
       assert.isTrue(handleStub.calledOnce);
       const serverCallContext = handleStub.getCall(0).args[1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-      expect(serverCallContext.user).to.be.an.instanceOf(UnAuthenticatedUser);
+      expect(serverCallContext.user).to.be.an.instanceOf(UnauthenticatedUser);
       expect(serverCallContext.user.isAuthenticated()).to.be.false;
     });
 
