@@ -143,7 +143,7 @@ export class JsonRpcTransportHandler {
             );
             break;
           case 'agent/getAuthenticatedExtendedCard':
-            result = await this.requestHandler.getAuthenticatedExtendedAgentCard();
+            result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
             break;
           default:
             throw A2AError.methodNotFound(method);
