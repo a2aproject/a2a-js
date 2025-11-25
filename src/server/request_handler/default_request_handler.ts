@@ -34,6 +34,7 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
+import { ExtendedCardModifier } from './common.js';
 
 const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
 
@@ -45,7 +46,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly eventBusManager: ExecutionEventBusManager;
   private readonly pushNotificationStore?: PushNotificationStore;
   private readonly pushNotificationSender?: PushNotificationSender;
-  private readonly extendedCardModifier?: (agentCard: AgentCard, context?: ServerCallContext) => Promise<AgentCard>;
+  private readonly extendedCardModifier?: ExtendedCardModifier;
 
   constructor(
     agentCard: AgentCard,
@@ -55,7 +56,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
     extendedAgentCard?: AgentCard,
-    extendedCardModifier?: (agentCard: AgentCard, context?: ServerCallContext) => Promise<AgentCard>
+    extendedCardModifier?: ExtendedCardModifier
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
@@ -78,16 +79,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   async getAuthenticatedExtendedAgentCard(context?: ServerCallContext): Promise<AgentCard> {
-    if(!this.agentCard.supportsAuthenticatedExtendedCard) {
+    if (!this.agentCard.supportsAuthenticatedExtendedCard) {
       throw A2AError.unsupportedOperation('Agent does not support authenticated extended card.');
     }
     if (!this.extendedAgentCard) {
       throw A2AError.authenticatedExtendedCardNotConfigured();
     }
     if (this.extendedCardModifier) {
-      return this.extendedCardModifier(this.extendedAgentCard, context);
+      return this.extendedCardModifier(this.extendedAgentCard, context) ?? this.agentCard;
     }
-    return this.extendedAgentCard;
+    return this.agentCard;
   }
 
   private async _createRequestContext(

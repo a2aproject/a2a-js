@@ -60,7 +60,10 @@ export class JsonRpcTransportHandler {
 
     const { method, id: requestId = null } = rpcRequest;
     try {
-      if (method !== 'agent/getAuthenticatedExtendedCard' && !this.paramsAreValid(rpcRequest.params)) {
+      if (
+        method !== 'agent/getAuthenticatedExtendedCard' &&
+        !this.paramsAreValid(rpcRequest.params)
+      ) {
         throw A2AError.invalidParams(`Invalid method parameters.`);
       }
 

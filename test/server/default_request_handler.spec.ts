@@ -12,6 +12,8 @@ import {
   InMemoryPushNotificationStore,
   RequestContext,
   ExecutionEventBus,
+  ExtendedCardModifier,
+  User,
 } from '../../src/server/index.js';
 import {
   AgentCard,
@@ -1728,5 +1730,119 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       new Set([expectedExtension]),
       'requestedExtensions should contain the expected extension'
     );
+  });
+
+  describe('getAuthenticatedExtendedAgentCard', async () => {
+    const agentCardWithExtendedSupport: AgentCard = {
+      name: 'Test Agent',
+      description: 'An agent for testing purposes',
+      url: 'http://localhost:8080',
+      version: '1.0.0',
+      protocolVersion: '0.3.0',
+      capabilities: {
+        extensions: [{ uri: 'requested-extension-uri' }],
+        streaming: true,
+        pushNotifications: true,
+      },
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: [
+        {
+          id: 'test-skill',
+          name: 'Test Skill',
+          description: 'A skill for testing',
+          tags: ['test'],
+        },
+      ],
+      supportsAuthenticatedExtendedCard: true,
+    };
+
+    it('getAuthenticatedExtendedAgentCard should fail if the agent card does not support extended agent card', async () => {
+      let caughtError;
+      try {
+        await handler.getAuthenticatedExtendedAgentCard();
+      } catch (error: any) {
+        caughtError = error;
+      } finally {
+        expect(caughtError).to.be.instanceOf(A2AError);
+        expect(caughtError.code).to.equal(-32004);
+        expect(caughtError.message).to.contain('Unsupported operation');
+      }
+    });
+
+    it('getAuthenticatedExtendedAgentCard should fail if the extended card is not provided', async () => {
+      handler = new DefaultRequestHandler(
+        agentCardWithExtendedSupport,
+        mockTaskStore,
+        mockAgentExecutor,
+        executionEventBusManager
+      );
+      let caughtError;
+      try {
+        await handler.getAuthenticatedExtendedAgentCard();
+      } catch (error: any) {
+        caughtError = error;
+      } finally {
+        expect(caughtError).to.be.instanceOf(A2AError);
+        expect(caughtError.code).to.equal(-32007);
+        expect(caughtError.message).to.contain('Extended card not configured');
+      }
+    });
+
+    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated', async () => {
+      const extendedCardModifier: ExtendedCardModifier = async (extendedAgentCard, context?) => {
+        if (context?.user?.isAuthenticated) {
+          return extendedAgentCard;
+        }
+        return undefined;
+      };
+      const extendedAgentCard: AgentCard = {
+        name: 'Test ExtendedAgentCard Agent',
+        description: 'An agent for testing the extended agent card functionality',
+        url: 'http://localhost:8080',
+        version: '1.0.0',
+        protocolVersion: '0.3.0',
+        capabilities: {
+          extensions: [
+            { uri: 'requested-extension-uri' },
+            { uri: 'extension-uri-for-authenticated-clients' },
+          ],
+          streaming: true,
+          pushNotifications: true,
+        },
+        defaultInputModes: ['text/plain'],
+        defaultOutputModes: ['text/plain'],
+        skills: [
+          {
+            id: 'test-skill',
+            name: 'Test Skill',
+            description: 'A skill for testing',
+            tags: ['test'],
+          },
+        ],
+      };
+      handler = new DefaultRequestHandler(
+        agentCardWithExtendedSupport,
+        mockTaskStore,
+        mockAgentExecutor,
+        executionEventBusManager,
+        undefined,
+        undefined,
+        extendedAgentCard,
+        extendedCardModifier
+      );
+
+      class A2AUser implements User {
+        isAuthenticated(): boolean {
+          return true;
+        }
+        userName(): string {
+          return 'test-user';
+        }
+      }
+      const context = new ServerCallContext(undefined, new A2AUser());
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      assert.deepEqual(agentCard, extendedAgentCard);
+    });
   });
 });
