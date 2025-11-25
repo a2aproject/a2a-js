@@ -1744,9 +1744,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       }
     }
 
-    const extendedAgentcardProvider: ExtendedAgentCardProvider = async (
-      context?
-    ) => {
+    const extendedAgentcardProvider: ExtendedAgentCardProvider = async (context?) => {
       if (context?.user?.isAuthenticated()) {
         return extendedAgentCard;
       }
