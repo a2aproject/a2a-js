@@ -60,12 +60,10 @@ describe('Client E2E tests', () => {
     );
 
     app = express();
-
     app.use(
       '/.well-known/agent-card.json',
       agentCardHandler({ agentCardProvider: requestHandler })
     );
-
     app.use('/a2a/rpc', jsonRpcHandler({ requestHandler: requestHandler }));
 
     server = app.listen();
