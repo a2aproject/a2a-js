@@ -11,6 +11,7 @@ import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../s
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
 import { ServerCallContext } from '../../src/server/context.js';
+import { User, UnauthenticatedUser } from '../../src/server/authentication/user.js';
 
 describe('A2AExpressApp', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -327,6 +328,155 @@ describe('A2AExpressApp', () => {
       app.setupRoutes(middlewareApp, '', [errorMiddleware]);
 
       await request(middlewareApp).get(`/${AGENT_CARD_PATH}`).expect(500);
+    });
+
+    it('should handle no authentication middlewares', async () => {
+      app = new A2AExpressApp(mockRequestHandler);
+      const middlewareApp = express();
+      app.setupRoutes(middlewareApp);
+
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-id');
+      await request(middlewareApp).post('/').send(requestBody).expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user).to.be.an.instanceOf(UnauthenticatedUser);
+      expect(serverCallContext.user.isAuthenticated()).to.be.false;
+    });
+
+    it('should handle successful authentication middlewares with class', async () => {
+      class CustomUser {
+        public isAuthenticated(): boolean {
+          return true;
+        }
+        public userName(): string {
+          return 'authenticated-user';
+        }
+      }
+
+      const authenticationMiddleware = (req: Request, _res: Response, next: NextFunction) => {
+        (req as any).user = new CustomUser();
+        next();
+      };
+
+      const userExtractor = (req: Request): Promise<User> => {
+        const user = (req as any).user;
+        return Promise.resolve(user as User);
+      };
+
+      app = new A2AExpressApp(mockRequestHandler, userExtractor);
+      const middlewareApp = express();
+      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-id');
+      await request(middlewareApp).post('/').send(requestBody).expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user.isAuthenticated()).to.be.true;
+      expect(serverCallContext.user.userName()).to.equal('authenticated-user');
+    });
+
+    it('should handle successful authentication middlewares with plain object', async () => {
+      const authenticationMiddleware = (req: Request, _res: Response, next: NextFunction) => {
+        (req as any).user = {
+          id: 123,
+          email: 'test_email',
+        };
+        next();
+      };
+
+      const userExtractor = (req: Request): Promise<User> => {
+        class CustomUser implements User {
+          constructor(private user: any) {}
+          public isAuthenticated(): boolean {
+            return true;
+          }
+          public userName(): string {
+            return this.user.email;
+          }
+          public getId(): number {
+            return this.user.id;
+          }
+        }
+
+        const user = (req as any).user;
+        const convertedUser = new CustomUser(user);
+        return Promise.resolve(convertedUser as User);
+      };
+
+      app = new A2AExpressApp(mockRequestHandler, userExtractor);
+      const middlewareApp = express();
+      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-id');
+      await request(middlewareApp).post('/').send(requestBody).expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user.isAuthenticated()).to.be.true;
+      expect(serverCallContext.user.userName()).to.equal('test_email');
+      expect(serverCallContext.user.getId()).to.equal(123);
+    });
+
+    it('should handle successful authentication middlewares without custom user extractor', async () => {
+      class CustomUser {
+        public isAuthenticated(): boolean {
+          return true;
+        }
+        public userName(): string {
+          return 'authenticated-user';
+        }
+      }
+
+      const authenticationMiddleware = (req: Request, _res: Response, next: NextFunction) => {
+        (req as any).user = new CustomUser();
+        next();
+      };
+
+      app = new A2AExpressApp(mockRequestHandler);
+      const middlewareApp = express();
+      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+
+      const mockResponse: JSONRPCSuccessResponse = {
+        jsonrpc: '2.0',
+        id: 'test-id',
+        result: { message: 'success' },
+      };
+      handleStub.resolves(mockResponse);
+
+      const requestBody = createRpcRequest('test-id');
+      await request(middlewareApp).post('/').send(requestBody).expect(200);
+
+      assert.isTrue(handleStub.calledOnce);
+      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
+      expect(serverCallContext.user.isAuthenticated()).to.be.false;
+      expect(serverCallContext.user.userName()).to.equal('');
     });
   });
 
