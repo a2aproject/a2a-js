@@ -4,12 +4,15 @@ import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { AGENT_CARD_PATH } from '../../constants.js';
 import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
+import { UserBuilder } from './common.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
+  private userBuilder?: UserBuilder;
 
-  constructor(requestHandler: A2ARequestHandler) {
+  constructor(requestHandler: A2ARequestHandler, userBuilder?: UserBuilder) {
     this.requestHandler = requestHandler;
+    this.userBuilder = userBuilder;
   }
 
   /**
@@ -38,7 +41,12 @@ export class A2AExpressApp {
       router.use(middlewares);
     }
 
-    router.use(jsonRpcHandler({ requestHandler: this.requestHandler }));
+    router.use(
+      jsonRpcHandler({
+        requestHandler: this.requestHandler,
+        userBuilder: this.userBuilder,
+      })
+    );
     router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: this.requestHandler }));
 
     app.use(baseUrl, router);

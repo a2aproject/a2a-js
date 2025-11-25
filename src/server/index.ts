@@ -27,3 +27,5 @@ export { DefaultPushNotificationSender } from './push_notification/default_push_
 export type { DefaultPushNotificationSenderOptions } from './push_notification/default_push_notification_sender.js';
 export type { PushNotificationStore } from './push_notification/push_notification_store.js';
 export { InMemoryPushNotificationStore } from './push_notification/push_notification_store.js';
+
+export type { User, UnauthenticatedUser } from './authentication/user.js';
