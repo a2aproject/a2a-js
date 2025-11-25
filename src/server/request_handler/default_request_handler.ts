@@ -34,19 +34,17 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
-import { ExtendedCardModifier } from './common.js';
 
 const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
 
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
-  private readonly extendedAgentCard?: AgentCard;
   private readonly taskStore: TaskStore;
   private readonly agentExecutor: AgentExecutor;
   private readonly eventBusManager: ExecutionEventBusManager;
   private readonly pushNotificationStore?: PushNotificationStore;
   private readonly pushNotificationSender?: PushNotificationSender;
-  private readonly extendedCardModifier?: ExtendedCardModifier;
+  private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
 
   constructor(
     agentCard: AgentCard,
@@ -55,15 +53,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventBusManager: ExecutionEventBusManager = new DefaultExecutionEventBusManager(),
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
-    extendedAgentCard?: AgentCard,
-    extendedCardModifier?: ExtendedCardModifier
+    extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
     this.agentExecutor = agentExecutor;
     this.eventBusManager = eventBusManager;
-    this.extendedAgentCard = extendedAgentCard;
-    this.extendedCardModifier = extendedCardModifier;
+    this.extendedAgentCardProvider = extendedAgentCardProvider;
 
     // If push notifications are supported, use the provided store and sender.
     // Otherwise, use the default in-memory store and sender.
@@ -82,14 +78,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!this.agentCard.supportsAuthenticatedExtendedCard) {
       throw A2AError.unsupportedOperation('Agent does not support authenticated extended card.');
     }
-    if (!this.extendedAgentCard) {
+    if (!this.extendedAgentCardProvider) {
       throw A2AError.authenticatedExtendedCardNotConfigured();
     }
-    if (this.extendedCardModifier) {
-      return this.extendedCardModifier(this.extendedAgentCard, this.agentCard, context);
+    if (typeof this.extendedAgentCardProvider === 'function') {
+      return this.extendedAgentCardProvider(context);
     }
-    if (context?.user?.isAuthenticated()) {
-      return this.extendedAgentCard;
+    if (this.extendedAgentCardProvider && context?.user?.isAuthenticated()) {
+      return this.extendedAgentCardProvider;
     }
     return this.agentCard;
   }
@@ -693,3 +689,5 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 }
+
+export type ExtendedAgentCardProvider = (context?: ServerCallContext) => Promise<AgentCard>;

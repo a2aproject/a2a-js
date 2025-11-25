@@ -12,7 +12,7 @@ import {
   InMemoryPushNotificationStore,
   RequestContext,
   ExecutionEventBus,
-  ExtendedCardModifier,
+  ExtendedAgentCardProvider,
   User,
 } from '../../src/server/index.js';
 import {
@@ -1744,9 +1744,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       }
     }
 
-    const extendedCardModifier: ExtendedCardModifier = async (
-      extendedAgentCard,
-      _agentCard,
+    const extendedAgentcardProvider: ExtendedAgentCardProvider = async (
       context?
     ) => {
       if (context?.user?.isAuthenticated()) {
@@ -1820,7 +1818,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       }
     });
 
-    it('getAuthenticatedExtendedAgentCard should fail if the extended card is not provided', async () => {
+    it('getAuthenticatedExtendedAgentCard should fail if ExtendedAgentCardProvider is not provided', async () => {
       handler = new DefaultRequestHandler(
         agentCardWithExtendedSupport,
         mockTaskStore,
@@ -1839,43 +1837,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       }
     });
 
-    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated with provided card modifier', async () => {
-      handler = new DefaultRequestHandler(
-        agentCardWithExtendedSupport,
-        mockTaskStore,
-        mockAgentExecutor,
-        executionEventBusManager,
-        undefined,
-        undefined,
-        extendedAgentCard,
-        extendedCardModifier
-      );
-
-      const context = new ServerCallContext(undefined, new A2AUser(true));
-      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
-      assert.deepEqual(agentCard, extendedAgentCard);
-    });
-
-    it('getAuthenticatedExtendedAgentCard should return capped extended card if user is not authenticated with provided card modifier', async () => {
-      handler = new DefaultRequestHandler(
-        agentCardWithExtendedSupport,
-        mockTaskStore,
-        mockAgentExecutor,
-        executionEventBusManager,
-        undefined,
-        undefined,
-        extendedAgentCard,
-        extendedCardModifier
-      );
-
-      const context = new ServerCallContext(undefined, new A2AUser(false));
-      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
-      assert(agentCard.capabilities.extensions.length === 1);
-      assert.deepEqual(agentCard.capabilities.extensions[0], { uri: 'requested-extension-uri' });
-      assert.deepEqual(agentCard.name, extendedAgentCard.name);
-    });
-
-    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated and no card modifier is provided', async () => {
+    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated with ExtendedAgentCardProvider as AgentCard', async () => {
       handler = new DefaultRequestHandler(
         agentCardWithExtendedSupport,
         mockTaskStore,
@@ -1889,6 +1851,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       const context = new ServerCallContext(undefined, new A2AUser(true));
       const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
       assert.deepEqual(agentCard, extendedAgentCard);
+    });
+
+    it('getAuthenticatedExtendedAgentCard should return capped extended card if user is not authenticated with ExtendedAgentCardProvider as callback', async () => {
+      handler = new DefaultRequestHandler(
+        agentCardWithExtendedSupport,
+        mockTaskStore,
+        mockAgentExecutor,
+        executionEventBusManager,
+        undefined,
+        undefined,
+        extendedAgentcardProvider
+      );
+
+      const context = new ServerCallContext(undefined, new A2AUser(false));
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      assert(agentCard.capabilities.extensions.length === 1);
+      assert.deepEqual(agentCard.capabilities.extensions[0], { uri: 'requested-extension-uri' });
+      assert.deepEqual(agentCard.name, extendedAgentCard.name);
     });
   });
 });
