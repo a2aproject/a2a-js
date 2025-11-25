@@ -86,7 +86,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw A2AError.authenticatedExtendedCardNotConfigured();
     }
     if (this.extendedCardModifier) {
-      return this.extendedCardModifier(this.extendedAgentCard, context);
+      return this.extendedCardModifier(this.extendedAgentCard, this.agentCard, context);
     }
     if (context?.user?.isAuthenticated()) {
       return this.extendedAgentCard;

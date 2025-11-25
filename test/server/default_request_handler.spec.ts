@@ -1744,7 +1744,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         }
     }
 
-    const extendedCardModifier: ExtendedCardModifier = async (extendedAgentCard, context?) => {
+    const extendedCardModifier: ExtendedCardModifier = async (extendedAgentCard, _agentCard, context?) => {
         if (context?.user?.isAuthenticated()) {
           return extendedAgentCard;
         }
@@ -1870,6 +1870,22 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
       assert(agentCard.capabilities.extensions.length === 1);
       assert.deepEqual(agentCard.capabilities.extensions[0], { uri: 'requested-extension-uri' });
+    });
+
+        it('getAuthenticatedExtendedAgentCard should return capped extended card if user is authenticated and no card modifier is provided', async () => {
+      handler = new DefaultRequestHandler(
+        agentCardWithExtendedSupport,
+        mockTaskStore,
+        mockAgentExecutor,
+        executionEventBusManager,
+        undefined,
+        undefined,
+        extendedAgentCard,
+      );
+
+      const context = new ServerCallContext(undefined, new A2AUser(true));
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      assert.deepEqual(agentCard, extendedAgentCard);
     });
   });
 });
