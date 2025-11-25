@@ -4,7 +4,7 @@ import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { AGENT_CARD_PATH } from '../../constants.js';
 import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
-import { UserBuilder } from './commands.js';
+import { UserBuilder } from './common.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;

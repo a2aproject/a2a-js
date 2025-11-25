@@ -13,7 +13,7 @@ import { ServerCallContext } from '../context.js';
 import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UnauthenticatedUser } from '../authentication/user.js';
-import { UserBuilder } from './commands.js';
+import { UserBuilder } from './common.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
