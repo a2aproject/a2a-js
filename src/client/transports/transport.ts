@@ -7,6 +7,7 @@ import {
   TaskQueryParams,
   Task,
   AgentCard,
+  GetTaskPushNotificationConfigParams,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 
@@ -24,7 +25,7 @@ export interface Transport {
   ): Promise<TaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
-    params: TaskIdParams,
+    params: GetTaskPushNotificationConfigParams,
     signal?: AbortSignal
   ): Promise<TaskPushNotificationConfig>;
 

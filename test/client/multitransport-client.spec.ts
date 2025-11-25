@@ -14,6 +14,7 @@ import {
   Message,
   TaskStatusUpdateEvent,
   AgentCard,
+  GetTaskPushNotificationConfigParams,
 } from '../../src/types.js';
 import { A2AStreamEventData } from '../../src/client/client.js';
 
@@ -42,6 +43,7 @@ describe('Client', () => {
       version: '1.0.0',
       capabilities: {
         streaming: true,
+        pushNotifications: true,
       },
       defaultInputModes: [],
       defaultOutputModes: [],
@@ -131,7 +133,10 @@ describe('Client', () => {
   });
 
   it('should call transport.getTaskPushNotificationConfig', async () => {
-    const params: TaskIdParams = { id: '123' };
+    const params: GetTaskPushNotificationConfigParams = {
+      id: '123',
+      pushNotificationConfigId: 'abc',
+    };
     const config: TaskPushNotificationConfig = {
       taskId: '123',
       pushNotificationConfig: { url: 'http://example.com' },

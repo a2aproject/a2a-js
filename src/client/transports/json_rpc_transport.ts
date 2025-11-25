@@ -1,3 +1,4 @@
+import { TransportProtocolName } from '../../core.js';
 import {
   AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
@@ -26,6 +27,7 @@ import {
   GetTaskSuccessResponse,
   CancelTaskSuccessResponse,
   AgentCard,
+  GetTaskPushNotificationConfigParams,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -79,12 +81,12 @@ export class JsonRpcTransport implements Transport {
   }
 
   async getTaskPushNotificationConfig(
-    params: TaskIdParams,
+    params: GetTaskPushNotificationConfigParams,
     signal?: AbortSignal,
     idOverride?: number
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
-      TaskIdParams,
+      GetTaskPushNotificationConfigParams,
       GetTaskPushNotificationConfigSuccessResponse
     >('tasks/pushNotificationConfig/get', params, idOverride, signal);
     return rpcResponse.result;
@@ -416,7 +418,7 @@ export class JsonRpcTransportFactoryOptions {
 }
 
 export class JsonRpcTransportFactory implements TransportFactory {
-  public static readonly name = 'JSONRPC';
+  public static readonly name: TransportProtocolName = 'JSONRPC';
 
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
