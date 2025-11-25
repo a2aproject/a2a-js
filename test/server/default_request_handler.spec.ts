@@ -1839,7 +1839,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       }
     });
 
-    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated', async () => {
+    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated with provided card modifier', async () => {
       handler = new DefaultRequestHandler(
         agentCardWithExtendedSupport,
         mockTaskStore,
@@ -1856,7 +1856,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       assert.deepEqual(agentCard, extendedAgentCard);
     });
 
-    it('getAuthenticatedExtendedAgentCard should return capped extended card if user is not authenticated', async () => {
+    it('getAuthenticatedExtendedAgentCard should return capped extended card if user is not authenticated with provided card modifier', async () => {
       handler = new DefaultRequestHandler(
         agentCardWithExtendedSupport,
         mockTaskStore,
@@ -1872,9 +1872,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
       assert(agentCard.capabilities.extensions.length === 1);
       assert.deepEqual(agentCard.capabilities.extensions[0], { uri: 'requested-extension-uri' });
+      assert.deepEqual(agentCard.name, extendedAgentCard.name);
     });
 
-    it('getAuthenticatedExtendedAgentCard should return capped extended card if user is authenticated and no card modifier is provided', async () => {
+    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated and no card modifier is provided', async () => {
       handler = new DefaultRequestHandler(
         agentCardWithExtendedSupport,
         mockTaskStore,
