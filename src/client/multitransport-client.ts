@@ -44,7 +44,13 @@ export class Client {
    * Uses blocking mode by default.
    */
   sendMessage(params: MessageSendParams): Promise<SendMessageResult> {
-    params = this.applyClientConfig({ params, blocking: !(this.config?.polling ?? false) });
+    params = this.applyClientConfig({
+      params,
+      blocking:
+        params.configuration?.blocking !== undefined
+          ? params.configuration.blocking
+          : !(this.config?.polling ?? false),
+    });
     return this.transport.sendMessage(params);
   }
 
@@ -138,10 +144,10 @@ export class Client {
     const { params, blocking } = options;
     const result = { ...params, configuration: params.configuration ?? {} };
 
-    if (this.config?.acceptedOutputModes) {
+    if (!result.configuration.acceptedOutputModes && this.config?.acceptedOutputModes) {
       result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
     }
-    if (this.config?.pushNotificationConfig) {
+    if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
       result.configuration.pushNotificationConfig = this.config.pushNotificationConfig;
     }
     result.configuration.blocking = blocking;

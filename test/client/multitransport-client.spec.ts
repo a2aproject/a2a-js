@@ -251,6 +251,22 @@ describe('Client', () => {
       expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
     });
 
+    it('should set blocking=false when explicitly provided in request', async () => {
+      client = new Client(transport, agentCard);
+      const params: MessageSendParams = {
+        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+        configuration: { blocking: false },
+      };
+
+      await client.sendMessage(params);
+
+      const expectedParams = {
+        ...params,
+        configuration: { blocking: false },
+      };
+      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+    });
+
     it('should apply acceptedOutputModes', async () => {
       const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
       client = new Client(transport, agentCard, config);
@@ -267,12 +283,50 @@ describe('Client', () => {
       expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
     });
 
+    it('should use acceptedOutputModes from request when provided', async () => {
+      const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
+      client = new Client(transport, agentCard, config);
+      const params: MessageSendParams = {
+        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+        configuration: { acceptedOutputModes: ['text/plain'] },
+      };
+
+      await client.sendMessage(params);
+
+      const expectedParams = {
+        ...params,
+        configuration: { blocking: true, acceptedOutputModes: ['text/plain'] },
+      };
+      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+    });
+
     it('should apply pushNotificationConfig', async () => {
       const pushConfig = { url: 'http://test.com' };
       const config: ClientConfig = { polling: false, pushNotificationConfig: pushConfig };
       client = new Client(transport, agentCard, config);
       const params: MessageSendParams = {
         message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      };
+
+      await client.sendMessage(params);
+
+      const expectedParams = {
+        ...params,
+        configuration: { blocking: true, pushNotificationConfig: pushConfig },
+      };
+      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+    });
+
+    it('should use pushNotificationConfig from request when provided', async () => {
+      const config: ClientConfig = {
+        polling: false,
+        pushNotificationConfig: { url: 'http://test.com' },
+      };
+      client = new Client(transport, agentCard, config);
+      const pushConfig = { url: 'http://test2.com' };
+      const params: MessageSendParams = {
+        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+        configuration: { pushNotificationConfig: pushConfig },
       };
 
       await client.sendMessage(params);
