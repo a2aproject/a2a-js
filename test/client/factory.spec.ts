@@ -50,7 +50,7 @@ describe('ClientFactory', () => {
         preferredTransports: ['UnknownTransport'],
       };
       expect(() => new ClientFactory(options)).to.throw(
-        'Unknown preferred transport: UnknownTransport'
+        'Unknown preferred transport: UnknownTransport, available transports: Transport1'
       );
     });
 

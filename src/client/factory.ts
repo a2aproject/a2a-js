@@ -33,6 +33,15 @@ export class ClientFactory {
   private readonly transportsByName = new Map<string, TransportFactory>();
 
   constructor(public readonly options: ClientFactoryOptions = ClientFactoryOptions.Default) {
+    if (!options.transports || options.transports.length === 0) {
+      throw new Error('No transports provided');
+    }
+    for (const transport of options.transports) {
+      if (this.transportsByName.has(transport.name)) {
+        throw new Error(`Duplicate transport name: ${transport.name}`);
+      }
+      this.transportsByName.set(transport.name, transport);
+    }
     for (const transport of options.preferredTransports ?? []) {
       const factory = this.options.transports.find((t) => t.name === transport);
       if (!factory) {
@@ -41,24 +50,19 @@ export class ClientFactory {
         );
       }
     }
-    for (const transport of options.transports) {
-      if (this.transportsByName.has(transport.name)) {
-        throw new Error(`Duplicate transport name: ${transport.name}`);
-      }
-      this.transportsByName.set(transport.name, transport);
-    }
   }
 
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const agentCardPreferred = agentCard.preferredTransport ?? JsonRpcTransportFactory.name;
+    const additionalInterfaces = agentCard.additionalInterfaces ?? [];
     const urlsPerAgentTransports = new Map<string, string>([
       [agentCardPreferred, agentCard.url],
-      ...(agentCard.additionalInterfaces ?? []).map<[string, string]>((i) => [i.transport, i.url]),
+      ...additionalInterfaces.map<[string, string]>((i) => [i.transport, i.url]),
     ]);
     const transportsByPreference = [
       ...(this.options.preferredTransports ?? []),
       agentCardPreferred,
-      ...(agentCard.additionalInterfaces ?? []).map((i) => i.transport),
+      ...additionalInterfaces.map((i) => i.transport),
     ];
     for (const transport of transportsByPreference) {
       if (!urlsPerAgentTransports.has(transport)) {
