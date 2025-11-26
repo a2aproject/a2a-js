@@ -124,7 +124,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
     // Validate requested extensions against agent capabilities
-    let newServerCallContext = context;
+    let newServerCallContext: ServerCallContext | undefined;
     if (context?.requestedExtensions) {
       const agentCard = await this.getAgentCard();
       const exposedExtensions = new Set(
@@ -149,7 +149,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       contextId,
       task,
       referenceTasks,
-      newServerCallContext
+      newServerCallContext ?? context
     );
   }
 
