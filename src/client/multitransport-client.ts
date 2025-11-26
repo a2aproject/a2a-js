@@ -46,10 +46,7 @@ export class Client {
   sendMessage(params: MessageSendParams): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
-      blocking:
-        params.configuration?.blocking !== undefined
-          ? params.configuration.blocking
-          : !(this.config?.polling ?? false),
+      blocking: params.configuration?.blocking ?? !(this.config?.polling ?? false),
     });
     return this.transport.sendMessage(params);
   }
