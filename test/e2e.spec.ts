@@ -85,7 +85,7 @@ describe('Client E2E tests', () => {
     it('should send a message to the agent', async () => {
       const expected = createTestMessage('1', 'test');
       agentExecutor.events = [expected];
-      const client = await clientFactory.createClient(agentCard);
+      const client = await clientFactory.createFromAgentCard(agentCard);
 
       const actual = await client.sendMessage({
         message: createTestMessage('1', 'test'),
@@ -122,7 +122,7 @@ describe('Client E2E tests', () => {
         },
       ];
       agentExecutor.events = expected;
-      const client = await clientFactory.createClient(agentCard);
+      const client = await clientFactory.createFromAgentCard(agentCard);
 
       const actual: A2AStreamEventData[] = [];
       for await (const message of client.sendMessageStream({

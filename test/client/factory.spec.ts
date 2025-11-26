@@ -95,7 +95,7 @@ describe('ClientFactory', () => {
     it('should use agentCard.preferredTransport if available and supported', async () => {
       factory = new ClientFactory({ transports: [mockTransportFactory1] });
 
-      const client = await factory.createClient(agentCard);
+      const client = await factory.createFromAgentCard(agentCard);
 
       expect(client).to.be.instanceOf(Client);
       expect(mockTransportFactory1.create.calledOnceWith('http://transport1.com', agentCard)).to.be
@@ -109,7 +109,7 @@ describe('ClientFactory', () => {
         preferredTransports: ['Transport2'],
       });
 
-      await factory.createClient(agentCard);
+      await factory.createFromAgentCard(agentCard);
 
       expect(mockTransportFactory2.create.calledOnce).to.be.true;
     });
@@ -119,7 +119,7 @@ describe('ClientFactory', () => {
       agentCard.preferredTransport = 'Transport2'; // Not supported
 
       try {
-        await factory.createClient(agentCard);
+        await factory.createFromAgentCard(agentCard);
         expect.fail('Should have thrown error');
       } catch (e: any) {
         expect(e.message).to.include('No compatible transport found');
@@ -132,7 +132,7 @@ describe('ClientFactory', () => {
         preferredTransports: ['Transport2'], // Not supported
       });
 
-      await factory.createClient(agentCard);
+      await factory.createFromAgentCard(agentCard);
 
       expect(mockTransportFactory1.create.calledOnce).to.be.true;
     });
@@ -145,7 +145,7 @@ describe('ClientFactory', () => {
       };
       factory = new ClientFactory({ transports: [jsonRpcFactory] });
 
-      await factory.createClient(agentCard);
+      await factory.createFromAgentCard(agentCard);
 
       expect(jsonRpcFactory.create.calledOnce).to.be.true;
     });
@@ -157,7 +157,7 @@ describe('ClientFactory', () => {
         clientConfig,
       });
 
-      const client = await factory.createClient(agentCard);
+      const client = await factory.createFromAgentCard(agentCard);
 
       expect(client.config).to.equal(clientConfig);
     });

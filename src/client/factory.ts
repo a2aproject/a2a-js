@@ -49,7 +49,7 @@ export class ClientFactory {
     }
   }
 
-  async createClient(agentCard: AgentCard): Promise<Client> {
+  async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const agentCardPreferred = agentCard.preferredTransport ?? JsonRpcTransportFactory.name;
     const urlsPerAgentTransports = new Map<string, string>([
       [agentCardPreferred, agentCard.url],
