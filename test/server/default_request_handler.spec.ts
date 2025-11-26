@@ -1712,7 +1712,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask);
     await handler.sendMessage(
       params,
-      new ServerCallContext(new Set([expectedExtension, 'not-available-extension-by-agent-card']), new UnauthenticatedUser())
+      new ServerCallContext(
+        new Set([expectedExtension, 'not-available-extension-by-agent-card']),
+        new UnauthenticatedUser()
+      )
     );
 
     expect(capturedRequestContext).to.be.instanceOf(
