@@ -20,7 +20,7 @@ npm run agents:authentication-agent
 The agent will start on `http://localhost:41241`.
 
 Use this tool https://www.jwt.io/ to generate your Json Web Token with the JWT Encoder. The secret key for the signature is 'a2a-secret-for-authentication-sample'.
-For a successful authentication the payload data MUST contain these valuese: "email", "userName", "role".
+For a successful authentication the payload data MUST contain these values: "email", "userName", "role".
 
 ```bash
 curl -X POST http://localhost:41241/
