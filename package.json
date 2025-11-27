@@ -71,7 +71,7 @@
     "clean": "gts clean",
     "build": "tsup",
     "pretest": "npm run build",
-    "test": "mocha test/**/*.spec.ts",
+    "test": "mocha \"test/**/*.spec.ts\"",
     "lint": "npx eslint .",
     "format:readme": "prettier --write ./README.md",
     "lint:fix": "npx eslint . --fix",

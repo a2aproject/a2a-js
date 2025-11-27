@@ -1,3 +1,4 @@
+import { TransportProtocolName } from '../../core.js';
 import {
   AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
@@ -25,16 +26,18 @@ import {
   ListTaskPushNotificationConfigSuccessResponse,
   GetTaskSuccessResponse,
   CancelTaskSuccessResponse,
+  AgentCard,
+  GetTaskPushNotificationConfigParams,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
-import { A2ATransport } from './transport.js';
+import { RequestOptions, Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
 }
 
-export class JsonRpcTransport implements A2ATransport {
+export class JsonRpcTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   private readonly endpoint: string;
   private requestIdCounter: number = 1;
@@ -44,97 +47,120 @@ export class JsonRpcTransport implements A2ATransport {
     this.customFetchImpl = options.fetchImpl;
   }
 
-  async sendMessage(params: MessageSendParams, idOverride?: number): Promise<SendMessageResult> {
+  async sendMessage(
+    params: MessageSendParams,
+    options?: RequestOptions,
+    idOverride?: number
+  ): Promise<SendMessageResult> {
     const rpcResponse = await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>(
       'message/send',
       params,
-      idOverride
+      idOverride,
+      options
     );
     return rpcResponse.result;
   }
 
   async *sendMessageStream(
-    params: MessageSendParams
+    params: MessageSendParams,
+    options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest('message/stream', params);
+    yield* this._sendStreamingRequest('message/stream', params, options);
   }
 
   async setTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
+    options?: RequestOptions,
     idOverride?: number
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       TaskPushNotificationConfig,
       SetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/set', params, idOverride);
+    >('tasks/pushNotificationConfig/set', params, idOverride, options);
     return rpcResponse.result;
   }
 
   async getTaskPushNotificationConfig(
-    params: TaskIdParams,
+    params: GetTaskPushNotificationConfigParams,
+    options?: RequestOptions,
     idOverride?: number
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
-      TaskIdParams,
+      GetTaskPushNotificationConfigParams,
       GetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/get', params, idOverride);
+    >('tasks/pushNotificationConfig/get', params, idOverride, options);
     return rpcResponse.result;
   }
 
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
+    options?: RequestOptions,
     idOverride?: number
   ): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendRpcRequest<
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/list', params, idOverride);
+    >('tasks/pushNotificationConfig/list', params, idOverride, options);
     return rpcResponse.result;
   }
 
   async deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,
+    options?: RequestOptions,
     idOverride?: number
   ): Promise<void> {
     await this._sendRpcRequest<
       DeleteTaskPushNotificationConfigParams,
       DeleteTaskPushNotificationConfigResponse
-    >('tasks/pushNotificationConfig/delete', params, idOverride);
+    >('tasks/pushNotificationConfig/delete', params, idOverride, options);
   }
 
-  async getTask(params: TaskQueryParams, idOverride?: number): Promise<Task> {
+  async getTask(
+    params: TaskQueryParams,
+    options?: RequestOptions,
+    idOverride?: number
+  ): Promise<Task> {
     const rpcResponse = await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>(
       'tasks/get',
       params,
-      idOverride
+      idOverride,
+      options
     );
     return rpcResponse.result;
   }
 
-  async cancelTask(params: TaskIdParams, idOverride?: number): Promise<Task> {
+  async cancelTask(
+    params: TaskIdParams,
+    options?: RequestOptions,
+    idOverride?: number
+  ): Promise<Task> {
     const rpcResponse = await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>(
       'tasks/cancel',
       params,
-      idOverride
+      idOverride,
+      options
     );
     return rpcResponse.result;
   }
 
   async *resubscribeTask(
-    params: TaskIdParams
+    params: TaskIdParams,
+    options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest('tasks/resubscribe', params);
+    yield* this._sendStreamingRequest('tasks/resubscribe', params, options);
   }
 
   async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(
     method: string,
     params: TExtensionParams,
-    idOverride: number
+    idOverride: number,
+    options?: RequestOptions
   ) {
     return await this._sendRpcRequest<TExtensionParams, TExtensionResponse>(
       method,
       params,
-      idOverride
+      idOverride,
+      options
     );
   }
 
@@ -155,7 +181,12 @@ export class JsonRpcTransport implements A2ATransport {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     TParams extends { [key: string]: any },
     TResponse extends JSONRPCResponse,
-  >(method: string, params: TParams, idOverride: number | undefined): Promise<TResponse> {
+  >(
+    method: string,
+    params: TParams,
+    idOverride: number | undefined,
+    options: RequestOptions | undefined
+  ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
 
     const rpcRequest: JSONRPCRequest = {
@@ -165,7 +196,7 @@ export class JsonRpcTransport implements A2ATransport {
       id: requestId,
     };
 
-    const httpResponse = await this._fetchRpc(rpcRequest);
+    const httpResponse = await this._fetchRpc(rpcRequest, 'application/json', options?.signal);
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
@@ -204,7 +235,8 @@ export class JsonRpcTransport implements A2ATransport {
 
   private async _fetchRpc(
     rpcRequest: JSONRPCRequest,
-    acceptHeader: string = 'application/json'
+    acceptHeader: string = 'application/json',
+    signal?: AbortSignal
   ): Promise<Response> {
     const requestInit: RequestInit = {
       method: 'POST',
@@ -213,13 +245,15 @@ export class JsonRpcTransport implements A2ATransport {
         Accept: acceptHeader,
       },
       body: JSON.stringify(rpcRequest),
+      signal,
     };
     return this._fetch(this.endpoint, requestInit);
   }
 
   private async *_sendStreamingRequest(
     method: string,
-    params: unknown
+    params: unknown,
+    options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
@@ -229,7 +263,7 @@ export class JsonRpcTransport implements A2ATransport {
       id: clientRequestId,
     };
 
-    const response = await this._fetchRpc(rpcRequest, 'text/event-stream');
+    const response = await this._fetchRpc(rpcRequest, 'text/event-stream', options?.signal);
 
     if (!response.ok) {
       let errorBody = '';
@@ -384,6 +418,27 @@ export class JsonRpcTransport implements A2ATransport {
       default:
         return new JSONRPCTransportError(response);
     }
+  }
+}
+
+export class JsonRpcTransportFactoryOptions {
+  fetchImpl?: typeof fetch;
+}
+
+export class JsonRpcTransportFactory implements TransportFactory {
+  public static readonly name: TransportProtocolName = 'JSONRPC';
+
+  constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
+
+  get protocolName(): string {
+    return JsonRpcTransportFactory.name;
+  }
+
+  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
+    return new JsonRpcTransport({
+      endpoint: url,
+      fetchImpl: this.options?.fetchImpl,
+    });
   }
 }
 
