@@ -15,7 +15,7 @@ export class AuthenticationAgentExecutor implements AgentExecutor {
       const customUser = requestContext.context.user;
       finalText = `The request is coming from the authenticated user ${customUser.userName()}, with email ${customUser.email()} and role ${customUser.role()}.`;
     } else {
-      finalText = `The request is not coming from an autheticated user.`;
+      finalText = `The request is not coming from an authenticated user.`;
     }
     const finalMessage: Message = {
       kind: 'message',
