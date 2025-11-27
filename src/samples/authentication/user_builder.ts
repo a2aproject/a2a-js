@@ -32,6 +32,6 @@ export const userBuilder: UserBuilder = async (req: Request): Promise<User> => {
     if ('userName' in user && 'email' in user && 'role' in user) {
       return new CustomUser(user.userName as string, user.email as string, user.role as string);
     }
-    return new UnauthenticatedUser();
   }
+  return new UnauthenticatedUser();
 };
