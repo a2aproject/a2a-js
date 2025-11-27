@@ -16,6 +16,7 @@ import { expect } from 'chai';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
 import { A2AStreamEventData } from '../src/client/client.js';
+import { UserBuilder } from '../src/server/express/common.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -66,7 +67,10 @@ describe('Client E2E tests', () => {
       agentCardHandler({ agentCardProvider: requestHandler })
     );
 
-    app.use('/a2a/rpc', jsonRpcHandler({ requestHandler: requestHandler }));
+    app.use(
+      '/a2a/rpc',
+      jsonRpcHandler({ requestHandler: requestHandler, userBuilder: UserBuilder.NoAuthentication })
+    );
 
     server = app.listen();
 
