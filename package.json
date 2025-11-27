@@ -51,6 +51,7 @@
     "@types/supertest": "^6.0.3",
     "c8": "^10.1.3",
     "chai": "^5.2.0",
+    "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
@@ -80,7 +81,8 @@
     "a2a:cli": "tsx src/samples/cli.ts",
     "agents:movie-agent": "tsx src/samples/agents/movie-agent/index.ts",
     "agents:sample-agent": "tsx src/samples/agents/sample-agent/index.ts",
-    "agents:extension-agent": "tsx src/samples/extensions/index.ts"
+    "agents:extension-agent": "tsx src/samples/extensions/index.ts",
+    "test-build:browser": "esbuild ./dist/client/index.js ./dist/index.js --bundle --platform=browser --outdir=dist/tmp-checks --outbase=./dist"
   },
   "dependencies": {
     "uuid": "^11.1.0"
