@@ -39,12 +39,12 @@ const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejecte
 
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
-  private readonly extendedAgentCard?: AgentCard;
   private readonly taskStore: TaskStore;
   private readonly agentExecutor: AgentExecutor;
   private readonly eventBusManager: ExecutionEventBusManager;
   private readonly pushNotificationStore?: PushNotificationStore;
   private readonly pushNotificationSender?: PushNotificationSender;
+  private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
 
   constructor(
     agentCard: AgentCard,
@@ -53,13 +53,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventBusManager: ExecutionEventBusManager = new DefaultExecutionEventBusManager(),
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
-    extendedAgentCard?: AgentCard
+    extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
     this.agentExecutor = agentExecutor;
     this.eventBusManager = eventBusManager;
-    this.extendedAgentCard = extendedAgentCard;
+    this.extendedAgentCardProvider = extendedAgentCardProvider;
 
     // If push notifications are supported, use the provided store and sender.
     // Otherwise, use the default in-memory store and sender.
@@ -74,12 +74,20 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return this.agentCard;
   }
 
-  async getAuthenticatedExtendedAgentCard(): Promise<AgentCard> {
-    if (!this.extendedAgentCard) {
+  async getAuthenticatedExtendedAgentCard(context?: ServerCallContext): Promise<AgentCard> {
+    if (!this.agentCard.supportsAuthenticatedExtendedCard) {
+      throw A2AError.unsupportedOperation('Agent does not support authenticated extended card.');
+    }
+    if (!this.extendedAgentCardProvider) {
       throw A2AError.authenticatedExtendedCardNotConfigured();
     }
-
-    return this.extendedAgentCard;
+    if (typeof this.extendedAgentCardProvider === 'function') {
+      return this.extendedAgentCardProvider(context);
+    }
+    if (context?.user?.isAuthenticated()) {
+      return this.extendedAgentCardProvider;
+    }
+    return this.agentCard;
   }
 
   private async _createRequestContext(
@@ -680,3 +688,5 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 }
+
+export type ExtendedAgentCardProvider = (context?: ServerCallContext) => Promise<AgentCard>;

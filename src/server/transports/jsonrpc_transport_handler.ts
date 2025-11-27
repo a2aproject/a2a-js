@@ -60,16 +60,10 @@ export class JsonRpcTransportHandler {
 
     const { method, id: requestId = null } = rpcRequest;
     try {
-      if (method === 'agent/getAuthenticatedExtendedCard') {
-        const result = await this.requestHandler.getAuthenticatedExtendedAgentCard();
-        return {
-          jsonrpc: '2.0',
-          id: requestId,
-          result: result,
-        } as JSONRPCResponse;
-      }
-
-      if (!this.paramsAreValid(rpcRequest.params)) {
+      if (
+        method !== 'agent/getAuthenticatedExtendedCard' &&
+        !this.paramsAreValid(rpcRequest.params)
+      ) {
         throw A2AError.invalidParams(`Invalid method parameters.`);
       }
 
@@ -147,6 +141,9 @@ export class JsonRpcTransportHandler {
               rpcRequest.params,
               context
             );
+            break;
+          case 'agent/getAuthenticatedExtendedCard':
+            result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
             break;
           default:
             throw A2AError.methodNotFound(method);

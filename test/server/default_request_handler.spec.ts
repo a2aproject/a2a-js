@@ -13,6 +13,8 @@ import {
   RequestContext,
   ExecutionEventBus,
   UnauthenticatedUser,
+  ExtendedAgentCardProvider,
+  User,
 } from '../../src/server/index.js';
 import {
   AgentCard,
@@ -1733,5 +1735,143 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'requestedExtensions should contain the expected extension'
     );
     expect(capturedRequestContext?.context?.user).to.be.an.instanceOf(UnauthenticatedUser);
+  });
+
+  describe('getAuthenticatedExtendedAgentCard tests', async () => {
+    class A2AUser implements User {
+      constructor(private _isAuthenticated: boolean) {}
+
+      isAuthenticated(): boolean {
+        return this._isAuthenticated;
+      }
+      userName(): string {
+        return 'test-user';
+      }
+    }
+
+    const extendedAgentcardProvider: ExtendedAgentCardProvider = async (context?) => {
+      if (context?.user?.isAuthenticated()) {
+        return extendedAgentCard;
+      }
+      // Remove the extensions that are not allowed for unauthenticated clients
+      extendedAgentCard.capabilities.extensions = [{ uri: 'requested-extension-uri' }];
+      return extendedAgentCard;
+    };
+
+    const agentCardWithExtendedSupport: AgentCard = {
+      name: 'Test Agent',
+      description: 'An agent for testing purposes',
+      url: 'http://localhost:8080',
+      version: '1.0.0',
+      protocolVersion: '0.3.0',
+      capabilities: {
+        extensions: [{ uri: 'requested-extension-uri' }],
+        streaming: true,
+        pushNotifications: true,
+      },
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: [
+        {
+          id: 'test-skill',
+          name: 'Test Skill',
+          description: 'A skill for testing',
+          tags: ['test'],
+        },
+      ],
+      supportsAuthenticatedExtendedCard: true,
+    };
+
+    const extendedAgentCard: AgentCard = {
+      name: 'Test ExtendedAgentCard Agent',
+      description: 'An agent for testing the extended agent card functionality',
+      url: 'http://localhost:8080',
+      version: '1.0.0',
+      protocolVersion: '0.3.0',
+      capabilities: {
+        extensions: [
+          { uri: 'requested-extension-uri' },
+          { uri: 'extension-uri-for-authenticated-clients' },
+        ],
+        streaming: true,
+        pushNotifications: true,
+      },
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: [
+        {
+          id: 'test-skill',
+          name: 'Test Skill',
+          description: 'A skill for testing',
+          tags: ['test'],
+        },
+      ],
+    };
+
+    it('getAuthenticatedExtendedAgentCard should fail if the agent card does not support extended agent card', async () => {
+      let caughtError;
+      try {
+        await handler.getAuthenticatedExtendedAgentCard();
+      } catch (error: any) {
+        caughtError = error;
+      } finally {
+        expect(caughtError).to.be.instanceOf(A2AError);
+        expect(caughtError.code).to.equal(-32004);
+        expect(caughtError.message).to.contain('Unsupported operation');
+      }
+    });
+
+    it('getAuthenticatedExtendedAgentCard should fail if ExtendedAgentCardProvider is not provided', async () => {
+      handler = new DefaultRequestHandler(
+        agentCardWithExtendedSupport,
+        mockTaskStore,
+        mockAgentExecutor,
+        executionEventBusManager
+      );
+      let caughtError;
+      try {
+        await handler.getAuthenticatedExtendedAgentCard();
+      } catch (error: any) {
+        caughtError = error;
+      } finally {
+        expect(caughtError).to.be.instanceOf(A2AError);
+        expect(caughtError.code).to.equal(-32007);
+        expect(caughtError.message).to.contain('Extended card not configured');
+      }
+    });
+
+    it('getAuthenticatedExtendedAgentCard should return extended card if user is authenticated with ExtendedAgentCardProvider as AgentCard', async () => {
+      handler = new DefaultRequestHandler(
+        agentCardWithExtendedSupport,
+        mockTaskStore,
+        mockAgentExecutor,
+        executionEventBusManager,
+        undefined,
+        undefined,
+        extendedAgentCard
+      );
+
+      const context = new ServerCallContext(undefined, new A2AUser(true));
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      assert.deepEqual(agentCard, extendedAgentCard);
+    });
+
+    it('getAuthenticatedExtendedAgentCard should return capped extended card if user is not authenticated with ExtendedAgentCardProvider as callback', async () => {
+      handler = new DefaultRequestHandler(
+        agentCardWithExtendedSupport,
+        mockTaskStore,
+        mockAgentExecutor,
+        executionEventBusManager,
+        undefined,
+        undefined,
+        extendedAgentcardProvider
+      );
+
+      const context = new ServerCallContext(undefined, new A2AUser(false));
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      assert(agentCard.capabilities.extensions.length === 1);
+      assert.deepEqual(agentCard.capabilities.extensions[0], { uri: 'requested-extension-uri' });
+      assert.deepEqual(agentCard.name, extendedAgentCard.name);
+    });
   });
 });
