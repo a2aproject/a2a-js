@@ -17,7 +17,7 @@ import { UserBuilder } from './common.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
-  userBuilder?: UserBuilder;
+  userBuilder: UserBuilder;
 }
 
 /**
