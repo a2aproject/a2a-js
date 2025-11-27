@@ -10,7 +10,10 @@ export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
   private userBuilder?: UserBuilder;
 
-  constructor(requestHandler: A2ARequestHandler, userBuilder?: UserBuilder) {
+  constructor(
+    requestHandler: A2ARequestHandler,
+    userBuilder: UserBuilder = UserBuilder.NoAuthentication
+  ) {
     this.requestHandler = requestHandler;
     this.userBuilder = userBuilder;
   }
