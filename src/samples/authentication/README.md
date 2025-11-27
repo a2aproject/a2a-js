@@ -6,7 +6,7 @@ This sample demonstrates how to implement **Bearer Token authentication** within
 ## Key Components
 
 - `index.ts`: generates an `AgentCard` to require for the Bearer authentication for incoming requests and starts the server with the authentication middleware and user builder.
-- `authetication_middleware.ts`: creates the middleware responsible for authentication. It uses Passport to support Bearer token authorization and populates the `user` parameter in the Request object with the plain extracted object.
+- `authentication_middleware.ts`: creates the middleware responsible for authentication. It uses Passport to support Bearer token authorization and populates the `user` parameter in the Request object with the plain extracted object.
 - `user_builder.ts`: defines the callback for the agent extraction. It expects the user object (populated by the middleware) to contain specific values (`email`, `userName`, `role`) which are used to build the `CustomUser` object.
 - `agent_executor.ts`: creates a simple agent executor, to check the authentication status of the user object present in the context, which is expected to be an instance of `CustomUser` in case of successful authentication.
 
