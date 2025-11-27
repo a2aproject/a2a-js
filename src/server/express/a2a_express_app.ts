@@ -8,7 +8,7 @@ import { UserBuilder } from './common.js';
 
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
-  private userBuilder?: UserBuilder;
+  private userBuilder: UserBuilder;
 
   constructor(
     requestHandler: A2ARequestHandler,
