@@ -26,13 +26,13 @@ describe('ClientFactory', () => {
     };
 
     mockTransportFactory1 = {
-      name: 'Transport1',
+      protocolName: 'Transport1',
       create: sinon.stub(),
     };
     mockTransportFactory1.create.resolves(mockTransport);
 
     mockTransportFactory2 = {
-      name: 'Transport2',
+      protocolName: 'Transport2',
       create: sinon.stub(),
     };
     mockTransportFactory2.create.resolves(mockTransport);
@@ -140,7 +140,7 @@ describe('ClientFactory', () => {
     it('should default to JSONRPC transport if agentCard.preferredTransport is undefined', async () => {
       agentCard.preferredTransport = undefined;
       const jsonRpcFactory = {
-        name: JsonRpcTransportFactory.name,
+        protocolName: JsonRpcTransportFactory.name,
         create: sinon.stub().resolves(mockTransport),
       };
       factory = new ClientFactory({ transports: [jsonRpcFactory] });

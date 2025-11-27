@@ -46,7 +46,7 @@ export class Client {
   sendMessage(params: MessageSendParams): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
-      blocking: params.configuration?.blocking ?? !(this.config?.polling ?? false),
+      blocking: !(this.config?.polling ?? false),
     });
     return this.transport.sendMessage(params);
   }
@@ -134,11 +134,13 @@ export class Client {
     yield* this.transport.resubscribeTask(params);
   }
 
-  private applyClientConfig(options: {
+  private applyClientConfig({
+    params,
+    blocking,
+  }: {
     params: MessageSendParams;
     blocking: boolean;
   }): MessageSendParams {
-    const { params, blocking } = options;
     const result = { ...params, configuration: params.configuration ?? {} };
 
     if (!result.configuration.acceptedOutputModes && this.config?.acceptedOutputModes) {
@@ -147,7 +149,7 @@ export class Client {
     if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
       result.configuration.pushNotificationConfig = this.config.pushNotificationConfig;
     }
-    result.configuration.blocking = blocking;
+    result.configuration.blocking ??= blocking;
     return result;
   }
 }

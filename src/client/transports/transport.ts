@@ -12,45 +12,49 @@ import {
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 
 export interface Transport {
-  sendMessage(params: MessageSendParams, signal?: AbortSignal): Promise<SendMessageResult>;
+  sendMessage(params: MessageSendParams, options?: RequestOptions): Promise<SendMessageResult>;
 
   sendMessageStream(
     params: MessageSendParams,
-    signal?: AbortSignal
+    options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 
   setTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
-    signal?: AbortSignal
+    options?: RequestOptions
   ): Promise<TaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigParams,
-    signal?: AbortSignal
+    options?: RequestOptions
   ): Promise<TaskPushNotificationConfig>;
 
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
-    signal?: AbortSignal
+    options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,
-    signal?: AbortSignal
+    options?: RequestOptions
   ): Promise<void>;
 
-  getTask(params: TaskQueryParams, signal?: AbortSignal): Promise<Task>;
+  getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task>;
 
-  cancelTask(params: TaskIdParams, signal?: AbortSignal): Promise<Task>;
+  cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task>;
 
   resubscribeTask(
     params: TaskIdParams,
-    signal?: AbortSignal
+    options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 }
 
 export interface TransportFactory {
-  get name(): string;
+  get protocolName(): string;
 
   create(url: string, agentCard: AgentCard): Promise<Transport>;
+}
+
+export interface RequestOptions {
+  signal?: AbortSignal;
 }

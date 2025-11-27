@@ -37,13 +37,13 @@ export class ClientFactory {
       throw new Error('No transports provided');
     }
     for (const transport of options.transports) {
-      if (this.transportsByName.has(transport.name)) {
-        throw new Error(`Duplicate transport name: ${transport.name}`);
+      if (this.transportsByName.has(transport.protocolName)) {
+        throw new Error(`Duplicate transport name: ${transport.protocolName}`);
       }
-      this.transportsByName.set(transport.name, transport);
+      this.transportsByName.set(transport.protocolName, transport);
     }
     for (const transport of options.preferredTransports ?? []) {
-      const factory = this.options.transports.find((t) => t.name === transport);
+      const factory = this.options.transports.find((t) => t.protocolName === transport);
       if (!factory) {
         throw new Error(
           `Unknown preferred transport: ${transport}, available transports: ${[...this.transportsByName.keys()].join()}`
