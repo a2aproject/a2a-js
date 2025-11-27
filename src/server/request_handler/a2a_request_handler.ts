@@ -17,7 +17,7 @@ import { ServerCallContext } from '../context.js';
 export interface A2ARequestHandler {
   getAgentCard(): Promise<AgentCard>;
 
-  getAuthenticatedExtendedAgentCard(): Promise<AgentCard>;
+  getAuthenticatedExtendedAgentCard(context?: ServerCallContext): Promise<AgentCard>;
 
   sendMessage(params: MessageSendParams, context?: ServerCallContext): Promise<Message | Task>;
 

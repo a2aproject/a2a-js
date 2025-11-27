@@ -14,6 +14,7 @@ export { ExecutionEventQueue } from './events/execution_event_queue.js';
 
 export type { A2ARequestHandler } from './request_handler/a2a_request_handler.js';
 export { DefaultRequestHandler } from './request_handler/default_request_handler.js';
+export type { ExtendedAgentCardProvider } from './request_handler/default_request_handler.js';
 export { ResultManager } from './result_manager.js';
 export type { TaskStore } from './store.js';
 export { InMemoryTaskStore } from './store.js';
@@ -28,4 +29,5 @@ export type { DefaultPushNotificationSenderOptions } from './push_notification/d
 export type { PushNotificationStore } from './push_notification/push_notification_store.js';
 export { InMemoryPushNotificationStore } from './push_notification/push_notification_store.js';
 
-export type { User, UnauthenticatedUser } from './authentication/user.js';
+export type { User } from './authentication/user.js';
+export { UnauthenticatedUser } from './authentication/user.js';
