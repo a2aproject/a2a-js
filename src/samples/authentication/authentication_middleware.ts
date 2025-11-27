@@ -19,7 +19,7 @@ export const authenticationHandler: RequestHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  passport.authenticate('jwt', { session: false }, (err: any, user: any, _info: any) => {
+  passport.authenticate('jwt', { session: false }, (err: any, user: any) => {
     if (err) {
       return next(err);
     }
