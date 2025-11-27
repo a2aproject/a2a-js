@@ -1,8 +1,6 @@
-
 import { Request } from 'express';
 import { UnauthenticatedUser, User } from '../../server/index.js';
 import { UserBuilder } from '../../server/express/common.js';
-
 
 export class CustomUser implements User {
   constructor(
@@ -35,5 +33,5 @@ export const userBuilder: UserBuilder = async (req: Request): Promise<User> => {
       return new CustomUser(user.userName as string, user.email as string, user.role as string);
     }
     return new UnauthenticatedUser();
-}
-}
+  }
+};

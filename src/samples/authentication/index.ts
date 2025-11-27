@@ -15,8 +15,7 @@ import { authenticationHandler } from './authentication_middleware.js';
 
 const authenticationAgentCard: AgentCard = {
   name: 'Sample Authentication Agent',
-  description:
-    'A sample agent to test the authentication functionality',
+  description: 'A sample agent to test the authentication functionality',
   // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
@@ -29,7 +28,7 @@ const authenticationAgentCard: AgentCard = {
     stateTransitionHistory: true, // Agent uses history
   },
   defaultInputModes: ['text'],
-  defaultOutputModes: ['text', 'task-status'], 
+  defaultOutputModes: ['text', 'task-status'],
   skills: [
     {
       id: 'sample_agent',
@@ -42,7 +41,7 @@ const authenticationAgentCard: AgentCard = {
     },
   ],
   supportsAuthenticatedExtendedCard: false,
-  security: [{'Bearer': []}],
+  security: [{ Bearer: [] }],
   securitySchemes: { Bearer: { type: 'http', scheme: 'bearer' } },
 };
 
@@ -54,7 +53,11 @@ async function main() {
   const agentExecutor: AgentExecutor = new AuthenticationAgentExecutor();
 
   // 3. Create DefaultRequestHandler
-  const requestHandler = new DefaultRequestHandler(authenticationAgentCard, taskStore, agentExecutor);
+  const requestHandler = new DefaultRequestHandler(
+    authenticationAgentCard,
+    taskStore,
+    agentExecutor
+  );
 
   // 4. Create and setup A2AExpressApp, with user builder and authentication middleware
   const appBuilder = new A2AExpressApp(requestHandler, userBuilder);
@@ -66,8 +69,12 @@ async function main() {
     if (err) {
       throw err;
     }
-    console.log(`[AuthenticationAgent] Server using new framework started on http://localhost:${PORT}`);
-    console.log(`[AuthenticationAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log(
+      `[AuthenticationAgent] Server using new framework started on http://localhost:${PORT}`
+    );
+    console.log(
+      `[AuthenticationAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`
+    );
     console.log('[AuthenticationAgent] Press Ctrl+C to stop the server');
   });
 }
