@@ -72,7 +72,7 @@ Expected response, with failed authentication:
             "role":"agent",
             "parts":[ {
                 "kind":"text",
-                "text":"The request is not coming from an autheticated user." 
+                "text":"The request is not coming from an authenticated user." 
                 }]
             }
     }
