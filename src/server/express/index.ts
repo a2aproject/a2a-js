@@ -4,4 +4,4 @@
  */
 
 export { A2AExpressApp } from './a2a_express_app.js';
-export type { UserBuilder } from './common.js';
+export { UserBuilder } from './common.js';

@@ -17,7 +17,7 @@ import { UserBuilder } from './common.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
-  userBuilder?: UserBuilder;
+  userBuilder: UserBuilder;
 }
 
 /**
@@ -37,7 +37,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
   router.post('/', async (req: Request, res: Response) => {
     try {
-      const user = await options.userBuilder?.(req);
+      const user = await options.userBuilder(req);
       const context = new ServerCallContext(
         getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)),
         user ?? new UnauthenticatedUser()

@@ -1,4 +1,8 @@
 import { Request } from 'express';
-import { User } from '../authentication/user.js';
+import { UnauthenticatedUser, User } from '../authentication/user.js';
 
 export type UserBuilder = (req: Request) => Promise<User>;
+
+export const UserBuilder = {
+  NoAuthentication: () => Promise.resolve(new UnauthenticatedUser()),
+};
