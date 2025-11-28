@@ -19,6 +19,13 @@ export interface TaskStore {
    * @returns A promise resolving to an object containing the Task, or undefined if not found.
    */
   load(taskId: string): Promise<Task | undefined>;
+
+  /**
+   * Deletes a task by task ID.
+   * @param taskId The ID of the task to delete.
+   * @returns A promise resolving when the delete operation is complete.
+   */
+  delete(taskId: string): Promise<void>;
 }
 
 // ========================
@@ -38,5 +45,9 @@ export class InMemoryTaskStore implements TaskStore {
   async save(task: Task): Promise<void> {
     // Store copies to prevent internal mutation if caller reuses objects
     this.store.set(task.id, { ...task });
+  }
+
+  async delete(taskId: string): Promise<void> {
+    this.store.delete(taskId);
   }
 }

@@ -21,12 +21,30 @@ You can install the A2A SDK using `npm`.
 npm install @a2a-js/sdk
 ```
 
-### For Server Usage
+### A2A Server
 
 If you plan to use the A2A server functionality (`A2AExpressApp`), you'll also need to install Express as it's a peer dependency:
 
 ```bash
 npm install express
+```
+
+### Persistent Task Storage
+
+For production deployments requiring persistent task storage, install Drizzle ORM, a database driver, and drizzle-kit for migrations:
+
+```bash
+# SQLite
+npm install drizzle-orm better-sqlite3
+npm install -D drizzle-kit
+
+# PostgreSQL
+npm install drizzle-orm pg
+npm install -D drizzle-kit
+
+# MySQL
+npm install drizzle-orm mysql2
+npm install -D drizzle-kit
 ```
 
 You can also find JavaScript samples [here](https://github.com/google-a2a/a2a-samples/tree/main/samples/js).
@@ -667,6 +685,87 @@ app.post('/webhook/task-updates', (req, res) => {
 
   res.status(200).json({ received: true });
 });
+```
+
+---
+
+## Persistent Task Storage
+
+By default, the SDK provides an `InMemoryTaskStore` which stores tasks in memory. For production deployments, use the `DatabaseTaskStore` with Drizzle ORM to persist tasks to SQLite, PostgreSQL, or MySQL.
+
+### Quick Setup
+
+**1. Create a schema file** (e.g., `src/schema.ts`):
+
+```typescript
+// For SQLite
+export { sqliteTasks as tasks } from '@a2a-js/sdk/server/drizzle';
+// For PostgreSQL: export { pgTasks as tasks } from '@a2a-js/sdk/server/drizzle';
+// For MySQL: export { mysqlTasks as tasks } from '@a2a-js/sdk/server/drizzle';
+```
+
+**2. Create `drizzle.config.ts`** in your project root:
+
+```typescript
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  schema: './src/schema.ts',
+  out: './drizzle',
+  dialect: 'sqlite', // or 'postgresql' or 'mysql'
+  dbCredentials: {
+    url: 'tasks.db', // or your connection string
+  },
+});
+```
+
+**3. Apply the schema:**
+
+```bash
+# For development (applies changes directly):
+npx drizzle-kit push
+
+# For production (version-controlled migrations):
+npx drizzle-kit generate
+npx drizzle-kit migrate
+```
+
+### Usage Examples
+
+**SQLite:**
+
+```typescript
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import Database from 'better-sqlite3';
+import { DatabaseTaskStore, sqliteTasks } from '@a2a-js/sdk/server/drizzle';
+
+const sqlite = new Database('tasks.db');
+const db = drizzle(sqlite);
+const taskStore = new DatabaseTaskStore({ db, table: sqliteTasks, dialect: 'sqlite' });
+```
+
+**PostgreSQL** (with connection pooling):
+
+```typescript
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { DatabaseTaskStore, pgTasks } from '@a2a-js/sdk/server/drizzle';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = drizzle(pool);
+const taskStore = new DatabaseTaskStore({ db, table: pgTasks, dialect: 'postgresql' });
+```
+
+**MySQL** (with connection pooling):
+
+```typescript
+import { drizzle } from 'drizzle-orm/mysql2';
+import mysql from 'mysql2/promise';
+import { DatabaseTaskStore, mysqlTasks } from '@a2a-js/sdk/server/drizzle';
+
+const pool = mysql.createPool(process.env.DATABASE_URL);
+const db = drizzle(pool);
+const taskStore = new DatabaseTaskStore({ db, table: mysqlTasks, dialect: 'mysql' });
 ```
 
 ## License
