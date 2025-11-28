@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.6](https://github.com/a2aproject/a2a-js/compare/v0.3.5...v0.3.6) (2025-11-28)
+
+
+### Features
+
+* Implement extended card support on server side ([#197](https://github.com/a2aproject/a2a-js/issues/197)) ([45014ac](https://github.com/a2aproject/a2a-js/commit/45014ac4a192ad3c6120849577530d1d63eb27b8))
+* introduce transport agnostic client ([#198](https://github.com/a2aproject/a2a-js/issues/198)) ([94a9848](https://github.com/a2aproject/a2a-js/commit/94a98483998a62669140de9bfbdde483787fa065))
+* server side support for extensions ([5ef7396](https://github.com/a2aproject/a2a-js/commit/5ef73960758b78ed2a52356a10cb35cadeb440bd))
+* support authentication on server side ([#195](https://github.com/a2aproject/a2a-js/issues/195)) ([9872d93](https://github.com/a2aproject/a2a-js/commit/9872d93622e12efb7369d7e658cec7ab4fd8590c))
+
+
+### Bug Fixes
+
+* handle errors occurred in non-blocking sendMessage ([#187](https://github.com/a2aproject/a2a-js/issues/187)) ([e55c0f4](https://github.com/a2aproject/a2a-js/commit/e55c0f4791b556cc42e256073cf9018d1ec18cca))
+
+
+### Miscellaneous Chores
+
+* set version to 0.3.6 ([#191](https://github.com/a2aproject/a2a-js/issues/191)) ([3f8cea0](https://github.com/a2aproject/a2a-js/commit/3f8cea066efa59ae38ac405801884b9b5037841b))
+
 ## [0.3.5](https://github.com/a2aproject/a2a-js/compare/v0.3.4...v0.3.5) (2025-11-05)
 
 
