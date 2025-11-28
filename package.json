@@ -70,8 +70,7 @@
   },
   "scripts": {
     "clean": "gts clean",
-    "compile": "tsc --noEmit",
-    "build": "tsup",
+    "build": "tsc --noEmit && tsup",
     "pretest": "npm run build",
     "test": "mocha \"test/**/*.spec.ts\"",
     "lint": "npx eslint .",

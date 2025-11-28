@@ -115,7 +115,7 @@ describe('JsonRpcTransportHandler', () => {
     });
 
     it('should handle valid request with null id', async () => {
-      const request : JSONRPCRequest = {
+      const request: JSONRPCRequest = {
         jsonrpc: '2.0',
         method: 'message/send',
         id: null,
