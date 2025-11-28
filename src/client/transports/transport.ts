@@ -10,6 +10,7 @@ import {
   GetTaskPushNotificationConfigParams,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
+import { RequestOptions } from '../multitransport-client.js';
 
 export interface Transport {
   sendMessage(params: MessageSendParams, options?: RequestOptions): Promise<SendMessageResult>;
@@ -53,8 +54,4 @@ export interface TransportFactory {
   get protocolName(): string;
 
   create(url: string, agentCard: AgentCard): Promise<Transport>;
-}
-
-export interface RequestOptions {
-  signal?: AbortSignal;
 }

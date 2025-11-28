@@ -11,7 +11,7 @@ import {
   AgentCard,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
-import { RequestOptions, Transport } from './transports/transport.js';
+import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
   /**
@@ -30,6 +30,18 @@ export interface ClientConfig {
    * Specifies the default push notification configuration to apply for every Task.
    */
   pushNotificationConfig?: PushNotificationConfig;
+}
+
+export interface RequestOptions {
+  /**
+   * Signal to abort request execution.
+   */
+  signal?: AbortSignal;
+
+  /**
+   * Arbitrary data available to interceptors and transport implementation.
+   */
+  context: Map<string, unknown>;
 }
 
 export class Client {
