@@ -70,6 +70,7 @@
   },
   "scripts": {
     "clean": "gts clean",
+    "compile": "tsc --noEmit",
     "build": "tsup",
     "pretest": "npm run build",
     "test": "mocha \"test/**/*.spec.ts\"",

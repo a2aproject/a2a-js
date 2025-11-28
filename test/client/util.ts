@@ -279,6 +279,7 @@ export function createMockFetch(
 
     // Handle API requests
     if (url.includes('/api')) {
+      // @ts-ignore
       const authHeader = options?.headers?.['Authorization'] as string;
 
       // Capture auth headers if requested

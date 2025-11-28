@@ -118,7 +118,7 @@ describe('JsonRpcTransportHandler', () => {
       const request = {
         jsonrpc: '2.0',
         method: 'message/send',
-        id: null,
+        id: null as number,
         params: {},
       };
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as sinon.SinonStub).resolves({

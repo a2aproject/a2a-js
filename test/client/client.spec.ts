@@ -343,7 +343,6 @@ describe('A2AClient Basic Tests', () => {
               streaming: true,
               pushNotifications: true,
             },
-            skills: [],
           };
           return createAgentCardResponse(invalidAgentCard);
         }
@@ -419,7 +418,6 @@ describe('A2AClient Basic Tests', () => {
           streaming: true,
           pushNotifications: true,
         },
-        skills: [],
       };
       expect(() => new A2AClient(mockAgentCard as any)).to.throw(
         "Provided Agent Card does not contain a valid 'url' for the service endpoint."
