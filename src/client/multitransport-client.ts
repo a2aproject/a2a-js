@@ -1,0 +1,155 @@
+import { PushNotificationNotSupportedError } from '../errors.js';
+import {
+  MessageSendParams,
+  TaskPushNotificationConfig,
+  DeleteTaskPushNotificationConfigParams,
+  ListTaskPushNotificationConfigParams,
+  Task,
+  TaskIdParams,
+  TaskQueryParams,
+  PushNotificationConfig,
+  AgentCard,
+} from '../types.js';
+import { A2AStreamEventData, SendMessageResult } from './client.js';
+import { Transport } from './transports/transport.js';
+
+export interface ClientConfig {
+  /**
+   * Whether client prefers to poll for task updates instead of blocking until a terminal state is reached.
+   * If set to true, non-streaming send message result might be a Message or a Task in any (including non-terminal) state.
+   * Callers are responsible for running the polling loop. This configuration does not apply to streaming requests.
+   */
+  polling: boolean;
+
+  /**
+   * Specifies the default list of accepted media types to apply for all "send message" calls.
+   */
+  acceptedOutputModes?: string[];
+
+  /**
+   * Specifies the default push notification configuration to apply for every Task.
+   */
+  pushNotificationConfig?: PushNotificationConfig;
+}
+
+export class Client {
+  constructor(
+    public readonly transport: Transport,
+    public readonly agentCard: AgentCard,
+    public readonly config?: ClientConfig
+  ) {}
+
+  /**
+   * Sends a message to an agent to initiate a new interaction or to continue an existing one.
+   * Uses blocking mode by default.
+   */
+  sendMessage(params: MessageSendParams): Promise<SendMessageResult> {
+    params = this.applyClientConfig({
+      params,
+      blocking: !(this.config?.polling ?? false),
+    });
+    return this.transport.sendMessage(params);
+  }
+
+  /**
+   * Sends a message to an agent to initiate/continue a task AND subscribes the client to real-time updates for that task.
+   * Performs fallback to non-streaming if not supported by the agent.
+   */
+  async *sendMessageStream(
+    params: MessageSendParams
+  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    params = this.applyClientConfig({ params, blocking: true });
+    if (!this.agentCard.capabilities.streaming) {
+      yield this.transport.sendMessage(params);
+      return;
+    }
+    yield* this.transport.sendMessageStream(params);
+  }
+
+  /**
+   * Sets or updates the push notification configuration for a specified task.
+   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
+   */
+  setTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig
+  ): Promise<TaskPushNotificationConfig> {
+    if (!this.agentCard.capabilities.pushNotifications) {
+      throw new PushNotificationNotSupportedError();
+    }
+    return this.transport.setTaskPushNotificationConfig(params);
+  }
+
+  /**
+   * Retrieves the current push notification configuration for a specified task.
+   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
+   */
+  getTaskPushNotificationConfig(params: TaskIdParams): Promise<TaskPushNotificationConfig> {
+    if (!this.agentCard.capabilities.pushNotifications) {
+      throw new PushNotificationNotSupportedError();
+    }
+    return this.transport.getTaskPushNotificationConfig(params);
+  }
+
+  /**
+   * Retrieves the associated push notification configurations for a specified task.
+   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
+   */
+  listTaskPushNotificationConfig(
+    params: ListTaskPushNotificationConfigParams
+  ): Promise<TaskPushNotificationConfig[]> {
+    if (!this.agentCard.capabilities.pushNotifications) {
+      throw new PushNotificationNotSupportedError();
+    }
+    return this.transport.listTaskPushNotificationConfig(params);
+  }
+
+  /**
+   * Deletes an associated push notification configuration for a task.
+   */
+  deleteTaskPushNotificationConfig(params: DeleteTaskPushNotificationConfigParams): Promise<void> {
+    return this.transport.deleteTaskPushNotificationConfig(params);
+  }
+
+  /**
+   * Retrieves the current state (including status, artifacts, and optionally history) of a previously initiated task.
+   */
+  getTask(params: TaskQueryParams): Promise<Task> {
+    return this.transport.getTask(params);
+  }
+
+  /**
+   * Requests the cancellation of an ongoing task. The server will attempt to cancel the task,
+   * but success is not guaranteed (e.g., the task might have already completed or failed, or cancellation might not be supported at its current stage).
+   */
+  cancelTask(params: TaskIdParams): Promise<Task> {
+    return this.transport.cancelTask(params);
+  }
+
+  /**
+   * Allows a client to reconnect to an updates stream for an ongoing task after a previous connection was interrupted.
+   */
+  async *resubscribeTask(
+    params: TaskIdParams
+  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    yield* this.transport.resubscribeTask(params);
+  }
+
+  private applyClientConfig({
+    params,
+    blocking,
+  }: {
+    params: MessageSendParams;
+    blocking: boolean;
+  }): MessageSendParams {
+    const result = { ...params, configuration: params.configuration ?? {} };
+
+    if (!result.configuration.acceptedOutputModes && this.config?.acceptedOutputModes) {
+      result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
+    }
+    if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
+      result.configuration.pushNotificationConfig = this.config.pushNotificationConfig;
+    }
+    result.configuration.blocking ??= blocking;
+    return result;
+  }
+}
