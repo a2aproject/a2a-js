@@ -1,16 +1,20 @@
 {
-  "name": "samples",
-  "version": "1.0.0",
-  "description": "Samples for the a2a-js",
+  "type": "module",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "a2a:cli": "tsx cli.ts",
+    "agents:movie-agent": "tsx agents/movie-agent/index.ts",
+    "agents:sample-agent": "tsx agents/sample-agent/index.ts",
+    "agents:extension-agent": "tsx extensions/index.ts"
   },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "@types/passport": "^1.0.17",
-    "@types/passport-jwt": "^4.0.1",
-    "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1"
+    "@genkit-ai/googleai": "^1.8.0",
+    "@types/express": "^5.0.5",
+    "express": "^5.1.0",
+    "genkit": "^1.8.0",
+    "tsx": "^4.19.3"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0"
   }
 }
