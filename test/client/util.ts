@@ -279,7 +279,8 @@ export function createMockFetch(
 
     // Handle API requests
     if (url.includes('/api')) {
-      const authHeader = options?.headers?.['Authorization'] as string;
+      const headers = new Headers(options?.headers);
+      const authHeader = headers.get('Authorization');
 
       // Capture auth headers if requested
       if (captureAuthHeaders) {

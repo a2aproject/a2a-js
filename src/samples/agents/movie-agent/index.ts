@@ -254,6 +254,7 @@ const movieAgentCard: AgentCard = {
     url: 'https://example.com/a2a-samples', // Added provider URL
   },
   version: '0.0.2', // Incremented version
+  protocolVersion: '0.3.0',
   capabilities: {
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet

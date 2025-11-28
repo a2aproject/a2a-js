@@ -4,7 +4,7 @@ import sinon from 'sinon';
 
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { JSONRPCErrorResponse } from '../../src/index.js';
+import { JSONRPCErrorResponse, JSONRPCRequest } from '../../src/index.js';
 
 describe('JsonRpcTransportHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -115,7 +115,7 @@ describe('JsonRpcTransportHandler', () => {
     });
 
     it('should handle valid request with null id', async () => {
-      const request = {
+      const request: JSONRPCRequest = {
         jsonrpc: '2.0',
         method: 'message/send',
         id: null,

@@ -29,6 +29,7 @@ import {
   TaskPushNotificationConfig,
   TaskState,
   TaskStatusUpdateEvent,
+  TextPart,
 } from '../../src/index.js';
 import {
   DefaultExecutionEventBusManager,
@@ -44,7 +45,6 @@ import {
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { MockTaskStore } from './mocks/task_store.mock.js';
-import { TextPart } from 'genkit/model';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let handler: A2ARequestHandler;

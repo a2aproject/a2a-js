@@ -90,11 +90,17 @@ jobs:
             sleep "$RETRY_INTERVAL"
           done
           
-      - name: Run TCK
-        id: run-tck
+      - name: Run TCK (mandatory)
+        id: run-tck-mandatory
         timeout-minutes: 5
         run: |
           ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory
+        working-directory: tck/a2a-tck
+      - name: Run TCK (capabilities)
+        id: run-tck-capabilities
+        timeout-minutes: 5
+        run: |
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities
         working-directory: tck/a2a-tck
       - name: Stop SUT
         if: always()
