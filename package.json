@@ -71,9 +71,8 @@
   "scripts": {
     "clean": "gts clean",
     "build": "tsup",
-    "pretest": "tsc --noEmit",
     "test": "mocha \"test/**/*.spec.ts\"",
-    "lint": "npx eslint .",
+    "lint": "tsc --noEmit && npx eslint .",
     "format:readme": "prettier --write ./README.md",
     "lint:fix": "npx eslint . --fix",
     "coverage": "c8 npm run test",
