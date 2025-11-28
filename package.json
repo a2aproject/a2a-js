@@ -81,7 +81,7 @@
     "agents:movie-agent": "tsx src/samples/agents/movie-agent/index.ts",
     "agents:sample-agent": "tsx src/samples/agents/sample-agent/index.ts",
     "agents:extension-agent": "tsx src/samples/extensions/index.ts",
-    "agents:authentication-agent": "tsx src/samples/authentication/index.ts"
+    "agents:authentication-agent": "tsx src/samples/authentication/index.ts",
     "test-build:browser": "esbuild ./dist/client/index.js ./dist/index.js --bundle --platform=browser --outdir=dist/tmp-checks --outbase=./dist"
   },
   "dependencies": {
