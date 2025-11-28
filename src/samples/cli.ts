@@ -373,4 +373,5 @@ async function main() {
 main().catch((err) => {
   console.error(colorize('red', 'Unhandled error in main:'), err);
   process.exit(1);
+  
 });
