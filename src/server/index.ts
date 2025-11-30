@@ -31,3 +31,7 @@ export { InMemoryPushNotificationStore } from './push_notification/push_notifica
 
 export type { User } from './authentication/user.js';
 export { UnauthenticatedUser } from './authentication/user.js';
+
+// Extension utilities for framework adapters (Hono, Fastify, etc.)
+export { HTTP_EXTENSION_HEADER } from '../constants.js';
+export { getRequestedExtensions } from './utils.js';
