@@ -5,7 +5,8 @@
     "a2a:cli": "tsx cli.ts",
     "agents:movie-agent": "tsx agents/movie-agent/index.ts",
     "agents:sample-agent": "tsx agents/sample-agent/index.ts",
-    "agents:extension-agent": "tsx extensions/index.ts"
+    "agents:extension-agent": "tsx extensions/index.ts",
+    "agents:authentication-agent": "tsx authentication/index.ts"
   },
   "devDependencies": {
     "@genkit-ai/googleai": "^1.8.0",

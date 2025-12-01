@@ -3,27 +3,12 @@ import { UnauthenticatedUser, User } from '../../server/index.js';
 import { UserBuilder } from '../../server/express/common.js';
 
 export class CustomUser implements User {
+  public isAuthenticated: boolean = true;
   constructor(
-    private _userName: string,
-    private _email: string,
-    private _role: string
-  ) {}
-
-  public isAuthenticated(): boolean {
-    return true;
-  }
-
-  public userName(): string {
-    return this._userName;
-  }
-
-  public email(): string {
-    return this._email;
-  }
-
-  public role(): string {
-    return this._role;
-  }
+    public userName: string,
+    public email: string,
+    public role: string
+  ) { }
 }
 
 export const userBuilder: UserBuilder = async (req: Request): Promise<User> => {

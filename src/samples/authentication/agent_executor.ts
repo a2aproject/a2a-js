@@ -9,11 +9,11 @@ export class AuthenticationAgentExecutor implements AgentExecutor {
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     let finalText;
     if (
-      requestContext.context?.user?.isAuthenticated() &&
+      requestContext.context?.user?.isAuthenticated &&
       requestContext.context.user instanceof CustomUser
     ) {
       const customUser = requestContext.context.user;
-      finalText = `The request is coming from the authenticated user ${customUser.userName()}, with email ${customUser.email()} and role ${customUser.role()}.`;
+      finalText = `The request is coming from the authenticated user ${customUser.userName}, with email ${customUser.email} and role ${customUser.role}.`;
     } else {
       finalText = `The request is not coming from an authenticated user.`;
     }

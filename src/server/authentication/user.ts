@@ -1,14 +1,14 @@
 export interface User {
-  isAuthenticated(): boolean;
-  userName(): string;
+  get isAuthenticated(): boolean;
+  get userName(): string;
 }
 
 export class UnauthenticatedUser implements User {
-  public isAuthenticated(): boolean {
+  get isAuthenticated(): boolean {
     return false;
   }
 
-  public userName(): string {
+  get userName(): string {
     return '';
   }
 }

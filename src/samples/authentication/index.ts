@@ -10,6 +10,7 @@ import { A2AExpressApp } from '../../server/express/index.js';
 import { AuthenticationAgentExecutor } from './agent_executor.js';
 import { userBuilder } from './user_builder.js';
 import { authenticationHandler } from './authentication_middleware.js';
+import { jsonRpcHandler } from '../../server/express/json_rpc_handler.js';
 
 // --- Server Setup ---
 
@@ -59,13 +60,18 @@ async function main() {
     agentExecutor
   );
 
-  // 4. Create and setup A2AExpressApp, with user builder and authentication middleware
-  const appBuilder = new A2AExpressApp(requestHandler, userBuilder);
-  const expressApp = appBuilder.setupRoutes(express(), '', [authenticationHandler]);
+  // 4. Create and setup express app, with authentication middleware and user builder
+  const app = express();
+  app.use(express.json());
+  app.use(authenticationHandler);
+  app.use(jsonRpcHandler({
+    requestHandler,
+    userBuilder,
+  }));
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
-  expressApp.listen(PORT, (err: unknown) => {
+  app.listen(PORT, (err: unknown) => {
     if (err) {
       throw err;
     }
