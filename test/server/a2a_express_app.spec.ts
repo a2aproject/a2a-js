@@ -349,15 +349,15 @@ describe('A2AExpressApp', () => {
       const serverCallContext = handleStub.getCall(0).args[1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user).to.be.an.instanceOf(UnauthenticatedUser);
-      expect(serverCallContext.user.isAuthenticated()).to.be.false;
+      expect(serverCallContext.user.isAuthenticated).to.be.false;
     });
 
     it('should handle successful authentication middlewares with class', async () => {
       class CustomUser {
-        public isAuthenticated(): boolean {
+        get isAuthenticated(): boolean {
           return true;
         }
-        public userName(): string {
+        get userName(): string {
           return 'authenticated-user';
         }
       }
@@ -389,8 +389,8 @@ describe('A2AExpressApp', () => {
       assert.isTrue(handleStub.calledOnce);
       const serverCallContext = handleStub.getCall(0).args[1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-      expect(serverCallContext.user.isAuthenticated()).to.be.true;
-      expect(serverCallContext.user.userName()).to.equal('authenticated-user');
+      expect(serverCallContext.user.isAuthenticated).to.be.true;
+      expect(serverCallContext.user.userName).to.equal('authenticated-user');
     });
 
     it('should handle successful authentication middlewares with plain object', async () => {
@@ -405,10 +405,10 @@ describe('A2AExpressApp', () => {
       const userExtractor = (req: Request): Promise<User> => {
         class CustomUser implements User {
           constructor(private user: any) {}
-          public isAuthenticated(): boolean {
+          get isAuthenticated(): boolean {
             return true;
           }
-          public userName(): string {
+          get userName(): string {
             return this.user.email;
           }
           public getId(): number {
@@ -438,17 +438,17 @@ describe('A2AExpressApp', () => {
       assert.isTrue(handleStub.calledOnce);
       const serverCallContext = handleStub.getCall(0).args[1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-      expect(serverCallContext.user.isAuthenticated()).to.be.true;
-      expect(serverCallContext.user.userName()).to.equal('test_email');
+      expect(serverCallContext.user.isAuthenticated).to.be.true;
+      expect(serverCallContext.user.userName).to.equal('test_email');
       expect(serverCallContext.user.getId()).to.equal(123);
     });
 
     it('should handle successful authentication middlewares without custom user extractor', async () => {
       class CustomUser {
-        public isAuthenticated(): boolean {
+        get isAuthenticated(): boolean {
           return true;
         }
-        public userName(): string {
+        get userName(): string {
           return 'authenticated-user';
         }
       }
@@ -475,8 +475,8 @@ describe('A2AExpressApp', () => {
       assert.isTrue(handleStub.calledOnce);
       const serverCallContext = handleStub.getCall(0).args[1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-      expect(serverCallContext.user.isAuthenticated()).to.be.false;
-      expect(serverCallContext.user.userName()).to.equal('');
+      expect(serverCallContext.user.isAuthenticated).to.be.false;
+      expect(serverCallContext.user.userName).to.equal('');
     });
   });
 

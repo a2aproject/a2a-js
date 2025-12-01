@@ -6,7 +6,6 @@ import {
   AgentExecutor,
   DefaultRequestHandler,
 } from '../../server/index.js';
-import { A2AExpressApp } from '../../server/express/index.js';
 import { AuthenticationAgentExecutor } from './agent_executor.js';
 import { userBuilder } from './user_builder.js';
 import { authenticationHandler } from './authentication_middleware.js';
@@ -64,10 +63,12 @@ async function main() {
   const app = express();
   app.use(express.json());
   app.use(authenticationHandler);
-  app.use(jsonRpcHandler({
-    requestHandler,
-    userBuilder,
-  }));
+  app.use(
+    jsonRpcHandler({
+      requestHandler,
+      userBuilder,
+    })
+  );
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;

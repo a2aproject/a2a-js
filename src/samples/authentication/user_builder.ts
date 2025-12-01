@@ -8,7 +8,7 @@ export class CustomUser implements User {
     public userName: string,
     public email: string,
     public role: string
-  ) { }
+  ) {}
 }
 
 export const userBuilder: UserBuilder = async (req: Request): Promise<User> => {
