@@ -1741,16 +1741,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     class A2AUser implements User {
       constructor(private _isAuthenticated: boolean) {}
 
-      isAuthenticated(): boolean {
+      get isAuthenticated(): boolean {
         return this._isAuthenticated;
       }
-      userName(): string {
+
+      get userName(): string {
         return 'test-user';
       }
     }
 
     const extendedAgentcardProvider: ExtendedAgentCardProvider = async (context?) => {
-      if (context?.user?.isAuthenticated()) {
+      if (context?.user?.isAuthenticated) {
         return extendedAgentCard;
       }
       // Remove the extensions that are not allowed for unauthenticated clients
