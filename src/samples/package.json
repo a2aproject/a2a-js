@@ -1,0 +1,25 @@
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "a2a:cli": "tsx cli.ts",
+    "agents:movie-agent": "tsx agents/movie-agent/index.ts",
+    "agents:sample-agent": "tsx agents/sample-agent/index.ts",
+    "agents:extension-agent": "tsx extensions/index.ts",
+    "agents:authentication-agent": "tsx authentication/index.ts"
+  },
+  "devDependencies": {
+    "@genkit-ai/googleai": "^1.8.0",
+    "@types/express": "^5.0.5",
+    "@types/passport": "^1.0.17",
+    "@types/passport-jwt": "^4.0.1",
+    "express": "^5.1.0",
+    "genkit": "^1.8.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "tsx": "^4.19.3"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0"
+  }
+}

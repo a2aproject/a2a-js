@@ -41,8 +41,6 @@
   ],
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@genkit-ai/googleai": "^1.8.0",
-    "@genkit-ai/vertexai": "^1.8.0",
     "@types/chai": "^5.2.2",
     "@types/express": "^5.0.3",
     "@types/mocha": "^10.0.10",
@@ -56,7 +54,6 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "express": "^5.1.0",
-    "genkit": "^1.8.0",
     "gts": "^6.0.2",
     "json-schema-to-typescript": "^15.0.4",
     "mocha": "^11.6.0",
@@ -77,10 +74,6 @@
     "lint:fix": "npx eslint . --fix",
     "coverage": "c8 npm run test",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
-    "a2a:cli": "tsx src/samples/cli.ts",
-    "agents:movie-agent": "tsx src/samples/agents/movie-agent/index.ts",
-    "agents:sample-agent": "tsx src/samples/agents/sample-agent/index.ts",
-    "agents:extension-agent": "tsx src/samples/extensions/index.ts",
     "test-build:browser": "esbuild ./dist/client/index.js ./dist/index.js --bundle --platform=browser --outdir=dist/tmp-checks --outbase=./dist"
   },
   "dependencies": {
