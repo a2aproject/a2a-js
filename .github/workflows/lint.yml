@@ -1,4 +1,4 @@
-name: npm run lint
+name: Run Linter
 
 on:
   push:
