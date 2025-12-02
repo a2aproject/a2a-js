@@ -8,12 +8,36 @@ export interface CallInterceptor {
 }
 
 export interface BeforeArgs<K extends keyof Client = keyof Client> {
+  /**
+   * Identifies the client method invoked and its payload.
+   */
   readonly input: ClientCallInput<K>;
+
+  /**
+   * If set by the interceptor, stops execution and returns set value.
+   */
+  earlyReturn?: ClientCallResult<K>;
+
+  /**
+   * Options passed to the client.
+   */
   options?: RequestOptions;
 }
 
 export interface AfterArgs<K extends keyof Client = keyof Client> {
+  /**
+   * Identifies the client method invoked and its result.
+   */
   readonly result: ClientCallResult<K>;
+
+  /**
+   * If set by the interceptor, stops execution and returns result value.
+   */
+  earlyReturn?: boolean;
+
+  /**
+   * Options passed to the client.
+   */
   options?: RequestOptions;
 }
 
@@ -69,7 +93,7 @@ type MethodInput<T, K extends keyof T = keyof T> = {
  */
 type MethodResult<T, K extends keyof T = keyof T, Overrides = object> = {
   [M in K]: M extends keyof Overrides // If there is an override, use it directly.
-    ? { readonly method: M; result: Overrides[M] }
+    ? { readonly method: M; value: Overrides[M] }
     : // Infer result, unwrap it from Promise and pack with method name.
       T[M] extends (payload: unknown) => infer R
       ? { readonly method: M; value: Awaited<R> }

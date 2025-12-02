@@ -11,7 +11,7 @@ import {
   AgentCard,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
-import { CallInterceptor, BeforeArgs, AfterArgs } from './interceptors.js';
+import { CallInterceptor, BeforeArgs, AfterArgs, ClientCallResult } from './interceptors.js';
 import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
@@ -74,7 +74,10 @@ export class Client {
       blocking: !(this.config?.polling ?? false),
     });
     const beforeArgs: BeforeArgs<'sendMessage'> = { input: { method, value: params }, options };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      return earlyReturn.value;
+    }
 
     const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
 
@@ -98,7 +101,11 @@ export class Client {
       input: { method, value: params },
       options,
     };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      yield earlyReturn.value;
+      return;
+    }
 
     if (!this.agentCard.capabilities.streaming) {
       yield this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
@@ -109,11 +116,14 @@ export class Client {
       beforeArgs.options
     )) {
       const afterArgs: AfterArgs<'sendMessageStream'> = {
-        result: { method, result: event },
+        result: { method, value: event },
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs);
-      yield afterArgs.result.result;
+      yield afterArgs.result.value;
+      if (afterArgs.earlyReturn) {
+        return;
+      }
     }
   }
 
@@ -135,7 +145,10 @@ export class Client {
       input: { method, value: params },
       options,
     };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      return earlyReturn.value;
+    }
 
     const result = await this.transport.setTaskPushNotificationConfig(
       beforeArgs.input.value,
@@ -168,7 +181,10 @@ export class Client {
       input: { method, value: params },
       options,
     };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      return earlyReturn.value;
+    }
 
     const result = await this.transport.getTaskPushNotificationConfig(
       beforeArgs.input.value,
@@ -201,7 +217,10 @@ export class Client {
       input: { method, value: params },
       options,
     };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      return earlyReturn.value;
+    }
 
     const result = await this.transport.listTaskPushNotificationConfig(
       beforeArgs.input.value,
@@ -229,7 +248,10 @@ export class Client {
       input: { method, value: params },
       options,
     };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      return earlyReturn.value;
+    }
 
     await this.transport.deleteTaskPushNotificationConfig(
       beforeArgs.input.value,
@@ -251,7 +273,10 @@ export class Client {
     const method = 'getTask';
 
     const beforeArgs: BeforeArgs<'getTask'> = { input: { method, value: params }, options };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      return earlyReturn.value;
+    }
 
     const result = await this.transport.getTask(beforeArgs.input.value, beforeArgs.options);
 
@@ -271,7 +296,10 @@ export class Client {
     const method = 'cancelTask';
 
     const beforeArgs: BeforeArgs<'cancelTask'> = { input: { method, value: params }, options };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      return earlyReturn.value;
+    }
 
     const result = await this.transport.cancelTask(beforeArgs.input.value, beforeArgs.options);
 
@@ -293,18 +321,25 @@ export class Client {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = { input: { method, value: params }, options };
-    await this.interceptBefore(beforeArgs);
+    const earlyReturn = await this.interceptBefore(beforeArgs);
+    if (earlyReturn) {
+      yield earlyReturn.value;
+      return;
+    }
 
     for await (const event of this.transport.resubscribeTask(
       beforeArgs.input.value,
       beforeArgs.options
     )) {
       const afterArgs: AfterArgs<'resubscribeTask'> = {
-        result: { method, result: event },
+        result: { method, value: event },
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs);
-      yield afterArgs.result.result;
+      yield afterArgs.result.value;
+      if (afterArgs.earlyReturn) {
+        return;
+      }
     }
   }
 
@@ -327,21 +362,29 @@ export class Client {
     return result;
   }
 
-  private async interceptBefore(args: BeforeArgs): Promise<void> {
+  private async interceptBefore<K extends keyof Client>(
+    args: BeforeArgs<K>
+  ): Promise<ClientCallResult<K> | undefined> {
     if (!this.config?.interceptors || this.config.interceptors.length === 0) {
       return;
     }
     for (const interceptor of this.config.interceptors) {
       await interceptor.before(args);
+      if (args.earlyReturn) {
+        return args.earlyReturn;
+      }
     }
   }
 
-  private async interceptAfter(args: AfterArgs): Promise<void> {
+  private async interceptAfter<K extends keyof Client>(args: AfterArgs<K>): Promise<void> {
     if (!this.config?.interceptors || this.config.interceptors.length === 0) {
       return;
     }
     for (const interceptor of this.config.interceptors) {
       await interceptor.after(args);
+      if (args.earlyReturn) {
+        return;
+      }
     }
   }
 }

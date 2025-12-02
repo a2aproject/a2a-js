@@ -483,8 +483,8 @@ describe('Client', () => {
             before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
-                args.result.result = {
-                  ...args.result.result,
+                args.result.value = {
+                  ...args.result.value,
                   metadata: { foo: 'bar' },
                 };
               }
