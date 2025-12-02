@@ -78,9 +78,11 @@ export type ClientCallResult<K extends keyof Client = keyof Client> = MethodResu
  *   value: number;
  * }
  */
-type MethodInput<T, K extends keyof T = keyof T> = {
-  [M in K]: T[M] extends (payload: infer P) => unknown ? { readonly method: M; value: P } : never;
-}[K];
+type MethodInput<T, TMembers extends keyof T = keyof T> = {
+  [M in TMembers]: T[M] extends (payload: infer P) => unknown
+    ? { readonly method: M; value: P }
+    : never;
+}[TMembers];
 
 /**
  * For
@@ -100,14 +102,14 @@ type MethodInput<T, K extends keyof T = keyof T> = {
  *   value: Result2;
  * }
  */
-type MethodResult<T, K extends keyof T = keyof T, Overrides = object> = {
-  [M in K]: M extends keyof Overrides // If there is an override, use it directly.
-    ? { readonly method: M; value: Overrides[M] }
+type MethodResult<T, TMembers extends keyof T = keyof T, TOverrides = object> = {
+  [M in TMembers]: M extends keyof TOverrides // If there is an override, use it directly.
+    ? { readonly method: M; value: TOverrides[M] }
     : // Infer result, unwrap it from Promise and pack with method name.
       T[M] extends (payload: unknown) => infer R
       ? { readonly method: M; value: Awaited<R> }
       : never;
-}[K];
+}[TMembers];
 
 interface ResultsOverrides {
   // sendMessageStream and resubscribeTask return async iterators and are intercepted on each item,
