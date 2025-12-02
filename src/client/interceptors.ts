@@ -3,7 +3,14 @@ import { Client } from './multitransport-client.js';
 import { RequestOptions } from './multitransport-client.js';
 
 export interface CallInterceptor {
+  /**
+   * Invoked before transport method.
+   */
   before(options: BeforeArgs): Promise<void>;
+
+  /**
+   * Invoked after transport method.
+   */
   after(options: AfterArgs): Promise<void>;
 }
 
@@ -14,7 +21,8 @@ export interface BeforeArgs<K extends keyof Client = keyof Client> {
   readonly input: ClientCallInput<K>;
 
   /**
-   * If set by the interceptor, stops execution and returns set value.
+   * If set by the interceptor, stops execution, invokes "after"
+   * for executed interceptors and returns the result. Transport is not called.
    */
   earlyReturn?: ClientCallResult<K>;
 
@@ -31,7 +39,8 @@ export interface AfterArgs<K extends keyof Client = keyof Client> {
   readonly result: ClientCallResult<K>;
 
   /**
-   * If set by the interceptor, stops execution and returns result value.
+   * If set by the interceptor, stops execution and returns result value,
+   * remaining interceptors are not executed.
    */
   earlyReturn?: boolean;
 
