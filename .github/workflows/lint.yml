@@ -1,4 +1,4 @@
-name: Run Linter & Formatter
+name: npm run lint
 
 on:
   push:
@@ -19,4 +19,4 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     - run: npm ci
-    - run: npx eslint .
+    - run: npm run lint
