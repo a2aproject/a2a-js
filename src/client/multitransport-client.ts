@@ -11,7 +11,7 @@ import {
   AgentCard,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
-import { CallInterceptor, BeforeArgs, AfterArgs } from './middleware.js';
+import { CallInterceptor, BeforeArgs, AfterArgs } from './interceptors.js';
 import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
@@ -73,13 +73,14 @@ export class Client {
       params,
       blocking: !(this.config?.polling ?? false),
     });
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'sendMessage'> = { input: { method, value: params }, options };
     await this.interceptBefore(beforeArgs);
 
-    const result = await this.transport.sendMessage(params, beforeArgs.options);
+    const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
 
-    await this.interceptAfter({ result: { method, value: result }, options: beforeArgs.options });
-    return result;
+    const afterArgs: AfterArgs<'sendMessage'> = { result: { method, value: result }, options };
+    await this.interceptAfter(afterArgs);
+    return afterArgs.result.value;
   }
 
   /**
@@ -93,16 +94,26 @@ export class Client {
     const method = 'sendMessageStream';
 
     params = this.applyClientConfig({ params, blocking: true });
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'sendMessageStream'> = {
+      input: { method, value: params },
+      options,
+    };
     await this.interceptBefore(beforeArgs);
 
     if (!this.agentCard.capabilities.streaming) {
-      yield this.transport.sendMessage(params, beforeArgs.options);
+      yield this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
       return;
     }
-    for await (const event of this.transport.sendMessageStream(params, options)) {
-      await this.interceptAfter({ result: { method, result: event }, options: beforeArgs.options });
-      yield event;
+    for await (const event of this.transport.sendMessageStream(
+      beforeArgs.input.value,
+      beforeArgs.options
+    )) {
+      const afterArgs: AfterArgs<'sendMessageStream'> = {
+        result: { method, result: event },
+        options: beforeArgs.options,
+      };
+      await this.interceptAfter(afterArgs);
+      yield afterArgs.result.result;
     }
   }
 
@@ -120,13 +131,23 @@ export class Client {
       throw new PushNotificationNotSupportedError();
     }
 
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'setTaskPushNotificationConfig'> = {
+      input: { method, value: params },
+      options,
+    };
     await this.interceptBefore(beforeArgs);
 
-    const result = await this.transport.setTaskPushNotificationConfig(params, options);
+    const result = await this.transport.setTaskPushNotificationConfig(
+      beforeArgs.input.value,
+      beforeArgs.options
+    );
 
-    await this.interceptAfter({ result: { method, value: result }, options: beforeArgs.options });
-    return result;
+    const afterArgs: AfterArgs<'setTaskPushNotificationConfig'> = {
+      result: { method, value: result },
+      options: beforeArgs.options,
+    };
+    await this.interceptAfter(afterArgs);
+    return afterArgs.result.value;
   }
 
   /**
@@ -143,13 +164,23 @@ export class Client {
       throw new PushNotificationNotSupportedError();
     }
 
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'getTaskPushNotificationConfig'> = {
+      input: { method, value: params },
+      options,
+    };
     await this.interceptBefore(beforeArgs);
 
-    const result = await this.transport.getTaskPushNotificationConfig(params, options);
+    const result = await this.transport.getTaskPushNotificationConfig(
+      beforeArgs.input.value,
+      beforeArgs.options
+    );
 
-    await this.interceptAfter({ result: { method, value: result }, options: beforeArgs.options });
-    return result;
+    const afterArgs: AfterArgs<'getTaskPushNotificationConfig'> = {
+      result: { method, value: result },
+      options: beforeArgs.options,
+    };
+    await this.interceptAfter(afterArgs);
+    return afterArgs.result.value;
   }
 
   /**
@@ -166,13 +197,23 @@ export class Client {
       throw new PushNotificationNotSupportedError();
     }
 
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'listTaskPushNotificationConfig'> = {
+      input: { method, value: params },
+      options,
+    };
     await this.interceptBefore(beforeArgs);
 
-    const result = await this.transport.listTaskPushNotificationConfig(params, options);
+    const result = await this.transport.listTaskPushNotificationConfig(
+      beforeArgs.input.value,
+      beforeArgs.options
+    );
 
-    await this.interceptAfter({ result: { method, value: result }, options: beforeArgs.options });
-    return result;
+    const afterArgs: AfterArgs<'listTaskPushNotificationConfig'> = {
+      result: { method, value: result },
+      options: beforeArgs.options,
+    };
+    await this.interceptAfter(afterArgs);
+    return afterArgs.result.value;
   }
 
   /**
@@ -184,16 +225,23 @@ export class Client {
   ): Promise<void> {
     const method = 'deleteTaskPushNotificationConfig';
 
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'deleteTaskPushNotificationConfig'> = {
+      input: { method, value: params },
+      options,
+    };
     await this.interceptBefore(beforeArgs);
 
-    await this.transport.deleteTaskPushNotificationConfig(params, options);
+    await this.transport.deleteTaskPushNotificationConfig(
+      beforeArgs.input.value,
+      beforeArgs.options
+    );
 
-    await this.interceptAfter({
+    const afterArgs: AfterArgs<'deleteTaskPushNotificationConfig'> = {
       result: { method, value: undefined },
       options: beforeArgs.options,
-    });
-    return;
+    };
+    await this.interceptAfter(afterArgs);
+    return afterArgs.result.value;
   }
 
   /**
@@ -202,13 +250,17 @@ export class Client {
   async getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
     const method = 'getTask';
 
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'getTask'> = { input: { method, value: params }, options };
     await this.interceptBefore(beforeArgs);
 
-    const result = await this.transport.getTask(params, options);
+    const result = await this.transport.getTask(beforeArgs.input.value, beforeArgs.options);
 
-    await this.interceptAfter({ result: { method, value: result }, options: beforeArgs.options });
-    return result;
+    const afterArgs: AfterArgs<'getTask'> = {
+      result: { method, value: result },
+      options: beforeArgs.options,
+    };
+    await this.interceptAfter(afterArgs);
+    return afterArgs.result.value;
   }
 
   /**
@@ -218,13 +270,17 @@ export class Client {
   async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
     const method = 'cancelTask';
 
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'cancelTask'> = { input: { method, value: params }, options };
     await this.interceptBefore(beforeArgs);
 
-    const result = await this.transport.cancelTask(params, options);
+    const result = await this.transport.cancelTask(beforeArgs.input.value, beforeArgs.options);
 
-    await this.interceptAfter({ result: { method, value: result }, options: beforeArgs.options });
-    return result;
+    const afterArgs: AfterArgs<'cancelTask'> = {
+      result: { method, value: result },
+      options: beforeArgs.options,
+    };
+    await this.interceptAfter(afterArgs);
+    return afterArgs.result.value;
   }
 
   /**
@@ -236,12 +292,19 @@ export class Client {
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const method = 'resubscribeTask';
 
-    const beforeArgs: BeforeArgs = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'resubscribeTask'> = { input: { method, value: params }, options };
     await this.interceptBefore(beforeArgs);
 
-    for await (const event of this.transport.resubscribeTask(params, beforeArgs.options)) {
-      await this.interceptAfter({ result: { method, result: event }, options: beforeArgs.options });
-      yield event;
+    for await (const event of this.transport.resubscribeTask(
+      beforeArgs.input.value,
+      beforeArgs.options
+    )) {
+      const afterArgs: AfterArgs<'resubscribeTask'> = {
+        result: { method, result: event },
+        options: beforeArgs.options,
+      };
+      await this.interceptAfter(afterArgs);
+      yield afterArgs.result.result;
     }
   }
 
