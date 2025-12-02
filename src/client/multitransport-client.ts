@@ -231,7 +231,7 @@ export class Client {
     const beforeResult = await this.interceptBefore(beforeArgs);
 
     if (beforeResult) {
-      yield beforeResult.value;
+      yield beforeResult.earlyReturn.value;
       return;
     }
 
@@ -285,7 +285,15 @@ export class Client {
     const beforeResult = await this.interceptBefore(beforeArgs);
 
     if (beforeResult) {
-      return beforeResult.value;
+      const afterArgs: AfterArgs<K> = {
+        result: {
+          method: input.method,
+          value: beforeResult.earlyReturn.value,
+        } as ClientCallResult<K>,
+        options: beforeArgs.options,
+      };
+      await this.interceptAfter(afterArgs, beforeResult.executed);
+      return afterArgs.result.value;
     }
 
     const result = await transportCall(beforeArgs.input.value, beforeArgs.options);
@@ -301,23 +309,31 @@ export class Client {
 
   private async interceptBefore<K extends keyof Client>(
     args: BeforeArgs<K>
-  ): Promise<ClientCallResult<K> | undefined> {
+  ): Promise<{ earlyReturn: ClientCallResult<K>; executed: CallInterceptor[] } | undefined> {
     if (!this.config?.interceptors || this.config.interceptors.length === 0) {
       return;
     }
+    const executed: CallInterceptor[] = [];
     for (const interceptor of this.config.interceptors) {
       await interceptor.before(args);
+      executed.push(interceptor);
       if (args.earlyReturn) {
-        return args.earlyReturn;
+        return {
+          earlyReturn: args.earlyReturn,
+          executed,
+        };
       }
     }
   }
 
-  private async interceptAfter<K extends keyof Client>(args: AfterArgs<K>): Promise<void> {
+  private async interceptAfter<K extends keyof Client>(
+    args: AfterArgs<K>,
+    interceptors?: CallInterceptor[]
+  ): Promise<void> {
     if (!this.config?.interceptors || this.config.interceptors.length === 0) {
       return;
     }
-    for (const interceptor of this.config.interceptors) {
+    for (const interceptor of interceptors ?? this.config.interceptors) {
       await interceptor.after(args);
       if (args.earlyReturn) {
         return;

@@ -533,6 +533,58 @@ describe('Client', () => {
       expect(result).to.equal(task);
     });
 
+    it('should run after for interceptors executed in before for early return', async () => {
+      const task: Task = {
+        id: '123',
+        kind: 'task',
+        contextId: 'ctx1',
+        status: { state: 'working' },
+      };
+      let firstAfterCalled = false;
+      let secondAfterCalled = false;
+      let thirdAfterCalled = false;
+      const config: ClientConfig = {
+        interceptors: [
+          {
+            before: async () => {},
+            after: async () => {
+              firstAfterCalled = true;
+            },
+          },
+          {
+            before: async (args) => {
+              if (args.input.method === 'getTask') {
+                args.earlyReturn = {
+                  method: 'getTask',
+                  value: task,
+                };
+              }
+            },
+            after: async () => {
+              secondAfterCalled = true;
+            },
+          },
+          {
+            before: async () => {},
+            after: async () => {
+              thirdAfterCalled = true;
+            },
+          },
+        ],
+      };
+      client = new Client(transport, agentCard, config);
+      const params: TaskQueryParams = { id: '123' };
+      transport.getTask.resolves(task);
+
+      const result = await client.getTask(params);
+
+      expect(transport.getTask.notCalled).to.be.true;
+      expect(firstAfterCalled).to.be.true;
+      expect(secondAfterCalled).to.be.true;
+      expect(thirdAfterCalled).to.be.false;
+      expect(result).to.equal(task);
+    });
+
     it('should intercept each iterator item', async () => {
       const params: MessageSendParams = {
         message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
