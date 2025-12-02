@@ -18,5 +18,5 @@ jobs:
         node-version: 18
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
-    - run: npm ci
-    - run: npx eslint .
+    - run: npm ci && (cd src/samples && npm ci)
+    - run: npm run lint

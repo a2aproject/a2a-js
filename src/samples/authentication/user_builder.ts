@@ -12,8 +12,8 @@ export class CustomUser implements User {
 }
 
 export const userBuilder: UserBuilder = async (req: Request): Promise<User> => {
-  const user = req.user;
-  if (user) {
+  if ('user' in req && typeof req.user === 'object') {
+    const user = req.user;
     if ('userName' in user && 'email' in user && 'role' in user) {
       return new CustomUser(user.userName as string, user.email as string, user.role as string);
     }
