@@ -8,28 +8,21 @@ export interface CallInterceptor {
 }
 
 export interface BeforeArgs<K extends keyof Client = keyof Client> {
-  readonly input: ClientMethodsInputs<K>;
+  readonly input: ClientCallInput<K>;
   options?: RequestOptions;
 }
 
 export interface AfterArgs<K extends keyof Client = keyof Client> {
-  readonly result: ClientMethodsResults<K>;
+  readonly result: ClientCallResult<K>;
   options?: RequestOptions;
 }
 
-export type ClientMethodsInputs<K extends keyof Client = keyof Client> = MethodsInputs<Client, K>;
-export type ClientMethodsResults<K extends keyof Client = keyof Client> = MethodsResults<
+export type ClientCallInput<K extends keyof Client = keyof Client> = MethodInput<Client, K>;
+export type ClientCallResult<K extends keyof Client = keyof Client> = MethodResult<
   Client,
   K,
   ResultsOverrides
 >;
-
-interface ResultsOverrides {
-  // sendMessageStream and resubscribeTask returns an async iterator which is intercepted on each item,
-  // which requires custom handling.
-  sendMessageStream: A2AStreamEventData;
-  resubscribeTask: A2AStreamEventData;
-}
 
 // Types below are helper types and are not exported to allow simplifying it without affecting
 // public API if necessary. They are exported via type aliases ClientXxx which can be replaced with explicit union if necessary.
@@ -52,7 +45,7 @@ interface ResultsOverrides {
  *   value: number;
  * }
  */
-type MethodsInputs<T, K extends keyof T = keyof T> = {
+type MethodInput<T, K extends keyof T = keyof T> = {
   [M in K]: T[M] extends (payload: infer P) => unknown ? { readonly method: M; value: P } : never;
 }[K];
 
@@ -74,7 +67,7 @@ type MethodsInputs<T, K extends keyof T = keyof T> = {
  *   value: number;
  * }
  */
-type MethodsResults<T, K extends keyof T = keyof T, Overrides = object> = {
+type MethodResult<T, K extends keyof T = keyof T, Overrides = object> = {
   [M in K]: M extends keyof Overrides // If there is an override, use it directly.
     ? { readonly method: M; result: Overrides[M] }
     : // Infer result, unwrap it from Promise and pack with method name.
@@ -82,3 +75,10 @@ type MethodsResults<T, K extends keyof T = keyof T, Overrides = object> = {
       ? { readonly method: M; value: Awaited<R> }
       : never;
 }[K];
+
+interface ResultsOverrides {
+  // sendMessageStream and resubscribeTask return async iterators and are intercepted on each item,
+  // which requires custom handling.
+  sendMessageStream: A2AStreamEventData;
+  resubscribeTask: A2AStreamEventData;
+}
