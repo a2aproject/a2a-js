@@ -11,7 +11,13 @@ import {
   AgentCard,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
-import { CallInterceptor, BeforeArgs, AfterArgs, ClientCallResult } from './interceptors.js';
+import {
+  CallInterceptor,
+  BeforeArgs,
+  AfterArgs,
+  ClientCallResult,
+  ClientCallInput,
+} from './interceptors.js';
 import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
@@ -63,27 +69,17 @@ export class Client {
    * Sends a message to an agent to initiate a new interaction or to continue an existing one.
    * Uses blocking mode by default.
    */
-  async sendMessage(
-    params: MessageSendParams,
-    options?: RequestOptions
-  ): Promise<SendMessageResult> {
-    const method = 'sendMessage';
-
+  sendMessage(params: MessageSendParams, options?: RequestOptions): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
       blocking: !(this.config?.polling ?? false),
     });
-    const beforeArgs: BeforeArgs<'sendMessage'> = { input: { method, value: params }, options };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      return earlyReturn.value;
-    }
 
-    const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
-
-    const afterArgs: AfterArgs<'sendMessage'> = { result: { method, value: result }, options };
-    await this.interceptAfter(afterArgs);
-    return afterArgs.result.value;
+    return this.executeWithInterceptors(
+      { method: 'sendMessage', value: params },
+      options,
+      this.transport.sendMessage.bind(this.transport)
+    );
   }
 
   /**
@@ -101,9 +97,10 @@ export class Client {
       input: { method, value: params },
       options,
     };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      yield earlyReturn.value;
+    const beforeResult = await this.interceptBefore(beforeArgs);
+
+    if (beforeResult) {
+      yield beforeArgs.earlyReturn.value;
       return;
     }
 
@@ -131,184 +128,94 @@ export class Client {
    * Sets or updates the push notification configuration for a specified task.
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
-  async setTaskPushNotificationConfig(
+  setTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const method = 'setTaskPushNotificationConfig';
-
     if (!this.agentCard.capabilities.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
-    const beforeArgs: BeforeArgs<'setTaskPushNotificationConfig'> = {
-      input: { method, value: params },
+    return this.executeWithInterceptors(
+      { method: 'setTaskPushNotificationConfig', value: params },
       options,
-    };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      return earlyReturn.value;
-    }
-
-    const result = await this.transport.setTaskPushNotificationConfig(
-      beforeArgs.input.value,
-      beforeArgs.options
+      this.transport.setTaskPushNotificationConfig.bind(this.transport)
     );
-
-    const afterArgs: AfterArgs<'setTaskPushNotificationConfig'> = {
-      result: { method, value: result },
-      options: beforeArgs.options,
-    };
-    await this.interceptAfter(afterArgs);
-    return afterArgs.result.value;
   }
 
   /**
    * Retrieves the current push notification configuration for a specified task.
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
-  async getTaskPushNotificationConfig(
+  getTaskPushNotificationConfig(
     params: TaskIdParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const method = 'getTaskPushNotificationConfig';
-
     if (!this.agentCard.capabilities.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
-    const beforeArgs: BeforeArgs<'getTaskPushNotificationConfig'> = {
-      input: { method, value: params },
+    return this.executeWithInterceptors(
+      { method: 'getTaskPushNotificationConfig', value: params },
       options,
-    };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      return earlyReturn.value;
-    }
-
-    const result = await this.transport.getTaskPushNotificationConfig(
-      beforeArgs.input.value,
-      beforeArgs.options
+      this.transport.getTaskPushNotificationConfig.bind(this.transport)
     );
-
-    const afterArgs: AfterArgs<'getTaskPushNotificationConfig'> = {
-      result: { method, value: result },
-      options: beforeArgs.options,
-    };
-    await this.interceptAfter(afterArgs);
-    return afterArgs.result.value;
   }
 
   /**
    * Retrieves the associated push notification configurations for a specified task.
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
-  async listTaskPushNotificationConfig(
+  listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    const method = 'listTaskPushNotificationConfig';
-
     if (!this.agentCard.capabilities.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
-    const beforeArgs: BeforeArgs<'listTaskPushNotificationConfig'> = {
-      input: { method, value: params },
+    return this.executeWithInterceptors(
+      { method: 'listTaskPushNotificationConfig', value: params },
       options,
-    };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      return earlyReturn.value;
-    }
-
-    const result = await this.transport.listTaskPushNotificationConfig(
-      beforeArgs.input.value,
-      beforeArgs.options
+      this.transport.listTaskPushNotificationConfig.bind(this.transport)
     );
-
-    const afterArgs: AfterArgs<'listTaskPushNotificationConfig'> = {
-      result: { method, value: result },
-      options: beforeArgs.options,
-    };
-    await this.interceptAfter(afterArgs);
-    return afterArgs.result.value;
   }
 
   /**
    * Deletes an associated push notification configuration for a task.
    */
-  async deleteTaskPushNotificationConfig(
+  deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<void> {
-    const method = 'deleteTaskPushNotificationConfig';
-
-    const beforeArgs: BeforeArgs<'deleteTaskPushNotificationConfig'> = {
-      input: { method, value: params },
+    return this.executeWithInterceptors(
+      { method: 'deleteTaskPushNotificationConfig', value: params },
       options,
-    };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      return earlyReturn.value;
-    }
-
-    await this.transport.deleteTaskPushNotificationConfig(
-      beforeArgs.input.value,
-      beforeArgs.options
+      this.transport.deleteTaskPushNotificationConfig.bind(this.transport)
     );
-
-    const afterArgs: AfterArgs<'deleteTaskPushNotificationConfig'> = {
-      result: { method, value: undefined },
-      options: beforeArgs.options,
-    };
-    await this.interceptAfter(afterArgs);
-    return afterArgs.result.value;
   }
 
   /**
    * Retrieves the current state (including status, artifacts, and optionally history) of a previously initiated task.
    */
-  async getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
-    const method = 'getTask';
-
-    const beforeArgs: BeforeArgs<'getTask'> = { input: { method, value: params }, options };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      return earlyReturn.value;
-    }
-
-    const result = await this.transport.getTask(beforeArgs.input.value, beforeArgs.options);
-
-    const afterArgs: AfterArgs<'getTask'> = {
-      result: { method, value: result },
-      options: beforeArgs.options,
-    };
-    await this.interceptAfter(afterArgs);
-    return afterArgs.result.value;
+  getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
+    return this.executeWithInterceptors(
+      { method: 'getTask', value: params },
+      options,
+      this.transport.getTask.bind(this.transport)
+    );
   }
 
   /**
    * Requests the cancellation of an ongoing task. The server will attempt to cancel the task,
    * but success is not guaranteed (e.g., the task might have already completed or failed, or cancellation might not be supported at its current stage).
    */
-  async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
-    const method = 'cancelTask';
-
-    const beforeArgs: BeforeArgs<'cancelTask'> = { input: { method, value: params }, options };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      return earlyReturn.value;
-    }
-
-    const result = await this.transport.cancelTask(beforeArgs.input.value, beforeArgs.options);
-
-    const afterArgs: AfterArgs<'cancelTask'> = {
-      result: { method, value: result },
-      options: beforeArgs.options,
-    };
-    await this.interceptAfter(afterArgs);
-    return afterArgs.result.value;
+  cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
+    return this.executeWithInterceptors(
+      { method: 'cancelTask', value: params },
+      options,
+      this.transport.cancelTask.bind(this.transport)
+    );
   }
 
   /**
@@ -321,9 +228,10 @@ export class Client {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = { input: { method, value: params }, options };
-    const earlyReturn = await this.interceptBefore(beforeArgs);
-    if (earlyReturn) {
-      yield earlyReturn.value;
+    const beforeResult = await this.interceptBefore(beforeArgs);
+
+    if (beforeResult) {
+      yield beforeResult.value;
       return;
     }
 
@@ -360,6 +268,35 @@ export class Client {
     }
     result.configuration.blocking ??= blocking;
     return result;
+  }
+
+  private async executeWithInterceptors<K extends keyof Client>(
+    input: ClientCallInput<K>,
+    options: RequestOptions | undefined,
+    transportCall: (
+      params: ClientCallInput<K>['value'],
+      options?: RequestOptions
+    ) => Promise<ClientCallResult<K>['value']>
+  ): Promise<ClientCallResult<K>['value']> {
+    const beforeArgs: BeforeArgs<K> = {
+      input: input,
+      options,
+    };
+    const beforeResult = await this.interceptBefore(beforeArgs);
+
+    if (beforeResult) {
+      return beforeResult.value;
+    }
+
+    const result = await transportCall(beforeArgs.input.value, beforeArgs.options);
+
+    const afterArgs: AfterArgs<K> = {
+      result: { method: input.method, value: result } as ClientCallResult<K>,
+      options: beforeArgs.options,
+    };
+    await this.interceptAfter(afterArgs);
+
+    return afterArgs.result.value;
   }
 
   private async interceptBefore<K extends keyof Client>(

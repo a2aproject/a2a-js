@@ -85,10 +85,10 @@ type MethodInput<T, K extends keyof T = keyof T> = {
  *
  * {
  *   readonly method: "f1";
- *   value: string;
+ *   value: Result1;
  * } | {
  *   readonly method: "f2";
- *   value: number;
+ *   value: Result2;
  * }
  */
 type MethodResult<T, K extends keyof T = keyof T, Overrides = object> = {
