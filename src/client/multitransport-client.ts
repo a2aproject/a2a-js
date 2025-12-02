@@ -20,7 +20,7 @@ export interface ClientConfig {
    * If set to true, non-streaming send message result might be a Message or a Task in any (including non-terminal) state.
    * Callers are responsible for running the polling loop. This configuration does not apply to streaming requests.
    */
-  polling: boolean;
+  polling?: boolean;
 
   /**
    * Specifies the default list of accepted media types to apply for all "send message" calls.

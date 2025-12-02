@@ -365,4 +365,147 @@ describe('Client', () => {
       expect(yielded.value).to.deep.equal(response);
     });
   });
+
+  describe('Interceptors', () => {
+    it('should modify request', async () => {
+      const config: ClientConfig = {
+        interceptors: [
+          {
+            before: async (args) => {
+              if (args.input.method === 'getTask') {
+                args.input.value = { ...args.input.value, metadata: { foo: 'bar' } };
+              }
+            },
+            after: async () => {},
+          },
+        ],
+      };
+      client = new Client(transport, agentCard, config);
+      const params: TaskQueryParams = { id: '123' };
+      const task: Task = {
+        id: '123',
+        kind: 'task',
+        contextId: 'ctx1',
+        status: { state: 'working' },
+      };
+      transport.getTask.resolves(task);
+
+      const result = await client.getTask(params);
+
+      expect(transport.getTask.calledOnceWith({ id: '123', metadata: { foo: 'bar' } })).to.be.true;
+      expect(result).to.equal(task);
+    });
+
+    it('should modify response', async () => {
+      const config: ClientConfig = {
+        interceptors: [
+          {
+            before: async () => {},
+            after: async (args) => {
+              if (args.result.method === 'getTask') {
+                args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
+              }
+            },
+          },
+        ],
+      };
+      client = new Client(transport, agentCard, config);
+      const params: TaskQueryParams = { id: '123' };
+      const task: Task = {
+        id: '123',
+        kind: 'task',
+        contextId: 'ctx1',
+        status: { state: 'working' },
+      };
+      transport.getTask.resolves(task);
+
+      const result = await client.getTask(params);
+
+      expect(transport.getTask.calledOnceWith(params)).to.be.true;
+      expect(result).to.deep.equal({ ...task, metadata: { foo: 'bar' } });
+    });
+
+    it('should modify options', async () => {
+      const config: ClientConfig = {
+        interceptors: [
+          {
+            before: async (args) => {
+              args.options = { context: new Map([['foo', 'bar']]) };
+            },
+            after: async () => {},
+          },
+        ],
+      };
+      client = new Client(transport, agentCard, config);
+      const params: TaskQueryParams = { id: '123' };
+      const task: Task = {
+        id: '123',
+        kind: 'task',
+        contextId: 'ctx1',
+        status: { state: 'working' },
+      };
+      transport.getTask.resolves(task);
+
+      const result = await client.getTask(params);
+
+      expect(transport.getTask.calledOnceWith(params, { context: new Map([['foo', 'bar']]) })).to.be
+        .true;
+      expect(result).to.equal(task);
+    });
+
+    it('should intercept each iterator item', async () => {
+      const params: MessageSendParams = {
+        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      };
+      const events: A2AStreamEventData[] = [
+        {
+          kind: 'status-update',
+          taskId: '123',
+          contextId: 'ctx1',
+          final: false,
+          status: { state: 'working' },
+        },
+        {
+          kind: 'status-update',
+          taskId: '123',
+          contextId: 'ctx1',
+          final: false,
+          status: { state: 'completed' },
+        },
+      ];
+      async function* stream() {
+        yield* events;
+      }
+      transport.sendMessageStream.returns(stream());
+      const config: ClientConfig = {
+        interceptors: [
+          {
+            before: async () => {},
+            after: async (args) => {
+              if (args.result.method === 'sendMessageStream') {
+                args.result.result = {
+                  ...args.result.result,
+                  metadata: { foo: 'bar' },
+                };
+              }
+            },
+          },
+        ],
+      };
+      client = new Client(transport, agentCard, config);
+
+      const result = client.sendMessageStream(params);
+
+      const got = [];
+      for await (const event of result) {
+        got.push(event);
+      }
+      const expectedParams = {
+        ...params,
+        configuration: { ...params.configuration, blocking: true },
+      };
+      expect(transport.sendMessageStream.calledOnceWith(expectedParams)).to.be.true;
+      expect(got).to.deep.equal(events.map((event) => ({ ...event, metadata: { foo: 'bar' } })));
+    });
+  });
 });
