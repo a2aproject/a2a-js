@@ -53,12 +53,12 @@ export interface RequestOptions {
   /**
    * List of extensions URI requested by the client.
    */
-  requestedExtensions?: string[];
+  requestedExtensions?: Set<string>;
 
   /**
    * List of extensions URI activated by the server.
    */
-  activatedExtensions?: string[];
+  activatedExtensions?: Set<string>;
 
   /**
    * Arbitrary data available to interceptors and transport implementation.

@@ -35,7 +35,7 @@ describe('JsonRpcTransport', () => {
         },
       };
 
-      const expectedExtensions = ['extension1', 'extension2'];
+      const expectedExtensions = new Set<string>(['extension1', 'extension2']);
       const options: RequestOptions = {
         context: new Map<string, unknown>(),
         requestedExtensions: expectedExtensions,
@@ -50,8 +50,8 @@ describe('JsonRpcTransport', () => {
       await transport.sendMessage(messageParams, options);
       const fetchArgs = mockFetch.firstCall.args[1];
       const headers = fetchArgs.headers;
-      expect((headers as any)[HTTP_EXTENSION_HEADER]).to.deep.equal(expectedExtensions.join(','));
-      expect(options.activatedExtensions).to.deep.equal(['extension1']);
+      expect((headers as any)[HTTP_EXTENSION_HEADER]).to.deep.equal(Array.from(expectedExtensions).join(','));
+      expect(Array.from(options.activatedExtensions)).to.deep.equal(['extension1']);
     });
   });
 });
