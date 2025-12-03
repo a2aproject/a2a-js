@@ -100,12 +100,24 @@ export class Client {
     const beforeResult = await this.interceptBefore(beforeArgs);
 
     if (beforeResult) {
-      yield beforeArgs.earlyReturn.value;
+      const earlyReturn = beforeResult.earlyReturn.value;
+      const afterArgs: AfterArgs<'sendMessageStream'> = {
+        result: { method, value: earlyReturn },
+        options: beforeArgs.options,
+      };
+      await this.interceptAfter(afterArgs, beforeResult.executed);
+      yield afterArgs.result.value;
       return;
     }
 
     if (!this.agentCard.capabilities.streaming) {
-      yield this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
+      const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
+      const afterArgs: AfterArgs<'sendMessageStream'> = {
+        result: { method, value: result },
+        options: beforeArgs.options,
+      };
+      await this.interceptAfter(afterArgs);
+      yield afterArgs.result.value;
       return;
     }
     for await (const event of this.transport.sendMessageStream(
@@ -231,7 +243,13 @@ export class Client {
     const beforeResult = await this.interceptBefore(beforeArgs);
 
     if (beforeResult) {
-      yield beforeResult.earlyReturn.value;
+      const earlyReturn = beforeResult.earlyReturn.value;
+      const afterArgs: AfterArgs<'resubscribeTask'> = {
+        result: { method, value: earlyReturn },
+        options: beforeArgs.options,
+      };
+      await this.interceptAfter(afterArgs, beforeResult.executed);
+      yield afterArgs.result.value;
       return;
     }
 
