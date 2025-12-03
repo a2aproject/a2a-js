@@ -50,7 +50,10 @@ export interface RequestOptions {
    */
   signal?: AbortSignal;
 
-  // TODO: propagate extensions
+  /**
+   * List of extensions URI requested by the client.
+   */
+  extensions?: string[];
 
   /**
    * Arbitrary data available to interceptors and transport implementation.
