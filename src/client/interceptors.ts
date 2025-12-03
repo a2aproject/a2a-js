@@ -6,12 +6,12 @@ export interface CallInterceptor {
   /**
    * Invoked before transport method.
    */
-  before(options: BeforeArgs): Promise<void>;
+  before(args: BeforeArgs): Promise<void>;
 
   /**
    * Invoked after transport method.
    */
-  after(options: AfterArgs): Promise<void>;
+  after(args: AfterArgs): Promise<void>;
 }
 
 export interface BeforeArgs<K extends keyof Client = keyof Client> {
