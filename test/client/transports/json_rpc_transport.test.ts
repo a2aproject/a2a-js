@@ -38,16 +38,17 @@ describe('JsonRpcTransport', () => {
       const expectedExtensions = ['extension1', 'extension2'];
       const options: RequestOptions = {
         context: new Map<string, unknown>(),
-        extensions: expectedExtensions,
+        requestedExtensions: expectedExtensions,
       };
 
       mockFetch.resolves(
-        new Response(JSON.stringify({ jsonrpc: '2.0', result: {}, id: 1 }), { status: 200 })
+        new Response(JSON.stringify({ jsonrpc: '2.0', result: {}, id: 1 }), {headers: { [HTTP_EXTENSION_HEADER]: 'extension1' },status: 200 })
       );
       await transport.sendMessage(messageParams, options);
       const fetchArgs = mockFetch.firstCall.args[1];
       const headers = fetchArgs.headers;
       expect((headers as any)[HTTP_EXTENSION_HEADER]).to.deep.equal(expectedExtensions.join(','));
+      expect(options.activatedExtensions).to.deep.equal(['extension1']);
     });
   });
 });

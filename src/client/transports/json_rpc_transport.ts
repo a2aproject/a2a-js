@@ -31,7 +31,7 @@ import {
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
-import { generateExtensionsHeaders } from './common.js';
+import { extractExtensionsFromHeaders, generateExtensionsHeaders } from './common.js';
 import { Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {
@@ -244,13 +244,17 @@ export class JsonRpcTransport implements Transport {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...generateExtensionsHeaders(options?.extensions),
+        ...generateExtensionsHeaders(options?.requestedExtensions),
         Accept: acceptHeader,
       },
       body: JSON.stringify(rpcRequest),
       signal: options?.signal,
     };
-    return this._fetch(this.endpoint, requestInit);
+    const response = await this._fetch(this.endpoint, requestInit);
+    if (options) {
+      options.activatedExtensions = extractExtensionsFromHeaders(response.headers);
+    }
+    return response;
   }
 
   private async *_sendStreamingRequest(

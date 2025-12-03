@@ -4,8 +4,11 @@ export function generateExtensionsHeaders(extensions?: string[]): Record<string,
   if (!extensions || extensions.length === 0) {
     return {};
   }
-
   return {
     [HTTP_EXTENSION_HEADER]: extensions.join(','),
   };
+}
+
+export function extractExtensionsFromHeaders(headers: Headers): string[] {
+  return headers.get(HTTP_EXTENSION_HEADER)?.split(',') ?? [];
 }
