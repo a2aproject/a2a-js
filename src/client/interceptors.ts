@@ -6,17 +6,18 @@ export interface CallInterceptor {
   /**
    * Invoked before transport method.
    */
-  before(options: BeforeArgs): Promise<void>;
+  before(args: BeforeArgs): Promise<void>;
 
   /**
    * Invoked after transport method.
    */
-  after(options: AfterArgs): Promise<void>;
+  after(args: AfterArgs): Promise<void>;
 }
 
 export interface BeforeArgs<K extends keyof Client = keyof Client> {
   /**
    * Identifies the client method invoked and its payload.
+   * Payload inside the input object can be modified.
    */
   readonly input: ClientCallInput<K>;
 
@@ -35,6 +36,7 @@ export interface BeforeArgs<K extends keyof Client = keyof Client> {
 export interface AfterArgs<K extends keyof Client = keyof Client> {
   /**
    * Identifies the client method invoked and its result.
+   * Payload inside the result object can be modified.
    */
   readonly result: ClientCallResult<K>;
 
@@ -64,8 +66,8 @@ export type ClientCallResult<K extends keyof Client = keyof Client> = MethodResu
  * For
  *
  * interface Foo {
- *   f1(): Promise<Result1>;
- *   f2(): Promise<Result2>;
+ *   f1(arg: string): Promise<Result1>;
+ *   f2(arg: number): Promise<Result2>;
  * }
  *
  * MethodInputs<Foo> resolves to

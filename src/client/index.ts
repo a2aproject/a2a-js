@@ -5,6 +5,11 @@
 export { A2AClient } from './client.js';
 export type { A2AClientOptions } from './client.js';
 export * from './auth-handler.js';
+export {
+  AgentCardResolver,
+  AgentCardResolverOptions,
+  DefaultAgentCardResolver,
+} from './card-resolver.js';
 export { Client, ClientConfig, RequestOptions } from './multitransport-client.js';
 export { Transport, TransportFactory } from './transports/transport.js';
 export { ClientFactory, ClientFactoryOptions } from './factory.js';

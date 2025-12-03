@@ -17,6 +17,7 @@ import {
   GetTaskPushNotificationConfigParams,
 } from '../../src/types.js';
 import { A2AStreamEventData } from '../../src/client/client.js';
+import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {
   let transport: sinon.SinonStubbedInstance<Transport>;
@@ -640,99 +641,30 @@ describe('Client', () => {
       expect(got).to.deep.equal(events.map((event) => ({ ...event, metadata: { foo: 'bar' } })));
     });
 
-    it('should return early from iterator (before)', async () => {
+    it('should intercept after non-streaming sendMessage for sendMessageStream', async () => {
       const params: MessageSendParams = {
         message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
       };
-      const events: A2AStreamEventData[] = [
-        {
-          kind: 'status-update',
-          taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: { state: 'working' },
-        },
-        {
-          kind: 'status-update',
-          taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: { state: 'completed' },
-        },
-      ];
-      async function* stream() {
-        yield* events;
-      }
-      transport.sendMessageStream.returns(stream());
-      const config: ClientConfig = {
-        interceptors: [
-          {
-            before: async (args) => {
-              if (args.input.method === 'sendMessageStream') {
-                args.earlyReturn = {
-                  method: 'sendMessageStream',
-                  value: events[0],
-                };
-              }
-            },
-            after: async () => {},
-          },
-        ],
+      const message: Message = {
+        kind: 'message',
+        messageId: '2',
+        role: 'agent',
+        parts: [],
       };
-      client = new Client(transport, agentCard, config);
-
-      const result = client.sendMessageStream(params);
-
-      const got = [];
-      for await (const event of result) {
-        got.push(event);
-      }
-      expect(transport.sendMessageStream.notCalled).to.be.true;
-      expect(got).to.deep.equal([events[0]]);
-    });
-
-    it('should return early from iterator (after)', async () => {
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
-      };
-      const events: A2AStreamEventData[] = [
-        {
-          kind: 'status-update',
-          taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: { state: 'working' },
-        },
-        {
-          kind: 'status-update',
-          taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: { state: 'completed' },
-        },
-      ];
-      async function* stream() {
-        yield* events;
-      }
-      transport.sendMessageStream.returns(stream());
+      transport.sendMessage.resolves(message);
       const config: ClientConfig = {
         interceptors: [
           {
             before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
-                if (
-                  args.result.value.kind === 'status-update' &&
-                  args.result.value.status.state === 'working'
-                ) {
-                  args.earlyReturn = true;
-                }
+                args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
               }
             },
           },
         ],
       };
-      client = new Client(transport, agentCard, config);
+      client = new Client(transport, { ...agentCard, capabilities: { streaming: false } }, config);
 
       const result = client.sendMessageStream(params);
 
@@ -740,12 +672,147 @@ describe('Client', () => {
       for await (const event of result) {
         got.push(event);
       }
-      const expectedParams = {
-        ...params,
-        configuration: { ...params.configuration, blocking: true },
-      };
-      expect(transport.sendMessageStream.calledOnceWith(expectedParams)).to.be.true;
-      expect(got).to.deep.equal([events[0]]);
+      expect(got).to.deep.equal([{ ...message, metadata: { foo: 'bar' } }]);
+    });
+
+    const iteratorsTests = [
+      {
+        name: 'sendMessageStream',
+        transportStubGetter: (t: sinon.SinonStubbedInstance<Transport>): sinon.SinonStub =>
+          t.sendMessageStream,
+        caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
+          c.sendMessageStream({
+            message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+          }),
+      },
+      {
+        name: 'resubscribeTask',
+        transportStubGetter: (t: sinon.SinonStubbedInstance<Transport>): sinon.SinonStub =>
+          t.resubscribeTask,
+        caller: (c: Client): AsyncGenerator<A2AStreamEventData> => c.resubscribeTask({ id: '123' }),
+      },
+    ];
+
+    iteratorsTests.forEach((test) => {
+      describe(test.name, () => {
+        it('should return early from iterator (before)', async () => {
+          const events: A2AStreamEventData[] = [
+            {
+              kind: 'status-update',
+              taskId: '123',
+              contextId: 'ctx1',
+              final: false,
+              status: { state: 'working' },
+            },
+            {
+              kind: 'status-update',
+              taskId: '123',
+              contextId: 'ctx1',
+              final: false,
+              status: { state: 'completed' },
+            },
+          ];
+          async function* stream() {
+            yield* events;
+          }
+          const transportStub = test.transportStubGetter(transport);
+          transportStub.returns(stream());
+          let firstAfterCalled = false;
+          let secondAfterCalled = false;
+          let thirdAfterCalled = false;
+          const config: ClientConfig = {
+            interceptors: [
+              {
+                before: async () => {},
+                after: async () => {
+                  firstAfterCalled = true;
+                },
+              },
+              {
+                before: async (args) => {
+                  if (args.input.method === test.name) {
+                    args.earlyReturn = {
+                      method: args.input.method,
+                      value: events[0],
+                    } as ClientCallResult;
+                  }
+                },
+                after: async () => {
+                  secondAfterCalled = true;
+                },
+              },
+              {
+                before: async () => {},
+                after: async () => {
+                  thirdAfterCalled = true;
+                },
+              },
+            ],
+          };
+          client = new Client(transport, agentCard, config);
+
+          const result = test.caller(client);
+
+          const got = [];
+          for await (const event of result) {
+            got.push(event);
+          }
+          expect(transportStub.notCalled).to.be.true;
+          expect(got).to.deep.equal([events[0]]);
+          expect(firstAfterCalled).to.be.true;
+          expect(secondAfterCalled).to.be.true;
+          expect(thirdAfterCalled).to.be.false;
+        });
+
+        it('should return early from iterator (after)', async () => {
+          const events: A2AStreamEventData[] = [
+            {
+              kind: 'status-update',
+              taskId: '123',
+              contextId: 'ctx1',
+              final: false,
+              status: { state: 'working' },
+            },
+            {
+              kind: 'status-update',
+              taskId: '123',
+              contextId: 'ctx1',
+              final: false,
+              status: { state: 'completed' },
+            },
+          ];
+          async function* stream() {
+            yield* events;
+          }
+          const transportStub = test.transportStubGetter(transport);
+          transportStub.returns(stream());
+          const config: ClientConfig = {
+            interceptors: [
+              {
+                before: async () => {},
+                after: async (args) => {
+                  if (args.result.method === test.name) {
+                    const event = args.result.value as A2AStreamEventData;
+                    if (event.kind === 'status-update' && event.status.state === 'working') {
+                      args.earlyReturn = true;
+                    }
+                  }
+                },
+              },
+            ],
+          };
+          client = new Client(transport, agentCard, config);
+
+          const result = test.caller(client);
+
+          const got = [];
+          for await (const event of result) {
+            got.push(event);
+          }
+          expect(transportStub.calledOnce).to.be.true;
+          expect(got).to.deep.equal([events[0]]);
+        });
+      });
     });
   });
 });
