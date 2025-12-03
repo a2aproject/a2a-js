@@ -17,6 +17,7 @@ export interface CallInterceptor {
 export interface BeforeArgs<K extends keyof Client = keyof Client> {
   /**
    * Identifies the client method invoked and its payload.
+   * Payload inside the input object can be modified.
    */
   readonly input: ClientCallInput<K>;
 
@@ -35,6 +36,7 @@ export interface BeforeArgs<K extends keyof Client = keyof Client> {
 export interface AfterArgs<K extends keyof Client = keyof Client> {
   /**
    * Identifies the client method invoked and its result.
+   * Payload inside the result object can be modified.
    */
   readonly result: ClientCallResult<K>;
 
