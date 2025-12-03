@@ -64,8 +64,8 @@ export type ClientCallResult<K extends keyof Client = keyof Client> = MethodResu
  * For
  *
  * interface Foo {
- *   f1(): Promise<Result1>;
- *   f2(): Promise<Result2>;
+ *   f1(arg: string): Promise<Result1>;
+ *   f2(arg: number): Promise<Result2>;
  * }
  *
  * MethodInputs<Foo> resolves to
