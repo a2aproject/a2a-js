@@ -42,7 +42,10 @@ describe('JsonRpcTransport', () => {
       };
 
       mockFetch.resolves(
-        new Response(JSON.stringify({ jsonrpc: '2.0', result: {}, id: 1 }), {headers: { [HTTP_EXTENSION_HEADER]: 'extension1' },status: 200 })
+        new Response(JSON.stringify({ jsonrpc: '2.0', result: {}, id: 1 }), {
+          headers: { [HTTP_EXTENSION_HEADER]: 'extension1' },
+          status: 200,
+        })
       );
       await transport.sendMessage(messageParams, options);
       const fetchArgs = mockFetch.firstCall.args[1];
