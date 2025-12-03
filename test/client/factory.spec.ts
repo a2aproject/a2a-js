@@ -74,7 +74,6 @@ describe('ClientFactory', () => {
   });
 
   describe('createClient', () => {
-    let factory: ClientFactory;
     let agentCard: AgentCard;
 
     beforeEach(() => {
@@ -93,7 +92,7 @@ describe('ClientFactory', () => {
     });
 
     it('should use agentCard.preferredTransport if available and supported', async () => {
-      factory = new ClientFactory({ transports: [mockTransportFactory1] });
+      const factory = new ClientFactory({ transports: [mockTransportFactory1] });
 
       const client = await factory.createFromAgentCard(agentCard);
 
@@ -104,7 +103,7 @@ describe('ClientFactory', () => {
 
     it('should use factory preferred transport if available', async () => {
       agentCard.additionalInterfaces = [{ transport: 'Transport2', url: 'http://transport2.com' }];
-      factory = new ClientFactory({
+      const factory = new ClientFactory({
         transports: [mockTransportFactory1, mockTransportFactory2],
         preferredTransports: ['Transport2'],
       });
@@ -115,7 +114,7 @@ describe('ClientFactory', () => {
     });
 
     it('should throw error if no compatible transport found', async () => {
-      factory = new ClientFactory({ transports: [mockTransportFactory1] });
+      const factory = new ClientFactory({ transports: [mockTransportFactory1] });
       agentCard.preferredTransport = 'Transport2'; // Not supported
 
       try {
@@ -127,7 +126,7 @@ describe('ClientFactory', () => {
     });
 
     it('should fallback to default transport if preferred transport is missing but default supported', async () => {
-      factory = new ClientFactory({
+      const factory = new ClientFactory({
         transports: [mockTransportFactory1, mockTransportFactory2],
         preferredTransports: ['Transport2'], // Not supported
       });
@@ -143,7 +142,7 @@ describe('ClientFactory', () => {
         protocolName: JsonRpcTransportFactory.name,
         create: sinon.stub().resolves(mockTransport),
       };
-      factory = new ClientFactory({ transports: [jsonRpcFactory] });
+      const factory = new ClientFactory({ transports: [jsonRpcFactory] });
 
       await factory.createFromAgentCard(agentCard);
 
@@ -152,7 +151,7 @@ describe('ClientFactory', () => {
 
     it('should pass clientConfig to the created Client', async () => {
       const clientConfig = { polling: true };
-      factory = new ClientFactory({
+      const factory = new ClientFactory({
         transports: [mockTransportFactory1],
         clientConfig,
       });
@@ -160,6 +159,37 @@ describe('ClientFactory', () => {
       const client = await factory.createFromAgentCard(agentCard);
 
       expect(client.config).to.equal(clientConfig);
+    });
+
+    it('should use card resolver with default path', async () => {
+      const cardResolver = {
+        resolve: sinon.stub().resolves(agentCard),
+      };
+      const factory = new ClientFactory({
+        transports: [mockTransportFactory1],
+        cardResolver,
+      });
+
+      await factory.createFromAgentCardUrl('http://transport1.com');
+
+      expect(mockTransportFactory1.create.calledOnce);
+      expect(cardResolver.resolve.calledOnceWith('http://transport1.com')).to.be.true;
+    });
+
+    it('should use card resolver with custom path', async () => {
+      const cardResolver = {
+        resolve: sinon.stub().resolves(agentCard),
+      };
+      const factory = new ClientFactory({
+        transports: [mockTransportFactory1],
+        cardResolver,
+      });
+
+      await factory.createFromAgentCardUrl('http://transport1.com', 'a2a/my-agent-card.json');
+
+      expect(mockTransportFactory1.create.calledOnce);
+      expect(cardResolver.resolve.calledOnceWith('http://transport1.com', 'a2a/my-agent-card.json'))
+        .to.be.true;
     });
   });
 });
