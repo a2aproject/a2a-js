@@ -31,6 +31,7 @@ import {
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
+import { getExtensionHeaders } from './common.js';
 import { Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {
@@ -197,7 +198,7 @@ export class JsonRpcTransport implements Transport {
       id: requestId,
     };
 
-    const httpResponse = await this._fetchRpc(rpcRequest, 'application/json', options?.signal);
+    const httpResponse = await this._fetchRpc(rpcRequest, 'application/json', options);
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
@@ -237,16 +238,17 @@ export class JsonRpcTransport implements Transport {
   private async _fetchRpc(
     rpcRequest: JSONRPCRequest,
     acceptHeader: string = 'application/json',
-    signal?: AbortSignal
+    options?: RequestOptions
   ): Promise<Response> {
     const requestInit: RequestInit = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...getExtensionHeaders(options?.extensions),
         Accept: acceptHeader,
       },
       body: JSON.stringify(rpcRequest),
-      signal,
+      signal: options?.signal,
     };
     return this._fetch(this.endpoint, requestInit);
   }
@@ -264,7 +266,7 @@ export class JsonRpcTransport implements Transport {
       id: clientRequestId,
     };
 
-    const response = await this._fetchRpc(rpcRequest, 'text/event-stream', options?.signal);
+    const response = await this._fetchRpc(rpcRequest, 'text/event-stream', options);
 
     if (!response.ok) {
       let errorBody = '';

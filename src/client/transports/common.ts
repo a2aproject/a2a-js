@@ -1,14 +1,11 @@
-import { HTTP_EXTENSION_HEADER } from "../../constants.js";
+import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 
-export function addExtensionHeader(req: RequestInit, extensions: string[]): RequestInit {
-    if (!extensions?.length){
-        return req;
-    }
+export function getExtensionHeaders(extensions?: string[]): Record<string, string> {
+  if (!extensions || extensions.length === 0) {
+    return {};
+  }
 
-    const headers = new Headers(req.headers);
-    headers.set(HTTP_EXTENSION_HEADER, extensions.join(','));
-    return {
-        ...req,
-        headers,
-    };
+  return {
+    [HTTP_EXTENSION_HEADER]: extensions.join(','),
+  };
 }
