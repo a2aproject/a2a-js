@@ -10,9 +10,9 @@ export function generateExtensionsHeaders(extensions?: Set<string>): Record<stri
 }
 
 export function extractExtensionsFromHeaders(headers: Headers): Set<string> {
-    if (!headers.has(HTTP_EXTENSION_HEADER)) {
-      return new Set();
-    }
+  if (!headers.has(HTTP_EXTENSION_HEADER)) {
+    return new Set();
+  }
   return new Set(
     headers
       .get(HTTP_EXTENSION_HEADER)
