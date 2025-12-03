@@ -10,3 +10,18 @@ export {
   AgentCardResolverOptions,
   DefaultAgentCardResolver,
 } from './card-resolver.js';
+export { Client, ClientConfig, RequestOptions } from './multitransport-client.js';
+export { Transport, TransportFactory } from './transports/transport.js';
+export { ClientFactory, ClientFactoryOptions } from './factory.js';
+export {
+  JsonRpcTransport,
+  JsonRpcTransportFactory,
+  JsonRpcTransportOptions,
+} from './transports/json_rpc_transport.js';
+export {
+  CallInterceptor,
+  BeforeArgs,
+  AfterArgs,
+  ClientCallInput,
+  ClientCallResult,
+} from './interceptors.js';

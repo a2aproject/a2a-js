@@ -30,7 +30,8 @@ import {
   GetTaskPushNotificationConfigParams,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
-import { RequestOptions, Transport, TransportFactory } from './transport.js';
+import { RequestOptions } from '../multitransport-client.js';
+import { Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
