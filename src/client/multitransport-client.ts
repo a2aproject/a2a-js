@@ -61,9 +61,19 @@ export interface RequestOptions {
 export class Client {
   constructor(
     public readonly transport: Transport,
-    public readonly agentCard: AgentCard,
+    public agentCard: AgentCard,
     public readonly config?: ClientConfig
   ) {}
+
+  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
+    if(this.agentCard.supportsAuthenticatedExtendedCard){
+      this.agentCard = await this.executeWithInterceptors(
+        { method: 'getAgentCard', value: undefined },
+        options,
+        this.transport.getAgentCard.bind(this.transport))
+    }
+    return this.agentCard
+  }
 
   /**
    * Sends a message to an agent to initiate a new interaction or to continue an existing one.
