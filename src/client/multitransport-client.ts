@@ -1,3 +1,4 @@
+import { ServiceParametersHeader } from '../core.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import {
   MessageSendParams,
@@ -53,7 +54,7 @@ export interface RequestOptions {
   /**
    * A key-value map for passing horizontally applicable context or parameters.
    */
-  serviceParameters?: Record<string, string>;
+  serviceParameters?: Partial<Record<ServiceParametersHeader, string>>;
 
   /**
    * Arbitrary data available to interceptors and transport implementation.

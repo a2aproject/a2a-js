@@ -1,4 +1,3 @@
-import { ACTIVATED_EXTENSION_HEADER } from '../../constants.js';
 import { TransportProtocolName } from '../../core.js';
 import {
   AuthenticatedExtendedCardNotConfiguredError,
@@ -32,7 +31,6 @@ import {
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
-import { extractExtensionsFromHeaders } from './common.js';
 import { Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {
@@ -251,18 +249,7 @@ export class JsonRpcTransport implements Transport {
       body: JSON.stringify(rpcRequest),
       signal: options?.signal,
     };
-    const response = await this._fetch(this.endpoint, requestInit);
-    const activatedExtensions = extractExtensionsFromHeaders(response.headers);
-    if (options && activatedExtensions?.length) {
-      if (!options.context) {
-        options.context = new Map();
-      }
-      options.context.set(
-        ACTIVATED_EXTENSION_HEADER,
-        extractExtensionsFromHeaders(response.headers)
-      );
-    }
-    return response;
+    return await this._fetch(this.endpoint, requestInit);
   }
 
   private async *_sendStreamingRequest(

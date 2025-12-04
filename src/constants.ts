@@ -13,6 +13,6 @@ export const AGENT_CARD_PATH = '.well-known/agent-card.json';
 export const HTTP_EXTENSION_HEADER = 'X-A2A-Extensions';
 
 /**
- * The key of activated extension headers in the context
+ * The name of the version header used in http
  */
-export const ACTIVATED_EXTENSION_HEADER = 'A2A-Activated-Extension';
+export const HTTP_VERSION_HEADER = 'A2A-Version'
