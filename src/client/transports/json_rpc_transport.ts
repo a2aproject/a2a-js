@@ -252,7 +252,11 @@ export class JsonRpcTransport implements Transport {
       signal: options?.signal,
     };
     const response = await this._fetch(this.endpoint, requestInit);
-    if (options?.context) {
+    const activatedExtensions = extractExtensionsFromHeaders(response.headers);
+    if (options && activatedExtensions?.length) {
+      if (!options.context) {
+        options.context = new Map();
+      }
       options.context.set(
         ACTIVATED_EXTENSION_HEADER,
         extractExtensionsFromHeaders(response.headers)
