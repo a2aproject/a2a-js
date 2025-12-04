@@ -4,7 +4,7 @@ import sinon from 'sinon';
 import { describe, it, beforeEach } from 'mocha';
 import { MessageSendParams, TextPart } from '../../../src/types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
-import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
+import { ACTIVATED_EXTENSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 
 describe('JsonRpcTransport', () => {
   let transport: JsonRpcTransport;
@@ -35,10 +35,10 @@ describe('JsonRpcTransport', () => {
         },
       };
 
-      const expectedExtensions = new Set<string>(['extension1', 'extension2']);
+      const expectedExtensions = 'extension1,extension2';
       const options: RequestOptions = {
-        context: new Map<string, unknown>(),
-        requestedExtensions: expectedExtensions,
+        context: new Map<symbol, unknown>(),
+        serviceParameters: { [HTTP_EXTENSION_HEADER]: expectedExtensions },
       };
 
       mockFetch.resolves(
@@ -50,10 +50,10 @@ describe('JsonRpcTransport', () => {
       await transport.sendMessage(messageParams, options);
       const fetchArgs = mockFetch.firstCall.args[1];
       const headers = fetchArgs.headers;
-      expect((headers as any)[HTTP_EXTENSION_HEADER]).to.deep.equal(
-        Array.from(expectedExtensions).join(',')
-      );
-      expect(Array.from(options.activatedExtensions)).to.deep.equal(['extension1']);
+      expect((headers as any)[HTTP_EXTENSION_HEADER]).to.deep.equal(expectedExtensions);
+      expect(options.context.get(ACTIVATED_EXTENSION_HEADER) as string[]).to.deep.equal([
+        'extension1',
+      ]);
     });
   });
 });

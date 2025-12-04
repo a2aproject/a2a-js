@@ -51,19 +51,14 @@ export interface RequestOptions {
   signal?: AbortSignal;
 
   /**
-   * List of extensions URI requested by the client.
+   * A key-value map for passing horizontally applicable context or parameters
    */
-  requestedExtensions?: Set<string>;
-
-  /**
-   * List of extensions URI activated by the server.
-   */
-  activatedExtensions?: Set<string>;
+  serviceParameters?: Record<string, string>;
 
   /**
    * Arbitrary data available to interceptors and transport implementation.
    */
-  context: Map<string, unknown>;
+  context?: Map<symbol, unknown>;
 }
 
 export class Client {
