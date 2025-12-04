@@ -1,4 +1,4 @@
-export type ClientCallContext = Record<string, unknown>;
+export type ClientCallContext = Record<symbol, unknown>;
 
 export type ContextUpdate = (context: ClientCallContext) => void;
 
