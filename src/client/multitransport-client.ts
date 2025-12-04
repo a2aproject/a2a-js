@@ -58,7 +58,7 @@ export interface RequestOptions {
   /**
    * Arbitrary data available to interceptors and transport implementation.
    */
-  context?: Map<symbol, unknown>;
+  context?: Map<string, unknown>;
 }
 
 export class Client {

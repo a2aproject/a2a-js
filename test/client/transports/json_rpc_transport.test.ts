@@ -37,7 +37,7 @@ describe('JsonRpcTransport', () => {
 
       const expectedExtensions = 'extension1,extension2';
       const options: RequestOptions = {
-        context: new Map<symbol, unknown>(),
+        context: new Map<string, unknown>(),
         serviceParameters: { [HTTP_EXTENSION_HEADER]: expectedExtensions },
       };
 

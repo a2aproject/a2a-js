@@ -15,4 +15,4 @@ export const HTTP_EXTENSION_HEADER = 'A2A-Extensions';
 /**
  * The key of activated extension headers in the context
  */
-export const ACTIVATED_EXTENSION_HEADER = Symbol('A2A-Activated-Extension');
+export const ACTIVATED_EXTENSION_HEADER = 'A2A-Activated-Extension';
