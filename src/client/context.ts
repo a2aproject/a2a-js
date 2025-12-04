@@ -1,18 +1,21 @@
-export type Context = Record<string, unknown>;
+export type ClientCallContext = Record<string, unknown>;
 
-export type ContextUpdate = (context: Context) => void;
+export type ContextUpdate = (context: ClientCallContext) => void;
 
-export const Context = {
-  create: (...updates: ContextUpdate[]): Context => {
-    const result = {};
-    Context.withUpdates(result, ...updates);
-    return result;
+export const ClientCallContext = {
+  create: (...updates: ContextUpdate[]): ClientCallContext => {
+    const empty: ClientCallContext = undefined;
+    return ClientCallContext.createFrom(empty, ...updates);
   },
 
-  withUpdates: (context: Context | undefined, ...updates: ContextUpdate[]) => {
+  createFrom: (
+    context: ClientCallContext | undefined,
+    ...updates: ContextUpdate[]
+  ): ClientCallContext => {
     const result = { ...context };
     for (const update of updates) {
       update(result);
     }
+    return result;
   },
 };
