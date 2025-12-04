@@ -244,8 +244,8 @@ export class JsonRpcTransport implements Transport {
     const requestInit: RequestInit = {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         ...options?.serviceParameters,
+        'Content-Type': 'application/json',
         Accept: acceptHeader,
       },
       body: JSON.stringify(rpcRequest),
