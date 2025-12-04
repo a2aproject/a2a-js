@@ -51,7 +51,7 @@ export interface RequestOptions {
   signal?: AbortSignal;
 
   /**
-   * A key-value map for passing horizontally applicable context or parameters
+   * A key-value map for passing horizontally applicable context or parameters.
    */
   serviceParameters?: Record<string, string>;
 
