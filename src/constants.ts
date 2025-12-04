@@ -15,4 +15,4 @@ export const HTTP_EXTENSION_HEADER = 'X-A2A-Extensions';
 /**
  * The name of the version header used in http
  */
-export const HTTP_VERSION_HEADER = 'A2A-Version'
+export const HTTP_VERSION_HEADER = 'A2A-Version';

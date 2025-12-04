@@ -38,7 +38,7 @@ describe('JsonRpcTransport', () => {
       const expectedExtensions = 'extension1,extension2';
       const options: RequestOptions = {
         context: new Map<string, unknown>(),
-        serviceParameters: { 
+        serviceParameters: {
           'X-A2A-Extensions': expectedExtensions,
         },
       };
