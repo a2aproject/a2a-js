@@ -69,7 +69,7 @@ describe('Client E2E tests', () => {
 
     app.use(
       '/a2a/rpc',
-      jsonRpcHandler({ requestHandler: requestHandler, userBuilder: UserBuilder.NoAuthentication })
+      jsonRpcHandler({ requestHandler: requestHandler, userBuilder: UserBuilder.noAuthentication })
     );
 
     server = app.listen();
