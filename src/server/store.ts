@@ -1,4 +1,5 @@
 import { Task } from '../types.js';
+import { ServerCallContext } from './context.js';
 
 /**
  * Simplified interface for task storage providers.
@@ -8,17 +9,19 @@ export interface TaskStore {
   /**
    * Saves a task.
    * Overwrites existing data if the task ID exists.
-   * @param data An object containing the task.
+   * @param task The task to save.
+   * @param context The context of the current call.
    * @returns A promise resolving when the save operation is complete.
    */
-  save(task: Task): Promise<void>;
+  save(task: Task, context?: ServerCallContext): Promise<void>;
 
   /**
    * Loads a task by task ID.
    * @param taskId The ID of the task to load.
+   * @param context The context of the current call.
    * @returns A promise resolving to an object containing the Task, or undefined if not found.
    */
-  load(taskId: string): Promise<Task | undefined>;
+  load(taskId: string, context?: ServerCallContext): Promise<Task | undefined>;
 }
 
 // ========================
