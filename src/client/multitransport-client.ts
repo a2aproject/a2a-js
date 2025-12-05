@@ -67,13 +67,21 @@ export interface RequestOptions {
 export class Client {
   constructor(
     public readonly transport: Transport,
-    public agentCard: AgentCard,
+    private agentCard: AgentCard,
     public readonly config?: ClientConfig
   ) {}
 
-  async getAgentCard(): Promise<AgentCard> {
+  /**
+   * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
+   * Otherwise it will return the current agent card value.
+   */
+  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
     if (this.agentCard.supportsAuthenticatedExtendedCard) {
-      this.agentCard = await this.transport.getAuthenticatedExtendedAgentCard();
+      this.agentCard = await this.executeWithInterceptors(
+        { method: 'getAgentCard', value: undefined },
+        options,
+        this.transport.getAuthenticatedExtendedAgentCard.bind(this.transport)
+      );
     }
     return this.agentCard;
   }

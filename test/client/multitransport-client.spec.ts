@@ -69,6 +69,13 @@ describe('Client', () => {
     expect(result).to.equal(extendedAgentCard);
   });
 
+  it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {  
+    const result = await client.getAgentCard();  
+
+    expect(transport.getAuthenticatedExtendedAgentCard.called).to.be.false;  
+    expect(result).to.equal(agentCard);  
+  });
+
   it('should call transport.sendMessage with default blocking=true', async () => {
     const params: MessageSendParams = {
       message: {
