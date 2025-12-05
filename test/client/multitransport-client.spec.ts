@@ -63,10 +63,8 @@ describe('Client', () => {
     client = new Client(transport, agentCardWithExtendedSupport);
 
     let caughtOptions;
-    let caughtParam;
-    transport.getAuthenticatedExtendedAgentCard.callsFake(async (param, options) => {
+    transport.getAuthenticatedExtendedAgentCard.callsFake(async (options) => {
       caughtOptions = options;
-      caughtParam = param;
       return extendedAgentCard;
     });
 
@@ -78,7 +76,6 @@ describe('Client', () => {
     expect(transport.getAuthenticatedExtendedAgentCard.calledOnce).to.be.true;
     expect(result).to.equal(extendedAgentCard);
     expect(caughtOptions).to.equal(expectedOptions);
-    expect(caughtParam).to.equal(undefined);
   });
 
   it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
