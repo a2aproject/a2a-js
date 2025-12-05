@@ -68,9 +68,9 @@ export class Client {
   async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
     if(this.agentCard.supportsAuthenticatedExtendedCard){
       this.agentCard = await this.executeWithInterceptors(
-        { method: 'getAgentCard', value: undefined },
+        { method: 'getAuthenticatedExtendedAgentCard', value: undefined },
         options,
-        this.transport.getAgentCard.bind(this.transport))
+        this.transport.getAuthenticatedExtendedAgentCard.bind(this.transport))
     }
     return this.agentCard
   }
