@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from 'mocha';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { Client, ClientConfig } from '../../src/client/multitransport-client.js';
+import { Client, ClientConfig, RequestOptions } from '../../src/client/multitransport-client.js';
 import { Transport } from '../../src/client/transports/transport.js';
 import {
   MessageSendParams,
@@ -62,18 +62,30 @@ describe('Client', () => {
     };
     client = new Client(transport, agentCardWithExtendedSupport);
 
-    transport.getAuthenticatedExtendedAgentCard.resolves(extendedAgentCard);
-    const result = await client.getAgentCard();
+    let caughtOptions;
+    let caughtParam;
+    transport.getAuthenticatedExtendedAgentCard.callsFake(async (param, options) => {
+      caughtOptions = options;
+      caughtParam = param;
+      return extendedAgentCard;
+    });
+
+    const expectedOptions: RequestOptions = {
+      serviceParameters: { key: 'value' },
+    };
+    const result = await client.getAgentCard(expectedOptions);
 
     expect(transport.getAuthenticatedExtendedAgentCard.calledOnce).to.be.true;
     expect(result).to.equal(extendedAgentCard);
+    expect(caughtOptions).to.equal(expectedOptions);
+    expect(caughtParam).to.equal(undefined);
   });
 
-  it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {  
-    const result = await client.getAgentCard();  
+  it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
+    const result = await client.getAgentCard();
 
-    expect(transport.getAuthenticatedExtendedAgentCard.called).to.be.false;  
-    expect(result).to.equal(agentCard);  
+    expect(transport.getAuthenticatedExtendedAgentCard.called).to.be.false;
+    expect(result).to.equal(agentCard);
   });
 
   it('should call transport.sendMessage with default blocking=true', async () => {

@@ -335,6 +335,7 @@ export class Client {
       return afterArgs.result.value;
     }
 
+    console.log(beforeArgs.options);
     const result = await transportCall(beforeArgs.input.value, beforeArgs.options);
 
     const afterArgs: AfterArgs<K> = {
