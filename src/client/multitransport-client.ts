@@ -53,7 +53,8 @@ export interface RequestOptions {
   signal?: AbortSignal;
 
   /**
-   * A key-value map for passing horizontally applicable context or parameters.
+   * A key-value map for passing horizontally applicable context or parameters. 
+   * All parameters are passed to the server via underlying transports (e.g. In JsonRPC via Headers).
    */
   serviceParameters?: ServiceParameters;
 
