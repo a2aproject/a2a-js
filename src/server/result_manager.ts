@@ -1,15 +1,19 @@
 import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../types.js';
+import { ServerCallContext } from './context.js';
 import { AgentExecutionEvent } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
 
 export class ResultManager {
-  private taskStore: TaskStore;
+  private readonly taskStore: TaskStore;
+  private readonly serverCallContext?: ServerCallContext;
+
   private currentTask?: Task;
   private latestUserMessage?: Message; // To add to history if a new task is created
   private finalMessageResult?: Message; // Stores the message if it's the final result
 
-  constructor(taskStore: TaskStore) {
+  constructor(taskStore: TaskStore, serverCallContext?: ServerCallContext) {
     this.taskStore = taskStore;
+    this.serverCallContext = serverCallContext;
   }
 
   public setContext(latestUserMessage: Message): void {
@@ -62,7 +66,7 @@ export class ResultManager {
       } else if (!this.currentTask && updateEvent.taskId) {
         // Potentially an update for a task we haven't seen the 'task' event for yet,
         // or we are rehydrating. Attempt to load.
-        const loaded = await this.taskStore.load(updateEvent.taskId);
+        const loaded = await this.taskStore.load(updateEvent.taskId, this.serverCallContext);
         if (loaded) {
           this.currentTask = loaded;
           this.currentTask.status = updateEvent.status;
@@ -119,7 +123,7 @@ export class ResultManager {
         await this.saveCurrentTask();
       } else if (!this.currentTask && artifactEvent.taskId) {
         // Similar to status update, try to load if task not in memory
-        const loaded = await this.taskStore.load(artifactEvent.taskId);
+        const loaded = await this.taskStore.load(artifactEvent.taskId, this.serverCallContext);
         if (loaded) {
           this.currentTask = loaded;
           if (!this.currentTask.artifacts) this.currentTask.artifacts = [];
@@ -150,7 +154,7 @@ export class ResultManager {
 
   private async saveCurrentTask(): Promise<void> {
     if (this.currentTask) {
-      await this.taskStore.save(this.currentTask);
+      await this.taskStore.save(this.currentTask, this.serverCallContext);
     }
   }
 
