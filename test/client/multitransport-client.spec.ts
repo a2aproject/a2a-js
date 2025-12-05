@@ -438,7 +438,7 @@ describe('Client', () => {
         interceptors: [
           {
             before: async (args) => {
-              args.options = { context: new Map([['foo', 'bar']]) };
+              args.options = { context: { [Symbol.for('foo')]: 'bar' } };
             },
             after: async () => {},
           },
@@ -456,8 +456,8 @@ describe('Client', () => {
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.calledOnceWith(params, { context: new Map([['foo', 'bar']]) })).to.be
-        .true;
+      expect(transport.getTask.calledOnceWith(params, { context: { [Symbol.for('foo')]: 'bar' } }))
+        .to.be.true;
       expect(result).to.equal(task);
     });
 

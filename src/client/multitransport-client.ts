@@ -11,6 +11,7 @@ import {
   AgentCard,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
+import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
   BeforeArgs,
@@ -59,7 +60,7 @@ export interface RequestOptions {
   /**
    * Arbitrary data available to interceptors and transport implementation.
    */
-  context?: Map<string, unknown>;
+  context?: ClientCallContext;
 }
 
 export class Client {

@@ -30,3 +30,4 @@ export {
   ServiceParametersUpdate,
   withA2AExtensions,
 } from './service-parameters.js';
+export { ClientCallContext, ContextUpdate, ClientCallContextKey } from './context.js';

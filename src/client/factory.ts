@@ -30,7 +30,7 @@ export interface ClientFactoryOptions {
 }
 
 export const ClientFactoryOptions = {
-  Default: {
+  default: {
     transports: [new JsonRpcTransportFactory()],
   },
 };
@@ -39,7 +39,7 @@ export class ClientFactory {
   private readonly transportsByName = new Map<string, TransportFactory>();
   private readonly agentCardResolver: AgentCardResolver;
 
-  constructor(public readonly options: ClientFactoryOptions = ClientFactoryOptions.Default) {
+  constructor(public readonly options: ClientFactoryOptions = ClientFactoryOptions.default) {
     if (!options.transports || options.transports.length === 0) {
       throw new Error('No transports provided');
     }
@@ -57,7 +57,7 @@ export class ClientFactory {
         );
       }
     }
-    this.agentCardResolver = options.cardResolver ?? AgentCardResolver.Default;
+    this.agentCardResolver = options.cardResolver ?? AgentCardResolver.default;
   }
 
   /**
