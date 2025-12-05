@@ -24,7 +24,7 @@ export const ClientCallContext = {
     context: ClientCallContext | undefined,
     ...updates: ContextUpdate[]
   ): ClientCallContext => {
-    const result = { ...context };
+    const result = context ? { ...context } : {};
     for (const update of updates) {
       update(result);
     }
