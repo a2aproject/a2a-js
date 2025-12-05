@@ -99,7 +99,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // incomingMessage would contain taskId, if a task already exists.
     if (incomingMessage.taskId) {
-      task = await this.taskStore.load(incomingMessage.taskId);
+      task = await this.taskStore.load(incomingMessage.taskId, context);
       if (!task) {
         throw A2AError.taskNotFound(incomingMessage.taskId);
       }
@@ -111,7 +111,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
       // Add incomingMessage to history and save the task.
       task.history = [...(task.history || []), incomingMessage];
-      await this.taskStore.save(task);
+      await this.taskStore.save(task, context);
     }
     // Ensure taskId is present
     const taskId = incomingMessage.taskId || uuidv4();
@@ -119,7 +119,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (incomingMessage.referenceTaskIds && incomingMessage.referenceTaskIds.length > 0) {
       referenceTasks = [];
       for (const refId of incomingMessage.referenceTaskIds) {
-        const refTask = await this.taskStore.load(refId);
+        const refTask = await this.taskStore.load(refId, context);
         if (refTask) {
           referenceTasks.push(refTask);
         } else {
@@ -157,6 +157,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     taskId: string,
     resultManager: ResultManager,
     eventQueue: ExecutionEventQueue,
+    context: ServerCallContext | undefined,
     options?: {
       firstResultResolver?: (value: Message | Task | PromiseLike<Message | Task>) => void;
       firstResultRejector?: (reason?: unknown) => void;
@@ -168,7 +169,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          await this._sendPushNotificationIfNeeded(event);
+          await this._sendPushNotificationIfNeeded(event, context);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -217,7 +218,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Default to blocking behavior if 'blocking' is not explicitly false.
     const isBlocking = params.configuration?.blocking !== false;
     // Instantiate ResultManager before creating RequestContext
-    const resultManager = new ResultManager(this.taskStore);
+    const resultManager = new ResultManager(this.taskStore, context);
     resultManager.setContext(incomingMessage); // Set context for ResultManager
 
     const requestContext = await this._createRequestContext(incomingMessage, context);
@@ -282,7 +283,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     if (isBlocking) {
       // In blocking mode, wait for the full processing to complete.
-      await this._processEvents(taskId, resultManager, eventQueue);
+      await this._processEvents(taskId, resultManager, eventQueue, context);
       const finalResult = resultManager.getFinalResult();
       if (!finalResult) {
         throw A2AError.internalError(
@@ -294,7 +295,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     } else {
       // In non-blocking mode, return a promise that will be settled by fullProcessing.
       return new Promise<Message | Task>((resolve, reject) => {
-        this._processEvents(taskId, resultManager, eventQueue, {
+        this._processEvents(taskId, resultManager, eventQueue, context, {
           firstResultResolver: resolve,
           firstResultRejector: reject,
         });
@@ -318,7 +319,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     // Instantiate ResultManager before creating RequestContext
-    const resultManager = new ResultManager(this.taskStore);
+    const resultManager = new ResultManager(this.taskStore, context);
     resultManager.setContext(incomingMessage); // Set context for ResultManager
 
     const requestContext = await this._createRequestContext(incomingMessage, context);
@@ -367,7 +368,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
-        await this._sendPushNotificationIfNeeded(event);
+        await this._sendPushNotificationIfNeeded(event, context);
         yield event; // Stream the event to the client
       }
     } finally {
@@ -376,8 +377,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  async getTask(params: TaskQueryParams, _context?: ServerCallContext): Promise<Task> {
-    const task = await this.taskStore.load(params.id);
+  async getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task> {
+    const task = await this.taskStore.load(params.id, context);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
     }
@@ -392,8 +393,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return task;
   }
 
-  async cancelTask(params: TaskIdParams, _context?: ServerCallContext): Promise<Task> {
-    const task = await this.taskStore.load(params.id);
+  async cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task> {
+    const task = await this.taskStore.load(params.id, context);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
     }
@@ -410,7 +411,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       const eventQueue = new ExecutionEventQueue(eventBus);
       await this.agentExecutor.cancelTask(params.id, eventBus);
       // Consume all the events until the task reaches a terminal state.
-      await this._processEvents(params.id, new ResultManager(this.taskStore), eventQueue);
+      await this._processEvents(
+        params.id,
+        new ResultManager(this.taskStore, context),
+        eventQueue,
+        context
+      );
     } else {
       // Here we are marking task as cancelled. We are not waiting for the executor to actually cancel processing.
       task.status = {
@@ -429,10 +435,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // Add cancellation message to history
       task.history = [...(task.history || []), task.status.message];
 
-      await this.taskStore.save(task);
+      await this.taskStore.save(task, context);
     }
 
-    const latestTask = await this.taskStore.load(params.id);
+    const latestTask = await this.taskStore.load(params.id, context);
     if (!latestTask) {
       throw A2AError.internalError(`Task ${params.id} not found after cancellation.`);
     }
@@ -444,12 +450,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async setTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
-    _context?: ServerCallContext
+    context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.taskId);
+    const task = await this.taskStore.load(params.taskId, context);
     if (!task) {
       throw A2AError.taskNotFound(params.taskId);
     }
@@ -468,12 +474,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async getTaskPushNotificationConfig(
     params: TaskIdParams | GetTaskPushNotificationConfigParams,
-    _context?: ServerCallContext
+    context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.id);
+    const task = await this.taskStore.load(params.id, context);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
     }
@@ -503,12 +509,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigParams,
-    _context?: ServerCallContext
+    context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.id);
+    const task = await this.taskStore.load(params.id, context);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
     }
@@ -523,12 +529,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,
-    _context?: ServerCallContext
+    context?: ServerCallContext
   ): Promise<void> {
     if (!this.agentCard.capabilities.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.id);
+    const task = await this.taskStore.load(params.id, context);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
     }
@@ -540,7 +546,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async *resubscribe(
     params: TaskIdParams,
-    _context?: ServerCallContext
+    context?: ServerCallContext
   ): AsyncGenerator<
     | Task // Initial task state
     | TaskStatusUpdateEvent
@@ -552,7 +558,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw A2AError.unsupportedOperation('Streaming (and thus resubscription) is not supported.');
     }
 
-    const task = await this.taskStore.load(params.id);
+    const task = await this.taskStore.load(params.id, context);
     if (!task) {
       throw A2AError.taskNotFound(params.id);
     }
@@ -600,7 +606,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  private async _sendPushNotificationIfNeeded(event: AgentExecutionEvent): Promise<void> {
+  private async _sendPushNotificationIfNeeded(
+    event: AgentExecutionEvent,
+    context: ServerCallContext | undefined
+  ): Promise<void> {
     if (!this.agentCard.capabilities.pushNotifications) {
       return;
     }
@@ -618,7 +627,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       return;
     }
 
-    const task = await this.taskStore.load(taskId);
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
       console.error(`Task ${taskId} not found.`);
       return;
