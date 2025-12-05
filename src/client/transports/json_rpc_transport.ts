@@ -249,7 +249,7 @@ export class JsonRpcTransport implements Transport {
       body: JSON.stringify(rpcRequest),
       signal: options?.signal,
     };
-    return await this._fetch(this.endpoint, requestInit);
+    return this._fetch(this.endpoint, requestInit);
   }
 
   private async *_sendStreamingRequest(
