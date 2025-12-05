@@ -81,7 +81,7 @@ export type ClientCallResult<K extends keyof Client = keyof Client> = MethodResu
  * }
  */
 type MethodInput<T, TMembers extends keyof T = keyof T> = {
-  [M in TMembers]: T[M] extends (requestOptions: RequestOptions | undefined) => unknown
+  [M in TMembers]: T[M] extends (options: RequestOptions | undefined) => unknown
     ? { readonly method: M; value?: undefined }
     : T[M] extends (payload: infer P) => unknown
       ? { readonly method: M; value: P }
