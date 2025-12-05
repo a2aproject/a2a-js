@@ -298,6 +298,7 @@ export class Client {
   ): Promise<ClientCallResult<K>['value']> {
     const beforeArgs: BeforeArgs<K> = {
       input: input,
+      agentCard: this.agentCard,
       options,
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
@@ -308,6 +309,7 @@ export class Client {
           method: input.method,
           value: beforeResult.earlyReturn.value,
         } as ClientCallResult<K>,
+        agentCard: this.agentCard,
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs, beforeResult.executed);
@@ -318,6 +320,7 @@ export class Client {
 
     const afterArgs: AfterArgs<K> = {
       result: { method: input.method, value: result } as ClientCallResult<K>,
+      agentCard: this.agentCard,
       options: beforeArgs.options,
     };
     await this.interceptAfter(afterArgs);
