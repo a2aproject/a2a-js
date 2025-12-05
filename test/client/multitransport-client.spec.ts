@@ -26,6 +26,7 @@ describe('Client', () => {
 
   beforeEach(() => {
     transport = {
+      getAuthenticatedExtendedAgentCard: sinon.stub(),
       sendMessage: sinon.stub(),
       sendMessageStream: sinon.stub(),
       setTaskPushNotificationConfig: sinon.stub(),
@@ -51,6 +52,21 @@ describe('Client', () => {
       skills: [],
     };
     client = new Client(transport, agentCard);
+  });
+
+  it('should call transport.getAuthenticatedExtendedAgentCard', async () => {
+    const agentCardWithExtendedSupport = { ...agentCard, supportsAuthenticatedExtendedCard: true };
+    const extendedAgentCard: AgentCard = {
+      ...agentCard,
+      capabilities: { ...agentCard.capabilities, stateTransitionHistory: true },
+    };
+    client = new Client(transport, agentCardWithExtendedSupport);
+
+    transport.getAuthenticatedExtendedAgentCard.resolves(extendedAgentCard);
+    const result = await client.getAgentCard();
+
+    expect(transport.getAuthenticatedExtendedAgentCard.calledOnce).to.be.true;
+    expect(result).to.equal(extendedAgentCard);
   });
 
   it('should call transport.sendMessage with default blocking=true', async () => {

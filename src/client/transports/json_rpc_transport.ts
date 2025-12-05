@@ -28,6 +28,7 @@ import {
   CancelTaskSuccessResponse,
   AgentCard,
   GetTaskPushNotificationConfigParams,
+  GetAuthenticatedExtendedCardSuccessResponse,
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
@@ -48,8 +49,12 @@ export class JsonRpcTransport implements Transport {
     this.customFetchImpl = options.fetchImpl;
   }
 
-  async getAuthenticatedExtendedAgentCard(): Promise<AgentCard> {
-    
+  async getAuthenticatedExtendedAgentCard(idOverride?: number): Promise<AgentCard> {
+    const rpcResponse = await this._sendRpcRequest<
+      unknown,
+      GetAuthenticatedExtendedCardSuccessResponse
+    >('agent/getAuthenticatedExtendedCard', {}, idOverride, undefined);
+    return rpcResponse.result;
   }
 
   async sendMessage(

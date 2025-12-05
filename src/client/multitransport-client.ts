@@ -65,14 +65,11 @@ export class Client {
     public readonly config?: ClientConfig
   ) {}
 
-  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    if(this.agentCard.supportsAuthenticatedExtendedCard){
-      this.agentCard = await this.executeWithInterceptors(
-        { method: 'getAuthenticatedExtendedAgentCard', value: undefined },
-        options,
-        this.transport.getAuthenticatedExtendedAgentCard.bind(this.transport))
+  async getAgentCard(): Promise<AgentCard> {
+    if (this.agentCard.supportsAuthenticatedExtendedCard) {
+      this.agentCard = await this.transport.getAuthenticatedExtendedAgentCard();
     }
-    return this.agentCard
+    return this.agentCard;
   }
 
   /**
