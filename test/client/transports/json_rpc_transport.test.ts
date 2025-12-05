@@ -5,6 +5,7 @@ import { describe, it, beforeEach } from 'mocha';
 import { MessageSendParams, TextPart } from '../../../src/types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
+import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
 
 describe('JsonRpcTransport', () => {
   let transport: JsonRpcTransport;
@@ -36,16 +37,13 @@ describe('JsonRpcTransport', () => {
       };
 
       const expectedExtensions = 'extension1,extension2';
+      const serviceParameters = ServiceParameters.create(withA2AExtensions(expectedExtensions));
       const options: RequestOptions = {
-        context: new Map<string, unknown>(),
-        serviceParameters: {
-          'X-A2A-Extensions': expectedExtensions,
-        },
+        serviceParameters,
       };
 
       mockFetch.resolves(
         new Response(JSON.stringify({ jsonrpc: '2.0', result: {}, id: 1 }), {
-          headers: { [HTTP_EXTENSION_HEADER]: 'extension1' },
           status: 200,
         })
       );

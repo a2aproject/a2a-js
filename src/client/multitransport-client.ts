@@ -1,4 +1,3 @@
-import { ServiceParametersHeader } from '../core.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import {
   MessageSendParams,
@@ -19,6 +18,7 @@ import {
   ClientCallResult,
   ClientCallInput,
 } from './interceptors.js';
+import { ServiceParameters } from './service-parameters.js';
 import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
@@ -54,7 +54,7 @@ export interface RequestOptions {
   /**
    * A key-value map for passing horizontally applicable context or parameters.
    */
-  serviceParameters?: Partial<Record<ServiceParametersHeader, string>>;
+  serviceParameters?: ServiceParameters;
 
   /**
    * Arbitrary data available to interceptors and transport implementation.

@@ -11,8 +11,3 @@ export const AGENT_CARD_PATH = '.well-known/agent-card.json';
  * The name of the extension header used in http
  */
 export const HTTP_EXTENSION_HEADER = 'X-A2A-Extensions';
-
-/**
- * The name of the version header used in http
- */
-export const HTTP_VERSION_HEADER = 'A2A-Version';
