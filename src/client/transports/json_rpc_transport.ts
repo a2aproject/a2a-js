@@ -49,7 +49,7 @@ export class JsonRpcTransport implements Transport {
     this.customFetchImpl = options.fetchImpl;
   }
 
-  async getAuthenticatedExtendedAgentCard(
+  async getExtendedAgentCard(
     options?: RequestOptions,
     idOverride?: number
   ): Promise<AgentCard> {

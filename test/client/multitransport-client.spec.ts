@@ -26,7 +26,7 @@ describe('Client', () => {
 
   beforeEach(() => {
     transport = {
-      getAuthenticatedExtendedAgentCard: sinon.stub(),
+      getExtendedAgentCard: sinon.stub(),
       sendMessage: sinon.stub(),
       sendMessageStream: sinon.stub(),
       setTaskPushNotificationConfig: sinon.stub(),
@@ -63,7 +63,7 @@ describe('Client', () => {
     client = new Client(transport, agentCardWithExtendedSupport);
 
     let caughtOptions;
-    transport.getAuthenticatedExtendedAgentCard.callsFake(async (options) => {
+    transport.getExtendedAgentCard.callsFake(async (options) => {
       caughtOptions = options;
       return extendedAgentCard;
     });
@@ -73,7 +73,7 @@ describe('Client', () => {
     };
     const result = await client.getAgentCard(expectedOptions);
 
-    expect(transport.getAuthenticatedExtendedAgentCard.calledOnce).to.be.true;
+    expect(transport.getExtendedAgentCard.calledOnce).to.be.true;
     expect(result).to.equal(extendedAgentCard);
     expect(caughtOptions).to.equal(expectedOptions);
   });
@@ -81,7 +81,7 @@ describe('Client', () => {
   it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
     const result = await client.getAgentCard();
 
-    expect(transport.getAuthenticatedExtendedAgentCard.called).to.be.false;
+    expect(transport.getExtendedAgentCard.called).to.be.false;
     expect(result).to.equal(agentCard);
   });
 

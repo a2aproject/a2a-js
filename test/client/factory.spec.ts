@@ -14,7 +14,7 @@ describe('ClientFactory', () => {
 
   beforeEach(() => {
     mockTransport = {
-      getAuthenticatedExtendedAgentCard: sinon.stub(),
+      getExtendedAgentCard: sinon.stub(),
       sendMessage: sinon.stub(),
       sendMessageStream: sinon.stub(),
       setTaskPushNotificationConfig: sinon.stub(),

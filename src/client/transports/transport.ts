@@ -13,7 +13,7 @@ import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 
 export interface Transport {
-  getAuthenticatedExtendedAgentCard(options?: RequestOptions): Promise<AgentCard>;
+  getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard>;
 
   sendMessage(params: MessageSendParams, options?: RequestOptions): Promise<SendMessageResult>;
 
