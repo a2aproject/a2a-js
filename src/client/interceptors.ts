@@ -25,7 +25,7 @@ export interface BeforeArgs<K extends keyof Client = keyof Client> {
   /**
    * Identifies the agent card cached on the client
    */
-  readonly agentCard?: AgentCard
+  readonly agentCard?: AgentCard;
 
   /**
    * If set by the interceptor, stops execution, invokes "after"
@@ -49,7 +49,7 @@ export interface AfterArgs<K extends keyof Client = keyof Client> {
   /**
    * Identifies the agent card cached on the client
    */
-  readonly agentCard?: AgentCard
+  readonly agentCard?: AgentCard;
 
   /**
    * If set by the interceptor, stops execution and returns result value,
