@@ -42,7 +42,7 @@ describe('ClientFactory', () => {
   describe('constructor', () => {
     it('should initialize with default options', () => {
       const factory = new ClientFactory();
-      expect(factory.options).to.deep.equal(ClientFactoryOptions.Default);
+      expect(factory.options).to.deep.equal(ClientFactoryOptions.default);
     });
 
     it('should throw error if preferred transport is unknown', () => {

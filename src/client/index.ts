@@ -25,3 +25,9 @@ export {
   ClientCallInput,
   ClientCallResult,
 } from './interceptors.js';
+export {
+  ServiceParameters,
+  ServiceParametersUpdate,
+  withA2AExtensions,
+} from './service-parameters.js';
+export { ClientCallContext, ContextUpdate, ClientCallContextKey } from './context.js';

@@ -11,6 +11,7 @@ import {
   AgentCard,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
+import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
   BeforeArgs,
@@ -18,6 +19,7 @@ import {
   ClientCallResult,
   ClientCallInput,
 } from './interceptors.js';
+import { ServiceParameters } from './service-parameters.js';
 import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
@@ -50,12 +52,16 @@ export interface RequestOptions {
    */
   signal?: AbortSignal;
 
-  // TODO: propagate extensions
+  /**
+   * A key-value map for passing horizontally applicable context or parameters.
+   * All parameters are passed to the server via underlying transports (e.g. In JsonRPC via Headers).
+   */
+  serviceParameters?: ServiceParameters;
 
   /**
    * Arbitrary data available to interceptors and transport implementation.
    */
-  context?: Map<string, unknown>;
+  context?: ClientCallContext;
 }
 
 export class Client {

@@ -63,7 +63,11 @@ const helloAgentCard: AgentCard = {
   version: '0.1.0',
   url: 'http://localhost:4000/', // The public URL of your agent server
   skills: [{ id: 'chat', name: 'Chat', description: 'Say hello', tags: ['chat'] }],
-  // --- Other AgentCard fields omitted for brevity ---
+  capabilities: {
+    pushNotifications: false,
+  },
+  defaultInputModes: ['text'],
+  defaultOutputModes: ['text'],
 };
 
 // 2. Implement the agent's logic.

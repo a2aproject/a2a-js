@@ -41,5 +41,5 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
 }
 
 export const AgentCardResolver = {
-  Default: new DefaultAgentCardResolver(),
+  default: new DefaultAgentCardResolver(),
 };
