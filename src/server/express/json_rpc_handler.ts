@@ -8,12 +8,13 @@ import express, {
 import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from '../../types.js';
 import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-import { JsonRpcTransportHandler } from '../transports/jsonrpc_transport_handler.js';
+import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
 import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UnauthenticatedUser } from '../authentication/user.js';
 import { UserBuilder } from './common.js';
+import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -55,17 +56,18 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           undefined
         >;
 
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
+        // Set SSE headers using shared utility
+        Object.entries(SSE_HEADERS).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
 
         res.flushHeaders();
 
         try {
           for await (const event of stream) {
             // Each event from the stream is already a JSONRPCResult
-            res.write(`id: ${new Date().getTime()}\n`);
-            res.write(`data: ${JSON.stringify(event)}\n\n`);
+            // Use shared formatSSEEvent utility
+            res.write(formatSSEEvent(event));
           }
         } catch (streamError) {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
@@ -88,9 +90,8 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             res.status(500).json(errorResponse); // Should be JSON, not SSE here
           } else {
             // Try to send as last SSE event if possible, though client might have disconnected
-            res.write(`id: ${new Date().getTime()}\n`);
-            res.write(`event: error\n`); // Custom event type for client-side handling
-            res.write(`data: ${JSON.stringify(errorResponse)}\n\n`);
+            // Use shared formatSSEErrorEvent utility
+            res.write(formatSSEErrorEvent(errorResponse));
           }
         } finally {
           if (!res.writableEnded) {
