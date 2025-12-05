@@ -101,6 +101,7 @@ export class Client {
     params = this.applyClientConfig({ params, blocking: true });
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
+      agentCard: this.agentCard,
       options,
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
@@ -109,6 +110,7 @@ export class Client {
       const earlyReturn = beforeResult.earlyReturn.value;
       const afterArgs: AfterArgs<'sendMessageStream'> = {
         result: { method, value: earlyReturn },
+        agentCard: this.agentCard,
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs, beforeResult.executed);
@@ -132,6 +134,7 @@ export class Client {
     )) {
       const afterArgs: AfterArgs<'sendMessageStream'> = {
         result: { method, value: event },
+        agentCard: this.agentCard,
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs);
@@ -245,13 +248,18 @@ export class Client {
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const method = 'resubscribeTask';
 
-    const beforeArgs: BeforeArgs<'resubscribeTask'> = { input: { method, value: params }, options };
+    const beforeArgs: BeforeArgs<'resubscribeTask'> = {
+      input: { method, value: params },
+      agentCard: this.agentCard,
+      options,
+    };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
     if (beforeResult) {
       const earlyReturn = beforeResult.earlyReturn.value;
       const afterArgs: AfterArgs<'resubscribeTask'> = {
         result: { method, value: earlyReturn },
+        agentCard: this.agentCard,
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs, beforeResult.executed);
@@ -265,6 +273,7 @@ export class Client {
     )) {
       const afterArgs: AfterArgs<'resubscribeTask'> = {
         result: { method, value: event },
+        agentCard: this.agentCard,
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs);
@@ -304,6 +313,7 @@ export class Client {
   ): Promise<ClientCallResult<K>['value']> {
     const beforeArgs: BeforeArgs<K> = {
       input: input,
+      agentCard: this.agentCard,
       options,
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
@@ -314,6 +324,7 @@ export class Client {
           method: input.method,
           value: beforeResult.earlyReturn.value,
         } as ClientCallResult<K>,
+        agentCard: this.agentCard,
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs, beforeResult.executed);
@@ -324,6 +335,7 @@ export class Client {
 
     const afterArgs: AfterArgs<K> = {
       result: { method: input.method, value: result } as ClientCallResult<K>,
+      agentCard: this.agentCard,
       options: beforeArgs.options,
     };
     await this.interceptAfter(afterArgs);
