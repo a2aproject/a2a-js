@@ -14,17 +14,15 @@ describe('DefaultExecutionEventBus', () => {
     eventBus = new DefaultExecutionEventBus();
   });
 
-  afterEach(() => {
-    // Clean up all listeners to ensure test isolation
-    eventBus.removeAllListeners();
-  });
-
-  const createMessage = (text: string): Message => ({
-    kind: 'message',
-    messageId: `msg-${Date.now()}`,
-    role: 'agent',
-    parts: [{ kind: 'text', text }],
-  });
+  const createMessage = (() => {
+    let counter = 0;
+    return (text: string): Message => ({
+      kind: 'message',
+      messageId: `msg-${counter++}`,
+      role: 'agent',
+      parts: [{ kind: 'text', text }],
+    });
+  })();
 
   describe('publish and event listeners', () => {
     it('should emit events to listeners registered with on()', () => {

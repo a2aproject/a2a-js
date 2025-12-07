@@ -54,12 +54,10 @@ type AnyListener = EventListener | FinishedListener;
  * Web-compatible ExecutionEventBus using EventTarget.
  * Works across all modern runtimes: Node.js 15+, browsers, Cloudflare Workers, Deno, Bun.
  *
- * This replaces Node.js EventEmitter to enable edge runtime compatibility.
- *
- * Note: Listeners registered with `once()` are tracked until the event fires or they are
- * explicitly removed via `off()` or `removeAllListeners()`. This matches the behavior of
- * Node.js EventEmitter. In long-running applications, ensure events eventually fire or
- * explicitly clean up listeners that are no longer needed.
+ * This is a drop-in replacement for Node.js EventEmitter with identical API and
+ * memory semantics. Listeners are held until explicitly removed (via `off()` or
+ * `removeAllListeners()`) or until the instance is garbage collected - exactly
+ * like EventEmitter. No additional cleanup is required beyond standard practices.
  */
 export class DefaultExecutionEventBus extends EventTarget implements ExecutionEventBus {
   // Track original listeners to their wrapped versions for proper removal.
@@ -89,7 +87,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
   on(eventName: 'finished', listener: FinishedListener): this;
   on(eventName: 'event' | 'finished', listener: AnyListener): this {
     const wrappedListener: WrappedListener = (e: Event) => {
-      if ('detail' in e) {
+      if (e.type === 'event') {
         (listener as EventListener)((e as CustomEvent<AgentExecutionEvent>).detail);
       } else {
         (listener as FinishedListener)();
@@ -152,7 +150,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
         }
       }
 
-      if ('detail' in e) {
+      if (e.type === 'event') {
         (listener as EventListener)((e as CustomEvent<AgentExecutionEvent>).detail);
       } else {
         (listener as FinishedListener)();
