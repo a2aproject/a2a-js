@@ -64,7 +64,7 @@ type AnyListener = EventListener | FinishedListener;
 export class DefaultExecutionEventBus extends EventTarget implements ExecutionEventBus {
   // Track original listeners to their wrapped versions for proper removal.
   // Structure: eventName -> listener -> array of wrapped listeners (to handle multiple registrations)
-  private listenerMap: Map<string, Map<AnyListener, WrappedListener[]>> = new Map();
+  private listenerMap: Map<'event' | 'finished', Map<AnyListener, WrappedListener[]>> = new Map();
 
   constructor() {
     super();
