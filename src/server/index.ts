@@ -6,7 +6,12 @@
 export type { AgentExecutor } from './agent_execution/agent_executor.js';
 export { RequestContext } from './agent_execution/request_context.js';
 
-export type { AgentExecutionEvent, ExecutionEventBus } from './events/execution_event_bus.js';
+export type {
+  AgentExecutionEvent,
+  EventListener,
+  FinishedListener,
+  ExecutionEventBus,
+} from './events/execution_event_bus.js';
 export { DefaultExecutionEventBus } from './events/execution_event_bus.js';
 export type { ExecutionEventBusManager } from './events/execution_event_bus_manager.js';
 export { DefaultExecutionEventBusManager } from './events/execution_event_bus_manager.js';
@@ -31,7 +36,3 @@ export { InMemoryPushNotificationStore } from './push_notification/push_notifica
 
 export type { User } from './authentication/user.js';
 export { UnauthenticatedUser } from './authentication/user.js';
-
-// Extension utilities for framework adapters (Hono, Fastify, etc.)
-export { HTTP_EXTENSION_HEADER } from '../constants.js';
-export { getRequestedExtensions } from './utils.js';

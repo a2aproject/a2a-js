@@ -2,11 +2,24 @@ import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '.
 
 export type AgentExecutionEvent = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
+/**
+ * Listener type for 'event' events that receive an AgentExecutionEvent payload.
+ */
+export type EventListener = (event: AgentExecutionEvent) => void;
+
+/**
+ * Listener type for 'finished' events that receive no payload.
+ */
+export type FinishedListener = () => void;
+
 export interface ExecutionEventBus {
   publish(event: AgentExecutionEvent): void;
-  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
-  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
-  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
+  on(eventName: 'event', listener: EventListener): this;
+  on(eventName: 'finished', listener: FinishedListener): this;
+  off(eventName: 'event', listener: EventListener): this;
+  off(eventName: 'finished', listener: FinishedListener): this;
+  once(eventName: 'event', listener: EventListener): this;
+  once(eventName: 'finished', listener: FinishedListener): this;
   removeAllListeners(eventName?: 'event' | 'finished'): this;
   finished(): void;
 }
@@ -14,6 +27,7 @@ export interface ExecutionEventBus {
 /**
  * CustomEvent polyfill for Node.js 15-18 (CustomEvent was added globally in Node.js 19).
  * In browsers and modern edge runtimes, CustomEvent is already available globally.
+ * Per the spec, detail defaults to null when not provided.
  */
 const CustomEventImpl: typeof CustomEvent =
   typeof CustomEvent !== 'undefined'
@@ -22,7 +36,7 @@ const CustomEventImpl: typeof CustomEvent =
         readonly detail: T;
         constructor(type: string, eventInitDict?: CustomEventInit<T>) {
           super(type, eventInitDict);
-          this.detail = eventInitDict?.detail as T;
+          this.detail = (eventInitDict?.detail ?? null) as T;
         }
       } as typeof CustomEvent);
 
@@ -32,17 +46,26 @@ const CustomEventImpl: typeof CustomEvent =
 type WrappedListener = (e: Event) => void;
 
 /**
+ * Union type for all listener types
+ */
+type AnyListener = EventListener | FinishedListener;
+
+/**
  * Web-compatible ExecutionEventBus using EventTarget.
  * Works across all modern runtimes: Node.js 15+, browsers, Cloudflare Workers, Deno, Bun.
  *
  * This replaces Node.js EventEmitter to enable edge runtime compatibility.
+ *
+ * Note: Listeners registered with `once()` are tracked until the event fires or they are
+ * explicitly removed via `off()` or `removeAllListeners()`. This matches the behavior of
+ * Node.js EventEmitter. In long-running applications, ensure events eventually fire or
+ * explicitly clean up listeners that are no longer needed.
  */
 export class DefaultExecutionEventBus extends EventTarget implements ExecutionEventBus {
   // Track original listeners to their wrapped versions for proper removal
-  private listenerMap: WeakMap<(event: AgentExecutionEvent) => void, WrappedListener> =
-    new WeakMap();
+  private listenerMap: WeakMap<AnyListener, WrappedListener> = new WeakMap();
   // Track all listeners for removeAllListeners support
-  private allListeners: Map<string, Set<(event: AgentExecutionEvent) => void>> = new Map();
+  private allListeners: Map<string, Set<AnyListener>> = new Map();
 
   constructor() {
     super();
@@ -62,13 +85,14 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * EventEmitter-compatible 'on' method.
    * Wraps the listener to extract event detail from CustomEvent.
    */
-  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
+  on(eventName: 'event', listener: EventListener): this;
+  on(eventName: 'finished', listener: FinishedListener): this;
+  on(eventName: 'event' | 'finished', listener: AnyListener): this {
     const wrappedListener: WrappedListener = (e: Event) => {
       if ('detail' in e) {
-        listener((e as CustomEvent<AgentExecutionEvent>).detail);
+        (listener as EventListener)((e as CustomEvent<AgentExecutionEvent>).detail);
       } else {
-        // 'finished' event has no payload - call listener with no arguments
-        (listener as () => void)();
+        (listener as FinishedListener)();
       }
     };
 
@@ -82,7 +106,9 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * EventEmitter-compatible 'off' method.
    * Uses the stored wrapped listener for proper removal.
    */
-  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
+  off(eventName: 'event', listener: EventListener): this;
+  off(eventName: 'finished', listener: FinishedListener): this;
+  off(eventName: 'event' | 'finished', listener: AnyListener): this {
     const wrappedListener = this.listenerMap.get(listener);
     if (wrappedListener) {
       this.removeEventListener(eventName, wrappedListener);
@@ -96,17 +122,18 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * EventEmitter-compatible 'once' method.
    * Listener is automatically removed after first invocation.
    */
-  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
+  once(eventName: 'event', listener: EventListener): this;
+  once(eventName: 'finished', listener: FinishedListener): this;
+  once(eventName: 'event' | 'finished', listener: AnyListener): this {
     const wrappedListener: WrappedListener = (e: Event) => {
       // Clean up tracking
       this.listenerMap.delete(listener);
       this.allListeners.get(eventName)?.delete(listener);
 
       if ('detail' in e) {
-        listener((e as CustomEvent<AgentExecutionEvent>).detail);
+        (listener as EventListener)((e as CustomEvent<AgentExecutionEvent>).detail);
       } else {
-        // 'finished' event has no payload - call listener with no arguments
-        (listener as () => void)();
+        (listener as FinishedListener)();
       }
     };
 
