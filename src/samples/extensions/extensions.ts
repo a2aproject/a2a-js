@@ -3,6 +3,8 @@ import {
   RequestContext,
   ExecutionEventBus,
   AgentExecutionEvent,
+  EventListener,
+  FinishedListener,
 } from '../../server/index.js';
 import { TaskStatusUpdateEvent } from '../../types.js';
 
@@ -74,18 +76,36 @@ class TimestampingEventQueue implements ExecutionEventBus {
     this._delegate.finished();
   }
 
-  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
-    this._delegate.on(eventName, listener);
+  on(eventName: 'event', listener: EventListener): this;
+  on(eventName: 'finished', listener: FinishedListener): this;
+  on(eventName: 'event' | 'finished', listener: EventListener | FinishedListener): this {
+    if (eventName === 'event') {
+      this._delegate.on(eventName, listener as EventListener);
+    } else {
+      this._delegate.on(eventName, listener as FinishedListener);
+    }
     return this;
   }
 
-  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
-    this._delegate.off(eventName, listener);
+  off(eventName: 'event', listener: EventListener): this;
+  off(eventName: 'finished', listener: FinishedListener): this;
+  off(eventName: 'event' | 'finished', listener: EventListener | FinishedListener): this {
+    if (eventName === 'event') {
+      this._delegate.off(eventName, listener as EventListener);
+    } else {
+      this._delegate.off(eventName, listener as FinishedListener);
+    }
     return this;
   }
 
-  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
-    this._delegate.once(eventName, listener);
+  once(eventName: 'event', listener: EventListener): this;
+  once(eventName: 'finished', listener: FinishedListener): this;
+  once(eventName: 'event' | 'finished', listener: EventListener | FinishedListener): this {
+    if (eventName === 'event') {
+      this._delegate.once(eventName, listener as EventListener);
+    } else {
+      this._delegate.once(eventName, listener as FinishedListener);
+    }
     return this;
   }
 
