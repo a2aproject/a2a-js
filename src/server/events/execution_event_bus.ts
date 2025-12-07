@@ -41,7 +41,7 @@ const CustomEventImpl: typeof CustomEvent =
       } as typeof CustomEvent);
 
 /**
- * Type for wrapped listener functions stored in WeakMap
+ * Type for wrapped listener functions stored in the listener map.
  */
 type WrappedListener = (e: Event) => void;
 
@@ -62,15 +62,14 @@ type AnyListener = EventListener | FinishedListener;
  * explicitly clean up listeners that are no longer needed.
  */
 export class DefaultExecutionEventBus extends EventTarget implements ExecutionEventBus {
-  // Track original listeners to their wrapped versions for proper removal
-  private listenerMap: WeakMap<AnyListener, WrappedListener> = new WeakMap();
-  // Track all listeners for removeAllListeners support
-  private allListeners: Map<string, Set<AnyListener>> = new Map();
+  // Track original listeners to their wrapped versions for proper removal.
+  // Structure: eventName -> listener -> array of wrapped listeners (to handle multiple registrations)
+  private listenerMap: Map<string, Map<AnyListener, WrappedListener[]>> = new Map();
 
   constructor() {
     super();
-    this.allListeners.set('event', new Set());
-    this.allListeners.set('finished', new Set());
+    this.listenerMap.set('event', new Map());
+    this.listenerMap.set('finished', new Map());
   }
 
   publish(event: AgentExecutionEvent): void {
@@ -84,6 +83,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
   /**
    * EventEmitter-compatible 'on' method.
    * Wraps the listener to extract event detail from CustomEvent.
+   * Supports multiple registrations of the same listener (like EventEmitter).
    */
   on(eventName: 'event', listener: EventListener): this;
   on(eventName: 'finished', listener: FinishedListener): this;
@@ -96,8 +96,13 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
       }
     };
 
-    this.listenerMap.set(listener, wrappedListener);
-    this.allListeners.get(eventName)?.add(listener);
+    const eventListeners = this.listenerMap.get(eventName)!;
+    const wrappedListeners = eventListeners.get(listener);
+    if (wrappedListeners) {
+      wrappedListeners.push(wrappedListener);
+    } else {
+      eventListeners.set(listener, [wrappedListener]);
+    }
     this.addEventListener(eventName, wrappedListener);
     return this;
   }
@@ -105,15 +110,21 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
   /**
    * EventEmitter-compatible 'off' method.
    * Uses the stored wrapped listener for proper removal.
+   * Removes one instance at a time (LIFO order, like EventEmitter).
    */
   off(eventName: 'event', listener: EventListener): this;
   off(eventName: 'finished', listener: FinishedListener): this;
   off(eventName: 'event' | 'finished', listener: AnyListener): this {
-    const wrappedListener = this.listenerMap.get(listener);
-    if (wrappedListener) {
+    const eventListeners = this.listenerMap.get(eventName)!;
+    const wrappedListeners = eventListeners.get(listener);
+    if (wrappedListeners && wrappedListeners.length > 0) {
+      // Remove the most recently added listener (LIFO)
+      const wrappedListener = wrappedListeners.pop()!;
       this.removeEventListener(eventName, wrappedListener);
-      this.listenerMap.delete(listener);
-      this.allListeners.get(eventName)?.delete(listener);
+      // Clean up the map entry if no more wrapped listeners
+      if (wrappedListeners.length === 0) {
+        eventListeners.delete(listener);
+      }
     }
     return this;
   }
@@ -121,14 +132,25 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
   /**
    * EventEmitter-compatible 'once' method.
    * Listener is automatically removed after first invocation.
+   * Supports multiple registrations of the same listener (like EventEmitter).
    */
   once(eventName: 'event', listener: EventListener): this;
   once(eventName: 'finished', listener: FinishedListener): this;
   once(eventName: 'event' | 'finished', listener: AnyListener): this {
+    const eventListeners = this.listenerMap.get(eventName)!;
+
     const wrappedListener: WrappedListener = (e: Event) => {
-      // Clean up tracking
-      this.listenerMap.delete(listener);
-      this.allListeners.get(eventName)?.delete(listener);
+      // Clean up tracking for this specific wrapped listener
+      const wrappedListeners = eventListeners.get(listener);
+      if (wrappedListeners) {
+        const index = wrappedListeners.indexOf(wrappedListener);
+        if (index !== -1) {
+          wrappedListeners.splice(index, 1);
+        }
+        if (wrappedListeners.length === 0) {
+          eventListeners.delete(listener);
+        }
+      }
 
       if ('detail' in e) {
         (listener as EventListener)((e as CustomEvent<AgentExecutionEvent>).detail);
@@ -137,8 +159,12 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
       }
     };
 
-    this.listenerMap.set(listener, wrappedListener);
-    this.allListeners.get(eventName)?.add(listener);
+    const wrappedListeners = eventListeners.get(listener);
+    if (wrappedListeners) {
+      wrappedListeners.push(wrappedListener);
+    } else {
+      eventListeners.set(listener, [wrappedListener]);
+    }
     this.addEventListener(eventName, wrappedListener, { once: true });
     return this;
   }
@@ -148,19 +174,19 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * Removes all listeners for a specific event or all events.
    */
   removeAllListeners(eventName?: 'event' | 'finished'): this {
-    const eventsToClean = eventName ? [eventName] : ['event', 'finished'];
+    const eventsToClean: Array<'event' | 'finished'> = eventName
+      ? [eventName]
+      : ['event', 'finished'];
 
     for (const event of eventsToClean) {
-      const listeners = this.allListeners.get(event);
-      if (listeners) {
-        for (const listener of listeners) {
-          const wrappedListener = this.listenerMap.get(listener);
-          if (wrappedListener) {
+      const eventListeners = this.listenerMap.get(event);
+      if (eventListeners) {
+        for (const [, wrappedListeners] of eventListeners) {
+          for (const wrappedListener of wrappedListeners) {
             this.removeEventListener(event, wrappedListener);
-            this.listenerMap.delete(listener);
           }
         }
-        listeners.clear();
+        eventListeners.clear();
       }
     }
     return this;
