@@ -137,6 +137,7 @@ export class Client {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
       const afterArgs: AfterArgs<'sendMessageStream'> = {
         result: { method, value: result },
+        agentCard: this.agentCard,
         options: beforeArgs.options,
       };
       await this.interceptAfter(afterArgs);
