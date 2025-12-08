@@ -2,6 +2,7 @@
   "name": "@a2a-js/sdk",
   "version": "0.3.5",
   "description": "Server & Client SDK for Agent2Agent protocol",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/a2aproject/a2a-js.git"
