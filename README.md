@@ -45,7 +45,7 @@ The core of an A2A server is the `AgentExecutor`, which contains your agent's lo
 // server.ts
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import type { AgentCard, Message } from '@a2a-js/sdk';
+import { AgentCard, Message, AGENT_CARD_WELL_KNOWN_PATH } from '@a2a-js/sdk';
 import {
   AgentExecutor,
   RequestContext,
@@ -53,7 +53,7 @@ import {
   DefaultRequestHandler,
   InMemoryTaskStore,
 } from '@a2a-js/sdk/server';
-import { A2AExpressApp } from '@a2a-js/sdk/server/express';
+import { agentCardHandler, jsonRpcHandler, UserBuilder } from '@a2a-js/sdk/server/express';
 
 // 1. Define your agent's identity card.
 const helloAgentCard: AgentCard = {
@@ -100,27 +100,32 @@ const requestHandler = new DefaultRequestHandler(
   agentExecutor
 );
 
-const appBuilder = new A2AExpressApp(requestHandler);
-const expressApp = appBuilder.setupRoutes(express());
+const app = express();
 
-expressApp.listen(4000, () => {
+app.use(AGENT_CARD_WELL_KNOWN_PATH, agentCardHandler({ agentCardProvider: requestHandler }));
+app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+
+app.listen(4000, () => {
   console.log(`🚀 Server started on http://localhost:4000`);
 });
 ```
 
 ### Client: Sending a Message
 
-The `A2AClient` makes it easy to communicate with any A2A-compliant agent.
+The `ClientFactory` makes it easy to communicate with any A2A-compliant agent.
 
 ```typescript
 // client.ts
-import { A2AClient, SendMessageSuccessResponse } from '@a2a-js/sdk/client';
+import { ClientFactory, SendMessageSuccessResponse } from '@a2a-js/sdk/client';
 import { Message, MessageSendParams } from '@a2a-js/sdk';
 import { v4 as uuidv4 } from 'uuid';
 
 async function run() {
-  // Create a client pointing to the agent's Agent Card URL.
-  const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json');
+  const clientFactory = new ClientFactory();
+  
+  // createFromAgentCardUrl accepts baseUrl and optional path,
+  // (the default path is /.well-known/agent-card.json)
+  const client = await client.createFromAgentCardUrl('http://localhost:4000');
 
   const sendParams: MessageSendParams = {
     message: {
@@ -131,13 +136,12 @@ async function run() {
     },
   };
 
-  const response = await client.sendMessage(sendParams);
-
-  if ('error' in response) {
-    console.error('Error:', response.error.message);
-  } else {
-    const result = (response as SendMessageSuccessResponse).result as Message;
+  try {
+    const response = await client.sendMessage(sendParams);
+    const result = response as Message;
     console.log('Agent response:', result.parts[0].text); // "Hello, world!"
+  } catch(e) {
+    console.error('Error:', e);
   }
 }
 
@@ -217,21 +221,19 @@ import { A2AClient, SendMessageSuccessResponse } from '@a2a-js/sdk/client';
 import { Message, MessageSendParams, Task } from '@a2a-js/sdk';
 // ... other imports ...
 
-const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json');
+// createFromAgentCardUrl accepts baseUrl and optional path,
+// (the default path is /.well-known/agent-card.json)
+const client = await client.createFromAgentCardUrl('http://localhost:4000');
 
-const response = await client.sendMessage({
-  message: {
-    messageId: uuidv4(),
-    role: 'user',
-    parts: [{ kind: 'text', text: 'Do something.' }],
-    kind: 'message',
-  },
-});
-
-if ('error' in response) {
-  console.error('Error:', response.error.message);
-} else {
-  const result = (response as SendMessageSuccessResponse).result;
+try {
+  const result = await client.sendMessage({
+    message: {
+      messageId: uuidv4(),
+      role: 'user',
+      parts: [{ kind: 'text', text: 'Do something.' }],
+      kind: 'message',
+    },
+  });
 
   // Check if the agent's response is a Task or a direct Message.
   if (result.kind === 'task') {
@@ -246,6 +248,8 @@ if ('error' in response) {
     const message = result as Message;
     console.log('Received direct message:', message.parts[0].text);
   }
+} catch (e) {
+  console.error('Error:', e);
 }
 ```
 

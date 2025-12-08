@@ -1,12 +1,12 @@
 import express from 'express';
-import { AgentCard } from '../../../index.js';
+import { AgentCard, AGENT_CARD_WELL_KNOWN_PATH } from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
   AgentExecutor,
   DefaultRequestHandler,
 } from '../../../server/index.js';
-import { A2AExpressApp } from '../../../server/express/index.js';
+import { agentCardHandler, jsonRpcHandler, UserBuilder } from '../../../server/express/index.js';
 import { SampleAgentExecutor } from './agent_executor.js';
 
 // --- Server Setup ---
@@ -54,13 +54,15 @@ async function main() {
   // 3. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(sampleAgentCard, taskStore, agentExecutor);
 
-  // 4. Create and setup A2AExpressApp
-  const appBuilder = new A2AExpressApp(requestHandler);
-  const expressApp = appBuilder.setupRoutes(express());
+  // 4. Create and setup Express app
+  const app = express();
+
+  app.use(AGENT_CARD_WELL_KNOWN_PATH, agentCardHandler({ agentCardProvider: requestHandler }));
+  app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
-  expressApp.listen(PORT, (err) => {
+  app.listen(PORT, (err) => {
     if (err) {
       throw err;
     }

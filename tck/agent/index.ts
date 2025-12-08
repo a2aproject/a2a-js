@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import { AgentCard, Task, TaskStatusUpdateEvent, Message } from '../../src/index.js';
+import { AgentCard, Task, TaskStatusUpdateEvent, Message, AGENT_CARD_WELL_KNOWN_PATH } from '../../src/index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -10,7 +10,7 @@ import {
   ExecutionEventBus,
   DefaultRequestHandler,
 } from '../../src/server/index.js';
-import { A2AExpressApp } from '../../src/server/express/index.js';
+import { agentCardHandler, jsonRpcHandler, UserBuilder } from '../../src/server/express/index.js';
 
 /**
  * SUTAgentExecutor implements the agent's core logic.
@@ -188,12 +188,14 @@ async function main() {
   const requestHandler = new DefaultRequestHandler(SUTAgentCard, taskStore, agentExecutor);
 
   // 4. Create and setup A2AExpressApp
-  const appBuilder = new A2AExpressApp(requestHandler);
-  const expressApp = appBuilder.setupRoutes(express());
+   const app = express();
+
+  app.use(AGENT_CARD_WELL_KNOWN_PATH, agentCardHandler({ agentCardProvider: requestHandler }));
+  app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
-  expressApp.listen(PORT, (err) => {
+  app.listen(PORT, (err) => {
     if (err) {
       throw err;
     }
