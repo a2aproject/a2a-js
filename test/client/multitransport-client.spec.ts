@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from 'mocha';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { Client, ClientConfig } from '../../src/client/multitransport-client.js';
+import { Client, ClientConfig, RequestOptions } from '../../src/client/multitransport-client.js';
 import { Transport } from '../../src/client/transports/transport.js';
 import {
   MessageSendParams,
@@ -26,6 +26,7 @@ describe('Client', () => {
 
   beforeEach(() => {
     transport = {
+      getExtendedAgentCard: sinon.stub(),
       sendMessage: sinon.stub(),
       sendMessageStream: sinon.stub(),
       setTaskPushNotificationConfig: sinon.stub(),
@@ -51,6 +52,37 @@ describe('Client', () => {
       skills: [],
     };
     client = new Client(transport, agentCard);
+  });
+
+  it('should call transport.getAuthenticatedExtendedAgentCard', async () => {
+    const agentCardWithExtendedSupport = { ...agentCard, supportsAuthenticatedExtendedCard: true };
+    const extendedAgentCard: AgentCard = {
+      ...agentCard,
+      capabilities: { ...agentCard.capabilities, stateTransitionHistory: true },
+    };
+    client = new Client(transport, agentCardWithExtendedSupport);
+
+    let caughtOptions;
+    transport.getExtendedAgentCard.callsFake(async (options) => {
+      caughtOptions = options;
+      return extendedAgentCard;
+    });
+
+    const expectedOptions: RequestOptions = {
+      serviceParameters: { key: 'value' },
+    };
+    const result = await client.getAgentCard(expectedOptions);
+
+    expect(transport.getExtendedAgentCard.calledOnce).to.be.true;
+    expect(result).to.equal(extendedAgentCard);
+    expect(caughtOptions).to.equal(expectedOptions);
+  });
+
+  it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
+    const result = await client.getAgentCard();
+
+    expect(transport.getExtendedAgentCard.called).to.be.false;
+    expect(result).to.equal(agentCard);
   });
 
   it('should call transport.sendMessage with default blocking=true', async () => {
@@ -438,7 +470,7 @@ describe('Client', () => {
         interceptors: [
           {
             before: async (args) => {
-              args.options = { context: new Map([['foo', 'bar']]) };
+              args.options = { context: { [Symbol.for('foo')]: 'bar' } };
             },
             after: async () => {},
           },
@@ -456,8 +488,8 @@ describe('Client', () => {
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.calledOnceWith(params, { context: new Map([['foo', 'bar']]) })).to.be
-        .true;
+      expect(transport.getTask.calledOnceWith(params, { context: { [Symbol.for('foo')]: 'bar' } }))
+        .to.be.true;
       expect(result).to.equal(task);
     });
 

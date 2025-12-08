@@ -8,7 +8,7 @@ import { A2AExpressApp } from '../../src/server/express/a2a_express_app.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_transport_handler.js';
 import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../src/index.js';
-import { AGENT_CARD_PATH } from '../../src/constants.js';
+import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { User, UnauthenticatedUser } from '../../src/server/authentication/user.js';
@@ -262,7 +262,7 @@ describe('A2AExpressApp', () => {
 
       await request(expressApp)
         .post('/')
-        .set('X-A2A-Extensions', uriExtensionsValues)
+        .set(HTTP_EXTENSION_HEADER, uriExtensionsValues)
         .set('Not-Relevant-Header', 'unused-value')
         .send(requestBody)
         .expect(200);
@@ -294,12 +294,12 @@ describe('A2AExpressApp', () => {
       });
       const response = await request(expressApp)
         .post('/')
-        .set('X-A2A-Extensions', uriExtensionsValues)
+        .set(HTTP_EXTENSION_HEADER, uriExtensionsValues)
         .set('Not-Relevant-Header', 'unused-value')
         .send(requestBody)
         .expect(200);
 
-      expect(response.get('X-A2A-Extensions')).to.equal('activated-extension');
+      expect(response.get(HTTP_EXTENSION_HEADER)).to.equal('activated-extension');
     });
   });
 

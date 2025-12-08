@@ -11,6 +11,7 @@ import {
   AgentCard,
 } from '../types.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
+import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
   BeforeArgs,
@@ -18,6 +19,7 @@ import {
   ClientCallResult,
   ClientCallInput,
 } from './interceptors.js';
+import { ServiceParameters } from './service-parameters.js';
 import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
@@ -50,20 +52,39 @@ export interface RequestOptions {
    */
   signal?: AbortSignal;
 
-  // TODO: propagate extensions
+  /**
+   * A key-value map for passing horizontally applicable context or parameters.
+   * All parameters are passed to the server via underlying transports (e.g. In JsonRPC via Headers).
+   */
+  serviceParameters?: ServiceParameters;
 
   /**
    * Arbitrary data available to interceptors and transport implementation.
    */
-  context?: Map<string, unknown>;
+  context?: ClientCallContext;
 }
 
 export class Client {
   constructor(
     public readonly transport: Transport,
-    public readonly agentCard: AgentCard,
+    private agentCard: AgentCard,
     public readonly config?: ClientConfig
   ) {}
+
+  /**
+   * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
+   * Otherwise it will return the current agent card value.
+   */
+  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
+    if (this.agentCard.supportsAuthenticatedExtendedCard) {
+      this.agentCard = await this.executeWithInterceptors(
+        { method: 'getAgentCard' },
+        options,
+        (_, options) => this.transport.getExtendedAgentCard(options)
+      );
+    }
+    return this.agentCard;
+  }
 
   /**
    * Sends a message to an agent to initiate a new interaction or to continue an existing one.
