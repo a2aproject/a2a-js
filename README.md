@@ -257,6 +257,8 @@ try {
 
 ## Client Customization
 
+Client can be customized via interceptors which is a recommended way as it's transport-agnostic.
+
 You can provide a custom `fetch` implementation to the `A2AClient` to modify its HTTP request behavior. Common use cases include:
 
 - **Request Interception**: Log outgoing requests or collect metrics.
