@@ -493,6 +493,32 @@ describe('Client', () => {
       expect(result).to.equal(task);
     });
 
+    it('should contain agent card', async () => {
+      let caughtAgentCard;
+      const config: ClientConfig = {
+        interceptors: [
+          {
+            before: async (args) => {
+              caughtAgentCard = args.agentCard;
+            },
+            after: async () => {},
+          },
+        ],
+      };
+      client = new Client(transport, agentCard, config);
+      const params: TaskQueryParams = { id: '123' };
+      const task: Task = {
+        id: '123',
+        kind: 'task',
+        contextId: 'ctx1',
+        status: { state: 'working' },
+      };
+      transport.getTask.resolves(task);
+
+      await client.getTask(params);
+      expect(caughtAgentCard).to.equal(agentCard);
+    });
+
     it('should return early from before', async () => {
       const task: Task = {
         id: '123',

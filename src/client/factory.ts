@@ -30,8 +30,46 @@ export interface ClientFactoryOptions {
 }
 
 export const ClientFactoryOptions = {
+  /**
+   * SDK default options for {@link ClientFactory}.
+   */
   default: {
     transports: [new JsonRpcTransportFactory()],
+  } as Readonly<ClientFactoryOptions>,
+
+  /**
+   * Creates new options by merging an original and an override object.
+   * Performs deep merge and concatenates arrays.
+   *
+   * @example
+   * ```ts
+   * const options = ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+   *  clientConfig: { interceptors: [new MyInterceptor()] },
+   * });
+   * ```
+   */
+  createFrom(
+    original: ClientFactoryOptions,
+    overrides: Partial<ClientFactoryOptions>
+  ): ClientFactoryOptions {
+    return {
+      ...original,
+      ...overrides,
+      transports: mergeArrays(original.transports, overrides.transports),
+      clientConfig: {
+        ...(original.clientConfig ?? {}),
+        ...(overrides.clientConfig ?? {}),
+        interceptors: mergeArrays(
+          original.clientConfig?.interceptors,
+          overrides.clientConfig?.interceptors
+        ),
+        acceptedOutputModes: mergeArrays(
+          original.clientConfig?.acceptedOutputModes,
+          overrides.clientConfig?.acceptedOutputModes
+        ),
+      },
+      preferredTransports: mergeArrays(original.preferredTransports, overrides.preferredTransports),
+    };
   },
 };
 
@@ -103,4 +141,15 @@ export class ClientFactory {
     const agentCard = await this.agentCardResolver.resolve(baseUrl, path);
     return await this.createFromAgentCard(agentCard);
   }
+}
+
+function mergeArrays<T>(
+  a1: ReadonlyArray<T> | undefined,
+  a2: ReadonlyArray<T> | undefined
+): T[] | undefined {
+  if (!a1 && !a2) {
+    return undefined;
+  }
+
+  return [...(a1 ?? []), ...(a2 ?? [])];
 }
