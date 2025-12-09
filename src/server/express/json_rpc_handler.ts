@@ -23,10 +23,13 @@ export interface JsonRpcHandlerOptions {
 /**
  * Creates Express.js middleware to handle A2A JSON-RPC requests.
  * @example
+ *
+ * ```ts
  * // Handle at root
- * app.use(jsonRpcHandler({ requestHandler: a2aRequestHandler }));
+ * app.use(jsonRpcHandler({ requestHandler: a2aRequestHandler, userBuilder: UserBuilder.noAuthentication }));
  * // or
- * app.use('/a2a/json-rpc', jsonRpcHandler({ requestHandler: a2aRequestHandler }));
+ * app.use('/a2a/json-rpc', jsonRpcHandler({ requestHandler: a2aRequestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * ```
  */
 export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   const jsonRpcTransportHandler = new JsonRpcTransportHandler(options.requestHandler);
