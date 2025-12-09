@@ -147,7 +147,7 @@ export class ClientFactory {
    */
   async createFromUrl(baseUrl: string, path?: string): Promise<Client> {
     const agentCard = await this.agentCardResolver.resolve(baseUrl, path);
-    return await this.createFromAgentCard(agentCard);
+    return this.createFromAgentCard(agentCard);
   }
 }
 
