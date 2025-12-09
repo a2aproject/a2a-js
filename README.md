@@ -259,11 +259,11 @@ try {
 
 Client can be customized via interceptors which is a recommended way as it's transport-agnostic.
 
-You can provide a custom `fetch` implementation to the `A2AClient` to modify its HTTP request behavior. Common use cases include:
+Common use cases include:
 
 - **Request Interception**: Log outgoing requests or collect metrics.
 - **Header Injection**: Add custom headers for authentication, tracing, or routing.
-- **Retry Mechanisms**: Implement custom logic for retrying failed requests.
+- **A2A Extensions**: Modifying payloads to include protocol extension data.
 
 ### Example: Injecting a Custom Header
 
@@ -273,19 +273,26 @@ This example creates a `fetch` wrapper that adds a unique `X-Request-ID` to ever
 import { A2AClient } from '@a2a-js/sdk/client';
 import { v4 as uuidv4 } from 'uuid';
 
-// 1. Create a wrapper around the global fetch function.
-const fetchWithCustomHeader: typeof fetch = async (url, init) => {
-  const headers = new Headers(init?.headers);
-  headers.set('X-Request-ID', uuidv4());
+// 1. Define an interceptor
+class RequestIdInterceptor implements CallInterceptor {
+  before(args: BeforeArgs): Promise<void> {
+    args.options = {
+      ...args.options,
+      serviceParameters: {
+        ...args.options.serviceParameters,
+        ['X-Request-ID']: uuidv4(),
+      },
+    };
+    return Promise.resolve();
+  }
 
-  const newInit = { ...init, headers };
+  after(_args: AfterArgs): Promise<void> {
+    return Promise.resolve();
+  }
+}
 
-  console.log(`Sending request to ${url} with X-Request-ID: ${headers.get('X-Request-ID')}`);
-
-  return fetch(url, newInit);
-};
-
-// 2. Provide the custom fetch implementation to the client.
+// 2. Register the interceptor in the client factory
+const 
 const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json', {
   fetchImpl: fetchWithCustomHeader,
 });
