@@ -136,10 +136,18 @@ export class ClientFactory {
   /**
    * Downloads agent card using AgentCardResolver from options
    * and creates a new client from the downloaded card.
+   *
+   * @example
+   * ```ts
+   * const factory = new ClientFactory(); // use default options and default {@link AgentCardResolver}.
+   * const client1 = await factory.createFromUrl('https://example.com'); // /.well-known/agent-card.json is used by default
+   * const client2 = await factory.createFromUrl('https://example.com', '/my-agent-card.json'); // specify custom path
+   * const client3 = await factory.createFromUrl('https://example.com/my-agent-card.json', ''); // specify full URL and set path to empty
+   * ```
    */
-  async createFromAgentCardUrl(baseUrl: string, path?: string): Promise<Client> {
+  async createFromUrl(baseUrl: string, path?: string): Promise<Client> {
     const agentCard = await this.agentCardResolver.resolve(baseUrl, path);
-    return await this.createFromAgentCard(agentCard);
+    return this.createFromAgentCard(agentCard);
   }
 }
 
