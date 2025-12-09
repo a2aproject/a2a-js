@@ -292,7 +292,7 @@ class RequestIdInterceptor implements CallInterceptor {
 }
 
 // 2. Register the interceptor in the client factory
-const 
+const factory = new ClientFactory(ClientFactoryOptions.createFrom)
 const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json', {
   fetchImpl: fetchWithCustomHeader,
 });
