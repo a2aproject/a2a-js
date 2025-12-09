@@ -6,6 +6,7 @@ import { TransportFactory, Transport } from '../../src/client/transports/transpo
 import { JsonRpcTransportFactory } from '../../src/client/transports/json_rpc_transport.js';
 import { AgentCard } from '../../src/types.js';
 import { Client } from '../../src/client/multitransport-client.js';
+import { CallInterceptor } from '../../src/client/interceptors.js';
 
 describe('ClientFactory', () => {
   let mockTransportFactory1: sinon.SinonStubbedInstance<TransportFactory>;
@@ -204,13 +205,17 @@ describe('ClientFactory', () => {
       };
       const overrides: Partial<ClientFactoryOptions> = {
         transports: [mockTransportFactory2],
-        clientConfig: { polling: false },
+        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
         preferredTransports: ['Transport2'],
         cardResolver: { resolve: sinon.stub() } as any,
       };
       const result = ClientFactoryOptions.createFrom(original, overrides);
       expect(result.transports).to.deep.equal([mockTransportFactory1, mockTransportFactory2]);
-      expect(result.clientConfig).to.deep.equal({ polling: false });
+      expect(result.clientConfig).to.deep.equal({
+        polling: false,
+        acceptedOutputModes: undefined,
+        interceptors: undefined,
+      });
       expect(result.preferredTransports).to.deep.equal(['Transport1', 'Transport2']);
       expect(result.cardResolver).to.equal(overrides.cardResolver);
     });
@@ -219,7 +224,7 @@ describe('ClientFactory', () => {
       const original: ClientFactoryOptions = {
         transports: [mockTransportFactory1],
         preferredTransports: ['Transport1'],
-        clientConfig: { polling: false },
+        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
       };
       const overrides: Partial<ClientFactoryOptions> = {};
       const result = ClientFactoryOptions.createFrom(original, overrides);
@@ -233,9 +238,10 @@ describe('ClientFactory', () => {
       const overrides: Partial<ClientFactoryOptions> = {
         transports: [mockTransportFactory1],
         preferredTransports: ['Transport1'],
-        clientConfig: { polling: false },
+        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
       };
       const result = ClientFactoryOptions.createFrom(original, overrides);
+      console.log(result);
       expect(result).to.deep.equal(overrides);
     });
 
@@ -247,15 +253,31 @@ describe('ClientFactory', () => {
     });
 
     it('should merge clientConfig objects', () => {
+      const interceptor1: CallInterceptor = {
+        before: () => Promise.resolve(),
+        after: () => Promise.resolve(),
+      };
+      const interceptor2: CallInterceptor = {
+        before: () => Promise.resolve(),
+        after: () => Promise.resolve(),
+      };
       const original: ClientFactoryOptions = {
         transports: [mockTransportFactory1],
-        clientConfig: { polling: true, acceptedOutputModes: ['mode1'] },
+        clientConfig: {
+          polling: true,
+          acceptedOutputModes: ['mode1'],
+          interceptors: [interceptor1],
+        },
       };
       const overrides: Partial<ClientFactoryOptions> = {
-        clientConfig: { acceptedOutputModes: ['mode2'] },
+        clientConfig: { acceptedOutputModes: ['mode2'], interceptors: [interceptor2] },
       };
       const result = ClientFactoryOptions.createFrom(original, overrides);
-      expect(result.clientConfig).to.deep.equal({ polling: true, acceptedOutputModes: ['mode2'] });
+      expect(result.clientConfig).to.deep.equal({
+        polling: true,
+        acceptedOutputModes: ['mode1', 'mode2'],
+        interceptors: [interceptor1, interceptor2],
+      });
     });
 
     it('should concatenate preferredTransports arrays', () => {
