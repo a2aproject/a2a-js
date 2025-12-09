@@ -172,7 +172,7 @@ describe('ClientFactory', () => {
         cardResolver,
       });
 
-      await factory.createFromAgentCardUrl('http://transport1.com');
+      await factory.createFromUrl('http://transport1.com');
 
       expect(mockTransportFactory1.create.calledOnce);
       expect(cardResolver.resolve.calledOnceWith('http://transport1.com')).to.be.true;
@@ -187,7 +187,7 @@ describe('ClientFactory', () => {
         cardResolver,
       });
 
-      await factory.createFromAgentCardUrl('http://transport1.com', 'a2a/my-agent-card.json');
+      await factory.createFromUrl('http://transport1.com', 'a2a/my-agent-card.json');
 
       expect(mockTransportFactory1.create.calledOnce);
       expect(cardResolver.resolve.calledOnceWith('http://transport1.com', 'a2a/my-agent-card.json'))
