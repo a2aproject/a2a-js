@@ -569,15 +569,15 @@ describe('Client', () => {
           {
             before: async () => {},
             after: async (args) => {
-              args.earlyReturn = true;
+              if (args.result.method === 'getTask') {
+                args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
+              }
             },
           },
           {
             before: async () => {},
             after: async (args) => {
-              if (args.result.method === 'getTask') {
-                args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
-              }
+              args.earlyReturn = true;
             },
           },
         ],
