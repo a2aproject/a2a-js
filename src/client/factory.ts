@@ -38,8 +38,8 @@ export const ClientFactoryOptions = {
   } as Readonly<ClientFactoryOptions>,
 
   /**
-   * Creates new options from the original and overrides.
-   * Performs deep copy and appends arrays from the original.
+   * Creates new options by merging an original and an override object.
+   * Performs deep merge and concatenates arrays.
    *
    * @example
    * ```ts
