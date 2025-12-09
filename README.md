@@ -121,11 +121,11 @@ import { Message, MessageSendParams } from '@a2a-js/sdk';
 import { v4 as uuidv4 } from 'uuid';
 
 async function run() {
-  const clientFactory = new ClientFactory();
-  
-  // createFromAgentCardUrl accepts baseUrl and optional path,
+  const factory = new ClientFactory();
+
+  // createFromUrl accepts baseUrl and optional path,
   // (the default path is /.well-known/agent-card.json)
-  const client = await client.createFromAgentCardUrl('http://localhost:4000');
+  const client = await factory.createFromUrl('http://localhost:4000');
 
   const sendParams: MessageSendParams = {
     message: {
@@ -217,13 +217,15 @@ The client sends a message and receives a `Task` object as the result.
 
 ```typescript
 // client.ts
-import { A2AClient, SendMessageSuccessResponse } from '@a2a-js/sdk/client';
+import { ClientFactory, SendMessageSuccessResponse } from '@a2a-js/sdk/client';
 import { Message, MessageSendParams, Task } from '@a2a-js/sdk';
 // ... other imports ...
 
-// createFromAgentCardUrl accepts baseUrl and optional path,
+const factory = new ClientFactory();
+
+// createFromUrl accepts baseUrl and optional path,
 // (the default path is /.well-known/agent-card.json)
-const client = await client.createFromAgentCardUrl('http://localhost:4000');
+const client = await factory.createFromUrl('http://localhost:4000');
 
 try {
   const result = await client.sendMessage({
@@ -257,7 +259,7 @@ try {
 
 ## Client Customization
 
-Client can be customized via interceptors which is a recommended way as it's transport-agnostic.
+Client can be customized via [`CallInterceptor`'s](src/client/interceptors.ts) which is a recommended way as it's transport-agnostic.
 
 Common use cases include:
 
@@ -267,11 +269,11 @@ Common use cases include:
 
 ### Example: Injecting a Custom Header
 
-This example creates a `fetch` wrapper that adds a unique `X-Request-ID` to every outgoing request.
+This example defines a `CallInterceptor` to update `serviceParameters` which are passed as HTTP headers.
 
 ```typescript
-import { A2AClient } from '@a2a-js/sdk/client';
 import { v4 as uuidv4 } from 'uuid';
+import { AfterArgs, BeforeArgs, CallInterceptor, ClientFactory, ClientFactoryOptions } from '@a2a-js/sdk/client';
 
 // 1. Define an interceptor
 class RequestIdInterceptor implements CallInterceptor {
@@ -286,18 +288,20 @@ class RequestIdInterceptor implements CallInterceptor {
     return Promise.resolve();
   }
 
-  after(_args: AfterArgs): Promise<void> {
+  after(): Promise<void> {
     return Promise.resolve();
   }
 }
 
 // 2. Register the interceptor in the client factory
-const factory = new ClientFactory(ClientFactoryOptions.createFrom)
-const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json', {
-  fetchImpl: fetchWithCustomHeader,
-});
+const factory = new ClientFactory(ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+  clientConfig: {
+    interceptors: [new RequestIdInterceptor()]
+  }
+}))
+const client = await factory.createFromAgentCardUrl('http://localhost:4000');
 
-// Now, all requests made by this client instance will include the X-Request-ID header.
+// Now, all requests made by clients created by this factory will include the X-Request-ID header.
 await client.sendMessage({
   message: {
     messageId: uuidv4(),
@@ -310,33 +314,33 @@ await client.sendMessage({
 
 ### Example: Specifying a Timeout
 
-This example creates a `fetch` wrapper that sets a timeout for every outgoing request.
+Each client method can be configured with an optional `signal` field.
 
 ```typescript
-import { A2AClient } from '@a2a-js/sdk/client';
+import { ClientFactory } from '@a2a-js/sdk/client';
 
-// 1. Create a wrapper around the global fetch function.
-const fetchWithTimeout: typeof fetch = async (url, init) => {
-  return fetch(url, { ...init, signal: AbortSignal.timeout(5000) });
-};
+const factory = new ClientFactory();
 
-// 2. Provide the custom fetch implementation to the client.
-const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json', {
-  fetchImpl: fetchWithTimeout,
-});
+// createFromUrl accepts baseUrl and optional path,
+// (the default path is /.well-known/agent-card.json)
+const client = await factory.createFromUrl('http://localhost:4000');
 
-// Now, all requests made by this client instance will have a configured timeout.
-await client.sendMessage({
-  message: {
-    messageId: uuidv4(),
-    role: 'user',
-    parts: [{ kind: 'text', text: 'A message requiring custom headers.' }],
-    kind: 'message',
+await client.sendMessage(
+  {
+    message: {
+      messageId: uuidv4(),
+      role: 'user',
+      parts: [{ kind: 'text', text: 'A long-running message.' }],
+      kind: 'message',
+    },
   },
-});
+  {
+    signal: AbortSignal.timeout(5000), // 5 seconds timeout
+  }
+);
 ```
 
-### Using the Provided `AuthenticationHandler`
+### Using the Provided `AuthenticationHandler` with `JsonRpcTransport`
 
 For advanced authentication scenarios, the SDK includes a higher-order function `createAuthenticatingFetchWithRetry` and an `AuthenticationHandler` interface. This utility automatically adds authorization headers and can retry requests that fail with authentication errors (e.g., 401 Unauthorized).
 
@@ -344,7 +348,9 @@ Here's how to use it to manage a Bearer token:
 
 ```typescript
 import {
-  A2AClient,
+  ClientFactory,
+  ClientFactoryOptions
+  JsonRpcTransportFactory,
   AuthenticationHandler,
   createAuthenticatingFetchWithRetry,
 } from '@a2a-js/sdk/client';
