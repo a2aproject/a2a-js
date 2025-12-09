@@ -30,8 +30,38 @@ export interface ClientFactoryOptions {
 }
 
 export const ClientFactoryOptions = {
+  /**
+   * SDK default options for {@link ClientFactory}.
+   */
   default: {
     transports: [new JsonRpcTransportFactory()],
+  } as Readonly<ClientFactoryOptions>,
+
+  /**
+   * Creates new options from the original and overrides.
+   * Performs deep copy and appends arrays from the original.
+   *
+   * @example
+   * ```ts
+   * const options = ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+   *  clientConfig: { interceptors: [new MyInterceptor()] },
+   * });
+   * ```
+   */
+  createFrom(
+    original: ClientFactoryOptions,
+    overrides: Partial<ClientFactoryOptions>
+  ): ClientFactoryOptions {
+    return {
+      ...original,
+      ...overrides,
+      transports: [...original.transports, ...(overrides.transports ?? [])],
+      clientConfig: { ...(original.clientConfig ?? {}), ...(overrides.clientConfig ?? {}) },
+      preferredTransports: [
+        ...(original.preferredTransports ?? []),
+        ...(overrides.preferredTransports ?? []),
+      ],
+    };
   },
 };
 

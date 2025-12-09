@@ -193,4 +193,103 @@ describe('ClientFactory', () => {
         .to.be.true;
     });
   });
+
+  describe('createFrom', () => {
+    it('should merge all properties', () => {
+      const original: ClientFactoryOptions = {
+        transports: [mockTransportFactory1],
+        clientConfig: { polling: true },
+        preferredTransports: ['Transport1'],
+        cardResolver: { resolve: sinon.stub() } as any,
+      };
+      const overrides: Partial<ClientFactoryOptions> = {
+        transports: [mockTransportFactory2],
+        clientConfig: { polling: false },
+        preferredTransports: ['Transport2'],
+        cardResolver: { resolve: sinon.stub() } as any,
+      };
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result.transports).to.deep.equal([mockTransportFactory1, mockTransportFactory2]);
+      expect(result.clientConfig).to.deep.equal({ polling: false });
+      expect(result.preferredTransports).to.deep.equal(['Transport1', 'Transport2']);
+      expect(result.cardResolver).to.equal(overrides.cardResolver);
+    });
+
+    it('should return original options if overrides are empty', () => {
+      const original: ClientFactoryOptions = {
+        transports: [mockTransportFactory1],
+        preferredTransports: ['Transport1'],
+        clientConfig: { polling: false },
+      };
+      const overrides: Partial<ClientFactoryOptions> = {};
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result).to.deep.equal(original);
+    });
+
+    it('should return overrides if original options are empty', () => {
+      const original: ClientFactoryOptions = {
+        transports: [],
+      };
+      const overrides: Partial<ClientFactoryOptions> = {
+        transports: [mockTransportFactory1],
+        preferredTransports: ['Transport1'],
+        clientConfig: { polling: false },
+      };
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result).to.deep.equal(overrides);
+    });
+
+    it('should concatenate transports arrays', () => {
+      const original: ClientFactoryOptions = { transports: [mockTransportFactory1] };
+      const overrides: Partial<ClientFactoryOptions> = { transports: [mockTransportFactory2] };
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result.transports).to.deep.equal([mockTransportFactory1, mockTransportFactory2]);
+    });
+
+    it('should merge clientConfig objects', () => {
+      const original: ClientFactoryOptions = {
+        transports: [mockTransportFactory1],
+        clientConfig: { polling: true, acceptedOutputModes: ['mode1'] },
+      };
+      const overrides: Partial<ClientFactoryOptions> = {
+        clientConfig: { acceptedOutputModes: ['mode2'] },
+      };
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result.clientConfig).to.deep.equal({ polling: true, acceptedOutputModes: ['mode2'] });
+    });
+
+    it('should concatenate preferredTransports arrays', () => {
+      const original: ClientFactoryOptions = {
+        transports: [mockTransportFactory1],
+        preferredTransports: ['Transport1'],
+      };
+      const overrides: Partial<ClientFactoryOptions> = { preferredTransports: ['Transport2'] };
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result.preferredTransports).to.deep.equal(['Transport1', 'Transport2']);
+    });
+
+    it('should handle undefined preferredTransports in original correctly', () => {
+      const original: ClientFactoryOptions = {
+        transports: [mockTransportFactory1],
+        clientConfig: { polling: true },
+      };
+      const overrides: Partial<ClientFactoryOptions> = {
+        preferredTransports: ['Transport2'],
+      };
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result.preferredTransports).to.deep.equal(['Transport2']);
+    });
+
+    it('should handle undefined preferredTransports in overrides correctly', () => {
+      const original: ClientFactoryOptions = {
+        transports: [mockTransportFactory1],
+        preferredTransports: ['Transport1'],
+      };
+      const overrides: Partial<ClientFactoryOptions> = {
+        clientConfig: { polling: false },
+      };
+      const result = ClientFactoryOptions.createFrom(original, overrides);
+      expect(result.preferredTransports).to.deep.equal(['Transport1']);
+    });
+  });
 });
