@@ -49,7 +49,7 @@ let currentTaskId: string | undefined = undefined; // Initialize as undefined
 let currentContextId: string | undefined = undefined; // Initialize as undefined
 const serverUrl = process.argv[2] || 'http://localhost:41241'; // Agent's base URL
 const factory = new ClientFactory();
-const client = await factory.createFromUrl(serverUrl, '');
+const client = await factory.createFromUrl(serverUrl);
 let agentName = 'Agent'; // Default, try to get from agent card later
 
 // --- Readline Setup ---
