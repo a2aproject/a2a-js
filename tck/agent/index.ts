@@ -1,13 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import {
-  AgentCard,
-  Task,
-  TaskStatusUpdateEvent,
-  Message,
-  AGENT_CARD_WELL_KNOWN_PATH,
-} from '../../src/index.js';
+import { AgentCard, Task, TaskStatusUpdateEvent, Message } from '../../src/index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
