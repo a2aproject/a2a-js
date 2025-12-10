@@ -57,11 +57,11 @@ const restErrorHandler: ErrorRequestHandler = (
 type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
 
 // ============================================================================
-// HTTP REST Handler - Main Export
+// HTTP+JSON/REST Handler - Main Export
 // ============================================================================
 
 /**
- * Creates Express.js middleware to handle A2A HTTP+REST requests.
+ * Creates Express.js middleware to handle A2A HTTP+JSON/REST requests.
  *
  * This handler implements the A2A REST API specification with snake_case
  * field names, providing endpoints for:

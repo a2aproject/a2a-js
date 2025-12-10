@@ -10,7 +10,7 @@ import { AgentCard, Task, Message } from '../../src/types.js';
 import { A2AError } from '../../src/server/error.js';
 
 /**
- * Test suite for restHandler - HTTP+REST transport implementation
+ * Test suite for restHandler - HTTP+JSON/REST transport implementation
  *
  * This suite tests the REST API endpoints following the A2A specification:
  * - GET /v1/card - Agent card retrieval

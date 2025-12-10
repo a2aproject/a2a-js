@@ -211,7 +211,7 @@ async function main() {
     jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication })
   );
 
-  // Register HTTP+REST handler (new feature - additional transport)
+  // Register HTTP+JSON/REST handler (new feature - additional transport)
   expressApp.use(
     '/a2a/rest',
     restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication })
