@@ -4,13 +4,13 @@ import sinon, { SinonStub } from 'sinon';
 import express, { Express } from 'express';
 import request from 'supertest';
 
-import { httpRestHandler, UserBuilder } from '../../src/server/express/index.js';
+import { restHandler, UserBuilder } from '../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message } from '../../src/types.js';
 import { A2AError } from '../../src/server/error.js';
 
 /**
- * Test suite for httpRestHandler - HTTP+REST transport implementation
+ * Test suite for restHandler - HTTP+JSON/REST transport implementation
  *
  * This suite tests the REST API endpoints following the A2A specification:
  * - GET /v1/card - Agent card retrieval
@@ -21,7 +21,7 @@ import { A2AError } from '../../src/server/error.js';
  * - POST /v1/tasks/:taskId:subscribe - Resubscribe to task updates
  * - Push notification config CRUD operations
  */
-describe('httpRestHandler', () => {
+describe('restHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let app: Express;
 
@@ -82,7 +82,7 @@ describe('httpRestHandler', () => {
 
     app = express();
     app.use(
-      httpRestHandler({
+      restHandler({
         requestHandler: mockRequestHandler,
         userBuilder: UserBuilder.noAuthentication,
       })
@@ -201,7 +201,7 @@ describe('httpRestHandler', () => {
       };
       const noStreamApp = express();
       noStreamApp.use(
-        httpRestHandler({
+        restHandler({
           requestHandler: noStreamRequestHandler as any,
           userBuilder: UserBuilder.noAuthentication,
         })
@@ -308,7 +308,7 @@ describe('httpRestHandler', () => {
       };
       const noStreamApp = express();
       noStreamApp.use(
-        httpRestHandler({
+        restHandler({
           requestHandler: noStreamRequestHandler as any,
           userBuilder: UserBuilder.noAuthentication,
         })
@@ -390,7 +390,7 @@ describe('httpRestHandler', () => {
         };
         const noPNApp = express();
         noPNApp.use(
-          httpRestHandler({
+          restHandler({
             requestHandler: noPNRequestHandler as any,
             userBuilder: UserBuilder.noAuthentication,
           })

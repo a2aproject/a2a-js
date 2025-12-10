@@ -60,7 +60,7 @@ describe('ClientFactory', () => {
       const options: ClientFactoryOptions = {
         transports: [mockTransportFactory1, mockTransportFactory1], // Same name
       };
-      expect(() => new ClientFactory(options)).to.throw('Duplicate transport name: Transport1');
+      expect(() => new ClientFactory(options)).to.throw('Duplicate protocol name: Transport1');
     });
 
     it('should accept valid custom options', () => {
@@ -195,7 +195,7 @@ describe('ClientFactory', () => {
     });
   });
 
-  describe('createFrom', () => {
+  describe('ClientFactoryOptions.createFrom', () => {
     it('should merge all properties', () => {
       const original: ClientFactoryOptions = {
         transports: [mockTransportFactory1],
@@ -216,7 +216,7 @@ describe('ClientFactory', () => {
         acceptedOutputModes: undefined,
         interceptors: undefined,
       });
-      expect(result.preferredTransports).to.deep.equal(['Transport1', 'Transport2']);
+      expect(result.preferredTransports).to.deep.equal(['Transport2']);
       expect(result.cardResolver).to.equal(overrides.cardResolver);
     });
 
@@ -245,11 +245,25 @@ describe('ClientFactory', () => {
       expect(result).to.deep.equal(overrides);
     });
 
-    it('should concatenate transports arrays', () => {
-      const original: ClientFactoryOptions = { transports: [mockTransportFactory1] };
-      const overrides: Partial<ClientFactoryOptions> = { transports: [mockTransportFactory2] };
+    it('should merge transports arrays by protocol name', () => {
+      const transport1Factory = {
+        protocolName: 'Transport1',
+        create: sinon.stub(),
+      };
+      const transport1FactoryOverride = {
+        protocolName: 'Transport1',
+        create: sinon.stub(),
+      };
+      const transport2Factory = {
+        protocolName: 'Transport2',
+        create: sinon.stub(),
+      };
+      const original: ClientFactoryOptions = { transports: [transport1Factory] };
+      const overrides: Partial<ClientFactoryOptions> = {
+        transports: [transport1FactoryOverride, transport2Factory],
+      };
       const result = ClientFactoryOptions.createFrom(original, overrides);
-      expect(result.transports).to.deep.equal([mockTransportFactory1, mockTransportFactory2]);
+      expect(result.transports).to.deep.equal([transport1FactoryOverride, transport2Factory]);
     });
 
     it('should merge clientConfig objects', () => {
@@ -275,19 +289,9 @@ describe('ClientFactory', () => {
       const result = ClientFactoryOptions.createFrom(original, overrides);
       expect(result.clientConfig).to.deep.equal({
         polling: true,
-        acceptedOutputModes: ['mode1', 'mode2'],
+        acceptedOutputModes: ['mode2'],
         interceptors: [interceptor1, interceptor2],
       });
-    });
-
-    it('should concatenate preferredTransports arrays', () => {
-      const original: ClientFactoryOptions = {
-        transports: [mockTransportFactory1],
-        preferredTransports: ['Transport1'],
-      };
-      const overrides: Partial<ClientFactoryOptions> = { preferredTransports: ['Transport2'] };
-      const result = ClientFactoryOptions.createFrom(original, overrides);
-      expect(result.preferredTransports).to.deep.equal(['Transport1', 'Transport2']);
     });
 
     it('should handle undefined preferredTransports in original correctly', () => {
