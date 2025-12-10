@@ -8,7 +8,7 @@ import {
   TaskStatusUpdateEvent,
   TextPart,
   Message,
-  AGENT_CARD_WELL_KNOWN_PATH,
+  AGENT_CARD_PATH,
 } from '../../../index.js';
 import {
   InMemoryTaskStore,
@@ -300,7 +300,7 @@ async function main() {
   // 4. Create and setup A2AExpressApp
   const app = express();
 
-  app.use(AGENT_CARD_WELL_KNOWN_PATH, agentCardHandler({ agentCardProvider: requestHandler }));
+  app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
   app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
   // 5. Start the server

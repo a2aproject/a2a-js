@@ -1,5 +1,5 @@
 import express from 'express';
-import { AgentCard, AGENT_CARD_WELL_KNOWN_PATH } from '../../../index.js';
+import { AgentCard, AGENT_CARD_PATH } from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -57,7 +57,7 @@ async function main() {
   // 4. Create and setup Express app
   const app = express();
 
-  app.use(AGENT_CARD_WELL_KNOWN_PATH, agentCardHandler({ agentCardProvider: requestHandler }));
+  app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
   app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
   // 5. Start the server
