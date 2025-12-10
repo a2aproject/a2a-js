@@ -1,12 +1,12 @@
-import { ExtensionIds } from '../extensions.js';
+import { Extensions } from '../extensions.js';
 import { User } from './authentication/user.js';
 
 export class ServerCallContext {
-  private readonly _requestedExtensions?: ExtensionIds;
+  private readonly _requestedExtensions?: Extensions;
   private readonly _user?: User;
-  private _activatedExtensions?: ExtensionIds;
+  private _activatedExtensions?: Extensions;
 
-  constructor(requestedExtensions?: ExtensionIds, user?: User) {
+  constructor(requestedExtensions?: Extensions, user?: User) {
     this._requestedExtensions = requestedExtensions;
     this._user = user;
   }
@@ -15,15 +15,15 @@ export class ServerCallContext {
     return this._user;
   }
 
-  get activatedExtensions(): ExtensionIds | undefined {
+  get activatedExtensions(): Extensions | undefined {
     return this._activatedExtensions;
   }
 
-  get requestedExtensions(): ExtensionIds | undefined {
+  get requestedExtensions(): Extensions | undefined {
     return this._requestedExtensions;
   }
 
   public addActivatedExtension(uri: string) {
-    this._activatedExtensions = ExtensionIds.createFrom(this._activatedExtensions, uri);
+    this._activatedExtensions = Extensions.createFrom(this._activatedExtensions, uri);
   }
 }

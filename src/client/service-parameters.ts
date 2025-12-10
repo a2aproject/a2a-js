@@ -1,5 +1,5 @@
 import { HTTP_EXTENSION_HEADER } from '../constants.js';
-import { ExtensionIds } from '../extensions.js';
+import { Extensions } from '../extensions.js';
 
 export type ServiceParameters = Record<string, string>;
 
@@ -22,8 +22,8 @@ export const ServiceParameters = {
   },
 };
 
-export function withA2AExtensions(...extensions: ExtensionIds): ServiceParametersUpdate {
+export function withA2AExtensions(...extensions: Extensions): ServiceParametersUpdate {
   return (parameters: ServiceParameters) => {
-    parameters[HTTP_EXTENSION_HEADER] = ExtensionIds.toServiceParameter(extensions);
+    parameters[HTTP_EXTENSION_HEADER] = Extensions.toServiceParameter(extensions);
   };
 }

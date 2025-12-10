@@ -17,7 +17,7 @@ import {
 import { ServerCallContext } from '../context.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
-import { ExtensionIds } from '../../extensions.js';
+import { Extensions } from '../../extensions.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -104,7 +104,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
     return new ServerCallContext(
-      ExtensionIds.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+      Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
       user
     );
   };

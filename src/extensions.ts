@@ -1,32 +1,31 @@
 /**
  * A2A Protocol Extension URI.
  */
-export type ExtensionId = string;
+export type ExtensionURI = string;
 
 /**
- * A collection of {@link ExtensionId}.
+ * A collection of {@link ExtensionURI}.
  */
-export type ExtensionIds = ExtensionId[];
+export type Extensions = ExtensionURI[];
 
-export const ExtensionIds = {
+export const Extensions = {
   /**
-   * Creates new {@link ExtensionIds} from `current` and `additional`.
+   * Creates new {@link Extensions} from `current` and `additional`.
    * If `current` already contains `additional` it is returned unmodified.
    */
-  createFrom: (current: ExtensionIds | undefined, additional: ExtensionId): ExtensionIds => {
-    if (!current || !current.includes(additional)) {
-      return [...(current ?? []), additional];
-    } else {
+  createFrom: (current: Extensions | undefined, additional: ExtensionURI): Extensions => {
+    if (current?.includes(additional)) {
       return current;
     }
+    return [...(current ?? []), additional];
   },
 
   /**
-   * Creates {@link ExtensionIds} from comma separated extensions identifiers as per
+   * Creates {@link Extensions} from comma separated extensions identifiers as per
    * https://a2a-protocol.org/latest/specification/#326-service-parameters.
    * Parses the output of `toServiceParameter`.
    */
-  parseServiceParameter: (value: string | undefined): ExtensionIds => {
+  parseServiceParameter: (value: string | undefined): Extensions => {
     if (!value) {
       return [];
     }
@@ -40,10 +39,10 @@ export const ExtensionIds = {
   },
 
   /**
-   * Converts {@link ExtensionIds} to comma separated extensions identifiers as per
+   * Converts {@link Extensions} to comma separated extensions identifiers as per
    * https://a2a-protocol.org/latest/specification/#326-service-parameters.
    */
-  toServiceParameter: (value: ExtensionIds): string => {
+  toServiceParameter: (value: Extensions): string => {
     return value.join(',');
   },
 };
