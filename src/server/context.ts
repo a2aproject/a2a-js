@@ -1,11 +1,12 @@
+import { ExtensionIds } from '../extensions.js';
 import { User } from './authentication/user.js';
 
 export class ServerCallContext {
-  private readonly _requestedExtensions?: Set<string>;
+  private readonly _requestedExtensions?: ExtensionIds;
   private readonly _user?: User;
-  private _activatedExtensions?: Set<string>;
+  private _activatedExtensions?: ExtensionIds;
 
-  constructor(requestedExtensions?: Set<string>, user?: User) {
+  constructor(requestedExtensions?: ExtensionIds, user?: User) {
     this._requestedExtensions = requestedExtensions;
     this._user = user;
   }
@@ -14,20 +15,15 @@ export class ServerCallContext {
     return this._user;
   }
 
-  get activatedExtensions(): ReadonlySet<string> | undefined {
+  get activatedExtensions(): ExtensionIds | undefined {
     return this._activatedExtensions;
   }
 
-  get requestedExtensions(): ReadonlySet<string> | undefined {
+  get requestedExtensions(): ExtensionIds | undefined {
     return this._requestedExtensions;
   }
 
   public addActivatedExtension(uri: string) {
-    if (this._requestedExtensions?.has(uri)) {
-      if (!this._activatedExtensions) {
-        this._activatedExtensions = new Set<string>();
-      }
-      this._activatedExtensions.add(uri);
-    }
+    this._activatedExtensions = ExtensionIds.createFrom(this._activatedExtensions, uri);
   }
 }
