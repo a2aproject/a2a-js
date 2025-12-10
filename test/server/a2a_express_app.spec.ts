@@ -270,9 +270,10 @@ describe('A2AExpressApp', () => {
       assert.isTrue(handleStub.calledOnce);
       const serverCallContext = handleStub.getCall(0).args[1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
-      expect(serverCallContext.requestedExtensions).to.deep.equal(
-        new Set(['test-extension-uri', 'another-extension'])
-      );
+      expect(serverCallContext.requestedExtensions).to.deep.equal([
+        'test-extension-uri',
+        'another-extension',
+      ]);
     });
 
     it('should handle extensions headers in response', async () => {

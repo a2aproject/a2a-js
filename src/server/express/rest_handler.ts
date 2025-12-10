@@ -15,9 +15,9 @@ import {
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
+import { Extensions } from '../../extensions.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -103,7 +103,10 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
-    return new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)), user);
+    return new ServerCallContext(
+      Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+      user
+    );
   };
 
   /**
