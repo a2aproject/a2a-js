@@ -4,10 +4,10 @@ import {
   TaskIdParams,
   A2ARequest,
   JSONRPCResponse,
-} from '../../types.js';
-import { ServerCallContext } from '../context.js';
-import { A2AError } from '../error.js';
-import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
+} from '../../../types.js';
+import { ServerCallContext } from '../../context.js';
+import { A2AError } from '../../error.js';
+import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 
 /**
  * Handles JSON-RPC transport layer, routing requests to A2ARequestHandler.

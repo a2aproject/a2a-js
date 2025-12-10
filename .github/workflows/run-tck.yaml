@@ -10,11 +10,14 @@ on:
 env:
   # TODO once we have the TCK for 0.4.0 we will need to look at the branch to decide which TCK version to run.
   # Tag of the TCK
-  TCK_VERSION: 0.3.0.beta3
+  # Temporary set to this commit sha because of this issue https://github.com/a2aproject/a2a-js/pull/142#issuecomment-3558892334 
+  TCK_VERSION: 601bf0d6f63baafb079c2ab23f53d73ce03e5461
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
-  # SUT_JSONRPC_URL to use for the TCK and the server agent
-  SUT_JSONRPC_URL: http://localhost:41241
+  # Base URL for the SUT agent
+  SUT_BASE_URL: http://localhost:41241
+  # Base URL for the SUT agent JSON-RPC transport
+  SUT_JSONRPC_URL: http://localhost:41241/a2a/jsonrpc
   # Slow system on CI
   TCK_STREAMING_TIMEOUT: 5.0
 
@@ -58,7 +61,7 @@ jobs:
           npm run tck:sut-agent &
       - name: Wait for SUT to start
         run: |
-          URL="${{ env.SUT_JSONRPC_URL }}/.well-known/agent-card.json"
+          URL="${{ env.SUT_BASE_URL }}/.well-known/agent-card.json"
           EXPECTED_STATUS=200
           TIMEOUT=120
           RETRY_INTERVAL=2
@@ -94,8 +97,9 @@ jobs:
         id: run-tck-mandatory
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc,rest
         working-directory: tck/a2a-tck
+        # TODO: Add back the transports jsonrpc,rest once the TCK supports REST, linked to https://github.com/a2aproject/a2a-tck/issues/99
       - name: Run TCK (capabilities)
         id: run-tck-capabilities
         timeout-minutes: 5
