@@ -9,7 +9,7 @@
 export const AGENT_CARD_PATH = '.well-known/agent-card.json';
 
 /**
- * The well-known path for the agent card.
+ * The well-known path for the agent card
  */
 export const AGENT_CARD_WELL_KNOWN_PATH = '/.well-known/agent-card.json';
 
