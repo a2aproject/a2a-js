@@ -345,7 +345,7 @@ await client.sendMessage(
 );
 ```
 
-### Using the Provided `AuthenticationHandler` with `JsonRpcTransport`
+### Customizing Transports: Using the Provided `AuthenticationHandler`
 
 For advanced authentication scenarios, the SDK includes a higher-order function `createAuthenticatingFetchWithRetry` and an `AuthenticationHandler` interface. This utility automatically adds authorization headers and can retry requests that fail with authentication errors (e.g., 401 Unauthorized).
 
