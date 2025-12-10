@@ -13,7 +13,7 @@ import {
   HTTP_STATUS,
   mapErrorToStatus,
   toHTTPError,
-} from '../transports/rest/http_rest_transport_handler.js';
+} from '../transports/rest/rest_transport_handler.js';
 import { ServerCallContext } from '../context.js';
 import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
@@ -22,7 +22,7 @@ import { UserBuilder } from './common.js';
 /**
  * Options for configuring the HTTP REST handler.
  */
-export interface HttpRestHandlerOptions {
+export interface RestHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
 }
@@ -81,10 +81,10 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  * ```typescript
  * const app = express();
  * const requestHandler = new DefaultRequestHandler(...);
- * app.use('/api/rest', httpRestHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * app.use('/api/rest', restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
  * ```
  */
-export function httpRestHandler(options: HttpRestHandlerOptions): RequestHandler {
+export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
