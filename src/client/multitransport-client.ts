@@ -10,7 +10,7 @@ import {
   PushNotificationConfig,
   AgentCard,
 } from '../types.js';
-import { A2AStreamEventData, SendMessageResult } from './client.js';
+import { A2AStreamEventData, A2AStreamEventDataResubscribe, SendMessageResult } from './client.js';
 import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
@@ -261,7 +261,7 @@ export class Client {
   async *resubscribeTask(
     params: TaskIdParams,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<A2AStreamEventDataResubscribe, void, undefined> {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {

@@ -30,7 +30,7 @@ import {
   GetTaskPushNotificationConfigParams,
   GetAuthenticatedExtendedCardSuccessResponse,
 } from '../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../client.js';
+import { A2AStreamEventData, A2AStreamEventDataResubscribe, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { Transport, TransportFactory } from './transport.js';
 
@@ -156,7 +156,7 @@ export class JsonRpcTransport implements Transport {
   async *resubscribeTask(
     params: TaskIdParams,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<A2AStreamEventDataResubscribe, void, undefined> {
     yield* this._sendStreamingRequest('tasks/resubscribe', params, options);
   }
 
@@ -261,11 +261,11 @@ export class JsonRpcTransport implements Transport {
     return this._fetch(this.endpoint, requestInit);
   }
 
-  private async *_sendStreamingRequest(
+  private async *_sendStreamingRequest<T extends A2AStreamEventData>(
     method: string,
     params: unknown,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<T, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
@@ -303,7 +303,7 @@ export class JsonRpcTransport implements Transport {
       );
     }
 
-    yield* this._parseA2ASseStream<A2AStreamEventData>(response, clientRequestId);
+    yield* this._parseA2ASseStream<T>(response, clientRequestId);
   }
 
   private async *_parseA2ASseStream<TStreamItem>(

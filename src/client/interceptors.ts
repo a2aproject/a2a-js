@@ -1,5 +1,5 @@
 import { AgentCard } from '../types.js';
-import { A2AStreamEventData } from './client.js';
+import { A2AStreamEventData, A2AStreamEventDataResubscribe } from './client.js';
 import { Client } from './multitransport-client.js';
 import { RequestOptions } from './multitransport-client.js';
 
@@ -130,5 +130,5 @@ interface ResultsOverrides {
   // sendMessageStream and resubscribeTask return async iterators and are intercepted on each item,
   // which requires custom handling.
   sendMessageStream: A2AStreamEventData;
-  resubscribeTask: A2AStreamEventData;
+  resubscribeTask: A2AStreamEventDataResubscribe;
 }

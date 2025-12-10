@@ -26,6 +26,7 @@ import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 import { RequestOptions } from './multitransport-client.js';
 
 export type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
+export type A2AStreamEventDataResubscribe = Exclude<A2AStreamEventData, Message>;
 
 export type SendMessageResult = Message | Task;
 
