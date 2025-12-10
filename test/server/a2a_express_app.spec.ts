@@ -6,7 +6,7 @@ import request from 'supertest';
 
 import { A2AExpressApp } from '../../src/server/express/a2a_express_app.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc_transport_handler.js';
+import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../src/index.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../src/constants.js';
 import { A2AError } from '../../src/server/error.js';

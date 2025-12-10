@@ -19,7 +19,7 @@ export { ResultManager } from './result_manager.js';
 export type { TaskStore } from './store.js';
 export { InMemoryTaskStore } from './store.js';
 
-export { JsonRpcTransportHandler } from './transports/jsonrpc_transport_handler.js';
+export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
 export { ServerCallContext } from './context.js';
 export { A2AError } from './error.js';
 
