@@ -329,4 +329,51 @@ describe('DefaultExecutionEventBus', () => {
       expect(count).to.equal(3);
     });
   });
+
+  describe('this context', () => {
+    // Helper to capture `this` without triggering no-this-alias lint rule
+    function createThisCapture(): { value: unknown; capture: () => void } {
+      const result = { value: undefined as unknown };
+      result.capture = function (this: unknown) {
+        result.value = this;
+      };
+      return result;
+    }
+
+    it('should bind this to the event bus for on() event listeners', () => {
+      const thisCapture = createThisCapture();
+      eventBus.on('event', thisCapture.capture);
+
+      eventBus.publish(createMessage('test'));
+
+      expect(thisCapture.value).to.equal(eventBus);
+    });
+
+    it('should bind this to the event bus for on() finished listeners', () => {
+      const thisCapture = createThisCapture();
+      eventBus.on('finished', thisCapture.capture);
+
+      eventBus.finished();
+
+      expect(thisCapture.value).to.equal(eventBus);
+    });
+
+    it('should bind this to the event bus for once() event listeners', () => {
+      const thisCapture = createThisCapture();
+      eventBus.once('event', thisCapture.capture);
+
+      eventBus.publish(createMessage('test'));
+
+      expect(thisCapture.value).to.equal(eventBus);
+    });
+
+    it('should bind this to the event bus for once() finished listeners', () => {
+      const thisCapture = createThisCapture();
+      eventBus.once('finished', thisCapture.capture);
+
+      eventBus.finished();
+
+      expect(thisCapture.value).to.equal(eventBus);
+    });
+  });
 });
