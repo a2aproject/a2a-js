@@ -1,6 +1,6 @@
 import { Request } from 'express';
 import { UnauthenticatedUser, User } from '../../server/index.js';
-import { UserBuilder } from '../../server/express/common.js';
+import { UserBuilder } from '../../server/express/index.js';
 
 export class CustomUser implements User {
   public isAuthenticated: boolean = true;

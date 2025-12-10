@@ -45,7 +45,7 @@ The core of an A2A server is the `AgentExecutor`, which contains your agent's lo
 // server.ts
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { AgentCard, Message, AGENT_CARD_WELL_KNOWN_PATH } from '@a2a-js/sdk';
+import { AgentCard, Message, AGENT_CARD_PATH } from '@a2a-js/sdk';
 import {
   AgentExecutor,
   RequestContext,
@@ -53,7 +53,7 @@ import {
   DefaultRequestHandler,
   InMemoryTaskStore,
 } from '@a2a-js/sdk/server';
-import { agentCardHandler, jsonRpcHandler, UserBuilder } from '@a2a-js/sdk/server/express';
+import { agentCardHandler, jsonRpcHandler, restHandler, UserBuilder } from '@a2a-js/sdk/server/express';
 
 // 1. Define your agent's identity card.
 const helloAgentCard: AgentCard = {
@@ -61,7 +61,7 @@ const helloAgentCard: AgentCard = {
   description: 'A simple agent that says hello.',
   protocolVersion: '0.3.0',
   version: '0.1.0',
-  url: 'http://localhost:4000/', // The public URL of your agent server
+  url: 'http://localhost:4000/a2a/jsonrpc', // The public URL of your agent server
   skills: [{ id: 'chat', name: 'Chat', description: 'Say hello', tags: ['chat'] }],
   capabilities: {
     pushNotifications: false,
@@ -69,7 +69,7 @@ const helloAgentCard: AgentCard = {
   defaultInputModes: ['text'],
   defaultOutputModes: ['text'],
   additionalInterfaces: [
-    { url: 'http://localhost:4000/', transport: 'JSONRPC' }, // Default JSON-RPC transport
+    { url: 'http://localhost:4000/a2a/jsonrpc', transport: 'JSONRPC' }, // Default JSON-RPC transport
     { url: 'http://localhost:4000/a2a/rest', transport: 'HTTP+JSON' }, // HTTP+JSON/REST transport
   ],
 };
@@ -106,9 +106,9 @@ const requestHandler = new DefaultRequestHandler(
 
 const app = express();
 
-app.use(AGENT_CARD_WELL_KNOWN_PATH, agentCardHandler({ agentCardProvider: requestHandler }));
+app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
 app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
-app.use(httpRestHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+app.use('/a2a/rest', restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
 app.listen(4000, () => {
   console.log(`🚀 Server started on http://localhost:4000`);
