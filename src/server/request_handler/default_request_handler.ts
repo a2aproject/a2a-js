@@ -137,10 +137,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       const exposedExtensions = new Set(
         agentCard.capabilities.extensions?.map((ext) => ext.uri) || []
       );
-      const validExtensions = new Set(
-        Array.from(context.requestedExtensions).filter((extension) =>
-          exposedExtensions.has(extension)
-        )
+      const validExtensions = context.requestedExtensions.filter((extension) =>
+        exposedExtensions.has(extension)
       );
       context = new ServerCallContext(validExtensions, context.user);
     }

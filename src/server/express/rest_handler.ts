@@ -13,16 +13,16 @@ import {
   HTTP_STATUS,
   mapErrorToStatus,
   toHTTPError,
-} from '../transports/rest/http_rest_transport_handler.js';
+} from '../transports/rest/rest_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
+import { Extensions } from '../../extensions.js';
 
 /**
- * Options for configuring the HTTP REST handler.
+ * Options for configuring the HTTP+JSON/REST handler.
  */
-export interface HttpRestHandlerOptions {
+export interface RestHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
 }
@@ -57,11 +57,11 @@ const restErrorHandler: ErrorRequestHandler = (
 type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
 
 // ============================================================================
-// HTTP REST Handler - Main Export
+// HTTP+JSON/REST Handler - Main Export
 // ============================================================================
 
 /**
- * Creates Express.js middleware to handle A2A HTTP+REST requests.
+ * Creates Express.js middleware to handle A2A HTTP+JSON/REST requests.
  *
  * This handler implements the A2A REST API specification with snake_case
  * field names, providing endpoints for:
@@ -78,13 +78,13 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  * @returns Express router configured with all A2A REST endpoints
  *
  * @example
- * ```typescript
+ * ```ts
  * const app = express();
  * const requestHandler = new DefaultRequestHandler(...);
- * app.use('/api/rest', httpRestHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * app.use('/api/rest', restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
  * ```
  */
-export function httpRestHandler(options: HttpRestHandlerOptions): RequestHandler {
+export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
@@ -103,7 +103,10 @@ export function httpRestHandler(options: HttpRestHandlerOptions): RequestHandler
    */
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
-    return new ServerCallContext(getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)), user);
+    return new ServerCallContext(
+      Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+      user
+    );
   };
 
   /**

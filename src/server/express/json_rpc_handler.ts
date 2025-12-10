@@ -10,11 +10,11 @@ import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { getRequestedExtensions } from '../utils.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UnauthenticatedUser } from '../authentication/user.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
+import { Extensions } from '../../extensions.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -24,10 +24,13 @@ export interface JsonRpcHandlerOptions {
 /**
  * Creates Express.js middleware to handle A2A JSON-RPC requests.
  * @example
+ *
+ * ```ts
  * // Handle at root
- * app.use(jsonRpcHandler({ requestHandler: a2aRequestHandler }));
+ * app.use(jsonRpcHandler({ requestHandler: a2aRequestHandler, userBuilder: UserBuilder.noAuthentication }));
  * // or
- * app.use('/a2a/json-rpc', jsonRpcHandler({ requestHandler: a2aRequestHandler }));
+ * app.use('/a2a/json-rpc', jsonRpcHandler({ requestHandler: a2aRequestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * ```
  */
 export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   const jsonRpcTransportHandler = new JsonRpcTransportHandler(options.requestHandler);
@@ -40,7 +43,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
     try {
       const user = await options.userBuilder(req);
       const context = new ServerCallContext(
-        getRequestedExtensions(req.header(HTTP_EXTENSION_HEADER)),
+        Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
         user ?? new UnauthenticatedUser()
       );
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);

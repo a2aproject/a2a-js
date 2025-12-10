@@ -1796,7 +1796,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await handler.sendMessage(
       params,
       new ServerCallContext(
-        new Set([expectedExtension, 'not-available-extension-by-agent-card']),
+        [expectedExtension, 'not-available-extension-by-agent-card'],
         new UnauthenticatedUser()
       )
     );
@@ -1812,7 +1812,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(capturedRequestContext?.taskId).to.equal(incomingTaskId, 'taskId should match');
     expect(capturedRequestContext?.contextId).to.equal(incomingContextId, 'contextId should match');
     expect(capturedRequestContext?.context?.requestedExtensions).to.deep.equal(
-      new Set([expectedExtension]),
+      [expectedExtension],
       'requestedExtensions should contain the expected extension'
     );
     expect(capturedRequestContext?.context?.user).to.be.an.instanceOf(UnauthenticatedUser);

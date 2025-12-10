@@ -10,7 +10,7 @@ export interface ClientFactoryOptions {
    * Transport factories to use.
    * Effectively defines transports supported by this client factory.
    */
-  transports: ReadonlyArray<TransportFactory>;
+  transports: TransportFactory[];
 
   /**
    * Client config to be used for clients created by this factory.
@@ -39,12 +39,14 @@ export const ClientFactoryOptions = {
 
   /**
    * Creates new options by merging an original and an override object.
-   * Performs deep merge and concatenates arrays.
+   * Transports are merged based on `TransportFactory.protocolName`,
+   * interceptors are concatenated, other fields are overriden.
    *
    * @example
    * ```ts
    * const options = ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
-   *  clientConfig: { interceptors: [new MyInterceptor()] },
+   *  transports: [new MyCustomTransportFactory()], // adds a custom transport
+   *  clientConfig: { interceptors: [new MyInterceptor()] }, // adds a custom interceptor
    * });
    * ```
    */
@@ -55,7 +57,7 @@ export const ClientFactoryOptions = {
     return {
       ...original,
       ...overrides,
-      transports: mergeArrays(original.transports, overrides.transports),
+      transports: mergeTransports(original.transports, overrides.transports),
       clientConfig: {
         ...(original.clientConfig ?? {}),
         ...(overrides.clientConfig ?? {}),
@@ -63,30 +65,23 @@ export const ClientFactoryOptions = {
           original.clientConfig?.interceptors,
           overrides.clientConfig?.interceptors
         ),
-        acceptedOutputModes: mergeArrays(
-          original.clientConfig?.acceptedOutputModes,
-          overrides.clientConfig?.acceptedOutputModes
-        ),
+        acceptedOutputModes:
+          overrides.clientConfig?.acceptedOutputModes ?? original.clientConfig?.acceptedOutputModes,
       },
-      preferredTransports: mergeArrays(original.preferredTransports, overrides.preferredTransports),
+      preferredTransports: overrides.preferredTransports ?? original.preferredTransports,
     };
   },
 };
 
 export class ClientFactory {
-  private readonly transportsByName = new Map<string, TransportFactory>();
+  private readonly transportsByName: Map<string, TransportFactory>;
   private readonly agentCardResolver: AgentCardResolver;
 
   constructor(public readonly options: ClientFactoryOptions = ClientFactoryOptions.default) {
     if (!options.transports || options.transports.length === 0) {
       throw new Error('No transports provided');
     }
-    for (const transport of options.transports) {
-      if (this.transportsByName.has(transport.protocolName)) {
-        throw new Error(`Duplicate transport name: ${transport.protocolName}`);
-      }
-      this.transportsByName.set(transport.protocolName, transport);
-    }
+    this.transportsByName = transportsByName(options.transports);
     for (const transport of options.preferredTransports ?? []) {
       const factory = this.options.transports.find((t) => t.protocolName === transport);
       if (!factory) {
@@ -149,6 +144,38 @@ export class ClientFactory {
     const agentCard = await this.agentCardResolver.resolve(baseUrl, path);
     return this.createFromAgentCard(agentCard);
   }
+}
+
+function mergeTransports(
+  original: TransportFactory[],
+  overrides: TransportFactory[] | undefined
+): TransportFactory[] {
+  if (!overrides) {
+    return original;
+  }
+
+  const result = transportsByName(original);
+  const overridesByName = transportsByName(overrides);
+  for (const [name, factory] of overridesByName) {
+    result.set(name, factory);
+  }
+  return Array.from(result.values());
+}
+
+function transportsByName(
+  transports: ReadonlyArray<TransportFactory> | undefined
+): Map<string, TransportFactory> {
+  const result = new Map<string, TransportFactory>();
+  if (!transports) {
+    return result;
+  }
+  for (const t of transports) {
+    if (result.has(t.protocolName)) {
+      throw new Error(`Duplicate protocol name: ${t.protocolName}`);
+    }
+    result.set(t.protocolName, t);
+  }
+  return result;
 }
 
 function mergeArrays<T>(

@@ -12,7 +12,7 @@ export class DefaultExecutionEventBusManager implements ExecutionEventBusManager
   /**
    * Creates or retrieves an existing ExecutionEventBus based on the taskId.
    * @param taskId The ID of the task.
-   * @returns An instance of IExecutionEventBus.
+   * @returns An instance of ExecutionEventBus.
    */
   public createOrGetByTaskId(taskId: string): ExecutionEventBus {
     if (!this.taskIdToBus.has(taskId)) {
@@ -24,7 +24,7 @@ export class DefaultExecutionEventBusManager implements ExecutionEventBusManager
   /**
    * Retrieves an existing ExecutionEventBus based on the taskId.
    * @param taskId The ID of the task.
-   * @returns An instance of IExecutionEventBus or undefined if not found.
+   * @returns An instance of ExecutionEventBus or undefined if not found.
    */
   public getByTaskId(taskId: string): ExecutionEventBus | undefined {
     return this.taskIdToBus.get(taskId);

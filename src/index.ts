@@ -7,4 +7,5 @@
 
 export * from './types.js';
 export type { A2AResponse } from './a2a_response.js';
-export { AGENT_CARD_PATH } from './constants.js';
+export { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from './constants.js';
+export { Extensions, type ExtensionURI } from './extensions.js';

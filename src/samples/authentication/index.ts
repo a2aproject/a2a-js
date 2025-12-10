@@ -6,17 +6,16 @@ import {
   AgentExecutor,
   DefaultRequestHandler,
 } from '../../server/index.js';
+import { jsonRpcHandler } from '../../server/express/index.js';
 import { AuthenticationAgentExecutor } from './agent_executor.js';
 import { userBuilder } from './user_builder.js';
 import { authenticationHandler } from './authentication_middleware.js';
-import { jsonRpcHandler } from '../../server/express/json_rpc_handler.js';
 
 // --- Server Setup ---
 
 const authenticationAgentCard: AgentCard = {
   name: 'Sample Authentication Agent',
   description: 'A sample agent to test the authentication functionality',
-  // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',

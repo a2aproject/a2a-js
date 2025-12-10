@@ -37,6 +37,7 @@ export interface A2AClientOptions {
 /**
  * A2AClient is a TypeScript HTTP client for interacting with A2A-compliant agents.
  * Only JSON-RPC transport is supported.
+ * @deprecated Use {@link ClientFactory}
  */
 export class A2AClient {
   private static emptyOptions?: RequestOptions = undefined;

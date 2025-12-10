@@ -18,7 +18,7 @@ import {
   Part, // Added for explicit Part typing
 } from '../index.js';
 
-import { A2AClient } from '../client/index.js';
+import { ClientFactory } from '../client/index.js';
 
 // --- ANSI Colors ---
 const colors = {
@@ -48,7 +48,8 @@ function generateId(): string {
 let currentTaskId: string | undefined = undefined; // Initialize as undefined
 let currentContextId: string | undefined = undefined; // Initialize as undefined
 const serverUrl = process.argv[2] || 'http://localhost:41241'; // Agent's base URL
-const client = new A2AClient(serverUrl);
+const factory = new ClientFactory();
+const client = await factory.createFromUrl(serverUrl);
 let agentName = 'Agent'; // Default, try to get from agent card later
 
 // --- Readline Setup ---

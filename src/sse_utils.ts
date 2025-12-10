@@ -30,7 +30,7 @@ export const SSE_HEADERS = {
  * @returns Formatted SSE event string following the SSE specification
  *
  * @example
- * ```typescript
+ * ```ts
  * formatSSEEvent({ kind: 'message', text: 'Hello' })
  * // Returns: "data: {\"kind\":\"message\",\"text\":\"Hello\"}\n\n"
  *
@@ -51,7 +51,7 @@ export function formatSSEEvent(event: unknown): string {
  * @returns Formatted SSE error event string with custom event type
  *
  * @example
- * ```typescript
+ * ```ts
  * formatSSEErrorEvent({ code: -32603, message: 'Internal error' })
  * // Returns: "event: error\ndata: {\"code\":-32603,\"message\":\"Internal error\"}\n\n"
  * ```

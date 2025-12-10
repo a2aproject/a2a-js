@@ -8,6 +8,7 @@ import {
   TaskStatusUpdateEvent,
   TextPart,
   Message,
+  AGENT_CARD_PATH,
 } from '../../../index.js';
 import {
   InMemoryTaskStore,
@@ -17,7 +18,7 @@ import {
   ExecutionEventBus,
   DefaultRequestHandler,
 } from '../../../server/index.js';
-import { A2AExpressApp } from '../../../server/express/index.js';
+import { agentCardHandler, jsonRpcHandler, UserBuilder } from '../../../server/express/index.js';
 import { MessageData } from 'genkit';
 import { ai } from './genkit.js';
 import { searchMovies, searchPeople } from './tools.js';
@@ -247,8 +248,7 @@ class MovieAgentExecutor implements AgentExecutor {
 const movieAgentCard: AgentCard = {
   name: 'Movie Agent',
   description: 'An agent that can answer questions about movies and actors using TMDB.',
-  // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
-  url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp
+  url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples', // Added provider URL
@@ -296,13 +296,15 @@ async function main() {
   // 3. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(movieAgentCard, taskStore, agentExecutor);
 
-  // 4. Create and setup A2AExpressApp
-  const appBuilder = new A2AExpressApp(requestHandler);
-  const expressApp = appBuilder.setupRoutes(express());
+  // 4. Create and setup Express.js app
+  const app = express();
+
+  app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
+  app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
-  expressApp.listen(PORT, (err) => {
+  app.listen(PORT, (err) => {
     if (err) {
       throw err;
     }
