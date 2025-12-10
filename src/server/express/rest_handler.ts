@@ -20,7 +20,7 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 
 /**
- * Options for configuring the HTTP REST handler.
+ * Options for configuring the HTTP+JSON/REST handler.
  */
 export interface RestHandlerOptions {
   requestHandler: A2ARequestHandler;
