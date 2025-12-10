@@ -2,24 +2,11 @@ import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '.
 
 export type AgentExecutionEvent = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
-/**
- * Listener type for 'event' events that receive an AgentExecutionEvent payload.
- */
-export type EventListener = (event: AgentExecutionEvent) => void;
-
-/**
- * Listener type for 'finished' events that receive no payload.
- */
-export type FinishedListener = () => void;
-
 export interface ExecutionEventBus {
   publish(event: AgentExecutionEvent): void;
-  on(eventName: 'event', listener: EventListener): this;
-  on(eventName: 'finished', listener: FinishedListener): this;
-  off(eventName: 'event', listener: EventListener): this;
-  off(eventName: 'finished', listener: FinishedListener): this;
-  once(eventName: 'event', listener: EventListener): this;
-  once(eventName: 'finished', listener: FinishedListener): this;
+  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
+  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
+  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
   removeAllListeners(eventName?: 'event' | 'finished'): this;
   finished(): void;
 }
@@ -46,9 +33,9 @@ const CustomEventImpl: typeof CustomEvent =
 type WrappedListener = (e: Event) => void;
 
 /**
- * Union type for all listener types
+ * Listener type matching the ExecutionEventBus interface.
  */
-type AnyListener = EventListener | FinishedListener;
+type Listener = (event: AgentExecutionEvent) => void;
 
 /**
  * Web-compatible ExecutionEventBus using EventTarget.
@@ -62,7 +49,7 @@ type AnyListener = EventListener | FinishedListener;
 export class DefaultExecutionEventBus extends EventTarget implements ExecutionEventBus {
   // Track original listeners to their wrapped versions for proper removal.
   // Structure: eventName -> listener -> array of wrapped listeners (to handle multiple registrations)
-  private listenerMap: Map<'event' | 'finished', Map<AnyListener, WrappedListener[]>> = new Map();
+  private listenerMap: Map<'event' | 'finished', Map<Listener, WrappedListener[]>> = new Map();
 
   constructor() {
     super();
@@ -83,14 +70,13 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * Wraps the listener to extract event detail from CustomEvent.
    * Supports multiple registrations of the same listener (like EventEmitter).
    */
-  on(eventName: 'event', listener: EventListener): this;
-  on(eventName: 'finished', listener: FinishedListener): this;
-  on(eventName: 'event' | 'finished', listener: AnyListener): this {
+  on(eventName: 'event' | 'finished', listener: Listener): this {
     const wrappedListener: WrappedListener = (e: Event) => {
       if (e.type === 'event') {
-        (listener as EventListener)((e as CustomEvent<AgentExecutionEvent>).detail);
+        listener((e as CustomEvent<AgentExecutionEvent>).detail);
       } else {
-        (listener as FinishedListener)();
+        // 'finished' event - call with undefined (matches EventEmitter behavior)
+        listener(undefined as unknown as AgentExecutionEvent);
       }
     };
 
@@ -110,9 +96,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * Uses the stored wrapped listener for proper removal.
    * Removes one instance at a time (LIFO order, like EventEmitter).
    */
-  off(eventName: 'event', listener: EventListener): this;
-  off(eventName: 'finished', listener: FinishedListener): this;
-  off(eventName: 'event' | 'finished', listener: AnyListener): this {
+  off(eventName: 'event' | 'finished', listener: Listener): this {
     const eventListeners = this.listenerMap.get(eventName)!;
     const wrappedListeners = eventListeners.get(listener);
     if (wrappedListeners && wrappedListeners.length > 0) {
@@ -132,9 +116,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * Listener is automatically removed after first invocation.
    * Supports multiple registrations of the same listener (like EventEmitter).
    */
-  once(eventName: 'event', listener: EventListener): this;
-  once(eventName: 'finished', listener: FinishedListener): this;
-  once(eventName: 'event' | 'finished', listener: AnyListener): this {
+  once(eventName: 'event' | 'finished', listener: Listener): this {
     const eventListeners = this.listenerMap.get(eventName)!;
 
     const wrappedListener: WrappedListener = (e: Event) => {
@@ -151,9 +133,10 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
       }
 
       if (e.type === 'event') {
-        (listener as EventListener)((e as CustomEvent<AgentExecutionEvent>).detail);
+        listener((e as CustomEvent<AgentExecutionEvent>).detail);
       } else {
-        (listener as FinishedListener)();
+        // 'finished' event - call with undefined (matches EventEmitter behavior)
+        listener(undefined as unknown as AgentExecutionEvent);
       }
     };
 
