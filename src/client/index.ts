@@ -6,13 +6,13 @@ export { A2AClient } from './client.js';
 export type { A2AClientOptions } from './client.js';
 export * from './auth-handler.js';
 export {
-  type AgentCardResolver,
+  AgentCardResolver,
   type AgentCardResolverOptions,
   DefaultAgentCardResolver,
 } from './card-resolver.js';
 export { Client, type ClientConfig, type RequestOptions } from './multitransport-client.js';
 export type { Transport, TransportFactory } from './transports/transport.js';
-export { ClientFactory, type ClientFactoryOptions } from './factory.js';
+export { ClientFactory, ClientFactoryOptions } from './factory.js';
 export {
   JsonRpcTransport,
   JsonRpcTransportFactory,
