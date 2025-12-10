@@ -18,7 +18,7 @@ export {
   JsonRpcTransportFactory,
   JsonRpcTransportOptions,
 } from './transports/json_rpc_transport.js';
-export {
+export type {
   CallInterceptor,
   BeforeArgs,
   AfterArgs,
