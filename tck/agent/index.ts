@@ -225,7 +225,7 @@ async function main() {
 
   // 5. Start the server
   const PORT = process.env.PORT || 41241;
-  app.listen(PORT, (err) => {
+  expressApp.listen(PORT, (err) => {
     if (err) {
       throw err;
     }
