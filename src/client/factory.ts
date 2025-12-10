@@ -39,7 +39,8 @@ export const ClientFactoryOptions = {
 
   /**
    * Creates new options by merging an original and an override object.
-   * Transports and interceptors are merged. Other properties are overridden.
+   * Transports are merged based on `TransportFactory.protocolName`,
+   * interceptors are concatenated, other fields are overriden.
    *
    * @example
    * ```ts
