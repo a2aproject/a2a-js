@@ -382,10 +382,8 @@ export class Client {
     args: AfterArgs<K>,
     interceptors?: CallInterceptor[]
   ): Promise<void> {
-    if (!this.config?.interceptors || this.config.interceptors.length === 0) {
-      return;
-    }
-    for (const interceptor of interceptors ?? this.config.interceptors) {
+    const reversedInterceptors = [...(interceptors ?? this.config?.interceptors ?? [])].reverse();
+    for (const interceptor of reversedInterceptors) {
       await interceptor.after(args);
       if (args.earlyReturn) {
         return;
