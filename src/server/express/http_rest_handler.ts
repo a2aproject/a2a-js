@@ -78,7 +78,7 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  * @returns Express router configured with all A2A REST endpoints
  *
  * @example
- * ```typescript
+ * ```ts
  * const app = express();
  * const requestHandler = new DefaultRequestHandler(...);
  * app.use('/api/rest', httpRestHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
