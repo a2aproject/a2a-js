@@ -16,7 +16,6 @@ import { authenticationHandler } from './authentication_middleware.js';
 const authenticationAgentCard: AgentCard = {
   name: 'Sample Authentication Agent',
   description: 'A sample agent to test the authentication functionality',
-  // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',

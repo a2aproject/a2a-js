@@ -6,6 +6,9 @@ import { jsonErrorHandler, jsonRpcHandler } from './json_rpc_handler.js';
 import { agentCardHandler } from './agent_card_handler.js';
 import { UserBuilder } from './common.js';
 
+/**
+ * @deprecated Use specific middlewares ({@link jsonRpcHandler}, {@link agentCardHandler}) directly.
+ */
 export class A2AExpressApp {
   private requestHandler: A2ARequestHandler;
   private userBuilder: UserBuilder;

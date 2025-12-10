@@ -15,7 +15,6 @@ const sampleAgentCard: AgentCard = {
   name: 'Sample Agent',
   description:
     'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
-  // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',

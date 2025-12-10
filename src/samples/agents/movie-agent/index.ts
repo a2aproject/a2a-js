@@ -248,8 +248,7 @@ class MovieAgentExecutor implements AgentExecutor {
 const movieAgentCard: AgentCard = {
   name: 'Movie Agent',
   description: 'An agent that can answer questions about movies and actors using TMDB.',
-  // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
-  url: 'http://localhost:41241/', // Example: if baseUrl in A2AExpressApp
+  url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples', // Added provider URL
@@ -297,7 +296,7 @@ async function main() {
   // 3. Create DefaultRequestHandler
   const requestHandler = new DefaultRequestHandler(movieAgentCard, taskStore, agentExecutor);
 
-  // 4. Create and setup A2AExpressApp
+  // 4. Create and setup Express.js app
   const app = express();
 
   app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));

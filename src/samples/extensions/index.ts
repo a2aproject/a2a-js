@@ -1,13 +1,13 @@
 import express from 'express';
 
-import { AgentCard } from '../../index.js';
+import { AGENT_CARD_PATH, AgentCard } from '../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
   AgentExecutor,
   DefaultRequestHandler,
 } from '../../server/index.js';
-import { A2AExpressApp } from '../../server/express/index.js';
+import { jsonRpcHandler, agentCardHandler, UserBuilder } from '../../server/express/index.js';
 import { TimestampingAgentExecutor } from './extensions.js';
 import { SampleAgentExecutor } from '../agents/sample-agent/agent_executor.js';
 
@@ -17,7 +17,6 @@ const extensionAgentCard: AgentCard = {
   name: 'Sample Agent with timestamp extensions',
   description:
     'A sample agent to test the stream functionality and simulate the flow of tasks statuses, with extensions integration.',
-  // Adjust the base URL and port as needed. /a2a is the default base in A2AExpressApp
   url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',
@@ -64,13 +63,15 @@ async function main() {
     timestampAgentExecutor
   );
 
-  // 5. Create and setup A2AExpressApp
-  const appBuilder = new A2AExpressApp(requestHandler);
-  const expressApp = appBuilder.setupRoutes(express());
+  // 5. Create and setup Express.js app
+  const app = express();
+
+  app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
+  app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
   // 6. Start the server
   const PORT = process.env.PORT || 41241;
-  expressApp.listen(PORT, (err) => {
+  app.listen(PORT, (err) => {
     if (err) {
       throw err;
     }
