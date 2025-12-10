@@ -68,6 +68,10 @@ const helloAgentCard: AgentCard = {
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text'],
+  additionalInterfaces: [
+    { url: 'http://localhost:4000/', transport: 'JSONRPC' }, // Default JSON-RPC transport
+    { url: 'http://localhost:4000/a2a/rest', transport: 'HTTP+JSON' }, // HTTP+JSON/REST transport
+  ],
 };
 
 // 2. Implement the agent's logic.
@@ -104,6 +108,7 @@ const app = express();
 
 app.use(AGENT_CARD_WELL_KNOWN_PATH, agentCardHandler({ agentCardProvider: requestHandler }));
 app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+app.use(httpRestHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
 app.listen(4000, () => {
   console.log(`🚀 Server started on http://localhost:4000`);
@@ -390,10 +395,15 @@ const handler: AuthenticationHandler = {
 // 2. Create the authenticated fetch function.
 const authFetch = createAuthenticatingFetchWithRetry(fetch, handler);
 
-// 3. Initialize the client with the new fetch implementation.
-const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json', {
-  fetchImpl: authFetch,
-});
+// 3. Inject new fetch implementation into a client factory.
+const factory = new ClientFactory(ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+  transports: [
+    new JsonRpcTransportFactory({ fetchImpl: authFetch })
+  ]
+}))
+
+// 4. Clients created from the factory are going to have custom fetch attached.
+const client = await factory.createFromUrl('http://localhost:4000');
 ```
 
 ---
@@ -467,12 +477,16 @@ The `sendMessageStream` method returns an `AsyncGenerator` that yields events as
 
 ```typescript
 // client.ts
-import { A2AClient } from '@a2a-js/sdk/client';
+import { ClientFactory } from '@a2a-js/sdk/client';
 import { MessageSendParams } from '@a2a-js/sdk';
 import { v4 as uuidv4 } from 'uuid';
 // ... other imports ...
 
-const client = await A2AClient.fromCardUrl('http://localhost:4000/.well-known/agent-card.json');
+const factory = new ClientFactory();
+
+// createFromUrl accepts baseUrl and optional path,
+// (the default path is /.well-known/agent-card.json)
+const client = await factory.createFromUrl('http://localhost:4000');
 
 async function streamTask() {
   const streamParams: MessageSendParams = {

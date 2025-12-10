@@ -1,55 +1,40 @@
 import { v4 as uuidv4 } from 'uuid';
-import {
-  A2AClient,
-  AfterArgs,
-  AuthenticationHandler,
-  BeforeArgs,
-  CallInterceptor,
-  ClientFactory,
-  ClientFactoryOptions,
-  createAuthenticatingFetchWithRetry,
-  JsonRpcTransportFactory,
-} from '../../client/index.js';
+import { ClientFactory } from '../../client/factory.js';
+import { MessageSendParams } from '../../types.js';
+// ... other imports ...
 
-// A simple token provider that simulates fetching a new token.
-const tokenProvider = {
-  token: 'initial-stale-token',
-  getNewToken: async () => {
-    console.log('Refreshing auth token...');
-    tokenProvider.token = `new-token-${Date.now()}`;
-    return tokenProvider.token;
-  },
-};
+const factory = new ClientFactory();
 
-// 1. Implement the AuthenticationHandler interface.
-const handler: AuthenticationHandler = {
-  // headers() is called on every request to get the current auth headers.
-  headers: async () => ({
-    Authorization: `Bearer ${tokenProvider.token}`,
-  }),
-
-  // shouldRetryWithHeaders() is called after a request fails.
-  // It decides if a retry is needed and provides new headers.
-  shouldRetryWithHeaders: async (req: RequestInit, res: Response) => {
-    if (res.status === 401) {
-      // Unauthorized
-      const newToken = await tokenProvider.getNewToken();
-      // Return new headers to trigger a single retry.
-      return { Authorization: `Bearer ${newToken}` };
-    }
-
-    // Return undefined to not retry for other errors.
-    return undefined;
-  },
-};
-
-// 2. Create the authenticated fetch function.
-const authFetch = createAuthenticatingFetchWithRetry(fetch, handler);
-
-// 3. Inject new fetch implementation into a client factory.
-const factory = new ClientFactory(ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
-  transports: [
-    new JsonRpcTransportFactory({ fetchImpl: authFetch })
-  ]
-}))
+// createFromUrl accepts baseUrl and optional path,
+// (the default path is /.well-known/agent-card.json)
 const client = await factory.createFromUrl('http://localhost:4000');
+
+async function streamTask() {
+  const streamParams: MessageSendParams = {
+    message: {
+      messageId: uuidv4(),
+      role: 'user',
+      parts: [{ kind: 'text', text: 'Stream me some updates!' }],
+      kind: 'message',
+    },
+  };
+
+  try {
+    const stream = client.sendMessageStream(streamParams);
+
+    for await (const event of stream) {
+      if (event.kind === 'task') {
+        console.log(`[${event.id}] Task created. Status: ${event.status.state}`);
+      } else if (event.kind === 'status-update') {
+        console.log(`[${event.taskId}] Status Updated: ${event.status.state}`);
+      } else if (event.kind === 'artifact-update') {
+        console.log(`[${event.taskId}] Artifact Received: ${event.artifact.artifactId}`);
+      }
+    }
+    console.log('--- Stream finished ---');
+  } catch (error) {
+    console.error('Error during streaming:', error);
+  }
+}
+
+await streamTask();
