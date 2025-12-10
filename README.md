@@ -107,7 +107,7 @@ const requestHandler = new DefaultRequestHandler(
 const app = express();
 
 app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
-app.use(jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+app.use('/a2a/jsonrpc', jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 app.use('/a2a/rest', restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
 
 app.listen(4000, () => {
@@ -117,7 +117,7 @@ app.listen(4000, () => {
 
 ### Client: Sending a Message
 
-The `ClientFactory` makes it easy to communicate with any A2A-compliant agent.
+The [`ClientFactory`](src/client/factory.ts) makes it easy to communicate with any A2A-compliant agent.
 
 ```typescript
 // client.ts
