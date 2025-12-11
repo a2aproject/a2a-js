@@ -23,13 +23,13 @@ npm install @a2a-js/sdk
 
 ### For Server Usage
 
-If you plan to use the A2A server functionality (`A2AExpressApp`), you'll also need to install Express as it's a peer dependency:
+If you plan to use the Express integration (imports from `@a2a-js/sdk/server/express`) for A2A server, you'll also need to install Express as it's a peer dependency:
 
 ```bash
 npm install express
 ```
 
-You can also find JavaScript samples [here](https://github.com/google-a2a/a2a-samples/tree/main/samples/js).
+You can also find some samples [here](https://github.com/a2aproject/a2a-js/tree/main/src/samples).
 
 ---
 
