@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, afterEach } from 'mocha';
-import { expect } from 'chai';
+import { describe, it, beforeEach, afterEach, expect } from 'vitest';
 import sinon from 'sinon';
 import { A2AClient } from '../../src/client/client.js';
 import {

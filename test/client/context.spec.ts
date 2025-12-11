@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { describe, it, expect } from 'vitest';
 import { ClientCallContext, ClientCallContextKey } from '../../src/client/context.js';
 
 describe('ClientCallContext', () => {

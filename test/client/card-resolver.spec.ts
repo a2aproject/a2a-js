@@ -1,7 +1,7 @@
+import { describe, it, beforeEach, expect } from 'vitest';
 import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
 import sinon from 'sinon';
 import { AgentCard } from '../../src/types.js';
-import { expect } from 'chai';
 
 describe('DefaultAgentCardResolver', () => {
   let mockFetch: sinon.SinonStub;

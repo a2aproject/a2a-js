@@ -1,5 +1,4 @@
-import 'mocha';
-import { assert, expect } from 'chai';
+import { describe, it, beforeEach, afterEach, assert, expect } from 'vitest';
 import sinon, { SinonStub } from 'sinon';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import request from 'supertest';

@@ -1,5 +1,4 @@
-import 'mocha';
-import { assert } from 'chai';
+import { describe, it, beforeEach, afterEach, assert } from 'vitest';
 import sinon from 'sinon';
 import express, { Request, Response } from 'express';
 import { Server } from 'http';

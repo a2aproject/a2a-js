@@ -1,7 +1,6 @@
 import { JsonRpcTransport } from '../../../src/client/transports/json_rpc_transport.js';
-import { expect } from 'chai';
 import sinon from 'sinon';
-import { describe, it, beforeEach } from 'mocha';
+import { describe, it, beforeEach, expect } from 'vitest';
 import { MessageSendParams, TextPart } from '../../../src/types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';

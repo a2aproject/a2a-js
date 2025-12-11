@@ -1,5 +1,4 @@
-import 'mocha';
-import { assert, expect } from 'chai';
+import { describe, it, beforeEach, afterEach, assert, expect } from 'vitest';
 import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';

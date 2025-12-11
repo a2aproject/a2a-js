@@ -1,5 +1,4 @@
-import { describe, it, beforeEach } from 'mocha';
-import { expect } from 'chai';
+import { describe, it, beforeEach, expect } from 'vitest';
 import sinon from 'sinon';
 import { Client, ClientConfig, RequestOptions } from '../../src/client/multitransport-client.js';
 import { Transport } from '../../src/client/transports/transport.js';

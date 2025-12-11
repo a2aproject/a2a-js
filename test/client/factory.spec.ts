@@ -1,5 +1,4 @@
-import { describe, it, beforeEach } from 'mocha';
-import { expect } from 'chai';
+import { describe, it, beforeEach, expect } from 'vitest';
 import sinon from 'sinon';
 import { ClientFactory, ClientFactoryOptions } from '../../src/client/factory.js';
 import { TransportFactory, Transport } from '../../src/client/transports/transport.js';

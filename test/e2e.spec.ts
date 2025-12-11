@@ -1,4 +1,5 @@
 import express, { Express } from 'express';
+import { describe, it, beforeEach, afterEach, expect } from 'vitest';
 import {
   AgentExecutionEvent,
   AgentExecutor,
@@ -12,7 +13,6 @@ import sinon from 'sinon';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { ClientFactory } from '../src/client/factory.js';
-import { expect } from 'chai';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
 import { A2AStreamEventData } from '../src/client/client.js';
