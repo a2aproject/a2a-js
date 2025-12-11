@@ -333,9 +333,11 @@ describe('DefaultExecutionEventBus', () => {
   describe('this context', () => {
     // Helper to capture `this` without triggering no-this-alias lint rule
     function createThisCapture(): { value: unknown; capture: () => void } {
-      const result = { value: undefined as unknown };
-      result.capture = function (this: unknown) {
-        result.value = this;
+      const result: { value: unknown; capture: () => void } = {
+        value: undefined,
+        capture: function (this: unknown) {
+          result.value = this;
+        },
       };
       return result;
     }
