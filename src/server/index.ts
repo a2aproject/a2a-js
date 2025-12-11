@@ -6,7 +6,11 @@
 export type { AgentExecutor } from './agent_execution/agent_executor.js';
 export { RequestContext } from './agent_execution/request_context.js';
 
-export type { AgentExecutionEvent, ExecutionEventBus } from './events/execution_event_bus.js';
+export type {
+  AgentExecutionEvent,
+  ExecutionEventBus,
+  ExecutionEventName,
+} from './events/execution_event_bus.js';
 export { DefaultExecutionEventBus } from './events/execution_event_bus.js';
 export type { ExecutionEventBusManager } from './events/execution_event_bus_manager.js';
 export { DefaultExecutionEventBusManager } from './events/execution_event_bus_manager.js';

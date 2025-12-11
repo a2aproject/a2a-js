@@ -2,12 +2,17 @@ import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '.
 
 export type AgentExecutionEvent = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
+/**
+ * Event names supported by ExecutionEventBus.
+ */
+export type ExecutionEventName = 'event' | 'finished';
+
 export interface ExecutionEventBus {
   publish(event: AgentExecutionEvent): void;
-  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
-  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
-  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this;
-  removeAllListeners(eventName?: 'event' | 'finished'): this;
+  on(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this;
+  off(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this;
+  once(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this;
+  removeAllListeners(eventName?: ExecutionEventName): this;
   finished(): void;
 }
 
@@ -50,16 +55,15 @@ function isAgentExecutionCustomEvent(e: Event): e is CustomEvent<AgentExecutionE
  * Web-compatible ExecutionEventBus using EventTarget.
  * Works across all modern runtimes: Node.js 15+, browsers, Cloudflare Workers, Deno, Bun.
  *
- * This is a drop-in replacement for Node.js EventEmitter with identical API and
- * memory semantics. Listeners are held until explicitly removed (via `off()` or
- * `removeAllListeners()`) or until the instance is garbage collected - exactly
- * like EventEmitter. No additional cleanup is required beyond standard practices.
+ * This implementation provides the subset of EventEmitter methods defined in the
+ * ExecutionEventBus interface. Users extending DefaultExecutionEventBus should note
+ * that other EventEmitter methods (e.g., listenerCount, rawListeners) are not available.
  */
 export class DefaultExecutionEventBus extends EventTarget implements ExecutionEventBus {
   // Separate storage for each event type - both use the interface's Listener type
   // but are invoked differently (with event payload vs. no arguments)
-  private eventListeners: Map<Listener, WrappedListener[]> = new Map();
-  private finishedListeners: Map<Listener, WrappedListener[]> = new Map();
+  private readonly eventListeners: Map<Listener, WrappedListener[]> = new Map();
+  private readonly finishedListeners: Map<Listener, WrappedListener[]> = new Map();
 
   publish(event: AgentExecutionEvent): void {
     this.dispatchEvent(new CustomEventImpl('event', { detail: event }));
@@ -73,8 +77,11 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * EventEmitter-compatible 'on' method.
    * Wraps the listener to extract event detail from CustomEvent.
    * Supports multiple registrations of the same listener (like EventEmitter).
+   * @param eventName The event name to listen for.
+   * @param listener The callback function to invoke when the event is emitted.
+   * @returns This instance for method chaining.
    */
-  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
+  on(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this {
     if (eventName === 'event') {
       this.addEventListenerInternal(listener);
     } else {
@@ -90,8 +97,11 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * EventEmitter-compatible 'off' method.
    * Uses the stored wrapped listener for proper removal.
    * Removes one instance at a time (LIFO order, like EventEmitter).
+   * @param eventName The event name to stop listening for.
+   * @param listener The callback function to remove.
+   * @returns This instance for method chaining.
    */
-  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
+  off(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this {
     if (eventName === 'event') {
       this.removeEventListenerInternal(listener);
     } else {
@@ -104,8 +114,11 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
    * EventEmitter-compatible 'once' method.
    * Listener is automatically removed after first invocation.
    * Supports multiple registrations of the same listener (like EventEmitter).
+   * @param eventName The event name to listen for once.
+   * @param listener The callback function to invoke when the event is emitted.
+   * @returns This instance for method chaining.
    */
-  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
+  once(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this {
     if (eventName === 'event') {
       this.addEventListenerOnceInternal(listener);
     } else {
@@ -117,8 +130,10 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
   /**
    * EventEmitter-compatible 'removeAllListeners' method.
    * Removes all listeners for a specific event or all events.
+   * @param eventName Optional event name to remove listeners for. If omitted, removes all.
+   * @returns This instance for method chaining.
    */
-  removeAllListeners(eventName?: 'event' | 'finished'): this {
+  removeAllListeners(eventName?: ExecutionEventName): this {
     if (eventName === undefined || eventName === 'event') {
       for (const wrappedListeners of this.eventListeners.values()) {
         for (const wrapped of wrappedListeners) {
@@ -140,7 +155,52 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     return this;
   }
 
-  // ─── Internal methods for 'event' listeners ────────────────────────────────
+  // ========================
+  // Helper methods for listener tracking
+  // ========================
+
+  /**
+   * Adds a wrapped listener to the tracking map.
+   */
+  private trackListener(
+    listenerMap: Map<Listener, WrappedListener[]>,
+    listener: Listener,
+    wrapped: WrappedListener
+  ): void {
+    const existing = listenerMap.get(listener);
+    if (existing) {
+      existing.push(wrapped);
+    } else {
+      listenerMap.set(listener, [wrapped]);
+    }
+  }
+
+  /**
+   * Removes a wrapped listener from the tracking map (for once cleanup).
+   * Returns true if the listener was found and removed.
+   */
+  private untrackWrappedListener(
+    listenerMap: Map<Listener, WrappedListener[]>,
+    listener: Listener,
+    wrapped: WrappedListener
+  ): boolean {
+    const wrappedList = listenerMap.get(listener);
+    if (wrappedList && wrappedList.length > 0) {
+      const index = wrappedList.indexOf(wrapped);
+      if (index !== -1) {
+        wrappedList.splice(index, 1);
+        if (wrappedList.length === 0) {
+          listenerMap.delete(listener);
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ========================
+  // Internal methods for 'event' listeners
+  // ========================
 
   private addEventListenerInternal(listener: Listener): void {
     const wrapped: WrappedListener = (e: Event) => {
@@ -150,12 +210,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
       listener.call(this, e.detail);
     };
 
-    const existing = this.eventListeners.get(listener);
-    if (existing) {
-      existing.push(wrapped);
-    } else {
-      this.eventListeners.set(listener, [wrapped]);
-    }
+    this.trackListener(this.eventListeners, listener, wrapped);
     this.addEventListener('event', wrapped);
   }
 
@@ -163,10 +218,10 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     const wrappedList = this.eventListeners.get(listener);
     if (wrappedList && wrappedList.length > 0) {
       const wrapped = wrappedList.pop()!;
-      this.removeEventListener('event', wrapped);
       if (wrappedList.length === 0) {
         this.eventListeners.delete(listener);
       }
+      this.removeEventListener('event', wrapped);
     }
   }
 
@@ -178,30 +233,18 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
       }
 
       // Clean up tracking
-      const wrappedList = this.eventListeners.get(listener);
-      if (wrappedList) {
-        const index = wrappedList.indexOf(wrapped);
-        if (index !== -1) {
-          wrappedList.splice(index, 1);
-        }
-        if (wrappedList.length === 0) {
-          this.eventListeners.delete(listener);
-        }
-      }
+      this.untrackWrappedListener(this.eventListeners, listener, wrapped);
 
       listener.call(this, e.detail);
     };
 
-    const existing = this.eventListeners.get(listener);
-    if (existing) {
-      existing.push(wrapped);
-    } else {
-      this.eventListeners.set(listener, [wrapped]);
-    }
+    this.trackListener(this.eventListeners, listener, wrapped);
     this.addEventListener('event', wrapped, { once: true });
   }
 
-  // ─── Internal methods for 'finished' listeners ─────────────────────────────
+  // ========================
+  // Internal methods for 'finished' listeners
+  // ========================
   // The interface declares listeners as (event: AgentExecutionEvent) => void,
   // but for 'finished' events they are invoked with no arguments (EventEmitter behavior).
   // We use Function.prototype.call to invoke with `this` as the event bus (matching
@@ -212,12 +255,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
       listener.call(this);
     };
 
-    const existing = this.finishedListeners.get(listener);
-    if (existing) {
-      existing.push(wrapped);
-    } else {
-      this.finishedListeners.set(listener, [wrapped]);
-    }
+    this.trackListener(this.finishedListeners, listener, wrapped);
     this.addEventListener('finished', wrapped);
   }
 
@@ -225,36 +263,22 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     const wrappedList = this.finishedListeners.get(listener);
     if (wrappedList && wrappedList.length > 0) {
       const wrapped = wrappedList.pop()!;
-      this.removeEventListener('finished', wrapped);
       if (wrappedList.length === 0) {
         this.finishedListeners.delete(listener);
       }
+      this.removeEventListener('finished', wrapped);
     }
   }
 
   private addFinishedListenerOnceInternal(listener: Listener): void {
     const wrapped: WrappedListener = () => {
       // Clean up tracking
-      const wrappedList = this.finishedListeners.get(listener);
-      if (wrappedList) {
-        const index = wrappedList.indexOf(wrapped);
-        if (index !== -1) {
-          wrappedList.splice(index, 1);
-        }
-        if (wrappedList.length === 0) {
-          this.finishedListeners.delete(listener);
-        }
-      }
+      this.untrackWrappedListener(this.finishedListeners, listener, wrapped);
 
       listener.call(this);
     };
 
-    const existing = this.finishedListeners.get(listener);
-    if (existing) {
-      existing.push(wrapped);
-    } else {
-      this.finishedListeners.set(listener, [wrapped]);
-    }
+    this.trackListener(this.finishedListeners, listener, wrapped);
     this.addEventListener('finished', wrapped, { once: true });
   }
 }
