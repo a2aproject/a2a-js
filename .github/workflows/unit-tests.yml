@@ -26,4 +26,8 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     - run: npm ci
-    - run: npm test
+    - run: npm run coverage
+    - uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-${{ matrix.node-version }}
+        path: coverage
