@@ -46,7 +46,7 @@
     "@types/node": "^22.13.14",
     "@types/sinon": "^17.0.4",
     "@types/supertest": "^6.0.3",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^4.0.15",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
@@ -61,7 +61,7 @@
     "tsx": "^4.19.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vitest": "^2.1.9"
+    "vitest": "^4.0.15"
   },
   "scripts": {
     "clean": "gts clean",
