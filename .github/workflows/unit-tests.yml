@@ -11,13 +11,10 @@ on:
 
 jobs:
   test:
-
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         node-version: [18, 20, 22, 24]
-
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -28,6 +25,10 @@ jobs:
     - run: npm ci
     - run: npm test
 
+  # The vitest 4.0.x test coverage integration doesn't support Node 18,
+  # Node 18 has reached EOL already, however for compatibility we're still going to run tests
+  # for Node 18 until the next major release (see https://github.com/a2aproject/a2a-js/pull/256).
+  # Run coverage only once on a modern node to generate a report to avoid downgrading vitest.
   coverage:
     runs-on: ubuntu-latest
     steps:
