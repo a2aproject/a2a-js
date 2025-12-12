@@ -26,8 +26,20 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     - run: npm ci
+    - run: npm test
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+    - run: npm ci
     - run: npm run coverage
     - uses: actions/upload-artifact@v4
       with:
-        name: coverage-report-${{ matrix.node-version }}
+        name: coverage-report
         path: coverage
