@@ -1,5 +1,4 @@
-import 'mocha';
-import { expect } from 'chai';
+import { describe, it, beforeEach, expect } from 'vitest';
 
 import {
   DefaultExecutionEventBus,
