@@ -15,7 +15,7 @@ import {
   AgentCard,
   GetTaskPushNotificationConfigParams,
 } from '../../src/types.js';
-import { A2AStreamEventData } from '../../src/client/client.js';
+import { A2AStreamEventData, A2AStreamEventDataResubscribe } from '../../src/client/client.js';
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {
@@ -746,7 +746,8 @@ describe('Client', () => {
         name: 'resubscribeTask',
         transportStubGetter: (t: sinon.SinonStubbedInstance<Transport>): sinon.SinonStub =>
           t.resubscribeTask,
-        caller: (c: Client): AsyncGenerator<A2AStreamEventData> => c.resubscribeTask({ id: '123' }),
+        caller: (c: Client): AsyncGenerator<A2AStreamEventDataResubscribe> =>
+          c.resubscribeTask({ id: '123' }),
       },
     ];
 

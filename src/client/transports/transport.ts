@@ -9,7 +9,7 @@ import {
   AgentCard,
   GetTaskPushNotificationConfigParams,
 } from '../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../client.js';
+import { A2AStreamEventData, A2AStreamEventDataResubscribe, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 
 export interface Transport {
@@ -49,7 +49,7 @@ export interface Transport {
   resubscribeTask(
     params: TaskIdParams,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined>;
+  ): AsyncGenerator<A2AStreamEventDataResubscribe, void, undefined>;
 }
 
 export interface TransportFactory {
