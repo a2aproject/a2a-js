@@ -121,8 +121,8 @@ The [`ClientFactory`](src/client/factory.ts) makes it easy to communicate with a
 
 ```typescript
 // client.ts
-import { ClientFactory, SendMessageSuccessResponse } from '@a2a-js/sdk/client';
-import { Message, MessageSendParams } from '@a2a-js/sdk';
+import { ClientFactory } from '@a2a-js/sdk/client';
+import { Message, MessageSendParams, SendMessageSuccessResponse } from '@a2a-js/sdk';
 import { v4 as uuidv4 } from 'uuid';
 
 async function run() {
@@ -222,8 +222,8 @@ The client sends a message and receives a `Task` object as the result.
 
 ```typescript
 // client.ts
-import { ClientFactory, SendMessageSuccessResponse } from '@a2a-js/sdk/client';
-import { Message, MessageSendParams, Task } from '@a2a-js/sdk';
+import { ClientFactory } from '@a2a-js/sdk/client';
+import { Message, MessageSendParams, SendMessageSuccessResponse, Task } from '@a2a-js/sdk';
 // ... other imports ...
 
 const factory = new ClientFactory();
@@ -354,7 +354,7 @@ Here's how to use it to manage a Bearer token:
 ```typescript
 import {
   ClientFactory,
-  ClientFactoryOptions
+  ClientFactoryOptions,
   JsonRpcTransportFactory,
   AuthenticationHandler,
   createAuthenticatingFetchWithRetry,
