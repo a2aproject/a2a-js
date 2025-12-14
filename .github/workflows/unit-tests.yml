@@ -25,6 +25,21 @@ jobs:
     - run: npm ci
     - run: npm test
 
+  # Edge runtime tests use @edge-runtime/vm to emulate Cloudflare Workers,
+  # Vercel Edge Functions, and similar environments. This ensures the SDK
+  # works correctly in non-Node.js server environments.
+  test-edge:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+    - run: npm ci
+    - run: npm run test:edge
+
   # The vitest 4.0.x test coverage integration doesn't support Node 18,
   # Node 18 has reached EOL already, however for compatibility we're still going to run tests
   # for Node 18 until the next major release (see https://github.com/a2aproject/a2a-js/pull/256).

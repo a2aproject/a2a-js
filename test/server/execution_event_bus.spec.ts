@@ -106,7 +106,7 @@ describe('DefaultExecutionEventBus', () => {
       expect(callCount).to.equal(0);
     });
 
-    it('should remove listeners in LIFO order when same listener registered multiple times', () => {
+    it('should remove one instance at a time when same listener registered multiple times', () => {
       let callCount = 0;
       const listener = () => {
         callCount++;
@@ -117,20 +117,20 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.on('event', listener);
       eventBus.on('event', listener);
 
-      // Remove one (should remove most recently added)
+      // Remove one instance
       eventBus.off('event', listener);
 
       eventBus.publish(createMessage('test'));
       expect(callCount).to.equal(2);
 
-      // Remove another
+      // Remove another instance
       callCount = 0;
       eventBus.off('event', listener);
 
       eventBus.publish(createMessage('test'));
       expect(callCount).to.equal(1);
 
-      // Remove last one
+      // Remove last instance
       callCount = 0;
       eventBus.off('event', listener);
 

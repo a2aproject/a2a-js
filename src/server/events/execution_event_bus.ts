@@ -85,9 +85,6 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     if (eventName === 'event') {
       this.addEventListenerInternal(listener);
     } else {
-      // For 'finished' events, the listener is called with no arguments.
-      // The interface types it as receiving AgentExecutionEvent for API simplicity,
-      // but the actual runtime behavior (matching EventEmitter) passes no args.
       this.addFinishedListenerInternal(listener);
     }
     return this;
@@ -96,7 +93,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
   /**
    * EventEmitter-compatible 'off' method.
    * Uses the stored wrapped listener for proper removal.
-   * Removes one instance at a time (LIFO order, like EventEmitter).
+   * Removes at most one instance of a listener per call (like EventEmitter).
    * @param eventName The event name to stop listening for.
    * @param listener The callback function to remove.
    * @returns This instance for method chaining.
@@ -177,13 +174,12 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
 
   /**
    * Removes a wrapped listener from the tracking map (for once cleanup).
-   * Returns true if the listener was found and removed.
    */
   private untrackWrappedListener(
     listenerMap: Map<Listener, WrappedListener[]>,
     listener: Listener,
     wrapped: WrappedListener
-  ): boolean {
+  ): void {
     const wrappedList = listenerMap.get(listener);
     if (wrappedList && wrappedList.length > 0) {
       const index = wrappedList.indexOf(wrapped);
@@ -192,10 +188,8 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
         if (wrappedList.length === 0) {
           listenerMap.delete(listener);
         }
-        return true;
       }
     }
-    return false;
   }
 
   // ========================
