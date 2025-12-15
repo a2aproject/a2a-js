@@ -1,14 +1,24 @@
 import { mergeConfig } from 'vitest/config';
+import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
 import defaultConfig from './vitest.config';
 
-export default mergeConfig(defaultConfig, {
-  test: {
-    environment: 'edge-runtime',
-    exclude: [
-      // Express tests require Node.js-specific APIs (http, Express framework)
-      'test/server/a2a_express_app.spec.ts',
-      // Node modules should always be excluded
-      '**/node_modules/**',
-    ],
-  },
-});
+export default defineWorkersConfig(
+  mergeConfig(defaultConfig, {
+    test: {
+      exclude: [
+        // Express tests require Node.js-specific APIs (http, Express framework)
+        'test/server/a2a_express_app.spec.ts',
+        'test/e2e.spec.ts',
+        // Node modules should always be excluded
+        '**/node_modules/**',
+      ],
+      poolOptions: {
+        workers: {
+          miniflare: {
+            compatibilityDate: '2024-04-01',
+          },
+        },
+      },
+    },
+  })
+);
