@@ -41,6 +41,7 @@
     "README.md"
   ],
   "devDependencies": {
+    "@edge-runtime/vm": "5.0.0",
     "@eslint/js": "^9.39.1",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.14",
@@ -67,6 +68,7 @@
     "clean": "gts clean",
     "build": "tsup",
     "test": "vitest run",
+    "test:edge": "vitest run --config vitest.edge.config.ts",
     "lint": "tsc --noEmit && npx eslint .",
     "format:readme": "prettier --write ./README.md",
     "lint:fix": "npx eslint . --fix",
