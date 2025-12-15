@@ -15,13 +15,13 @@ jobs:
       - name: Checkout Main
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ishymko/coverage-delta-test
 
       - name: Install & Test (Main)
         run: |
           npm ci
           npm run coverage
-          mv ./coverage/coverage-summary.json ./coverage-main-summary.json
+          mv coverage/coverage-summary.json coverage-main-summary.json
 
       - name: Checkout PR Branch
         uses: actions/checkout@v4
