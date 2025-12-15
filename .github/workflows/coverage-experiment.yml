@@ -43,12 +43,7 @@ jobs:
             const fs = require('fs');
 
             const loadSummary = (path) => {
-              try {
-                return JSON.parse(fs.readFileSync(path, 'utf8'));
-              } catch (error) {
-                core.setFailed(`Could not load ${path}: ${error.message}`);
-                throw error;
-              }
+              return JSON.parse(fs.readFileSync(path, 'utf8'));
             };
 
             const mainSummaryPath = './coverage-summary-main.json';
@@ -56,11 +51,6 @@ jobs:
 
             const mainSummary = loadSummary(mainSummaryPath);
             const prSummary = loadSummary(prSummaryPath);
-
-            if (!mainSummary || !prSummary) {
-              core.setFailed('Could not load coverage summaries for comparison.');
-              return;
-            }
 
             const metrics = ['lines', 'statements', 'functions', 'branches'];
             
