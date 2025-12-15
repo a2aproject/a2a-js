@@ -21,7 +21,7 @@ jobs:
         run: |
           npm ci
           npm run coverage
-          mv coverage/coverage-summary.json coverage-main-summary.json
+          mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-main-summary.json
 
       - name: Checkout PR Branch
         uses: actions/checkout@v4
@@ -35,6 +35,9 @@ jobs:
 
       - name: Report Coverage Delta
         uses: actions/github-script@v6
+        env:
+          # Pass the temp path to the script
+          MAIN_COVERAGE_PATH: ${{ runner.temp }}/coverage-main-summary.json
         with:
           script: |
             const fs = require('fs');
@@ -48,8 +51,11 @@ jobs:
               }
             };
 
-            const mainSummary = loadSummary('./coverage-main-summary.json');
-            const prSummary = loadSummary('./coverage/coverage-summary.json');
+            const mainSummaryPath = process.env.MAIN_COVERAGE_PATH;
+            const prSummaryPath = './coverage/coverage-summary.json';
+
+            const mainSummary = loadSummary(mainSummaryPath);
+            const prSummary = loadSummary(prSummaryPath);
 
             if (!mainSummary || !prSummary) {
               core.setFailed('Could not load coverage summaries for comparison.');
