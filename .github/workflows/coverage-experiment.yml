@@ -46,12 +46,12 @@ jobs:
               try {
                 return JSON.parse(fs.readFileSync(path, 'utf8'));
               } catch (error) {
-                console.log(`Could not load ${path}: ${error.message}`);
-                return null;
+                core.setFailed(`Could not load ${path}: ${error.message}`);
+                throw error;
               }
             };
 
-            const mainSummaryPath = process.env.MAIN_COVERAGE_PATH;
+            const mainSummaryPath = './coverage-summary-main.json';
             const prSummaryPath = './coverage/coverage-summary.json';
 
             const mainSummary = loadSummary(mainSummaryPath);
