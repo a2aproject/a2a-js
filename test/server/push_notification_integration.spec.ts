@@ -758,7 +758,11 @@ describe('Push Notification Integration Tests', () => {
 
       // Verify Authorization header
       // Bearer should be prioritized over Basic
-      assert.equal(notification.headers['authorization'], 'Bearer test-credentials', 'Should prioritize Bearer scheme');
+      assert.equal(
+        notification.headers['authorization'],
+        'Bearer test-credentials',
+        'Should prioritize Bearer scheme'
+      );
     });
 
     it('should send Bearer Authorization header', async () => {
