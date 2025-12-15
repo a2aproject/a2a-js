@@ -94,7 +94,9 @@ describe('DefaultAgentCardResolver', () => {
       const actual = await resolver.resolve(test.baseUrl, test.path);
 
       expect(actual).to.deep.equal(testAgentCard);
-      expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ href: test.expected }));
+      expect(mockFetch).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ href: test.expected })
+      );
     });
   });
 

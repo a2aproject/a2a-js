@@ -229,7 +229,7 @@ describe('Client', () => {
 
     const result = await client.getTask(params);
 
-    expect(transport.getTask).toHaveBeenCalledWith(params, undefined);
+    expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
     expect(result).to.equal(task);
   });
 
@@ -385,7 +385,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: true, pushNotificationConfig: pushConfig },
       };
-      expect(transport.sendMessage).toHaveBeenCalledWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
   });
 

@@ -1580,7 +1580,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Let the executor's loop run to completion to detect the cancellation
     await vi.runAllTimersAsync();
 
-    expect(cancellableExecutor.cancelTaskSpy).toHaveBeenCalledWith(taskId, expect.anything());
+    expect(cancellableExecutor.cancelTaskSpy).toHaveBeenCalledExactlyOnceWith(
+      taskId,
+      expect.anything()
+    );
 
     const finalTask = await handler.getTask({ id: taskId }, serverCallContext);
     assert.equal(finalTask.status.state, 'canceled');
