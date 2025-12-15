@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
-import sinon from 'sinon';
+import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
 
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
@@ -11,23 +10,23 @@ describe('JsonRpcTransportHandler', () => {
 
   beforeEach(() => {
     mockRequestHandler = {
-      getAgentCard: sinon.stub(),
-      getAuthenticatedExtendedAgentCard: sinon.stub(),
-      sendMessage: sinon.stub(),
-      sendMessageStream: sinon.stub(),
-      getTask: sinon.stub(),
-      cancelTask: sinon.stub(),
-      setTaskPushNotificationConfig: sinon.stub(),
-      getTaskPushNotificationConfig: sinon.stub(),
-      listTaskPushNotificationConfigs: sinon.stub(),
-      deleteTaskPushNotificationConfig: sinon.stub(),
-      resubscribe: sinon.stub(),
+      getAgentCard: vi.fn(),
+      getAuthenticatedExtendedAgentCard: vi.fn(),
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn(),
+      getTask: vi.fn(),
+      cancelTask: vi.fn(),
+      setTaskPushNotificationConfig: vi.fn(),
+      getTaskPushNotificationConfig: vi.fn(),
+      listTaskPushNotificationConfigs: vi.fn(),
+      deleteTaskPushNotificationConfig: vi.fn(),
+      resubscribe: vi.fn(),
     };
     transportHandler = new JsonRpcTransportHandler(mockRequestHandler);
   });
 
   afterEach(() => {
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('Check JSON-RPC request format', () => {
@@ -120,7 +119,7 @@ describe('JsonRpcTransportHandler', () => {
         id: null,
         params: {},
       };
-      (mockRequestHandler.getAuthenticatedExtendedAgentCard as sinon.SinonStub).resolves({
+      (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockResolvedValue({
         card: 'data',
       });
       const response = await transportHandler.handle(request);

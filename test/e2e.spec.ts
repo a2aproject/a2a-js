@@ -9,7 +9,6 @@ import {
   RequestContext,
 } from '../src/server/index.js';
 import { AgentCard, Message } from '../src/types.js';
-import sinon from 'sinon';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { ClientFactory } from '../src/client/factory.js';
@@ -81,7 +80,6 @@ describe('Client E2E tests', () => {
   });
 
   afterEach(() => {
-    sinon.restore();
     server.close();
   });
 

@@ -1,42 +1,41 @@
-import { describe, it, beforeEach, expect } from 'vitest';
-import sinon from 'sinon';
+import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { ClientFactory, ClientFactoryOptions } from '../../src/client/factory.js';
-import { TransportFactory, Transport } from '../../src/client/transports/transport.js';
+import { Transport } from '../../src/client/transports/transport.js';
 import { JsonRpcTransportFactory } from '../../src/client/transports/json_rpc_transport.js';
 import { AgentCard } from '../../src/types.js';
 import { Client } from '../../src/client/multitransport-client.js';
 import { CallInterceptor } from '../../src/client/interceptors.js';
 
 describe('ClientFactory', () => {
-  let mockTransportFactory1: sinon.SinonStubbedInstance<TransportFactory>;
-  let mockTransportFactory2: sinon.SinonStubbedInstance<TransportFactory>;
-  let mockTransport: sinon.SinonStubbedInstance<Transport>;
+  let mockTransportFactory1: { protocolName: string; create: Mock };
+  let mockTransportFactory2: { protocolName: string; create: Mock };
+  let mockTransport: Record<keyof Transport, Mock>;
 
   beforeEach(() => {
     mockTransport = {
-      getExtendedAgentCard: sinon.stub(),
-      sendMessage: sinon.stub(),
-      sendMessageStream: sinon.stub(),
-      setTaskPushNotificationConfig: sinon.stub(),
-      getTaskPushNotificationConfig: sinon.stub(),
-      listTaskPushNotificationConfig: sinon.stub(),
-      deleteTaskPushNotificationConfig: sinon.stub(),
-      getTask: sinon.stub(),
-      cancelTask: sinon.stub(),
-      resubscribeTask: sinon.stub(),
+      getExtendedAgentCard: vi.fn(),
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn(),
+      setTaskPushNotificationConfig: vi.fn(),
+      getTaskPushNotificationConfig: vi.fn(),
+      listTaskPushNotificationConfig: vi.fn(),
+      deleteTaskPushNotificationConfig: vi.fn(),
+      getTask: vi.fn(),
+      cancelTask: vi.fn(),
+      resubscribeTask: vi.fn(),
     };
 
     mockTransportFactory1 = {
       protocolName: 'Transport1',
-      create: sinon.stub(),
+      create: vi.fn(),
     };
-    mockTransportFactory1.create.resolves(mockTransport);
+    mockTransportFactory1.create.mockResolvedValue(mockTransport);
 
     mockTransportFactory2 = {
       protocolName: 'Transport2',
-      create: sinon.stub(),
+      create: vi.fn(),
     };
-    mockTransportFactory2.create.resolves(mockTransport);
+    mockTransportFactory2.create.mockResolvedValue(mockTransport);
   });
 
   describe('constructor', () => {
@@ -98,8 +97,10 @@ describe('ClientFactory', () => {
       const client = await factory.createFromAgentCard(agentCard);
 
       expect(client).to.be.instanceOf(Client);
-      expect(mockTransportFactory1.create.calledOnceWith('http://transport1.com', agentCard)).to.be
-        .true;
+      expect(mockTransportFactory1.create).toHaveBeenCalledExactlyOnceWith(
+        'http://transport1.com',
+        agentCard
+      );
     });
 
     it('should use factory preferred transport if available', async () => {
@@ -111,7 +112,7 @@ describe('ClientFactory', () => {
 
       await factory.createFromAgentCard(agentCard);
 
-      expect(mockTransportFactory2.create.calledOnce).to.be.true;
+      expect(mockTransportFactory2.create).toHaveBeenCalledTimes(1);
     });
 
     it('should throw error if no compatible transport found', async () => {
@@ -134,20 +135,20 @@ describe('ClientFactory', () => {
 
       await factory.createFromAgentCard(agentCard);
 
-      expect(mockTransportFactory1.create.calledOnce).to.be.true;
+      expect(mockTransportFactory1.create).toHaveBeenCalledTimes(1);
     });
 
     it('should default to JSONRPC transport if agentCard.preferredTransport is undefined', async () => {
       agentCard.preferredTransport = undefined;
       const jsonRpcFactory = {
         protocolName: JsonRpcTransportFactory.name,
-        create: sinon.stub().resolves(mockTransport),
+        create: vi.fn().mockResolvedValue(mockTransport),
       };
       const factory = new ClientFactory({ transports: [jsonRpcFactory] });
 
       await factory.createFromAgentCard(agentCard);
 
-      expect(jsonRpcFactory.create.calledOnce).to.be.true;
+      expect(jsonRpcFactory.create).toHaveBeenCalledTimes(1);
     });
 
     it('should pass clientConfig to the created Client', async () => {
@@ -164,7 +165,7 @@ describe('ClientFactory', () => {
 
     it('should use card resolver with default path', async () => {
       const cardResolver = {
-        resolve: sinon.stub().resolves(agentCard),
+        resolve: vi.fn().mockResolvedValue(agentCard),
       };
       const factory = new ClientFactory({
         transports: [mockTransportFactory1],
@@ -173,13 +174,16 @@ describe('ClientFactory', () => {
 
       await factory.createFromUrl('http://transport1.com');
 
-      expect(mockTransportFactory1.create.calledOnce);
-      expect(cardResolver.resolve.calledOnceWith('http://transport1.com')).to.be.true;
+      expect(mockTransportFactory1.create).toHaveBeenCalledTimes(1);
+      expect(cardResolver.resolve).toHaveBeenCalledExactlyOnceWith(
+        'http://transport1.com',
+        undefined
+      );
     });
 
     it('should use card resolver with custom path', async () => {
       const cardResolver = {
-        resolve: sinon.stub().resolves(agentCard),
+        resolve: vi.fn().mockResolvedValue(agentCard),
       };
       const factory = new ClientFactory({
         transports: [mockTransportFactory1],
@@ -188,9 +192,11 @@ describe('ClientFactory', () => {
 
       await factory.createFromUrl('http://transport1.com', 'a2a/my-agent-card.json');
 
-      expect(mockTransportFactory1.create.calledOnce);
-      expect(cardResolver.resolve.calledOnceWith('http://transport1.com', 'a2a/my-agent-card.json'))
-        .to.be.true;
+      expect(mockTransportFactory1.create).toHaveBeenCalledTimes(1);
+      expect(cardResolver.resolve).toHaveBeenCalledExactlyOnceWith(
+        'http://transport1.com',
+        'a2a/my-agent-card.json'
+      );
     });
   });
 
@@ -200,13 +206,13 @@ describe('ClientFactory', () => {
         transports: [mockTransportFactory1],
         clientConfig: { polling: true },
         preferredTransports: ['Transport1'],
-        cardResolver: { resolve: sinon.stub() } as any,
+        cardResolver: { resolve: vi.fn() } as any,
       };
       const overrides: Partial<ClientFactoryOptions> = {
         transports: [mockTransportFactory2],
         clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
         preferredTransports: ['Transport2'],
-        cardResolver: { resolve: sinon.stub() } as any,
+        cardResolver: { resolve: vi.fn() } as any,
       };
       const result = ClientFactoryOptions.createFrom(original, overrides);
       expect(result.transports).to.deep.equal([mockTransportFactory1, mockTransportFactory2]);
@@ -247,15 +253,15 @@ describe('ClientFactory', () => {
     it('should merge transports arrays by protocol name', () => {
       const transport1Factory = {
         protocolName: 'Transport1',
-        create: sinon.stub(),
+        create: vi.fn(),
       };
       const transport1FactoryOverride = {
         protocolName: 'Transport1',
-        create: sinon.stub(),
+        create: vi.fn(),
       };
       const transport2Factory = {
         protocolName: 'Transport2',
-        create: sinon.stub(),
+        create: vi.fn(),
       };
       const original: ClientFactoryOptions = { transports: [transport1Factory] };
       const overrides: Partial<ClientFactoryOptions> = {

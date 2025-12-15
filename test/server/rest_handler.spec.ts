@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, afterEach, assert } from 'vitest';
-import sinon, { SinonStub } from 'sinon';
+import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import express, { Express } from 'express';
 import request from 'supertest';
 
@@ -66,17 +65,17 @@ describe('restHandler', () => {
 
   beforeEach(() => {
     mockRequestHandler = {
-      getAgentCard: sinon.stub().resolves(testAgentCard),
-      getAuthenticatedExtendedAgentCard: sinon.stub().resolves(testAgentCard),
-      sendMessage: sinon.stub(),
-      sendMessageStream: sinon.stub(),
-      getTask: sinon.stub(),
-      cancelTask: sinon.stub(),
-      setTaskPushNotificationConfig: sinon.stub(),
-      getTaskPushNotificationConfig: sinon.stub(),
-      listTaskPushNotificationConfigs: sinon.stub(),
-      deleteTaskPushNotificationConfig: sinon.stub(),
-      resubscribe: sinon.stub(),
+      getAgentCard: vi.fn().mockResolvedValue(testAgentCard),
+      getAuthenticatedExtendedAgentCard: vi.fn().mockResolvedValue(testAgentCard),
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn(),
+      getTask: vi.fn(),
+      cancelTask: vi.fn(),
+      setTaskPushNotificationConfig: vi.fn(),
+      getTaskPushNotificationConfig: vi.fn(),
+      listTaskPushNotificationConfigs: vi.fn(),
+      deleteTaskPushNotificationConfig: vi.fn(),
+      resubscribe: vi.fn(),
     };
 
     app = express();
@@ -89,7 +88,7 @@ describe('restHandler', () => {
   });
 
   afterEach(() => {
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('GET /v1/card', () => {
@@ -97,12 +96,12 @@ describe('restHandler', () => {
       const response = await request(app).get('/v1/card').expect(200);
 
       // REST API returns data (format checked by handler)
-      assert.isTrue((mockRequestHandler.getAuthenticatedExtendedAgentCard as SinonStub).calledOnce);
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
       assert.deepEqual(response.body.name, testAgentCard.name);
     });
 
     it('should return 500 if getAuthenticatedExtendedAgentCard fails', async () => {
-      (mockRequestHandler.getAuthenticatedExtendedAgentCard as SinonStub).rejects(
+      (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
         A2AError.internalError('Card fetch failed')
       );
 
@@ -115,7 +114,7 @@ describe('restHandler', () => {
 
   describe('POST /v1/message:send', () => {
     it('should accept camelCase message and return 201 with Task', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       const response = await request(app)
         .post('/v1/message:send')
@@ -127,7 +126,7 @@ describe('restHandler', () => {
     });
 
     it('should accept snake_case message and return 201 with Task', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       const response = await request(app)
         .post('/v1/message:send')
@@ -139,7 +138,7 @@ describe('restHandler', () => {
     });
 
     it('should return camelCase response regardless of input format', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       const response = await request(app)
         .post('/v1/message:send')
@@ -152,7 +151,7 @@ describe('restHandler', () => {
     });
 
     it('should return 400 when message is invalid', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).rejects(
+      (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
         A2AError.invalidParams('Message is required')
       );
 
@@ -166,7 +165,7 @@ describe('restHandler', () => {
         yield testMessage;
         yield testTask;
       }
-      (mockRequestHandler.sendMessageStream as SinonStub).resolves(mockStream());
+      (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
       const response = await request(app)
         .post('/v1/message:stream')
@@ -180,7 +179,7 @@ describe('restHandler', () => {
       async function* mockStream() {
         yield testMessage;
       }
-      (mockRequestHandler.sendMessageStream as SinonStub).resolves(mockStream());
+      (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
       const response = await request(app)
         .post('/v1/message:stream')
@@ -193,7 +192,7 @@ describe('restHandler', () => {
     it('should return 400 if streaming is not supported', async () => {
       const noStreamRequestHandler = {
         ...mockRequestHandler,
-        getAgentCard: sinon.stub().resolves({
+        getAgentCard: vi.fn().mockResolvedValue({
           ...testAgentCard,
           capabilities: { streaming: false, pushNotifications: false },
         }),
@@ -215,25 +214,29 @@ describe('restHandler', () => {
 
   describe('GET /v1/tasks/:taskId', () => {
     it('should return task with 200 OK', async () => {
-      (mockRequestHandler.getTask as SinonStub).resolves(testTask);
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
       const response = await request(app).get('/v1/tasks/task-1').expect(200);
 
       assert.deepEqual(response.body.id, testTask.id);
       assert.deepEqual(response.body.kind, 'task');
-      assert.isTrue((mockRequestHandler.getTask as SinonStub).calledWith({ id: 'task-1' }));
+      expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1' },
+        expect.anything()
+      );
     });
 
     it('should support historyLength query parameter', async () => {
-      (mockRequestHandler.getTask as SinonStub).resolves(testTask);
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
       await request(app).get('/v1/tasks/task-1?historyLength=10').expect(200);
 
-      assert.isTrue(
-        (mockRequestHandler.getTask as SinonStub).calledWith({
+      expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
+        {
           id: 'task-1',
           historyLength: 10,
-        })
+        },
+        expect.anything()
       );
     });
 
@@ -242,7 +245,7 @@ describe('restHandler', () => {
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.getTask as SinonStub).rejects(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.getTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
 
       const response = await request(app).get('/v1/tasks/task-1').expect(404);
 
@@ -254,17 +257,20 @@ describe('restHandler', () => {
   describe('POST /v1/tasks/:taskId:cancel', () => {
     it('should cancel task and return 202 Accepted', async () => {
       const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
-      (mockRequestHandler.cancelTask as SinonStub).resolves(cancelledTask);
+      (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
       assert.deepEqual(response.body.status.state, 'canceled');
-      assert.isTrue((mockRequestHandler.cancelTask as SinonStub).calledWith({ id: 'task-1' }));
+      expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1' },
+        expect.anything()
+      );
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.cancelTask as SinonStub).rejects(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(404);
 
@@ -273,7 +279,9 @@ describe('restHandler', () => {
     });
 
     it('should return 409 if task is not cancelable', async () => {
-      (mockRequestHandler.cancelTask as SinonStub).rejects(A2AError.taskNotCancelable('task-1'));
+      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(
+        A2AError.taskNotCancelable('task-1')
+      );
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(409);
 
@@ -288,19 +296,22 @@ describe('restHandler', () => {
         yield testTask;
       }
 
-      (mockRequestHandler.resubscribe as SinonStub).resolves(mockStream());
+      (mockRequestHandler.resubscribe as Mock).mockResolvedValue(mockStream());
 
       const response = await request(app).post('/v1/tasks/task-1:subscribe').expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
-      assert.isTrue((mockRequestHandler.resubscribe as SinonStub).calledWith({ id: 'task-1' }));
+      expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
+        { id: 'task-1' },
+        expect.anything()
+      );
     });
 
     it('should return 400 if streaming is not supported', async () => {
       // Create new app with handler that has capabilities without streaming
       const noStreamRequestHandler = {
         ...mockRequestHandler,
-        getAgentCard: sinon.stub().resolves({
+        getAgentCard: vi.fn().mockResolvedValue({
           ...testAgentCard,
           capabilities: { streaming: false, pushNotifications: false },
         }),
@@ -331,7 +342,7 @@ describe('restHandler', () => {
 
     describe('POST /v1/tasks/:taskId/pushNotificationConfigs', () => {
       it('should accept camelCase pushNotificationConfig and return 201', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as SinonStub).resolves(mockConfig);
+        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
@@ -347,7 +358,7 @@ describe('restHandler', () => {
       });
 
       it('should accept snake_case push_notification_config and return 201', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as SinonStub).resolves(mockConfig);
+        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
@@ -363,7 +374,7 @@ describe('restHandler', () => {
       });
 
       it('should return camelCase response regardless of input format', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as SinonStub).resolves(mockConfig);
+        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
@@ -382,7 +393,7 @@ describe('restHandler', () => {
       it('should return 400 if push notifications not supported', async () => {
         const noPNRequestHandler = {
           ...mockRequestHandler,
-          getAgentCard: sinon.stub().resolves({
+          getAgentCard: vi.fn().mockResolvedValue({
             ...testAgentCard,
             capabilities: { streaming: false, pushNotifications: false },
           }),
@@ -405,7 +416,7 @@ describe('restHandler', () => {
     describe('GET /v1/tasks/:taskId/pushNotificationConfigs', () => {
       it('should list push notification configs and return 200', async () => {
         const configs = [mockConfig];
-        (mockRequestHandler.listTaskPushNotificationConfigs as SinonStub).resolves(configs);
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue(configs);
 
         const response = await request(app)
           .get('/v1/tasks/task-1/pushNotificationConfigs')
@@ -418,7 +429,7 @@ describe('restHandler', () => {
 
     describe('GET /v1/tasks/:taskId/pushNotificationConfigs/:configId', () => {
       it('should get specific push notification config and return 200', async () => {
-        (mockRequestHandler.getTaskPushNotificationConfig as SinonStub).resolves(mockConfig);
+        (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
           .get('/v1/tasks/task-1/pushNotificationConfigs/config-1')
@@ -426,16 +437,17 @@ describe('restHandler', () => {
 
         // REST API returns camelCase
         assert.deepEqual(response.body.taskId, mockConfig.taskId);
-        assert.isTrue(
-          (mockRequestHandler.getTaskPushNotificationConfig as SinonStub).calledWith({
+        expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+          {
             id: 'task-1',
             pushNotificationConfigId: 'config-1',
-          })
+          },
+          expect.anything()
         );
       });
 
       it('should return 404 if config not found', async () => {
-        (mockRequestHandler.getTaskPushNotificationConfig as SinonStub).rejects(
+        (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockRejectedValue(
           A2AError.taskNotFound('task-1')
         );
 
@@ -450,20 +462,21 @@ describe('restHandler', () => {
 
     describe('DELETE /v1/tasks/:taskId/pushNotificationConfigs/:configId', () => {
       it('should delete push notification config and return 204', async () => {
-        (mockRequestHandler.deleteTaskPushNotificationConfig as SinonStub).resolves();
+        (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockResolvedValue(undefined);
 
         await request(app).delete('/v1/tasks/task-1/pushNotificationConfigs/config-1').expect(204);
 
-        assert.isTrue(
-          (mockRequestHandler.deleteTaskPushNotificationConfig as SinonStub).calledWith({
+        expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+          {
             id: 'task-1',
             pushNotificationConfigId: 'config-1',
-          })
+          },
+          expect.anything()
         );
       });
 
       it('should return 404 if config not found', async () => {
-        (mockRequestHandler.deleteTaskPushNotificationConfig as SinonStub).rejects(
+        (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockRejectedValue(
           A2AError.taskNotFound('task-1')
         );
 
@@ -482,7 +495,7 @@ describe('restHandler', () => {
    */
   describe('File parts format acceptance', () => {
     it('should accept camelCase mimeType in file parts', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       await request(app)
         .post('/v1/message:send')
@@ -507,7 +520,7 @@ describe('restHandler', () => {
     });
 
     it('should accept snake_case mime_type in file parts', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       await request(app)
         .post('/v1/message:send')
@@ -537,7 +550,7 @@ describe('restHandler', () => {
    */
   describe('Configuration format acceptance', () => {
     it('should accept camelCase configuration fields', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       await request(app)
         .post('/v1/message:send')
@@ -552,7 +565,7 @@ describe('restHandler', () => {
     });
 
     it('should accept snake_case configuration fields', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).resolves(testTask);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       await request(app)
         .post('/v1/message:send')
@@ -579,7 +592,9 @@ describe('restHandler', () => {
     });
 
     it('should handle internal server errors gracefully', async () => {
-      (mockRequestHandler.sendMessage as SinonStub).rejects(new Error('Unexpected internal error'));
+      (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
+        new Error('Unexpected internal error')
+      );
 
       const response = await request(app)
         .post('/v1/message:send')

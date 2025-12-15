@@ -2,8 +2,8 @@
  * Utility functions for A2A client tests
  */
 
-import sinon from 'sinon';
-import { AGENT_CARD_PATH } from '../../src/constants.js';
+import { vi, Mock } from 'vitest';
+import { AGENT_CARD_PATH } from '../../src/client/../constants.js';
 
 /**
  * Extracts the request ID from a RequestInit options object.
@@ -244,11 +244,11 @@ export interface MockFetchConfig {
  * This is the single function that replaces all previous mock fetch utilities.
  *
  * @param config - Configuration options for the mock fetch behavior
- * @returns A sinon stub that can be used as a mock fetch implementation, with capturedAuthHeaders attached as a property
+ * @returns A vitest mock that can be used as a mock fetch implementation, with capturedAuthHeaders attached as a property
  */
 export function createMockFetch(
   config: MockFetchConfig = {}
-): sinon.SinonStub & { capturedAuthHeaders: string[] } {
+): Mock & { capturedAuthHeaders: string[] } {
   const {
     requiresAuth = false, // Default to no auth required for basic testing
     agentDescription = 'A test agent for basic client testing',
@@ -268,7 +268,7 @@ export function createMockFetch(
   let callCount = 0;
   const capturedAuthHeaders: string[] = [];
 
-  const mockFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+  const mockFetch = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
     // Handle agent card requests
     if (url.includes(AGENT_CARD_PATH)) {
       const mockAgentCard = createMockAgentCard({
@@ -356,5 +356,5 @@ export function createMockFetch(
   // Attach the capturedAuthHeaders as a property to the mock fetch function
   (mockFetch as any).capturedAuthHeaders = capturedAuthHeaders;
 
-  return mockFetch as sinon.SinonStub & { capturedAuthHeaders: string[] };
+  return mockFetch as Mock & { capturedAuthHeaders: string[] };
 }
