@@ -757,15 +757,8 @@ describe('Push Notification Integration Tests', () => {
       const notification = receivedNotifications[1];
 
       // Verify Authorization header
-      // Since both are present, we check if at least one is present or how it behaves.
-      // The implementation plan says:
-      // if (schemes.includes("Bearer")) { headers["Authorization"] = `Bearer ${credentials}`; }
-      // if (schemes.includes("Basic")) { headers["Authorization"] = `Basic ${credentials}`; }
-      // So if both are present, Basic will overwrite Bearer.
-      // We should probably check for Basic here if the implementation follows that order.
-      // But for this specific test case with both, let's just assert it has *some* authorization header for now,
-      // or maybe we should just check the specific single-scheme tests which are more deterministic.
-      assert.exists(notification.headers['authorization'], 'Should have Authorization header');
+      // Bearer should be prioritized over Basic
+      assert.equal(notification.headers['authorization'], 'Bearer test-credentials', 'Should prioritize Bearer scheme');
     });
 
     it('should send Bearer Authorization header', async () => {

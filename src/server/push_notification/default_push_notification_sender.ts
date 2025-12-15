@@ -86,8 +86,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         const { schemes, credentials } = pushConfig.authentication;
         if (schemes.includes('Bearer')) {
           headers['Authorization'] = `Bearer ${credentials}`;
-        }
-        if (schemes.includes('Basic')) {
+        } else if (schemes.includes('Basic')) {
           headers['Authorization'] = `Basic ${credentials}`;
         }
       }
