@@ -358,3 +358,60 @@ export function createMockFetch(
 
   return mockFetch as sinon.SinonStub & { capturedAuthHeaders: string[] };
 }
+
+/**
+ * Creates a REST response (plain JSON, not JSON-RPC wrapped).
+ * Used for testing REST transport which doesn't use JSON-RPC envelope.
+ *
+ * @param data - The data to include in the response
+ * @param status - HTTP status code (defaults to 200)
+ * @param headers - Additional headers to include
+ * @returns A Response object with JSON content
+ */
+export function createRestResponse(
+  data: unknown,
+  status: number = 200,
+  headers: Record<string, string> = {}
+): Response {
+  const defaultHeaders = { 'Content-Type': 'application/json' };
+  const responseHeaders = { ...defaultHeaders, ...headers };
+  return new Response(JSON.stringify(data), { status, headers: responseHeaders });
+}
+
+/**
+ * Creates a REST error response with A2A error format.
+ *
+ * @param code - A2A error code (e.g., -32001 for TaskNotFound)
+ * @param message - Error message
+ * @param status - HTTP status code (defaults to 400)
+ * @param data - Optional additional error data
+ * @returns A Response object with error JSON content
+ */
+export function createRestErrorResponse(
+  code: number,
+  message: string,
+  status: number = 400,
+  data?: Record<string, unknown>
+): Response {
+  const errorBody = { code, message, ...(data && { data }) };
+  return new Response(JSON.stringify(errorBody), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/**
+ * Creates a mock task response for testing.
+ *
+ * @param id - Task ID (defaults to 'task-123')
+ * @param status - Task status state (defaults to 'completed')
+ * @returns A mock Task object
+ */
+export function createMockTask(id: string = 'task-123', status: string = 'completed'): any {
+  return {
+    id,
+    contextId: 'context-123',
+    status: { state: status },
+    kind: 'task',
+  };
+}
