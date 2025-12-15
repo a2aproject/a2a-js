@@ -747,7 +747,11 @@ describe('Push Notification Integration Tests', () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Verify notification received
-      assert.lengthOf(receivedNotifications, 2, 'Should send notifications for working and completed states');
+      assert.lengthOf(
+        receivedNotifications,
+        2,
+        'Should send notifications for working and completed states'
+      );
 
       // Check the last notification (completed)
       const notification = receivedNotifications[1];
