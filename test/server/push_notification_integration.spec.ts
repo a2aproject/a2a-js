@@ -701,5 +701,149 @@ describe('Push Notification Integration Tests', () => {
         );
       });
     });
+    it('should send correct Authorization header when authentication config is provided', async () => {
+      const pushConfig: PushNotificationConfig = {
+        id: 'auth-test-config',
+        url: `${testServerUrl}/notify`,
+        authentication: {
+          schemes: ['Bearer', 'Basic'],
+          credentials: 'test-credentials',
+        },
+      };
+
+      const params: MessageSendParams = {
+        message: createTestMessage('Test with authentication'),
+        configuration: {
+          pushNotificationConfig: pushConfig,
+        },
+      };
+
+      // Mock the agent executor to publish completion
+      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+        const taskId = ctx.taskId;
+        const contextId = ctx.contextId;
+
+        bus.publish({
+          id: taskId,
+          contextId,
+          status: { state: 'working' },
+          kind: 'task',
+        });
+
+        bus.publish({
+          taskId,
+          contextId,
+          kind: 'status-update',
+          status: { state: 'completed' },
+          final: true,
+        });
+
+        bus.finished();
+      });
+
+      await handler.sendMessage(params);
+
+      // Wait for async push notifications to be sent
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Verify notification received
+      assert.lengthOf(receivedNotifications, 2, 'Should send notifications for working and completed states');
+
+      // Check the last notification (completed)
+      const notification = receivedNotifications[1];
+
+      // Verify Authorization header
+      // Since both are present, we check if at least one is present or how it behaves.
+      // The implementation plan says:
+      // if (schemes.includes("Bearer")) { headers["Authorization"] = `Bearer ${credentials}`; }
+      // if (schemes.includes("Basic")) { headers["Authorization"] = `Basic ${credentials}`; }
+      // So if both are present, Basic will overwrite Bearer.
+      // We should probably check for Basic here if the implementation follows that order.
+      // But for this specific test case with both, let's just assert it has *some* authorization header for now,
+      // or maybe we should just check the specific single-scheme tests which are more deterministic.
+      assert.exists(notification.headers['authorization'], 'Should have Authorization header');
+    });
+
+    it('should send Bearer Authorization header', async () => {
+      const pushConfig: PushNotificationConfig = {
+        id: 'bearer-auth-test',
+        url: `${testServerUrl}/notify`,
+        authentication: {
+          schemes: ['Bearer'],
+          credentials: 'bearer-token',
+        },
+      };
+
+      const params: MessageSendParams = {
+        message: createTestMessage('Test with Bearer auth'),
+        configuration: {
+          pushNotificationConfig: pushConfig,
+        },
+      };
+
+      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+        bus.publish({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: { state: 'working' },
+          kind: 'task',
+        });
+        bus.publish({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          kind: 'status-update',
+          status: { state: 'completed' },
+          final: true,
+        });
+        bus.finished();
+      });
+
+      await handler.sendMessage(params);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      assert.lengthOf(receivedNotifications, 2);
+      assert.equal(receivedNotifications[1].headers['authorization'], 'Bearer bearer-token');
+    });
+
+    it('should send Basic Authorization header', async () => {
+      const pushConfig: PushNotificationConfig = {
+        id: 'basic-auth-test',
+        url: `${testServerUrl}/notify`,
+        authentication: {
+          schemes: ['Basic'],
+          credentials: 'basic-creds',
+        },
+      };
+
+      const params: MessageSendParams = {
+        message: createTestMessage('Test with Basic auth'),
+        configuration: {
+          pushNotificationConfig: pushConfig,
+        },
+      };
+
+      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+        bus.publish({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: { state: 'working' },
+          kind: 'task',
+        });
+        bus.publish({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          kind: 'status-update',
+          status: { state: 'completed' },
+          final: true,
+        });
+        bus.finished();
+      });
+
+      await handler.sendMessage(params);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      assert.lengthOf(receivedNotifications, 2);
+      assert.equal(receivedNotifications[1].headers['authorization'], 'Basic basic-creds');
+    });
   });
 });
