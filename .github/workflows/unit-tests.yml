@@ -61,19 +61,41 @@ jobs:
         npm ci
         npm run coverage
         mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-main-summary.json
+    
+    - name: Upload Artifact (main)
+      uses: actions/upload-artifact@v4
+      if: github.event_name != 'pull_request'
+      with:
+        name: coverage-report
+        path: coverage
+        retention-days: 14
 
     - name: Checkout PR Branch
+      if: github.event_name == 'pull_request'
       uses: actions/checkout@v4
       with:
         clean: true
 
     - name: Install & Test (PR)
+      if: github.event_name == 'pull_request'
       run: |
         npm ci
         npm run coverage
+    
+    - name: Upload Artifact (PR)
+      id: upload-artifact-pr
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'pull_request'
+      with:
+        name: coverage-report
+        path: coverage
+        retention-days: 14
 
-    - name: Report Coverage Delta
+    - name: Post Comment
       uses: actions/github-script@v6
+      if: github.event_name == 'pull_request'
+      env:
+        ARTIFACT_URL: ${{ steps.upload-artifact-pr.outputs.artifact-url }}
       with:
         script: |
           const fs = require('fs');
@@ -82,7 +104,8 @@ jobs:
             return JSON.parse(fs.readFileSync(path, 'utf8'));
           };
           
-          let markdown = `### 🧪 Code Coverage Delta\n\n`;
+          let markdown = `### 🧪 Code Coverage\n\n`;
+          markdown += `[⬇️ **Download HTML Report**](${process.env.ARTIFACT_URL})\n\n`;
           markdown += `| Metric | Main | PR | Delta |\n`;
           markdown += `| :--- | :---: | :---: | :---: |\n`;
 
