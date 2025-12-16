@@ -130,9 +130,14 @@ describe('Push Notification Integration Tests', () => {
 
   afterEach(async () => {
     // Clean up test server
-    if (testServer) {
-      await testServer.close();
-    }
+    // if (testServer) {
+    //   await new Promise<void>((resolve, reject) => {
+    //     testServer.close((err) => {
+    //       if (err) reject(err);
+    //       else resolve();
+    //     });
+    //   });
+    // }
     sinon.restore();
   });
 

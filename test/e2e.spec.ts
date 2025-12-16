@@ -80,9 +80,14 @@ describe('Client E2E tests', () => {
     clientFactory = new ClientFactory();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     sinon.restore();
-    server.close();
+    // await new Promise<void>((resolve, reject) => {
+    //   server.close((err) => {
+    //     if (err) reject(err);
+    //     else resolve();
+    //   });
+    // });
   });
 
   describe('sendMessage', () => {
