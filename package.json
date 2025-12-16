@@ -29,6 +29,11 @@
       "import": "./dist/server/express/index.js",
       "require": "./dist/server/express/index.cjs"
     },
+    "./server/pgTaskStore": {
+      "types": "./dist/server/pgTaskStore/index.d.ts",
+      "import": "./dist/server/pgTaskStore/index.js",
+      "require": "./dist/server/pgTaskStore/index.cjs"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
@@ -45,6 +50,7 @@
     "@eslint/js": "^9.39.1",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.14",
+    "@types/pg": "^8.16.0",
     "@types/sinon": "^17.0.4",
     "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^4.0.15",
