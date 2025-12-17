@@ -1,4 +1,14 @@
-import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  beforeEach,
+  afterEach,
+  assert,
+  expect,
+  vi,
+  Mock,
+  MockInstance,
+} from 'vitest';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 
@@ -15,7 +25,7 @@ describe('A2AExpressApp', () => {
   let mockRequestHandler: A2ARequestHandler;
   let app: A2AExpressApp;
   let expressApp: Express;
-  let handleStub: Mock;
+  let handleStub: MockInstance;
 
   // Helper function to create JSON-RPC request bodies
   const createRpcRequest = (id: string | null, method = 'message/send', params: object = {}) => ({
