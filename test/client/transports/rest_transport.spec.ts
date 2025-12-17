@@ -2,8 +2,7 @@ import {
   RestTransport,
   RestTransportFactory,
 } from '../../../src/client/transports/rest_transport.js';
-import sinon from 'sinon';
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
 import { TaskPushNotificationConfig } from '../../../src/types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
@@ -24,11 +23,11 @@ import {
 
 describe('RestTransport', () => {
   let transport: RestTransport;
-  let mockFetch: sinon.SinonStubbedFunction<typeof fetch>;
+  let mockFetch: Mock<typeof fetch>;
   const endpoint = 'https://test.endpoint/api';
 
   beforeEach(() => {
-    mockFetch = sinon.stub();
+    mockFetch = vi.fn();
     transport = new RestTransport({
       endpoint,
       fetchImpl: mockFetch,
@@ -36,7 +35,7 @@ describe('RestTransport', () => {
   });
 
   afterEach(() => {
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('constructor', () => {
@@ -46,11 +45,11 @@ describe('RestTransport', () => {
         fetchImpl: mockFetch,
       });
       const mockResponse = createMockMessage();
-      mockFetch.resolves(createRestResponse(mockResponse));
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
 
       await trailingSlashTransport.sendMessage(createMessageParams());
 
-      const [url] = mockFetch.firstCall.args;
+      const [url] = mockFetch.mock.calls[0];
       expect(url).to.equal('https://example.com/a2a/rest/v1/message:send');
     });
 
@@ -60,11 +59,11 @@ describe('RestTransport', () => {
         fetchImpl: mockFetch,
       });
       const mockResponse = createMockMessage();
-      mockFetch.resolves(createRestResponse(mockResponse));
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
 
       await trailingSlashTransport.sendMessage(createMessageParams());
 
-      const [url] = mockFetch.firstCall.args;
+      const [url] = mockFetch.mock.calls[0];
       expect(url).to.equal('https://example.com/a2a/rest/v1/message:send');
     });
   });
@@ -74,14 +73,14 @@ describe('RestTransport', () => {
       const messageParams = createMessageParams();
       const mockResponse = createMockMessage();
 
-      mockFetch.resolves(createRestResponse(mockResponse));
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
 
       const result = await transport.sendMessage(messageParams);
 
       expect(result).to.deep.equal(mockResponse);
-      expect(mockFetch.calledOnce).to.be.true;
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      const [url, options] = mockFetch.firstCall.args;
+      const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/v1/message:send`);
       expect(options?.method).to.equal('POST');
       expect((options?.headers as Record<string, string>)['Content-Type']).to.equal(
@@ -95,18 +94,18 @@ describe('RestTransport', () => {
       const serviceParameters = ServiceParameters.create(withA2AExtensions(expectedExtensions));
       const options: RequestOptions = { serviceParameters };
 
-      mockFetch.resolves(createRestResponse(createMockMessage()));
+      mockFetch.mockResolvedValue(createRestResponse(createMockMessage()));
 
       await transport.sendMessage(messageParams, options);
 
-      const fetchArgs = mockFetch.firstCall.args[1];
+      const fetchArgs = mockFetch.mock.calls[0][1];
       const headers = fetchArgs?.headers as Record<string, string>;
       expect(headers[HTTP_EXTENSION_HEADER]).to.equal(expectedExtensions);
     });
 
     it('should throw TaskNotFoundError on -32001', async () => {
       const messageParams = createMessageParams();
-      mockFetch.resolves(createRestErrorResponse(-32001, 'Task not found', 404));
+      mockFetch.mockResolvedValue(createRestErrorResponse(-32001, 'Task not found', 404));
 
       await expect(transport.sendMessage(messageParams)).rejects.toThrow(TaskNotFoundError);
     });
@@ -117,14 +116,14 @@ describe('RestTransport', () => {
       const taskId = 'task-123';
       const mockTask = createMockTask(taskId);
 
-      mockFetch.resolves(createRestResponse(mockTask));
+      mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
       const result = await transport.getTask({ id: taskId });
 
       expect(result).to.deep.equal(mockTask);
-      expect(mockFetch.calledOnce).to.be.true;
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      const [url, options] = mockFetch.firstCall.args;
+      const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}`);
       expect(options?.method).to.equal('GET');
     });
@@ -134,19 +133,19 @@ describe('RestTransport', () => {
       const historyLength = 10;
       const mockTask = createMockTask(taskId);
 
-      mockFetch.resolves(createRestResponse(mockTask));
+      mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
       const result = await transport.getTask({ id: taskId, historyLength });
 
       expect(result).to.deep.equal(mockTask);
-      expect(mockFetch.calledOnce).to.be.true;
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      const [url] = mockFetch.firstCall.args;
+      const [url] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}?historyLength=${historyLength}`);
     });
 
     it('should throw TaskNotFoundError when task does not exist', async () => {
-      mockFetch.resolves(createRestErrorResponse(-32001, 'Task not found', 404));
+      mockFetch.mockResolvedValue(createRestErrorResponse(-32001, 'Task not found', 404));
 
       await expect(transport.getTask({ id: 'nonexistent' })).rejects.toThrow(TaskNotFoundError);
     });
@@ -157,20 +156,20 @@ describe('RestTransport', () => {
       const taskId = 'task-123';
       const mockTask = createMockTask(taskId, 'canceled');
 
-      mockFetch.resolves(createRestResponse(mockTask));
+      mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
       const result = await transport.cancelTask({ id: taskId });
 
       expect(result).to.deep.equal(mockTask);
-      expect(mockFetch.calledOnce).to.be.true;
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      const [url, options] = mockFetch.firstCall.args;
+      const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}:cancel`);
       expect(options?.method).to.equal('POST');
     });
 
     it('should throw TaskNotCancelableError on -32002', async () => {
-      mockFetch.resolves(createRestErrorResponse(-32002, 'Task cannot be canceled', 409));
+      mockFetch.mockResolvedValue(createRestErrorResponse(-32002, 'Task cannot be canceled', 409));
 
       await expect(transport.cancelTask({ id: 'task-123' })).rejects.toThrow(
         TaskNotCancelableError
@@ -187,14 +186,14 @@ describe('RestTransport', () => {
         protocolVersion: '0.3.0',
       };
 
-      mockFetch.resolves(createRestResponse(mockCard));
+      mockFetch.mockResolvedValue(createRestResponse(mockCard));
 
       const result = await transport.getExtendedAgentCard();
 
       expect(result).to.deep.equal(mockCard);
-      expect(mockFetch.calledOnce).to.be.true;
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      const [url, options] = mockFetch.firstCall.args;
+      const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/v1/card`);
       expect(options?.method).to.equal('GET');
     });
@@ -213,20 +212,20 @@ describe('RestTransport', () => {
 
     describe('setTaskPushNotificationConfig', () => {
       it('should set push notification config successfully', async () => {
-        mockFetch.resolves(createRestResponse(mockConfig));
+        mockFetch.mockResolvedValue(createRestResponse(mockConfig));
 
         const result = await transport.setTaskPushNotificationConfig(mockConfig);
 
         expect(result).to.deep.equal(mockConfig);
-        expect(mockFetch.calledOnce).to.be.true;
+        expect(mockFetch).toHaveBeenCalledTimes(1);
 
-        const [url, options] = mockFetch.firstCall.args;
+        const [url, options] = mockFetch.mock.calls[0];
         expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('POST');
       });
 
       it('should throw PushNotificationNotSupportedError on -32003', async () => {
-        mockFetch.resolves(
+        mockFetch.mockResolvedValue(
           createRestErrorResponse(-32003, 'Push notifications not supported', 400)
         );
 
@@ -238,7 +237,7 @@ describe('RestTransport', () => {
 
     describe('getTaskPushNotificationConfig', () => {
       it('should get push notification config successfully', async () => {
-        mockFetch.resolves(createRestResponse(mockConfig));
+        mockFetch.mockResolvedValue(createRestResponse(mockConfig));
 
         const result = await transport.getTaskPushNotificationConfig({
           id: taskId,
@@ -246,9 +245,9 @@ describe('RestTransport', () => {
         });
 
         expect(result).to.deep.equal(mockConfig);
-        expect(mockFetch.calledOnce).to.be.true;
+        expect(mockFetch).toHaveBeenCalledTimes(1);
 
-        const [url] = mockFetch.firstCall.args;
+        const [url] = mockFetch.mock.calls[0];
         expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
       });
 
@@ -268,14 +267,14 @@ describe('RestTransport', () => {
           mockConfig,
           { ...mockConfig, pushNotificationConfig: { id: 'config-789' } },
         ];
-        mockFetch.resolves(createRestResponse(mockConfigs));
+        mockFetch.mockResolvedValue(createRestResponse(mockConfigs));
 
         const result = await transport.listTaskPushNotificationConfig({ id: taskId });
 
         expect(result).to.deep.equal(mockConfigs);
-        expect(mockFetch.calledOnce).to.be.true;
+        expect(mockFetch).toHaveBeenCalledTimes(1);
 
-        const [url, options] = mockFetch.firstCall.args;
+        const [url, options] = mockFetch.mock.calls[0];
         expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('GET');
       });
@@ -283,16 +282,16 @@ describe('RestTransport', () => {
 
     describe('deleteTaskPushNotificationConfig', () => {
       it('should delete push notification config successfully', async () => {
-        mockFetch.resolves(new Response(null, { status: 204 }));
+        mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
 
         await transport.deleteTaskPushNotificationConfig({
           id: taskId,
           pushNotificationConfigId: configId,
         });
 
-        expect(mockFetch.calledOnce).to.be.true;
+        expect(mockFetch).toHaveBeenCalledTimes(1);
 
-        const [url, options] = mockFetch.firstCall.args;
+        const [url, options] = mockFetch.mock.calls[0];
         expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
         expect(options?.method).to.equal('DELETE');
       });
@@ -301,7 +300,7 @@ describe('RestTransport', () => {
 
   describe('Error Handling', () => {
     it('should handle HTTP errors with non-JSON response', async () => {
-      mockFetch.resolves(
+      mockFetch.mockResolvedValue(
         new Response('Internal Server Error', {
           status: 500,
           headers: { 'Content-Type': 'text/plain' },
@@ -312,7 +311,7 @@ describe('RestTransport', () => {
     });
 
     it('should handle network errors', async () => {
-      mockFetch.rejects(new Error('Network error'));
+      mockFetch.mockRejectedValue(new Error('Network error'));
 
       await expect(transport.getTask({ id: 'task-123' })).rejects.toThrow('Network error');
     });

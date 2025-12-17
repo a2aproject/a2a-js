@@ -105,7 +105,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
   });
 
-  // After each test, restore any sinon fakes or stubs
+  // After each test, restore any mocks
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
