@@ -5,6 +5,7 @@ import defaultConfig from './vitest.config';
 export default defineWorkersConfig(
   mergeConfig(defaultConfig, {
     test: {
+      coverage: undefined,
       exclude: [
         // Express tests require Node.js-specific APIs (http, Express framework)
         'test/server/a2a_express_app.spec.ts',
