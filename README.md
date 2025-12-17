@@ -35,7 +35,7 @@ You can also find some samples [here](https://github.com/a2aproject/a2a-js/tree/
 
 ## Compatibility
 
-This SDK supports A2A Protocol Specification [`v0.3.0`](https://a2a-protocol.org/v0.3.0/specification).
+This SDK implements the A2A Protocol Specification [`v0.3.0`](https://a2a-protocol.org/v0.3.0/specification).
 
 | Transport | Client | Server |
 | :--- | :---: | :---: |
