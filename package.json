@@ -72,7 +72,7 @@
     "lint:fix": "npx eslint . --fix",
     "coverage": "vitest run --coverage",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
-    "test-build:browser": "esbuild ./dist/client/index.js ./dist/index.js --bundle --platform=browser --outdir=dist/tmp-checks --outbase=./dist"
+    "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist"
   },
   "dependencies": {
     "uuid": "^11.1.0"
