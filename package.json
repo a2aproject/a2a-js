@@ -1,6 +1,6 @@
 {
   "name": "@a2a-js/sdk",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Server & Client SDK for Agent2Agent protocol",
   "license": "Apache-2.0",
   "repository": {

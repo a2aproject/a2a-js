@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.7](https://github.com/a2aproject/a2a-js/compare/v0.3.6...v0.3.7) (2025-12-17)
+
+
+### Features
+
+* add rest client ([#258](https://github.com/a2aproject/a2a-js/issues/258)) ([96be3a1](https://github.com/a2aproject/a2a-js/commit/96be3a1d6caa3f55673e0c0e77859fe064beab2d))
+* remove EventEmitter dependency to support Edge Runtime ([#219](https://github.com/a2aproject/a2a-js/issues/219)) ([6c76fef](https://github.com/a2aproject/a2a-js/commit/6c76fef26473d8b15d729040b6c474de2794c7fe)), closes [#218](https://github.com/a2aproject/a2a-js/issues/218)
+
+
+### Bug Fixes
+
+* export transport agnostic errors from client ([#272](https://github.com/a2aproject/a2a-js/issues/272)) ([23cd42e](https://github.com/a2aproject/a2a-js/commit/23cd42e83d6510b54b013df2efd762017f47d2a1))
+* pass ServerCallContext to getAuthenticatedExtendedAgentCard for REST ([#274](https://github.com/a2aproject/a2a-js/issues/274)) ([89b141b](https://github.com/a2aproject/a2a-js/commit/89b141b5ba915c53c04b2ffb1632e673b3adaace)), closes [#137](https://github.com/a2aproject/a2a-js/issues/137)
+
 ## [0.3.6](https://github.com/a2aproject/a2a-js/compare/v0.3.5...v0.3.6) (2025-12-10)
 
 
