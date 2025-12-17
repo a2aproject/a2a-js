@@ -146,8 +146,8 @@ export class RestTransportHandler {
   /**
    * Gets the authenticated extended agent card.
    */
-  async getAuthenticatedExtendedAgentCard(): Promise<AgentCard> {
-    return this.requestHandler.getAuthenticatedExtendedAgentCard();
+  async getAuthenticatedExtendedAgentCard(context: ServerCallContext): Promise<AgentCard> {
+    return this.requestHandler.getAuthenticatedExtendedAgentCard(context);
   }
 
   /**
