@@ -47,7 +47,7 @@ describe('JsonRpcTransport', () => {
       );
       await transport.sendMessage(messageParams, options);
       const fetchArgs = mockFetch.mock.calls[0][1];
-      const headers = fetchArgs!.headers;
+      const headers = fetchArgs.headers;
       expect((headers as any)[HTTP_EXTENSION_HEADER]).to.deep.equal(expectedExtensions);
     });
   });

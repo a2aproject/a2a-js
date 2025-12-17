@@ -139,7 +139,7 @@ describe('A2AClient Authentication Tests', () => {
           Accept: 'application/json',
         },
       });
-      expect((mockFetch.mock.calls[1][1] as any).body).to.include('"method":"message/send"');
+      expect(mockFetch.mock.calls[1][1].body).to.include('"method":"message/send"');
 
       // Third call: RPC request with auth header
       expect(mockFetch.mock.calls[2][0]).to.equal('https://test-agent.example.com/api');
@@ -147,18 +147,15 @@ describe('A2AClient Authentication Tests', () => {
         method: 'POST',
       });
       // Check headers separately to avoid issues with Authorization header
-      expect((mockFetch.mock.calls[2][1] as any).headers).to.have.property(
+      expect(mockFetch.mock.calls[2][1].headers).to.have.property(
         'Content-Type',
         'application/json'
       );
-      expect((mockFetch.mock.calls[2][1] as any).headers).to.have.property(
-        'Accept',
-        'application/json'
-      );
-      expect((mockFetch.mock.calls[2][1] as any).headers).to.have.property('Authorization');
+      expect(mockFetch.mock.calls[2][1].headers).to.have.property('Accept', 'application/json');
+      expect(mockFetch.mock.calls[2][1].headers).to.have.property('Authorization');
 
-      expect((mockFetch.mock.calls[2][1] as any).headers['Authorization']).to.match(/^Bearer .+$/);
-      expect((mockFetch.mock.calls[2][1] as any).body).to.include('"method":"message/send"');
+      expect(mockFetch.mock.calls[2][1].headers['Authorization']).to.match(/^Bearer .+$/);
+      expect(mockFetch.mock.calls[2][1].body).to.include('"method":"message/send"');
 
       // Verify the result
       expect(isSuccessResponse(result)).to.be.true;
@@ -178,10 +175,9 @@ describe('A2AClient Authentication Tests', () => {
 
       // Capture the token from the first request
       const firstRequestAuthCall = mockFetch.mock.calls.find(
-        (args) =>
-          (args[0] as string).includes('/api') && (args[1] as any)?.headers?.['Authorization']
+        (args) => (args[0] as string).includes('/api') && args[1].headers?.['Authorization']
       );
-      const firstRequestToken = (firstRequestAuthCall?.[1] as any)?.headers?.['Authorization'];
+      const firstRequestToken = firstRequestAuthCall?.[1]?.headers?.['Authorization'];
 
       // Second request - should use existing token
       const result2 = await client.sendMessage(messageParams);
@@ -194,12 +190,10 @@ describe('A2AClient Authentication Tests', () => {
 
       // Only one call for second request: RPC request with auth header (agent card and token cached)
       expect(secondRequestCalls[0][0]).to.equal('https://test-agent.example.com/api');
-      expect((secondRequestCalls[0][1] as any).headers).to.have.property('Authorization');
+      expect(secondRequestCalls[0][1].headers).to.have.property('Authorization');
 
       // Should use the exact same token from the first request
-      expect((secondRequestCalls[0][1] as any).headers['Authorization']).to.equal(
-        firstRequestToken
-      );
+      expect(secondRequestCalls[0][1].headers['Authorization']).to.equal(firstRequestToken);
 
       expect(isSuccessResponse(result2)).to.be.true;
     });

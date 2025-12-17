@@ -3,7 +3,7 @@
  */
 
 import { vi, Mock } from 'vitest';
-import { AGENT_CARD_PATH } from '../../src/client/../constants.js';
+import { AGENT_CARD_PATH } from '../../src/constants.js';
 
 /**
  * Extracts the request ID from a RequestInit options object.
