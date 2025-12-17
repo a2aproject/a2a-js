@@ -1,5 +1,4 @@
-// Transport-agnostic errors according to https://a2a-protocol.org/latest/specification/#82-a2a-specific-errors;
-
+// Legacy JSON-RPC error codes.
 export const A2A_ERROR_CODE = {
   PARSE_ERROR: -32700,
   INVALID_REQUEST: -32600,
@@ -14,6 +13,11 @@ export const A2A_ERROR_CODE = {
   INVALID_AGENT_RESPONSE: -32006,
   AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED: -32007,
 } as const;
+
+// Transport-agnostic errors according to https://a2a-protocol.org/v0.3.0/specification/#82-a2a-specific-errors.
+// Due to a name conflict with legacy JSON-RPC types reexported from src/index.ts
+// below errors are going to be exported via src/client/index.ts to allow usage
+// from external transport implementations.
 
 export class TaskNotFoundError extends Error {
   constructor(message?: string) {

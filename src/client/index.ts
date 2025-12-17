@@ -36,3 +36,12 @@ export {
   withA2AExtensions,
 } from './service-parameters.js';
 export { ClientCallContext, type ContextUpdate, ClientCallContextKey } from './context.js';
+export {
+  AuthenticatedExtendedCardNotConfiguredError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  PushNotificationNotSupportedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+} from '../errors.js';
