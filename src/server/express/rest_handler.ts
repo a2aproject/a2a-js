@@ -268,7 +268,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/card',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const result = await restTransportHandler.getAuthenticatedExtendedAgentCard();
+      const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
       sendResponse(res, HTTP_STATUS.OK, context, result);
     })
   );
