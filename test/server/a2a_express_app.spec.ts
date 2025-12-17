@@ -134,8 +134,7 @@ describe('A2AExpressApp', () => {
       const response = await request(expressApp).post('/').send(requestBody).expect(200);
 
       assert.deepEqual(response.body, mockResponse);
-      expect(handleStub).toHaveBeenCalledTimes(1);
-      expect(handleStub).toHaveBeenCalledWith(requestBody, expect.anything());
+      expect(handleStub).toHaveBeenCalledExactlyOnceWith(requestBody, expect.anything());
     });
 
     it('should handle streaming JSON-RPC response', async () => {
@@ -508,8 +507,7 @@ describe('A2AExpressApp', () => {
 
       await request(jsonApp).post('/').send(requestBody).expect(200);
 
-      expect(handleStub).toHaveBeenCalledTimes(1);
-      expect(handleStub).toHaveBeenCalledWith(requestBody, expect.anything());
+      expect(handleStub).toHaveBeenCalledExactlyOnceWith(requestBody, expect.anything());
     });
 
     it('should handle malformed json request', async () => {
