@@ -108,9 +108,9 @@ describe('Client E2E tests', () => {
         agentCard.url = `http://localhost:${address.port}${transportConfig.serverPath}`;
       });
 
-  afterEach(() => {
-    server.close();
-  });
+      afterEach(() => {
+        server.close();
+      });
 
       describe('sendMessage', () => {
         it('should send a message to the agent', async () => {
