@@ -32,6 +32,7 @@ import {
 } from '../../types.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
+import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
 
 export interface JsonRpcTransportOptions {
@@ -303,62 +304,8 @@ export class JsonRpcTransport implements Transport {
       );
     }
 
-    yield* this._parseA2ASseStream<A2AStreamEventData>(response, clientRequestId);
-  }
-
-  private async *_parseA2ASseStream<TStreamItem>(
-    response: Response,
-    originalRequestId: number | string | null
-  ): AsyncGenerator<TStreamItem, void, undefined> {
-    if (!response.body) {
-      throw new Error('SSE response body is undefined. Cannot read stream.');
-    }
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = '';
-    let eventDataBuffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          if (eventDataBuffer.trim()) {
-            const result = this._processSseEventData<TStreamItem>(
-              eventDataBuffer,
-              originalRequestId
-            );
-            yield result;
-          }
-          break;
-        }
-
-        buffer += value;
-        let lineEndIndex;
-        while ((lineEndIndex = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.substring(0, lineEndIndex).trim();
-          buffer = buffer.substring(lineEndIndex + 1);
-
-          if (line === '') {
-            if (eventDataBuffer) {
-              const result = this._processSseEventData<TStreamItem>(
-                eventDataBuffer,
-                originalRequestId
-              );
-              yield result;
-              eventDataBuffer = '';
-            }
-          } else if (line.startsWith('data:')) {
-            eventDataBuffer += line.substring(5).trimStart() + '\n';
-          }
-        }
-      }
-    } catch (error) {
-      console.error(
-        'Error reading or parsing SSE stream:',
-        (error instanceof Error && error.message) || 'Error unknown'
-      );
-      throw error;
-    } finally {
-      reader.releaseLock();
+    for await (const event of parseSseStream(response)) {
+      yield this._processSseEventData<A2AStreamEventData>(event.data, clientRequestId);
     }
   }
 
@@ -370,7 +317,7 @@ export class JsonRpcTransport implements Transport {
       throw new Error('Attempted to process empty SSE event data.');
     }
     try {
-      const sseJsonRpcResponse = JSON.parse(jsonData.replace(/\n$/, ''));
+      const sseJsonRpcResponse = JSON.parse(jsonData);
       const a2aStreamResponse: JSONRPCResponse = sseJsonRpcResponse as JSONRPCResponse;
 
       if (a2aStreamResponse.id !== originalRequestId) {
