@@ -2,7 +2,7 @@
  * Utility functions for A2A client tests
  */
 
-import sinon from 'sinon';
+import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 
 /**
@@ -244,11 +244,11 @@ export interface MockFetchConfig {
  * This is the single function that replaces all previous mock fetch utilities.
  *
  * @param config - Configuration options for the mock fetch behavior
- * @returns A sinon stub that can be used as a mock fetch implementation, with capturedAuthHeaders attached as a property
+ * @returns A vitest mock that can be used as a mock fetch implementation, with capturedAuthHeaders attached as a property
  */
 export function createMockFetch(
   config: MockFetchConfig = {}
-): sinon.SinonStub & { capturedAuthHeaders: string[] } {
+): Mock & { capturedAuthHeaders: string[] } {
   const {
     requiresAuth = false, // Default to no auth required for basic testing
     agentDescription = 'A test agent for basic client testing',
@@ -268,7 +268,7 @@ export function createMockFetch(
   let callCount = 0;
   const capturedAuthHeaders: string[] = [];
 
-  const mockFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+  const mockFetch = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
     // Handle agent card requests
     if (url.includes(AGENT_CARD_PATH)) {
       const mockAgentCard = createMockAgentCard({
@@ -356,5 +356,62 @@ export function createMockFetch(
   // Attach the capturedAuthHeaders as a property to the mock fetch function
   (mockFetch as any).capturedAuthHeaders = capturedAuthHeaders;
 
-  return mockFetch as sinon.SinonStub & { capturedAuthHeaders: string[] };
+  return mockFetch as Mock & { capturedAuthHeaders: string[] };
+}
+
+/**
+ * Creates a REST response (plain JSON, not JSON-RPC wrapped).
+ * Used for testing REST transport which doesn't use JSON-RPC envelope.
+ *
+ * @param data - The data to include in the response
+ * @param status - HTTP status code (defaults to 200)
+ * @param headers - Additional headers to include
+ * @returns A Response object with JSON content
+ */
+export function createRestResponse(
+  data: unknown,
+  status: number = 200,
+  headers: Record<string, string> = {}
+): Response {
+  const defaultHeaders = { 'Content-Type': 'application/json' };
+  const responseHeaders = { ...defaultHeaders, ...headers };
+  return new Response(JSON.stringify(data), { status, headers: responseHeaders });
+}
+
+/**
+ * Creates a REST error response with A2A error format.
+ *
+ * @param code - A2A error code (e.g., -32001 for TaskNotFound)
+ * @param message - Error message
+ * @param status - HTTP status code (defaults to 400)
+ * @param data - Optional additional error data
+ * @returns A Response object with error JSON content
+ */
+export function createRestErrorResponse(
+  code: number,
+  message: string,
+  status: number = 400,
+  data?: Record<string, unknown>
+): Response {
+  const errorBody = { code, message, ...(data && { data }) };
+  return new Response(JSON.stringify(errorBody), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/**
+ * Creates a mock task response for testing.
+ *
+ * @param id - Task ID (defaults to 'task-123')
+ * @param status - Task status state (defaults to 'completed')
+ * @returns A mock Task object
+ */
+export function createMockTask(id: string = 'task-123', status: string = 'completed'): any {
+  return {
+    id,
+    contextId: 'context-123',
+    status: { state: status },
+    kind: 'task',
+  };
 }

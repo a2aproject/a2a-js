@@ -3,6 +3,7 @@ import { AgentCard } from '../types.js';
 import { AgentCardResolver } from './card-resolver.js';
 import { Client, ClientConfig } from './multitransport-client.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
+import { RestTransportFactory } from './transports/rest_transport.js';
 import { TransportFactory } from './transports/transport.js';
 
 export interface ClientFactoryOptions {
@@ -34,7 +35,7 @@ export const ClientFactoryOptions = {
    * SDK default options for {@link ClientFactory}.
    */
   default: {
-    transports: [new JsonRpcTransportFactory()],
+    transports: [new JsonRpcTransportFactory(), new RestTransportFactory()],
   } as Readonly<ClientFactoryOptions>,
 
   /**

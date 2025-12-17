@@ -18,6 +18,11 @@ export {
   JsonRpcTransportFactory,
   type JsonRpcTransportOptions,
 } from './transports/json_rpc_transport.js';
+export {
+  RestTransport,
+  RestTransportFactory,
+  type RestTransportOptions,
+} from './transports/rest_transport.js';
 export type {
   CallInterceptor,
   BeforeArgs,

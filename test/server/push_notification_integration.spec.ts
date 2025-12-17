@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, afterEach, assert } from 'vitest';
-import sinon from 'sinon';
+import { describe, it, beforeEach, afterEach, assert, vi } from 'vitest';
 import express, { Request, Response } from 'express';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
@@ -133,7 +132,7 @@ describe('Push Notification Integration Tests', () => {
     if (testServer) {
       await testServer.close();
     }
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   const createTestMessage = (text: string, taskId?: string): Message => ({
@@ -165,7 +164,7 @@ describe('Push Notification Integration Tests', () => {
 
       let taskId: string;
       // Mock the agent executor to publish all three states for this test only
-      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         taskId = ctx.taskId;
         fakeTaskExecute(ctx, bus);
       });
@@ -264,7 +263,7 @@ describe('Push Notification Integration Tests', () => {
       });
 
       // Mock the agent executor to publish only completed state
-      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
@@ -338,7 +337,7 @@ describe('Push Notification Integration Tests', () => {
 
       let taskId: string;
       // Mock the agent executor to publish task states
-      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         taskId = ctx.taskId;
         fakeTaskExecute(ctx, bus);
       });
@@ -388,7 +387,7 @@ describe('Push Notification Integration Tests', () => {
       };
 
       // Mock the agent executor to publish completion
-      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
@@ -468,7 +467,7 @@ describe('Push Notification Integration Tests', () => {
       };
 
       // Mock the agent executor to publish completion
-      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
@@ -535,7 +534,7 @@ describe('Push Notification Integration Tests', () => {
       };
 
       // Mock the agent executor to publish completion
-      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
@@ -640,7 +639,7 @@ describe('Push Notification Integration Tests', () => {
       });
 
       // Mock the agent executor to publish completion
-      mockAgentExecutor.execute.callsFake(async (ctx, bus) => {
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 

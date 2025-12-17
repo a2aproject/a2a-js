@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, afterEach, assert, expect } from 'vitest';
-import sinon, { SinonStub } from 'sinon';
+import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 
@@ -16,7 +15,7 @@ describe('A2AExpressApp', () => {
   let mockRequestHandler: A2ARequestHandler;
   let app: A2AExpressApp;
   let expressApp: Express;
-  let handleStub: SinonStub;
+  let handleStub: Mock;
 
   // Helper function to create JSON-RPC request bodies
   const createRpcRequest = (id: string | null, method = 'message/send', params: object = {}) => ({
@@ -44,27 +43,27 @@ describe('A2AExpressApp', () => {
 
   beforeEach(() => {
     mockRequestHandler = {
-      getAgentCard: sinon.stub().resolves(testAgentCard),
-      getAuthenticatedExtendedAgentCard: sinon.stub(),
-      sendMessage: sinon.stub(),
-      sendMessageStream: sinon.stub(),
-      getTask: sinon.stub(),
-      cancelTask: sinon.stub(),
-      setTaskPushNotificationConfig: sinon.stub(),
-      getTaskPushNotificationConfig: sinon.stub(),
-      listTaskPushNotificationConfigs: sinon.stub(),
-      deleteTaskPushNotificationConfig: sinon.stub(),
-      resubscribe: sinon.stub(),
+      getAgentCard: vi.fn().mockResolvedValue(testAgentCard),
+      getAuthenticatedExtendedAgentCard: vi.fn(),
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn(),
+      getTask: vi.fn(),
+      cancelTask: vi.fn(),
+      setTaskPushNotificationConfig: vi.fn(),
+      getTaskPushNotificationConfig: vi.fn(),
+      listTaskPushNotificationConfigs: vi.fn(),
+      deleteTaskPushNotificationConfig: vi.fn(),
+      resubscribe: vi.fn(),
     };
 
     app = new A2AExpressApp(mockRequestHandler);
     expressApp = express();
 
-    handleStub = sinon.stub(JsonRpcTransportHandler.prototype, 'handle');
+    handleStub = vi.spyOn(JsonRpcTransportHandler.prototype, 'handle');
   });
 
   afterEach(() => {
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('constructor', () => {
@@ -91,7 +90,7 @@ describe('A2AExpressApp', () => {
       const response = await request(expressApp).get(`/${AGENT_CARD_PATH}`).expect(200);
 
       assert.deepEqual(response.body, testAgentCard);
-      assert.isTrue((mockRequestHandler.getAgentCard as SinonStub).calledOnce);
+      expect(mockRequestHandler.getAgentCard as Mock).toHaveBeenCalledTimes(1);
     });
 
     it('should return agent card on custom path when agentCardPath is provided', async () => {
@@ -106,7 +105,7 @@ describe('A2AExpressApp', () => {
 
     it('should handle errors when getting agent card', async () => {
       const errorMessage = 'Failed to get agent card';
-      (mockRequestHandler.getAgentCard as SinonStub).rejects(new Error(errorMessage));
+      (mockRequestHandler.getAgentCard as Mock).mockRejectedValue(new Error(errorMessage));
 
       const response = await request(expressApp).get(`/${AGENT_CARD_PATH}`).expect(500);
 
@@ -128,14 +127,14 @@ describe('A2AExpressApp', () => {
         result: { message: 'success' },
       };
 
-      handleStub.resolves(mockResponse);
+      handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
 
       const response = await request(expressApp).post('/').send(requestBody).expect(200);
 
       assert.deepEqual(response.body, mockResponse);
-      assert.isTrue(handleStub.calledOnceWith(requestBody));
+      expect(handleStub).toHaveBeenCalledExactlyOnceWith(requestBody, expect.anything());
     });
 
     it('should handle streaming JSON-RPC response', async () => {
@@ -146,7 +145,7 @@ describe('A2AExpressApp', () => {
         },
       };
 
-      handleStub.resolves(mockStreamResponse);
+      handleStub.mockResolvedValue(mockStreamResponse);
 
       const requestBody = createRpcRequest('stream-test', 'message/stream');
 
@@ -169,7 +168,7 @@ describe('A2AExpressApp', () => {
         },
       };
 
-      handleStub.resolves(mockErrorStream);
+      handleStub.mockResolvedValue(mockErrorStream);
 
       const requestBody = createRpcRequest('stream-error-test', 'message/stream');
 
@@ -188,7 +187,7 @@ describe('A2AExpressApp', () => {
         },
       };
 
-      handleStub.resolves(mockImmediateErrorStream);
+      handleStub.mockResolvedValue(mockImmediateErrorStream);
 
       const requestBody = createRpcRequest('immediate-stream-error-test', 'message/stream');
 
@@ -206,7 +205,7 @@ describe('A2AExpressApp', () => {
 
     it('should handle general processing error', async () => {
       const error = new A2AError(-32603, 'Processing error');
-      handleStub.rejects(error);
+      handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest('error-test');
 
@@ -226,7 +225,7 @@ describe('A2AExpressApp', () => {
 
     it('should handle non-A2AError with fallback error handling', async () => {
       const genericError = new Error('Generic error');
-      handleStub.rejects(genericError);
+      handleStub.mockRejectedValue(genericError);
 
       const requestBody = createRpcRequest('generic-error-test');
 
@@ -239,7 +238,7 @@ describe('A2AExpressApp', () => {
 
     it('should handle request without id', async () => {
       const error = new A2AError(-32600, 'No ID error');
-      handleStub.rejects(error);
+      handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest(null);
 
@@ -254,7 +253,7 @@ describe('A2AExpressApp', () => {
         id: 'test-id',
         result: { message: 'success' },
       };
-      handleStub.resolves(mockResponse);
+      handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
       const uriExtensionsValues = 'test-extension-uri, another-extension';
@@ -266,8 +265,8 @@ describe('A2AExpressApp', () => {
         .send(requestBody)
         .expect(200);
 
-      assert.isTrue(handleStub.calledOnce);
-      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      const serverCallContext = handleStub.mock.calls[0][1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.requestedExtensions).to.deep.equal([
         'test-extension-uri',
@@ -285,13 +284,15 @@ describe('A2AExpressApp', () => {
       const requestBody = createRpcRequest('test-id');
       const uriExtensionsValues = 'activated-extension, non-activated-extension';
 
-      handleStub.callsFake(async (requestBody: any, serverCallContext: ServerCallContext) => {
-        const firstRequestedExtension = serverCallContext.requestedExtensions
-          ?.values()
-          .next().value;
-        serverCallContext.addActivatedExtension(firstRequestedExtension);
-        return mockResponse;
-      });
+      handleStub.mockImplementation(
+        async (requestBody: any, serverCallContext: ServerCallContext) => {
+          const firstRequestedExtension = serverCallContext.requestedExtensions
+            ?.values()
+            .next().value;
+          serverCallContext.addActivatedExtension(firstRequestedExtension);
+          return mockResponse;
+        }
+      );
       const response = await request(expressApp)
         .post('/')
         .set(HTTP_EXTENSION_HEADER, uriExtensionsValues)
@@ -305,7 +306,7 @@ describe('A2AExpressApp', () => {
 
   describe('middleware integration', () => {
     it('should apply custom middlewares to routes', async () => {
-      const middlewareCalled = sinon.spy();
+      const middlewareCalled = vi.fn();
       const testMiddleware = (_req: Request, _res: Response, next: NextFunction) => {
         middlewareCalled();
         next();
@@ -316,7 +317,7 @@ describe('A2AExpressApp', () => {
 
       await request(middlewareApp).get(`/${AGENT_CARD_PATH}`).expect(200);
 
-      assert.isTrue(middlewareCalled.calledOnce);
+      expect(middlewareCalled).toHaveBeenCalledTimes(1);
     });
 
     it('should handle middleware errors', async () => {
@@ -340,13 +341,13 @@ describe('A2AExpressApp', () => {
         id: 'test-id',
         result: { message: 'success' },
       };
-      handleStub.resolves(mockResponse);
+      handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
       await request(middlewareApp).post('/').send(requestBody).expect(200);
 
-      assert.isTrue(handleStub.calledOnce);
-      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      const serverCallContext = handleStub.mock.calls[0][1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user).to.be.an.instanceOf(UnauthenticatedUser);
       expect(serverCallContext.user.isAuthenticated).to.be.false;
@@ -381,13 +382,13 @@ describe('A2AExpressApp', () => {
         id: 'test-id',
         result: { message: 'success' },
       };
-      handleStub.resolves(mockResponse);
+      handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
       await request(middlewareApp).post('/').send(requestBody).expect(200);
 
-      assert.isTrue(handleStub.calledOnce);
-      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      const serverCallContext = handleStub.mock.calls[0][1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user.isAuthenticated).to.be.true;
       expect(serverCallContext.user.userName).to.equal('authenticated-user');
@@ -430,13 +431,13 @@ describe('A2AExpressApp', () => {
         id: 'test-id',
         result: { message: 'success' },
       };
-      handleStub.resolves(mockResponse);
+      handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
       await request(middlewareApp).post('/').send(requestBody).expect(200);
 
-      assert.isTrue(handleStub.calledOnce);
-      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      const serverCallContext = handleStub.mock.calls[0][1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user.isAuthenticated).to.be.true;
       expect(serverCallContext.user.userName).to.equal('test_email');
@@ -467,13 +468,13 @@ describe('A2AExpressApp', () => {
         id: 'test-id',
         result: { message: 'success' },
       };
-      handleStub.resolves(mockResponse);
+      handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
       await request(middlewareApp).post('/').send(requestBody).expect(200);
 
-      assert.isTrue(handleStub.calledOnce);
-      const serverCallContext = handleStub.getCall(0).args[1];
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      const serverCallContext = handleStub.mock.calls[0][1];
       expect(serverCallContext).to.be.an.instanceOf(ServerCallContext);
       expect(serverCallContext.user.isAuthenticated).to.be.false;
       expect(serverCallContext.user.userName).to.equal('');
@@ -506,7 +507,7 @@ describe('A2AExpressApp', () => {
 
       await request(jsonApp).post('/').send(requestBody).expect(200);
 
-      assert.isTrue(handleStub.calledOnceWith(requestBody));
+      expect(handleStub).toHaveBeenCalledExactlyOnceWith(requestBody, expect.anything());
     });
 
     it('should handle malformed json request', async () => {

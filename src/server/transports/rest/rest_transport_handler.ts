@@ -32,6 +32,7 @@ import {
   TaskPushNotificationConfigInput,
   FileInput,
 } from './rest_types.js';
+import { A2A_ERROR_CODE } from '../../../errors.js';
 
 // ============================================================================
 // HTTP Status Codes and Error Mapping
@@ -51,21 +52,6 @@ export const HTTP_STATUS = {
   CONFLICT: 409,
   INTERNAL_SERVER_ERROR: 500,
   NOT_IMPLEMENTED: 501,
-} as const;
-
-/**
- * A2A error codes mapped to JSON-RPC and protocol-specific errors.
- */
-const A2A_ERROR_CODE = {
-  PARSE_ERROR: -32700,
-  INVALID_REQUEST: -32600,
-  METHOD_NOT_FOUND: -32601,
-  INVALID_PARAMS: -32602,
-  TASK_NOT_FOUND: -32001,
-  TASK_NOT_CANCELABLE: -32002,
-  PUSH_NOTIFICATION_NOT_SUPPORTED: -32003,
-  UNSUPPORTED_OPERATION: -32004,
-  UNAUTHORIZED: -32005,
 } as const;
 
 /**
@@ -92,8 +78,6 @@ export function mapErrorToStatus(errorCode: number): number {
     case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
     case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
       return HTTP_STATUS.BAD_REQUEST;
-    case A2A_ERROR_CODE.UNAUTHORIZED:
-      return HTTP_STATUS.UNAUTHORIZED;
     default:
       return HTTP_STATUS.INTERNAL_SERVER_ERROR;
   }
