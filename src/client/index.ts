@@ -37,11 +37,11 @@ export {
 } from './service-parameters.js';
 export { ClientCallContext, type ContextUpdate, ClientCallContextKey } from './context.js';
 export {
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  PushNotificationNotSupportedError,
-  UnsupportedOperationError,
+  AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
-  AuthenticatedExtendedCardNotConfiguredError,
+  PushNotificationNotSupportedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
 } from '../errors.js';
