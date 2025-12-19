@@ -40,6 +40,9 @@ jobs:
           script: |
             const fs = require('fs');
 
+            const { owner, repo } = context.repo;
+            const headSha = context.payload.workflow_run.head_commit.id;
+
             const loadSummary = (path) => {
               try {
                 return JSON.parse(fs.readFileSync(path, 'utf8'));
@@ -60,27 +63,10 @@ jobs:
             let markdown = `### 🧪 Code Coverage\n\n`;
             
             markdown += `[⬇️ **Download Full Report**](${process.env.ARTIFACT_URL})\n\n`;
-            markdown += `#### Overall Coverage Summary\n`;
-            markdown += `| Metric | Main | PR | Delta |\n`;
-            markdown += `| :--- | :---: | :---: | :---: |\n`;
 
-            const metrics = ['lines', 'statements', 'functions', 'branches'];
-            const getPct = (summary, metric) => summary.total[metric].pct;
-
-            metrics.forEach(metric => {
-              const oldPct = getPct(mainSummary, metric);
-              const newPct = getPct(prSummary, metric);
-              const diff = (newPct - oldPct).toFixed(2);
-              
-              let icon = '';
-              if (diff > 0) icon = '🟢';
-              else if (diff < 0) icon = '🔴';
-              else icon = '⚪️';
-
-              const diffStr = diff > 0 ? `+${diff}%` : `${diff}%`;
-              markdown += `| **${metric}** | ${oldPct}% | ${newPct}% | ${icon} ${diffStr} |\n`;
-            });
-
+            const metric = 'statements';
+            const getPct = (summaryItem, m) => summaryItem && summaryItem[m] ? summaryItem[m].pct : 0;
+            
             const formatDiff = (oldPct, newPct) => {
               const diff = (newPct - oldPct).toFixed(2);
               
@@ -93,39 +79,52 @@ jobs:
               return `${icon} ${diffStr}`;
             };
 
-            const fileDiffs = [];
+            const fileUrl = (path) => `https://github.com/${owner}/${repo}/blob/${headSha}/${path}`;
+
             const allFiles = new Set([...Object.keys(mainSummary), ...Object.keys(prSummary)]);
             allFiles.delete('total');
+            const workspacePath = process.env.GITHUB_WORKSPACE ? process.env.GITHUB_WORKSPACE + '/' : ''; 
 
+            let changedRows = [];
+            let newRows = [];
+            
             for (const file of allFiles) {
               const mainFile = mainSummary[file];
               const prFile = prSummary[file];
 
-              const diffMetrics = {};
-              let hasDiff = false;
-              metrics.forEach(metric => {
-                const oldPct = mainFile ? mainFile[metric].pct : 0;
-                const newPct = prFile ? prFile[metric].pct : 0;
-                if (oldPct !== newPct) {
-                  hasDiff = true;
-                }
-                diffMetrics[metric] = formatDiff(oldPct, newPct);
-              });
+              if (!prFile) continue;
 
-              if (hasDiff) {
-                fileDiffs.push({ file, ...diffMetrics });
+              const oldPct = getPct(mainFile, metric);
+              const newPct = getPct(prFile, metric);
+
+              const relativeFilePath = file.replace(workspacePath, '');
+              const linkedPath = `[${relativeFilePath}](${fileUrl(relativeFilePath)})`;
+
+              if (!mainFile && prFile) {
+                newRows.push(`| ${linkedPath} (**new**) | — | ${newPct}% | — |\n`);
+              } else if (oldPct !== newPct) {
+                changedRows.push(`| ${linkedPath} | ${oldPct}% | ${newPct}% | ${formatDiff(oldPct, newPct)} |\n`);
               }
             }
 
-            if (fileDiffs.length > 0) {
-              markdown += `\n#### Per-File Coverage Changes\n`;
-              markdown += `| File | Lines | Statements | Functions | Branches |\n`;
-              markdown += `| :--- | :---: | :---: | :---: | :---: |\n`;
-              fileDiffs.forEach(diff => {
-                markdown += `| \`${diff.file}\` | ${diff.lines} | ${diff.statements} | ${diff.functions} | ${diff.branches} |\n`;
-              });
+            if (changedRows.length === 0 && newRows.length === 0) {
+              markdown += `\n_No coverage changes._\n`;
             } else {
-              markdown += `\n\n✅ No changes in file coverage.`;
+              markdown += `| | Main | PR | Delta |\n`;
+              markdown += `| :--- | :---: | :---: | :---: |\n`;
+              
+              if (changedRows.length > 0) {
+                markdown += changedRows.sort().join('');
+              }
+              if (newRows.length > 0) {
+                markdown += newRows.sort().join('');
+              }
+
+              const oldTotalPct = getPct(mainSummary.total, metric);
+              const newTotalPct = getPct(prSummary.total, metric);
+              if (oldTotalPct !== newTotalPct) {
+                markdown += `| **Total** | ${oldTotalPct}% | ${newTotalPct}% | ${formatDiff(oldTotalPct, newTotalPct)} |\n`;
+              }
             }
 
             markdown += `\n\n_Generated by [coverage-comment.yml](https://github.com/a2aproject/a2a-js/actions/workflows/coverage-comment.yml)_`;
@@ -136,8 +135,6 @@ jobs:
               console.log("No PR number found.");
               return;
             }
-
-            const { owner, repo } = context.repo;
 
             const comments = await github.rest.issues.listComments({
               owner,
