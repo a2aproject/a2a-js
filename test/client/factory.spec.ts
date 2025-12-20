@@ -50,7 +50,7 @@ describe('ClientFactory', () => {
         preferredTransports: ['UnknownTransport'],
       };
       expect(() => new ClientFactory(options)).to.throw(
-        'Unknown preferred transport: UnknownTransport, available transports: Transport1'
+        'Unknown preferred transport: UnknownTransport, available transports: TRANSPORT1'
       );
     });
 
@@ -70,6 +70,30 @@ describe('ClientFactory', () => {
       const factory = new ClientFactory(options);
 
       expect(factory.options).to.equal(options);
+    });
+
+    it('should accept preferred transport with different case', () => {
+      const options: ClientFactoryOptions = {
+        transports: [mockTransportFactory1],
+        preferredTransports: ['transport1'], // lowercase, but Transport1 is registered
+      };
+
+      // Should not throw
+      const factory = new ClientFactory(options);
+
+      expect(factory.options).to.equal(options);
+    });
+
+    it('should detect duplicate transports with different case as duplicates', () => {
+      const transport1Lower = {
+        protocolName: 'transport1', // lowercase
+        create: vi.fn(),
+      };
+      const options: ClientFactoryOptions = {
+        transports: [mockTransportFactory1, transport1Lower], // Transport1 and transport1
+      };
+
+      expect(() => new ClientFactory(options)).to.throw('Duplicate protocol name: transport1');
     });
   });
 
@@ -161,6 +185,46 @@ describe('ClientFactory', () => {
       const client = await factory.createFromAgentCard(agentCard);
 
       expect(client.config).to.equal(clientConfig);
+    });
+
+    it('should match transport with case-insensitive protocol name', async () => {
+      // Transport factory uses "Transport1" but agent card uses "transport1" (lowercase)
+      agentCard.preferredTransport = 'transport1';
+      const factory = new ClientFactory({ transports: [mockTransportFactory1] });
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(mockTransportFactory1.create).toHaveBeenCalledExactlyOnceWith(
+        'http://transport1.com',
+        agentCard
+      );
+    });
+
+    it('should match HTTP+JSON transport regardless of case', async () => {
+      const httpJsonFactory = {
+        protocolName: 'HTTP+JSON',
+        create: vi.fn().mockResolvedValue(mockTransport),
+      };
+      agentCard.preferredTransport = 'http+json'; // lowercase
+      const factory = new ClientFactory({ transports: [httpJsonFactory] });
+
+      await factory.createFromAgentCard(agentCard);
+
+      expect(httpJsonFactory.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('should match JSONRPC transport regardless of case', async () => {
+      const jsonRpcFactory = {
+        protocolName: 'JSONRPC',
+        create: vi.fn().mockResolvedValue(mockTransport),
+      };
+      agentCard.preferredTransport = 'JsonRpc'; // mixed case
+      const factory = new ClientFactory({ transports: [jsonRpcFactory] });
+
+      await factory.createFromAgentCard(agentCard);
+
+      expect(jsonRpcFactory.create).toHaveBeenCalledTimes(1);
     });
 
     it('should use card resolver with default path', async () => {
