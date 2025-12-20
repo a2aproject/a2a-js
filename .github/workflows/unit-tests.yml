@@ -12,6 +12,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         node-version: [18, 20, 22, 24]
@@ -30,6 +31,7 @@ jobs:
   # works correctly in non-Node.js server environments.
   test-edge:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -47,15 +49,58 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v3
       with:
         node-version: 24
-        registry-url: 'https://registry.npmjs.org'
-        cache: 'npm'
-    - run: npm ci
-    - run: npm run coverage
-    - uses: actions/upload-artifact@v4
+
+    - name: Checkout Main
+      uses: actions/checkout@v4
+      with:
+        ref: main
+
+    - name: Install & Test (Main)
+      timeout-minutes: 10
+      run: |
+        npm ci
+        npm run coverage
+        mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-main-summary.json
+    
+    - name: Upload Artifact (main)
+      uses: actions/upload-artifact@v4
+      if: github.event_name != 'pull_request'
       with:
         name: coverage-report
         path: coverage
+        retention-days: 14
+
+    - name: Checkout PR Branch
+      if: github.event_name == 'pull_request'
+      uses: actions/checkout@v4
+      with:
+        clean: true
+
+    - name: Install & Test (PR)
+      if: github.event_name == 'pull_request'
+      timeout-minutes: 10
+      run: |
+        npm ci
+        npm run coverage
+        mv coverage/coverage-summary.json coverage-pr-summary.json
+        mv ${{ runner.temp }}/coverage-main-summary.json coverage-main-summary.json
+    
+    - name: Save PR number
+      run: |
+        echo ${{ github.event.number }} > ./PR_NUMBER
+    
+    - name: Upload Coverage Artifacts
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'pull_request'
+      with:
+        name: coverage-data
+        path: |
+          coverage-main-summary.json
+          coverage-pr-summary.json
+          coverage/
+          PR_NUMBER
+        retention-days: 1
+

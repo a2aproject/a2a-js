@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
-import sinon from 'sinon';
+import { describe, it, beforeEach, afterEach, expect, vi, Mock } from 'vitest';
 import { A2AClient } from '../../src/client/client.js';
 import {
   MessageSendParams,
@@ -45,7 +44,7 @@ function isErrorResponse(response: any): response is JSONRPCErrorResponse {
 
 describe('A2AClient Basic Tests', () => {
   let client: A2AClient;
-  let mockFetch: sinon.SinonStub;
+  let mockFetch: Mock & { capturedAuthHeaders: string[] };
   let originalConsoleError: typeof console.error;
   const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
   const agentBaseUrl = 'https://test-agent.example.com';
@@ -65,7 +64,7 @@ describe('A2AClient Basic Tests', () => {
   afterEach(() => {
     // Restore console.error
     console.error = originalConsoleError;
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('Client Initialization', () => {
@@ -79,9 +78,9 @@ describe('A2AClient Basic Tests', () => {
     });
 
     it('should initialize client with custom fetch implementation', async () => {
-      const customFetch = sinon
-        .stub()
-        .resolves(new Response(JSON.stringify(createMockAgentCard()), { status: 200 }));
+      const customFetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify(createMockAgentCard()), { status: 200 }));
       const clientWithCustomFetch = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: customFetch,
       });
@@ -120,32 +119,29 @@ describe('A2AClient Basic Tests', () => {
       // Wait for agent card to be fetched
       await client.getAgentCard();
 
-      expect(mockFetch.callCount).to.be.greaterThan(0);
-      const agentCardCall = mockFetch
-        .getCalls()
-        .find((call) => call.args[0].includes(AGENT_CARD_PATH));
+      expect(mockFetch.mock.calls.length).to.be.greaterThan(0);
+      const agentCardCall = mockFetch.mock.calls.find((args) =>
+        (args[0] as string).includes(AGENT_CARD_PATH)
+      );
       expect(agentCardCall).to.exist;
     });
   });
 
   describe('Backward Compatibility', () => {
     it('should construct with a URL and log a warning', async () => {
-      const consoleWarnSpy = sinon.spy(console, 'warn');
+      const consoleWarnSpy = vi.spyOn(console, 'warn');
       const backwardCompatibleClient = new A2AClient(agentBaseUrl, {
         fetchImpl: mockFetch,
       });
 
-      expect(consoleWarnSpy.calledOnce).to.be.true;
-      expect(
-        consoleWarnSpy.calledWith(
-          'Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.'
-        )
-      ).to.be.true;
+      expect(consoleWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        'Warning: Constructing A2AClient with a URL is deprecated. Please use A2AClient.fromCardUrl() instead.'
+      );
 
       const agentCard = await backwardCompatibleClient.getAgentCard();
       expect(agentCard).to.have.property('name', 'Test Agent');
 
-      consoleWarnSpy.restore();
+      consoleWarnSpy.mockRestore();
     });
   });
 
@@ -168,15 +164,15 @@ describe('A2AClient Basic Tests', () => {
       // Second call - should not fetch agent card again
       await client.getAgentCard();
 
-      const agentCardCalls = mockFetch
-        .getCalls()
-        .filter((call) => call.args[0].includes(AGENT_CARD_PATH));
+      const agentCardCalls = mockFetch.mock.calls.filter((args) =>
+        (args[0] as string).includes(AGENT_CARD_PATH)
+      );
 
       expect(agentCardCalls).to.have.length(1);
     });
 
     it('should handle agent card fetch errors', async () => {
-      const errorFetch = sinon.stub().callsFake(async (url: string) => {
+      const errorFetch = vi.fn().mockImplementation(async (url: string) => {
         if (url.includes(AGENT_CARD_PATH)) {
           return new Response('Not found', { status: 404 });
         }
@@ -215,19 +211,19 @@ describe('A2AClient Basic Tests', () => {
       const result = await client.sendMessage(messageParams);
 
       // Verify fetch was called
-      expect(mockFetch.callCount).to.be.greaterThan(0);
+      expect(mockFetch.mock.calls.length).to.be.greaterThan(0);
 
       // Verify RPC call was made
-      const rpcCall = mockFetch.getCalls().find((call) => call.args[0].includes('/api'));
+      const rpcCall = mockFetch.mock.calls.find((args) => (args[0] as string).includes('/api'));
       expect(rpcCall).to.exist;
-      expect(rpcCall.args[1]).to.deep.include({
+      expect(rpcCall[1]).to.deep.include({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
       });
-      expect(rpcCall.args[1].body).to.include('"method":"message/send"');
+      expect(rpcCall[1].body).to.include('"method":"message/send"');
 
       // Verify the result
       expect(isSuccessResponse(result)).to.be.true;
@@ -238,7 +234,7 @@ describe('A2AClient Basic Tests', () => {
     });
 
     it('should handle message sending errors', async () => {
-      const errorFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+      const errorFetch = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
         if (url.includes(AGENT_CARD_PATH)) {
           const mockAgentCard = createMockAgentCard({
             description: 'A test agent for error testing',
@@ -293,7 +289,7 @@ describe('A2AClient Basic Tests', () => {
 
   describe('Error Handling', () => {
     it('should handle network errors gracefully', async () => {
-      const networkErrorFetch = sinon.stub().rejects(new Error('Network error'));
+      const networkErrorFetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
       try {
         await A2AClient.fromCardUrl(agentCardUrl, {
@@ -307,7 +303,7 @@ describe('A2AClient Basic Tests', () => {
     });
 
     it('should handle malformed JSON responses', async () => {
-      const malformedFetch = sinon.stub().callsFake(async (url: string) => {
+      const malformedFetch = vi.fn().mockImplementation(async (url: string) => {
         if (url.includes(AGENT_CARD_PATH)) {
           return new Response('Invalid JSON', {
             status: 200,
@@ -328,7 +324,7 @@ describe('A2AClient Basic Tests', () => {
     });
 
     it('should handle missing agent card URL', async () => {
-      const missingUrlFetch = sinon.stub().callsFake(async (url: string) => {
+      const missingUrlFetch = vi.fn().mockImplementation(async (url: string) => {
         if (url.includes(AGENT_CARD_PATH)) {
           const invalidAgentCard = {
             name: 'Test Agent',
@@ -386,7 +382,7 @@ describe('A2AClient Basic Tests', () => {
       // Getting the card should return the provided card without a fetch call
       const agentCard = await clientFromCard.getAgentCard();
       expect(agentCard).to.deep.equal(mockAgentCard);
-      expect(mockFetchForStatic.called).to.be.false;
+      expect(mockFetchForStatic.mock.calls.length).to.equal(0);
 
       // Test sending a message to ensure serviceEndpointUrl is set
       const messageParams: MessageSendParams = {
@@ -406,9 +402,9 @@ describe('A2AClient Basic Tests', () => {
       const result = await clientFromCard.sendMessage(messageParams);
 
       // Verify fetch was called for the RPC request
-      expect(mockFetchForStatic.calledOnce).to.be.true;
-      const rpcCall = mockFetchForStatic.getCall(0);
-      expect(rpcCall.args[0]).to.equal('https://static-agent.example.com/api');
+      expect(mockFetchForStatic.mock.calls.length).to.equal(1);
+      const rpcCall = mockFetchForStatic.mock.calls[0];
+      expect(rpcCall[0]).to.equal('https://static-agent.example.com/api');
       expect(isSuccessResponse(result)).to.be.true;
     });
 
@@ -442,7 +438,7 @@ describe('A2AClient Basic Tests', () => {
 });
 
 describe('Extension Methods', () => {
-  let mockFetch: sinon.SinonStub;
+  let mockFetch: Mock & { capturedAuthHeaders: string[] };
   let originalConsoleError: typeof console.error;
   const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
 
@@ -461,7 +457,7 @@ describe('Extension Methods', () => {
   afterEach(() => {
     // Restore console.error
     console.error = originalConsoleError;
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('callExtensionMethod', () => {
@@ -492,7 +488,7 @@ describe('Extension Methods', () => {
       };
 
       // Setup custom fetch mock for this specific test
-      const customFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+      const customFetch = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
         if (url.includes(AGENT_CARD_PATH)) {
           return createAgentCardResponse(createMockAgentCard());
         }
@@ -552,7 +548,7 @@ describe('Extension Methods', () => {
       };
 
       // Setup custom fetch mock for this specific test
-      const errorFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+      const errorFetch = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
         if (url.includes(AGENT_CARD_PATH)) {
           return createAgentCardResponse(createMockAgentCard());
         }
@@ -613,7 +609,7 @@ describe('Push Notification Config Operations', () => {
   afterEach(() => {
     // Restore console.error
     console.error = originalConsoleError;
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('listTaskPushNotificationConfig', () => {
@@ -638,7 +634,7 @@ describe('Push Notification Config Operations', () => {
       ];
 
       // Setup custom mock fetch for this specific test
-      const customFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+      const customFetch = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
         if (url.includes(AGENT_CARD_PATH)) {
           const mockAgentCard = createMockAgentCard({
             capabilities: { pushNotifications: true },
@@ -714,7 +710,7 @@ describe('Push Notification Config Operations', () => {
       };
 
       // Setup custom mock fetch for this specific test
-      const customFetch = sinon.stub().callsFake(async (url: string, options?: RequestInit) => {
+      const customFetch = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
         if (url.includes(AGENT_CARD_PATH)) {
           const mockAgentCard = createMockAgentCard({
             capabilities: { pushNotifications: true },

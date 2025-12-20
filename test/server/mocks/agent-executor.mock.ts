@@ -1,4 +1,4 @@
-import sinon, { SinonStub, SinonFakeTimers } from 'sinon';
+import { vi, type Mock, type MockInstance } from 'vitest';
 import { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
 import { RequestContext, ExecutionEventBus } from '../../../src/server/index.js';
 
@@ -7,9 +7,11 @@ import { RequestContext, ExecutionEventBus } from '../../../src/server/index.js'
  */
 export class MockAgentExecutor implements AgentExecutor {
   // Stubs to control and inspect calls to execute and cancelTask
-  public execute: SinonStub<[RequestContext, ExecutionEventBus], Promise<void>> = sinon.stub();
+  public execute: Mock<
+    (requestContext: RequestContext, eventBus: ExecutionEventBus) => Promise<void>
+  > = vi.fn();
 
-  public cancelTask: SinonStub<[string, ExecutionEventBus], Promise<void>> = sinon.stub();
+  public cancelTask: Mock<(taskId: string, eventBus: ExecutionEventBus) => Promise<void>> = vi.fn();
 }
 
 /**
@@ -53,16 +55,13 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
  */
 export class CancellableMockAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
-  private clock: SinonFakeTimers;
+  public cancelTaskSpy: MockInstance;
 
-  constructor(clock: SinonFakeTimers) {
-    this.clock = clock;
+  constructor() {
+    this.cancelTaskSpy = vi.spyOn(this as CancellableMockAgentExecutor, 'cancelTask');
   }
 
-  public execute = async (
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus
-  ): Promise<void> => {
+  public async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
 
@@ -94,7 +93,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
         return;
       }
       // Use fake timers to simulate work
-      await this.clock.tickAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
     }
 
     eventBus.publish({
@@ -105,15 +104,12 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
       final: true,
     });
     eventBus.finished();
-  };
+  }
 
-  public cancelTask = async (taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {
+  public async cancelTask(taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
     this.cancelledTasks.add(taskId);
     // The execute loop is responsible for publishing the final state
-  };
-
-  // Stub for spying on cancelTask calls
-  public cancelTaskSpy = sinon.spy(this, 'cancelTask');
+  }
 }
 
 /**
@@ -121,16 +117,13 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
  */
 export class FailingCancellableMockAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
-  private clock: SinonFakeTimers;
+  public cancelTaskSpy: MockInstance;
 
-  constructor(clock: SinonFakeTimers) {
-    this.clock = clock;
+  constructor() {
+    this.cancelTaskSpy = vi.spyOn(this as FailingCancellableMockAgentExecutor, 'cancelTask');
   }
 
-  public execute = async (
-    requestContext: RequestContext,
-    eventBus: ExecutionEventBus
-  ): Promise<void> => {
+  public async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
 
@@ -162,7 +155,7 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
         return;
       }
       // Use fake timers to simulate work
-      await this.clock.tickAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
     }
 
     eventBus.publish({
@@ -173,12 +166,9 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
       final: true,
     });
     eventBus.finished();
-  };
+  }
 
-  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {
+  public async cancelTask(_taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
     // No operation: simulates the failure of task cancellation
-  };
-
-  // Stub for spying on cancelTask calls
-  public cancelTaskSpy = sinon.spy(this, 'cancelTask');
+  }
 }

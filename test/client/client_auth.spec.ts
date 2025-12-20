@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
-import sinon from 'sinon';
+import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
 import { A2AClient } from '../../src/client/client.js';
 import {
   AuthenticationHandler,
@@ -78,7 +77,7 @@ function isSuccessResponse(response: SendMessageResponse): response is SendMessa
 describe('A2AClient Authentication Tests', () => {
   let client: A2AClient;
   let authHandler: MockAuthHandler;
-  let mockFetch: sinon.SinonStub;
+  let mockFetch: Mock & { capturedAuthHeaders: string[] };
   let originalConsoleError: typeof console.error;
   const agentCardUrl = `https://test-agent.example.com/${AGENT_CARD_PATH}`;
 
@@ -109,7 +108,7 @@ describe('A2AClient Authentication Tests', () => {
   afterEach(() => {
     // Restore console.error
     console.error = originalConsoleError;
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('Authentication Flow', () => {
@@ -123,40 +122,40 @@ describe('A2AClient Authentication Tests', () => {
       const result = await client.sendMessage(messageParams);
 
       // Verify fetch was called multiple times
-      expect(mockFetch.callCount).to.equal(3);
+      expect(mockFetch.mock.calls.length).to.equal(3);
 
       // First call: agent card fetch
-      expect(mockFetch.firstCall.args[0]).to.equal(agentCardUrl);
-      expect(mockFetch.firstCall.args[1]).to.deep.include({
+      expect(mockFetch.mock.calls[0][0]).to.equal(agentCardUrl);
+      expect(mockFetch.mock.calls[0][1]).to.deep.include({
         headers: { Accept: 'application/json' },
       });
 
       // Second call: RPC request without auth header
-      expect(mockFetch.secondCall.args[0]).to.equal('https://test-agent.example.com/api');
-      expect(mockFetch.secondCall.args[1]).to.deep.include({
+      expect(mockFetch.mock.calls[1][0]).to.equal('https://test-agent.example.com/api');
+      expect(mockFetch.mock.calls[1][1]).to.deep.include({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
       });
-      expect(mockFetch.secondCall.args[1].body).to.include('"method":"message/send"');
+      expect(mockFetch.mock.calls[1][1].body).to.include('"method":"message/send"');
 
       // Third call: RPC request with auth header
-      expect(mockFetch.thirdCall.args[0]).to.equal('https://test-agent.example.com/api');
-      expect(mockFetch.thirdCall.args[1]).to.deep.include({
+      expect(mockFetch.mock.calls[2][0]).to.equal('https://test-agent.example.com/api');
+      expect(mockFetch.mock.calls[2][1]).to.deep.include({
         method: 'POST',
       });
       // Check headers separately to avoid issues with Authorization header
-      expect(mockFetch.thirdCall.args[1].headers).to.have.property(
+      expect(mockFetch.mock.calls[2][1].headers).to.have.property(
         'Content-Type',
         'application/json'
       );
-      expect(mockFetch.thirdCall.args[1].headers).to.have.property('Accept', 'application/json');
-      expect(mockFetch.thirdCall.args[1].headers).to.have.property('Authorization');
+      expect(mockFetch.mock.calls[2][1].headers).to.have.property('Accept', 'application/json');
+      expect(mockFetch.mock.calls[2][1].headers).to.have.property('Authorization');
 
-      expect(mockFetch.thirdCall.args[1].headers['Authorization']).to.match(/^Bearer .+$/);
-      expect(mockFetch.thirdCall.args[1].body).to.include('"method":"message/send"');
+      expect(mockFetch.mock.calls[2][1].headers['Authorization']).to.match(/^Bearer .+$/);
+      expect(mockFetch.mock.calls[2][1].body).to.include('"method":"message/send"');
 
       // Verify the result
       expect(isSuccessResponse(result)).to.be.true;
@@ -175,26 +174,26 @@ describe('A2AClient Authentication Tests', () => {
       await client.sendMessage(messageParams);
 
       // Capture the token from the first request
-      const firstRequestAuthCall = mockFetch
-        .getCalls()
-        .find((call) => call.args[0].includes('/api') && call.args[1]?.headers?.['Authorization']);
-      const firstRequestToken = firstRequestAuthCall?.args[1]?.headers?.['Authorization'];
+      const firstRequestAuthCall = mockFetch.mock.calls.find(
+        (args) => (args[0] as string).includes('/api') && args[1].headers?.['Authorization']
+      );
+      const firstRequestToken = firstRequestAuthCall?.[1]?.headers?.['Authorization'];
 
       // Second request - should use existing token
       const result2 = await client.sendMessage(messageParams);
 
       // Total calls should be 4: 3 for first request + 1 for second request (both agent card and auth token cached)
-      expect(mockFetch.callCount).to.equal(4);
+      expect(mockFetch.mock.calls.length).to.equal(4);
 
       // Second request should start from call #4 (after the first 3 calls)
-      const secondRequestCalls = mockFetch.getCalls().slice(3);
+      const secondRequestCalls = mockFetch.mock.calls.slice(3);
 
       // Only one call for second request: RPC request with auth header (agent card and token cached)
-      expect(secondRequestCalls[0].args[0]).to.equal('https://test-agent.example.com/api');
-      expect(secondRequestCalls[0].args[1].headers).to.have.property('Authorization');
+      expect(secondRequestCalls[0][0]).to.equal('https://test-agent.example.com/api');
+      expect(secondRequestCalls[0][1].headers).to.have.property('Authorization');
 
       // Should use the exact same token from the first request
-      expect(secondRequestCalls[0].args[1].headers['Authorization']).to.equal(firstRequestToken);
+      expect(secondRequestCalls[0][1].headers['Authorization']).to.equal(firstRequestToken);
 
       expect(isSuccessResponse(result2)).to.be.true;
     });
@@ -203,9 +202,9 @@ describe('A2AClient Authentication Tests', () => {
   describe('Authentication Handler Integration', () => {
     it('should call auth handler methods correctly', async () => {
       const authHandlerSpy = {
-        headers: sinon.spy(authHandler, 'headers'),
-        shouldRetryWithHeaders: sinon.spy(authHandler, 'shouldRetryWithHeaders'),
-        onSuccess: sinon.spy(authHandler, 'onSuccessfulRetry'),
+        headers: vi.spyOn(authHandler, 'headers'),
+        shouldRetryWithHeaders: vi.spyOn(authHandler, 'shouldRetryWithHeaders'),
+        onSuccess: vi.spyOn(authHandler, 'onSuccessfulRetry'),
       };
 
       const messageParams = createMessageParams({
@@ -216,16 +215,16 @@ describe('A2AClient Authentication Tests', () => {
       await client.sendMessage(messageParams);
 
       // Verify auth handler methods were called
-      expect(authHandlerSpy.headers.called).to.be.true;
-      expect(authHandlerSpy.shouldRetryWithHeaders.called).to.be.true;
-      expect(authHandlerSpy.onSuccess.called).to.be.true;
+      expect(authHandlerSpy.headers).toHaveBeenCalled();
+      expect(authHandlerSpy.shouldRetryWithHeaders).toHaveBeenCalled();
+      expect(authHandlerSpy.onSuccess).toHaveBeenCalled();
     });
 
     it('should handle auth handler returning undefined for retry', async () => {
       // Create a mock that doesn't retry
       const noRetryHandler = new MockAuthHandler();
-      noRetryHandler.shouldRetryWithHeaders.bind(noRetryHandler);
-      noRetryHandler.shouldRetryWithHeaders = sinon.stub().resolves(undefined);
+      // noRetryHandler.shouldRetryWithHeaders.bind(noRetryHandler);
+      noRetryHandler.shouldRetryWithHeaders = vi.fn().mockResolvedValue(undefined);
 
       const clientNoRetry = await A2AClient.fromCardUrl(agentCardUrl, {
         fetchImpl: mockFetch,
@@ -347,13 +346,13 @@ describe('A2AClient Authentication Tests', () => {
       expect((result as any).error).to.have.property('message', 'Authentication required');
 
       // Verify that fetch was called only once (no retry attempted)
-      expect(fetchWithApiError.callCount).to.equal(2); // One for agent card, one for API call
+      expect(fetchWithApiError.mock.calls.length).to.equal(2); // One for agent card, one for API call
     });
   });
 });
 
 describe('AuthHandlingFetch Tests', () => {
-  let mockFetch: sinon.SinonStub;
+  let mockFetch: Mock & { capturedAuthHeaders: string[] };
   let authHandler: MockAuthHandler;
   let authHandlingFetch: ReturnType<typeof createAuthenticatingFetchWithRetry>;
 
@@ -372,7 +371,7 @@ describe('AuthHandlingFetch Tests', () => {
   });
 
   afterEach(() => {
-    sinon.restore();
+    vi.restoreAllMocks();
   });
 
   describe('Constructor and Function Call', () => {
@@ -410,8 +409,8 @@ describe('AuthHandlingFetch Tests', () => {
       });
 
       // Verify that the fetch was called with merged headers including auth headers
-      const fetchCall = mockFetch.getCall(0);
-      const headers = fetchCall.args[1]?.headers as Record<string, string>;
+      const fetchCallArgs = mockFetch.mock.calls[0];
+      const headers = fetchCallArgs[1]?.headers as Record<string, string>;
 
       // Should include both user headers and auth headers
       expect(headers).to.include({
@@ -431,15 +430,15 @@ describe('AuthHandlingFetch Tests', () => {
 
       await emptyAuthFetch('https://test.example.com/api');
 
-      const fetchCall = mockFetch.getCall(0);
-      expect(fetchCall.args[1]).to.exist;
+      const fetchCallArgs = mockFetch.mock.calls[0];
+      expect(fetchCallArgs[1]).to.exist;
     });
   });
 
   describe('Success Callback', () => {
     it('should call onSuccessfulRetry when retry succeeds', async () => {
       const successAuthHandler = new MockAuthHandler();
-      const onSuccessSpy = sinon.spy(successAuthHandler, 'onSuccessfulRetry');
+      const onSuccessSpy = vi.spyOn(successAuthHandler, 'onSuccessfulRetry');
 
       // Create a modified version of the existing mockFetch that returns 401 first, then 200
       const successMockFetch = createMockFetch({
@@ -457,15 +456,15 @@ describe('AuthHandlingFetch Tests', () => {
 
       await successAuthFetch('https://test.example.com/api');
 
-      expect(onSuccessSpy.called).to.be.true;
-      expect(onSuccessSpy.firstCall.args[0]).to.deep.include({
+      expect(onSuccessSpy).toHaveBeenCalled();
+      expect(onSuccessSpy.mock.calls[0][0]).to.deep.include({
         Authorization: 'Bearer challenge123.challenge123',
       });
     });
 
     it('should not call onSuccessfulRetry when retry fails', async () => {
       const failAuthHandler = new MockAuthHandler();
-      const onSuccessSpy = sinon.spy(failAuthHandler, 'onSuccessfulRetry');
+      const onSuccessSpy = vi.spyOn(failAuthHandler, 'onSuccessfulRetry');
 
       createAuthenticatingFetchWithRetry(mockFetch, failAuthHandler);
 
@@ -478,14 +477,14 @@ describe('AuthHandlingFetch Tests', () => {
 
       const response = await failAuthFetch('https://test.example.com/api');
 
-      expect(onSuccessSpy.called).to.be.false;
+      expect(onSuccessSpy).not.toHaveBeenCalled();
       expect(response.status).to.equal(401);
     });
   });
 
   describe('Error Handling', () => {
     it('should propagate fetch errors', async () => {
-      const errorFetch = sinon.stub().rejects(new Error('Network error'));
+      const errorFetch = vi.fn().mockRejectedValue(new Error('Network error'));
       const errorAuthFetch = createAuthenticatingFetchWithRetry(errorFetch, authHandler);
 
       try {
@@ -499,8 +498,8 @@ describe('AuthHandlingFetch Tests', () => {
 
     it('should handle auth handler errors gracefully', async () => {
       const errorAuthHandler = new MockAuthHandler();
-      const shouldRetrySpy = sinon.stub(errorAuthHandler, 'shouldRetryWithHeaders');
-      shouldRetrySpy.rejects(new Error('Auth handler error'));
+      const shouldRetrySpy = vi.spyOn(errorAuthHandler, 'shouldRetryWithHeaders');
+      shouldRetrySpy.mockRejectedValue(new Error('Auth handler error'));
 
       const errorAuthFetch = createAuthenticatingFetchWithRetry(mockFetch, errorAuthHandler);
 

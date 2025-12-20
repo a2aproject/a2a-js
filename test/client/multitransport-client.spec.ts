@@ -1,5 +1,4 @@
-import { describe, it, beforeEach, expect } from 'vitest';
-import sinon from 'sinon';
+import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { Client, ClientConfig, RequestOptions } from '../../src/client/multitransport-client.js';
 import { Transport } from '../../src/client/transports/transport.js';
 import {
@@ -19,22 +18,22 @@ import { A2AStreamEventData } from '../../src/client/client.js';
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {
-  let transport: sinon.SinonStubbedInstance<Transport>;
+  let transport: Record<keyof Transport, Mock>;
   let client: Client;
   let agentCard: AgentCard;
 
   beforeEach(() => {
     transport = {
-      getExtendedAgentCard: sinon.stub(),
-      sendMessage: sinon.stub(),
-      sendMessageStream: sinon.stub(),
-      setTaskPushNotificationConfig: sinon.stub(),
-      getTaskPushNotificationConfig: sinon.stub(),
-      listTaskPushNotificationConfig: sinon.stub(),
-      deleteTaskPushNotificationConfig: sinon.stub(),
-      getTask: sinon.stub(),
-      cancelTask: sinon.stub(),
-      resubscribeTask: sinon.stub(),
+      getExtendedAgentCard: vi.fn(),
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn(),
+      setTaskPushNotificationConfig: vi.fn(),
+      getTaskPushNotificationConfig: vi.fn(),
+      listTaskPushNotificationConfig: vi.fn(),
+      deleteTaskPushNotificationConfig: vi.fn(),
+      getTask: vi.fn(),
+      cancelTask: vi.fn(),
+      resubscribeTask: vi.fn(),
     };
     agentCard = {
       protocolVersion: '0.3.0',
@@ -62,7 +61,7 @@ describe('Client', () => {
     client = new Client(transport, agentCardWithExtendedSupport);
 
     let caughtOptions;
-    transport.getExtendedAgentCard.callsFake(async (options) => {
+    transport.getExtendedAgentCard.mockImplementation(async (options) => {
       caughtOptions = options;
       return extendedAgentCard;
     });
@@ -72,7 +71,7 @@ describe('Client', () => {
     };
     const result = await client.getAgentCard(expectedOptions);
 
-    expect(transport.getExtendedAgentCard.calledOnce).to.be.true;
+    expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(1);
     expect(result).to.equal(extendedAgentCard);
     expect(caughtOptions).to.equal(expectedOptions);
   });
@@ -80,7 +79,7 @@ describe('Client', () => {
   it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
     const result = await client.getAgentCard();
 
-    expect(transport.getExtendedAgentCard.called).to.be.false;
+    expect(transport.getExtendedAgentCard).not.toHaveBeenCalled();
     expect(result).to.equal(agentCard);
   });
 
@@ -100,7 +99,7 @@ describe('Client', () => {
       role: 'agent',
       parts: [{ kind: 'text', text: 'response' }],
     };
-    transport.sendMessage.resolves(response);
+    transport.sendMessage.mockResolvedValue(response);
 
     const result = await client.sendMessage(params);
 
@@ -108,8 +107,8 @@ describe('Client', () => {
       ...params,
       configuration: { ...params.configuration, blocking: true },
     };
-    expect(transport.sendMessage.calledOn(transport)).to.be.true;
-    expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+    expect(transport.sendMessage.mock.contexts[0]).toBe(transport);
+    expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     expect(result).to.deep.equal(response);
   });
 
@@ -136,7 +135,7 @@ describe('Client', () => {
     async function* stream() {
       yield* events;
     }
-    transport.sendMessageStream.returns(stream());
+    transport.sendMessageStream.mockReturnValue(stream());
 
     const result = client.sendMessageStream(params);
 
@@ -148,8 +147,8 @@ describe('Client', () => {
       ...params,
       configuration: { ...params.configuration, blocking: true },
     };
-    expect(transport.sendMessageStream.calledOn(transport)).to.be.true;
-    expect(transport.sendMessageStream.calledOnceWith(expectedParams)).to.be.true;
+    expect(transport.sendMessageStream).toHaveBeenCalledTimes(1);
+    expect(transport.sendMessageStream).toHaveBeenCalledWith(expectedParams, undefined);
     expect(got).to.deep.equal(events);
   });
 
@@ -158,12 +157,15 @@ describe('Client', () => {
       taskId: '123',
       pushNotificationConfig: { url: 'http://example.com' },
     };
-    transport.setTaskPushNotificationConfig.resolves(params);
+    transport.setTaskPushNotificationConfig.mockResolvedValue(params);
 
     const result = await client.setTaskPushNotificationConfig(params);
 
-    expect(transport.setTaskPushNotificationConfig.calledOn(transport)).to.be.true;
-    expect(transport.setTaskPushNotificationConfig.calledOnceWith(params)).to.be.true;
+    expect(transport.setTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
+    expect(transport.setTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
+      params,
+      undefined
+    );
     expect(result).to.equal(params);
   });
 
@@ -176,12 +178,15 @@ describe('Client', () => {
       taskId: '123',
       pushNotificationConfig: { url: 'http://example.com' },
     };
-    transport.getTaskPushNotificationConfig.resolves(config);
+    transport.getTaskPushNotificationConfig.mockResolvedValue(config);
 
     const result = await client.getTaskPushNotificationConfig(params);
 
-    expect(transport.getTaskPushNotificationConfig.calledOn(transport)).to.be.true;
-    expect(transport.getTaskPushNotificationConfig.calledOnceWith(params)).to.be.true;
+    expect(transport.getTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
+    expect(transport.getTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
+      params,
+      undefined
+    );
     expect(result).to.equal(config);
   });
 
@@ -190,11 +195,14 @@ describe('Client', () => {
     const configs: TaskPushNotificationConfig[] = [
       { taskId: '123', pushNotificationConfig: { url: 'http://example.com' } },
     ];
-    transport.listTaskPushNotificationConfig.resolves(configs);
+    transport.listTaskPushNotificationConfig.mockResolvedValue(configs);
 
     const result = await client.listTaskPushNotificationConfig(params);
 
-    expect(transport.listTaskPushNotificationConfig.calledOnceWith(params)).to.be.true;
+    expect(transport.listTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
+      params,
+      undefined
+    );
     expect(result).to.equal(configs);
   });
 
@@ -203,22 +211,25 @@ describe('Client', () => {
       id: '123',
       pushNotificationConfigId: 'abc',
     };
-    transport.deleteTaskPushNotificationConfig.resolves();
+    transport.deleteTaskPushNotificationConfig.mockResolvedValue(undefined);
 
     await client.deleteTaskPushNotificationConfig(params);
 
-    expect(transport.deleteTaskPushNotificationConfig.calledOn(transport)).to.be.true;
-    expect(transport.deleteTaskPushNotificationConfig.calledOnceWith(params)).to.be.true;
+    expect(transport.deleteTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
+    expect(transport.deleteTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
+      params,
+      undefined
+    );
   });
 
   it('should call transport.getTask', async () => {
     const params: TaskQueryParams = { id: '123' };
     const task: Task = { id: '123', kind: 'task', contextId: 'ctx1', status: { state: 'working' } };
-    transport.getTask.resolves(task);
+    transport.getTask.mockResolvedValue(task);
 
     const result = await client.getTask(params);
 
-    expect(transport.getTask.calledOnceWith(params)).to.be.true;
+    expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
     expect(result).to.equal(task);
   });
 
@@ -230,12 +241,12 @@ describe('Client', () => {
       contextId: 'ctx1',
       status: { state: 'canceled' },
     };
-    transport.cancelTask.resolves(task);
+    transport.cancelTask.mockResolvedValue(task);
 
     const result = await client.cancelTask(params);
 
-    expect(transport.cancelTask.calledOn(transport)).to.be.true;
-    expect(transport.cancelTask.calledOnceWith(params)).to.be.true;
+    expect(transport.cancelTask.mock.contexts[0]).toBe(transport);
+    expect(transport.cancelTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
     expect(result).to.equal(task);
   });
 
@@ -260,7 +271,7 @@ describe('Client', () => {
     async function* stream() {
       yield* events;
     }
-    transport.resubscribeTask.returns(stream());
+    transport.resubscribeTask.mockReturnValue(stream());
 
     const result = client.resubscribeTask(params);
 
@@ -268,8 +279,8 @@ describe('Client', () => {
     for await (const event of result) {
       got.push(event);
     }
-    expect(transport.resubscribeTask.calledOn(transport)).to.be.true;
-    expect(transport.resubscribeTask.calledOnceWith(params)).to.be.true;
+    expect(transport.resubscribeTask.mock.contexts[0]).toBe(transport);
+    expect(transport.resubscribeTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
     expect(got).to.deep.equal(events);
   });
 
@@ -287,7 +298,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: false },
       };
-      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
 
     it('should set blocking=false when explicitly provided in request', async () => {
@@ -303,7 +314,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: false },
       };
-      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
 
     it('should apply acceptedOutputModes', async () => {
@@ -319,7 +330,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: true, acceptedOutputModes: ['application/json'] },
       };
-      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
 
     it('should use acceptedOutputModes from request when provided', async () => {
@@ -336,7 +347,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: true, acceptedOutputModes: ['text/plain'] },
       };
-      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
 
     it('should apply pushNotificationConfig', async () => {
@@ -353,7 +364,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: true, pushNotificationConfig: pushConfig },
       };
-      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
 
     it('should use pushNotificationConfig from request when provided', async () => {
@@ -374,7 +385,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: true, pushNotificationConfig: pushConfig },
       };
-      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
   });
 
@@ -391,7 +402,7 @@ describe('Client', () => {
         role: 'agent',
         parts: [],
       };
-      transport.sendMessage.resolves(response);
+      transport.sendMessage.mockResolvedValue(response);
 
       const result = client.sendMessageStream(params);
       const yielded = await result.next();
@@ -400,7 +411,7 @@ describe('Client', () => {
         ...params,
         configuration: { blocking: true },
       };
-      expect(transport.sendMessage.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
       expect(yielded.value).to.deep.equal(response);
     });
   });
@@ -427,11 +438,14 @@ describe('Client', () => {
         contextId: 'ctx1',
         status: { state: 'working' },
       };
-      transport.getTask.resolves(task);
+      transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.calledOnceWith({ id: '123', metadata: { foo: 'bar' } })).to.be.true;
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(
+        { id: '123', metadata: { foo: 'bar' } },
+        undefined
+      );
       expect(result).to.equal(task);
     });
 
@@ -456,11 +470,11 @@ describe('Client', () => {
         contextId: 'ctx1',
         status: { state: 'working' },
       };
-      transport.getTask.resolves(task);
+      transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.calledOnceWith(params)).to.be.true;
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
       expect(result).to.deep.equal({ ...task, metadata: { foo: 'bar' } });
     });
 
@@ -483,12 +497,13 @@ describe('Client', () => {
         contextId: 'ctx1',
         status: { state: 'working' },
       };
-      transport.getTask.resolves(task);
+      transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.calledOnceWith(params, { context: { [Symbol.for('foo')]: 'bar' } }))
-        .to.be.true;
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+        context: { [Symbol.for('foo')]: 'bar' },
+      });
       expect(result).to.equal(task);
     });
 
@@ -512,7 +527,7 @@ describe('Client', () => {
         contextId: 'ctx1',
         status: { state: 'working' },
       };
-      transport.getTask.resolves(task);
+      transport.getTask.mockResolvedValue(task);
 
       await client.getTask(params);
       expect(caughtAgentCard).to.equal(agentCard);
@@ -548,11 +563,11 @@ describe('Client', () => {
       };
       client = new Client(transport, agentCard, config);
       const params: TaskQueryParams = { id: '123' };
-      transport.getTask.resolves(task);
+      transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.notCalled).to.be.true;
+      expect(transport.getTask).not.toHaveBeenCalled();
       expect(result).to.equal(task);
     });
 
@@ -583,11 +598,11 @@ describe('Client', () => {
       };
       client = new Client(transport, agentCard, config);
       const params: TaskQueryParams = { id: '123' };
-      transport.getTask.resolves(task);
+      transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.calledOnceWith(params)).to.be.true;
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
       expect(result).to.equal(task);
     });
 
@@ -632,11 +647,11 @@ describe('Client', () => {
       };
       client = new Client(transport, agentCard, config);
       const params: TaskQueryParams = { id: '123' };
-      transport.getTask.resolves(task);
+      transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask.notCalled).to.be.true;
+      expect(transport.getTask).not.toHaveBeenCalled();
       expect(firstAfterCalled).to.be.true;
       expect(secondAfterCalled).to.be.true;
       expect(thirdAfterCalled).to.be.false;
@@ -666,7 +681,7 @@ describe('Client', () => {
       async function* stream() {
         yield* events;
       }
-      transport.sendMessageStream.returns(stream());
+      transport.sendMessageStream.mockReturnValue(stream());
       const config: ClientConfig = {
         interceptors: [
           {
@@ -694,7 +709,10 @@ describe('Client', () => {
         ...params,
         configuration: { ...params.configuration, blocking: true },
       };
-      expect(transport.sendMessageStream.calledOnceWith(expectedParams)).to.be.true;
+      expect(transport.sendMessageStream).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        undefined
+      );
       expect(got).to.deep.equal(events.map((event) => ({ ...event, metadata: { foo: 'bar' } })));
     });
 
@@ -708,7 +726,7 @@ describe('Client', () => {
         role: 'agent',
         parts: [],
       };
-      transport.sendMessage.resolves(message);
+      transport.sendMessage.mockResolvedValue(message);
       const config: ClientConfig = {
         interceptors: [
           {
@@ -735,8 +753,7 @@ describe('Client', () => {
     const iteratorsTests = [
       {
         name: 'sendMessageStream',
-        transportStubGetter: (t: sinon.SinonStubbedInstance<Transport>): sinon.SinonStub =>
-          t.sendMessageStream,
+        transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.sendMessageStream,
         caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
           c.sendMessageStream({
             message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
@@ -744,8 +761,7 @@ describe('Client', () => {
       },
       {
         name: 'resubscribeTask',
-        transportStubGetter: (t: sinon.SinonStubbedInstance<Transport>): sinon.SinonStub =>
-          t.resubscribeTask,
+        transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.resubscribeTask,
         caller: (c: Client): AsyncGenerator<A2AStreamEventData> => c.resubscribeTask({ id: '123' }),
       },
     ];
@@ -773,7 +789,7 @@ describe('Client', () => {
             yield* events;
           }
           const transportStub = test.transportStubGetter(transport);
-          transportStub.returns(stream());
+          transportStub.mockReturnValue(stream());
           let firstAfterCalled = false;
           let secondAfterCalled = false;
           let thirdAfterCalled = false;
@@ -814,7 +830,7 @@ describe('Client', () => {
           for await (const event of result) {
             got.push(event);
           }
-          expect(transportStub.notCalled).to.be.true;
+          expect(transportStub).not.toHaveBeenCalled();
           expect(got).to.deep.equal([events[0]]);
           expect(firstAfterCalled).to.be.true;
           expect(secondAfterCalled).to.be.true;
@@ -842,7 +858,7 @@ describe('Client', () => {
             yield* events;
           }
           const transportStub = test.transportStubGetter(transport);
-          transportStub.returns(stream());
+          transportStub.mockReturnValue(stream());
           const config: ClientConfig = {
             interceptors: [
               {
@@ -866,7 +882,7 @@ describe('Client', () => {
           for await (const event of result) {
             got.push(event);
           }
-          expect(transportStub.calledOnce).to.be.true;
+          expect(transportStub).toHaveBeenCalledTimes(1);
           expect(got).to.deep.equal([events[0]]);
         });
       });

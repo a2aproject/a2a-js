@@ -18,6 +18,11 @@ export {
   JsonRpcTransportFactory,
   type JsonRpcTransportOptions,
 } from './transports/json_rpc_transport.js';
+export {
+  RestTransport,
+  RestTransportFactory,
+  type RestTransportOptions,
+} from './transports/rest_transport.js';
 export type {
   CallInterceptor,
   BeforeArgs,
@@ -31,3 +36,12 @@ export {
   withA2AExtensions,
 } from './service-parameters.js';
 export { ClientCallContext, type ContextUpdate, ClientCallContextKey } from './context.js';
+export {
+  AuthenticatedExtendedCardNotConfiguredError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  PushNotificationNotSupportedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+} from '../errors.js';

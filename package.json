@@ -1,6 +1,6 @@
 {
   "name": "@a2a-js/sdk",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Server & Client SDK for Agent2Agent protocol",
   "license": "Apache-2.0",
   "repository": {
@@ -41,13 +41,12 @@
     "README.md"
   ],
   "devDependencies": {
-    "@edge-runtime/vm": "5.0.0",
+    "@cloudflare/vitest-pool-workers": "^0.10.15",
     "@eslint/js": "^9.39.1",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.14",
-    "@types/sinon": "^17.0.4",
     "@types/supertest": "^6.0.3",
-    "@vitest/coverage-v8": "^4.0.15",
+    "@vitest/coverage-v8": "^3.2.4",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
@@ -56,13 +55,12 @@
     "gts": "^6.0.2",
     "json-schema-to-typescript": "^15.0.4",
     "prettier": "^3.6.2",
-    "sinon": "^20.0.0",
     "supertest": "^7.1.4",
     "tsup": "^8.5.0",
     "tsx": "^4.19.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vitest": "^4.0.15"
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "clean": "gts clean",
@@ -74,7 +72,7 @@
     "lint:fix": "npx eslint . --fix",
     "coverage": "vitest run --coverage",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
-    "test-build:browser": "esbuild ./dist/client/index.js ./dist/index.js --bundle --platform=browser --outdir=dist/tmp-checks --outbase=./dist"
+    "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist"
   },
   "dependencies": {
     "uuid": "^11.1.0"
