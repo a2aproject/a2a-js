@@ -1764,7 +1764,7 @@ export interface Message1 {
  * The current status of the task, including its state and a descriptive message.
  */
 export interface TaskStatus {
-  message?: Message2;
+  message?: Message;
   /**
    * The current state of the task's lifecycle.
    */

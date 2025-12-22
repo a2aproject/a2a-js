@@ -105,14 +105,14 @@ jobs:
         id: run-tck-mandatory
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc,rest
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc,rest,grpc
         working-directory: tck/a2a-tck
-        # TODO: Add back the transports jsonrpc,rest once the TCK supports REST, linked to https://github.com/a2aproject/a2a-tck/issues/99
+        # TODO: Add rest once the TCK supports REST, linked to https://github.com/a2aproject/a2a-tck/issues/99
       - name: Run TCK (capabilities)
         id: run-tck-capabilities
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports jsonrpc,grpc
         working-directory: tck/a2a-tck
       - name: Stop SUT
         if: always()
