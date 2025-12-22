@@ -124,37 +124,45 @@ describe('RestTransportHandler', () => {
   });
 
   describe('sendMessage', () => {
-    it('should normalize camelCase message and call request handler', async () => {
-      const result = await transportHandler.sendMessage({ message: testMessage }, mockContext);
-
-      expect(result).to.deep.equal(testTask);
-      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.objectContaining({ messageId: 'msg-1' }),
-        }),
-        mockContext
-      );
-    });
-
-    it('should normalize snake_case message and call request handler', async () => {
-      const snakeCaseInput = {
-        message: {
-          message_id: 'msg-2',
-          role: 'user' as const,
-          parts: [{ kind: 'text' as const, text: 'Hello snake' }],
-          kind: 'message' as const,
+    it.each([
+      {
+        name: 'camelCase',
+        input: {
+          message: {
+            messageId: 'msg-1',
+            role: 'user' as const,
+            parts: [{ kind: 'text' as const, text: 'Hello' }],
+            kind: 'message' as const,
+          },
         },
-      };
+        expectedMessageId: 'msg-1',
+      },
+      {
+        name: 'snake_case',
+        input: {
+          message: {
+            message_id: 'msg-2',
+            role: 'user' as const,
+            parts: [{ kind: 'text' as const, text: 'Hello snake' }],
+            kind: 'message' as const,
+          },
+        },
+        expectedMessageId: 'msg-2',
+      },
+    ])(
+      'should normalize $name message and call request handler',
+      async ({ input, expectedMessageId }) => {
+        const result = await transportHandler.sendMessage(input as any, mockContext);
 
-      await transportHandler.sendMessage(snakeCaseInput, mockContext);
-
-      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.objectContaining({ messageId: 'msg-2' }),
-        }),
-        mockContext
-      );
-    });
+        expect(result).to.deep.equal(testTask);
+        expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: expect.objectContaining({ messageId: expectedMessageId }),
+          }),
+          mockContext
+        );
+      }
+    );
 
     it('should throw InvalidParams if message is missing', async () => {
       await expect(transportHandler.sendMessage({} as any, mockContext)).rejects.toThrow(
@@ -429,8 +437,9 @@ describe('RestTransportHandler', () => {
   });
 
   describe('File parts normalization', () => {
-    it('should normalize camelCase mimeType in file parts', async () => {
-      const messageWithFile = {
+    it.each([
+      {
+        name: 'camelCase',
         message: {
           messageId: 'msg-file',
           role: 'user' as const,
@@ -446,27 +455,9 @@ describe('RestTransportHandler', () => {
           ],
           kind: 'message' as const,
         },
-      };
-
-      await transportHandler.sendMessage(messageWithFile, mockContext);
-
-      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.objectContaining({
-            parts: [
-              expect.objectContaining({
-                kind: 'file',
-                file: expect.objectContaining({ mimeType: 'application/pdf' }),
-              }),
-            ],
-          }),
-        }),
-        mockContext
-      );
-    });
-
-    it('should normalize snake_case mime_type in file parts', async () => {
-      const messageWithFile = {
+      },
+      {
+        name: 'snake_case',
         message: {
           message_id: 'msg-file',
           role: 'user' as const,
@@ -482,9 +473,9 @@ describe('RestTransportHandler', () => {
           ],
           kind: 'message' as const,
         },
-      };
-
-      await transportHandler.sendMessage(messageWithFile as any, mockContext);
+      },
+    ])('should normalize $name file parts to camelCase', async ({ message }) => {
+      await transportHandler.sendMessage({ message } as any, mockContext);
 
       expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
         expect.objectContaining({

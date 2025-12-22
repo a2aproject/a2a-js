@@ -2,10 +2,10 @@ import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'v
 import express, { Express } from 'express';
 import request from 'supertest';
 
-import { restHandler, UserBuilder } from '../../src/server/express/index.js';
-import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { AgentCard, Task, Message } from '../../src/types.js';
-import { A2AError } from '../../src/server/error.js';
+import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
+import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
+import { AgentCard, Task, Message } from '../../../src/types.js';
+import { A2AError } from '../../../src/server/error.js';
 
 /**
  * Test suite for restHandler - HTTP+JSON/REST transport implementation
@@ -113,25 +113,13 @@ describe('restHandler', () => {
   });
 
   describe('POST /v1/message:send', () => {
-    it('should accept camelCase message and return 201 with Task', async () => {
+    it.each([
+      { name: 'camelCase', message: testMessage },
+      { name: 'snake_case', message: snakeCaseMessage },
+    ])('should accept $name message and return 201 with Task', async ({ message }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app)
-        .post('/v1/message:send')
-        .send({ message: testMessage })
-        .expect(201);
-
-      assert.deepEqual(response.body.id, testTask.id);
-      assert.deepEqual(response.body.kind, 'task');
-    });
-
-    it('should accept snake_case message and return 201 with Task', async () => {
-      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-
-      const response = await request(app)
-        .post('/v1/message:send')
-        .send({ message: snakeCaseMessage })
-        .expect(201);
+      const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
 
       assert.deepEqual(response.body.id, testTask.id);
       assert.deepEqual(response.body.kind, 'task');
@@ -160,31 +148,17 @@ describe('restHandler', () => {
   });
 
   describe('POST /v1/message:stream', () => {
-    it('should accept camelCase message and stream via SSE', async () => {
+    it.each([
+      { name: 'camelCase', message: testMessage },
+      { name: 'snake_case', message: snakeCaseMessage },
+    ])('should accept $name message and stream via SSE', async ({ message }) => {
       async function* mockStream() {
         yield testMessage;
         yield testTask;
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const response = await request(app)
-        .post('/v1/message:stream')
-        .send({ message: testMessage })
-        .expect(200);
-
-      assert.equal(response.headers['content-type'], 'text/event-stream');
-    });
-
-    it('should accept snake_case message and stream via SSE', async () => {
-      async function* mockStream() {
-        yield testMessage;
-      }
-      (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
-
-      const response = await request(app)
-        .post('/v1/message:stream')
-        .send({ message: snakeCaseMessage })
-        .expect(200);
+      const response = await request(app).post('/v1/message:stream').send({ message }).expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
     });
@@ -341,33 +315,25 @@ describe('restHandler', () => {
     };
 
     describe('POST /v1/tasks/:taskId/pushNotificationConfigs', () => {
-      it('should accept camelCase pushNotificationConfig and return 201', async () => {
+      it.each([
+        {
+          name: 'camelCase',
+          payload: {
+            pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' },
+          },
+        },
+        {
+          name: 'snake_case',
+          payload: {
+            push_notification_config: { id: 'config-1', url: 'https://example.com/webhook' },
+          },
+        },
+      ])('should accept $name config and return 201', async ({ payload }) => {
         (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({
-            pushNotificationConfig: {
-              id: 'config-1',
-              url: 'https://example.com/webhook',
-            },
-          })
-          .expect(201);
-
-        assert.deepEqual(response.body.taskId, mockConfig.taskId);
-      });
-
-      it('should accept snake_case push_notification_config and return 201', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
-
-        const response = await request(app)
-          .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({
-            push_notification_config: {
-              id: 'config-1',
-              url: 'https://example.com/webhook',
-            },
-          })
+          .send(payload)
           .expect(201);
 
         assert.deepEqual(response.body.taskId, mockConfig.taskId);
@@ -494,54 +460,47 @@ describe('restHandler', () => {
    * File Parts Format Tests
    */
   describe('File parts format acceptance', () => {
-    it('should accept camelCase mimeType in file parts', async () => {
+    it.each([
+      {
+        name: 'camelCase',
+        message: {
+          messageId: 'msg-file',
+          role: 'user',
+          kind: 'message',
+          parts: [
+            {
+              kind: 'file',
+              file: {
+                uri: 'https://example.com/file.pdf',
+                mimeType: 'application/pdf',
+                name: 'document.pdf',
+              },
+            },
+          ],
+        },
+      },
+      {
+        name: 'snake_case',
+        message: {
+          message_id: 'msg-file',
+          role: 'user',
+          kind: 'message',
+          parts: [
+            {
+              kind: 'file',
+              file: {
+                uri: 'https://example.com/file.pdf',
+                mime_type: 'application/pdf',
+                name: 'document.pdf',
+              },
+            },
+          ],
+        },
+      },
+    ])('should accept $name file parts', async ({ message }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      await request(app)
-        .post('/v1/message:send')
-        .send({
-          message: {
-            messageId: 'msg-file',
-            role: 'user',
-            kind: 'message',
-            parts: [
-              {
-                kind: 'file',
-                file: {
-                  uri: 'https://example.com/file.pdf',
-                  mimeType: 'application/pdf',
-                  name: 'document.pdf',
-                },
-              },
-            ],
-          },
-        })
-        .expect(201);
-    });
-
-    it('should accept snake_case mime_type in file parts', async () => {
-      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-
-      await request(app)
-        .post('/v1/message:send')
-        .send({
-          message: {
-            message_id: 'msg-file',
-            role: 'user',
-            kind: 'message',
-            parts: [
-              {
-                kind: 'file',
-                file: {
-                  uri: 'https://example.com/file.pdf',
-                  mime_type: 'application/pdf',
-                  name: 'document.pdf',
-                },
-              },
-            ],
-          },
-        })
-        .expect(201);
+      await request(app).post('/v1/message:send').send({ message }).expect(201);
     });
   });
 
@@ -549,34 +508,25 @@ describe('restHandler', () => {
    * Configuration Format Tests
    */
   describe('Configuration format acceptance', () => {
-    it('should accept camelCase configuration fields', async () => {
-      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-
-      await request(app)
-        .post('/v1/message:send')
-        .send({
+    it.each([
+      {
+        name: 'camelCase',
+        payload: {
           message: testMessage,
-          configuration: {
-            acceptedOutputModes: ['text/plain'],
-            historyLength: 5,
-          },
-        })
-        .expect(201);
-    });
-
-    it('should accept snake_case configuration fields', async () => {
+          configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
+        },
+      },
+      {
+        name: 'snake_case',
+        payload: {
+          message: snakeCaseMessage,
+          configuration: { accepted_output_modes: ['text/plain'], history_length: 5 },
+        },
+      },
+    ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      await request(app)
-        .post('/v1/message:send')
-        .send({
-          message: snakeCaseMessage,
-          configuration: {
-            accepted_output_modes: ['text/plain'],
-            history_length: 5,
-          },
-        })
-        .expect(201);
+      await request(app).post('/v1/message:send').send(payload).expect(201);
     });
   });
 
