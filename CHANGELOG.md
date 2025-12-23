@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.8](https://github.com/a2aproject/a2a-js/compare/v0.3.7...v0.3.8) (2025-12-23)
+
+
+### Features
+
+* use case-insensitive transport protocol name comparison in ClientFactory ([5246067](https://github.com/a2aproject/a2a-js/commit/5246067f5fc1ca3aa7b1aef7176aab5b0f164acb))
+
 ## [0.3.7](https://github.com/a2aproject/a2a-js/compare/v0.3.6...v0.3.7) (2025-12-17)
 
 
