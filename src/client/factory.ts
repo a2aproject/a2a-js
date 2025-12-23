@@ -75,7 +75,7 @@ export const ClientFactoryOptions = {
 };
 
 export class ClientFactory {
-  private readonly transportsByName: Map<string, TransportFactory>;
+  private readonly transportsByName: CaseInsensitiveMap<TransportFactory>;
   private readonly agentCardResolver: AgentCardResolver;
 
   constructor(public readonly options: ClientFactoryOptions = ClientFactoryOptions.default) {
@@ -84,8 +84,7 @@ export class ClientFactory {
     }
     this.transportsByName = transportsByName(options.transports);
     for (const transport of options.preferredTransports ?? []) {
-      const factory = this.options.transports.find((t) => t.protocolName === transport);
-      if (!factory) {
+      if (!this.transportsByName.has(transport)) {
         throw new Error(
           `Unknown preferred transport: ${transport}, available transports: ${[...this.transportsByName.keys()].join()}`
         );
@@ -100,7 +99,7 @@ export class ClientFactory {
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const agentCardPreferred = agentCard.preferredTransport ?? JsonRpcTransportFactory.name;
     const additionalInterfaces = agentCard.additionalInterfaces ?? [];
-    const urlsPerAgentTransports = new Map<string, string>([
+    const urlsPerAgentTransports = new CaseInsensitiveMap<string>([
       [agentCardPreferred, agentCard.url],
       ...additionalInterfaces.map<[string, string]>((i) => [i.transport, i.url]),
     ]);
@@ -165,8 +164,8 @@ function mergeTransports(
 
 function transportsByName(
   transports: ReadonlyArray<TransportFactory> | undefined
-): Map<string, TransportFactory> {
-  const result = new Map<string, TransportFactory>();
+): CaseInsensitiveMap<TransportFactory> {
+  const result = new CaseInsensitiveMap<TransportFactory>();
   if (!transports) {
     return result;
   }
@@ -188,4 +187,30 @@ function mergeArrays<T>(
   }
 
   return [...(a1 ?? []), ...(a2 ?? [])];
+}
+
+/**
+ * A Map that normalizes string keys to uppercase for case-insensitive lookups.
+ * This prevents errors from inconsistent casing in protocol names.
+ */
+class CaseInsensitiveMap<T> extends Map<string, T> {
+  private normalizeKey(key: string): string {
+    return key.toUpperCase();
+  }
+
+  override set(key: string, value: T): this {
+    return super.set(this.normalizeKey(key), value);
+  }
+
+  override get(key: string): T | undefined {
+    return super.get(this.normalizeKey(key));
+  }
+
+  override has(key: string): boolean {
+    return super.has(this.normalizeKey(key));
+  }
+
+  override delete(key: string): boolean {
+    return super.delete(this.normalizeKey(key));
+  }
 }
