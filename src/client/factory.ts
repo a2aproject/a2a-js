@@ -6,32 +6,6 @@ import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 import { RestTransportFactory } from './transports/rest_transport.js';
 import { TransportFactory } from './transports/transport.js';
 
-/**
- * A Map that normalizes string keys to uppercase for case-insensitive lookups.
- * This prevents errors from inconsistent casing in protocol names.
- */
-class CaseInsensitiveMap<T> extends Map<string, T> {
-  private normalizeKey(key: string): string {
-    return key.toUpperCase();
-  }
-
-  override set(key: string, value: T): this {
-    return super.set(this.normalizeKey(key), value);
-  }
-
-  override get(key: string): T | undefined {
-    return super.get(this.normalizeKey(key));
-  }
-
-  override has(key: string): boolean {
-    return super.has(this.normalizeKey(key));
-  }
-
-  override delete(key: string): boolean {
-    return super.delete(this.normalizeKey(key));
-  }
-}
-
 export interface ClientFactoryOptions {
   /**
    * Transport factories to use.
@@ -213,4 +187,30 @@ function mergeArrays<T>(
   }
 
   return [...(a1 ?? []), ...(a2 ?? [])];
+}
+
+/**
+ * A Map that normalizes string keys to uppercase for case-insensitive lookups.
+ * This prevents errors from inconsistent casing in protocol names.
+ */
+class CaseInsensitiveMap<T> extends Map<string, T> {
+  private normalizeKey(key: string): string {
+    return key.toUpperCase();
+  }
+
+  override set(key: string, value: T): this {
+    return super.set(this.normalizeKey(key), value);
+  }
+
+  override get(key: string): T | undefined {
+    return super.get(this.normalizeKey(key));
+  }
+
+  override has(key: string): boolean {
+    return super.has(this.normalizeKey(key));
+  }
+
+  override delete(key: string): boolean {
+    return super.delete(this.normalizeKey(key));
+  }
 }
