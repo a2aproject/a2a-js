@@ -249,9 +249,13 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
       ? error
       : A2AError.internalError(error instanceof Error ? error.message : 'Unknown Error');
 
+  const metadata = new grpc.Metadata();
+  metadata.set('a2a-error-code', a2aError.code.toString());
   return {
+    message: a2aError.message,
     code: mapping[a2aError.code] ?? grpc.status.INTERNAL,
     details: a2aError.message,
+    metadata: metadata,
   };
 };
 
