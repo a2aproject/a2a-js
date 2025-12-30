@@ -52,7 +52,7 @@ export class FromProto {
     };
   }
 
-  static setTaskPushNotificationConfigParams(
+  static taskPushNotificationConfig(
     request: CreateTaskPushNotificationConfigRequest
   ): types.TaskPushNotificationConfig {
     if (!request.config?.pushNotificationConfig) {
@@ -86,7 +86,7 @@ export class FromProto {
     return {
       kind: 'message',
       messageId: message.messageId,
-      parts: message.content.map((p) => FromProto.parts(p)),
+      parts: message.content.map((p) => FromProto.part(p)),
       contextId: message.contextId,
       taskId: message.taskId,
       role: FromProto.role(message.role),
@@ -106,7 +106,7 @@ export class FromProto {
     }
   }
 
-  static configuration(
+  static messageSendConfiguration(
     configuration: SendMessageConfiguration
   ): types.MessageSendConfiguration | undefined {
     if (!configuration) {
@@ -131,11 +131,11 @@ export class FromProto {
       id: config.id,
       url: config.url,
       token: config.token,
-      authentication: FromProto.authenticationInfo(config.authentication),
+      authentication: FromProto.pushNotificationAuthenticationInfo(config.authentication),
     };
   }
 
-  static authenticationInfo(
+  static pushNotificationAuthenticationInfo(
     authInfo: AuthenticationInfo
   ): types.PushNotificationAuthenticationInfo | undefined {
     if (!authInfo) {
@@ -148,7 +148,7 @@ export class FromProto {
     };
   }
 
-  static parts(part: Part): types.Part {
+  static part(part: Part): types.Part {
     if (part.part?.$case === 'text') {
       return {
         kind: 'text',
@@ -190,7 +190,7 @@ export class FromProto {
   static messageSendParams(request: SendMessageRequest): types.MessageSendParams {
     return {
       message: FromProto.message(request.request),
-      configuration: FromProto.configuration(request.configuration),
+      configuration: FromProto.messageSendConfiguration(request.configuration),
       metadata: request.metadata,
     };
   }

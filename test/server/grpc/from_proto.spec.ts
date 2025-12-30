@@ -81,7 +81,7 @@ describe('FromProto', () => {
         },
       },
     };
-    const result = FromProto.setTaskPushNotificationConfigParams(request);
+    const result = FromProto.taskPushNotificationConfig(request);
     expect(idDecoding.extractTaskId).toHaveBeenCalledWith(request.parent);
     expect(result).toEqual({
       taskId: 'task-123',
@@ -141,7 +141,7 @@ describe('FromProto', () => {
       },
       historyLength: 0,
     };
-    const result = FromProto.configuration(protoConfig);
+    const result = FromProto.messageSendConfiguration(protoConfig);
     expect(result).toEqual({
       blocking: true,
       acceptedOutputModes: ['text/plain'],
@@ -159,7 +159,7 @@ describe('FromProto', () => {
       schemes: ['bearer'],
       credentials: 'bearer-token',
     };
-    const result = FromProto.authenticationInfo(authInfo);
+    const result = FromProto.pushNotificationAuthenticationInfo(authInfo);
     expect(result).toEqual({
       schemes: ['bearer'],
       credentials: 'bearer-token',
@@ -169,7 +169,7 @@ describe('FromProto', () => {
   describe('parts', () => {
     it('should convert a text part', () => {
       const part: proto.Part = { part: { $case: 'text', value: 'hello' } };
-      const result = FromProto.parts(part);
+      const result = FromProto.part(part);
       expect(result).toEqual({ kind: 'text', text: 'hello' });
     });
 
@@ -183,7 +183,7 @@ describe('FromProto', () => {
           },
         },
       };
-      const result = FromProto.parts(part);
+      const result = FromProto.part(part);
       expect(result).toEqual({
         kind: 'file',
         file: { mimeType: 'text/plain', uri: 'file://path/to/file' },
@@ -198,7 +198,7 @@ describe('FromProto', () => {
           value: { file: { $case: 'fileWithBytes', value: bytes }, mimeType: 'text/plain' },
         },
       };
-      const result = FromProto.parts(part);
+      const result = FromProto.part(part);
       expect(result).toEqual({
         kind: 'file',
         file: { bytes: bytes.toString('base64'), mimeType: 'text/plain' },
@@ -215,19 +215,19 @@ describe('FromProto', () => {
           }, // Invalid state
         },
       };
-      expect(() => FromProto.parts(part)).toThrow(new A2AError(-32602, 'Invalid file part type'));
+      expect(() => FromProto.part(part)).toThrow(new A2AError(-32602, 'Invalid file part type'));
     });
 
     it('should convert a data part', () => {
       const data = { foo: 'bar' };
       const part: proto.Part = { part: { $case: 'data', value: { data } } };
-      const result = FromProto.parts(part);
+      const result = FromProto.part(part);
       expect(result).toEqual({ kind: 'data', data });
     });
 
     it('should throw for an unknown part type', () => {
       const part: proto.Part = { part: { $case: 'invalid', value: undefined } as any }; // Invalid state
-      expect(() => FromProto.parts(part)).toThrow(new A2AError(-32602, 'Invalid part type'));
+      expect(() => FromProto.part(part)).toThrow(new A2AError(-32602, 'Invalid part type'));
     });
   });
 

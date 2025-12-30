@@ -92,7 +92,7 @@ describe('ToProto', () => {
   describe('parts', () => {
     it('should convert a text part', () => {
       const part: types.Part = { kind: 'text', text: 'hello' };
-      const result = ToProto.parts(part);
+      const result = ToProto.part(part);
       expect(result).toEqual({
         part: { $case: 'text', value: 'hello' },
       });
@@ -103,7 +103,7 @@ describe('ToProto', () => {
         kind: 'file',
         file: { uri: 'file://path', mimeType: 'text/plain' },
       };
-      const result = ToProto.parts(part);
+      const result = ToProto.part(part);
       expect(result).toEqual({
         part: {
           $case: 'file',
@@ -121,7 +121,7 @@ describe('ToProto', () => {
         kind: 'file',
         file: { bytes: base64Bytes, mimeType: 'application/octet-stream' },
       };
-      const result = ToProto.parts(part);
+      const result = ToProto.part(part);
       expect(result).toEqual({
         part: {
           $case: 'file',
@@ -138,13 +138,13 @@ describe('ToProto', () => {
         kind: 'file',
         file: {} as any,
       };
-      expect(() => ToProto.parts(part)).toThrow(new A2AError(-32603, 'Invalid file part'));
+      expect(() => ToProto.part(part)).toThrow(new A2AError(-32603, 'Invalid file part'));
     });
 
     it('should convert a data part', () => {
       const data = { foo: 'bar' };
       const part: types.Part = { kind: 'data', data };
-      const result = ToProto.parts(part);
+      const result = ToProto.part(part);
       expect(result).toEqual({
         part: { $case: 'data', value: { data } },
       });
@@ -152,7 +152,7 @@ describe('ToProto', () => {
 
     it('should throw for an unknown part type', () => {
       const part: types.Part = { kind: 'unknown' } as any;
-      expect(() => ToProto.parts(part)).toThrow(new A2AError(-32603, 'Invalid part type'));
+      expect(() => ToProto.part(part)).toThrow(new A2AError(-32603, 'Invalid part type'));
     });
   });
 
@@ -275,7 +275,7 @@ describe('ToProto', () => {
       schemes: ['bearer'],
       credentials: 'my-token',
     };
-    const result = ToProto.authenticationInfo(authInfo);
+    const result = ToProto.pushNotificationAuthenticationInfo(authInfo);
     expect(result).toEqual({
       schemes: ['bearer'],
       credentials: 'my-token',
@@ -335,7 +335,7 @@ describe('ToProto', () => {
         pushNotificationConfig: { id: 'pnc-456', url: 'https://example.com/notify' },
       },
     ];
-    const result = ToProto.listTaskPushNotificationConfigs(configs);
+    const result = ToProto.listTaskPushNotificationConfig(configs);
     expect(result.configs.length).toBe(1);
     expect(result.nextPageToken).toBe('');
     expect(result.configs[0].name).toBe('tasks/task-123/pushNotificationConfigs/pnc-456');

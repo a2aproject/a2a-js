@@ -57,15 +57,15 @@ export class ToProto {
       defaultOutputModes: agentCard.defaultOutputModes,
       skills: agentCard.skills.map((s) => ToProto.agentSkill(s)),
       supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard ?? false,
-      signatures: agentCard.signatures?.map((s) => ToProto.signatures(s)) ?? [],
+      signatures: agentCard.signatures?.map((s) => ToProto.agentCardSignature(s)) ?? [],
     };
   }
 
-  static signatures(signatures: types.AgentCardSignature): AgentCardSignature {
+  static agentCardSignature(signature: types.AgentCardSignature): AgentCardSignature {
     return {
-      protected: signatures.protected,
-      signature: signatures.signature,
-      header: signatures.header,
+      protected: signature.protected,
+      signature: signature.signature,
+      header: signature.header,
     };
   }
 
@@ -221,12 +221,12 @@ export class ToProto {
       streaming: capabilities.streaming ?? false,
       pushNotifications: capabilities.pushNotifications ?? false,
       extensions: capabilities.extensions
-        ? capabilities.extensions.map((e) => ToProto.extension(e))
+        ? capabilities.extensions.map((e) => ToProto.agentExtension(e))
         : [],
     };
   }
 
-  static extension(extension: types.AgentExtension): AgentExtension {
+  static agentExtension(extension: types.AgentExtension): AgentExtension {
     return {
       uri: extension.uri,
       description: extension.description ?? '',
@@ -235,7 +235,7 @@ export class ToProto {
     };
   }
 
-  static listTaskPushNotificationConfigs(
+  static listTaskPushNotificationConfig(
     config: types.TaskPushNotificationConfig[]
   ): ListTaskPushNotificationConfigResponse {
     return {
@@ -261,11 +261,11 @@ export class ToProto {
       id: config.id ?? '',
       url: config.url,
       token: config.token ?? '',
-      authentication: ToProto.authenticationInfo(config.authentication),
+      authentication: ToProto.pushNotificationAuthenticationInfo(config.authentication),
     };
   }
 
-  static authenticationInfo(
+  static pushNotificationAuthenticationInfo(
     authInfo: types.PushNotificationAuthenticationInfo
   ): AuthenticationInfo | undefined {
     if (!authInfo) {
@@ -298,14 +298,14 @@ export class ToProto {
       return {
         payload: {
           $case: 'statusUpdate',
-          value: ToProto.taskStatusUpdate(event),
+          value: ToProto.taskStatusUpdateEvent(event),
         },
       };
     } else if (event.kind === 'artifact-update') {
       return {
         payload: {
           $case: 'artifactUpdate',
-          value: ToProto.taskArtifactUpdate(event),
+          value: ToProto.taskArtifactUpdateEvent(event),
         },
       };
     } else {
@@ -313,7 +313,7 @@ export class ToProto {
     }
   }
 
-  static taskStatusUpdate(event: types.TaskStatusUpdateEvent): TaskStatusUpdateEvent {
+  static taskStatusUpdateEvent(event: types.TaskStatusUpdateEvent): TaskStatusUpdateEvent {
     return {
       taskId: event.taskId,
       status: ToProto.taskStatus(event.status),
@@ -323,7 +323,7 @@ export class ToProto {
     };
   }
 
-  static taskArtifactUpdate(event: types.TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
+  static taskArtifactUpdateEvent(event: types.TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
     return {
       taskId: event.taskId,
       artifact: ToProto.artifact(event.artifact),
@@ -359,7 +359,7 @@ export class ToProto {
 
     return {
       messageId: message.messageId,
-      content: message.parts.map((p) => ToProto.parts(p)),
+      content: message.parts.map((p) => ToProto.part(p)),
       contextId: message.contextId ?? '',
       taskId: message.taskId ?? '',
       role: ToProto.role(message.role),
@@ -403,7 +403,7 @@ export class ToProto {
       artifactId: artifact.artifactId,
       name: artifact.name ?? '',
       description: artifact.description ?? '',
-      parts: artifact.parts.map((p) => ToProto.parts(p)),
+      parts: artifact.parts.map((p) => ToProto.part(p)),
       metadata: artifact.metadata,
       extensions: artifact.extensions ? artifact.extensions : [],
     };
@@ -434,7 +434,7 @@ export class ToProto {
     }
   }
 
-  static parts(part: types.Part): Part {
+  static part(part: types.Part): Part {
     if (part.kind === 'text') {
       return {
         part: { $case: 'text', value: part.text },
