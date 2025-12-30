@@ -8,6 +8,8 @@ export default defineWorkersConfig(
       exclude: [
         // Express tests require Node.js-specific APIs (http, Express framework)
         'test/server/express/**',
+        // gRpc test require Node.js-specific gRPC module
+        'test/server/grpc/*.spec.ts',
         'test/e2e.spec.ts',
         'test/server/push_notification_integration.spec.ts',
         // Node modules should always be excluded

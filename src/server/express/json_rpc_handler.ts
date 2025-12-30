@@ -11,7 +11,6 @@ import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
-import { UnauthenticatedUser } from '../authentication/user.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
@@ -44,7 +43,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       const user = await options.userBuilder(req);
       const context = new ServerCallContext(
         Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
-        user ?? new UnauthenticatedUser()
+        user
       );
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
