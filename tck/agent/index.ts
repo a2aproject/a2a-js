@@ -1,4 +1,5 @@
 import express from 'express';
+import { Server, ServerCredentials } from '@grpc/grpc-js';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import { AgentCard, Task, TaskStatusUpdateEvent, Message } from '../../src/index.js';
@@ -16,6 +17,8 @@ import {
   restHandler,
   UserBuilder,
 } from '../../src/server/express/index.js';
+import { grpcHandler } from '../../src/server/grpc/grpc_handler.js';
+import { A2AServiceService } from '../../src/grpc/a2a.js';
 
 /**
  * SUTAgentExecutor implements the agent's core logic.
@@ -183,6 +186,7 @@ const SUTAgentCard: AgentCard = {
   additionalInterfaces: [
     { url: 'http://localhost:41241/a2a/jsonrpc', transport: 'JSONRPC' },
     { url: 'http://localhost:41241/a2a/rest', transport: 'HTTP+JSON' },
+    { url: 'http://localhost:41242', transport: 'GRPC' },
   ],
 };
 
@@ -218,14 +222,26 @@ async function main() {
   );
 
   // 5. Start the server
-  const PORT = process.env.PORT || 41241;
-  expressApp.listen(PORT, (err) => {
+  const HTTP_PORT = process.env.HTTP_PORT || 41241;
+  expressApp.listen(HTTP_PORT, (err) => {
     if (err) {
       throw err;
     }
-    console.log(`[SUTAgent] Server using new framework started on http://localhost:${PORT}`);
-    console.log(`[SUTAgent] Agent Card: http://localhost:${PORT}/.well-known/agent-card.json`);
+    console.log(`[SUTAgent] HTTP server started on http://localhost:${HTTP_PORT}`);
+    console.log(`[SUTAgent] Agent Card: http://localhost:${HTTP_PORT}/.well-known/agent-card.json`);
     console.log('[SUTAgent] Press Ctrl+C to stop the server');
+  });
+
+  // 6. Start the gRPC server on a different port
+  const GRPC_PORT = process.env.GRPC_PORT || 41242;
+  const grpcHandlerInstance = grpcHandler({
+    requestHandler,
+    userBuilder: UserBuilder.noAuthentication,
+  });
+  const server = new Server();
+  server.addService(A2AServiceService, grpcHandlerInstance);
+  server.bindAsync(`localhost:${GRPC_PORT}`, ServerCredentials.createInsecure(), () => {
+    console.log(`[SUTAgent] gRPC server running at http://localhost:${GRPC_PORT}`);
   });
 }
 

@@ -29,6 +29,11 @@
       "import": "./dist/server/express/index.js",
       "require": "./dist/server/express/index.cjs"
     },
+    "./server/grpc": {
+      "types": "./dist/server/grpc/index.d.ts",
+      "import": "./dist/server/grpc/index.js",
+      "require": "./dist/server/grpc/index.cjs"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
@@ -41,8 +46,11 @@
     "README.md"
   ],
   "devDependencies": {
+    "@bufbuild/buf": "^1.61.0",
+    "@bufbuild/protobuf": "^2.10.2",
     "@cloudflare/vitest-pool-workers": "^0.10.15",
     "@eslint/js": "^9.39.1",
+    "@grpc/grpc-js": "^1.11.0",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.14",
     "@types/supertest": "^6.0.3",
@@ -72,16 +80,25 @@
     "lint:fix": "npx eslint . --fix",
     "coverage": "vitest run --coverage",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
+    "generate-grpc-types": "cd ./src/grpc && curl -o ./a2a.proto https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/grpc/a2a.proto && buf generate && rm ./a2a.proto",
     "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist"
   },
   "dependencies": {
     "uuid": "^11.1.0"
   },
   "peerDependencies": {
+    "@bufbuild/protobuf": "^2.10.2",
+    "@grpc/grpc-js": "^1.11.0",
     "express": "^4.21.2 || ^5.1.0"
   },
   "peerDependenciesMeta": {
     "express": {
+      "optional": true
+    },
+    "@grpc/grpc-js": {
+      "optional": true
+    },
+    "@bufbuild/protobuf": {
       "optional": true
     }
   }
