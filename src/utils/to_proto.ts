@@ -302,6 +302,10 @@ export class ToProto {
   }
 
   static pushNotificationConfig(config: types.PushNotificationConfig): PushNotificationConfig {
+    if (!config) {
+      return undefined;
+    }
+    
     return {
       id: config.id ?? '',
       url: config.url,
