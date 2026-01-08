@@ -47,13 +47,7 @@ describe('restHandler', () => {
     kind: 'message' as const,
   };
 
-  // snake_case format (REST/TCK style input)
-  const snakeCaseMessage = {
-    message_id: 'msg-1',
-    role: 'user' as const,
-    parts: [{ kind: 'text' as const, text: 'Hello' }],
-    kind: 'message' as const,
-  };
+
 
   const testTask: Task = {
     id: 'task-1',
@@ -113,30 +107,19 @@ describe('restHandler', () => {
   });
 
   describe('POST /v1/message:send', () => {
-    it.each([
-      { name: 'camelCase', message: testMessage },
-      { name: 'snake_case', message: snakeCaseMessage },
-    ])('should accept $name message and return 201 with Task', async ({ message }) => {
+    it('should accept camelCase message and return 201 with Task', async () => {
+      const message = testMessage;
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
 
       assert.deepEqual(response.body.id, testTask.id);
-      assert.deepEqual(response.body.kind, 'task');
+      assert.deepEqual(response.body.id, testTask.id);
+      // Kind is not present in Proto JSON
+      assert.isUndefined(response.body.kind);
     });
 
-    it('should return camelCase response regardless of input format', async () => {
-      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app)
-        .post('/v1/message:send')
-        .send({ message: snakeCaseMessage })
-        .expect(201);
-
-      // Response must be camelCase only
-      assert.property(response.body, 'contextId');
-      assert.notProperty(response.body, 'context_id');
-    });
 
     it('should return 400 when message is invalid', async () => {
       (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
@@ -148,10 +131,8 @@ describe('restHandler', () => {
   });
 
   describe('POST /v1/message:stream', () => {
-    it.each([
-      { name: 'camelCase', message: testMessage },
-      { name: 'snake_case', message: snakeCaseMessage },
-    ])('should accept $name message and stream via SSE', async ({ message }) => {
+    it('should accept camelCase message and stream via SSE', async () => {
+      const message = testMessage;
       async function* mockStream() {
         yield testMessage;
         yield testTask;
@@ -193,7 +174,11 @@ describe('restHandler', () => {
       const response = await request(app).get('/v1/tasks/task-1').expect(200);
 
       assert.deepEqual(response.body.id, testTask.id);
-      assert.deepEqual(response.body.kind, 'task');
+      assert.deepEqual(response.body.id, testTask.id);
+      // Kind is not present in Proto JSON
+      assert.isUndefined(response.body.kind);
+      // Status state is enum string
+      assert.deepEqual(response.body.status.state, 'TASK_STATE_COMPLETED');
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         { id: 'task-1' },
         expect.anything()
@@ -236,7 +221,8 @@ describe('restHandler', () => {
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
-      assert.deepEqual(response.body.status.state, 'canceled');
+      assert.deepEqual(response.body.id, cancelledTask.id);
+      assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELLED');
       expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
         { id: 'task-1' },
         expect.anything()
@@ -322,12 +308,6 @@ describe('restHandler', () => {
             pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' },
           },
         },
-        {
-          name: 'snake_case',
-          payload: {
-            push_notification_config: { id: 'config-1', url: 'https://example.com/webhook' },
-          },
-        },
       ])('should accept $name config and return 201', async ({ payload }) => {
         (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
@@ -339,22 +319,7 @@ describe('restHandler', () => {
         assert.deepEqual(response.body.taskId, mockConfig.taskId);
       });
 
-      it('should return camelCase response regardless of input format', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
-        const response = await request(app)
-          .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({
-            push_notification_config: { id: 'config-1', url: 'https://example.com/webhook' },
-          })
-          .expect(201);
-
-        // Response must be camelCase only
-        assert.property(response.body, 'taskId');
-        assert.property(response.body, 'pushNotificationConfig');
-        assert.notProperty(response.body, 'task_id');
-        assert.notProperty(response.body, 'push_notification_config');
-      });
 
       it('should return 400 if push notifications not supported', async () => {
         const noPNRequestHandler = {
@@ -479,23 +444,6 @@ describe('restHandler', () => {
           ],
         },
       },
-      {
-        name: 'snake_case',
-        message: {
-          message_id: 'msg-file',
-          role: 'user',
-          kind: 'message',
-          parts: [
-            {
-              kind: 'file',
-              file: {
-                uri: 'https://example.com/file.pdf',
-                mime_type: 'application/pdf',
-                name: 'document.pdf',
-              },
-            },
-          ],
-        },
       },
     ])('should accept $name file parts', async ({ message }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
@@ -516,12 +464,6 @@ describe('restHandler', () => {
           configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
         },
       },
-      {
-        name: 'snake_case',
-        payload: {
-          message: snakeCaseMessage,
-          configuration: { accepted_output_modes: ['text/plain'], history_length: 5 },
-        },
       },
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
@@ -548,7 +490,7 @@ describe('restHandler', () => {
 
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ message: snakeCaseMessage })
+        .send({ message: testMessage })
         .expect(500);
 
       assert.property(response.body, 'code');

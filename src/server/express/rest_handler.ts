@@ -19,6 +19,25 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
+import { FromProto } from '../../utils/from_proto.js';
+import {
+  SendMessageRequest,
+  SendMessageResponse,
+  Task,
+  AgentCard,
+  StreamResponse,
+  GetTaskRequest,
+  CancelTaskRequest,
+  TaskSubscriptionRequest,
+  CreateTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  TaskPushNotificationConfig,
+  ListTaskPushNotificationConfigResponse,
+} from '../../generated/a2a.js';
+import { ToProto } from '../../utils/to_proto.js';
+
 /**
  * Options for configuring the HTTP+JSON/REST handler.
  */
@@ -269,7 +288,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
-      sendResponse(res, HTTP_STATUS.OK, context, result);
+      sendResponse(res, HTTP_STATUS.OK, context, AgentCard.toJSON(ToProto.agentCard(result)));
     })
   );
 
@@ -288,8 +307,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const result = await restTransportHandler.sendMessage(req.body, context);
-      sendResponse(res, HTTP_STATUS.CREATED, context, result);
+      const protoReq = SendMessageRequest.fromJSON(req.body);
+      const params = FromProto.messageSendParams(protoReq);
+      const result = await restTransportHandler.sendMessage(params, context);
+      const protoResult = ToProto.messageSendResult(result);
+      sendResponse(res, HTTP_STATUS.CREATED, context, SendMessageResponse.toJSON(protoResult));
     })
   );
 
@@ -309,7 +331,9 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const stream = await restTransportHandler.sendMessageStream(req.body, context);
+      const protoReq = SendMessageRequest.fromJSON(req.body);
+      const params = FromProto.messageSendParams(protoReq);
+      const stream = await restTransportHandler.sendMessageStream(params, context);
       await sendStreamResponse(res, stream, context);
     })
   );
@@ -334,7 +358,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context,
         req.query.historyLength
       );
-      sendResponse(res, HTTP_STATUS.OK, context, result);
+      sendResponse(res, HTTP_STATUS.OK, context, Task.toJSON(ToProto.task(result)));
     })
   );
 
@@ -354,7 +378,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
-      sendResponse(res, HTTP_STATUS.ACCEPTED, context, result);
+      sendResponse(res, HTTP_STATUS.ACCEPTED, context, Task.toJSON(ToProto.task(result)));
     })
   );
 
@@ -420,7 +444,13 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.params.taskId,
         context
       );
-      sendResponse(res, HTTP_STATUS.OK, context, result);
+      const protoResponse = ToProto.listTaskPushNotificationConfig(result);
+      sendResponse(
+        res,
+        HTTP_STATUS.OK,
+        context,
+        ListTaskPushNotificationConfigResponse.toJSON(protoResponse)
+      );
     })
   );
 
@@ -443,7 +473,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.params.configId,
         context
       );
-      sendResponse(res, HTTP_STATUS.OK, context, result);
+      const protoResult = ToProto.taskPushNotificationConfig(result);
+      sendResponse(res, HTTP_STATUS.OK, context, TaskPushNotificationConfig.toJSON(protoResult));
     })
   );
 
