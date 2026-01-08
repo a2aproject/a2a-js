@@ -12,38 +12,38 @@ export const protobufPackage = "a2a.v1";
 
 /** The set of states a Task can be in. */
 export enum TaskState {
-  TASK_STATE_UNSPECIFIED = "TASK_STATE_UNSPECIFIED",
+  TASK_STATE_UNSPECIFIED = 0,
   /** TASK_STATE_SUBMITTED - Represents the status that acknowledges a task is created */
-  TASK_STATE_SUBMITTED = "TASK_STATE_SUBMITTED",
+  TASK_STATE_SUBMITTED = 1,
   /** TASK_STATE_WORKING - Represents the status that a task is actively being processed */
-  TASK_STATE_WORKING = "TASK_STATE_WORKING",
+  TASK_STATE_WORKING = 2,
   /** TASK_STATE_COMPLETED - Represents the status a task is finished. This is a terminal state */
-  TASK_STATE_COMPLETED = "TASK_STATE_COMPLETED",
+  TASK_STATE_COMPLETED = 3,
   /** TASK_STATE_FAILED - Represents the status a task is done but failed. This is a terminal state */
-  TASK_STATE_FAILED = "TASK_STATE_FAILED",
+  TASK_STATE_FAILED = 4,
   /**
    * TASK_STATE_CANCELLED - Represents the status a task was cancelled before it finished.
    * This is a terminal state.
    */
-  TASK_STATE_CANCELLED = "TASK_STATE_CANCELLED",
+  TASK_STATE_CANCELLED = 5,
   /**
    * TASK_STATE_INPUT_REQUIRED - Represents the status that the task requires information to complete.
    * This is an interrupted state.
    */
-  TASK_STATE_INPUT_REQUIRED = "TASK_STATE_INPUT_REQUIRED",
+  TASK_STATE_INPUT_REQUIRED = 6,
   /**
    * TASK_STATE_REJECTED - Represents the status that the agent has decided to not perform the task.
    * This may be done during initial task creation or later once an agent
    * has determined it can't or won't proceed. This is a terminal state.
    */
-  TASK_STATE_REJECTED = "TASK_STATE_REJECTED",
+  TASK_STATE_REJECTED = 7,
   /**
    * TASK_STATE_AUTH_REQUIRED - Represents the state that some authentication is needed from the upstream
    * client. Authentication is expected to come out-of-band thus this is not
    * an interrupted or terminal state.
    */
-  TASK_STATE_AUTH_REQUIRED = "TASK_STATE_AUTH_REQUIRED",
-  UNRECOGNIZED = "UNRECOGNIZED",
+  TASK_STATE_AUTH_REQUIRED = 8,
+  UNRECOGNIZED = -1,
 }
 
 export function taskStateToJSON(object: TaskState): string {
@@ -73,12 +73,12 @@ export function taskStateToJSON(object: TaskState): string {
 }
 
 export enum Role {
-  ROLE_UNSPECIFIED = "ROLE_UNSPECIFIED",
+  ROLE_UNSPECIFIED = 0,
   /** ROLE_USER - USER role refers to communication from the client to the server. */
-  ROLE_USER = "ROLE_USER",
+  ROLE_USER = 1,
   /** ROLE_AGENT - AGENT role refers to communication from the server to the client. */
-  ROLE_AGENT = "ROLE_AGENT",
-  UNRECOGNIZED = "UNRECOGNIZED",
+  ROLE_AGENT = 2,
+  UNRECOGNIZED = -1,
 }
 
 export function roleToJSON(object: Role): string {
@@ -870,7 +870,7 @@ export const Task: MessageFns<Task> = {
 export const TaskStatus: MessageFns<TaskStatus> = {
   toJSON(message: TaskStatus): unknown {
     const obj: any = {};
-    if (message.state !== TaskState.TASK_STATE_UNSPECIFIED) {
+    if (message.state !== 0) {
       obj.state = taskStateToJSON(message.state);
     }
     if (message.update !== undefined) {
@@ -934,7 +934,7 @@ export const Message: MessageFns<Message> = {
     if (message.taskId !== "") {
       obj.taskId = message.taskId;
     }
-    if (message.role !== Role.ROLE_UNSPECIFIED) {
+    if (message.role !== 0) {
       obj.role = roleToJSON(message.role);
     }
     if (message.content?.length) {

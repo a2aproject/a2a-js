@@ -67,7 +67,7 @@ export class FromProto {
     };
   }
 
-  static setTaskPushNotificationConfigParams(
+  static taskPushNotificationConfig(
     request: CreateTaskPushNotificationConfigRequest
   ): types.TaskPushNotificationConfig {
     if (!request.config?.pushNotificationConfig) {
@@ -121,7 +121,7 @@ export class FromProto {
     }
   }
 
-  static configuration(
+  static messageSendConfiguration(
     configuration: SendMessageConfiguration
   ): types.MessageSendConfiguration | undefined {
     if (!configuration) {
@@ -146,11 +146,11 @@ export class FromProto {
       id: config.id,
       url: config.url,
       token: config.token,
-      authentication: FromProto.authenticationInfo(config.authentication),
+      authentication: FromProto.pushNotificationAuthenticationInfo(config.authentication),
     };
   }
 
-  static authenticationInfo(
+  static pushNotificationAuthenticationInfo(
     authInfo: AuthenticationInfo
   ): types.PushNotificationAuthenticationInfo | undefined {
     if (!authInfo) {
@@ -205,7 +205,7 @@ export class FromProto {
   static messageSendParams(request: SendMessageRequest): types.MessageSendParams {
     return {
       message: FromProto.message(request.request),
-      configuration: FromProto.configuration(request.configuration),
+      configuration: FromProto.messageSendConfiguration(request.configuration),
       metadata: request.metadata,
     };
   }
@@ -274,7 +274,7 @@ export class FromProto {
     };
   }
 
-  static getTaskPushNoticationConfig(
+  static taskPushNoticationConfig(
     request: TaskPushNotificationConfig
   ): types.TaskPushNotificationConfig {
     return {
@@ -286,7 +286,7 @@ export class FromProto {
   static listTaskPushNotificationConfig(
     request: ListTaskPushNotificationConfigResponse
   ): types.TaskPushNotificationConfig[] {
-    return request.configs.map((c) => FromProto.getTaskPushNoticationConfig(c));
+    return request.configs.map((c) => FromProto.taskPushNoticationConfig(c));
   }
 
   static agentCard(agentCard: AgentCard): types.AgentCard {
@@ -311,7 +311,7 @@ export class FromProto {
           )
         : {},
       skills: agentCard.skills.map((s) => FromProto.skills(s)),
-      signatures: agentCard.signatures?.map((s) => FromProto.signatures(s)),
+      signatures: agentCard.signatures?.map((s) => FromProto.agentCardSignature(s)),
       supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard,
       url: agentCard.url,
       version: agentCard.version,
@@ -416,7 +416,7 @@ export class FromProto {
     };
   }
 
-  static signatures(signatures: AgentCardSignature): types.AgentCardSignature {
+  static agentCardSignature(signatures: AgentCardSignature): types.AgentCardSignature {
     return {
       protected: signatures.protected,
       signature: signatures.signature,
@@ -424,7 +424,7 @@ export class FromProto {
     };
   }
 
-  static taskStatusUpdate(event: TaskStatusUpdateEvent): types.TaskStatusUpdateEvent {
+  static taskStatusUpdateEvent(event: TaskStatusUpdateEvent): types.TaskStatusUpdateEvent {
     return {
       kind: 'status-update',
       taskId: event.taskId,
@@ -435,7 +435,7 @@ export class FromProto {
     };
   }
 
-  static taskArtifactUpdate(event: TaskArtifactUpdateEvent): types.TaskArtifactUpdateEvent {
+  static taskArtifactUpdateEvent(event: TaskArtifactUpdateEvent): types.TaskArtifactUpdateEvent {
     return {
       kind: 'artifact-update',
       taskId: event.taskId,

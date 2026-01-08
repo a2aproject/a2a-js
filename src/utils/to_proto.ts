@@ -66,11 +66,11 @@ export class ToProto {
       defaultOutputModes: agentCard.defaultOutputModes,
       skills: agentCard.skills.map((s) => ToProto.agentSkill(s)),
       supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard ?? false,
-      signatures: agentCard.signatures?.map((s) => ToProto.signatures(s)) ?? [],
+      signatures: agentCard.signatures?.map((s) => ToProto.agentCardSignature(s)) ?? [],
     };
   }
 
-  static signatures(signatures: types.AgentCardSignature): AgentCardSignature {
+  static agentCardSignature(signatures: types.AgentCardSignature): AgentCardSignature {
     return {
       protected: signatures.protected,
       signature: signatures.signature,
@@ -230,12 +230,12 @@ export class ToProto {
       streaming: capabilities.streaming ?? false,
       pushNotifications: capabilities.pushNotifications ?? false,
       extensions: capabilities.extensions
-        ? capabilities.extensions.map((e) => ToProto.extension(e))
+        ? capabilities.extensions.map((e) => ToProto.agentExtension(e))
         : [],
     };
   }
 
-  static extension(extension: types.AgentExtension): AgentExtension {
+  static agentExtension(extension: types.AgentExtension): AgentExtension {
     return {
       uri: extension.uri,
       description: extension.description ?? '',
@@ -244,7 +244,7 @@ export class ToProto {
     };
   }
 
-  static listTaskPushNotificationConfigs(
+  static listTaskPushNotificationConfig(
     config: types.TaskPushNotificationConfig[]
   ): ListTaskPushNotificationConfigResponse {
     return {
@@ -253,7 +253,7 @@ export class ToProto {
     };
   }
 
-  static getTaskPushNotificationConfigRequest(
+  static getTaskPushNotificationConfigParams(
     config: types.GetTaskPushNotificationConfigParams
   ): GetTaskPushNotificationConfigRequest {
     return {
@@ -261,7 +261,7 @@ export class ToProto {
     };
   }
 
-  static listTaskPushNotificationConfigRequest(
+  static listTaskPushNotificationConfigParams(
     config: types.ListTaskPushNotificationConfigParams
   ): ListTaskPushNotificationConfigRequest {
     return {
@@ -271,7 +271,7 @@ export class ToProto {
     };
   }
 
-  static deleteTaskPushNotificationConfigRequest(
+  static deleteTaskPushNotificationConfigParams(
     config: types.DeleteTaskPushNotificationConfigParams
   ): DeleteTaskPushNotificationConfigRequest {
     return {
@@ -306,11 +306,11 @@ export class ToProto {
       id: config.id ?? '',
       url: config.url,
       token: config.token ?? '',
-      authentication: ToProto.authenticationInfo(config.authentication),
+      authentication: ToProto.pushNotificationAuthenticationInfo(config.authentication),
     };
   }
 
-  static authenticationInfo(
+  static pushNotificationAuthenticationInfo(
     authInfo: types.PushNotificationAuthenticationInfo
   ): AuthenticationInfo | undefined {
     if (!authInfo) {
@@ -343,14 +343,14 @@ export class ToProto {
       return {
         payload: {
           $case: 'statusUpdate',
-          value: ToProto.taskStatusUpdate(event),
+          value: ToProto.taskStatusUpdateEvent(event),
         },
       };
     } else if (event.kind === 'artifact-update') {
       return {
         payload: {
           $case: 'artifactUpdate',
-          value: ToProto.taskArtifactUpdate(event),
+          value: ToProto.taskArtifactUpdateEvent(event),
         },
       };
     } else {
@@ -358,7 +358,7 @@ export class ToProto {
     }
   }
 
-  static taskStatusUpdate(event: types.TaskStatusUpdateEvent): TaskStatusUpdateEvent {
+  static taskStatusUpdateEvent(event: types.TaskStatusUpdateEvent): TaskStatusUpdateEvent {
     return {
       taskId: event.taskId,
       status: ToProto.taskStatus(event.status),
@@ -368,7 +368,7 @@ export class ToProto {
     };
   }
 
-  static taskArtifactUpdate(event: types.TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
+  static taskArtifactUpdateEvent(event: types.TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
     return {
       taskId: event.taskId,
       artifact: ToProto.artifact(event.artifact),
@@ -535,7 +535,7 @@ export class ToProto {
     };
   }
 
-  static getTaskRequest(params: types.TaskQueryParams): GetTaskRequest {
+  static taskQueryParams(params: types.TaskQueryParams): GetTaskRequest {
     return {
       name: generateTaskName(params.id),
       historyLength: params.historyLength ?? 0,
