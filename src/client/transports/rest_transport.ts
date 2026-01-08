@@ -24,6 +24,16 @@ import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
+import { ToProto } from '../../utils/to_proto.js';
+import { FromProto } from '../../utils/from_proto.js';
+import {
+  SendMessageRequest,
+  SendMessageResponse,
+  ListTaskPushNotificationConfigResponse,
+  TaskPushNotificationConfig as ProtoTaskPushNotificationConfig,
+  Task as ProtoTask,
+  AgentCard as ProtoAgentCard,
+} from '../../generated/a2a.js';
 
 export interface RestTransportOptions {
   endpoint: string;
@@ -46,14 +56,25 @@ export class RestTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    return this._sendRequest<AgentCard>('GET', '/v1/card', undefined, options);
+    const response = await this._sendRequest<unknown>('GET', '/v1/card', undefined, options);
+    const protoResponse = ProtoAgentCard.fromJSON(response);
+    return FromProto.agentCard(protoResponse);
   }
 
   async sendMessage(
     params: MessageSendParams,
     options?: RequestOptions
   ): Promise<SendMessageResult> {
-    return this._sendRequest<SendMessageResult>('POST', '/v1/message:send', params, options);
+    const protoParams = ToProto.messageSendParams(params);
+    const requestBody = SendMessageRequest.toJSON(protoParams);
+    const response = await this._sendRequest<unknown>(
+      'POST',
+      '/v1/message:send',
+      requestBody,
+      options
+    );
+    const protoResponse = SendMessageResponse.fromJSON(response);
+    return FromProto.sendMessageResult(protoResponse);
   }
 
   async *sendMessageStream(
@@ -67,14 +88,18 @@ export class RestTransport implements Transport {
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    return this._sendRequest<TaskPushNotificationConfig>(
+    const protoResource = ToProto.taskPushNotificationConfig(params);
+    const requestBody = ProtoTaskPushNotificationConfig.toJSON(protoResource);
+
+    const response = await this._sendRequest<unknown>(
       'POST',
       `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
-      {
-        pushNotificationConfig: params.pushNotificationConfig,
-      },
+      requestBody,
       options
     );
+
+    const resourceResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
+    return FromProto.taskPushNoticationConfig(resourceResponse);
   }
 
   async getTaskPushNotificationConfig(
@@ -87,24 +112,28 @@ export class RestTransport implements Transport {
         'pushNotificationConfigId is required for getTaskPushNotificationConfig with REST transport.'
       );
     }
-    return this._sendRequest<TaskPushNotificationConfig>(
+    const response = await this._sendRequest<unknown>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(pushNotificationConfigId)}`,
       undefined,
       options
     );
+    const protoResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
+    return FromProto.taskPushNoticationConfig(protoResponse);
   }
 
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    return this._sendRequest<TaskPushNotificationConfig[]>(
+    const response = await this._sendRequest<unknown>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
       undefined,
       options
     );
+    const protoResponse = ListTaskPushNotificationConfigResponse.fromJSON(response);
+    return FromProto.listTaskPushNotificationConfig(protoResponse);
   }
 
   async deleteTaskPushNotificationConfig(
@@ -126,7 +155,9 @@ export class RestTransport implements Transport {
     }
     const queryString = queryParams.toString();
     const path = `/v1/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`;
-    return this._sendRequest<Task>('GET', path, undefined, options);
+    const response = await this._sendRequest<unknown>('GET', path, undefined, options);
+    const protoResponse = ProtoTask.fromJSON(response);
+    return FromProto.task(protoResponse);
   }
 
   async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
