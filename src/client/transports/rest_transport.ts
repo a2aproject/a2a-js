@@ -100,7 +100,7 @@ export class RestTransport implements Transport {
     );
 
     const resourceResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
-    return FromProto.taskPushNoticationConfig(resourceResponse);
+    return FromProto.taskPushNotificationConfig(resourceResponse);
   }
 
   async getTaskPushNotificationConfig(
@@ -120,7 +120,7 @@ export class RestTransport implements Transport {
       options
     );
     const protoResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
-    return FromProto.taskPushNoticationConfig(protoResponse);
+    return FromProto.taskPushNotificationConfig(protoResponse);
   }
 
   async listTaskPushNotificationConfig(

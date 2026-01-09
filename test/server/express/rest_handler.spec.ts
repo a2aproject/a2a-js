@@ -366,7 +366,7 @@ describe('restHandler', () => {
           .expect(200);
 
         // REST API returns camelCase
-        const convertedResult = FromProto.taskPushNoticationConfig(TaskPushNotificationConfig.fromJSON(response.body));
+        const convertedResult = FromProto.taskPushNotificationConfig(TaskPushNotificationConfig.fromJSON(response.body));
         assert.deepEqual(convertedResult.taskId, mockConfig.taskId);
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {

@@ -68,7 +68,7 @@ export class FromProto {
     };
   }
 
-  static taskPushNotificationConfig(
+  static createTaskPushNotificationConfig(
     request: CreateTaskPushNotificationConfigRequest
   ): types.TaskPushNotificationConfig {
     if (!request.config?.pushNotificationConfig) {
@@ -275,7 +275,7 @@ export class FromProto {
     };
   }
 
-  static taskPushNoticationConfig(
+  static taskPushNotificationConfig(
     request: TaskPushNotificationConfig
   ): types.TaskPushNotificationConfig {
     return {
@@ -287,7 +287,7 @@ export class FromProto {
   static listTaskPushNotificationConfig(
     request: ListTaskPushNotificationConfigResponse
   ): types.TaskPushNotificationConfig[] {
-    return request.configs.map((c) => FromProto.taskPushNoticationConfig(c));
+    return request.configs.map((c) => FromProto.taskPushNotificationConfig(c));
   }
 
   static agentCard(agentCard: AgentCard): types.AgentCard {

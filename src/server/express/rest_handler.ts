@@ -201,7 +201,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     try {
       // Write first event
       if (!firstResult.done) {
-        const proto = ToProto.messageStreamResult(firstResult.value);
+        const proto = ToProto.messageStreamResult(firstResult.value as Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent);
         const result = StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
