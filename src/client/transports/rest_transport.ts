@@ -33,6 +33,7 @@ import {
   TaskPushNotificationConfig as ProtoTaskPushNotificationConfig,
   Task as ProtoTask,
   AgentCard as ProtoAgentCard,
+  StreamResponse,
 } from '../../types/a2a.js';
 
 export interface RestTransportOptions {
@@ -81,7 +82,7 @@ export class RestTransport implements Transport {
     params: MessageSendParams,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest('/v1/message:stream', params, options);
+    yield* this._sendStreamingRequest('/v1/message:stream', SendMessageRequest.toJSON(ToProto.messageSendParams(params)), options);
   }
 
   async setTaskPushNotificationConfig(
@@ -306,8 +307,7 @@ export class RestTransport implements Transport {
     }
 
     try {
-      const data = JSON.parse(jsonData);
-      return data as A2AStreamEventData;
+      return FromProto.messageStreamResult(StreamResponse.fromJSON(JSON.parse(jsonData)));
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
       throw new Error(

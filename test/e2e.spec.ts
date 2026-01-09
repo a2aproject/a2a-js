@@ -121,8 +121,8 @@ describe('Client E2E tests', () => {
           const actual = await client.sendMessage({
             message: createTestMessage('1', 'test'),
           });
-
-          expect(actual).to.deep.equal(expected);
+          const sanitize = (obj: any) => JSON.parse(JSON.stringify(obj));
+          expect(sanitize(actual)).to.deep.equal(sanitize(expected));
         });
       });
 
@@ -134,21 +134,38 @@ describe('Client E2E tests', () => {
             {
               id: taskId,
               contextId,
-              status: { state: 'submitted' },
+              status: {
+                state: 'submitted',
+                message: undefined,
+                timestamp: undefined,
+              },
               kind: 'task',
+              artifacts: [],
+              history: [],
+              metadata: undefined,
             },
             {
               taskId,
               contextId,
               kind: 'status-update',
-              status: { state: 'working' },
+              metadata: undefined,
+              status: {
+                state: 'working',
+                message: undefined,
+                timestamp: undefined,
+              },
               final: false,
             },
             {
               taskId,
               contextId,
               kind: 'status-update',
-              status: { state: 'completed' },
+              metadata: undefined,
+              status: {
+                state: 'completed',
+                message: undefined,
+                timestamp: undefined,
+              },
               final: true,
             },
           ];
@@ -162,7 +179,8 @@ describe('Client E2E tests', () => {
             actual.push(message);
           }
 
-          expect(actual).to.deep.equal(expected);
+          const sanitize = (obj: any) => JSON.parse(JSON.stringify(obj));
+          expect(sanitize(actual)).to.deep.equal(sanitize(expected));
         });
       });
     });
@@ -172,6 +190,10 @@ describe('Client E2E tests', () => {
 function createTestMessage(id: string, text: string): Message {
   return {
     messageId: id,
+    contextId: '',
+    extensions: [],
+    metadata: undefined,
+    taskId: '',
     role: 'user',
     parts: [{ kind: 'text', text }],
     kind: 'message',
