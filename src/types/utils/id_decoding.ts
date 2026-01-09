@@ -1,4 +1,4 @@
-import { A2AError } from '../server/error.js';
+import { A2AError } from '../../server/error.js';
 
 const CONFIG_REGEX = /^tasks\/([^/]+)\/pushNotificationConfigs\/([^/]+)$/;
 const TASK_ONLY_REGEX = /^tasks\/([^/]+)$/;

@@ -19,24 +19,18 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
-import { FromProto } from '../../utils/from_proto.js';
+import { FromProto } from '../../types/utils/from_proto.js';
 import {
   SendMessageRequest,
   SendMessageResponse,
-  Task,
+  Task as ProtoTask,
   AgentCard,
   StreamResponse,
-  GetTaskRequest,
-  CancelTaskRequest,
-  TaskSubscriptionRequest,
-  CreateTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigRequest,
-  GetTaskPushNotificationConfigRequest,
-  DeleteTaskPushNotificationConfigRequest,
   TaskPushNotificationConfig,
   ListTaskPushNotificationConfigResponse,
-} from '../../generated/a2a.js';
-import { ToProto } from '../../utils/to_proto.js';
+} from '../../types/a2a.js';
+import { ToProto } from '../../types/utils/to_proto.js';
+import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../types.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -207,11 +201,16 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     try {
       // Write first event
       if (!firstResult.done) {
-        res.write(formatSSEEvent(firstResult.value));
+        const proto = ToProto.messageStreamResult(firstResult.value);
+        const result = StreamResponse.toJSON(proto);
+        res.write(formatSSEEvent(result));
       }
-      // Continue with remaining events
       for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
-        res.write(formatSSEEvent(event));
+        const proto = ToProto.messageStreamResult(
+          event as Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
+        );
+        const result = StreamResponse.toJSON(proto);
+        res.write(formatSSEEvent(result));
       }
     } catch (streamError: unknown) {
       console.error('SSE streaming error:', streamError);
@@ -358,7 +357,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context,
         req.query.historyLength
       );
-      sendResponse(res, HTTP_STATUS.OK, context, Task.toJSON(ToProto.task(result)));
+      sendResponse(res, HTTP_STATUS.OK, context, ProtoTask.toJSON(ToProto.task(result)));
     })
   );
 
@@ -378,7 +377,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
-      sendResponse(res, HTTP_STATUS.ACCEPTED, context, Task.toJSON(ToProto.task(result)));
+      sendResponse(res, HTTP_STATUS.ACCEPTED, context, ProtoTask.toJSON(ToProto.task(result)));
     })
   );
 

@@ -1,4 +1,4 @@
-import { A2AError } from '../server/error.js';
+import { A2AError } from '../../server/error.js';
 import {
   CancelTaskRequest,
   GetTaskPushNotificationConfigRequest,
@@ -28,8 +28,9 @@ import {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   OAuthFlows,
-} from '../generated/a2a.js';
-import * as types from '../types.js';
+  StreamResponse,
+} from '../a2a.js';
+import * as types from '../../types.js';
 import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_decoding.js';
 
 /**
@@ -106,7 +107,7 @@ export class FromProto {
       taskId: message.taskId,
       role: FromProto.role(message.role),
       metadata: message.metadata,
-      extensions: message.extensions.length > 0 ? message.extensions : undefined,
+      extensions: message.extensions,
     };
   }
 
@@ -444,5 +445,26 @@ export class FromProto {
       metadata: event.metadata,
       lastChunk: event.lastChunk,
     };
+  }
+
+  static messageStreamResult(
+    event: StreamResponse
+  ): types.Message | types.Task | types.TaskStatusUpdateEvent | types.TaskArtifactUpdateEvent {
+    switch (event.payload?.$case) {
+      case 'msg':
+        const message = FromProto.message(event.payload.value);
+        if (!message) {
+          throw A2AError.internalError('Invalid message in StreamResponse');
+        }
+        return message;
+      case 'task':
+        return FromProto.task(event.payload.value);
+      case 'statusUpdate':
+        return FromProto.taskStatusUpdateEvent(event.payload.value);
+      case 'artifactUpdate':
+        return FromProto.taskArtifactUpdateEvent(event.payload.value);
+      default:
+        throw A2AError.internalError('Invalid event type in StreamResponse');
+    }
   }
 }

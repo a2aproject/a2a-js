@@ -1,5 +1,5 @@
-import { A2AError } from '../server/error.js';
-import * as types from '../types.js';
+import { A2AError } from '../../server/error.js';
+import * as types from '../../types.js';
 import {
   AgentCard,
   AgentCardSignature,
@@ -36,7 +36,7 @@ import {
   CancelTaskRequest,
   TaskSubscriptionRequest,
   CreateTaskPushNotificationConfigRequest,
-} from '../generated/a2a.js';
+} from '../a2a.js';
 import { generatePushNotificationConfigName, generateTaskName } from './id_decoding.js';
 
 export class ToProto {
@@ -305,7 +305,7 @@ export class ToProto {
     if (!config) {
       return undefined;
     }
-    
+
     return {
       id: config.id ?? '',
       url: config.url,

@@ -24,8 +24,8 @@ import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
-import { ToProto } from '../../utils/to_proto.js';
-import { FromProto } from '../../utils/from_proto.js';
+import { ToProto } from '../../types/utils/to_proto.js';
+import { FromProto } from '../../types/utils/from_proto.js';
 import {
   SendMessageRequest,
   SendMessageResponse,
@@ -33,7 +33,7 @@ import {
   TaskPushNotificationConfig as ProtoTaskPushNotificationConfig,
   Task as ProtoTask,
   AgentCard as ProtoAgentCard,
-} from '../../generated/a2a.js';
+} from '../../types/a2a.js';
 
 export interface RestTransportOptions {
   endpoint: string;
@@ -161,12 +161,14 @@ export class RestTransport implements Transport {
   }
 
   async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
-    return this._sendRequest<Task>(
+    const response = await this._sendRequest<unknown>(
       'POST',
       `/v1/tasks/${encodeURIComponent(params.id)}:cancel`,
       undefined,
       options
     );
+    const protoResponse = ProtoTask.fromJSON(response);
+    return FromProto.task(protoResponse);
   }
 
   async *resubscribeTask(

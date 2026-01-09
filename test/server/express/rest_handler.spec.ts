@@ -47,8 +47,6 @@ describe('restHandler', () => {
     kind: 'message' as const,
   };
 
-
-
   const testTask: Task = {
     id: 'task-1',
     kind: 'task' as const,
@@ -118,8 +116,6 @@ describe('restHandler', () => {
       // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
     });
-
-
 
     it('should return 400 when message is invalid', async () => {
       (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
@@ -319,8 +315,6 @@ describe('restHandler', () => {
         assert.deepEqual(response.body.taskId, mockConfig.taskId);
       });
 
-
-
       it('should return 400 if push notifications not supported', async () => {
         const noPNRequestHandler = {
           ...mockRequestHandler,
@@ -444,7 +438,6 @@ describe('restHandler', () => {
           ],
         },
       },
-      },
     ])('should accept $name file parts', async ({ message }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
@@ -463,7 +456,6 @@ describe('restHandler', () => {
           message: testMessage,
           configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
         },
-      },
       },
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
