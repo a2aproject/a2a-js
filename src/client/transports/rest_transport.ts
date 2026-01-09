@@ -82,7 +82,11 @@ export class RestTransport implements Transport {
     params: MessageSendParams,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest('/v1/message:stream', SendMessageRequest.toJSON(ToProto.messageSendParams(params)), options);
+    yield* this._sendStreamingRequest(
+      '/v1/message:stream',
+      SendMessageRequest.toJSON(ToProto.messageSendParams(params)),
+      options
+    );
   }
 
   async setTaskPushNotificationConfig(

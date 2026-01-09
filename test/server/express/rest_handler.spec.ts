@@ -7,7 +7,12 @@ import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_reque
 import { AgentCard, Task, Message } from '../../../src/types.js';
 import { A2AError } from '../../../src/server/error.js';
 import { ToProto } from '../../../src/types/utils/to_proto.js';
-import { ListTaskPushNotificationConfigResponse, Message as ProtoMessage, SendMessageResponse, Task as TaskProto, TaskPushNotificationConfig } from '../../../src/types/a2a.js';
+import {
+  ListTaskPushNotificationConfigResponse,
+  Message as ProtoMessage,
+  SendMessageResponse,
+  TaskPushNotificationConfig,
+} from '../../../src/types/a2a.js';
 import { FromProto } from '../../../src/types/utils/from_proto.js';
 
 /**
@@ -114,7 +119,9 @@ describe('restHandler', () => {
 
       const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
 
-      const converted_result = FromProto.sendMessageResult(SendMessageResponse.fromJSON(response.body));
+      const converted_result = FromProto.sendMessageResult(
+        SendMessageResponse.fromJSON(response.body)
+      );
       assert.deepEqual((converted_result as Task).id, testTask.id);
       // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
@@ -350,7 +357,9 @@ describe('restHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs')
           .expect(200);
 
-        const convertedResult = FromProto.listTaskPushNotificationConfig(ListTaskPushNotificationConfigResponse.fromJSON(response.body));
+        const convertedResult = FromProto.listTaskPushNotificationConfig(
+          ListTaskPushNotificationConfigResponse.fromJSON(response.body)
+        );
         assert.isArray(convertedResult);
         assert.lengthOf(convertedResult, configs.length);
       });
@@ -365,7 +374,9 @@ describe('restHandler', () => {
           .expect(200);
 
         // REST API returns camelCase
-        const convertedResult = FromProto.taskPushNotificationConfig(TaskPushNotificationConfig.fromJSON(response.body));
+        const convertedResult = FromProto.taskPushNotificationConfig(
+          TaskPushNotificationConfig.fromJSON(response.body)
+        );
         assert.deepEqual(convertedResult.taskId, mockConfig.taskId);
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
@@ -467,7 +478,7 @@ describe('restHandler', () => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       const protoMessage = ProtoMessage.toJSON(ToProto.message(payload.message as Message));
-      await request(app).post('/v1/message:send').send({ message: protoMessage}).expect(201);
+      await request(app).post('/v1/message:send').send({ message: protoMessage }).expect(201);
     });
   });
 

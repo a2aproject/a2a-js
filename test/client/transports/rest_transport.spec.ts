@@ -22,7 +22,6 @@ import {
   createMockProtoMessage,
   createMockProtoTask,
 } from '../util.js';
-import { create } from 'domain';
 import { AgentCard, TaskState } from '../../../src/types/a2a.js';
 import { FromProto } from '../../../src/types/utils/from_proto.js';
 import { ToProto } from '../../../src/types/utils/to_proto.js';
@@ -192,7 +191,7 @@ describe('RestTransport', () => {
         capabilities: {
           streaming: true,
           pushNotifications: true,
-          extensions: []
+          extensions: [],
         },
         skills: [],
         defaultInputModes: ['text'],
@@ -204,12 +203,12 @@ describe('RestTransport', () => {
         additionalInterfaces: [],
         provider: {
           url: '',
-          organization: ''
+          organization: '',
         },
         security: [],
         securitySchemes: {},
         documentationUrl: '',
-        signatures: []
+        signatures: [],
       };
 
       mockFetch.mockResolvedValue(createRestResponse(mockCard));
@@ -294,9 +293,19 @@ describe('RestTransport', () => {
       it('should list push notification configs successfully', async () => {
         const mockConfigs: TaskPushNotificationConfig[] = [
           mockConfig,
-          { ...mockConfig, pushNotificationConfig: { id: 'config-789', url: 'https://test.com', authentication: undefined, token: 'secret-token' } },
+          {
+            ...mockConfig,
+            pushNotificationConfig: {
+              id: 'config-789',
+              url: 'https://test.com',
+              authentication: undefined,
+              token: 'secret-token',
+            },
+          },
         ];
-        mockFetch.mockResolvedValue(createRestResponse(ToProto.listTaskPushNotificationConfig(mockConfigs)));
+        mockFetch.mockResolvedValue(
+          createRestResponse(ToProto.listTaskPushNotificationConfig(mockConfigs))
+        );
 
         const result = await transport.listTaskPushNotificationConfig({ id: taskId });
 

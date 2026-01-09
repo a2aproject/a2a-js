@@ -202,16 +202,16 @@ export function createMockProtoMessage(
         role: role,
         content: [
           {
-          part: {
-            $case: 'text',
-            value: text,
-          }
-        }
+            part: {
+              $case: 'text',
+              value: text,
+            },
+          },
         ],
         metadata: {},
         extensions: [],
       },
-    }
+    },
   };
 
   return SendMessageResponse.toJSON(obj);
@@ -453,11 +453,12 @@ export function createMockTask(id: string = 'task-123', status: string = 'comple
   return {
     id,
     contextId: 'context-123',
-        status: {
-          state: status,
-          timestamp: new Date('2023-01-01T00:00:00.000Z').toISOString(),
-          message: undefined,
-        },    kind: 'task',
+    status: {
+      state: status,
+      timestamp: new Date('2023-01-01T00:00:00.000Z').toISOString(),
+      message: undefined,
+    },
+    kind: 'task',
     artifacts: [],
     history: [],
     metadata: {},
@@ -471,14 +472,17 @@ export function createMockTask(id: string = 'task-123', status: string = 'comple
  * @param status - Task status state (defaults to 'completed')
  * @returns A mock Task object
  */
-export function createMockProtoTask(id: string = 'task-123', status: TaskState = TaskState.TASK_STATE_COMPLETED): any {
+export function createMockProtoTask(
+  id: string = 'task-123',
+  status: TaskState = TaskState.TASK_STATE_COMPLETED
+): any {
   const obj: Task = {
     id: id,
     contextId: 'context-123',
     status: {
       state: status,
       timestamp: new Date('2023-01-01T00:00:00.000Z'),
-      update: undefined
+      update: undefined,
     },
     artifacts: [],
     history: [],
