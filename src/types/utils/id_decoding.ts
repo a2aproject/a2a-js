@@ -1,7 +1,7 @@
 import { A2AError } from '../../server/error.js';
 
 const CONFIG_REGEX = /^tasks\/([^/]+)\/pushNotificationConfigs\/([^/]+)$/;
-const TASK_ONLY_REGEX = /^tasks\/([^/]+)$/;
+const TASK_ONLY_REGEX = /^tasks\/([^/]+)(?:\/|$)/;
 
 export const extractTaskId = (name: string): string => {
   const match = name.match(TASK_ONLY_REGEX);
