@@ -116,7 +116,6 @@ describe('restHandler', () => {
 
       const converted_result = FromProto.sendMessageResult(SendMessageResponse.fromJSON(response.body));
       assert.deepEqual((converted_result as Task).id, testTask.id);
-      assert.deepEqual((converted_result as Task).id, testTask.id);
       // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
     });
