@@ -2285,20 +2285,20 @@ export const FileDescriptorProto: MessageFns<FileDescriptorProto> = {
       dependency: globalThis.Array.isArray(object?.dependency)
         ? object.dependency.map((e: any) => globalThis.String(e))
         : [],
-      publicDependency: globalThis.Array.isArray(object?.publicDependency)
-        ? object.publicDependency.map((e: any) => globalThis.Number(e))
+      publicDependency: globalThis.Array.isArray(object?.public_dependency)
+        ? object.public_dependency.map((e: any) => globalThis.Number(e))
         : [],
-      weakDependency: globalThis.Array.isArray(object?.weakDependency)
-        ? object.weakDependency.map((e: any) => globalThis.Number(e))
+      weakDependency: globalThis.Array.isArray(object?.weak_dependency)
+        ? object.weak_dependency.map((e: any) => globalThis.Number(e))
         : [],
-      optionDependency: globalThis.Array.isArray(object?.optionDependency)
-        ? object.optionDependency.map((e: any) => globalThis.String(e))
+      optionDependency: globalThis.Array.isArray(object?.option_dependency)
+        ? object.option_dependency.map((e: any) => globalThis.String(e))
         : [],
-      messageType: globalThis.Array.isArray(object?.messageType)
-        ? object.messageType.map((e: any) => DescriptorProto.fromJSON(e))
+      messageType: globalThis.Array.isArray(object?.message_type)
+        ? object.message_type.map((e: any) => DescriptorProto.fromJSON(e))
         : [],
-      enumType: globalThis.Array.isArray(object?.enumType)
-        ? object.enumType.map((e: any) => EnumDescriptorProto.fromJSON(e))
+      enumType: globalThis.Array.isArray(object?.enum_type)
+        ? object.enum_type.map((e: any) => EnumDescriptorProto.fromJSON(e))
         : [],
       service: globalThis.Array.isArray(object?.service)
         ? object.service.map((e: any) => ServiceDescriptorProto.fromJSON(e))
@@ -2307,7 +2307,7 @@ export const FileDescriptorProto: MessageFns<FileDescriptorProto> = {
         ? object.extension.map((e: any) => FieldDescriptorProto.fromJSON(e))
         : [],
       options: isSet(object.options) ? FileOptions.fromJSON(object.options) : undefined,
-      sourceCodeInfo: isSet(object.sourceCodeInfo) ? SourceCodeInfo.fromJSON(object.sourceCodeInfo) : undefined,
+      sourceCodeInfo: isSet(object.source_code_info) ? SourceCodeInfo.fromJSON(object.source_code_info) : undefined,
       syntax: isSet(object.syntax) ? globalThis.String(object.syntax) : "",
       edition: isSet(object.edition) ? editionFromJSON(object.edition) : 0,
     };
@@ -2325,19 +2325,19 @@ export const FileDescriptorProto: MessageFns<FileDescriptorProto> = {
       obj.dependency = message.dependency;
     }
     if (message.publicDependency?.length) {
-      obj.publicDependency = message.publicDependency.map((e) => Math.round(e));
+      obj.public_dependency = message.publicDependency.map((e) => Math.round(e));
     }
     if (message.weakDependency?.length) {
-      obj.weakDependency = message.weakDependency.map((e) => Math.round(e));
+      obj.weak_dependency = message.weakDependency.map((e) => Math.round(e));
     }
     if (message.optionDependency?.length) {
-      obj.optionDependency = message.optionDependency;
+      obj.option_dependency = message.optionDependency;
     }
     if (message.messageType?.length) {
-      obj.messageType = message.messageType.map((e) => DescriptorProto.toJSON(e));
+      obj.message_type = message.messageType.map((e) => DescriptorProto.toJSON(e));
     }
     if (message.enumType?.length) {
-      obj.enumType = message.enumType.map((e) => EnumDescriptorProto.toJSON(e));
+      obj.enum_type = message.enumType.map((e) => EnumDescriptorProto.toJSON(e));
     }
     if (message.service?.length) {
       obj.service = message.service.map((e) => ServiceDescriptorProto.toJSON(e));
@@ -2349,7 +2349,7 @@ export const FileDescriptorProto: MessageFns<FileDescriptorProto> = {
       obj.options = FileOptions.toJSON(message.options);
     }
     if (message.sourceCodeInfo !== undefined) {
-      obj.sourceCodeInfo = SourceCodeInfo.toJSON(message.sourceCodeInfo);
+      obj.source_code_info = SourceCodeInfo.toJSON(message.sourceCodeInfo);
     }
     if (message.syntax !== undefined && message.syntax !== "") {
       obj.syntax = message.syntax;
@@ -2371,24 +2371,24 @@ export const DescriptorProto: MessageFns<DescriptorProto> = {
       extension: globalThis.Array.isArray(object?.extension)
         ? object.extension.map((e: any) => FieldDescriptorProto.fromJSON(e))
         : [],
-      nestedType: globalThis.Array.isArray(object?.nestedType)
-        ? object.nestedType.map((e: any) => DescriptorProto.fromJSON(e))
+      nestedType: globalThis.Array.isArray(object?.nested_type)
+        ? object.nested_type.map((e: any) => DescriptorProto.fromJSON(e))
         : [],
-      enumType: globalThis.Array.isArray(object?.enumType)
-        ? object.enumType.map((e: any) => EnumDescriptorProto.fromJSON(e))
+      enumType: globalThis.Array.isArray(object?.enum_type)
+        ? object.enum_type.map((e: any) => EnumDescriptorProto.fromJSON(e))
         : [],
-      extensionRange: globalThis.Array.isArray(object?.extensionRange)
-        ? object.extensionRange.map((e: any) => DescriptorProto_ExtensionRange.fromJSON(e))
+      extensionRange: globalThis.Array.isArray(object?.extension_range)
+        ? object.extension_range.map((e: any) => DescriptorProto_ExtensionRange.fromJSON(e))
         : [],
-      oneofDecl: globalThis.Array.isArray(object?.oneofDecl)
-        ? object.oneofDecl.map((e: any) => OneofDescriptorProto.fromJSON(e))
+      oneofDecl: globalThis.Array.isArray(object?.oneof_decl)
+        ? object.oneof_decl.map((e: any) => OneofDescriptorProto.fromJSON(e))
         : [],
       options: isSet(object.options) ? MessageOptions.fromJSON(object.options) : undefined,
-      reservedRange: globalThis.Array.isArray(object?.reservedRange)
-        ? object.reservedRange.map((e: any) => DescriptorProto_ReservedRange.fromJSON(e))
+      reservedRange: globalThis.Array.isArray(object?.reserved_range)
+        ? object.reserved_range.map((e: any) => DescriptorProto_ReservedRange.fromJSON(e))
         : [],
-      reservedName: globalThis.Array.isArray(object?.reservedName)
-        ? object.reservedName.map((e: any) => globalThis.String(e))
+      reservedName: globalThis.Array.isArray(object?.reserved_name)
+        ? object.reserved_name.map((e: any) => globalThis.String(e))
         : [],
       visibility: isSet(object.visibility) ? symbolVisibilityFromJSON(object.visibility) : 0,
     };
@@ -2406,25 +2406,25 @@ export const DescriptorProto: MessageFns<DescriptorProto> = {
       obj.extension = message.extension.map((e) => FieldDescriptorProto.toJSON(e));
     }
     if (message.nestedType?.length) {
-      obj.nestedType = message.nestedType.map((e) => DescriptorProto.toJSON(e));
+      obj.nested_type = message.nestedType.map((e) => DescriptorProto.toJSON(e));
     }
     if (message.enumType?.length) {
-      obj.enumType = message.enumType.map((e) => EnumDescriptorProto.toJSON(e));
+      obj.enum_type = message.enumType.map((e) => EnumDescriptorProto.toJSON(e));
     }
     if (message.extensionRange?.length) {
-      obj.extensionRange = message.extensionRange.map((e) => DescriptorProto_ExtensionRange.toJSON(e));
+      obj.extension_range = message.extensionRange.map((e) => DescriptorProto_ExtensionRange.toJSON(e));
     }
     if (message.oneofDecl?.length) {
-      obj.oneofDecl = message.oneofDecl.map((e) => OneofDescriptorProto.toJSON(e));
+      obj.oneof_decl = message.oneofDecl.map((e) => OneofDescriptorProto.toJSON(e));
     }
     if (message.options !== undefined) {
       obj.options = MessageOptions.toJSON(message.options);
     }
     if (message.reservedRange?.length) {
-      obj.reservedRange = message.reservedRange.map((e) => DescriptorProto_ReservedRange.toJSON(e));
+      obj.reserved_range = message.reservedRange.map((e) => DescriptorProto_ReservedRange.toJSON(e));
     }
     if (message.reservedName?.length) {
-      obj.reservedName = message.reservedName;
+      obj.reserved_name = message.reservedName;
     }
     if (message.visibility !== undefined && message.visibility !== 0) {
       obj.visibility = symbolVisibilityToJSON(message.visibility);
@@ -2480,8 +2480,8 @@ export const DescriptorProto_ReservedRange: MessageFns<DescriptorProto_ReservedR
 export const ExtensionRangeOptions: MessageFns<ExtensionRangeOptions> = {
   fromJSON(object: any): ExtensionRangeOptions {
     return {
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
       declaration: globalThis.Array.isArray(object?.declaration)
         ? object.declaration.map((e: any) => ExtensionRangeOptions_Declaration.fromJSON(e))
@@ -2496,7 +2496,7 @@ export const ExtensionRangeOptions: MessageFns<ExtensionRangeOptions> = {
   toJSON(message: ExtensionRangeOptions): unknown {
     const obj: any = {};
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     if (message.declaration?.length) {
       obj.declaration = message.declaration.map((e) => ExtensionRangeOptions_Declaration.toJSON(e));
@@ -2515,7 +2515,7 @@ export const ExtensionRangeOptions_Declaration: MessageFns<ExtensionRangeOptions
   fromJSON(object: any): ExtensionRangeOptions_Declaration {
     return {
       number: isSet(object.number) ? globalThis.Number(object.number) : 0,
-      fullName: isSet(object.fullName) ? globalThis.String(object.fullName) : "",
+      fullName: isSet(object.full_name) ? globalThis.String(object.full_name) : "",
       type: isSet(object.type) ? globalThis.String(object.type) : "",
       reserved: isSet(object.reserved) ? globalThis.Boolean(object.reserved) : false,
       repeated: isSet(object.repeated) ? globalThis.Boolean(object.repeated) : false,
@@ -2528,7 +2528,7 @@ export const ExtensionRangeOptions_Declaration: MessageFns<ExtensionRangeOptions
       obj.number = Math.round(message.number);
     }
     if (message.fullName !== undefined && message.fullName !== "") {
-      obj.fullName = message.fullName;
+      obj.full_name = message.fullName;
     }
     if (message.type !== undefined && message.type !== "") {
       obj.type = message.type;
@@ -2550,13 +2550,13 @@ export const FieldDescriptorProto: MessageFns<FieldDescriptorProto> = {
       number: isSet(object.number) ? globalThis.Number(object.number) : 0,
       label: isSet(object.label) ? fieldDescriptorProto_LabelFromJSON(object.label) : 1,
       type: isSet(object.type) ? fieldDescriptorProto_TypeFromJSON(object.type) : 1,
-      typeName: isSet(object.typeName) ? globalThis.String(object.typeName) : "",
+      typeName: isSet(object.type_name) ? globalThis.String(object.type_name) : "",
       extendee: isSet(object.extendee) ? globalThis.String(object.extendee) : "",
-      defaultValue: isSet(object.defaultValue) ? globalThis.String(object.defaultValue) : "",
-      oneofIndex: isSet(object.oneofIndex) ? globalThis.Number(object.oneofIndex) : 0,
-      jsonName: isSet(object.jsonName) ? globalThis.String(object.jsonName) : "",
+      defaultValue: isSet(object.default_value) ? globalThis.String(object.default_value) : "",
+      oneofIndex: isSet(object.oneof_index) ? globalThis.Number(object.oneof_index) : 0,
+      jsonName: isSet(object.json_name) ? globalThis.String(object.json_name) : "",
       options: isSet(object.options) ? FieldOptions.fromJSON(object.options) : undefined,
-      proto3Optional: isSet(object.proto3Optional) ? globalThis.Boolean(object.proto3Optional) : false,
+      proto3Optional: isSet(object.proto3_optional) ? globalThis.Boolean(object.proto3_optional) : false,
     };
   },
 
@@ -2575,25 +2575,25 @@ export const FieldDescriptorProto: MessageFns<FieldDescriptorProto> = {
       obj.type = fieldDescriptorProto_TypeToJSON(message.type);
     }
     if (message.typeName !== undefined && message.typeName !== "") {
-      obj.typeName = message.typeName;
+      obj.type_name = message.typeName;
     }
     if (message.extendee !== undefined && message.extendee !== "") {
       obj.extendee = message.extendee;
     }
     if (message.defaultValue !== undefined && message.defaultValue !== "") {
-      obj.defaultValue = message.defaultValue;
+      obj.default_value = message.defaultValue;
     }
     if (message.oneofIndex !== undefined && message.oneofIndex !== 0) {
-      obj.oneofIndex = Math.round(message.oneofIndex);
+      obj.oneof_index = Math.round(message.oneofIndex);
     }
     if (message.jsonName !== undefined && message.jsonName !== "") {
-      obj.jsonName = message.jsonName;
+      obj.json_name = message.jsonName;
     }
     if (message.options !== undefined) {
       obj.options = FieldOptions.toJSON(message.options);
     }
     if (message.proto3Optional !== undefined && message.proto3Optional !== false) {
-      obj.proto3Optional = message.proto3Optional;
+      obj.proto3_optional = message.proto3Optional;
     }
     return obj;
   },
@@ -2627,11 +2627,11 @@ export const EnumDescriptorProto: MessageFns<EnumDescriptorProto> = {
         ? object.value.map((e: any) => EnumValueDescriptorProto.fromJSON(e))
         : [],
       options: isSet(object.options) ? EnumOptions.fromJSON(object.options) : undefined,
-      reservedRange: globalThis.Array.isArray(object?.reservedRange)
-        ? object.reservedRange.map((e: any) => EnumDescriptorProto_EnumReservedRange.fromJSON(e))
+      reservedRange: globalThis.Array.isArray(object?.reserved_range)
+        ? object.reserved_range.map((e: any) => EnumDescriptorProto_EnumReservedRange.fromJSON(e))
         : [],
-      reservedName: globalThis.Array.isArray(object?.reservedName)
-        ? object.reservedName.map((e: any) => globalThis.String(e))
+      reservedName: globalThis.Array.isArray(object?.reserved_name)
+        ? object.reserved_name.map((e: any) => globalThis.String(e))
         : [],
       visibility: isSet(object.visibility) ? symbolVisibilityFromJSON(object.visibility) : 0,
     };
@@ -2649,10 +2649,10 @@ export const EnumDescriptorProto: MessageFns<EnumDescriptorProto> = {
       obj.options = EnumOptions.toJSON(message.options);
     }
     if (message.reservedRange?.length) {
-      obj.reservedRange = message.reservedRange.map((e) => EnumDescriptorProto_EnumReservedRange.toJSON(e));
+      obj.reserved_range = message.reservedRange.map((e) => EnumDescriptorProto_EnumReservedRange.toJSON(e));
     }
     if (message.reservedName?.length) {
-      obj.reservedName = message.reservedName;
+      obj.reserved_name = message.reservedName;
     }
     if (message.visibility !== undefined && message.visibility !== 0) {
       obj.visibility = symbolVisibilityToJSON(message.visibility);
@@ -2735,11 +2735,11 @@ export const MethodDescriptorProto: MessageFns<MethodDescriptorProto> = {
   fromJSON(object: any): MethodDescriptorProto {
     return {
       name: isSet(object.name) ? globalThis.String(object.name) : "",
-      inputType: isSet(object.inputType) ? globalThis.String(object.inputType) : "",
-      outputType: isSet(object.outputType) ? globalThis.String(object.outputType) : "",
+      inputType: isSet(object.input_type) ? globalThis.String(object.input_type) : "",
+      outputType: isSet(object.output_type) ? globalThis.String(object.output_type) : "",
       options: isSet(object.options) ? MethodOptions.fromJSON(object.options) : undefined,
-      clientStreaming: isSet(object.clientStreaming) ? globalThis.Boolean(object.clientStreaming) : false,
-      serverStreaming: isSet(object.serverStreaming) ? globalThis.Boolean(object.serverStreaming) : false,
+      clientStreaming: isSet(object.client_streaming) ? globalThis.Boolean(object.client_streaming) : false,
+      serverStreaming: isSet(object.server_streaming) ? globalThis.Boolean(object.server_streaming) : false,
     };
   },
 
@@ -2749,19 +2749,19 @@ export const MethodDescriptorProto: MessageFns<MethodDescriptorProto> = {
       obj.name = message.name;
     }
     if (message.inputType !== undefined && message.inputType !== "") {
-      obj.inputType = message.inputType;
+      obj.input_type = message.inputType;
     }
     if (message.outputType !== undefined && message.outputType !== "") {
-      obj.outputType = message.outputType;
+      obj.output_type = message.outputType;
     }
     if (message.options !== undefined) {
       obj.options = MethodOptions.toJSON(message.options);
     }
     if (message.clientStreaming !== undefined && message.clientStreaming !== false) {
-      obj.clientStreaming = message.clientStreaming;
+      obj.client_streaming = message.clientStreaming;
     }
     if (message.serverStreaming !== undefined && message.serverStreaming !== false) {
-      obj.serverStreaming = message.serverStreaming;
+      obj.server_streaming = message.serverStreaming;
     }
     return obj;
   },
@@ -2770,30 +2770,36 @@ export const MethodDescriptorProto: MessageFns<MethodDescriptorProto> = {
 export const FileOptions: MessageFns<FileOptions> = {
   fromJSON(object: any): FileOptions {
     return {
-      javaPackage: isSet(object.javaPackage) ? globalThis.String(object.javaPackage) : "",
-      javaOuterClassname: isSet(object.javaOuterClassname) ? globalThis.String(object.javaOuterClassname) : "",
-      javaMultipleFiles: isSet(object.javaMultipleFiles) ? globalThis.Boolean(object.javaMultipleFiles) : false,
-      javaGenerateEqualsAndHash: isSet(object.javaGenerateEqualsAndHash)
-        ? globalThis.Boolean(object.javaGenerateEqualsAndHash)
+      javaPackage: isSet(object.java_package) ? globalThis.String(object.java_package) : "",
+      javaOuterClassname: isSet(object.java_outer_classname) ? globalThis.String(object.java_outer_classname) : "",
+      javaMultipleFiles: isSet(object.java_multiple_files) ? globalThis.Boolean(object.java_multiple_files) : false,
+      javaGenerateEqualsAndHash: isSet(object.java_generate_equals_and_hash)
+        ? globalThis.Boolean(object.java_generate_equals_and_hash)
         : false,
-      javaStringCheckUtf8: isSet(object.javaStringCheckUtf8) ? globalThis.Boolean(object.javaStringCheckUtf8) : false,
-      optimizeFor: isSet(object.optimizeFor) ? fileOptions_OptimizeModeFromJSON(object.optimizeFor) : 1,
-      goPackage: isSet(object.goPackage) ? globalThis.String(object.goPackage) : "",
-      ccGenericServices: isSet(object.ccGenericServices) ? globalThis.Boolean(object.ccGenericServices) : false,
-      javaGenericServices: isSet(object.javaGenericServices) ? globalThis.Boolean(object.javaGenericServices) : false,
-      pyGenericServices: isSet(object.pyGenericServices) ? globalThis.Boolean(object.pyGenericServices) : false,
+      javaStringCheckUtf8: isSet(object.java_string_check_utf8)
+        ? globalThis.Boolean(object.java_string_check_utf8)
+        : false,
+      optimizeFor: isSet(object.optimize_for) ? fileOptions_OptimizeModeFromJSON(object.optimize_for) : 1,
+      goPackage: isSet(object.go_package) ? globalThis.String(object.go_package) : "",
+      ccGenericServices: isSet(object.cc_generic_services) ? globalThis.Boolean(object.cc_generic_services) : false,
+      javaGenericServices: isSet(object.java_generic_services)
+        ? globalThis.Boolean(object.java_generic_services)
+        : false,
+      pyGenericServices: isSet(object.py_generic_services) ? globalThis.Boolean(object.py_generic_services) : false,
       deprecated: isSet(object.deprecated) ? globalThis.Boolean(object.deprecated) : false,
-      ccEnableArenas: isSet(object.ccEnableArenas) ? globalThis.Boolean(object.ccEnableArenas) : true,
-      objcClassPrefix: isSet(object.objcClassPrefix) ? globalThis.String(object.objcClassPrefix) : "",
-      csharpNamespace: isSet(object.csharpNamespace) ? globalThis.String(object.csharpNamespace) : "",
-      swiftPrefix: isSet(object.swiftPrefix) ? globalThis.String(object.swiftPrefix) : "",
-      phpClassPrefix: isSet(object.phpClassPrefix) ? globalThis.String(object.phpClassPrefix) : "",
-      phpNamespace: isSet(object.phpNamespace) ? globalThis.String(object.phpNamespace) : "",
-      phpMetadataNamespace: isSet(object.phpMetadataNamespace) ? globalThis.String(object.phpMetadataNamespace) : "",
-      rubyPackage: isSet(object.rubyPackage) ? globalThis.String(object.rubyPackage) : "",
+      ccEnableArenas: isSet(object.cc_enable_arenas) ? globalThis.Boolean(object.cc_enable_arenas) : true,
+      objcClassPrefix: isSet(object.objc_class_prefix) ? globalThis.String(object.objc_class_prefix) : "",
+      csharpNamespace: isSet(object.csharp_namespace) ? globalThis.String(object.csharp_namespace) : "",
+      swiftPrefix: isSet(object.swift_prefix) ? globalThis.String(object.swift_prefix) : "",
+      phpClassPrefix: isSet(object.php_class_prefix) ? globalThis.String(object.php_class_prefix) : "",
+      phpNamespace: isSet(object.php_namespace) ? globalThis.String(object.php_namespace) : "",
+      phpMetadataNamespace: isSet(object.php_metadata_namespace)
+        ? globalThis.String(object.php_metadata_namespace)
+        : "",
+      rubyPackage: isSet(object.ruby_package) ? globalThis.String(object.ruby_package) : "",
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -2801,67 +2807,67 @@ export const FileOptions: MessageFns<FileOptions> = {
   toJSON(message: FileOptions): unknown {
     const obj: any = {};
     if (message.javaPackage !== undefined && message.javaPackage !== "") {
-      obj.javaPackage = message.javaPackage;
+      obj.java_package = message.javaPackage;
     }
     if (message.javaOuterClassname !== undefined && message.javaOuterClassname !== "") {
-      obj.javaOuterClassname = message.javaOuterClassname;
+      obj.java_outer_classname = message.javaOuterClassname;
     }
     if (message.javaMultipleFiles !== undefined && message.javaMultipleFiles !== false) {
-      obj.javaMultipleFiles = message.javaMultipleFiles;
+      obj.java_multiple_files = message.javaMultipleFiles;
     }
     if (message.javaGenerateEqualsAndHash !== undefined && message.javaGenerateEqualsAndHash !== false) {
-      obj.javaGenerateEqualsAndHash = message.javaGenerateEqualsAndHash;
+      obj.java_generate_equals_and_hash = message.javaGenerateEqualsAndHash;
     }
     if (message.javaStringCheckUtf8 !== undefined && message.javaStringCheckUtf8 !== false) {
-      obj.javaStringCheckUtf8 = message.javaStringCheckUtf8;
+      obj.java_string_check_utf8 = message.javaStringCheckUtf8;
     }
     if (message.optimizeFor !== undefined && message.optimizeFor !== 1) {
-      obj.optimizeFor = fileOptions_OptimizeModeToJSON(message.optimizeFor);
+      obj.optimize_for = fileOptions_OptimizeModeToJSON(message.optimizeFor);
     }
     if (message.goPackage !== undefined && message.goPackage !== "") {
-      obj.goPackage = message.goPackage;
+      obj.go_package = message.goPackage;
     }
     if (message.ccGenericServices !== undefined && message.ccGenericServices !== false) {
-      obj.ccGenericServices = message.ccGenericServices;
+      obj.cc_generic_services = message.ccGenericServices;
     }
     if (message.javaGenericServices !== undefined && message.javaGenericServices !== false) {
-      obj.javaGenericServices = message.javaGenericServices;
+      obj.java_generic_services = message.javaGenericServices;
     }
     if (message.pyGenericServices !== undefined && message.pyGenericServices !== false) {
-      obj.pyGenericServices = message.pyGenericServices;
+      obj.py_generic_services = message.pyGenericServices;
     }
     if (message.deprecated !== undefined && message.deprecated !== false) {
       obj.deprecated = message.deprecated;
     }
     if (message.ccEnableArenas !== undefined && message.ccEnableArenas !== true) {
-      obj.ccEnableArenas = message.ccEnableArenas;
+      obj.cc_enable_arenas = message.ccEnableArenas;
     }
     if (message.objcClassPrefix !== undefined && message.objcClassPrefix !== "") {
-      obj.objcClassPrefix = message.objcClassPrefix;
+      obj.objc_class_prefix = message.objcClassPrefix;
     }
     if (message.csharpNamespace !== undefined && message.csharpNamespace !== "") {
-      obj.csharpNamespace = message.csharpNamespace;
+      obj.csharp_namespace = message.csharpNamespace;
     }
     if (message.swiftPrefix !== undefined && message.swiftPrefix !== "") {
-      obj.swiftPrefix = message.swiftPrefix;
+      obj.swift_prefix = message.swiftPrefix;
     }
     if (message.phpClassPrefix !== undefined && message.phpClassPrefix !== "") {
-      obj.phpClassPrefix = message.phpClassPrefix;
+      obj.php_class_prefix = message.phpClassPrefix;
     }
     if (message.phpNamespace !== undefined && message.phpNamespace !== "") {
-      obj.phpNamespace = message.phpNamespace;
+      obj.php_namespace = message.phpNamespace;
     }
     if (message.phpMetadataNamespace !== undefined && message.phpMetadataNamespace !== "") {
-      obj.phpMetadataNamespace = message.phpMetadataNamespace;
+      obj.php_metadata_namespace = message.phpMetadataNamespace;
     }
     if (message.rubyPackage !== undefined && message.rubyPackage !== "") {
-      obj.rubyPackage = message.rubyPackage;
+      obj.ruby_package = message.rubyPackage;
     }
     if (message.features !== undefined) {
       obj.features = FeatureSet.toJSON(message.features);
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -2870,20 +2876,20 @@ export const FileOptions: MessageFns<FileOptions> = {
 export const MessageOptions: MessageFns<MessageOptions> = {
   fromJSON(object: any): MessageOptions {
     return {
-      messageSetWireFormat: isSet(object.messageSetWireFormat)
-        ? globalThis.Boolean(object.messageSetWireFormat)
+      messageSetWireFormat: isSet(object.message_set_wire_format)
+        ? globalThis.Boolean(object.message_set_wire_format)
         : false,
-      noStandardDescriptorAccessor: isSet(object.noStandardDescriptorAccessor)
-        ? globalThis.Boolean(object.noStandardDescriptorAccessor)
+      noStandardDescriptorAccessor: isSet(object.no_standard_descriptor_accessor)
+        ? globalThis.Boolean(object.no_standard_descriptor_accessor)
         : false,
       deprecated: isSet(object.deprecated) ? globalThis.Boolean(object.deprecated) : false,
-      mapEntry: isSet(object.mapEntry) ? globalThis.Boolean(object.mapEntry) : false,
-      deprecatedLegacyJsonFieldConflicts: isSet(object.deprecatedLegacyJsonFieldConflicts)
-        ? globalThis.Boolean(object.deprecatedLegacyJsonFieldConflicts)
+      mapEntry: isSet(object.map_entry) ? globalThis.Boolean(object.map_entry) : false,
+      deprecatedLegacyJsonFieldConflicts: isSet(object.deprecated_legacy_json_field_conflicts)
+        ? globalThis.Boolean(object.deprecated_legacy_json_field_conflicts)
         : false,
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -2891,27 +2897,27 @@ export const MessageOptions: MessageFns<MessageOptions> = {
   toJSON(message: MessageOptions): unknown {
     const obj: any = {};
     if (message.messageSetWireFormat !== undefined && message.messageSetWireFormat !== false) {
-      obj.messageSetWireFormat = message.messageSetWireFormat;
+      obj.message_set_wire_format = message.messageSetWireFormat;
     }
     if (message.noStandardDescriptorAccessor !== undefined && message.noStandardDescriptorAccessor !== false) {
-      obj.noStandardDescriptorAccessor = message.noStandardDescriptorAccessor;
+      obj.no_standard_descriptor_accessor = message.noStandardDescriptorAccessor;
     }
     if (message.deprecated !== undefined && message.deprecated !== false) {
       obj.deprecated = message.deprecated;
     }
     if (message.mapEntry !== undefined && message.mapEntry !== false) {
-      obj.mapEntry = message.mapEntry;
+      obj.map_entry = message.mapEntry;
     }
     if (
       message.deprecatedLegacyJsonFieldConflicts !== undefined && message.deprecatedLegacyJsonFieldConflicts !== false
     ) {
-      obj.deprecatedLegacyJsonFieldConflicts = message.deprecatedLegacyJsonFieldConflicts;
+      obj.deprecated_legacy_json_field_conflicts = message.deprecatedLegacyJsonFieldConflicts;
     }
     if (message.features !== undefined) {
       obj.features = FeatureSet.toJSON(message.features);
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -2924,23 +2930,23 @@ export const FieldOptions: MessageFns<FieldOptions> = {
       packed: isSet(object.packed) ? globalThis.Boolean(object.packed) : false,
       jstype: isSet(object.jstype) ? fieldOptions_JSTypeFromJSON(object.jstype) : 0,
       lazy: isSet(object.lazy) ? globalThis.Boolean(object.lazy) : false,
-      unverifiedLazy: isSet(object.unverifiedLazy) ? globalThis.Boolean(object.unverifiedLazy) : false,
+      unverifiedLazy: isSet(object.unverified_lazy) ? globalThis.Boolean(object.unverified_lazy) : false,
       deprecated: isSet(object.deprecated) ? globalThis.Boolean(object.deprecated) : false,
       weak: isSet(object.weak) ? globalThis.Boolean(object.weak) : false,
-      debugRedact: isSet(object.debugRedact) ? globalThis.Boolean(object.debugRedact) : false,
+      debugRedact: isSet(object.debug_redact) ? globalThis.Boolean(object.debug_redact) : false,
       retention: isSet(object.retention) ? fieldOptions_OptionRetentionFromJSON(object.retention) : 0,
       targets: globalThis.Array.isArray(object?.targets)
         ? object.targets.map((e: any) => fieldOptions_OptionTargetTypeFromJSON(e))
         : [],
-      editionDefaults: globalThis.Array.isArray(object?.editionDefaults)
-        ? object.editionDefaults.map((e: any) => FieldOptions_EditionDefault.fromJSON(e))
+      editionDefaults: globalThis.Array.isArray(object?.edition_defaults)
+        ? object.edition_defaults.map((e: any) => FieldOptions_EditionDefault.fromJSON(e))
         : [],
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
-      featureSupport: isSet(object.featureSupport)
-        ? FieldOptions_FeatureSupport.fromJSON(object.featureSupport)
+      featureSupport: isSet(object.feature_support)
+        ? FieldOptions_FeatureSupport.fromJSON(object.feature_support)
         : undefined,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -2960,7 +2966,7 @@ export const FieldOptions: MessageFns<FieldOptions> = {
       obj.lazy = message.lazy;
     }
     if (message.unverifiedLazy !== undefined && message.unverifiedLazy !== false) {
-      obj.unverifiedLazy = message.unverifiedLazy;
+      obj.unverified_lazy = message.unverifiedLazy;
     }
     if (message.deprecated !== undefined && message.deprecated !== false) {
       obj.deprecated = message.deprecated;
@@ -2969,7 +2975,7 @@ export const FieldOptions: MessageFns<FieldOptions> = {
       obj.weak = message.weak;
     }
     if (message.debugRedact !== undefined && message.debugRedact !== false) {
-      obj.debugRedact = message.debugRedact;
+      obj.debug_redact = message.debugRedact;
     }
     if (message.retention !== undefined && message.retention !== 0) {
       obj.retention = fieldOptions_OptionRetentionToJSON(message.retention);
@@ -2978,16 +2984,16 @@ export const FieldOptions: MessageFns<FieldOptions> = {
       obj.targets = message.targets.map((e) => fieldOptions_OptionTargetTypeToJSON(e));
     }
     if (message.editionDefaults?.length) {
-      obj.editionDefaults = message.editionDefaults.map((e) => FieldOptions_EditionDefault.toJSON(e));
+      obj.edition_defaults = message.editionDefaults.map((e) => FieldOptions_EditionDefault.toJSON(e));
     }
     if (message.features !== undefined) {
       obj.features = FeatureSet.toJSON(message.features);
     }
     if (message.featureSupport !== undefined) {
-      obj.featureSupport = FieldOptions_FeatureSupport.toJSON(message.featureSupport);
+      obj.feature_support = FieldOptions_FeatureSupport.toJSON(message.featureSupport);
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -3016,26 +3022,26 @@ export const FieldOptions_EditionDefault: MessageFns<FieldOptions_EditionDefault
 export const FieldOptions_FeatureSupport: MessageFns<FieldOptions_FeatureSupport> = {
   fromJSON(object: any): FieldOptions_FeatureSupport {
     return {
-      editionIntroduced: isSet(object.editionIntroduced) ? editionFromJSON(object.editionIntroduced) : 0,
-      editionDeprecated: isSet(object.editionDeprecated) ? editionFromJSON(object.editionDeprecated) : 0,
-      deprecationWarning: isSet(object.deprecationWarning) ? globalThis.String(object.deprecationWarning) : "",
-      editionRemoved: isSet(object.editionRemoved) ? editionFromJSON(object.editionRemoved) : 0,
+      editionIntroduced: isSet(object.edition_introduced) ? editionFromJSON(object.edition_introduced) : 0,
+      editionDeprecated: isSet(object.edition_deprecated) ? editionFromJSON(object.edition_deprecated) : 0,
+      deprecationWarning: isSet(object.deprecation_warning) ? globalThis.String(object.deprecation_warning) : "",
+      editionRemoved: isSet(object.edition_removed) ? editionFromJSON(object.edition_removed) : 0,
     };
   },
 
   toJSON(message: FieldOptions_FeatureSupport): unknown {
     const obj: any = {};
     if (message.editionIntroduced !== undefined && message.editionIntroduced !== 0) {
-      obj.editionIntroduced = editionToJSON(message.editionIntroduced);
+      obj.edition_introduced = editionToJSON(message.editionIntroduced);
     }
     if (message.editionDeprecated !== undefined && message.editionDeprecated !== 0) {
-      obj.editionDeprecated = editionToJSON(message.editionDeprecated);
+      obj.edition_deprecated = editionToJSON(message.editionDeprecated);
     }
     if (message.deprecationWarning !== undefined && message.deprecationWarning !== "") {
-      obj.deprecationWarning = message.deprecationWarning;
+      obj.deprecation_warning = message.deprecationWarning;
     }
     if (message.editionRemoved !== undefined && message.editionRemoved !== 0) {
-      obj.editionRemoved = editionToJSON(message.editionRemoved);
+      obj.edition_removed = editionToJSON(message.editionRemoved);
     }
     return obj;
   },
@@ -3045,8 +3051,8 @@ export const OneofOptions: MessageFns<OneofOptions> = {
   fromJSON(object: any): OneofOptions {
     return {
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -3057,7 +3063,7 @@ export const OneofOptions: MessageFns<OneofOptions> = {
       obj.features = FeatureSet.toJSON(message.features);
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -3066,14 +3072,14 @@ export const OneofOptions: MessageFns<OneofOptions> = {
 export const EnumOptions: MessageFns<EnumOptions> = {
   fromJSON(object: any): EnumOptions {
     return {
-      allowAlias: isSet(object.allowAlias) ? globalThis.Boolean(object.allowAlias) : false,
+      allowAlias: isSet(object.allow_alias) ? globalThis.Boolean(object.allow_alias) : false,
       deprecated: isSet(object.deprecated) ? globalThis.Boolean(object.deprecated) : false,
-      deprecatedLegacyJsonFieldConflicts: isSet(object.deprecatedLegacyJsonFieldConflicts)
-        ? globalThis.Boolean(object.deprecatedLegacyJsonFieldConflicts)
+      deprecatedLegacyJsonFieldConflicts: isSet(object.deprecated_legacy_json_field_conflicts)
+        ? globalThis.Boolean(object.deprecated_legacy_json_field_conflicts)
         : false,
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -3081,7 +3087,7 @@ export const EnumOptions: MessageFns<EnumOptions> = {
   toJSON(message: EnumOptions): unknown {
     const obj: any = {};
     if (message.allowAlias !== undefined && message.allowAlias !== false) {
-      obj.allowAlias = message.allowAlias;
+      obj.allow_alias = message.allowAlias;
     }
     if (message.deprecated !== undefined && message.deprecated !== false) {
       obj.deprecated = message.deprecated;
@@ -3089,13 +3095,13 @@ export const EnumOptions: MessageFns<EnumOptions> = {
     if (
       message.deprecatedLegacyJsonFieldConflicts !== undefined && message.deprecatedLegacyJsonFieldConflicts !== false
     ) {
-      obj.deprecatedLegacyJsonFieldConflicts = message.deprecatedLegacyJsonFieldConflicts;
+      obj.deprecated_legacy_json_field_conflicts = message.deprecatedLegacyJsonFieldConflicts;
     }
     if (message.features !== undefined) {
       obj.features = FeatureSet.toJSON(message.features);
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -3106,12 +3112,12 @@ export const EnumValueOptions: MessageFns<EnumValueOptions> = {
     return {
       deprecated: isSet(object.deprecated) ? globalThis.Boolean(object.deprecated) : false,
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
-      debugRedact: isSet(object.debugRedact) ? globalThis.Boolean(object.debugRedact) : false,
-      featureSupport: isSet(object.featureSupport)
-        ? FieldOptions_FeatureSupport.fromJSON(object.featureSupport)
+      debugRedact: isSet(object.debug_redact) ? globalThis.Boolean(object.debug_redact) : false,
+      featureSupport: isSet(object.feature_support)
+        ? FieldOptions_FeatureSupport.fromJSON(object.feature_support)
         : undefined,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -3125,13 +3131,13 @@ export const EnumValueOptions: MessageFns<EnumValueOptions> = {
       obj.features = FeatureSet.toJSON(message.features);
     }
     if (message.debugRedact !== undefined && message.debugRedact !== false) {
-      obj.debugRedact = message.debugRedact;
+      obj.debug_redact = message.debugRedact;
     }
     if (message.featureSupport !== undefined) {
-      obj.featureSupport = FieldOptions_FeatureSupport.toJSON(message.featureSupport);
+      obj.feature_support = FieldOptions_FeatureSupport.toJSON(message.featureSupport);
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -3142,8 +3148,8 @@ export const ServiceOptions: MessageFns<ServiceOptions> = {
     return {
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
       deprecated: isSet(object.deprecated) ? globalThis.Boolean(object.deprecated) : false,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -3157,7 +3163,7 @@ export const ServiceOptions: MessageFns<ServiceOptions> = {
       obj.deprecated = message.deprecated;
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -3167,12 +3173,12 @@ export const MethodOptions: MessageFns<MethodOptions> = {
   fromJSON(object: any): MethodOptions {
     return {
       deprecated: isSet(object.deprecated) ? globalThis.Boolean(object.deprecated) : false,
-      idempotencyLevel: isSet(object.idempotencyLevel)
-        ? methodOptions_IdempotencyLevelFromJSON(object.idempotencyLevel)
+      idempotencyLevel: isSet(object.idempotency_level)
+        ? methodOptions_IdempotencyLevelFromJSON(object.idempotency_level)
         : 0,
       features: isSet(object.features) ? FeatureSet.fromJSON(object.features) : undefined,
-      uninterpretedOption: globalThis.Array.isArray(object?.uninterpretedOption)
-        ? object.uninterpretedOption.map((e: any) => UninterpretedOption.fromJSON(e))
+      uninterpretedOption: globalThis.Array.isArray(object?.uninterpreted_option)
+        ? object.uninterpreted_option.map((e: any) => UninterpretedOption.fromJSON(e))
         : [],
     };
   },
@@ -3183,13 +3189,13 @@ export const MethodOptions: MessageFns<MethodOptions> = {
       obj.deprecated = message.deprecated;
     }
     if (message.idempotencyLevel !== undefined && message.idempotencyLevel !== 0) {
-      obj.idempotencyLevel = methodOptions_IdempotencyLevelToJSON(message.idempotencyLevel);
+      obj.idempotency_level = methodOptions_IdempotencyLevelToJSON(message.idempotencyLevel);
     }
     if (message.features !== undefined) {
       obj.features = FeatureSet.toJSON(message.features);
     }
     if (message.uninterpretedOption?.length) {
-      obj.uninterpretedOption = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
+      obj.uninterpreted_option = message.uninterpretedOption.map((e) => UninterpretedOption.toJSON(e));
     }
     return obj;
   },
@@ -3201,12 +3207,12 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
       name: globalThis.Array.isArray(object?.name)
         ? object.name.map((e: any) => UninterpretedOption_NamePart.fromJSON(e))
         : [],
-      identifierValue: isSet(object.identifierValue) ? globalThis.String(object.identifierValue) : "",
-      positiveIntValue: isSet(object.positiveIntValue) ? globalThis.Number(object.positiveIntValue) : 0,
-      negativeIntValue: isSet(object.negativeIntValue) ? globalThis.Number(object.negativeIntValue) : 0,
-      doubleValue: isSet(object.doubleValue) ? globalThis.Number(object.doubleValue) : 0,
-      stringValue: isSet(object.stringValue) ? Buffer.from(bytesFromBase64(object.stringValue)) : Buffer.alloc(0),
-      aggregateValue: isSet(object.aggregateValue) ? globalThis.String(object.aggregateValue) : "",
+      identifierValue: isSet(object.identifier_value) ? globalThis.String(object.identifier_value) : "",
+      positiveIntValue: isSet(object.positive_int_value) ? globalThis.Number(object.positive_int_value) : 0,
+      negativeIntValue: isSet(object.negative_int_value) ? globalThis.Number(object.negative_int_value) : 0,
+      doubleValue: isSet(object.double_value) ? globalThis.Number(object.double_value) : 0,
+      stringValue: isSet(object.string_value) ? Buffer.from(bytesFromBase64(object.string_value)) : Buffer.alloc(0),
+      aggregateValue: isSet(object.aggregate_value) ? globalThis.String(object.aggregate_value) : "",
     };
   },
 
@@ -3216,22 +3222,22 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
       obj.name = message.name.map((e) => UninterpretedOption_NamePart.toJSON(e));
     }
     if (message.identifierValue !== undefined && message.identifierValue !== "") {
-      obj.identifierValue = message.identifierValue;
+      obj.identifier_value = message.identifierValue;
     }
     if (message.positiveIntValue !== undefined && message.positiveIntValue !== 0) {
-      obj.positiveIntValue = Math.round(message.positiveIntValue);
+      obj.positive_int_value = Math.round(message.positiveIntValue);
     }
     if (message.negativeIntValue !== undefined && message.negativeIntValue !== 0) {
-      obj.negativeIntValue = Math.round(message.negativeIntValue);
+      obj.negative_int_value = Math.round(message.negativeIntValue);
     }
     if (message.doubleValue !== undefined && message.doubleValue !== 0) {
-      obj.doubleValue = message.doubleValue;
+      obj.double_value = message.doubleValue;
     }
     if (message.stringValue !== undefined && message.stringValue.length !== 0) {
-      obj.stringValue = base64FromBytes(message.stringValue);
+      obj.string_value = base64FromBytes(message.stringValue);
     }
     if (message.aggregateValue !== undefined && message.aggregateValue !== "") {
-      obj.aggregateValue = message.aggregateValue;
+      obj.aggregate_value = message.aggregateValue;
     }
     return obj;
   },
@@ -3240,18 +3246,18 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
 export const UninterpretedOption_NamePart: MessageFns<UninterpretedOption_NamePart> = {
   fromJSON(object: any): UninterpretedOption_NamePart {
     return {
-      namePart: isSet(object.namePart) ? globalThis.String(object.namePart) : "",
-      isExtension: isSet(object.isExtension) ? globalThis.Boolean(object.isExtension) : false,
+      namePart: isSet(object.name_part) ? globalThis.String(object.name_part) : "",
+      isExtension: isSet(object.is_extension) ? globalThis.Boolean(object.is_extension) : false,
     };
   },
 
   toJSON(message: UninterpretedOption_NamePart): unknown {
     const obj: any = {};
     if (message.namePart !== "") {
-      obj.namePart = message.namePart;
+      obj.name_part = message.namePart;
     }
     if (message.isExtension !== false) {
-      obj.isExtension = message.isExtension;
+      obj.is_extension = message.isExtension;
     }
     return obj;
   },
@@ -3260,19 +3266,19 @@ export const UninterpretedOption_NamePart: MessageFns<UninterpretedOption_NamePa
 export const FeatureSet: MessageFns<FeatureSet> = {
   fromJSON(object: any): FeatureSet {
     return {
-      fieldPresence: isSet(object.fieldPresence) ? featureSet_FieldPresenceFromJSON(object.fieldPresence) : 0,
-      enumType: isSet(object.enumType) ? featureSet_EnumTypeFromJSON(object.enumType) : 0,
-      repeatedFieldEncoding: isSet(object.repeatedFieldEncoding)
-        ? featureSet_RepeatedFieldEncodingFromJSON(object.repeatedFieldEncoding)
+      fieldPresence: isSet(object.field_presence) ? featureSet_FieldPresenceFromJSON(object.field_presence) : 0,
+      enumType: isSet(object.enum_type) ? featureSet_EnumTypeFromJSON(object.enum_type) : 0,
+      repeatedFieldEncoding: isSet(object.repeated_field_encoding)
+        ? featureSet_RepeatedFieldEncodingFromJSON(object.repeated_field_encoding)
         : 0,
-      utf8Validation: isSet(object.utf8Validation) ? featureSet_Utf8ValidationFromJSON(object.utf8Validation) : 0,
-      messageEncoding: isSet(object.messageEncoding) ? featureSet_MessageEncodingFromJSON(object.messageEncoding) : 0,
-      jsonFormat: isSet(object.jsonFormat) ? featureSet_JsonFormatFromJSON(object.jsonFormat) : 0,
-      enforceNamingStyle: isSet(object.enforceNamingStyle)
-        ? featureSet_EnforceNamingStyleFromJSON(object.enforceNamingStyle)
+      utf8Validation: isSet(object.utf8_validation) ? featureSet_Utf8ValidationFromJSON(object.utf8_validation) : 0,
+      messageEncoding: isSet(object.message_encoding) ? featureSet_MessageEncodingFromJSON(object.message_encoding) : 0,
+      jsonFormat: isSet(object.json_format) ? featureSet_JsonFormatFromJSON(object.json_format) : 0,
+      enforceNamingStyle: isSet(object.enforce_naming_style)
+        ? featureSet_EnforceNamingStyleFromJSON(object.enforce_naming_style)
         : 0,
-      defaultSymbolVisibility: isSet(object.defaultSymbolVisibility)
-        ? featureSet_VisibilityFeature_DefaultSymbolVisibilityFromJSON(object.defaultSymbolVisibility)
+      defaultSymbolVisibility: isSet(object.default_symbol_visibility)
+        ? featureSet_VisibilityFeature_DefaultSymbolVisibilityFromJSON(object.default_symbol_visibility)
         : 0,
     };
   },
@@ -3280,28 +3286,28 @@ export const FeatureSet: MessageFns<FeatureSet> = {
   toJSON(message: FeatureSet): unknown {
     const obj: any = {};
     if (message.fieldPresence !== undefined && message.fieldPresence !== 0) {
-      obj.fieldPresence = featureSet_FieldPresenceToJSON(message.fieldPresence);
+      obj.field_presence = featureSet_FieldPresenceToJSON(message.fieldPresence);
     }
     if (message.enumType !== undefined && message.enumType !== 0) {
-      obj.enumType = featureSet_EnumTypeToJSON(message.enumType);
+      obj.enum_type = featureSet_EnumTypeToJSON(message.enumType);
     }
     if (message.repeatedFieldEncoding !== undefined && message.repeatedFieldEncoding !== 0) {
-      obj.repeatedFieldEncoding = featureSet_RepeatedFieldEncodingToJSON(message.repeatedFieldEncoding);
+      obj.repeated_field_encoding = featureSet_RepeatedFieldEncodingToJSON(message.repeatedFieldEncoding);
     }
     if (message.utf8Validation !== undefined && message.utf8Validation !== 0) {
-      obj.utf8Validation = featureSet_Utf8ValidationToJSON(message.utf8Validation);
+      obj.utf8_validation = featureSet_Utf8ValidationToJSON(message.utf8Validation);
     }
     if (message.messageEncoding !== undefined && message.messageEncoding !== 0) {
-      obj.messageEncoding = featureSet_MessageEncodingToJSON(message.messageEncoding);
+      obj.message_encoding = featureSet_MessageEncodingToJSON(message.messageEncoding);
     }
     if (message.jsonFormat !== undefined && message.jsonFormat !== 0) {
-      obj.jsonFormat = featureSet_JsonFormatToJSON(message.jsonFormat);
+      obj.json_format = featureSet_JsonFormatToJSON(message.jsonFormat);
     }
     if (message.enforceNamingStyle !== undefined && message.enforceNamingStyle !== 0) {
-      obj.enforceNamingStyle = featureSet_EnforceNamingStyleToJSON(message.enforceNamingStyle);
+      obj.enforce_naming_style = featureSet_EnforceNamingStyleToJSON(message.enforceNamingStyle);
     }
     if (message.defaultSymbolVisibility !== undefined && message.defaultSymbolVisibility !== 0) {
-      obj.defaultSymbolVisibility = featureSet_VisibilityFeature_DefaultSymbolVisibilityToJSON(
+      obj.default_symbol_visibility = featureSet_VisibilityFeature_DefaultSymbolVisibilityToJSON(
         message.defaultSymbolVisibility,
       );
     }
@@ -3326,8 +3332,8 @@ export const FeatureSetDefaults: MessageFns<FeatureSetDefaults> = {
       defaults: globalThis.Array.isArray(object?.defaults)
         ? object.defaults.map((e: any) => FeatureSetDefaults_FeatureSetEditionDefault.fromJSON(e))
         : [],
-      minimumEdition: isSet(object.minimumEdition) ? editionFromJSON(object.minimumEdition) : 0,
-      maximumEdition: isSet(object.maximumEdition) ? editionFromJSON(object.maximumEdition) : 0,
+      minimumEdition: isSet(object.minimum_edition) ? editionFromJSON(object.minimum_edition) : 0,
+      maximumEdition: isSet(object.maximum_edition) ? editionFromJSON(object.maximum_edition) : 0,
     };
   },
 
@@ -3337,10 +3343,10 @@ export const FeatureSetDefaults: MessageFns<FeatureSetDefaults> = {
       obj.defaults = message.defaults.map((e) => FeatureSetDefaults_FeatureSetEditionDefault.toJSON(e));
     }
     if (message.minimumEdition !== undefined && message.minimumEdition !== 0) {
-      obj.minimumEdition = editionToJSON(message.minimumEdition);
+      obj.minimum_edition = editionToJSON(message.minimumEdition);
     }
     if (message.maximumEdition !== undefined && message.maximumEdition !== 0) {
-      obj.maximumEdition = editionToJSON(message.maximumEdition);
+      obj.maximum_edition = editionToJSON(message.maximumEdition);
     }
     return obj;
   },
@@ -3350,10 +3356,10 @@ export const FeatureSetDefaults_FeatureSetEditionDefault: MessageFns<FeatureSetD
   fromJSON(object: any): FeatureSetDefaults_FeatureSetEditionDefault {
     return {
       edition: isSet(object.edition) ? editionFromJSON(object.edition) : 0,
-      overridableFeatures: isSet(object.overridableFeatures)
-        ? FeatureSet.fromJSON(object.overridableFeatures)
+      overridableFeatures: isSet(object.overridable_features)
+        ? FeatureSet.fromJSON(object.overridable_features)
         : undefined,
-      fixedFeatures: isSet(object.fixedFeatures) ? FeatureSet.fromJSON(object.fixedFeatures) : undefined,
+      fixedFeatures: isSet(object.fixed_features) ? FeatureSet.fromJSON(object.fixed_features) : undefined,
     };
   },
 
@@ -3363,10 +3369,10 @@ export const FeatureSetDefaults_FeatureSetEditionDefault: MessageFns<FeatureSetD
       obj.edition = editionToJSON(message.edition);
     }
     if (message.overridableFeatures !== undefined) {
-      obj.overridableFeatures = FeatureSet.toJSON(message.overridableFeatures);
+      obj.overridable_features = FeatureSet.toJSON(message.overridableFeatures);
     }
     if (message.fixedFeatures !== undefined) {
-      obj.fixedFeatures = FeatureSet.toJSON(message.fixedFeatures);
+      obj.fixed_features = FeatureSet.toJSON(message.fixedFeatures);
     }
     return obj;
   },
@@ -3397,10 +3403,10 @@ export const SourceCodeInfo_Location: MessageFns<SourceCodeInfo_Location> = {
         ? object.path.map((e: any) => globalThis.Number(e))
         : [],
       span: globalThis.Array.isArray(object?.span) ? object.span.map((e: any) => globalThis.Number(e)) : [],
-      leadingComments: isSet(object.leadingComments) ? globalThis.String(object.leadingComments) : "",
-      trailingComments: isSet(object.trailingComments) ? globalThis.String(object.trailingComments) : "",
-      leadingDetachedComments: globalThis.Array.isArray(object?.leadingDetachedComments)
-        ? object.leadingDetachedComments.map((e: any) => globalThis.String(e))
+      leadingComments: isSet(object.leading_comments) ? globalThis.String(object.leading_comments) : "",
+      trailingComments: isSet(object.trailing_comments) ? globalThis.String(object.trailing_comments) : "",
+      leadingDetachedComments: globalThis.Array.isArray(object?.leading_detached_comments)
+        ? object.leading_detached_comments.map((e: any) => globalThis.String(e))
         : [],
     };
   },
@@ -3414,13 +3420,13 @@ export const SourceCodeInfo_Location: MessageFns<SourceCodeInfo_Location> = {
       obj.span = message.span.map((e) => Math.round(e));
     }
     if (message.leadingComments !== undefined && message.leadingComments !== "") {
-      obj.leadingComments = message.leadingComments;
+      obj.leading_comments = message.leadingComments;
     }
     if (message.trailingComments !== undefined && message.trailingComments !== "") {
-      obj.trailingComments = message.trailingComments;
+      obj.trailing_comments = message.trailingComments;
     }
     if (message.leadingDetachedComments?.length) {
-      obj.leadingDetachedComments = message.leadingDetachedComments;
+      obj.leading_detached_comments = message.leadingDetachedComments;
     }
     return obj;
   },
@@ -3450,7 +3456,7 @@ export const GeneratedCodeInfo_Annotation: MessageFns<GeneratedCodeInfo_Annotati
       path: globalThis.Array.isArray(object?.path)
         ? object.path.map((e: any) => globalThis.Number(e))
         : [],
-      sourceFile: isSet(object.sourceFile) ? globalThis.String(object.sourceFile) : "",
+      sourceFile: isSet(object.source_file) ? globalThis.String(object.source_file) : "",
       begin: isSet(object.begin) ? globalThis.Number(object.begin) : 0,
       end: isSet(object.end) ? globalThis.Number(object.end) : 0,
       semantic: isSet(object.semantic) ? generatedCodeInfo_Annotation_SemanticFromJSON(object.semantic) : 0,
@@ -3463,7 +3469,7 @@ export const GeneratedCodeInfo_Annotation: MessageFns<GeneratedCodeInfo_Annotati
       obj.path = message.path.map((e) => Math.round(e));
     }
     if (message.sourceFile !== undefined && message.sourceFile !== "") {
-      obj.sourceFile = message.sourceFile;
+      obj.source_file = message.sourceFile;
     }
     if (message.begin !== undefined && message.begin !== 0) {
       obj.begin = Math.round(message.begin);

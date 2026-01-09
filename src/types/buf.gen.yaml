@@ -6,5 +6,5 @@ inputs:
   - directory: .
 plugins:
   - remote: buf.build/community/stephenh-ts-proto:v2.6.1
-    opt: outputEncodeMethods=false,outputPartialMethods=false,outputServices=false,oneof=unions-value,importSuffix=.js,env=node
+    opt: outputEncodeMethods=false,outputPartialMethods=false,outputServices=false,oneof=unions-value,importSuffix=.js,env=node,snakeToCamel=keys
     out: .

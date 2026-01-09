@@ -551,12 +551,12 @@ export interface SelectiveGapicGeneration {
 export const CommonLanguageSettings: MessageFns<CommonLanguageSettings> = {
   fromJSON(object: any): CommonLanguageSettings {
     return {
-      referenceDocsUri: isSet(object.referenceDocsUri) ? globalThis.String(object.referenceDocsUri) : "",
+      referenceDocsUri: isSet(object.reference_docs_uri) ? globalThis.String(object.reference_docs_uri) : "",
       destinations: globalThis.Array.isArray(object?.destinations)
         ? object.destinations.map((e: any) => clientLibraryDestinationFromJSON(e))
         : [],
-      selectiveGapicGeneration: isSet(object.selectiveGapicGeneration)
-        ? SelectiveGapicGeneration.fromJSON(object.selectiveGapicGeneration)
+      selectiveGapicGeneration: isSet(object.selective_gapic_generation)
+        ? SelectiveGapicGeneration.fromJSON(object.selective_gapic_generation)
         : undefined,
     };
   },
@@ -564,13 +564,13 @@ export const CommonLanguageSettings: MessageFns<CommonLanguageSettings> = {
   toJSON(message: CommonLanguageSettings): unknown {
     const obj: any = {};
     if (message.referenceDocsUri !== "") {
-      obj.referenceDocsUri = message.referenceDocsUri;
+      obj.reference_docs_uri = message.referenceDocsUri;
     }
     if (message.destinations?.length) {
       obj.destinations = message.destinations.map((e) => clientLibraryDestinationToJSON(e));
     }
     if (message.selectiveGapicGeneration !== undefined) {
-      obj.selectiveGapicGeneration = SelectiveGapicGeneration.toJSON(message.selectiveGapicGeneration);
+      obj.selective_gapic_generation = SelectiveGapicGeneration.toJSON(message.selectiveGapicGeneration);
     }
     return obj;
   },
@@ -580,16 +580,16 @@ export const ClientLibrarySettings: MessageFns<ClientLibrarySettings> = {
   fromJSON(object: any): ClientLibrarySettings {
     return {
       version: isSet(object.version) ? globalThis.String(object.version) : "",
-      launchStage: isSet(object.launchStage) ? launchStageFromJSON(object.launchStage) : 0,
-      restNumericEnums: isSet(object.restNumericEnums) ? globalThis.Boolean(object.restNumericEnums) : false,
-      javaSettings: isSet(object.javaSettings) ? JavaSettings.fromJSON(object.javaSettings) : undefined,
-      cppSettings: isSet(object.cppSettings) ? CppSettings.fromJSON(object.cppSettings) : undefined,
-      phpSettings: isSet(object.phpSettings) ? PhpSettings.fromJSON(object.phpSettings) : undefined,
-      pythonSettings: isSet(object.pythonSettings) ? PythonSettings.fromJSON(object.pythonSettings) : undefined,
-      nodeSettings: isSet(object.nodeSettings) ? NodeSettings.fromJSON(object.nodeSettings) : undefined,
-      dotnetSettings: isSet(object.dotnetSettings) ? DotnetSettings.fromJSON(object.dotnetSettings) : undefined,
-      rubySettings: isSet(object.rubySettings) ? RubySettings.fromJSON(object.rubySettings) : undefined,
-      goSettings: isSet(object.goSettings) ? GoSettings.fromJSON(object.goSettings) : undefined,
+      launchStage: isSet(object.launch_stage) ? launchStageFromJSON(object.launch_stage) : 0,
+      restNumericEnums: isSet(object.rest_numeric_enums) ? globalThis.Boolean(object.rest_numeric_enums) : false,
+      javaSettings: isSet(object.java_settings) ? JavaSettings.fromJSON(object.java_settings) : undefined,
+      cppSettings: isSet(object.cpp_settings) ? CppSettings.fromJSON(object.cpp_settings) : undefined,
+      phpSettings: isSet(object.php_settings) ? PhpSettings.fromJSON(object.php_settings) : undefined,
+      pythonSettings: isSet(object.python_settings) ? PythonSettings.fromJSON(object.python_settings) : undefined,
+      nodeSettings: isSet(object.node_settings) ? NodeSettings.fromJSON(object.node_settings) : undefined,
+      dotnetSettings: isSet(object.dotnet_settings) ? DotnetSettings.fromJSON(object.dotnet_settings) : undefined,
+      rubySettings: isSet(object.ruby_settings) ? RubySettings.fromJSON(object.ruby_settings) : undefined,
+      goSettings: isSet(object.go_settings) ? GoSettings.fromJSON(object.go_settings) : undefined,
     };
   },
 
@@ -599,34 +599,34 @@ export const ClientLibrarySettings: MessageFns<ClientLibrarySettings> = {
       obj.version = message.version;
     }
     if (message.launchStage !== 0) {
-      obj.launchStage = launchStageToJSON(message.launchStage);
+      obj.launch_stage = launchStageToJSON(message.launchStage);
     }
     if (message.restNumericEnums !== false) {
-      obj.restNumericEnums = message.restNumericEnums;
+      obj.rest_numeric_enums = message.restNumericEnums;
     }
     if (message.javaSettings !== undefined) {
-      obj.javaSettings = JavaSettings.toJSON(message.javaSettings);
+      obj.java_settings = JavaSettings.toJSON(message.javaSettings);
     }
     if (message.cppSettings !== undefined) {
-      obj.cppSettings = CppSettings.toJSON(message.cppSettings);
+      obj.cpp_settings = CppSettings.toJSON(message.cppSettings);
     }
     if (message.phpSettings !== undefined) {
-      obj.phpSettings = PhpSettings.toJSON(message.phpSettings);
+      obj.php_settings = PhpSettings.toJSON(message.phpSettings);
     }
     if (message.pythonSettings !== undefined) {
-      obj.pythonSettings = PythonSettings.toJSON(message.pythonSettings);
+      obj.python_settings = PythonSettings.toJSON(message.pythonSettings);
     }
     if (message.nodeSettings !== undefined) {
-      obj.nodeSettings = NodeSettings.toJSON(message.nodeSettings);
+      obj.node_settings = NodeSettings.toJSON(message.nodeSettings);
     }
     if (message.dotnetSettings !== undefined) {
-      obj.dotnetSettings = DotnetSettings.toJSON(message.dotnetSettings);
+      obj.dotnet_settings = DotnetSettings.toJSON(message.dotnetSettings);
     }
     if (message.rubySettings !== undefined) {
-      obj.rubySettings = RubySettings.toJSON(message.rubySettings);
+      obj.ruby_settings = RubySettings.toJSON(message.rubySettings);
     }
     if (message.goSettings !== undefined) {
-      obj.goSettings = GoSettings.toJSON(message.goSettings);
+      obj.go_settings = GoSettings.toJSON(message.goSettings);
     }
     return obj;
   },
@@ -635,26 +635,26 @@ export const ClientLibrarySettings: MessageFns<ClientLibrarySettings> = {
 export const Publishing: MessageFns<Publishing> = {
   fromJSON(object: any): Publishing {
     return {
-      methodSettings: globalThis.Array.isArray(object?.methodSettings)
-        ? object.methodSettings.map((e: any) => MethodSettings.fromJSON(e))
+      methodSettings: globalThis.Array.isArray(object?.method_settings)
+        ? object.method_settings.map((e: any) => MethodSettings.fromJSON(e))
         : [],
-      newIssueUri: isSet(object.newIssueUri) ? globalThis.String(object.newIssueUri) : "",
-      documentationUri: isSet(object.documentationUri) ? globalThis.String(object.documentationUri) : "",
-      apiShortName: isSet(object.apiShortName) ? globalThis.String(object.apiShortName) : "",
-      githubLabel: isSet(object.githubLabel) ? globalThis.String(object.githubLabel) : "",
-      codeownerGithubTeams: globalThis.Array.isArray(object?.codeownerGithubTeams)
-        ? object.codeownerGithubTeams.map((e: any) => globalThis.String(e))
+      newIssueUri: isSet(object.new_issue_uri) ? globalThis.String(object.new_issue_uri) : "",
+      documentationUri: isSet(object.documentation_uri) ? globalThis.String(object.documentation_uri) : "",
+      apiShortName: isSet(object.api_short_name) ? globalThis.String(object.api_short_name) : "",
+      githubLabel: isSet(object.github_label) ? globalThis.String(object.github_label) : "",
+      codeownerGithubTeams: globalThis.Array.isArray(object?.codeowner_github_teams)
+        ? object.codeowner_github_teams.map((e: any) => globalThis.String(e))
         : [],
-      docTagPrefix: isSet(object.docTagPrefix) ? globalThis.String(object.docTagPrefix) : "",
+      docTagPrefix: isSet(object.doc_tag_prefix) ? globalThis.String(object.doc_tag_prefix) : "",
       organization: isSet(object.organization) ? clientLibraryOrganizationFromJSON(object.organization) : 0,
-      librarySettings: globalThis.Array.isArray(object?.librarySettings)
-        ? object.librarySettings.map((e: any) => ClientLibrarySettings.fromJSON(e))
+      librarySettings: globalThis.Array.isArray(object?.library_settings)
+        ? object.library_settings.map((e: any) => ClientLibrarySettings.fromJSON(e))
         : [],
-      protoReferenceDocumentationUri: isSet(object.protoReferenceDocumentationUri)
-        ? globalThis.String(object.protoReferenceDocumentationUri)
+      protoReferenceDocumentationUri: isSet(object.proto_reference_documentation_uri)
+        ? globalThis.String(object.proto_reference_documentation_uri)
         : "",
-      restReferenceDocumentationUri: isSet(object.restReferenceDocumentationUri)
-        ? globalThis.String(object.restReferenceDocumentationUri)
+      restReferenceDocumentationUri: isSet(object.rest_reference_documentation_uri)
+        ? globalThis.String(object.rest_reference_documentation_uri)
         : "",
     };
   },
@@ -662,37 +662,37 @@ export const Publishing: MessageFns<Publishing> = {
   toJSON(message: Publishing): unknown {
     const obj: any = {};
     if (message.methodSettings?.length) {
-      obj.methodSettings = message.methodSettings.map((e) => MethodSettings.toJSON(e));
+      obj.method_settings = message.methodSettings.map((e) => MethodSettings.toJSON(e));
     }
     if (message.newIssueUri !== "") {
-      obj.newIssueUri = message.newIssueUri;
+      obj.new_issue_uri = message.newIssueUri;
     }
     if (message.documentationUri !== "") {
-      obj.documentationUri = message.documentationUri;
+      obj.documentation_uri = message.documentationUri;
     }
     if (message.apiShortName !== "") {
-      obj.apiShortName = message.apiShortName;
+      obj.api_short_name = message.apiShortName;
     }
     if (message.githubLabel !== "") {
-      obj.githubLabel = message.githubLabel;
+      obj.github_label = message.githubLabel;
     }
     if (message.codeownerGithubTeams?.length) {
-      obj.codeownerGithubTeams = message.codeownerGithubTeams;
+      obj.codeowner_github_teams = message.codeownerGithubTeams;
     }
     if (message.docTagPrefix !== "") {
-      obj.docTagPrefix = message.docTagPrefix;
+      obj.doc_tag_prefix = message.docTagPrefix;
     }
     if (message.organization !== 0) {
       obj.organization = clientLibraryOrganizationToJSON(message.organization);
     }
     if (message.librarySettings?.length) {
-      obj.librarySettings = message.librarySettings.map((e) => ClientLibrarySettings.toJSON(e));
+      obj.library_settings = message.librarySettings.map((e) => ClientLibrarySettings.toJSON(e));
     }
     if (message.protoReferenceDocumentationUri !== "") {
-      obj.protoReferenceDocumentationUri = message.protoReferenceDocumentationUri;
+      obj.proto_reference_documentation_uri = message.protoReferenceDocumentationUri;
     }
     if (message.restReferenceDocumentationUri !== "") {
-      obj.restReferenceDocumentationUri = message.restReferenceDocumentationUri;
+      obj.rest_reference_documentation_uri = message.restReferenceDocumentationUri;
     }
     return obj;
   },
@@ -701,9 +701,9 @@ export const Publishing: MessageFns<Publishing> = {
 export const JavaSettings: MessageFns<JavaSettings> = {
   fromJSON(object: any): JavaSettings {
     return {
-      libraryPackage: isSet(object.libraryPackage) ? globalThis.String(object.libraryPackage) : "",
-      serviceClassNames: isObject(object.serviceClassNames)
-        ? Object.entries(object.serviceClassNames).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+      libraryPackage: isSet(object.library_package) ? globalThis.String(object.library_package) : "",
+      serviceClassNames: isObject(object.service_class_names)
+        ? Object.entries(object.service_class_names).reduce<{ [key: string]: string }>((acc, [key, value]) => {
           acc[key] = String(value);
           return acc;
         }, {})
@@ -715,14 +715,14 @@ export const JavaSettings: MessageFns<JavaSettings> = {
   toJSON(message: JavaSettings): unknown {
     const obj: any = {};
     if (message.libraryPackage !== "") {
-      obj.libraryPackage = message.libraryPackage;
+      obj.library_package = message.libraryPackage;
     }
     if (message.serviceClassNames) {
       const entries = Object.entries(message.serviceClassNames);
       if (entries.length > 0) {
-        obj.serviceClassNames = {};
+        obj.service_class_names = {};
         entries.forEach(([k, v]) => {
-          obj.serviceClassNames[k] = v;
+          obj.service_class_names[k] = v;
         });
       }
     }
@@ -785,8 +785,8 @@ export const PythonSettings: MessageFns<PythonSettings> = {
   fromJSON(object: any): PythonSettings {
     return {
       common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined,
-      experimentalFeatures: isSet(object.experimentalFeatures)
-        ? PythonSettings_ExperimentalFeatures.fromJSON(object.experimentalFeatures)
+      experimentalFeatures: isSet(object.experimental_features)
+        ? PythonSettings_ExperimentalFeatures.fromJSON(object.experimental_features)
         : undefined,
     };
   },
@@ -797,7 +797,7 @@ export const PythonSettings: MessageFns<PythonSettings> = {
       obj.common = CommonLanguageSettings.toJSON(message.common);
     }
     if (message.experimentalFeatures !== undefined) {
-      obj.experimentalFeatures = PythonSettings_ExperimentalFeatures.toJSON(message.experimentalFeatures);
+      obj.experimental_features = PythonSettings_ExperimentalFeatures.toJSON(message.experimentalFeatures);
     }
     return obj;
   },
@@ -806,12 +806,14 @@ export const PythonSettings: MessageFns<PythonSettings> = {
 export const PythonSettings_ExperimentalFeatures: MessageFns<PythonSettings_ExperimentalFeatures> = {
   fromJSON(object: any): PythonSettings_ExperimentalFeatures {
     return {
-      restAsyncIoEnabled: isSet(object.restAsyncIoEnabled) ? globalThis.Boolean(object.restAsyncIoEnabled) : false,
-      protobufPythonicTypesEnabled: isSet(object.protobufPythonicTypesEnabled)
-        ? globalThis.Boolean(object.protobufPythonicTypesEnabled)
+      restAsyncIoEnabled: isSet(object.rest_async_io_enabled)
+        ? globalThis.Boolean(object.rest_async_io_enabled)
         : false,
-      unversionedPackageDisabled: isSet(object.unversionedPackageDisabled)
-        ? globalThis.Boolean(object.unversionedPackageDisabled)
+      protobufPythonicTypesEnabled: isSet(object.protobuf_pythonic_types_enabled)
+        ? globalThis.Boolean(object.protobuf_pythonic_types_enabled)
+        : false,
+      unversionedPackageDisabled: isSet(object.unversioned_package_disabled)
+        ? globalThis.Boolean(object.unversioned_package_disabled)
         : false,
     };
   },
@@ -819,13 +821,13 @@ export const PythonSettings_ExperimentalFeatures: MessageFns<PythonSettings_Expe
   toJSON(message: PythonSettings_ExperimentalFeatures): unknown {
     const obj: any = {};
     if (message.restAsyncIoEnabled !== false) {
-      obj.restAsyncIoEnabled = message.restAsyncIoEnabled;
+      obj.rest_async_io_enabled = message.restAsyncIoEnabled;
     }
     if (message.protobufPythonicTypesEnabled !== false) {
-      obj.protobufPythonicTypesEnabled = message.protobufPythonicTypesEnabled;
+      obj.protobuf_pythonic_types_enabled = message.protobufPythonicTypesEnabled;
     }
     if (message.unversionedPackageDisabled !== false) {
-      obj.unversionedPackageDisabled = message.unversionedPackageDisabled;
+      obj.unversioned_package_disabled = message.unversionedPackageDisabled;
     }
     return obj;
   },
@@ -849,26 +851,26 @@ export const DotnetSettings: MessageFns<DotnetSettings> = {
   fromJSON(object: any): DotnetSettings {
     return {
       common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined,
-      renamedServices: isObject(object.renamedServices)
-        ? Object.entries(object.renamedServices).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+      renamedServices: isObject(object.renamed_services)
+        ? Object.entries(object.renamed_services).reduce<{ [key: string]: string }>((acc, [key, value]) => {
           acc[key] = String(value);
           return acc;
         }, {})
         : {},
-      renamedResources: isObject(object.renamedResources)
-        ? Object.entries(object.renamedResources).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+      renamedResources: isObject(object.renamed_resources)
+        ? Object.entries(object.renamed_resources).reduce<{ [key: string]: string }>((acc, [key, value]) => {
           acc[key] = String(value);
           return acc;
         }, {})
         : {},
-      ignoredResources: globalThis.Array.isArray(object?.ignoredResources)
-        ? object.ignoredResources.map((e: any) => globalThis.String(e))
+      ignoredResources: globalThis.Array.isArray(object?.ignored_resources)
+        ? object.ignored_resources.map((e: any) => globalThis.String(e))
         : [],
-      forcedNamespaceAliases: globalThis.Array.isArray(object?.forcedNamespaceAliases)
-        ? object.forcedNamespaceAliases.map((e: any) => globalThis.String(e))
+      forcedNamespaceAliases: globalThis.Array.isArray(object?.forced_namespace_aliases)
+        ? object.forced_namespace_aliases.map((e: any) => globalThis.String(e))
         : [],
-      handwrittenSignatures: globalThis.Array.isArray(object?.handwrittenSignatures)
-        ? object.handwrittenSignatures.map((e: any) => globalThis.String(e))
+      handwrittenSignatures: globalThis.Array.isArray(object?.handwritten_signatures)
+        ? object.handwritten_signatures.map((e: any) => globalThis.String(e))
         : [],
     };
   },
@@ -881,29 +883,29 @@ export const DotnetSettings: MessageFns<DotnetSettings> = {
     if (message.renamedServices) {
       const entries = Object.entries(message.renamedServices);
       if (entries.length > 0) {
-        obj.renamedServices = {};
+        obj.renamed_services = {};
         entries.forEach(([k, v]) => {
-          obj.renamedServices[k] = v;
+          obj.renamed_services[k] = v;
         });
       }
     }
     if (message.renamedResources) {
       const entries = Object.entries(message.renamedResources);
       if (entries.length > 0) {
-        obj.renamedResources = {};
+        obj.renamed_resources = {};
         entries.forEach(([k, v]) => {
-          obj.renamedResources[k] = v;
+          obj.renamed_resources[k] = v;
         });
       }
     }
     if (message.ignoredResources?.length) {
-      obj.ignoredResources = message.ignoredResources;
+      obj.ignored_resources = message.ignoredResources;
     }
     if (message.forcedNamespaceAliases?.length) {
-      obj.forcedNamespaceAliases = message.forcedNamespaceAliases;
+      obj.forced_namespace_aliases = message.forcedNamespaceAliases;
     }
     if (message.handwrittenSignatures?.length) {
-      obj.handwrittenSignatures = message.handwrittenSignatures;
+      obj.handwritten_signatures = message.handwrittenSignatures;
     }
     return obj;
   },
@@ -967,8 +969,8 @@ export const GoSettings: MessageFns<GoSettings> = {
   fromJSON(object: any): GoSettings {
     return {
       common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined,
-      renamedServices: isObject(object.renamedServices)
-        ? Object.entries(object.renamedServices).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+      renamedServices: isObject(object.renamed_services)
+        ? Object.entries(object.renamed_services).reduce<{ [key: string]: string }>((acc, [key, value]) => {
           acc[key] = String(value);
           return acc;
         }, {})
@@ -984,9 +986,9 @@ export const GoSettings: MessageFns<GoSettings> = {
     if (message.renamedServices) {
       const entries = Object.entries(message.renamedServices);
       if (entries.length > 0) {
-        obj.renamedServices = {};
+        obj.renamed_services = {};
         entries.forEach(([k, v]) => {
-          obj.renamedServices[k] = v;
+          obj.renamed_services[k] = v;
         });
       }
     }
@@ -1018,9 +1020,9 @@ export const MethodSettings: MessageFns<MethodSettings> = {
   fromJSON(object: any): MethodSettings {
     return {
       selector: isSet(object.selector) ? globalThis.String(object.selector) : "",
-      longRunning: isSet(object.longRunning) ? MethodSettings_LongRunning.fromJSON(object.longRunning) : undefined,
-      autoPopulatedFields: globalThis.Array.isArray(object?.autoPopulatedFields)
-        ? object.autoPopulatedFields.map((e: any) => globalThis.String(e))
+      longRunning: isSet(object.long_running) ? MethodSettings_LongRunning.fromJSON(object.long_running) : undefined,
+      autoPopulatedFields: globalThis.Array.isArray(object?.auto_populated_fields)
+        ? object.auto_populated_fields.map((e: any) => globalThis.String(e))
         : [],
     };
   },
@@ -1031,10 +1033,10 @@ export const MethodSettings: MessageFns<MethodSettings> = {
       obj.selector = message.selector;
     }
     if (message.longRunning !== undefined) {
-      obj.longRunning = MethodSettings_LongRunning.toJSON(message.longRunning);
+      obj.long_running = MethodSettings_LongRunning.toJSON(message.longRunning);
     }
     if (message.autoPopulatedFields?.length) {
-      obj.autoPopulatedFields = message.autoPopulatedFields;
+      obj.auto_populated_fields = message.autoPopulatedFields;
     }
     return obj;
   },
@@ -1043,26 +1045,26 @@ export const MethodSettings: MessageFns<MethodSettings> = {
 export const MethodSettings_LongRunning: MessageFns<MethodSettings_LongRunning> = {
   fromJSON(object: any): MethodSettings_LongRunning {
     return {
-      initialPollDelay: isSet(object.initialPollDelay) ? Duration.fromJSON(object.initialPollDelay) : undefined,
-      pollDelayMultiplier: isSet(object.pollDelayMultiplier) ? globalThis.Number(object.pollDelayMultiplier) : 0,
-      maxPollDelay: isSet(object.maxPollDelay) ? Duration.fromJSON(object.maxPollDelay) : undefined,
-      totalPollTimeout: isSet(object.totalPollTimeout) ? Duration.fromJSON(object.totalPollTimeout) : undefined,
+      initialPollDelay: isSet(object.initial_poll_delay) ? Duration.fromJSON(object.initial_poll_delay) : undefined,
+      pollDelayMultiplier: isSet(object.poll_delay_multiplier) ? globalThis.Number(object.poll_delay_multiplier) : 0,
+      maxPollDelay: isSet(object.max_poll_delay) ? Duration.fromJSON(object.max_poll_delay) : undefined,
+      totalPollTimeout: isSet(object.total_poll_timeout) ? Duration.fromJSON(object.total_poll_timeout) : undefined,
     };
   },
 
   toJSON(message: MethodSettings_LongRunning): unknown {
     const obj: any = {};
     if (message.initialPollDelay !== undefined) {
-      obj.initialPollDelay = Duration.toJSON(message.initialPollDelay);
+      obj.initial_poll_delay = Duration.toJSON(message.initialPollDelay);
     }
     if (message.pollDelayMultiplier !== 0) {
-      obj.pollDelayMultiplier = message.pollDelayMultiplier;
+      obj.poll_delay_multiplier = message.pollDelayMultiplier;
     }
     if (message.maxPollDelay !== undefined) {
-      obj.maxPollDelay = Duration.toJSON(message.maxPollDelay);
+      obj.max_poll_delay = Duration.toJSON(message.maxPollDelay);
     }
     if (message.totalPollTimeout !== undefined) {
-      obj.totalPollTimeout = Duration.toJSON(message.totalPollTimeout);
+      obj.total_poll_timeout = Duration.toJSON(message.totalPollTimeout);
     }
     return obj;
   },
@@ -1074,8 +1076,8 @@ export const SelectiveGapicGeneration: MessageFns<SelectiveGapicGeneration> = {
       methods: globalThis.Array.isArray(object?.methods)
         ? object.methods.map((e: any) => globalThis.String(e))
         : [],
-      generateOmittedAsInternal: isSet(object.generateOmittedAsInternal)
-        ? globalThis.Boolean(object.generateOmittedAsInternal)
+      generateOmittedAsInternal: isSet(object.generate_omitted_as_internal)
+        ? globalThis.Boolean(object.generate_omitted_as_internal)
         : false,
     };
   },
@@ -1086,7 +1088,7 @@ export const SelectiveGapicGeneration: MessageFns<SelectiveGapicGeneration> = {
       obj.methods = message.methods;
     }
     if (message.generateOmittedAsInternal !== false) {
-      obj.generateOmittedAsInternal = message.generateOmittedAsInternal;
+      obj.generate_omitted_as_internal = message.generateOmittedAsInternal;
     }
     return obj;
   },
