@@ -219,6 +219,9 @@ export class ToProto {
   }
 
   static agentProvider(agentProvider: types.AgentProvider): AgentProvider {
+    if (!agentProvider) {
+      return undefined;
+    }
     return {
       url: agentProvider.url,
       organization: agentProvider.organization,

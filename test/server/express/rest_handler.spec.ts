@@ -6,6 +6,9 @@ import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message } from '../../../src/types.js';
 import { A2AError } from '../../../src/server/error.js';
+import { ToProto } from '../../../src/types/utils/to_proto.js';
+import { ListTaskPushNotificationConfigResponse, Message as ProtoMessage, SendMessageResponse, Task as TaskProto, TaskPushNotificationConfig } from '../../../src/types/a2a.js';
+import { FromProto } from '../../../src/types/utils/from_proto.js';
 
 /**
  * Test suite for restHandler - HTTP+JSON/REST transport implementation
@@ -106,13 +109,14 @@ describe('restHandler', () => {
 
   describe('POST /v1/message:send', () => {
     it('should accept camelCase message and return 201 with Task', async () => {
-      const message = testMessage;
+      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
 
-      assert.deepEqual(response.body.id, testTask.id);
-      assert.deepEqual(response.body.id, testTask.id);
+      const converted_result = FromProto.sendMessageResult(SendMessageResponse.fromJSON(response.body));
+      assert.deepEqual((converted_result as Task).id, testTask.id);
+      assert.deepEqual((converted_result as Task).id, testTask.id);
       // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
     });
@@ -128,7 +132,7 @@ describe('restHandler', () => {
 
   describe('POST /v1/message:stream', () => {
     it('should accept camelCase message and stream via SSE', async () => {
-      const message = testMessage;
+      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
       async function* mockStream() {
         yield testMessage;
         yield testTask;
@@ -347,8 +351,9 @@ describe('restHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs')
           .expect(200);
 
-        assert.isArray(response.body);
-        assert.lengthOf(response.body, configs.length);
+        const convertedResult = FromProto.listTaskPushNotificationConfig(ListTaskPushNotificationConfigResponse.fromJSON(response.body));
+        assert.isArray(convertedResult);
+        assert.lengthOf(convertedResult, configs.length);
       });
     });
 
@@ -361,7 +366,8 @@ describe('restHandler', () => {
           .expect(200);
 
         // REST API returns camelCase
-        assert.deepEqual(response.body.taskId, mockConfig.taskId);
+        const convertedResult = FromProto.taskPushNoticationConfig(TaskPushNotificationConfig.fromJSON(response.body));
+        assert.deepEqual(convertedResult.taskId, mockConfig.taskId);
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
             id: 'task-1',
@@ -441,7 +447,8 @@ describe('restHandler', () => {
     ])('should accept $name file parts', async ({ message }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      await request(app).post('/v1/message:send').send({ message }).expect(201);
+      const protoMessage = ProtoMessage.toJSON(ToProto.message(message as Message));
+      await request(app).post('/v1/message:send').send({ message: protoMessage }).expect(201);
     });
   });
 
@@ -460,7 +467,8 @@ describe('restHandler', () => {
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      await request(app).post('/v1/message:send').send(payload).expect(201);
+      const protoMessage = ProtoMessage.toJSON(ToProto.message(payload.message as Message));
+      await request(app).post('/v1/message:send').send({ message: protoMessage}).expect(201);
     });
   });
 
@@ -480,9 +488,10 @@ describe('restHandler', () => {
         new Error('Unexpected internal error')
       );
 
+      const messageProto = ProtoMessage.toJSON(ToProto.message(testMessage));
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ message: testMessage })
+        .send({ message: messageProto })
         .expect(500);
 
       assert.property(response.body, 'code');
