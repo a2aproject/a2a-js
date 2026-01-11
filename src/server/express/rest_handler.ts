@@ -357,7 +357,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const result = await restTransportHandler.getTask(
         req.params.taskId,
         context,
-        req.query.history_length
+        req.query.historyLength
       );
       sendResponse(res, HTTP_STATUS.OK, context, ProtoTask.toJSON(ToProto.task(result)));
     })

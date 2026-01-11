@@ -22,7 +22,12 @@ import {
   createMockProtoMessage,
   createMockProtoTask,
 } from '../util.js';
-import { AgentCard, TaskState } from '../../../src/types/a2a.js';
+import {
+  AgentCard,
+  ListTaskPushNotificationConfigResponse,
+  TaskPushNotificationConfig as TaskPushNotificationConfigProto,
+  TaskState,
+} from '../../../src/types/a2a.js';
 import { FromProto } from '../../../src/types/utils/from_proto.js';
 import { ToProto } from '../../../src/types/utils/to_proto.js';
 
@@ -211,7 +216,7 @@ describe('RestTransport', () => {
         signatures: [],
       };
 
-      mockFetch.mockResolvedValue(createRestResponse(mockCard));
+      mockFetch.mockResolvedValue(createRestResponse(AgentCard.toJSON(mockCard)));
 
       const result = await transport.getExtendedAgentCard();
 
@@ -240,7 +245,9 @@ describe('RestTransport', () => {
 
     describe('setTaskPushNotificationConfig', () => {
       it('should set push notification config successfully', async () => {
-        mockFetch.mockResolvedValue(createRestResponse(mockProtoConfig));
+        mockFetch.mockResolvedValue(
+          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
+        );
 
         const result = await transport.setTaskPushNotificationConfig(mockConfig);
 
@@ -265,7 +272,9 @@ describe('RestTransport', () => {
 
     describe('getTaskPushNotificationConfig', () => {
       it('should get push notification config successfully', async () => {
-        mockFetch.mockResolvedValue(createRestResponse(mockProtoConfig));
+        mockFetch.mockResolvedValue(
+          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
+        );
 
         const result = await transport.getTaskPushNotificationConfig({
           id: taskId,
@@ -304,7 +313,11 @@ describe('RestTransport', () => {
           },
         ];
         mockFetch.mockResolvedValue(
-          createRestResponse(ToProto.listTaskPushNotificationConfig(mockConfigs))
+          createRestResponse(
+            ListTaskPushNotificationConfigResponse.toJSON(
+              ToProto.listTaskPushNotificationConfig(mockConfigs)
+            )
+          )
         );
 
         const result = await transport.listTaskPushNotificationConfig({ id: taskId });
