@@ -224,8 +224,8 @@ export class RestTransport implements Transport {
     path: string,
     body: TRequest,
     options: RequestOptions | undefined,
-    toJson: ((request: TRequest) => unknown) | undefined,
-    fromJson: ((response: unknown) => TResponse) | undefined
+    toJson: a2a.MessageFns<TRequest>['toJSON'] | undefined,
+    fromJson: a2a.MessageFns<TResponse>['fromJSON'] | undefined
   ): Promise<TResponse> {
     const url = `${this.endpoint}${path}`;
     const requestInit: RequestInit = {
