@@ -83,10 +83,10 @@ export class RestTransport implements Transport {
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const protoResource = ToProto.taskPushNotificationConfig(params);
-    const requestBody = a2a.TaskPushNotificationConfig.toJSON(protoResource);
+    const protoParams = ToProto.taskPushNotificationConfig(params);
+    const requestBody = a2a.TaskPushNotificationConfig.toJSON(protoParams);
 
-    const response = await this._sendRequest<unknown>(
+    const response = await this._sendRequest<TaskPushNotificationConfig>(
       'POST',
       `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
       requestBody,
@@ -107,7 +107,7 @@ export class RestTransport implements Transport {
         'pushNotificationConfigId is required for getTaskPushNotificationConfig with REST transport.'
       );
     }
-    const response = await this._sendRequest<unknown>(
+    const response = await this._sendRequest<TaskPushNotificationConfig>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(pushNotificationConfigId)}`,
       undefined,
@@ -121,7 +121,7 @@ export class RestTransport implements Transport {
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    const response = await this._sendRequest<unknown>(
+    const response = await this._sendRequest<TaskPushNotificationConfig[]>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
       undefined,
@@ -150,13 +150,13 @@ export class RestTransport implements Transport {
     }
     const queryString = queryParams.toString();
     const path = `/v1/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`;
-    const response = await this._sendRequest<unknown>('GET', path, undefined, options);
+    const response = await this._sendRequest<Task>('GET', path, undefined, options);
     const protoResponse = a2a.Task.fromJSON(response);
     return FromProto.task(protoResponse);
   }
 
   async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
-    const response = await this._sendRequest<unknown>(
+    const response = await this._sendRequest<Task>(
       'POST',
       `/v1/tasks/${encodeURIComponent(params.id)}:cancel`,
       undefined,

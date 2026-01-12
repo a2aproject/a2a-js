@@ -321,7 +321,7 @@ export class FromProto {
 
   static security(security: Security): { [k: string]: string[] } {
     return Object.fromEntries(
-      Object.entries(security.schemes).map(([key, value]) => [key, value.list])
+      Object.entries(security.schemes)?.map(([key, value]) => [key, value.list])
     );
   }
 
