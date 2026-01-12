@@ -20,15 +20,7 @@ import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
 import { FromProto } from '../../types/utils/from_proto.js';
-import {
-  SendMessageRequest,
-  SendMessageResponse,
-  Task as ProtoTask,
-  AgentCard,
-  StreamResponse,
-  TaskPushNotificationConfig,
-  ListTaskPushNotificationConfigResponse,
-} from '../../types/a2a.js';
+import * as a2a from '../../types/a2a.js';
 import { ToProto } from '../../types/utils/to_proto.js';
 import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../types.js';
 
@@ -204,14 +196,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         const proto = ToProto.messageStreamResult(
           firstResult.value as Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
         );
-        const result = StreamResponse.toJSON(proto);
+        const result = a2a.StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
       for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
         const proto = ToProto.messageStreamResult(
           event as Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
         );
-        const result = StreamResponse.toJSON(proto);
+        const result = a2a.StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
     } catch (streamError: unknown) {
@@ -290,7 +282,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
       const protoResult = ToProto.agentCard(result);
-      sendResponse(res, HTTP_STATUS.OK, context, AgentCard.toJSON(protoResult));
+      sendResponse(res, HTTP_STATUS.OK, context, a2a.AgentCard.toJSON(protoResult));
     })
   );
 
@@ -309,11 +301,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const protoReq = SendMessageRequest.fromJSON(req.body);
+      const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
       const params = FromProto.messageSendParams(protoReq);
       const result = await restTransportHandler.sendMessage(params, context);
       const protoResult = ToProto.messageSendResult(result);
-      sendResponse(res, HTTP_STATUS.CREATED, context, SendMessageResponse.toJSON(protoResult));
+      sendResponse(res, HTTP_STATUS.CREATED, context, a2a.SendMessageResponse.toJSON(protoResult));
     })
   );
 
@@ -333,7 +325,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const protoReq = SendMessageRequest.fromJSON(req.body);
+      const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
       const params = FromProto.messageSendParams(protoReq);
       const stream = await restTransportHandler.sendMessageStream(params, context);
       await sendStreamResponse(res, stream, context);
@@ -362,7 +354,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       );
       //TODO: clarify for version 1.0.0 the shape of the historyLenght parameter, and if it should be added to the returned object
       const protoResult = ToProto.task(result);
-      sendResponse(res, HTTP_STATUS.OK, context, ProtoTask.toJSON(protoResult));
+      sendResponse(res, HTTP_STATUS.OK, context, a2a.Task.toJSON(protoResult));
     })
   );
 
@@ -383,7 +375,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
       const protoResult = ToProto.task(result);
-      sendResponse(res, HTTP_STATUS.ACCEPTED, context, ProtoTask.toJSON(protoResult));
+      sendResponse(res, HTTP_STATUS.ACCEPTED, context, a2a.Task.toJSON(protoResult));
     })
   );
 
@@ -433,7 +425,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         res,
         HTTP_STATUS.CREATED,
         context,
-        TaskPushNotificationConfig.toJSON(protoResult)
+        a2a.TaskPushNotificationConfig.toJSON(protoResult)
       );
     })
   );
@@ -460,7 +452,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         res,
         HTTP_STATUS.OK,
         context,
-        ListTaskPushNotificationConfigResponse.toJSON(protoResult)
+        a2a.ListTaskPushNotificationConfigResponse.toJSON(protoResult)
       );
     })
   );
@@ -485,7 +477,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context
       );
       const protoResult = ToProto.taskPushNotificationConfig(result);
-      sendResponse(res, HTTP_STATUS.OK, context, TaskPushNotificationConfig.toJSON(protoResult));
+      sendResponse(
+        res,
+        HTTP_STATUS.OK,
+        context,
+        a2a.TaskPushNotificationConfig.toJSON(protoResult)
+      );
     })
   );
 
