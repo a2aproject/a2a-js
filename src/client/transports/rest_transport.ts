@@ -49,7 +49,7 @@ export class RestTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const response = await this._sendRequest<unknown>('GET', '/v1/card', undefined, options);
+    const response = await this._sendRequest<AgentCard>('GET', '/v1/card', undefined, options);
     const protoResponse = a2a.AgentCard.fromJSON(response);
     return FromProto.agentCard(protoResponse);
   }
@@ -60,7 +60,7 @@ export class RestTransport implements Transport {
   ): Promise<SendMessageResult> {
     const protoParams = ToProto.messageSendParams(params);
     const requestBody = a2a.SendMessageRequest.toJSON(protoParams);
-    const response = await this._sendRequest<unknown>(
+    const response = await this._sendRequest<SendMessageResult>(
       'POST',
       '/v1/message:send',
       requestBody,
