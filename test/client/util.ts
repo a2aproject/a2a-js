@@ -4,7 +4,7 @@
 
 import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
-import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/a2a.js';
+import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/client/client.js';
 
 /**

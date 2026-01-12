@@ -24,9 +24,9 @@ import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
-import { ToProto } from '../../types/utils/to_proto.js';
-import { FromProto } from '../../types/utils/from_proto.js';
-import * as a2a from '../../types/a2a.js';
+import { ToProto } from '../../types/converters/to_proto.js';
+import { FromProto } from '../../types/converters/from_proto.js';
+import * as a2a from '../../types/pb/a2a.js';
 
 export interface RestTransportOptions {
   endpoint: string;

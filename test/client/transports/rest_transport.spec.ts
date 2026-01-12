@@ -27,9 +27,9 @@ import {
   ListTaskPushNotificationConfigResponse,
   TaskPushNotificationConfig as TaskPushNotificationConfigProto,
   TaskState,
-} from '../../../src/types/a2a.js';
-import { FromProto } from '../../../src/types/utils/from_proto.js';
-import { ToProto } from '../../../src/types/utils/to_proto.js';
+} from '../../../src/types/pb/a2a.js';
+import { FromProto } from '../../../src/types/converters/from_proto.js';
+import { ToProto } from '../../../src/types/converters/to_proto.js';
 
 describe('RestTransport', () => {
   let transport: RestTransport;

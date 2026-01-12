@@ -19,9 +19,9 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
-import { FromProto } from '../../types/utils/from_proto.js';
-import * as a2a from '../../types/a2a.js';
-import { ToProto } from '../../types/utils/to_proto.js';
+import { FromProto } from '../../types/converters/from_proto.js';
+import * as a2a from '../../types/pb/a2a.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../types.js';
 
 /**

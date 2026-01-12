@@ -29,7 +29,7 @@ import {
   TaskArtifactUpdateEvent,
   OAuthFlows,
   StreamResponse,
-} from '../a2a.js';
+} from '../pb/a2a.js';
 import * as types from '../../types.js';
 import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_decoding.js';
 

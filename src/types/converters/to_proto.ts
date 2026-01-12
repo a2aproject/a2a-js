@@ -36,7 +36,7 @@ import {
   CancelTaskRequest,
   TaskSubscriptionRequest,
   CreateTaskPushNotificationConfigRequest,
-} from '../a2a.js';
+} from '../pb/a2a.js';
 import { generatePushNotificationConfigName, generateTaskName } from './id_decoding.js';
 
 export class ToProto {

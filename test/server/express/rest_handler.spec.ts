@@ -6,14 +6,14 @@ import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message } from '../../../src/types.js';
 import { A2AError } from '../../../src/server/error.js';
-import { ToProto } from '../../../src/types/utils/to_proto.js';
+import { ToProto } from '../../../src/types/converters/to_proto.js';
 import {
   ListTaskPushNotificationConfigResponse,
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
-} from '../../../src/types/a2a.js';
-import { FromProto } from '../../../src/types/utils/from_proto.js';
+} from '../../../src/types/pb/a2a.js';
+import { FromProto } from '../../../src/types/converters/from_proto.js';
 
 /**
  * Test suite for restHandler - HTTP+JSON/REST transport implementation
