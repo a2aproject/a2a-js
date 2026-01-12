@@ -359,6 +359,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context,
         req.query.historyLength ?? req.query.history_length
       );
+      //TODO: clarify for version 1.0.0 the shape of the historyLenght parameter, and if it should be added to the returned object
       sendResponse(res, HTTP_STATUS.OK, context, ProtoTask.toJSON(ToProto.task(result)));
     })
   );
