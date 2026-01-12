@@ -352,7 +352,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context,
         req.query.historyLength ?? req.query.history_length
       );
-      //TODO: clarify for version 1.0.0 the shape of the historyLenght parameter, and if it should be added to the returned object
+      //TODO: clarify for version 1.0.0 the format of the historyLength query parameter, and if history should always be added to the returned object
       const protoResult = ToProto.task(result);
       sendResponse(res, HTTP_STATUS.OK, context, a2a.Task.toJSON(protoResult));
     })
