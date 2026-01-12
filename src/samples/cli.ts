@@ -2,6 +2,7 @@
 
 import readline from 'node:readline';
 import crypto from 'node:crypto';
+import { GoogleAuth } from 'google-auth-library';
 
 import {
   // Specific Params/Payload types used by the CLI
@@ -16,9 +17,18 @@ import {
   // Type for the agent card
   AgentCard,
   Part, // Added for explicit Part typing
+  AGENT_CARD_PATH,
 } from '../index.js';
 
-import { ClientFactory } from '../client/index.js';
+import {
+  AuthenticationHandler,
+  ClientFactory,
+  ClientFactoryOptions,
+  createAuthenticatingFetchWithRetry,
+  DefaultAgentCardResolver,
+  JsonRpcTransportFactory,
+  RestTransportFactory,
+} from '../client/index.js';
 
 // --- ANSI Colors ---
 const colors = {
@@ -44,12 +54,50 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
+// Application Default Credentials required for A2A agent running on Agent Engine.
+export class ADCHandler implements AuthenticationHandler {
+  private auth = new GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+
+  async headers(): Promise<Record<string, string>> {
+    const client = await this.auth.getClient();
+    const token = await client.getAccessToken();
+    if (token?.token) {
+      return { Authorization: `Bearer ${token.token}` };
+    }
+    throw new Error('Failed to retrieve ADC access token.');
+  }
+
+  async shouldRetryWithHeaders(
+    _req: RequestInit,
+    res: Response
+  ): Promise<Record<string, string> | undefined> {
+    if (res.status !== 401 && res.status !== 403) return undefined;
+    return this.headers();
+  }
+}
+
 // --- State ---
 let currentTaskId: string | undefined = undefined; // Initialize as undefined
 let currentContextId: string | undefined = undefined; // Initialize as undefined
 const serverUrl = process.argv[2] || 'http://localhost:41241'; // Agent's base URL
-const factory = new ClientFactory();
-const client = await factory.createFromUrl(serverUrl);
+let fetchImpl: typeof fetch = fetch;
+let agentCardPath = AGENT_CARD_PATH;
+if (process.argv.includes('--agent-engine')) {
+  fetchImpl = createAuthenticatingFetchWithRetry(fetch, new ADCHandler());
+  agentCardPath = 'a2a/v1/card'; // Agent Engine doesn't use well-known public agent card endpoint.
+}
+const factory = new ClientFactory(
+  ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+    cardResolver: new DefaultAgentCardResolver({ fetchImpl }),
+    transports: [
+      new JsonRpcTransportFactory({ fetchImpl }),
+      new RestTransportFactory({ fetchImpl }),
+    ],
+  })
+);
+const client = await factory.createFromUrl(serverUrl, agentCardPath);
 let agentName = 'Agent'; // Default, try to get from agent card later
 
 // --- Readline Setup ---
