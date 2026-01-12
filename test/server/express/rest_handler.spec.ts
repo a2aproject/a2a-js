@@ -322,7 +322,8 @@ describe('restHandler', () => {
           .send(payload)
           .expect(201);
 
-        assert.deepEqual(response.body.taskId, mockConfig.taskId);
+        const protoResponse = FromProto.taskPushNotificationConfig(TaskPushNotificationConfig.fromJSON(response.body));
+        assert.deepEqual(protoResponse.taskId, mockConfig.taskId);
       });
 
       it('should return 400 if push notifications not supported', async () => {
