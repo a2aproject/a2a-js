@@ -289,7 +289,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
-      sendResponse(res, HTTP_STATUS.OK, context, AgentCard.toJSON(ToProto.agentCard(result)));
+      const protoResult = ToProto.agentCard(result);
+      sendResponse(res, HTTP_STATUS.OK, context, AgentCard.toJSON(protoResult));
     })
   );
 
@@ -360,7 +361,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.query.historyLength ?? req.query.history_length
       );
       //TODO: clarify for version 1.0.0 the shape of the historyLenght parameter, and if it should be added to the returned object
-      sendResponse(res, HTTP_STATUS.OK, context, ProtoTask.toJSON(ToProto.task(result)));
+      const protoResult = ToProto.task(result);
+      sendResponse(res, HTTP_STATUS.OK, context, ProtoTask.toJSON(protoResult));
     })
   );
 
@@ -380,7 +382,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
-      sendResponse(res, HTTP_STATUS.ACCEPTED, context, ProtoTask.toJSON(ToProto.task(result)));
+      const protoResult = ToProto.task(result);
+      sendResponse(res, HTTP_STATUS.ACCEPTED, context, ProtoTask.toJSON(protoResult));
     })
   );
 
@@ -425,7 +428,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         task_id: req.params.taskId,
       };
       const result = await restTransportHandler.setTaskPushNotificationConfig(config, context);
-      sendResponse(res, HTTP_STATUS.CREATED, context, result);
+      const protoResult = ToProto.taskPushNotificationConfig(result);
+      sendResponse(res, HTTP_STATUS.CREATED, context, TaskPushNotificationConfig.toJSON(protoResult));
     })
   );
 
@@ -446,12 +450,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.params.taskId,
         context
       );
-      const protoResponse = ToProto.listTaskPushNotificationConfig(result);
+      const protoResult = ToProto.listTaskPushNotificationConfig(result);
       sendResponse(
         res,
         HTTP_STATUS.OK,
         context,
-        ListTaskPushNotificationConfigResponse.toJSON(protoResponse)
+        ListTaskPushNotificationConfigResponse.toJSON(protoResult)
       );
     })
   );

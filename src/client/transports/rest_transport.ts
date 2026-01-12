@@ -82,9 +82,11 @@ export class RestTransport implements Transport {
     params: MessageSendParams,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    const protoParams = ToProto.messageSendParams(params);
+    const requestBody = SendMessageRequest.toJSON(protoParams);
     yield* this._sendStreamingRequest(
       '/v1/message:stream',
-      SendMessageRequest.toJSON(ToProto.messageSendParams(params)),
+      requestBody,
       options
     );
   }
@@ -103,8 +105,8 @@ export class RestTransport implements Transport {
       options
     );
 
-    const resourceResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
-    return FromProto.taskPushNotificationConfig(resourceResponse);
+    const protoResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
+    return FromProto.taskPushNotificationConfig(protoResponse);
   }
 
   async getTaskPushNotificationConfig(
@@ -311,7 +313,9 @@ export class RestTransport implements Transport {
     }
 
     try {
-      return FromProto.messageStreamResult(StreamResponse.fromJSON(JSON.parse(jsonData)));
+      const response = JSON.parse(jsonData);
+      const protoResponse = StreamResponse.fromJSON(response);
+      return FromProto.messageStreamResult(protoResponse);
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
       throw new Error(
