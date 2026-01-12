@@ -55,7 +55,7 @@ export class RestTransport implements Transport {
       undefined,
       options,
       undefined,
-      a2a.AgentCard.fromJSON
+      a2a.AgentCard
     );
     return FromProto.agentCard(response);
   }
@@ -70,8 +70,8 @@ export class RestTransport implements Transport {
       '/v1/message:send',
       requestBody,
       options,
-      a2a.SendMessageRequest.toJSON,
-      a2a.SendMessageResponse.fromJSON
+      a2a.SendMessageRequest,
+      a2a.SendMessageResponse
     );
     return FromProto.sendMessageResult(response);
   }
@@ -98,8 +98,8 @@ export class RestTransport implements Transport {
       `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
       requestBody,
       options,
-      a2a.TaskPushNotificationConfig.toJSON,
-      a2a.TaskPushNotificationConfig.fromJSON
+      a2a.TaskPushNotificationConfig,
+      a2a.TaskPushNotificationConfig
     );
     return FromProto.taskPushNotificationConfig(response);
   }
@@ -120,7 +120,7 @@ export class RestTransport implements Transport {
       undefined,
       options,
       undefined,
-      a2a.TaskPushNotificationConfig.fromJSON
+      a2a.TaskPushNotificationConfig
     );
     return FromProto.taskPushNotificationConfig(response);
   }
@@ -135,7 +135,7 @@ export class RestTransport implements Transport {
       undefined,
       options,
       undefined,
-      a2a.ListTaskPushNotificationConfigResponse.fromJSON
+      a2a.ListTaskPushNotificationConfigResponse
     );
     return FromProto.listTaskPushNotificationConfig(response);
   }
@@ -167,7 +167,7 @@ export class RestTransport implements Transport {
       undefined,
       options,
       undefined,
-      a2a.Task.fromJSON
+      a2a.Task
     );
     return FromProto.task(response);
   }
@@ -179,7 +179,7 @@ export class RestTransport implements Transport {
       undefined,
       options,
       undefined,
-      a2a.Task.fromJSON
+      a2a.Task
     );
     return FromProto.task(response);
   }
@@ -224,8 +224,8 @@ export class RestTransport implements Transport {
     path: string,
     body: TRequest,
     options: RequestOptions | undefined,
-    toJson: a2a.MessageFns<TRequest>['toJSON'] | undefined,
-    fromJson: a2a.MessageFns<TResponse>['fromJSON'] | undefined
+    requestType: a2a.MessageFns<TRequest> | undefined,
+    responseType: a2a.MessageFns<TResponse> | undefined
   ): Promise<TResponse> {
     const url = `${this.endpoint}${path}`;
     const requestInit: RequestInit = {
@@ -235,12 +235,12 @@ export class RestTransport implements Transport {
     };
 
     if (body !== undefined && method !== 'GET') {
-      if (!toJson) {
+      if (!requestType) {
         throw new Error(
           `Request body provided for ${method} ${path} but no toJson serializer provided.`
         );
       }
-      requestInit.body = JSON.stringify(toJson(body));
+      requestInit.body = JSON.stringify(requestType.toJSON(body));
     }
 
     const response = await this._fetch(url, requestInit);
@@ -249,12 +249,12 @@ export class RestTransport implements Transport {
       await this._handleErrorResponse(response, path);
     }
 
-    if (response.status === 204 || !fromJson) {
+    if (response.status === 204 || !responseType) {
       return undefined as TResponse;
     }
 
     const result = await response.json();
-    return fromJson(result);
+    return responseType.fromJSON(result);
   }
 
   private async _handleErrorResponse(response: Response, path: string): Promise<never> {
