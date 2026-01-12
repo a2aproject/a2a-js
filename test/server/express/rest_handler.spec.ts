@@ -180,7 +180,6 @@ describe('restHandler', () => {
       const response = await request(app).get('/v1/tasks/task-1').expect(200);
 
       assert.deepEqual(response.body.id, testTask.id);
-      assert.deepEqual(response.body.id, testTask.id);
       // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
       // Status state is enum string
@@ -226,7 +225,6 @@ describe('restHandler', () => {
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
 
-      assert.deepEqual(response.body.id, cancelledTask.id);
       assert.deepEqual(response.body.id, cancelledTask.id);
       assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELLED');
       expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(

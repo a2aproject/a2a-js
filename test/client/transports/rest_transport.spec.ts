@@ -150,8 +150,9 @@ describe('RestTransport', () => {
       expect(result).to.deep.equal(createMockTask(taskId));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      const [url] = mockFetch.mock.calls[0];
+      const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}?historyLength=${historyLength}`);
+      expect(options?.method).to.equal('GET');
     });
 
     it('should throw TaskNotFoundError when task does not exist', async () => {
@@ -284,8 +285,9 @@ describe('RestTransport', () => {
         expect(result).to.deep.equal(mockConfig);
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
-        const [url] = mockFetch.mock.calls[0];
+        const [url, options] = mockFetch.mock.calls[0];
         expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
+        expect(options?.method).to.equal('GET');
       });
 
       it('should throw error when pushNotificationConfigId is missing', async () => {
