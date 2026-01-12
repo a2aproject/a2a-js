@@ -164,7 +164,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   const sendStreamResponse = async (
     res: Response,
-    stream: AsyncGenerator<Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>,
+    stream: AsyncGenerator<
+      Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
+      void,
+      undefined
+    >,
     context: ServerCallContext
   ): Promise<void> => {
     // Get first event before flushing headers to catch early errors
@@ -194,16 +198,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     try {
       // Write first event
       if (!firstResult.done) {
-        const proto = ToProto.messageStreamResult(
-          firstResult.value
-        );
+        const proto = ToProto.messageStreamResult(firstResult.value);
         const result = a2a.StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
       for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
-        const proto = ToProto.messageStreamResult(
-          event
-        );
+        const proto = ToProto.messageStreamResult(event);
         const result = a2a.StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
@@ -306,7 +306,13 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const params = FromProto.messageSendParams(protoReq);
       const result = await restTransportHandler.sendMessage(params, context);
       const protoResult = ToProto.messageSendResult(result);
-      sendResponse<a2a.SendMessageResponse>(res, HTTP_STATUS.CREATED, context, protoResult, a2a.SendMessageResponse.toJSON);
+      sendResponse<a2a.SendMessageResponse>(
+        res,
+        HTTP_STATUS.CREATED,
+        context,
+        protoResult,
+        a2a.SendMessageResponse.toJSON
+      );
     })
   );
 
