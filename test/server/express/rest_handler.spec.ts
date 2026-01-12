@@ -320,7 +320,9 @@ describe('restHandler', () => {
           .send(payload)
           .expect(201);
 
-        const protoResponse = FromProto.taskPushNotificationConfig(TaskPushNotificationConfig.fromJSON(response.body));
+        const protoResponse = FromProto.taskPushNotificationConfig(
+          TaskPushNotificationConfig.fromJSON(response.body)
+        );
         assert.deepEqual(protoResponse.taskId, mockConfig.taskId);
       });
 

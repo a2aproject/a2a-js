@@ -429,7 +429,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       };
       const result = await restTransportHandler.setTaskPushNotificationConfig(config, context);
       const protoResult = ToProto.taskPushNotificationConfig(result);
-      sendResponse(res, HTTP_STATUS.CREATED, context, TaskPushNotificationConfig.toJSON(protoResult));
+      sendResponse(
+        res,
+        HTTP_STATUS.CREATED,
+        context,
+        TaskPushNotificationConfig.toJSON(protoResult)
+      );
     })
   );
 

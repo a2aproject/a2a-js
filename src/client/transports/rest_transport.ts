@@ -26,15 +26,7 @@ import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
 import { ToProto } from '../../types/utils/to_proto.js';
 import { FromProto } from '../../types/utils/from_proto.js';
-import {
-  SendMessageRequest,
-  SendMessageResponse,
-  ListTaskPushNotificationConfigResponse,
-  TaskPushNotificationConfig as ProtoTaskPushNotificationConfig,
-  Task as ProtoTask,
-  AgentCard as ProtoAgentCard,
-  StreamResponse,
-} from '../../types/a2a.js';
+import * as a2a from '../../types/a2a.js';
 
 export interface RestTransportOptions {
   endpoint: string;
@@ -58,7 +50,7 @@ export class RestTransport implements Transport {
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const response = await this._sendRequest<unknown>('GET', '/v1/card', undefined, options);
-    const protoResponse = ProtoAgentCard.fromJSON(response);
+    const protoResponse = a2a.AgentCard.fromJSON(response);
     return FromProto.agentCard(protoResponse);
   }
 
@@ -67,14 +59,14 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): Promise<SendMessageResult> {
     const protoParams = ToProto.messageSendParams(params);
-    const requestBody = SendMessageRequest.toJSON(protoParams);
+    const requestBody = a2a.SendMessageRequest.toJSON(protoParams);
     const response = await this._sendRequest<unknown>(
       'POST',
       '/v1/message:send',
       requestBody,
       options
     );
-    const protoResponse = SendMessageResponse.fromJSON(response);
+    const protoResponse = a2a.SendMessageResponse.fromJSON(response);
     return FromProto.sendMessageResult(protoResponse);
   }
 
@@ -83,12 +75,8 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const protoParams = ToProto.messageSendParams(params);
-    const requestBody = SendMessageRequest.toJSON(protoParams);
-    yield* this._sendStreamingRequest(
-      '/v1/message:stream',
-      requestBody,
-      options
-    );
+    const requestBody = a2a.SendMessageRequest.toJSON(protoParams);
+    yield* this._sendStreamingRequest('/v1/message:stream', requestBody, options);
   }
 
   async setTaskPushNotificationConfig(
@@ -96,7 +84,7 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     const protoResource = ToProto.taskPushNotificationConfig(params);
-    const requestBody = ProtoTaskPushNotificationConfig.toJSON(protoResource);
+    const requestBody = a2a.TaskPushNotificationConfig.toJSON(protoResource);
 
     const response = await this._sendRequest<unknown>(
       'POST',
@@ -105,7 +93,7 @@ export class RestTransport implements Transport {
       options
     );
 
-    const protoResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
+    const protoResponse = a2a.TaskPushNotificationConfig.fromJSON(response);
     return FromProto.taskPushNotificationConfig(protoResponse);
   }
 
@@ -125,7 +113,7 @@ export class RestTransport implements Transport {
       undefined,
       options
     );
-    const protoResponse = ProtoTaskPushNotificationConfig.fromJSON(response);
+    const protoResponse = a2a.TaskPushNotificationConfig.fromJSON(response);
     return FromProto.taskPushNotificationConfig(protoResponse);
   }
 
@@ -139,7 +127,7 @@ export class RestTransport implements Transport {
       undefined,
       options
     );
-    const protoResponse = ListTaskPushNotificationConfigResponse.fromJSON(response);
+    const protoResponse = a2a.ListTaskPushNotificationConfigResponse.fromJSON(response);
     return FromProto.listTaskPushNotificationConfig(protoResponse);
   }
 
@@ -163,7 +151,7 @@ export class RestTransport implements Transport {
     const queryString = queryParams.toString();
     const path = `/v1/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`;
     const response = await this._sendRequest<unknown>('GET', path, undefined, options);
-    const protoResponse = ProtoTask.fromJSON(response);
+    const protoResponse = a2a.Task.fromJSON(response);
     return FromProto.task(protoResponse);
   }
 
@@ -174,7 +162,7 @@ export class RestTransport implements Transport {
       undefined,
       options
     );
-    const protoResponse = ProtoTask.fromJSON(response);
+    const protoResponse = a2a.Task.fromJSON(response);
     return FromProto.task(protoResponse);
   }
 
@@ -314,7 +302,7 @@ export class RestTransport implements Transport {
 
     try {
       const response = JSON.parse(jsonData);
-      const protoResponse = StreamResponse.fromJSON(response);
+      const protoResponse = a2a.StreamResponse.fromJSON(response);
       return FromProto.messageStreamResult(protoResponse);
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
