@@ -121,18 +121,7 @@ describe('Client E2E tests', () => {
           const actual = await client.sendMessage({
             message: createTestMessage('1', 'test'),
           });
-          const sanitize = (obj: any): any => {
-            if (Array.isArray(obj)) return obj.map(sanitize);
-            if (obj && typeof obj === 'object') {
-              return Object.fromEntries(
-                Object.entries(obj)
-                  .filter(([, v]) => v !== undefined)
-                  .map(([k, v]) => [k, sanitize(v)])
-              );
-            }
-            return obj;
-          };
-          expect(sanitize(actual)).to.deep.equal(expected);
+          expect(removeUndefinedFields(actual)).to.deep.equal(expected);
         });
       });
 
@@ -174,24 +163,14 @@ describe('Client E2E tests', () => {
             actual.push(message);
           }
 
-          const sanitize = (obj: any): any => {
-            if (Array.isArray(obj)) return obj.map(sanitize);
-            if (obj && typeof obj === 'object') {
-              return Object.fromEntries(
-                Object.entries(obj)
-                  .filter(([, v]) => v !== undefined)
-                  .map(([k, v]) => [k, sanitize(v)])
-              );
-            }
-            return obj;
-          };
-          expect(sanitize(actual)).to.deep.equal(expected);
+          expect(removeUndefinedFields(actual)).to.deep.equal(expected);
         });
       });
     });
   });
 });
 
+const removeUndefinedFields = (obj: any) => JSON.parse(JSON.stringify(obj));
 function createTestMessage(id: string, text: string): Message {
   return {
     messageId: id,
