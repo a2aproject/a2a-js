@@ -121,7 +121,17 @@ describe('Client E2E tests', () => {
           const actual = await client.sendMessage({
             message: createTestMessage('1', 'test'),
           });
-          const sanitize = (obj: any) => JSON.parse(JSON.stringify(obj));
+          const sanitize = (obj: any): any => {
+            if (Array.isArray(obj)) return obj.map(sanitize);
+            if (obj && typeof obj === 'object') {
+              return Object.fromEntries(
+                Object.entries(obj)
+                  .filter(([, v]) => v !== undefined)
+                  .map(([k, v]) => [k, sanitize(v)])
+              );
+            }
+            return obj;
+          };
           expect(sanitize(actual)).to.deep.equal(sanitize(expected));
         });
       });
@@ -136,23 +146,17 @@ describe('Client E2E tests', () => {
               contextId,
               status: {
                 state: 'submitted',
-                message: undefined,
-                timestamp: undefined,
               },
               kind: 'task',
               artifacts: [],
               history: [],
-              metadata: undefined,
             },
             {
               taskId,
               contextId,
               kind: 'status-update',
-              metadata: undefined,
               status: {
                 state: 'working',
-                message: undefined,
-                timestamp: undefined,
               },
               final: false,
             },
@@ -160,11 +164,8 @@ describe('Client E2E tests', () => {
               taskId,
               contextId,
               kind: 'status-update',
-              metadata: undefined,
               status: {
                 state: 'completed',
-                message: undefined,
-                timestamp: undefined,
               },
               final: true,
             },
@@ -179,8 +180,18 @@ describe('Client E2E tests', () => {
             actual.push(message);
           }
 
-          const sanitize = (obj: any) => JSON.parse(JSON.stringify(obj));
-          expect(sanitize(actual)).to.deep.equal(sanitize(expected));
+          const sanitize = (obj: any): any => {
+            if (Array.isArray(obj)) return obj.map(sanitize);
+            if (obj && typeof obj === 'object') {
+              return Object.fromEntries(
+                Object.entries(obj)
+                  .filter(([, v]) => v !== undefined)
+                  .map(([k, v]) => [k, sanitize(v)])
+              );
+            }
+            return obj;
+          };
+          expect(sanitize(actual)).to.deep.equal(expected);
         });
       });
     });
