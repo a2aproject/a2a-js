@@ -132,7 +132,7 @@ describe('Client E2E tests', () => {
             }
             return obj;
           };
-          expect(sanitize(actual)).to.deep.equal(sanitize(expected));
+          expect(sanitize(actual)).to.deep.equal(expected);
         });
       });
 
@@ -203,7 +203,6 @@ function createTestMessage(id: string, text: string): Message {
     messageId: id,
     contextId: '',
     extensions: [],
-    metadata: undefined,
     taskId: '',
     role: 'user',
     parts: [{ kind: 'text', text }],
