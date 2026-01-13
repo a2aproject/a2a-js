@@ -29,6 +29,10 @@ import {
   TaskArtifactUpdateEvent,
   OAuthFlows,
   StreamResponse,
+  AgentInterface,
+  AgentProvider,
+  AgentCapabilities,
+  AgentExtension,
 } from '../pb/a2a.js';
 import * as types from '../../types.js';
 import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_decoding.js';
@@ -292,15 +296,19 @@ export class FromProto {
 
   static agentCard(agentCard: AgentCard): types.AgentCard {
     return {
-      additionalInterfaces: agentCard.additionalInterfaces,
-      capabilities: agentCard.capabilities,
+      additionalInterfaces: agentCard.additionalInterfaces?.map((i) =>
+        FromProto.agentInterface(i)
+      ),
+      capabilities: agentCard.capabilities
+        ? FromProto.agentCapabilities(agentCard.capabilities)
+        : {},
       defaultInputModes: agentCard.defaultInputModes,
       defaultOutputModes: agentCard.defaultOutputModes,
       description: agentCard.description,
       documentationUrl: agentCard.documentationUrl,
       name: agentCard.name,
       preferredTransport: agentCard.preferredTransport,
-      provider: agentCard.provider,
+      provider: agentCard.provider ? FromProto.agentProvider(agentCard.provider) : undefined,
       protocolVersion: agentCard.protocolVersion,
       security: agentCard.security?.map((s) => FromProto.security(s)),
       securitySchemes: agentCard.securitySchemes
@@ -316,6 +324,37 @@ export class FromProto {
       supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard,
       url: agentCard.url,
       version: agentCard.version,
+    };
+  }
+
+  static agentCapabilities(capabilities: AgentCapabilities): types.AgentCapabilities1 {
+    return {
+      extensions: capabilities.extensions?.map((e) => FromProto.agentExtension(e)),
+      pushNotifications: capabilities.pushNotifications,
+      streaming: capabilities.streaming,
+    };
+  }
+
+  static agentExtension(extension: AgentExtension): types.AgentExtension {
+    return {
+      uri: extension.uri ?? '',
+      description: extension.description,
+      required: extension.required,
+      params: extension.params,
+    };
+  }
+
+  static agentInterface(intf: AgentInterface): types.AgentInterface {
+    return {
+      transport: intf.transport ?? '',
+      url: intf.url ?? '',
+    };
+  }
+
+  static agentProvider(provider: AgentProvider): types.AgentProvider {
+    return {
+      organization: provider.organization ?? '',
+      url: provider.url ?? '',
     };
   }
 

@@ -144,9 +144,7 @@ describe('Client E2E tests', () => {
             {
               id: taskId,
               contextId,
-              status: {
-                state: 'submitted',
-              },
+              status: { state: 'submitted' },
               kind: 'task',
               artifacts: [],
               history: [],
@@ -155,18 +153,14 @@ describe('Client E2E tests', () => {
               taskId,
               contextId,
               kind: 'status-update',
-              status: {
-                state: 'working',
-              },
+              status: { state: 'working' },
               final: false,
             },
             {
               taskId,
               contextId,
               kind: 'status-update',
-              status: {
-                state: 'completed',
-              },
+              status: { state: 'completed' },
               final: true,
             },
           ];
@@ -201,9 +195,7 @@ describe('Client E2E tests', () => {
 function createTestMessage(id: string, text: string): Message {
   return {
     messageId: id,
-    contextId: '',
     extensions: [],
-    taskId: '',
     role: 'user',
     parts: [{ kind: 'text', text }],
     kind: 'message',
