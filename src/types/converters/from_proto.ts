@@ -296,9 +296,7 @@ export class FromProto {
 
   static agentCard(agentCard: AgentCard): types.AgentCard {
     return {
-      additionalInterfaces: agentCard.additionalInterfaces?.map((i) =>
-        FromProto.agentInterface(i)
-      ),
+      additionalInterfaces: agentCard.additionalInterfaces?.map((i) => FromProto.agentInterface(i)),
       capabilities: agentCard.capabilities
         ? FromProto.agentCapabilities(agentCard.capabilities)
         : {},
