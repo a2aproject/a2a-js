@@ -19,9 +19,9 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
-import { FromProto } from '../../types/pb_converters/from_proto.js';
+import { FromProto } from '../../types/converters/from_proto.js';
 import * as a2a from '../../types/pb/a2a.js';
-import { ToProto } from '../../types/pb_converters/to_proto.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../types.js';
 
 /**
@@ -135,20 +135,24 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @param statusCode - HTTP status code
    * @param context - ServerCallContext for setting extension headers
    * @param body - Response body (omitted for 204 responses)
+   * @param responseType - Optional protobuf message type for serialization
    */
   const sendResponse = <T>(
     res: Response,
     statusCode: number,
     context: ServerCallContext,
     body?: T,
-    toJson?: a2a.MessageFns<T>['toJSON']
+    responseType?: a2a.MessageFns<T>
   ): void => {
     setExtensionsHeader(res, context);
     res.status(statusCode);
     if (statusCode === HTTP_STATUS.NO_CONTENT) {
       res.end();
     } else {
-      res.json(toJson ? toJson(body!) : body);
+      if (!responseType) {
+        throw new Error('Bug: toJson serializer must be provided for non-204 responses.');
+      }
+      res.json(responseType.toJSON(body));
     }
   };
 
@@ -283,7 +287,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
       const protoResult = ToProto.agentCard(result);
-      sendResponse<a2a.AgentCard>(res, HTTP_STATUS.OK, context, protoResult, a2a.AgentCard.toJSON);
+      sendResponse<a2a.AgentCard>(res, HTTP_STATUS.OK, context, protoResult, a2a.AgentCard);
     })
   );
 
@@ -311,7 +315,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         HTTP_STATUS.CREATED,
         context,
         protoResult,
-        a2a.SendMessageResponse.toJSON
+        a2a.SendMessageResponse
       );
     })
   );
@@ -361,7 +365,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.query.historyLength ?? req.query.history_length
       );
       const protoResult = ToProto.task(result);
-      sendResponse<a2a.Task>(res, HTTP_STATUS.OK, context, protoResult, a2a.Task.toJSON);
+      sendResponse<a2a.Task>(res, HTTP_STATUS.OK, context, protoResult, a2a.Task);
     })
   );
 
@@ -382,7 +386,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
       const protoResult = ToProto.task(result);
-      sendResponse<a2a.Task>(res, HTTP_STATUS.ACCEPTED, context, protoResult, a2a.Task.toJSON);
+      sendResponse<a2a.Task>(res, HTTP_STATUS.ACCEPTED, context, protoResult, a2a.Task);
     })
   );
 
@@ -433,7 +437,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         HTTP_STATUS.CREATED,
         context,
         protoResult,
-        a2a.TaskPushNotificationConfig.toJSON
+        a2a.TaskPushNotificationConfig
       );
     })
   );
@@ -461,7 +465,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         HTTP_STATUS.OK,
         context,
         protoResult,
-        a2a.ListTaskPushNotificationConfigResponse.toJSON
+        a2a.ListTaskPushNotificationConfigResponse
       );
     })
   );
@@ -491,7 +495,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         HTTP_STATUS.OK,
         context,
         protoResult,
-        a2a.TaskPushNotificationConfig.toJSON
+        a2a.TaskPushNotificationConfig
       );
     })
   );

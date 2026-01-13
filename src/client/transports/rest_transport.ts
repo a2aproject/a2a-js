@@ -24,8 +24,8 @@ import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
-import { ToProto } from '../../types/pb_converters/to_proto.js';
-import { FromProto } from '../../types/pb_converters/from_proto.js';
+import { ToProto } from '../../types/converters/to_proto.js';
+import { FromProto } from '../../types/converters/from_proto.js';
 import * as a2a from '../../types/pb/a2a.js';
 
 export interface RestTransportOptions {
@@ -237,7 +237,7 @@ export class RestTransport implements Transport {
     if (body !== undefined && method !== 'GET') {
       if (!requestType) {
         throw new Error(
-          `Request body provided for ${method} ${path} but no toJson serializer provided.`
+          `Bug: Request body provided for ${method} ${path} but no toJson serializer provided.`
         );
       }
       requestInit.body = JSON.stringify(requestType.toJSON(body));

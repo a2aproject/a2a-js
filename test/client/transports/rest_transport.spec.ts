@@ -28,8 +28,8 @@ import {
   TaskPushNotificationConfig as TaskPushNotificationConfigProto,
   TaskState,
 } from '../../../src/types/pb/a2a.js';
-import { FromProto } from '../../../src/types/pb_converters/from_proto.js';
-import { ToProto } from '../../../src/types/pb_converters/to_proto.js';
+import { FromProto } from '../../../src/types/converters/from_proto.js';
+import { ToProto } from '../../../src/types/converters/to_proto.js';
 
 describe('RestTransport', () => {
   let transport: RestTransport;
