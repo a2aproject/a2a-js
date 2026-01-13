@@ -62,7 +62,7 @@ The project is structured into modular entry points to allow tree-shaking and se
 The `src/samples` directory contains practical examples:
 
 *   **`agents/`**:
-    *   `movie-agent/`: A sample agent that likely queries movie data (TMDB).
+    *   `movie-agent/`: A sample agent that queries movie data from TMDB.
     *   `sample-agent/`: A basic reference agent implementation.
 *   **`authentication/`**: Examples of how to implement authentication middleware and user building.
 *   **`extensions/`**: Examples of using protocol extensions.
