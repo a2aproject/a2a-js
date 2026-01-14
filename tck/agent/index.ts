@@ -18,7 +18,7 @@ import {
   UserBuilder,
 } from '../../src/server/express/index.js';
 import { grpcHandler } from '../../src/server/grpc/grpc_handler.js';
-import { A2AServiceService } from '../../src/grpc/a2a.js';
+import { A2AServiceService } from '../../src/grpc/a2a_services.js';
 
 /**
  * SUTAgentExecutor implements the agent's core logic.

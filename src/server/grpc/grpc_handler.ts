@@ -16,7 +16,7 @@ import {
   Task,
   TaskPushNotificationConfig,
   TaskSubscriptionRequest,
-} from '../../grpc/a2a.js';
+} from '../../grpc/a2a_services.js';
 import { MessageSendParams, TaskIdParams } from '../../types.js';
 import { Empty } from '../../grpc/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
