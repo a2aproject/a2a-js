@@ -1,6 +1,12 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import { Task, TaskStatusUpdateEvent, Message } from '../../../index.js';
+import {
+  Task,
+  TaskStatusUpdateEvent,
+  Message,
+  TaskArtifactUpdateEvent,
+  Artifact,
+} from '../../../index.js';
 import { AgentExecutor, RequestContext, ExecutionEventBus } from '../../../server/index.js';
 
 /**
@@ -58,31 +64,39 @@ export class SampleAgentExecutor implements AgentExecutor {
     };
     eventBus.publish(workingStatusUpdate);
 
-    // 3. Publish final task status update
+    // 3. Publish artifact with the result
     const agentReplyText = this.parseInputMessage(userMessage);
     console.info(`[SampleAgentExecutor] Prompt response: ${agentReplyText}`);
 
-    const agentMessage: Message = {
-      kind: 'message',
-      role: 'agent',
-      messageId: uuidv4(),
+    const artifactId = uuidv4();
+    const resultArtifact: Artifact = {
+      artifactId: artifactId,
+      name: 'Result',
+      description: 'The final result from the agent.',
       parts: [{ kind: 'text', text: agentReplyText }],
-      taskId: taskId,
-      contextId: contextId,
     };
 
+    const artifactUpdate: TaskArtifactUpdateEvent = {
+      kind: 'artifact-update',
+      taskId: taskId,
+      contextId: contextId,
+      artifact: resultArtifact,
+      lastChunk: true,
+    };
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing delay
+    eventBus.publish(artifactUpdate);
+
+    // 4. Publish final task status update (completed, no message)
     const finalUpdate: TaskStatusUpdateEvent = {
       kind: 'status-update',
       taskId: taskId,
       contextId: contextId,
       status: {
         state: 'completed',
-        message: agentMessage,
         timestamp: new Date().toISOString(),
       },
       final: true,
     };
-    await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing delay
     eventBus.publish(finalUpdate);
 
     console.log(`[SampleAgentExecutor] Task ${taskId} finished with state: completed`);
