@@ -411,7 +411,7 @@ export class ToProto {
 
     return {
       messageId: message.messageId,
-      content: message.parts.map((p) => ToProto.parts(p)),
+      content: message.parts.map((p) => ToProto.part(p)),
       contextId: message.contextId,
       taskId: message.taskId,
       role: ToProto.role(message.role),
@@ -455,7 +455,7 @@ export class ToProto {
       artifactId: artifact.artifactId,
       name: artifact.name,
       description: artifact.description,
-      parts: artifact.parts.map((p) => ToProto.parts(p)),
+      parts: artifact.parts.map((p) => ToProto.part(p)),
       metadata: artifact.metadata,
       extensions: artifact.extensions ? artifact.extensions : [],
     };
@@ -486,7 +486,7 @@ export class ToProto {
     }
   }
 
-  static parts(part: types.Part): Part {
+  static part(part: types.Part): Part {
     if (part.kind === 'text') {
       return {
         part: { $case: 'text', value: part.text },

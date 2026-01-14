@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ToProto } from '../../../src/grpc/utils/to_proto.js';
+import { ToProto } from '../../../src/types/converters/to_proto.js';
 import * as types from '../../../src/types.js';
-import * as proto from '../../../src/grpc/a2a_services.js';
-import * as idDecoding from '../../../src/grpc/utils/id_decoding.js';
+import * as proto from '../../../src/types/pb/a2a.js';
+import * as idDecoding from '../../../src/types/converters/id_decoding.js';
 import { A2AError } from '../../../src/server/index.js';
 
-vi.mock('../../../src/grpc/utils/id_decoding.js', () => ({
+vi.mock('../../../src/types/converters/id_decoding.js', () => ({
   generatePushNotificationConfigName: vi.fn(),
 }));
 
@@ -322,7 +322,7 @@ describe('ToProto', () => {
       pushNotificationConfig: {
         id: 'pnc-456',
         url: 'https://example.com/notify',
-        token: '',
+        token: undefined,
         authentication: undefined,
       },
     });

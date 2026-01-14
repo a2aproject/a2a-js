@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { FromProto } from '../../../src/grpc/utils/from_proto.js';
-import * as proto from '../../../src/grpc/a2a_services.js';
-import * as idDecoding from '../../../src/grpc/utils/id_decoding.js';
+import { FromProto } from '../../../src/types/converters/from_proto.js';
+import * as proto from '../../../src/types/pb/a2a.js';
+import * as idDecoding from '../../../src/types/converters/id_decoding.js';
 import { A2AError } from '../../../src/server/index.js';
 
-vi.mock('../../../src/grpc/utils/id_decoding.js', () => ({
+vi.mock('../../../src/types/converters/id_decoding.js', () => ({
   extractTaskId: vi.fn(),
   extractTaskAndPushNotificationConfigId: vi.fn(),
 }));
@@ -68,21 +68,17 @@ describe('FromProto', () => {
   });
 
   it('should convert CreateTaskPushNotificationConfigRequest to params', () => {
-    const request: proto.CreateTaskPushNotificationConfigRequest = {
-      parent: 'tasks/task-123',
-      configId: 'pnc-456',
-      config: {
-        name: 'tasks/task-123/pushNotificationConfigs/pnc-456',
-        pushNotificationConfig: {
-          id: 'pnc-456',
-          url: 'http://example.com',
-          token: 'token-abc',
-          authentication: undefined,
-        },
+    const request: proto.TaskPushNotificationConfig = {
+      name: 'tasks/task-123/pushNotificationConfigs/pnc-456',
+      pushNotificationConfig: {
+        id: 'pnc-456',
+        url: 'http://example.com',
+        token: 'token-abc',
+        authentication: undefined,
       },
     };
     const result = FromProto.taskPushNotificationConfig(request);
-    expect(idDecoding.extractTaskId).toHaveBeenCalledWith(request.parent);
+    expect(idDecoding.extractTaskId).toHaveBeenCalledWith(request.name);
     expect(result).toEqual({
       taskId: 'task-123',
       pushNotificationConfig: {

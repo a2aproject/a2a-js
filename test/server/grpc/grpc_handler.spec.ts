@@ -4,12 +4,11 @@ import * as proto from '../../../src/grpc/a2a_services.js';
 import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
 import { grpcHandler } from '../../../src/server/grpc/grpc_handler.js';
 import { AgentCard, HTTP_EXTENSION_HEADER, MessageSendParams, Task } from '../../../src/index.js';
-import { ToProto } from '../../../src/grpc/utils/to_proto.js';
-import { FromProto } from '../../../src/grpc/utils/from_proto.js';
+import { ToProto } from '../../../src/types/converters/to_proto.js';
+import { FromProto } from '../../../src/types/converters/from_proto.js';
 
-vi.mock('../../../src/grpc/utils/from_proto.js');
-vi.mock('../../../src/grpc/utils/to_proto.js');
-
+vi.mock('../../../src/types/converters/from_proto.js');
+vi.mock('../../../src/types/converters/to_proto.js');
 describe('grpcHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let handler: ReturnType<typeof grpcHandler>;
