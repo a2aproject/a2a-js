@@ -112,7 +112,7 @@ jobs:
         id: run-tck-capabilities
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports jsonrpc,rest
         working-directory: tck/a2a-tck
       - name: Stop SUT
         if: always()
