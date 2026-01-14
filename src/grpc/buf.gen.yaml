@@ -6,5 +6,5 @@ inputs:
   - directory: .
 plugins:
   - remote: buf.build/community/stephenh-ts-proto:v2.6.1
-    opt: oneof=unions-value,importSuffix=.js,outputServices=grpc-js,env=node,esModuleInterop=true
+    opt: oneof=unions-value,importSuffix=.js,outputServices=grpc-js,env=node,esModuleInterop=true,outputJsonMethods=false,outputPartialMethods=false
     out: .

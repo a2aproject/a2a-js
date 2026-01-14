@@ -20,8 +20,8 @@ import {
 import { MessageSendParams, TaskIdParams } from '../../types.js';
 import { Empty } from '../../grpc/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-import { FromProto } from '../../grpc/utils/from_proto.js';
-import { ToProto } from '../../grpc/utils/to_proto.js';
+import { FromProto } from '../../types/converters/from_proto.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 import { GrpcTransportHandler } from '../transports/grpc/grpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
 import { Extensions } from '../../extensions.js';

@@ -7,7 +7,7 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import { Duration } from "../protobuf/duration.js";
-import { LaunchStage, launchStageFromJSON, launchStageToJSON } from "./launch_stage.js";
+import { LaunchStage } from "./launch_stage.js";
 
 export const protobufPackage = "google.api";
 
@@ -35,63 +35,6 @@ export enum ClientLibraryOrganization {
   UNRECOGNIZED = -1,
 }
 
-export function clientLibraryOrganizationFromJSON(object: any): ClientLibraryOrganization {
-  switch (object) {
-    case 0:
-    case "CLIENT_LIBRARY_ORGANIZATION_UNSPECIFIED":
-      return ClientLibraryOrganization.CLIENT_LIBRARY_ORGANIZATION_UNSPECIFIED;
-    case 1:
-    case "CLOUD":
-      return ClientLibraryOrganization.CLOUD;
-    case 2:
-    case "ADS":
-      return ClientLibraryOrganization.ADS;
-    case 3:
-    case "PHOTOS":
-      return ClientLibraryOrganization.PHOTOS;
-    case 4:
-    case "STREET_VIEW":
-      return ClientLibraryOrganization.STREET_VIEW;
-    case 5:
-    case "SHOPPING":
-      return ClientLibraryOrganization.SHOPPING;
-    case 6:
-    case "GEO":
-      return ClientLibraryOrganization.GEO;
-    case 7:
-    case "GENERATIVE_AI":
-      return ClientLibraryOrganization.GENERATIVE_AI;
-    case -1:
-    case "UNRECOGNIZED":
-    default:
-      return ClientLibraryOrganization.UNRECOGNIZED;
-  }
-}
-
-export function clientLibraryOrganizationToJSON(object: ClientLibraryOrganization): string {
-  switch (object) {
-    case ClientLibraryOrganization.CLIENT_LIBRARY_ORGANIZATION_UNSPECIFIED:
-      return "CLIENT_LIBRARY_ORGANIZATION_UNSPECIFIED";
-    case ClientLibraryOrganization.CLOUD:
-      return "CLOUD";
-    case ClientLibraryOrganization.ADS:
-      return "ADS";
-    case ClientLibraryOrganization.PHOTOS:
-      return "PHOTOS";
-    case ClientLibraryOrganization.STREET_VIEW:
-      return "STREET_VIEW";
-    case ClientLibraryOrganization.SHOPPING:
-      return "SHOPPING";
-    case ClientLibraryOrganization.GEO:
-      return "GEO";
-    case ClientLibraryOrganization.GENERATIVE_AI:
-      return "GENERATIVE_AI";
-    case ClientLibraryOrganization.UNRECOGNIZED:
-    default:
-      return "UNRECOGNIZED";
-  }
-}
-
 /** To where should client libraries be published? */
 export enum ClientLibraryDestination {
   /**
@@ -107,38 +50,6 @@ export enum ClientLibraryDestination {
   /** PACKAGE_MANAGER - Publish the library to package managers like nuget.org and npmjs.com. */
   PACKAGE_MANAGER = 20,
   UNRECOGNIZED = -1,
-}
-
-export function clientLibraryDestinationFromJSON(object: any): ClientLibraryDestination {
-  switch (object) {
-    case 0:
-    case "CLIENT_LIBRARY_DESTINATION_UNSPECIFIED":
-      return ClientLibraryDestination.CLIENT_LIBRARY_DESTINATION_UNSPECIFIED;
-    case 10:
-    case "GITHUB":
-      return ClientLibraryDestination.GITHUB;
-    case 20:
-    case "PACKAGE_MANAGER":
-      return ClientLibraryDestination.PACKAGE_MANAGER;
-    case -1:
-    case "UNRECOGNIZED":
-    default:
-      return ClientLibraryDestination.UNRECOGNIZED;
-  }
-}
-
-export function clientLibraryDestinationToJSON(object: ClientLibraryDestination): string {
-  switch (object) {
-    case ClientLibraryDestination.CLIENT_LIBRARY_DESTINATION_UNSPECIFIED:
-      return "CLIENT_LIBRARY_DESTINATION_UNSPECIFIED";
-    case ClientLibraryDestination.GITHUB:
-      return "GITHUB";
-    case ClientLibraryDestination.PACKAGE_MANAGER:
-      return "PACKAGE_MANAGER";
-    case ClientLibraryDestination.UNRECOGNIZED:
-    default:
-      return "UNRECOGNIZED";
-  }
 }
 
 /** Required information for every language. */
@@ -618,46 +529,6 @@ export const CommonLanguageSettings: MessageFns<CommonLanguageSettings> = {
     }
     return message;
   },
-
-  fromJSON(object: any): CommonLanguageSettings {
-    return {
-      referenceDocsUri: isSet(object.referenceDocsUri) ? globalThis.String(object.referenceDocsUri) : "",
-      destinations: globalThis.Array.isArray(object?.destinations)
-        ? object.destinations.map((e: any) => clientLibraryDestinationFromJSON(e))
-        : [],
-      selectiveGapicGeneration: isSet(object.selectiveGapicGeneration)
-        ? SelectiveGapicGeneration.fromJSON(object.selectiveGapicGeneration)
-        : undefined,
-    };
-  },
-
-  toJSON(message: CommonLanguageSettings): unknown {
-    const obj: any = {};
-    if (message.referenceDocsUri !== "") {
-      obj.referenceDocsUri = message.referenceDocsUri;
-    }
-    if (message.destinations?.length) {
-      obj.destinations = message.destinations.map((e) => clientLibraryDestinationToJSON(e));
-    }
-    if (message.selectiveGapicGeneration !== undefined) {
-      obj.selectiveGapicGeneration = SelectiveGapicGeneration.toJSON(message.selectiveGapicGeneration);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<CommonLanguageSettings>, I>>(base?: I): CommonLanguageSettings {
-    return CommonLanguageSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<CommonLanguageSettings>, I>>(object: I): CommonLanguageSettings {
-    const message = createBaseCommonLanguageSettings();
-    message.referenceDocsUri = object.referenceDocsUri ?? "";
-    message.destinations = object.destinations?.map((e) => e) || [];
-    message.selectiveGapicGeneration =
-      (object.selectiveGapicGeneration !== undefined && object.selectiveGapicGeneration !== null)
-        ? SelectiveGapicGeneration.fromPartial(object.selectiveGapicGeneration)
-        : undefined;
-    return message;
-  },
 };
 
 function createBaseClientLibrarySettings(): ClientLibrarySettings {
@@ -815,95 +686,6 @@ export const ClientLibrarySettings: MessageFns<ClientLibrarySettings> = {
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): ClientLibrarySettings {
-    return {
-      version: isSet(object.version) ? globalThis.String(object.version) : "",
-      launchStage: isSet(object.launchStage) ? launchStageFromJSON(object.launchStage) : 0,
-      restNumericEnums: isSet(object.restNumericEnums) ? globalThis.Boolean(object.restNumericEnums) : false,
-      javaSettings: isSet(object.javaSettings) ? JavaSettings.fromJSON(object.javaSettings) : undefined,
-      cppSettings: isSet(object.cppSettings) ? CppSettings.fromJSON(object.cppSettings) : undefined,
-      phpSettings: isSet(object.phpSettings) ? PhpSettings.fromJSON(object.phpSettings) : undefined,
-      pythonSettings: isSet(object.pythonSettings) ? PythonSettings.fromJSON(object.pythonSettings) : undefined,
-      nodeSettings: isSet(object.nodeSettings) ? NodeSettings.fromJSON(object.nodeSettings) : undefined,
-      dotnetSettings: isSet(object.dotnetSettings) ? DotnetSettings.fromJSON(object.dotnetSettings) : undefined,
-      rubySettings: isSet(object.rubySettings) ? RubySettings.fromJSON(object.rubySettings) : undefined,
-      goSettings: isSet(object.goSettings) ? GoSettings.fromJSON(object.goSettings) : undefined,
-    };
-  },
-
-  toJSON(message: ClientLibrarySettings): unknown {
-    const obj: any = {};
-    if (message.version !== "") {
-      obj.version = message.version;
-    }
-    if (message.launchStage !== 0) {
-      obj.launchStage = launchStageToJSON(message.launchStage);
-    }
-    if (message.restNumericEnums !== false) {
-      obj.restNumericEnums = message.restNumericEnums;
-    }
-    if (message.javaSettings !== undefined) {
-      obj.javaSettings = JavaSettings.toJSON(message.javaSettings);
-    }
-    if (message.cppSettings !== undefined) {
-      obj.cppSettings = CppSettings.toJSON(message.cppSettings);
-    }
-    if (message.phpSettings !== undefined) {
-      obj.phpSettings = PhpSettings.toJSON(message.phpSettings);
-    }
-    if (message.pythonSettings !== undefined) {
-      obj.pythonSettings = PythonSettings.toJSON(message.pythonSettings);
-    }
-    if (message.nodeSettings !== undefined) {
-      obj.nodeSettings = NodeSettings.toJSON(message.nodeSettings);
-    }
-    if (message.dotnetSettings !== undefined) {
-      obj.dotnetSettings = DotnetSettings.toJSON(message.dotnetSettings);
-    }
-    if (message.rubySettings !== undefined) {
-      obj.rubySettings = RubySettings.toJSON(message.rubySettings);
-    }
-    if (message.goSettings !== undefined) {
-      obj.goSettings = GoSettings.toJSON(message.goSettings);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<ClientLibrarySettings>, I>>(base?: I): ClientLibrarySettings {
-    return ClientLibrarySettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ClientLibrarySettings>, I>>(object: I): ClientLibrarySettings {
-    const message = createBaseClientLibrarySettings();
-    message.version = object.version ?? "";
-    message.launchStage = object.launchStage ?? 0;
-    message.restNumericEnums = object.restNumericEnums ?? false;
-    message.javaSettings = (object.javaSettings !== undefined && object.javaSettings !== null)
-      ? JavaSettings.fromPartial(object.javaSettings)
-      : undefined;
-    message.cppSettings = (object.cppSettings !== undefined && object.cppSettings !== null)
-      ? CppSettings.fromPartial(object.cppSettings)
-      : undefined;
-    message.phpSettings = (object.phpSettings !== undefined && object.phpSettings !== null)
-      ? PhpSettings.fromPartial(object.phpSettings)
-      : undefined;
-    message.pythonSettings = (object.pythonSettings !== undefined && object.pythonSettings !== null)
-      ? PythonSettings.fromPartial(object.pythonSettings)
-      : undefined;
-    message.nodeSettings = (object.nodeSettings !== undefined && object.nodeSettings !== null)
-      ? NodeSettings.fromPartial(object.nodeSettings)
-      : undefined;
-    message.dotnetSettings = (object.dotnetSettings !== undefined && object.dotnetSettings !== null)
-      ? DotnetSettings.fromPartial(object.dotnetSettings)
-      : undefined;
-    message.rubySettings = (object.rubySettings !== undefined && object.rubySettings !== null)
-      ? RubySettings.fromPartial(object.rubySettings)
-      : undefined;
-    message.goSettings = (object.goSettings !== undefined && object.goSettings !== null)
-      ? GoSettings.fromPartial(object.goSettings)
-      : undefined;
     return message;
   },
 };
@@ -1065,89 +847,6 @@ export const Publishing: MessageFns<Publishing> = {
     }
     return message;
   },
-
-  fromJSON(object: any): Publishing {
-    return {
-      methodSettings: globalThis.Array.isArray(object?.methodSettings)
-        ? object.methodSettings.map((e: any) => MethodSettings.fromJSON(e))
-        : [],
-      newIssueUri: isSet(object.newIssueUri) ? globalThis.String(object.newIssueUri) : "",
-      documentationUri: isSet(object.documentationUri) ? globalThis.String(object.documentationUri) : "",
-      apiShortName: isSet(object.apiShortName) ? globalThis.String(object.apiShortName) : "",
-      githubLabel: isSet(object.githubLabel) ? globalThis.String(object.githubLabel) : "",
-      codeownerGithubTeams: globalThis.Array.isArray(object?.codeownerGithubTeams)
-        ? object.codeownerGithubTeams.map((e: any) => globalThis.String(e))
-        : [],
-      docTagPrefix: isSet(object.docTagPrefix) ? globalThis.String(object.docTagPrefix) : "",
-      organization: isSet(object.organization) ? clientLibraryOrganizationFromJSON(object.organization) : 0,
-      librarySettings: globalThis.Array.isArray(object?.librarySettings)
-        ? object.librarySettings.map((e: any) => ClientLibrarySettings.fromJSON(e))
-        : [],
-      protoReferenceDocumentationUri: isSet(object.protoReferenceDocumentationUri)
-        ? globalThis.String(object.protoReferenceDocumentationUri)
-        : "",
-      restReferenceDocumentationUri: isSet(object.restReferenceDocumentationUri)
-        ? globalThis.String(object.restReferenceDocumentationUri)
-        : "",
-    };
-  },
-
-  toJSON(message: Publishing): unknown {
-    const obj: any = {};
-    if (message.methodSettings?.length) {
-      obj.methodSettings = message.methodSettings.map((e) => MethodSettings.toJSON(e));
-    }
-    if (message.newIssueUri !== "") {
-      obj.newIssueUri = message.newIssueUri;
-    }
-    if (message.documentationUri !== "") {
-      obj.documentationUri = message.documentationUri;
-    }
-    if (message.apiShortName !== "") {
-      obj.apiShortName = message.apiShortName;
-    }
-    if (message.githubLabel !== "") {
-      obj.githubLabel = message.githubLabel;
-    }
-    if (message.codeownerGithubTeams?.length) {
-      obj.codeownerGithubTeams = message.codeownerGithubTeams;
-    }
-    if (message.docTagPrefix !== "") {
-      obj.docTagPrefix = message.docTagPrefix;
-    }
-    if (message.organization !== 0) {
-      obj.organization = clientLibraryOrganizationToJSON(message.organization);
-    }
-    if (message.librarySettings?.length) {
-      obj.librarySettings = message.librarySettings.map((e) => ClientLibrarySettings.toJSON(e));
-    }
-    if (message.protoReferenceDocumentationUri !== "") {
-      obj.protoReferenceDocumentationUri = message.protoReferenceDocumentationUri;
-    }
-    if (message.restReferenceDocumentationUri !== "") {
-      obj.restReferenceDocumentationUri = message.restReferenceDocumentationUri;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<Publishing>, I>>(base?: I): Publishing {
-    return Publishing.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<Publishing>, I>>(object: I): Publishing {
-    const message = createBasePublishing();
-    message.methodSettings = object.methodSettings?.map((e) => MethodSettings.fromPartial(e)) || [];
-    message.newIssueUri = object.newIssueUri ?? "";
-    message.documentationUri = object.documentationUri ?? "";
-    message.apiShortName = object.apiShortName ?? "";
-    message.githubLabel = object.githubLabel ?? "";
-    message.codeownerGithubTeams = object.codeownerGithubTeams?.map((e) => e) || [];
-    message.docTagPrefix = object.docTagPrefix ?? "";
-    message.organization = object.organization ?? 0;
-    message.librarySettings = object.librarySettings?.map((e) => ClientLibrarySettings.fromPartial(e)) || [];
-    message.protoReferenceDocumentationUri = object.protoReferenceDocumentationUri ?? "";
-    message.restReferenceDocumentationUri = object.restReferenceDocumentationUri ?? "";
-    return message;
-  },
 };
 
 function createBaseJavaSettings(): JavaSettings {
@@ -1210,60 +909,6 @@ export const JavaSettings: MessageFns<JavaSettings> = {
     }
     return message;
   },
-
-  fromJSON(object: any): JavaSettings {
-    return {
-      libraryPackage: isSet(object.libraryPackage) ? globalThis.String(object.libraryPackage) : "",
-      serviceClassNames: isObject(object.serviceClassNames)
-        ? Object.entries(object.serviceClassNames).reduce<{ [key: string]: string }>((acc, [key, value]) => {
-          acc[key] = String(value);
-          return acc;
-        }, {})
-        : {},
-      common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined,
-    };
-  },
-
-  toJSON(message: JavaSettings): unknown {
-    const obj: any = {};
-    if (message.libraryPackage !== "") {
-      obj.libraryPackage = message.libraryPackage;
-    }
-    if (message.serviceClassNames) {
-      const entries = Object.entries(message.serviceClassNames);
-      if (entries.length > 0) {
-        obj.serviceClassNames = {};
-        entries.forEach(([k, v]) => {
-          obj.serviceClassNames[k] = v;
-        });
-      }
-    }
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<JavaSettings>, I>>(base?: I): JavaSettings {
-    return JavaSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<JavaSettings>, I>>(object: I): JavaSettings {
-    const message = createBaseJavaSettings();
-    message.libraryPackage = object.libraryPackage ?? "";
-    message.serviceClassNames = Object.entries(object.serviceClassNames ?? {}).reduce<{ [key: string]: string }>(
-      (acc, [key, value]) => {
-        if (value !== undefined) {
-          acc[key] = globalThis.String(value);
-        }
-        return acc;
-      },
-      {},
-    );
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
-    return message;
-  },
 };
 
 function createBaseJavaSettings_ServiceClassNamesEntry(): JavaSettings_ServiceClassNamesEntry {
@@ -1312,38 +957,6 @@ export const JavaSettings_ServiceClassNamesEntry: MessageFns<JavaSettings_Servic
     }
     return message;
   },
-
-  fromJSON(object: any): JavaSettings_ServiceClassNamesEntry {
-    return {
-      key: isSet(object.key) ? globalThis.String(object.key) : "",
-      value: isSet(object.value) ? globalThis.String(object.value) : "",
-    };
-  },
-
-  toJSON(message: JavaSettings_ServiceClassNamesEntry): unknown {
-    const obj: any = {};
-    if (message.key !== "") {
-      obj.key = message.key;
-    }
-    if (message.value !== "") {
-      obj.value = message.value;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<JavaSettings_ServiceClassNamesEntry>, I>>(
-    base?: I,
-  ): JavaSettings_ServiceClassNamesEntry {
-    return JavaSettings_ServiceClassNamesEntry.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<JavaSettings_ServiceClassNamesEntry>, I>>(
-    object: I,
-  ): JavaSettings_ServiceClassNamesEntry {
-    const message = createBaseJavaSettings_ServiceClassNamesEntry();
-    message.key = object.key ?? "";
-    message.value = object.value ?? "";
-    return message;
-  },
 };
 
 function createBaseCppSettings(): CppSettings {
@@ -1381,29 +994,6 @@ export const CppSettings: MessageFns<CppSettings> = {
     }
     return message;
   },
-
-  fromJSON(object: any): CppSettings {
-    return { common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined };
-  },
-
-  toJSON(message: CppSettings): unknown {
-    const obj: any = {};
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<CppSettings>, I>>(base?: I): CppSettings {
-    return CppSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<CppSettings>, I>>(object: I): CppSettings {
-    const message = createBaseCppSettings();
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
-    return message;
-  },
 };
 
 function createBasePhpSettings(): PhpSettings {
@@ -1439,29 +1029,6 @@ export const PhpSettings: MessageFns<PhpSettings> = {
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): PhpSettings {
-    return { common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined };
-  },
-
-  toJSON(message: PhpSettings): unknown {
-    const obj: any = {};
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<PhpSettings>, I>>(base?: I): PhpSettings {
-    return PhpSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<PhpSettings>, I>>(object: I): PhpSettings {
-    const message = createBasePhpSettings();
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
     return message;
   },
 };
@@ -1510,40 +1077,6 @@ export const PythonSettings: MessageFns<PythonSettings> = {
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): PythonSettings {
-    return {
-      common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined,
-      experimentalFeatures: isSet(object.experimentalFeatures)
-        ? PythonSettings_ExperimentalFeatures.fromJSON(object.experimentalFeatures)
-        : undefined,
-    };
-  },
-
-  toJSON(message: PythonSettings): unknown {
-    const obj: any = {};
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    if (message.experimentalFeatures !== undefined) {
-      obj.experimentalFeatures = PythonSettings_ExperimentalFeatures.toJSON(message.experimentalFeatures);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<PythonSettings>, I>>(base?: I): PythonSettings {
-    return PythonSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<PythonSettings>, I>>(object: I): PythonSettings {
-    const message = createBasePythonSettings();
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
-    message.experimentalFeatures = (object.experimentalFeatures !== undefined && object.experimentalFeatures !== null)
-      ? PythonSettings_ExperimentalFeatures.fromPartial(object.experimentalFeatures)
-      : undefined;
     return message;
   },
 };
@@ -1605,47 +1138,6 @@ export const PythonSettings_ExperimentalFeatures: MessageFns<PythonSettings_Expe
     }
     return message;
   },
-
-  fromJSON(object: any): PythonSettings_ExperimentalFeatures {
-    return {
-      restAsyncIoEnabled: isSet(object.restAsyncIoEnabled) ? globalThis.Boolean(object.restAsyncIoEnabled) : false,
-      protobufPythonicTypesEnabled: isSet(object.protobufPythonicTypesEnabled)
-        ? globalThis.Boolean(object.protobufPythonicTypesEnabled)
-        : false,
-      unversionedPackageDisabled: isSet(object.unversionedPackageDisabled)
-        ? globalThis.Boolean(object.unversionedPackageDisabled)
-        : false,
-    };
-  },
-
-  toJSON(message: PythonSettings_ExperimentalFeatures): unknown {
-    const obj: any = {};
-    if (message.restAsyncIoEnabled !== false) {
-      obj.restAsyncIoEnabled = message.restAsyncIoEnabled;
-    }
-    if (message.protobufPythonicTypesEnabled !== false) {
-      obj.protobufPythonicTypesEnabled = message.protobufPythonicTypesEnabled;
-    }
-    if (message.unversionedPackageDisabled !== false) {
-      obj.unversionedPackageDisabled = message.unversionedPackageDisabled;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<PythonSettings_ExperimentalFeatures>, I>>(
-    base?: I,
-  ): PythonSettings_ExperimentalFeatures {
-    return PythonSettings_ExperimentalFeatures.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<PythonSettings_ExperimentalFeatures>, I>>(
-    object: I,
-  ): PythonSettings_ExperimentalFeatures {
-    const message = createBasePythonSettings_ExperimentalFeatures();
-    message.restAsyncIoEnabled = object.restAsyncIoEnabled ?? false;
-    message.protobufPythonicTypesEnabled = object.protobufPythonicTypesEnabled ?? false;
-    message.unversionedPackageDisabled = object.unversionedPackageDisabled ?? false;
-    return message;
-  },
 };
 
 function createBaseNodeSettings(): NodeSettings {
@@ -1681,29 +1173,6 @@ export const NodeSettings: MessageFns<NodeSettings> = {
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): NodeSettings {
-    return { common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined };
-  },
-
-  toJSON(message: NodeSettings): unknown {
-    const obj: any = {};
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<NodeSettings>, I>>(base?: I): NodeSettings {
-    return NodeSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<NodeSettings>, I>>(object: I): NodeSettings {
-    const message = createBaseNodeSettings();
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
     return message;
   },
 };
@@ -1811,100 +1280,6 @@ export const DotnetSettings: MessageFns<DotnetSettings> = {
     }
     return message;
   },
-
-  fromJSON(object: any): DotnetSettings {
-    return {
-      common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined,
-      renamedServices: isObject(object.renamedServices)
-        ? Object.entries(object.renamedServices).reduce<{ [key: string]: string }>((acc, [key, value]) => {
-          acc[key] = String(value);
-          return acc;
-        }, {})
-        : {},
-      renamedResources: isObject(object.renamedResources)
-        ? Object.entries(object.renamedResources).reduce<{ [key: string]: string }>((acc, [key, value]) => {
-          acc[key] = String(value);
-          return acc;
-        }, {})
-        : {},
-      ignoredResources: globalThis.Array.isArray(object?.ignoredResources)
-        ? object.ignoredResources.map((e: any) => globalThis.String(e))
-        : [],
-      forcedNamespaceAliases: globalThis.Array.isArray(object?.forcedNamespaceAliases)
-        ? object.forcedNamespaceAliases.map((e: any) => globalThis.String(e))
-        : [],
-      handwrittenSignatures: globalThis.Array.isArray(object?.handwrittenSignatures)
-        ? object.handwrittenSignatures.map((e: any) => globalThis.String(e))
-        : [],
-    };
-  },
-
-  toJSON(message: DotnetSettings): unknown {
-    const obj: any = {};
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    if (message.renamedServices) {
-      const entries = Object.entries(message.renamedServices);
-      if (entries.length > 0) {
-        obj.renamedServices = {};
-        entries.forEach(([k, v]) => {
-          obj.renamedServices[k] = v;
-        });
-      }
-    }
-    if (message.renamedResources) {
-      const entries = Object.entries(message.renamedResources);
-      if (entries.length > 0) {
-        obj.renamedResources = {};
-        entries.forEach(([k, v]) => {
-          obj.renamedResources[k] = v;
-        });
-      }
-    }
-    if (message.ignoredResources?.length) {
-      obj.ignoredResources = message.ignoredResources;
-    }
-    if (message.forcedNamespaceAliases?.length) {
-      obj.forcedNamespaceAliases = message.forcedNamespaceAliases;
-    }
-    if (message.handwrittenSignatures?.length) {
-      obj.handwrittenSignatures = message.handwrittenSignatures;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<DotnetSettings>, I>>(base?: I): DotnetSettings {
-    return DotnetSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<DotnetSettings>, I>>(object: I): DotnetSettings {
-    const message = createBaseDotnetSettings();
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
-    message.renamedServices = Object.entries(object.renamedServices ?? {}).reduce<{ [key: string]: string }>(
-      (acc, [key, value]) => {
-        if (value !== undefined) {
-          acc[key] = globalThis.String(value);
-        }
-        return acc;
-      },
-      {},
-    );
-    message.renamedResources = Object.entries(object.renamedResources ?? {}).reduce<{ [key: string]: string }>(
-      (acc, [key, value]) => {
-        if (value !== undefined) {
-          acc[key] = globalThis.String(value);
-        }
-        return acc;
-      },
-      {},
-    );
-    message.ignoredResources = object.ignoredResources?.map((e) => e) || [];
-    message.forcedNamespaceAliases = object.forcedNamespaceAliases?.map((e) => e) || [];
-    message.handwrittenSignatures = object.handwrittenSignatures?.map((e) => e) || [];
-    return message;
-  },
 };
 
 function createBaseDotnetSettings_RenamedServicesEntry(): DotnetSettings_RenamedServicesEntry {
@@ -1951,38 +1326,6 @@ export const DotnetSettings_RenamedServicesEntry: MessageFns<DotnetSettings_Rena
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): DotnetSettings_RenamedServicesEntry {
-    return {
-      key: isSet(object.key) ? globalThis.String(object.key) : "",
-      value: isSet(object.value) ? globalThis.String(object.value) : "",
-    };
-  },
-
-  toJSON(message: DotnetSettings_RenamedServicesEntry): unknown {
-    const obj: any = {};
-    if (message.key !== "") {
-      obj.key = message.key;
-    }
-    if (message.value !== "") {
-      obj.value = message.value;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<DotnetSettings_RenamedServicesEntry>, I>>(
-    base?: I,
-  ): DotnetSettings_RenamedServicesEntry {
-    return DotnetSettings_RenamedServicesEntry.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<DotnetSettings_RenamedServicesEntry>, I>>(
-    object: I,
-  ): DotnetSettings_RenamedServicesEntry {
-    const message = createBaseDotnetSettings_RenamedServicesEntry();
-    message.key = object.key ?? "";
-    message.value = object.value ?? "";
     return message;
   },
 };
@@ -2033,38 +1376,6 @@ export const DotnetSettings_RenamedResourcesEntry: MessageFns<DotnetSettings_Ren
     }
     return message;
   },
-
-  fromJSON(object: any): DotnetSettings_RenamedResourcesEntry {
-    return {
-      key: isSet(object.key) ? globalThis.String(object.key) : "",
-      value: isSet(object.value) ? globalThis.String(object.value) : "",
-    };
-  },
-
-  toJSON(message: DotnetSettings_RenamedResourcesEntry): unknown {
-    const obj: any = {};
-    if (message.key !== "") {
-      obj.key = message.key;
-    }
-    if (message.value !== "") {
-      obj.value = message.value;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<DotnetSettings_RenamedResourcesEntry>, I>>(
-    base?: I,
-  ): DotnetSettings_RenamedResourcesEntry {
-    return DotnetSettings_RenamedResourcesEntry.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<DotnetSettings_RenamedResourcesEntry>, I>>(
-    object: I,
-  ): DotnetSettings_RenamedResourcesEntry {
-    const message = createBaseDotnetSettings_RenamedResourcesEntry();
-    message.key = object.key ?? "";
-    message.value = object.value ?? "";
-    return message;
-  },
 };
 
 function createBaseRubySettings(): RubySettings {
@@ -2100,29 +1411,6 @@ export const RubySettings: MessageFns<RubySettings> = {
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): RubySettings {
-    return { common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined };
-  },
-
-  toJSON(message: RubySettings): unknown {
-    const obj: any = {};
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<RubySettings>, I>>(base?: I): RubySettings {
-    return RubySettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<RubySettings>, I>>(object: I): RubySettings {
-    const message = createBaseRubySettings();
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
     return message;
   },
 };
@@ -2176,55 +1464,6 @@ export const GoSettings: MessageFns<GoSettings> = {
     }
     return message;
   },
-
-  fromJSON(object: any): GoSettings {
-    return {
-      common: isSet(object.common) ? CommonLanguageSettings.fromJSON(object.common) : undefined,
-      renamedServices: isObject(object.renamedServices)
-        ? Object.entries(object.renamedServices).reduce<{ [key: string]: string }>((acc, [key, value]) => {
-          acc[key] = String(value);
-          return acc;
-        }, {})
-        : {},
-    };
-  },
-
-  toJSON(message: GoSettings): unknown {
-    const obj: any = {};
-    if (message.common !== undefined) {
-      obj.common = CommonLanguageSettings.toJSON(message.common);
-    }
-    if (message.renamedServices) {
-      const entries = Object.entries(message.renamedServices);
-      if (entries.length > 0) {
-        obj.renamedServices = {};
-        entries.forEach(([k, v]) => {
-          obj.renamedServices[k] = v;
-        });
-      }
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<GoSettings>, I>>(base?: I): GoSettings {
-    return GoSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<GoSettings>, I>>(object: I): GoSettings {
-    const message = createBaseGoSettings();
-    message.common = (object.common !== undefined && object.common !== null)
-      ? CommonLanguageSettings.fromPartial(object.common)
-      : undefined;
-    message.renamedServices = Object.entries(object.renamedServices ?? {}).reduce<{ [key: string]: string }>(
-      (acc, [key, value]) => {
-        if (value !== undefined) {
-          acc[key] = globalThis.String(value);
-        }
-        return acc;
-      },
-      {},
-    );
-    return message;
-  },
 };
 
 function createBaseGoSettings_RenamedServicesEntry(): GoSettings_RenamedServicesEntry {
@@ -2271,36 +1510,6 @@ export const GoSettings_RenamedServicesEntry: MessageFns<GoSettings_RenamedServi
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): GoSettings_RenamedServicesEntry {
-    return {
-      key: isSet(object.key) ? globalThis.String(object.key) : "",
-      value: isSet(object.value) ? globalThis.String(object.value) : "",
-    };
-  },
-
-  toJSON(message: GoSettings_RenamedServicesEntry): unknown {
-    const obj: any = {};
-    if (message.key !== "") {
-      obj.key = message.key;
-    }
-    if (message.value !== "") {
-      obj.value = message.value;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<GoSettings_RenamedServicesEntry>, I>>(base?: I): GoSettings_RenamedServicesEntry {
-    return GoSettings_RenamedServicesEntry.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<GoSettings_RenamedServicesEntry>, I>>(
-    object: I,
-  ): GoSettings_RenamedServicesEntry {
-    const message = createBaseGoSettings_RenamedServicesEntry();
-    message.key = object.key ?? "";
-    message.value = object.value ?? "";
     return message;
   },
 };
@@ -2360,43 +1569,6 @@ export const MethodSettings: MessageFns<MethodSettings> = {
       }
       reader.skip(tag & 7);
     }
-    return message;
-  },
-
-  fromJSON(object: any): MethodSettings {
-    return {
-      selector: isSet(object.selector) ? globalThis.String(object.selector) : "",
-      longRunning: isSet(object.longRunning) ? MethodSettings_LongRunning.fromJSON(object.longRunning) : undefined,
-      autoPopulatedFields: globalThis.Array.isArray(object?.autoPopulatedFields)
-        ? object.autoPopulatedFields.map((e: any) => globalThis.String(e))
-        : [],
-    };
-  },
-
-  toJSON(message: MethodSettings): unknown {
-    const obj: any = {};
-    if (message.selector !== "") {
-      obj.selector = message.selector;
-    }
-    if (message.longRunning !== undefined) {
-      obj.longRunning = MethodSettings_LongRunning.toJSON(message.longRunning);
-    }
-    if (message.autoPopulatedFields?.length) {
-      obj.autoPopulatedFields = message.autoPopulatedFields;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<MethodSettings>, I>>(base?: I): MethodSettings {
-    return MethodSettings.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<MethodSettings>, I>>(object: I): MethodSettings {
-    const message = createBaseMethodSettings();
-    message.selector = object.selector ?? "";
-    message.longRunning = (object.longRunning !== undefined && object.longRunning !== null)
-      ? MethodSettings_LongRunning.fromPartial(object.longRunning)
-      : undefined;
-    message.autoPopulatedFields = object.autoPopulatedFields?.map((e) => e) || [];
     return message;
   },
 };
@@ -2469,50 +1641,6 @@ export const MethodSettings_LongRunning: MessageFns<MethodSettings_LongRunning> 
     }
     return message;
   },
-
-  fromJSON(object: any): MethodSettings_LongRunning {
-    return {
-      initialPollDelay: isSet(object.initialPollDelay) ? Duration.fromJSON(object.initialPollDelay) : undefined,
-      pollDelayMultiplier: isSet(object.pollDelayMultiplier) ? globalThis.Number(object.pollDelayMultiplier) : 0,
-      maxPollDelay: isSet(object.maxPollDelay) ? Duration.fromJSON(object.maxPollDelay) : undefined,
-      totalPollTimeout: isSet(object.totalPollTimeout) ? Duration.fromJSON(object.totalPollTimeout) : undefined,
-    };
-  },
-
-  toJSON(message: MethodSettings_LongRunning): unknown {
-    const obj: any = {};
-    if (message.initialPollDelay !== undefined) {
-      obj.initialPollDelay = Duration.toJSON(message.initialPollDelay);
-    }
-    if (message.pollDelayMultiplier !== 0) {
-      obj.pollDelayMultiplier = message.pollDelayMultiplier;
-    }
-    if (message.maxPollDelay !== undefined) {
-      obj.maxPollDelay = Duration.toJSON(message.maxPollDelay);
-    }
-    if (message.totalPollTimeout !== undefined) {
-      obj.totalPollTimeout = Duration.toJSON(message.totalPollTimeout);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<MethodSettings_LongRunning>, I>>(base?: I): MethodSettings_LongRunning {
-    return MethodSettings_LongRunning.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<MethodSettings_LongRunning>, I>>(object: I): MethodSettings_LongRunning {
-    const message = createBaseMethodSettings_LongRunning();
-    message.initialPollDelay = (object.initialPollDelay !== undefined && object.initialPollDelay !== null)
-      ? Duration.fromPartial(object.initialPollDelay)
-      : undefined;
-    message.pollDelayMultiplier = object.pollDelayMultiplier ?? 0;
-    message.maxPollDelay = (object.maxPollDelay !== undefined && object.maxPollDelay !== null)
-      ? Duration.fromPartial(object.maxPollDelay)
-      : undefined;
-    message.totalPollTimeout = (object.totalPollTimeout !== undefined && object.totalPollTimeout !== null)
-      ? Duration.fromPartial(object.totalPollTimeout)
-      : undefined;
-    return message;
-  },
 };
 
 function createBaseSelectiveGapicGeneration(): SelectiveGapicGeneration {
@@ -2561,64 +1689,9 @@ export const SelectiveGapicGeneration: MessageFns<SelectiveGapicGeneration> = {
     }
     return message;
   },
-
-  fromJSON(object: any): SelectiveGapicGeneration {
-    return {
-      methods: globalThis.Array.isArray(object?.methods) ? object.methods.map((e: any) => globalThis.String(e)) : [],
-      generateOmittedAsInternal: isSet(object.generateOmittedAsInternal)
-        ? globalThis.Boolean(object.generateOmittedAsInternal)
-        : false,
-    };
-  },
-
-  toJSON(message: SelectiveGapicGeneration): unknown {
-    const obj: any = {};
-    if (message.methods?.length) {
-      obj.methods = message.methods;
-    }
-    if (message.generateOmittedAsInternal !== false) {
-      obj.generateOmittedAsInternal = message.generateOmittedAsInternal;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<SelectiveGapicGeneration>, I>>(base?: I): SelectiveGapicGeneration {
-    return SelectiveGapicGeneration.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<SelectiveGapicGeneration>, I>>(object: I): SelectiveGapicGeneration {
-    const message = createBaseSelectiveGapicGeneration();
-    message.methods = object.methods?.map((e) => e) || [];
-    message.generateOmittedAsInternal = object.generateOmittedAsInternal ?? false;
-    return message;
-  },
 };
-
-type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
-
-export type DeepPartial<T> = T extends Builtin ? T
-  : T extends globalThis.Array<infer U> ? globalThis.Array<DeepPartial<U>>
-  : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
-  : T extends { $case: string; value: unknown } ? { $case: T["$case"]; value?: DeepPartial<T["value"]> }
-  : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
-  : Partial<T>;
-
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-export type Exact<P, I extends P> = P extends Builtin ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
-
-function isObject(value: any): boolean {
-  return typeof value === "object" && value !== null;
-}
-
-function isSet(value: any): boolean {
-  return value !== null && value !== undefined;
-}
 
 export interface MessageFns<T> {
   encode(message: T, writer?: BinaryWriter): BinaryWriter;
   decode(input: BinaryReader | Uint8Array, length?: number): T;
-  fromJSON(object: any): T;
-  toJSON(message: T): unknown;
-  create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
-  fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
 }

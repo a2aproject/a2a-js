@@ -418,36 +418,6 @@ export const Http: MessageFns<Http> = {
     }
     return message;
   },
-
-  fromJSON(object: any): Http {
-    return {
-      rules: globalThis.Array.isArray(object?.rules) ? object.rules.map((e: any) => HttpRule.fromJSON(e)) : [],
-      fullyDecodeReservedExpansion: isSet(object.fullyDecodeReservedExpansion)
-        ? globalThis.Boolean(object.fullyDecodeReservedExpansion)
-        : false,
-    };
-  },
-
-  toJSON(message: Http): unknown {
-    const obj: any = {};
-    if (message.rules?.length) {
-      obj.rules = message.rules.map((e) => HttpRule.toJSON(e));
-    }
-    if (message.fullyDecodeReservedExpansion !== false) {
-      obj.fullyDecodeReservedExpansion = message.fullyDecodeReservedExpansion;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<Http>, I>>(base?: I): Http {
-    return Http.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<Http>, I>>(object: I): Http {
-    const message = createBaseHttp();
-    message.rules = object.rules?.map((e) => HttpRule.fromPartial(e)) || [];
-    message.fullyDecodeReservedExpansion = object.fullyDecodeReservedExpansion ?? false;
-    return message;
-  },
 };
 
 function createBaseHttpRule(): HttpRule {
@@ -586,110 +556,6 @@ export const HttpRule: MessageFns<HttpRule> = {
     }
     return message;
   },
-
-  fromJSON(object: any): HttpRule {
-    return {
-      selector: isSet(object.selector) ? globalThis.String(object.selector) : "",
-      pattern: isSet(object.get)
-        ? { $case: "get", value: globalThis.String(object.get) }
-        : isSet(object.put)
-        ? { $case: "put", value: globalThis.String(object.put) }
-        : isSet(object.post)
-        ? { $case: "post", value: globalThis.String(object.post) }
-        : isSet(object.delete)
-        ? { $case: "delete", value: globalThis.String(object.delete) }
-        : isSet(object.patch)
-        ? { $case: "patch", value: globalThis.String(object.patch) }
-        : isSet(object.custom)
-        ? { $case: "custom", value: CustomHttpPattern.fromJSON(object.custom) }
-        : undefined,
-      body: isSet(object.body) ? globalThis.String(object.body) : "",
-      responseBody: isSet(object.responseBody) ? globalThis.String(object.responseBody) : "",
-      additionalBindings: globalThis.Array.isArray(object?.additionalBindings)
-        ? object.additionalBindings.map((e: any) => HttpRule.fromJSON(e))
-        : [],
-    };
-  },
-
-  toJSON(message: HttpRule): unknown {
-    const obj: any = {};
-    if (message.selector !== "") {
-      obj.selector = message.selector;
-    }
-    if (message.pattern?.$case === "get") {
-      obj.get = message.pattern.value;
-    } else if (message.pattern?.$case === "put") {
-      obj.put = message.pattern.value;
-    } else if (message.pattern?.$case === "post") {
-      obj.post = message.pattern.value;
-    } else if (message.pattern?.$case === "delete") {
-      obj.delete = message.pattern.value;
-    } else if (message.pattern?.$case === "patch") {
-      obj.patch = message.pattern.value;
-    } else if (message.pattern?.$case === "custom") {
-      obj.custom = CustomHttpPattern.toJSON(message.pattern.value);
-    }
-    if (message.body !== "") {
-      obj.body = message.body;
-    }
-    if (message.responseBody !== "") {
-      obj.responseBody = message.responseBody;
-    }
-    if (message.additionalBindings?.length) {
-      obj.additionalBindings = message.additionalBindings.map((e) => HttpRule.toJSON(e));
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<HttpRule>, I>>(base?: I): HttpRule {
-    return HttpRule.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<HttpRule>, I>>(object: I): HttpRule {
-    const message = createBaseHttpRule();
-    message.selector = object.selector ?? "";
-    switch (object.pattern?.$case) {
-      case "get": {
-        if (object.pattern?.value !== undefined && object.pattern?.value !== null) {
-          message.pattern = { $case: "get", value: object.pattern.value };
-        }
-        break;
-      }
-      case "put": {
-        if (object.pattern?.value !== undefined && object.pattern?.value !== null) {
-          message.pattern = { $case: "put", value: object.pattern.value };
-        }
-        break;
-      }
-      case "post": {
-        if (object.pattern?.value !== undefined && object.pattern?.value !== null) {
-          message.pattern = { $case: "post", value: object.pattern.value };
-        }
-        break;
-      }
-      case "delete": {
-        if (object.pattern?.value !== undefined && object.pattern?.value !== null) {
-          message.pattern = { $case: "delete", value: object.pattern.value };
-        }
-        break;
-      }
-      case "patch": {
-        if (object.pattern?.value !== undefined && object.pattern?.value !== null) {
-          message.pattern = { $case: "patch", value: object.pattern.value };
-        }
-        break;
-      }
-      case "custom": {
-        if (object.pattern?.value !== undefined && object.pattern?.value !== null) {
-          message.pattern = { $case: "custom", value: CustomHttpPattern.fromPartial(object.pattern.value) };
-        }
-        break;
-      }
-    }
-    message.body = object.body ?? "";
-    message.responseBody = object.responseBody ?? "";
-    message.additionalBindings = object.additionalBindings?.map((e) => HttpRule.fromPartial(e)) || [];
-    return message;
-  },
 };
 
 function createBaseCustomHttpPattern(): CustomHttpPattern {
@@ -738,58 +604,9 @@ export const CustomHttpPattern: MessageFns<CustomHttpPattern> = {
     }
     return message;
   },
-
-  fromJSON(object: any): CustomHttpPattern {
-    return {
-      kind: isSet(object.kind) ? globalThis.String(object.kind) : "",
-      path: isSet(object.path) ? globalThis.String(object.path) : "",
-    };
-  },
-
-  toJSON(message: CustomHttpPattern): unknown {
-    const obj: any = {};
-    if (message.kind !== "") {
-      obj.kind = message.kind;
-    }
-    if (message.path !== "") {
-      obj.path = message.path;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<CustomHttpPattern>, I>>(base?: I): CustomHttpPattern {
-    return CustomHttpPattern.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<CustomHttpPattern>, I>>(object: I): CustomHttpPattern {
-    const message = createBaseCustomHttpPattern();
-    message.kind = object.kind ?? "";
-    message.path = object.path ?? "";
-    return message;
-  },
 };
-
-type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
-
-export type DeepPartial<T> = T extends Builtin ? T
-  : T extends globalThis.Array<infer U> ? globalThis.Array<DeepPartial<U>>
-  : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
-  : T extends { $case: string; value: unknown } ? { $case: T["$case"]; value?: DeepPartial<T["value"]> }
-  : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
-  : Partial<T>;
-
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-export type Exact<P, I extends P> = P extends Builtin ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
-
-function isSet(value: any): boolean {
-  return value !== null && value !== undefined;
-}
 
 export interface MessageFns<T> {
   encode(message: T, writer?: BinaryWriter): BinaryWriter;
   decode(input: BinaryReader | Uint8Array, length?: number): T;
-  fromJSON(object: any): T;
-  toJSON(message: T): unknown;
-  create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
-  fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
 }
