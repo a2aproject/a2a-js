@@ -167,7 +167,7 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.taskPushNotificationConfig,
+        FromProto.createTaskPushNotificationConfig,
         grpcTransportHandler.setTaskPushNotificationConfig.bind(grpcTransportHandler),
         ToProto.taskPushNotificationConfig
       );
