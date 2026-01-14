@@ -13,10 +13,8 @@ on:
 
 
 env:
-  # TODO once we have the TCK for 0.4.0 we will need to look at the branch to decide which TCK version to run.
   # Tag of the TCK
-  # Temporary set to this commit sha because of this issue https://github.com/a2aproject/a2a-js/pull/142#issuecomment-3558892334 
-  TCK_VERSION: 601bf0d6f63baafb079c2ab23f53d73ce03e5461
+  TCK_VERSION: 0.3.0.beta3
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
   # Base URL for the SUT agent
@@ -107,12 +105,11 @@ jobs:
         run: |
           ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc,rest,grpc
         working-directory: tck/a2a-tck
-        # TODO: Add rest once the TCK supports REST, linked to https://github.com/a2aproject/a2a-tck/issues/99
       - name: Run TCK (capabilities)
         id: run-tck-capabilities
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports jsonrpc,grpc
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports jsonrpc,rest
         working-directory: tck/a2a-tck
       - name: Stop SUT
         if: always()

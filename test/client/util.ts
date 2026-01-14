@@ -4,6 +4,8 @@
 
 import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
+import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
+import { SendMessageResult } from '../../src/client/client.js';
 
 /**
  * Extracts the request ID from a RequestInit options object.
@@ -179,6 +181,42 @@ export function createMessageParams(
   };
 }
 
+export function createMockProtoMessage(
+  options: {
+    messageId?: string;
+    text?: string;
+    role?: Role.ROLE_USER | Role.ROLE_AGENT;
+  } = {}
+): any {
+  const messageId = options.messageId ?? 'msg-123';
+  const text = options.text ?? 'Hello, agent!';
+  const role = options.role ?? Role.ROLE_USER;
+
+  const obj: SendMessageResponse = {
+    payload: {
+      $case: 'msg',
+      value: {
+        messageId: messageId,
+        contextId: 'context-123',
+        taskId: 'task-123',
+        role: role,
+        content: [
+          {
+            part: {
+              $case: 'text',
+              value: text,
+            },
+          },
+        ],
+        metadata: {},
+        extensions: [],
+      },
+    },
+  };
+
+  return SendMessageResponse.toJSON(obj);
+}
+
 /**
  * Factory function to create common mock message objects for testing.
  * Creates a Message object with text content that can be used
@@ -194,9 +232,9 @@ export function createMockMessage(
   options: {
     messageId?: string;
     text?: string;
-    role?: 'user' | 'assistant';
+    role?: 'user' | 'agent';
   } = {}
-): any {
+): SendMessageResult {
   const messageId = options.messageId ?? 'msg-123';
   const text = options.text ?? 'Hello, agent!';
   const role = options.role ?? 'user';
@@ -204,6 +242,8 @@ export function createMockMessage(
   return {
     kind: 'message',
     messageId: messageId,
+    contextId: 'context-123',
+    taskId: 'task-123',
     role: role,
     parts: [
       {
@@ -211,6 +251,8 @@ export function createMockMessage(
         text: text,
       },
     ],
+    metadata: {},
+    extensions: [],
   };
 }
 
@@ -411,7 +453,41 @@ export function createMockTask(id: string = 'task-123', status: string = 'comple
   return {
     id,
     contextId: 'context-123',
-    status: { state: status },
+    status: {
+      state: status,
+      timestamp: new Date('2023-01-01T00:00:00.000Z').toISOString(),
+      message: undefined,
+    },
     kind: 'task',
+    artifacts: [],
+    history: [],
+    metadata: {},
   };
+}
+
+/**
+ * Creates a mock task response for testing.
+ *
+ * @param id - Task ID (defaults to 'task-123')
+ * @param status - Task status state (defaults to 'completed')
+ * @returns A mock Task object
+ */
+export function createMockProtoTask(
+  id: string = 'task-123',
+  status: TaskState = TaskState.TASK_STATE_COMPLETED
+): any {
+  const obj: Task = {
+    id: id,
+    contextId: 'context-123',
+    status: {
+      state: status,
+      timestamp: new Date('2023-01-01T00:00:00.000Z'),
+      update: undefined,
+    },
+    artifacts: [],
+    history: [],
+    metadata: {},
+  };
+
+  return Task.toJSON(obj);
 }

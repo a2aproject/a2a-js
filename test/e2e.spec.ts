@@ -121,8 +121,7 @@ describe('Client E2E tests', () => {
           const actual = await client.sendMessage({
             message: createTestMessage('1', 'test'),
           });
-
-          expect(actual).to.deep.equal(expected);
+          expect(removeUndefinedFields(actual)).to.deep.equal(expected);
         });
       });
 
@@ -136,6 +135,8 @@ describe('Client E2E tests', () => {
               contextId,
               status: { state: 'submitted' },
               kind: 'task',
+              artifacts: [],
+              history: [],
             },
             {
               taskId,
@@ -162,16 +163,18 @@ describe('Client E2E tests', () => {
             actual.push(message);
           }
 
-          expect(actual).to.deep.equal(expected);
+          expect(removeUndefinedFields(actual)).to.deep.equal(expected);
         });
       });
     });
   });
 });
 
+const removeUndefinedFields = (obj: any) => JSON.parse(JSON.stringify(obj));
 function createTestMessage(id: string, text: string): Message {
   return {
     messageId: id,
+    extensions: [],
     role: 'user',
     parts: [{ kind: 'text', text }],
     kind: 'message',
