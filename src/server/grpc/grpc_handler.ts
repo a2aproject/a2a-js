@@ -76,8 +76,34 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
     }
   };
 
+  /**
+   * Helper to wrap Streaming calls with common logic (context, metadata, error handling)
+   */
+  const wrapStreaming = async <TReq, TRes, TParams, TResult>(
+    call: grpc.ServerWritableStream<TReq, TRes>,
+    parser: (req: TReq) => TParams,
+    handler: (params: TParams, ctx: ServerCallContext) => AsyncGenerator<TResult>,
+    converter: (res: TResult) => TRes
+  ) => {
+    try {
+      const context = await buildContext(call, options.userBuilder);
+      const params = parser(call.request);
+      const stream = await handler(params, context);
+      const metadata = buildMetadata(context);
+      call.sendMetadata(metadata);
+      for await (const responsePart of stream) {
+        const response = converter(responsePart);
+        call.write(response);
+      }
+    } catch (error) {
+      call.emit('error', mapToError(error));
+    } finally {
+      call.end();
+    }
+  };
+
   return {
-    async sendMessage(
+    sendMessage(
       call: grpc.ServerUnaryCall<SendMessageRequest, SendMessageResponse>,
       callback: grpc.sendUnaryData<SendMessageResponse>
     ): Promise<void> {
@@ -90,47 +116,29 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
       );
     },
 
-    async sendStreamingMessage(
+    sendStreamingMessage(
       call: grpc.ServerWritableStream<SendMessageRequest, StreamResponse>
     ): Promise<void> {
-      try {
-        const context = await buildContext(call, options.userBuilder);
-        const params: MessageSendParams = FromProto.messageSendParams(call.request);
-        const stream = await grpcTransportHandler.sendMessageStream(params, context);
-        const metadata = buildMetadata(context);
-        call.sendMetadata(metadata);
-        for await (const responsePart of stream) {
-          const response = ToProto.messageStreamResult(responsePart);
-          call.write(response);
-        }
-      } catch (error) {
-        call.emit('error', mapToError(error));
-      } finally {
-        call.end();
-      }
+      return wrapStreaming(
+        call,
+        FromProto.messageSendParams,
+        grpcTransportHandler.sendMessageStream.bind(grpcTransportHandler),
+        ToProto.messageStreamResult
+      );
     },
 
-    async taskSubscription(
+    taskSubscription(
       call: grpc.ServerWritableStream<TaskSubscriptionRequest, StreamResponse>
     ): Promise<void> {
-      try {
-        const context = await buildContext(call, options.userBuilder);
-        const params: TaskIdParams = FromProto.taskIdParams(call.request);
-        const stream = await grpcTransportHandler.resubscribe(params, context);
-        const metadata = buildMetadata(context);
-        call.sendMetadata(metadata);
-        for await (const responsePart of stream) {
-          const response = ToProto.messageStreamResult(responsePart);
-          call.write(response);
-        }
-      } catch (error) {
-        call.emit('error', mapToError(error));
-      } finally {
-        call.end();
-      }
+      return wrapStreaming(
+        call,
+        FromProto.taskIdParams,
+        grpcTransportHandler.resubscribe.bind(grpcTransportHandler),
+        ToProto.messageStreamResult
+      );
     },
 
-    async deleteTaskPushNotificationConfig(
+    deleteTaskPushNotificationConfig(
       call: grpc.ServerUnaryCall<DeleteTaskPushNotificationConfigRequest, Empty>,
       callback: grpc.sendUnaryData<Empty>
     ): Promise<void> {
@@ -142,7 +150,8 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
         () => ({})
       );
     },
-    async listTaskPushNotificationConfig(
+
+    listTaskPushNotificationConfig(
       call: grpc.ServerUnaryCall<
         ListTaskPushNotificationConfigRequest,
         ListTaskPushNotificationConfigResponse
@@ -157,7 +166,8 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
         ToProto.listTaskPushNotificationConfig
       );
     },
-    async createTaskPushNotificationConfig(
+
+    createTaskPushNotificationConfig(
       call: grpc.ServerUnaryCall<
         CreateTaskPushNotificationConfigRequest,
         TaskPushNotificationConfig
@@ -172,7 +182,8 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
         ToProto.taskPushNotificationConfig
       );
     },
-    async getTaskPushNotificationConfig(
+
+    getTaskPushNotificationConfig(
       call: grpc.ServerUnaryCall<GetTaskPushNotificationConfigRequest, TaskPushNotificationConfig>,
       callback: grpc.sendUnaryData<TaskPushNotificationConfig>
     ): Promise<void> {
@@ -184,7 +195,8 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
         ToProto.taskPushNotificationConfig
       );
     },
-    async getTask(
+
+    getTask(
       call: grpc.ServerUnaryCall<GetTaskRequest, Task>,
       callback: grpc.sendUnaryData<Task>
     ): Promise<void> {
@@ -196,7 +208,8 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
         ToProto.task
       );
     },
-    async cancelTask(
+
+    cancelTask(
       call: grpc.ServerUnaryCall<CancelTaskRequest, Task>,
       callback: grpc.sendUnaryData<Task>
     ): Promise<void> {
@@ -208,11 +221,12 @@ export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
         ToProto.task
       );
     },
-    async getAgentCard(
+
+    getAgentCard(
       call: grpc.ServerUnaryCall<GetAgentCardRequest, AgentCard>,
       callback: grpc.sendUnaryData<AgentCard>
     ): Promise<void> {
-      return await wrapUnary(
+      return wrapUnary(
         call,
         callback,
         () => ({}),

@@ -9,7 +9,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'json-summary'],
       include: ['src/**/*'],
-      exclude: ['src/samples/**/*', 'src/types/pb/**/*'],
+      exclude: ['src/samples/**/*', 'src/types/pb/**/*', 'src/grpc/**/*'],
     },
   },
 });

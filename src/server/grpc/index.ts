@@ -5,3 +5,5 @@
 
 export { grpcHandler } from './grpc_handler.js';
 export type { GrpcHandlerOptions as grpcHandlerOptions } from './grpc_handler.js';
+export { A2AServiceService as A2AService } from '../../grpc/a2a_services.js';
+export { UserBuilder } from './common.js';
