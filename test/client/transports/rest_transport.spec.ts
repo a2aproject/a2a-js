@@ -27,7 +27,7 @@ import {
   ListTaskPushNotificationConfigResponse,
   TaskPushNotificationConfig as TaskPushNotificationConfigProto,
   TaskState,
-} from '../../../src/types/pb/a2a.js';
+} from '../../../src/types/pb/a2a_types.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 

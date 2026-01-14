@@ -26,7 +26,7 @@ import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { FromProto } from '../../types/converters/from_proto.js';
-import * as a2a from '../../types/pb/a2a.js';
+import * as a2a from '../../types/pb/a2a_types.js';
 
 export interface RestTransportOptions {
   endpoint: string;

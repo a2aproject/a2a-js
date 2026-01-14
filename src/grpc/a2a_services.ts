@@ -26,7 +26,7 @@ import { Timestamp } from "./google/protobuf/timestamp.js";
 
 export const protobufPackage = "a2a.v1";
 
-import * as pb from "../types/pb/a2a.js";
+import * as pb from "../types/pb/a2a_types.js";
 
 export type SendMessageConfiguration = pb.SendMessageConfiguration;
 export type Task = pb.Task;

@@ -20,7 +20,7 @@ import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
 import { FromProto } from '../../types/converters/from_proto.js';
-import * as a2a from '../../types/pb/a2a.js';
+import * as a2a from '../../types/pb/a2a_types.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../types.js';
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
-import * as proto from '../../../src/types/pb/a2a.js';
+import * as proto from '../../../src/types/pb/a2a_types.js';
 import * as idDecoding from '../../../src/types/converters/id_decoding.js';
 import { A2AError } from '../../../src/server/index.js';
 

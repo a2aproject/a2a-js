@@ -12,7 +12,7 @@ import {
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
-} from '../../../src/types/pb/a2a.js';
+} from '../../../src/types/pb/a2a_types.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
 /**

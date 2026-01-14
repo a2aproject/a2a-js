@@ -33,7 +33,7 @@ import {
   AgentProvider,
   AgentCapabilities,
   AgentExtension,
-} from '../pb/a2a.js';
+} from '../pb/a2a_types.js';
 import * as types from '../../types.js';
 import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_decoding.js';
 
