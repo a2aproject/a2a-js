@@ -249,10 +249,9 @@ const mapping: Record<number, grpc.status> = {
   [-32006]: grpc.status.INTERNAL,
   [-32007]: grpc.status.FAILED_PRECONDITION,
   [-32600]: grpc.status.INVALID_ARGUMENT,
-  [-32601]: grpc.status.UNIMPLEMENTED,
+  [-32601]: grpc.status.NOT_FOUND,
   [-32602]: grpc.status.INVALID_ARGUMENT,
   [-32603]: grpc.status.INTERNAL,
-  [-32700]: grpc.status.INTERNAL,
 };
 
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
