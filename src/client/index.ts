@@ -23,6 +23,11 @@ export {
   RestTransportFactory,
   type RestTransportOptions,
 } from './transports/rest_transport.js';
+export {
+  GrpcTransport,
+  GrpcTransportFactory,
+  type GrpcTransportOptions,
+} from './transports/grpc_transport.js';
 export type {
   CallInterceptor,
   BeforeArgs,
