@@ -21,7 +21,6 @@ import { Empty } from '../../grpc/pb/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { GrpcTransportHandler } from '../transports/grpc/grpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
 import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
@@ -52,7 +51,7 @@ export interface GrpcServiceOptions {
  * ```
  */
 export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
-  const grpcTransportHandler = new GrpcTransportHandler(options.requestHandler);
+  const requestHandler = options.requestHandler;
 
   /**
    * Helper to wrap Unary calls with common logic (context, metadata, error handling)
@@ -110,7 +109,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         FromProto.messageSendParams,
-        grpcTransportHandler.sendMessage.bind(grpcTransportHandler),
+        requestHandler.sendMessage.bind(requestHandler),
         ToProto.messageSendResult
       );
     },
@@ -121,7 +120,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapStreaming(
         call,
         FromProto.messageSendParams,
-        grpcTransportHandler.sendMessageStream.bind(grpcTransportHandler),
+        requestHandler.sendMessageStream.bind(requestHandler),
         ToProto.messageStreamResult
       );
     },
@@ -132,7 +131,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapStreaming(
         call,
         FromProto.taskIdParams,
-        grpcTransportHandler.resubscribe.bind(grpcTransportHandler),
+        requestHandler.resubscribe.bind(requestHandler),
         ToProto.messageStreamResult
       );
     },
@@ -145,7 +144,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         FromProto.deleteTaskPushNotificationConfigParams,
-        grpcTransportHandler.deleteTaskPushNotificationConfig.bind(grpcTransportHandler),
+        requestHandler.deleteTaskPushNotificationConfig.bind(requestHandler),
         () => ({})
       );
     },
@@ -161,7 +160,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         FromProto.listTaskPushNotificationConfigParams,
-        grpcTransportHandler.listTaskPushNotificationConfigs.bind(grpcTransportHandler),
+        requestHandler.listTaskPushNotificationConfigs.bind(requestHandler),
         ToProto.listTaskPushNotificationConfig
       );
     },
@@ -177,7 +176,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         FromProto.createTaskPushNotificationConfig,
-        grpcTransportHandler.setTaskPushNotificationConfig.bind(grpcTransportHandler),
+        requestHandler.setTaskPushNotificationConfig.bind(requestHandler),
         ToProto.taskPushNotificationConfig
       );
     },
@@ -190,7 +189,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         FromProto.getTaskPushNotificationConfigParams,
-        grpcTransportHandler.getTaskPushNotificationConfig.bind(grpcTransportHandler),
+        requestHandler.getTaskPushNotificationConfig.bind(requestHandler),
         ToProto.taskPushNotificationConfig
       );
     },
@@ -203,7 +202,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         FromProto.taskQueryParams,
-        grpcTransportHandler.getTask.bind(grpcTransportHandler),
+        requestHandler.getTask.bind(requestHandler),
         ToProto.task
       );
     },
@@ -216,7 +215,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         FromProto.taskIdParams,
-        grpcTransportHandler.cancelTask.bind(grpcTransportHandler),
+        requestHandler.cancelTask.bind(requestHandler),
         ToProto.task
       );
     },
@@ -229,7 +228,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         () => ({}),
-        (_params, _context) => grpcTransportHandler.getAgentCard(),
+        (_params, context) => requestHandler.getAuthenticatedExtendedAgentCard(context),
         ToProto.agentCard
       );
     },
@@ -262,13 +261,9 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
       ? error
       : A2AError.internalError(error instanceof Error ? error.message : 'Unknown Error');
 
-  const metadata = new grpc.Metadata();
-  metadata.set('a2a-error-code', a2aError.code.toString());
   return {
-    message: a2aError.message,
     code: mapping[a2aError.code] ?? grpc.status.INTERNAL,
     details: a2aError.message,
-    metadata: metadata,
   };
 };
 
