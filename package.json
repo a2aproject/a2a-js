@@ -21,6 +21,9 @@
       "server/express": [
         "./dist/server/express/index.d.ts"
       ],
+      "server/grpc": [
+        "./dist/server/grpc/index.d.ts"
+      ],
       "client": [
         "./dist/client/index.d.ts"
       ]
