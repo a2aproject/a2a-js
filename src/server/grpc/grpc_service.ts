@@ -258,10 +258,10 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   const a2aError =
     error instanceof A2AError
       ? error
-      : A2AError.internalError(error instanceof Error ? error.message : 'Unknown Error');
+      : A2AError.internalError(error instanceof Error ? error.message : 'Internal server error');
 
   return {
-    code: mapping[a2aError.code] ?? grpc.status.INTERNAL,
+    code: mapping[a2aError.code] ?? grpc.status.UNKNOWN,
     details: a2aError.message,
   };
 };
