@@ -24,6 +24,9 @@ import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
+import { ToProto } from '../../types/converters/to_proto.js';
+import { FromProto } from '../../types/converters/from_proto.js';
+import * as a2a from '../../types/pb/a2a.js';
 
 export interface RestTransportOptions {
   endpoint: string;
@@ -46,35 +49,59 @@ export class RestTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    return this._sendRequest<AgentCard>('GET', '/v1/card', undefined, options);
+    const response = await this._sendRequest<undefined, a2a.AgentCard>(
+      'GET',
+      '/v1/card',
+      undefined,
+      options,
+      undefined,
+      a2a.AgentCard
+    );
+    return FromProto.agentCard(response);
   }
 
   async sendMessage(
     params: MessageSendParams,
     options?: RequestOptions
   ): Promise<SendMessageResult> {
-    return this._sendRequest<SendMessageResult>('POST', '/v1/message:send', params, options);
+    const requestBody = ToProto.messageSendParams(params);
+    const response = await this._sendRequest<a2a.SendMessageRequest, a2a.SendMessageResponse>(
+      'POST',
+      '/v1/message:send',
+      requestBody,
+      options,
+      a2a.SendMessageRequest,
+      a2a.SendMessageResponse
+    );
+    return FromProto.sendMessageResult(response);
   }
 
   async *sendMessageStream(
     params: MessageSendParams,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest('/v1/message:stream', params, options);
+    const protoParams = ToProto.messageSendParams(params);
+    const requestBody = a2a.SendMessageRequest.toJSON(protoParams);
+    yield* this._sendStreamingRequest('/v1/message:stream', requestBody, options);
   }
 
   async setTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    return this._sendRequest<TaskPushNotificationConfig>(
+    const requestBody = ToProto.taskPushNotificationConfig(params);
+    const response = await this._sendRequest<
+      a2a.TaskPushNotificationConfig,
+      a2a.TaskPushNotificationConfig
+    >(
       'POST',
       `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
-      {
-        pushNotificationConfig: params.pushNotificationConfig,
-      },
-      options
+      requestBody,
+      options,
+      a2a.TaskPushNotificationConfig,
+      a2a.TaskPushNotificationConfig
     );
+    return FromProto.taskPushNotificationConfig(response);
   }
 
   async getTaskPushNotificationConfig(
@@ -87,35 +114,43 @@ export class RestTransport implements Transport {
         'pushNotificationConfigId is required for getTaskPushNotificationConfig with REST transport.'
       );
     }
-    return this._sendRequest<TaskPushNotificationConfig>(
+    const response = await this._sendRequest<undefined, a2a.TaskPushNotificationConfig>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(pushNotificationConfigId)}`,
       undefined,
-      options
+      options,
+      undefined,
+      a2a.TaskPushNotificationConfig
     );
+    return FromProto.taskPushNotificationConfig(response);
   }
 
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    return this._sendRequest<TaskPushNotificationConfig[]>(
+    const response = await this._sendRequest<undefined, a2a.ListTaskPushNotificationConfigResponse>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
       undefined,
-      options
+      options,
+      undefined,
+      a2a.ListTaskPushNotificationConfigResponse
     );
+    return FromProto.listTaskPushNotificationConfig(response);
   }
 
   async deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<void> {
-    await this._sendRequest<void>(
+    await this._sendRequest<undefined, void>(
       'DELETE',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(params.pushNotificationConfigId)}`,
       undefined,
-      options
+      options,
+      undefined,
+      undefined
     );
   }
 
@@ -126,16 +161,27 @@ export class RestTransport implements Transport {
     }
     const queryString = queryParams.toString();
     const path = `/v1/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`;
-    return this._sendRequest<Task>('GET', path, undefined, options);
+    const response = await this._sendRequest<undefined, a2a.Task>(
+      'GET',
+      path,
+      undefined,
+      options,
+      undefined,
+      a2a.Task
+    );
+    return FromProto.task(response);
   }
 
   async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
-    return this._sendRequest<Task>(
+    const response = await this._sendRequest<undefined, a2a.Task>(
       'POST',
       `/v1/tasks/${encodeURIComponent(params.id)}:cancel`,
       undefined,
-      options
+      options,
+      undefined,
+      a2a.Task
     );
+    return FromProto.task(response);
   }
 
   async *resubscribeTask(
@@ -173,11 +219,13 @@ export class RestTransport implements Transport {
     };
   }
 
-  private async _sendRequest<TResponse>(
+  private async _sendRequest<TRequest, TResponse>(
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
-    body: unknown | undefined,
-    options: RequestOptions | undefined
+    body: TRequest,
+    options: RequestOptions | undefined,
+    requestType: a2a.MessageFns<TRequest> | undefined,
+    responseType: a2a.MessageFns<TResponse> | undefined
   ): Promise<TResponse> {
     const url = `${this.endpoint}${path}`;
     const requestInit: RequestInit = {
@@ -187,7 +235,12 @@ export class RestTransport implements Transport {
     };
 
     if (body !== undefined && method !== 'GET') {
-      requestInit.body = JSON.stringify(body);
+      if (!requestType) {
+        throw new Error(
+          `Bug: Request body provided for ${method} ${path} but no toJson serializer provided.`
+        );
+      }
+      requestInit.body = JSON.stringify(requestType.toJSON(body));
     }
 
     const response = await this._fetch(url, requestInit);
@@ -196,12 +249,12 @@ export class RestTransport implements Transport {
       await this._handleErrorResponse(response, path);
     }
 
-    if (response.status === 204) {
+    if (response.status === 204 || !responseType) {
       return undefined as TResponse;
     }
 
     const result = await response.json();
-    return result as TResponse;
+    return responseType.fromJSON(result);
   }
 
   private async _handleErrorResponse(response: Response, path: string): Promise<never> {
@@ -273,8 +326,9 @@ export class RestTransport implements Transport {
     }
 
     try {
-      const data = JSON.parse(jsonData);
-      return data as A2AStreamEventData;
+      const response = JSON.parse(jsonData);
+      const protoResponse = a2a.StreamResponse.fromJSON(response);
+      return FromProto.messageStreamResult(protoResponse);
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
       throw new Error(
