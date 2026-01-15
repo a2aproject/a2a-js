@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.8](https://github.com/a2aproject/a2a-js/compare/v0.3.7...v0.3.8) (2026-01-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* use ProtoJSON for REST transport ([#292](https://github.com/a2aproject/a2a-js/issues/292))
+
+### Features
+
+* use case-insensitive transport protocol name comparison in ClientFactory ([5246067](https://github.com/a2aproject/a2a-js/commit/5246067f5fc1ca3aa7b1aef7176aab5b0f164acb))
+
+
+### Bug Fixes
+
+* add typesVersions to support legacy module resolution ([#288](https://github.com/a2aproject/a2a-js/issues/288)) ([6499e29](https://github.com/a2aproject/a2a-js/commit/6499e290f6e5a932eb7a6946c3b708cdea367165))
+* use ProtoJSON for REST transport ([#292](https://github.com/a2aproject/a2a-js/issues/292)) ([d2efc4c](https://github.com/a2aproject/a2a-js/commit/d2efc4cf343860d25b05f064f507ef4da7bba06b))
+
 ## [0.3.7](https://github.com/a2aproject/a2a-js/compare/v0.3.6...v0.3.7) (2025-12-17)
 
 
