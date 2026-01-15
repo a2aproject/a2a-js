@@ -76,7 +76,6 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "express": "^5.1.0",
-    "gts": "^6.0.2",
     "json-schema-to-typescript": "^15.0.4",
     "prettier": "^3.6.2",
     "supertest": "^7.1.4",
@@ -87,7 +86,6 @@
     "vitest": "^3.2.4"
   },
   "scripts": {
-    "clean": "gts clean",
     "build": "tsup",
     "test": "vitest run",
     "test:edge": "vitest run --config vitest.edge.config.ts",
