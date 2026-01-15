@@ -2,6 +2,7 @@ import { TransportProtocolName } from '../core.js';
 import { AgentCard } from '../types.js';
 import { AgentCardResolver } from './card-resolver.js';
 import { Client, ClientConfig } from './multitransport-client.js';
+import { GrpcTransportFactory } from './transports/grpc_transport.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 import { RestTransportFactory } from './transports/rest_transport.js';
 import { TransportFactory } from './transports/transport.js';
@@ -35,7 +36,7 @@ export const ClientFactoryOptions = {
    * SDK default options for {@link ClientFactory}.
    */
   default: {
-    transports: [new JsonRpcTransportFactory(), new RestTransportFactory()],
+    transports: [new JsonRpcTransportFactory(), new RestTransportFactory(), new GrpcTransportFactory()],
   } as Readonly<ClientFactoryOptions>,
 
   /**

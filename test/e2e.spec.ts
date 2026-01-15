@@ -1,4 +1,5 @@
 import express, { Express } from 'express';
+import * as grpc from '@grpc/grpc-js';
 import { describe, it, beforeEach, afterEach, expect } from 'vitest';
 import {
   AgentExecutionEvent,
@@ -17,6 +18,7 @@ import { Server } from 'http';
 import { AddressInfo } from 'net';
 import { A2AStreamEventData } from '../src/client/client.js';
 import { UserBuilder } from '../src/server/express/common.js';
+import { A2AService, grpcService } from '../src/server/grpc/index.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -47,6 +49,11 @@ const transportConfigs: TransportConfig[] = [
     preferredTransport: 'HTTP+JSON',
     serverPath: '/a2a/rest',
   },
+  {
+    name: 'GRPC',
+    preferredTransport: 'GRPC',
+    serverPath: '/a2a/grpc',
+  },
 ];
 
 describe('Client E2E tests', () => {
@@ -56,10 +63,11 @@ describe('Client E2E tests', () => {
     describe(`[${transportConfig.name}]`, () => {
       let app: Express;
       let server: Server;
+      let grpc_server: grpc.Server;
       let agentExecutor: TestAgentExecutor;
       let agentCard: AgentCard;
 
-      beforeEach(() => {
+      beforeEach(async () => {
         agentExecutor = new TestAgentExecutor();
         agentCard = {
           protocolVersion: '0.3.0',
@@ -106,10 +114,34 @@ describe('Client E2E tests', () => {
 
         const address = server.address() as AddressInfo;
         agentCard.url = `http://localhost:${address.port}${transportConfig.serverPath}`;
+
+        const grpcHandlerInstance = grpcService({
+          requestHandler: requestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+        });
+        grpc_server = new grpc.Server();
+        grpc_server.addService(A2AService, grpcHandlerInstance);
+        await new Promise<void>((resolve, reject) => {
+          grpc_server.bindAsync(
+            `localhost:0`,
+            grpc.ServerCredentials.createInsecure(),
+            (error, port) => {
+              if (error) {
+                reject(error);
+                return;
+              }
+              if (transportConfig.name === 'GRPC') {
+                agentCard.url = `localhost:${port}`;
+              }
+              resolve();
+            }
+          );
+        });
       });
 
       afterEach(() => {
         server.close();
+        grpc_server.forceShutdown();
       });
 
       describe('sendMessage', () => {
