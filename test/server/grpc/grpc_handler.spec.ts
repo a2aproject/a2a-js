@@ -1,8 +1,8 @@
 import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import * as grpc from '@grpc/grpc-js';
-import * as proto from '../../../src/grpc/a2a_services.js';
+import * as proto from '../../../src/grpc/pb/a2a_services.js';
 import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
-import { grpcHandler } from '../../../src/server/grpc/grpc_handler.js';
+import { grpcService } from '../../../src/server/grpc/grpc_handler.js';
 import { AgentCard, HTTP_EXTENSION_HEADER, MessageSendParams, Task } from '../../../src/index.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
@@ -11,7 +11,7 @@ vi.mock('../../../src/types/converters/from_proto.js');
 vi.mock('../../../src/types/converters/to_proto.js');
 describe('grpcHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
-  let handler: ReturnType<typeof grpcHandler>;
+  let handler: ReturnType<typeof grpcService>;
 
   const testAgentCard: AgentCard = {
     protocolVersion: '0.3.0',
@@ -75,7 +75,7 @@ describe('grpcHandler', () => {
       resubscribe: vi.fn(),
     };
 
-    handler = grpcHandler({
+    handler = grpcService({
       requestHandler: mockRequestHandler,
       userBuilder: async () => ({ id: 'test-user' }) as any,
     });

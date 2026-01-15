@@ -16,8 +16,8 @@ import {
   Task,
   TaskPushNotificationConfig,
   TaskSubscriptionRequest,
-} from '../../grpc/a2a_services.js';
-import { Empty } from '../../grpc/google/protobuf/empty.js';
+} from '../../grpc/pb/a2a_services.js';
+import { Empty } from '../../grpc/pb/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
@@ -31,7 +31,7 @@ import { A2AError } from '../error.js';
 /**
  * Options for configuring the gRPC handler.
  */
-export interface GrpcHandlerOptions {
+export interface GrpcServiceOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
 }
@@ -48,10 +48,10 @@ export interface GrpcHandlerOptions {
  * ```ts
  * const server = new grpc.Server();
  * const requestHandler = new DefaultRequestHandler(...);
- * server.addService(A2AService, grpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * server.addService(A2AService, grpcService({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
  * ```
  */
-export function grpcHandler(options: GrpcHandlerOptions): A2AServiceServer {
+export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   const grpcTransportHandler = new GrpcTransportHandler(options.requestHandler);
 
   /**
