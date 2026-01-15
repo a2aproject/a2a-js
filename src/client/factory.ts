@@ -36,7 +36,11 @@ export const ClientFactoryOptions = {
    * SDK default options for {@link ClientFactory}.
    */
   default: {
-    transports: [new JsonRpcTransportFactory(), new RestTransportFactory(), new GrpcTransportFactory()],
+    transports: [
+      new JsonRpcTransportFactory(),
+      new RestTransportFactory(),
+      new GrpcTransportFactory(),
+    ],
   } as Readonly<ClientFactoryOptions>,
 
   /**

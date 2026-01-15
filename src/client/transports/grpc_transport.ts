@@ -298,11 +298,8 @@ export class GrpcTransport implements Transport {
           return new UnsupportedOperationError(error.details);
         }
         break;
-      case grpc.status.INVALID_ARGUMENT:
-        // no where the -32005 is thrown
-        break;
-      case grpc.status.INTERNAL:
-        // no where the -32006 is thrown
+      //TODO: add case for grpc.status.INVALID_ARGUMENT and grpc.status.INTERNAL
+      default:
         break;
     }
     return new Error(`GRPC error for ${String(method)}! ${error.code} ${error.details}`, {

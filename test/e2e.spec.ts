@@ -111,16 +111,17 @@ describe('Client E2E tests', () => {
         );
 
         server = app.listen();
-
         const address = server.address() as AddressInfo;
         agentCard.url = `http://localhost:${address.port}${transportConfig.serverPath}`;
 
-        const grpcHandlerInstance = grpcService({
-          requestHandler: requestHandler,
-          userBuilder: UserBuilder.noAuthentication,
-        });
         grpc_server = new grpc.Server();
-        grpc_server.addService(A2AService, grpcHandlerInstance);
+        grpc_server.addService(
+          A2AService,
+          grpcService({
+            requestHandler: requestHandler,
+            userBuilder: UserBuilder.noAuthentication,
+          })
+        );
         await new Promise<void>((resolve, reject) => {
           grpc_server.bindAsync(
             `localhost:0`,
