@@ -23,15 +23,16 @@ import { grpcService, A2AService } from '../../src/server/grpc/index.js';
  * SUTAgentExecutor implements the agent's core logic.
  */
 class SUTAgentExecutor implements AgentExecutor {
-  private runningTask: Set<string> = new Set();
-  private lastContextId?: string;
+  private activeTasks: Map<string, string> = new Map(); // taskId -> lastContextId
 
   public cancelTask = async (taskId: string, eventBus: ExecutionEventBus): Promise<void> => {
-    this.runningTask.delete(taskId);
+    const contextId = this.activeTasks.get(taskId);
+    this.activeTasks.delete(taskId);
+
     const cancelledUpdate: TaskStatusUpdateEvent = {
       kind: 'status-update',
       taskId: taskId,
-      contextId: this.lastContextId ?? uuidv4(),
+      contextId: contextId ?? uuidv4(),
       status: {
         state: 'canceled',
         timestamp: new Date().toISOString(),
@@ -39,6 +40,7 @@ class SUTAgentExecutor implements AgentExecutor {
       final: true, // Cancellation is a final state
     };
     eventBus.publish(cancelledUpdate);
+    eventBus.finished();
   };
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
@@ -49,8 +51,7 @@ class SUTAgentExecutor implements AgentExecutor {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
 
-    this.lastContextId = contextId;
-    this.runningTask.add(taskId);
+    this.activeTasks.set(taskId, contextId);
 
     console.log(
       `[SUTAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
@@ -96,12 +97,15 @@ class SUTAgentExecutor implements AgentExecutor {
     // 3. Publish final task status update
     const agentReplyText = this.parseInputMessage(userMessage);
     await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate processing delay
-    if (!this.runningTask.has(taskId)) {
+
+    if (!this.activeTasks.has(taskId)) {
       console.log(
         `[SUTAgentExecutor] Task ${taskId} was cancelled before processing could complete.`
       );
       return;
     }
+    this.activeTasks.delete(taskId);
+
     console.info(`[SUTAgentExecutor] Prompt response: ${agentReplyText}`);
 
     const agentMessage: Message = {
@@ -125,6 +129,7 @@ class SUTAgentExecutor implements AgentExecutor {
       final: true,
     };
     eventBus.publish(finalUpdate);
+    eventBus.finished();
   }
 
   parseInputMessage(message: Message): string {
