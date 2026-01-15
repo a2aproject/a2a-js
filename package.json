@@ -13,6 +13,19 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "typesVersions": {
+    "*": {
+      "server": [
+        "./dist/server/index.d.ts"
+      ],
+      "server/express": [
+        "./dist/server/express/index.d.ts"
+      ],
+      "client": [
+        "./dist/client/index.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
