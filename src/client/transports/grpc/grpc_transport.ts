@@ -250,7 +250,9 @@ export class GrpcTransport implements Transport {
       if (this.isServiceError(error)) {
         throw GrpcTransport.mapToError(error, method);
       } else {
-        throw error;
+        throw new Error(`GRPC error for ${String(method)}!`, {
+          cause: error,
+        });
       }
     } finally {
       streamResponse.cancel();
@@ -261,7 +263,7 @@ export class GrpcTransport implements Transport {
     return typeof error === 'object' && error !== null && 'code' in error;
   }
 
-  private _buildMetadata(options?: RequestOptions): grpc.Metadata {
+  private _buildMetadata(options: RequestOptions | undefined): grpc.Metadata {
     const metadata = new grpc.Metadata();
     if (options?.serviceParameters) {
       for (const [key, value] of Object.entries(options.serviceParameters)) {
@@ -271,7 +273,7 @@ export class GrpcTransport implements Transport {
     return metadata;
   }
 
-  // TODO: this mapToError will be improved in v1.0.0 with the enriched error model
+  // TODO: the logic of mapToError will be removed in v1.0.0 with the enriched error model (https://a2a-protocol.org/latest/specification/#106-error-handling)
   private static mapToError(error: grpc.ServiceError, method: keyof A2AServiceClient): Error {
     switch (error.code) {
       case grpc.status.NOT_FOUND:
@@ -310,7 +312,6 @@ export class GrpcTransport implements Transport {
 }
 
 export class GrpcTransportFactoryOptions {
-  grpcClient?: A2AServiceClient;
   grpcChannelCredentials?: grpc.ChannelCredentials;
   grpcCallOptions?: Partial<grpc.CallOptions>;
 }
