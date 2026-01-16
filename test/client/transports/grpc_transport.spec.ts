@@ -67,6 +67,7 @@ vi.mock('../../../src/types/converters/from_proto.js', () => ({
     taskStatusUpdate: vi.fn((x) => x),
     taskArtifactUpdate: vi.fn((x) => x),
     taskPushNotificationConfig: vi.fn((x) => x),
+    messageStreamResult: vi.fn((x) => x),
   },
 }));
 

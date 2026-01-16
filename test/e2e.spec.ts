@@ -119,8 +119,8 @@ describe('Client E2E tests', () => {
         const address = server.address() as AddressInfo;
         agentCard.url = `http://localhost:${address.port}${transportConfig.serverPath}`;
 
-        grpc_server = new grpc.Server();
-        grpc_server.addService(
+        grpcServer = new grpc.Server();
+        grpcServer.addService(
           A2AService,
           grpcService({
             requestHandler: requestHandler,
@@ -128,7 +128,7 @@ describe('Client E2E tests', () => {
           })
         );
         await new Promise<void>((resolve, reject) => {
-          grpc_server.bindAsync(
+          grpcServer.bindAsync(
             `localhost:0`,
             grpc.ServerCredentials.createInsecure(),
             (error, port) => {
@@ -147,7 +147,7 @@ describe('Client E2E tests', () => {
 
       afterEach(() => {
         server.close();
-        grpc_server.forceShutdown();
+        grpcServer.forceShutdown();
       });
 
       describe('sendMessage', () => {

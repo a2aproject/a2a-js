@@ -230,21 +230,8 @@ export class GrpcTransport implements Transport {
     );
     try {
       for await (const response of streamResponse) {
-        const payload = response.payload;
-        switch (payload.$case) {
-          case 'msg':
-            yield FromProto.message(payload.value);
-            break;
-          case 'task':
-            yield FromProto.task(payload.value);
-            break;
-          case 'statusUpdate':
-            yield FromProto.taskStatusUpdateEvent(payload.value);
-            break;
-          case 'artifactUpdate':
-            yield FromProto.taskArtifactUpdateEvent(payload.value);
-            break;
-        }
+        console.log('response', response);
+        yield FromProto.messageStreamResult(response);
       }
     } catch (error) {
       if (this.isServiceError(error)) {
@@ -301,7 +288,7 @@ export class GrpcTransport implements Transport {
           return new UnsupportedOperationError(error.details);
         }
         break;
-      //TODO: add case for grpc.status.INVALID_ARGUMENT and grpc.status.INTERNAL
+      //TODO: add case for grpc.status.INVALID_ARGUMENT and grpc.status.INTERNAL (the respective a2a errors are not implemented yet)
       default:
         break;
     }

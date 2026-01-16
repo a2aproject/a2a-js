@@ -26,6 +26,9 @@
       ],
       "client": [
         "./dist/client/index.d.ts"
+      ],
+      "client/grpc": [
+        "./dist/client/transports/grpc/index.d.ts"
       ]
     }
   },
