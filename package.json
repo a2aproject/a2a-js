@@ -54,6 +54,11 @@
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
       "require": "./dist/client/index.cjs"
+    },
+    "./client/grpc": {
+      "types": "./dist/client/transports/grpc/index.d.ts",
+      "import": "./dist/client/transports/grpc/index.js",
+      "require": "./dist/client/transports/grpc/index.cjs"
     }
   },
   "files": [

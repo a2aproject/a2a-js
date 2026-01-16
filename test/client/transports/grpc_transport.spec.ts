@@ -3,7 +3,7 @@ import { credentials, Metadata, ServiceError, status } from '@grpc/grpc-js';
 import {
   GrpcTransport,
   GrpcTransportFactory,
-} from '../../../src/client/transports/grpc_transport.js';
+} from '../../../src/client/transports/grpc/grpc_transport.js';
 import { A2AServiceClient } from '../../../src/grpc/pb/a2a_services.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';

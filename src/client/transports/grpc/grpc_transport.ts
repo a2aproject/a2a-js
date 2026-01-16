@@ -1,6 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
-import { TransportProtocolName } from '../../core.js';
-import { A2AServiceClient } from '../../grpc/pb/a2a_services.js';
+import { TransportProtocolName } from '../../../core.js';
+import { A2AServiceClient } from '../../../grpc/pb/a2a_services.js';
 import {
   MessageSendParams,
   TaskPushNotificationConfig,
@@ -11,12 +11,12 @@ import {
   Task,
   AgentCard,
   GetTaskPushNotificationConfigParams,
-} from '../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../client.js';
-import { RequestOptions } from '../multitransport-client.js';
-import { Transport, TransportFactory } from './transport.js';
-import { ToProto } from '../../types/converters/to_proto.js';
-import { FromProto } from '../../types/converters/from_proto.js';
+} from '../../../types.js';
+import { A2AStreamEventData, SendMessageResult } from '../../client.js';
+import { RequestOptions } from '../../multitransport-client.js';
+import { Transport, TransportFactory } from '../transport.js';
+import { ToProto } from '../../../types/converters/to_proto.js';
+import { FromProto } from '../../../types/converters/from_proto.js';
 
 import {
   AuthenticatedExtendedCardNotConfiguredError,
@@ -24,7 +24,7 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   UnsupportedOperationError,
-} from '../../errors.js';
+} from '../../../errors.js';
 
 type GrpcUnaryCall<TReq, TRes> = (
   request: TReq,
@@ -63,7 +63,7 @@ export class GrpcTransport implements Transport {
       undefined,
       options,
       this.grpcClient.getAgentCard.bind(this.grpcClient),
-      () => ({}),
+      ToProto.getAgentCardRequest,
       FromProto.agentCard
     );
     return rpcResponse;

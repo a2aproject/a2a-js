@@ -19,6 +19,7 @@ import { AddressInfo } from 'net';
 import { A2AStreamEventData } from '../src/client/client.js';
 import { UserBuilder } from '../src/server/express/common.js';
 import { A2AService, grpcService } from '../src/server/grpc/index.js';
+import { GrpcTransportFactory } from '../src/client/transports/grpc/grpc_transport.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -57,7 +58,11 @@ const transportConfigs: TransportConfig[] = [
 ];
 
 describe('Client E2E tests', () => {
-  const clientFactory = new ClientFactory(ClientFactoryOptions.default);
+  const clientFactory = new ClientFactory(
+    ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+      transports: [new GrpcTransportFactory()],
+    })
+  );
 
   transportConfigs.forEach((transportConfig) => {
     describe(`[${transportConfig.name}]`, () => {
