@@ -155,6 +155,27 @@ describe('GrpcTransport', () => {
 
       await expect(transport.sendMessage(params)).rejects.toThrow('GRPC error for sendMessage');
     });
+
+    it('should cancel request when signal is aborted', async () => {
+      const params = createMessageParams();
+      const cancelMock = vi.fn();
+      (mockGrpcClient.sendMessage as Mock).mockImplementation((_req, _meta, _opts, callback) => {
+        return {
+          cancel: () => {
+            cancelMock();
+            callback({ code: status.CANCELLED, details: 'Cancelled' }, null);
+          },
+        };
+      });
+
+      const controller = new AbortController();
+      const promise = transport.sendMessage(params, { signal: controller.signal });
+
+      controller.abort();
+
+      expect(cancelMock).toHaveBeenCalled();
+      await expect(promise).rejects.toThrow();
+    });
   });
 
   describe('sendMessageStream', () => {
@@ -192,6 +213,27 @@ describe('GrpcTransport', () => {
 
       const iterator = transport.sendMessageStream(params);
       await expect(iterator.next()).rejects.toThrow('GRPC error for sendStreamingMessage!');
+    });
+
+    it('should cancel stream when signal is aborted', async () => {
+      const params = createMessageParams();
+      const cancelMock = vi.fn();
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          yield { payload: { $case: 'msg', value: createMockMessage() } };
+        },
+        cancel: cancelMock,
+      };
+      (mockGrpcClient.sendStreamingMessage as Mock).mockReturnValue(mockStream);
+
+      const controller = new AbortController();
+      const iterator = transport.sendMessageStream(params, { signal: controller.signal });
+
+      iterator.next();
+      controller.abort();
+
+      expect(cancelMock).toHaveBeenCalled();
     });
   });
 
