@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, assert, vi } from 'vitest';
+import { describe, it, beforeEach, afterEach, assert, vi, type MockInstance } from 'vitest';
 import express, { Request, Response } from 'express';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
@@ -17,6 +17,8 @@ import {
 } from '../../src/index.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
+type PushNotificationSenderSpy = MockInstance<(task: Task) => Promise<void>>;
+
 describe('Push Notification Integration Tests', () => {
   let testServer: Server;
   let testServerUrl: string;
@@ -32,6 +34,7 @@ describe('Push Notification Integration Tests', () => {
   let mockAgentExecutor: MockAgentExecutor;
   let pushNotificationStore: InMemoryPushNotificationStore;
   let pushNotificationSender: DefaultPushNotificationSender;
+  let pushNotificationSenderSpy: PushNotificationSenderSpy;
 
   const testAgentCard: AgentCard = {
     name: 'Test Agent',
@@ -116,6 +119,7 @@ describe('Push Notification Integration Tests', () => {
     const executionEventBusManager = new DefaultExecutionEventBusManager();
     pushNotificationStore = new InMemoryPushNotificationStore();
     pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
+    pushNotificationSenderSpy = vi.spyOn(pushNotificationSender, 'send');
 
     handler = new DefaultRequestHandler(
       testAgentCard,
@@ -142,6 +146,10 @@ describe('Push Notification Integration Tests', () => {
     kind: 'message',
     ...(taskId && { taskId }),
   });
+
+  const waitForPushNotifications = async (spy: PushNotificationSenderSpy) => {
+    await Promise.all(spy.mock.results.map((r) => r.value));
+  };
 
   describe('End-to-End Push Notification Flow', () => {
     it('should send push notifications for task status updates', async () => {
@@ -173,7 +181,7 @@ describe('Push Notification Integration Tests', () => {
       await handler.sendMessage(params);
 
       // Wait for async push notifications to be sent
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await waitForPushNotifications(pushNotificationSenderSpy);
 
       // Load the task from the store
       const expectedTaskResult: Task = {
@@ -291,7 +299,7 @@ describe('Push Notification Integration Tests', () => {
       await handler.sendMessage(params);
 
       // Wait for async push notifications to be sent
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await waitForPushNotifications(pushNotificationSenderSpy);
 
       // Should now have notifications from both endpoints
       const notificationsByEndpoint = receivedNotifications.reduce(
@@ -347,7 +355,7 @@ describe('Push Notification Integration Tests', () => {
       const task = result as Task;
 
       // Wait for async push notifications to be sent
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await waitForPushNotifications(pushNotificationSenderSpy);
 
       // Load the task from the store
       const expectedTaskResult: Task = {
@@ -412,7 +420,7 @@ describe('Push Notification Integration Tests', () => {
       await handler.sendMessage(params);
 
       // Wait for async push notifications to be sent
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await waitForPushNotifications(pushNotificationSenderSpy);
 
       // Verify default header name is used
       assert.lengthOf(
@@ -443,6 +451,7 @@ describe('Push Notification Integration Tests', () => {
           tokenHeaderName: 'X-Custom-Auth-Token',
         }
       );
+      const customSenderSpy = vi.spyOn(customPushNotificationSender, 'send');
 
       const customHandler = new DefaultRequestHandler(
         testAgentCard,
@@ -492,7 +501,7 @@ describe('Push Notification Integration Tests', () => {
       await customHandler.sendMessage(params);
 
       // Wait for async push notifications to be sent
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await waitForPushNotifications(customSenderSpy);
 
       // Verify custom header name is used
       assert.lengthOf(
@@ -559,7 +568,7 @@ describe('Push Notification Integration Tests', () => {
       await handler.sendMessage(params);
 
       // Wait for async push notifications to be sent
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await waitForPushNotifications(pushNotificationSenderSpy);
 
       // Verify no token header is sent
       assert.lengthOf(
@@ -589,6 +598,7 @@ describe('Push Notification Integration Tests', () => {
           tokenHeaderName: 'X-Custom-Token',
         }
       );
+      const customSenderSpy = vi.spyOn(customPushNotificationSender, 'send');
 
       const customHandler = new DefaultRequestHandler(
         testAgentCard,
@@ -657,7 +667,7 @@ describe('Push Notification Integration Tests', () => {
       await customHandler.sendMessage(params);
 
       // Wait for async push notifications to be sent
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await waitForPushNotifications(customSenderSpy);
 
       // Verify both endpoints received notifications with correct headers
       const config1Notifications = receivedNotifications.filter((n) => n.url === '/notify');

@@ -56,7 +56,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     });
     this.notificationChain.set(task.id, newPromise);
 
-    newPromise.finally(() => {
+    return newPromise.finally(() => {
       // Clean up the chain if it's the last notification
       if (this.notificationChain.get(task.id) === newPromise) {
         this.notificationChain.delete(task.id);
