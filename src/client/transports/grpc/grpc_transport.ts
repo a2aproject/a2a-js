@@ -202,17 +202,31 @@ export class GrpcTransport implements Transport {
     converter: (res: TRes) => TResponse
   ): Promise<TResponse> {
     return new Promise((resolve, reject) => {
-      call(
+      let onAbort: (() => void) | undefined;
+
+      const clientCall = call(
         parser(params),
         this._buildMetadata(options),
         this.grpcCallOptions ?? {},
         (error, response) => {
+          if (options?.signal && onAbort) {
+            options.signal.removeEventListener('abort', onAbort);
+          }
           if (error) {
             return reject(GrpcTransport.mapToError(error, method));
           }
           resolve(converter(response));
         }
       );
+
+      if (options?.signal) {
+        if (options.signal.aborted) {
+          clientCall.cancel();
+        } else {
+          onAbort = () => clientCall.cancel();
+          options.signal.addEventListener('abort', onAbort);
+        }
+      }
     });
   }
 
@@ -228,9 +242,19 @@ export class GrpcTransport implements Transport {
       this._buildMetadata(options),
       this.grpcCallOptions ?? {}
     );
+
+    let onAbort: (() => void) | undefined;
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        streamResponse.cancel();
+      } else {
+        onAbort = () => streamResponse.cancel();
+        options.signal.addEventListener('abort', onAbort);
+      }
+    }
+
     try {
       for await (const response of streamResponse) {
-        console.log('response', response);
         yield FromProto.messageStreamResult(response);
       }
     } catch (error) {
@@ -242,6 +266,9 @@ export class GrpcTransport implements Transport {
         });
       }
     } finally {
+      if (options?.signal && onAbort) {
+        options.signal.removeEventListener('abort', onAbort);
+      }
       streamResponse.cancel();
     }
   }
