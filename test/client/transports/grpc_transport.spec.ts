@@ -18,7 +18,6 @@ import {
   createMockMessage,
   createMockTask,
 } from '../util.js';
-import { mock } from 'node:test';
 
 // --- Mocks ---
 
