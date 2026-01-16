@@ -42,16 +42,16 @@ import { generatePushNotificationConfigName, generateTaskName } from './id_decod
 export class ToProto {
   static agentCard(agentCard: types.AgentCard): AgentCard {
     return {
-      protocolVersion: agentCard.protocolVersion,
-      name: agentCard.name,
-      description: agentCard.description,
-      url: agentCard.url,
-      preferredTransport: agentCard.preferredTransport,
+      protocolVersion: agentCard.protocolVersion || '',
+      name: agentCard.name || '',
+      description: agentCard.description || '',
+      url: agentCard.url || '',
+      preferredTransport: agentCard.preferredTransport || '',
       additionalInterfaces:
         agentCard.additionalInterfaces?.map((i) => ToProto.agentInterface(i)) ?? [],
       provider: ToProto.agentProvider(agentCard.provider),
-      version: agentCard.version,
-      documentationUrl: agentCard.documentationUrl,
+      version: agentCard.version || '',
+      documentationUrl: agentCard.documentationUrl || '',
       capabilities: ToProto.agentCapabilities(agentCard.capabilities),
       securitySchemes: agentCard.securitySchemes
         ? Object.fromEntries(
@@ -72,8 +72,8 @@ export class ToProto {
 
   static agentCardSignature(signatures: types.AgentCardSignature): AgentCardSignature {
     return {
-      protected: signatures.protected,
-      signature: signatures.signature,
+      protected: signatures.protected || '',
+      signature: signatures.signature || '',
       header: signatures.header,
     };
   }
@@ -81,8 +81,8 @@ export class ToProto {
   static agentSkill(skill: types.AgentSkill): AgentSkill {
     return {
       id: skill.id,
-      name: skill.name,
-      description: skill.description,
+      name: skill.name || '',
+      description: skill.description || '',
       tags: skill.tags ?? [],
       examples: skill.examples ?? [],
       inputModes: skill.inputModes ?? [],
@@ -108,9 +108,9 @@ export class ToProto {
           scheme: {
             $case: 'apiKeySecurityScheme',
             value: {
-              name: scheme.name,
-              location: scheme.in,
-              description: scheme.description,
+              name: scheme.name || '',
+              location: scheme.in || '',
+              description: scheme.description || '',
             },
           },
         };
@@ -119,9 +119,9 @@ export class ToProto {
           scheme: {
             $case: 'httpAuthSecurityScheme',
             value: {
-              description: scheme.description,
-              scheme: scheme.scheme,
-              bearerFormat: scheme.bearerFormat,
+              description: scheme.description || '',
+              scheme: scheme.scheme || '',
+              bearerFormat: scheme.bearerFormat || '',
             },
           },
         };
@@ -130,7 +130,7 @@ export class ToProto {
           scheme: {
             $case: 'mtlsSecurityScheme',
             value: {
-              description: scheme.description,
+              description: scheme.description || '',
             },
           },
         };
@@ -139,9 +139,9 @@ export class ToProto {
           scheme: {
             $case: 'oauth2SecurityScheme',
             value: {
-              description: scheme.description,
+              description: scheme.description || '',
               flows: ToProto.oauthFlows(scheme.flows),
-              oauth2MetadataUrl: scheme.oauth2MetadataUrl,
+              oauth2MetadataUrl: scheme.oauth2MetadataUrl || '',
             },
           },
         };
@@ -150,8 +150,8 @@ export class ToProto {
           scheme: {
             $case: 'openIdConnectSecurityScheme',
             value: {
-              description: scheme.description,
-              openIdConnectUrl: scheme.openIdConnectUrl,
+              description: scheme.description || '',
+              openIdConnectUrl: scheme.openIdConnectUrl || '',
             },
           },
         };
@@ -166,9 +166,9 @@ export class ToProto {
         flow: {
           $case: 'implicit',
           value: {
-            authorizationUrl: flows.implicit.authorizationUrl,
+            authorizationUrl: flows.implicit.authorizationUrl || '',
             scopes: flows.implicit.scopes,
-            refreshUrl: flows.implicit.refreshUrl,
+            refreshUrl: flows.implicit.refreshUrl || '',
           },
         },
       };
@@ -177,9 +177,9 @@ export class ToProto {
         flow: {
           $case: 'password',
           value: {
-            tokenUrl: flows.password.tokenUrl,
+            tokenUrl: flows.password.tokenUrl || '',
             scopes: flows.password.scopes,
-            refreshUrl: flows.password.refreshUrl,
+            refreshUrl: flows.password.refreshUrl || '',
           },
         },
       };
@@ -188,9 +188,9 @@ export class ToProto {
         flow: {
           $case: 'clientCredentials',
           value: {
-            tokenUrl: flows.clientCredentials.tokenUrl,
+            tokenUrl: flows.clientCredentials.tokenUrl || '',
             scopes: flows.clientCredentials.scopes,
-            refreshUrl: flows.clientCredentials.refreshUrl,
+            refreshUrl: flows.clientCredentials.refreshUrl || '',
           },
         },
       };
@@ -199,10 +199,10 @@ export class ToProto {
         flow: {
           $case: 'authorizationCode',
           value: {
-            authorizationUrl: flows.authorizationCode.authorizationUrl,
-            tokenUrl: flows.authorizationCode.tokenUrl,
+            authorizationUrl: flows.authorizationCode.authorizationUrl || '',
+            tokenUrl: flows.authorizationCode.tokenUrl || '',
             scopes: flows.authorizationCode.scopes,
-            refreshUrl: flows.authorizationCode.refreshUrl,
+            refreshUrl: flows.authorizationCode.refreshUrl || '',
           },
         },
       };
@@ -213,8 +213,8 @@ export class ToProto {
 
   static agentInterface(agentInterface: types.AgentInterface): AgentInterface {
     return {
-      transport: agentInterface.transport,
-      url: agentInterface.url,
+      transport: agentInterface.transport || '',
+      url: agentInterface.url || '',
     };
   }
 
@@ -223,8 +223,8 @@ export class ToProto {
       return undefined;
     }
     return {
-      url: agentProvider.url,
-      organization: agentProvider.organization,
+      url: agentProvider.url || '',
+      organization: agentProvider.organization || '',
     };
   }
 
@@ -240,8 +240,8 @@ export class ToProto {
 
   static agentExtension(extension: types.AgentExtension): AgentExtension {
     return {
-      uri: extension.uri,
-      description: extension.description,
+      uri: extension.uri || '',
+      description: extension.description || '',
       required: extension.required,
       params: extension.params,
     };
@@ -310,9 +310,9 @@ export class ToProto {
     }
 
     return {
-      id: config.id,
-      url: config.url,
-      token: config.token,
+      id: config.id || '',
+      url: config.url || '',
+      token: config.token || '',
       authentication: ToProto.pushNotificationAuthenticationInfo(config.authentication),
     };
   }
@@ -325,7 +325,7 @@ export class ToProto {
     }
     return {
       schemes: authInfo.schemes,
-      credentials: authInfo.credentials,
+      credentials: authInfo.credentials || '',
     };
   }
 
@@ -367,9 +367,9 @@ export class ToProto {
 
   static taskStatusUpdateEvent(event: types.TaskStatusUpdateEvent): TaskStatusUpdateEvent {
     return {
-      taskId: event.taskId,
+      taskId: event.taskId || '',
       status: ToProto.taskStatus(event.status),
-      contextId: event.contextId,
+      contextId: event.contextId || '',
       metadata: event.metadata,
       final: event.final,
     };
@@ -377,9 +377,9 @@ export class ToProto {
 
   static taskArtifactUpdateEvent(event: types.TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
     return {
-      taskId: event.taskId,
+      taskId: event.taskId || '',
       artifact: ToProto.artifact(event.artifact),
-      contextId: event.contextId,
+      contextId: event.contextId || '',
       metadata: event.metadata,
       append: event.append,
       lastChunk: event.lastChunk,
@@ -410,10 +410,10 @@ export class ToProto {
     }
 
     return {
-      messageId: message.messageId,
+      messageId: message.messageId || '',
       content: message.parts.map((p) => ToProto.part(p)),
-      contextId: message.contextId,
-      taskId: message.taskId,
+      contextId: message.contextId || '',
+      taskId: message.taskId || '',
       role: ToProto.role(message.role),
       metadata: message.metadata,
       extensions: message.extensions ?? [],
@@ -433,8 +433,8 @@ export class ToProto {
 
   static task(task: types.Task): Task {
     return {
-      id: task.id,
-      contextId: task.contextId,
+      id: task.id || '',
+      contextId: task.contextId || '',
       status: ToProto.taskStatus(task.status),
       artifacts: task.artifacts?.map((a) => ToProto.artifact(a)) ?? [],
       history: task.history?.map((m) => ToProto.message(m)) ?? [],
@@ -452,9 +452,9 @@ export class ToProto {
 
   static artifact(artifact: types.Artifact): Artifact {
     return {
-      artifactId: artifact.artifactId,
-      name: artifact.name,
-      description: artifact.description,
+      artifactId: artifact.artifactId || '',
+      name: artifact.name || '',
+      description: artifact.description || '',
       parts: artifact.parts.map((p) => ToProto.part(p)),
       metadata: artifact.metadata,
       extensions: artifact.extensions ? artifact.extensions : [],
@@ -489,7 +489,7 @@ export class ToProto {
   static part(part: types.Part): Part {
     if (part.kind === 'text') {
       return {
-        part: { $case: 'text', value: part.text },
+        part: { $case: 'text', value: part.text || '' },
       };
     }
 

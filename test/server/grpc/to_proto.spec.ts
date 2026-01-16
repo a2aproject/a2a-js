@@ -322,7 +322,7 @@ describe('ToProto', () => {
       pushNotificationConfig: {
         id: 'pnc-456',
         url: 'https://example.com/notify',
-        token: undefined,
+        token: '',
         authentication: undefined,
       },
     });
