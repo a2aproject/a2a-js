@@ -36,7 +36,7 @@ class TestAgentExecutor implements AgentExecutor {
 interface TransportConfig {
   name: string;
   preferredTransport: string;
-  serverPath: string;
+  serverPath?: string;
 }
 
 const transportConfigs: TransportConfig[] = [
@@ -53,7 +53,6 @@ const transportConfigs: TransportConfig[] = [
   {
     name: 'GRPC',
     preferredTransport: 'GRPC',
-    serverPath: '/a2a/grpc',
   },
 ];
 
