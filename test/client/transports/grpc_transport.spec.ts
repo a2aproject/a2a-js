@@ -18,6 +18,7 @@ import {
   createMockMessage,
   createMockTask,
 } from '../util.js';
+import { GetAgentCardRequest } from '../../../src/types/pb/a2a_types.js';
 
 // --- Mocks ---
 
@@ -51,6 +52,7 @@ vi.mock('../../../src/types/converters/to_proto.js', () => ({
     taskIdParams: vi.fn((x) => x),
     taskPushNotificationConfigCreate: vi.fn((x) => x),
     taskQueryParams: vi.fn((x) => x),
+    getAgentCardRequest: vi.fn((x) => x),
   },
 }));
 
