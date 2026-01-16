@@ -18,6 +18,7 @@ import {
   createMockMessage,
   createMockTask,
 } from '../util.js';
+import { mock } from 'node:test';
 
 // --- Mocks ---
 
@@ -161,10 +162,11 @@ describe('GrpcTransport', () => {
     it('should yield messages from stream', async () => {
       const params = createMessageParams();
       const mockMsg = createMockMessage();
+      const mockMsgResponse = { payload: { $case: 'msg', value: mockMsg } };
 
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
-          yield { payload: { $case: 'msg', value: mockMsg } };
+          yield mockMsgResponse;
         },
         cancel: vi.fn(),
       };
@@ -173,8 +175,8 @@ describe('GrpcTransport', () => {
       const iterator = transport.sendMessageStream(params);
       const result = await iterator.next();
 
-      expect(result.value).toEqual(mockMsg);
-      expect(FromProto.message).toHaveBeenCalledWith(mockMsg);
+      expect(result.value).toEqual(mockMsgResponse);
+      expect(FromProto.messageStreamResult).toHaveBeenCalledWith(mockMsgResponse);
       expect(mockGrpcClient.sendStreamingMessage).toHaveBeenCalled();
     });
 
@@ -309,10 +311,11 @@ describe('GrpcTransport', () => {
     it('should yield task updates from stream', async () => {
       const params = { id: 'task-123' };
       const mockUpdate = createMockTask('task-123');
+      const mockResponse = { payload: { $case: 'task', value: mockUpdate } };
 
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
-          yield { payload: { $case: 'task', value: mockUpdate } };
+          yield mockResponse;
         },
         cancel: vi.fn(),
       };
@@ -321,8 +324,8 @@ describe('GrpcTransport', () => {
       const iterator = transport.resubscribeTask(params);
       const result = await iterator.next();
 
-      expect(result.value).toEqual(mockUpdate);
-      expect(FromProto.task).toHaveBeenCalledWith(mockUpdate);
+      expect(result.value).toEqual(mockResponse);
+      expect(FromProto.messageStreamResult).toHaveBeenCalledWith(mockResponse);
     });
   });
 });
