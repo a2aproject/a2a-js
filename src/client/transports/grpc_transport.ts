@@ -271,7 +271,7 @@ export class GrpcTransport implements Transport {
     return metadata;
   }
 
-  private static mapToError(error: grpc.ServiceError, method: string): Error {
+  private static mapToError(error: grpc.ServiceError, method: keyof A2AServiceClient): Error {
     switch (error.code) {
       case grpc.status.NOT_FOUND:
         return new TaskNotFoundError(error.details);
