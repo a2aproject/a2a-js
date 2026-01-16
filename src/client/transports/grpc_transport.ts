@@ -271,6 +271,7 @@ export class GrpcTransport implements Transport {
     return metadata;
   }
 
+  // TODO: this mapToError will be improved in v1.0.0 with the enriched error model
   private static mapToError(error: grpc.ServiceError, method: keyof A2AServiceClient): Error {
     switch (error.code) {
       case grpc.status.NOT_FOUND:
