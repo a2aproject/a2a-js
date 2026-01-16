@@ -107,8 +107,8 @@ export class FromProto {
       kind: 'message',
       messageId: message.messageId,
       parts: message.content.map((p) => FromProto.part(p)),
-      contextId: message.contextId,
-      taskId: message.taskId,
+      contextId: message.contextId || undefined,
+      taskId: message.taskId || undefined,
       role: FromProto.role(message.role),
       metadata: message.metadata,
       extensions: message.extensions,
@@ -488,13 +488,8 @@ export class FromProto {
     event: StreamResponse
   ): types.Message | types.Task | types.TaskStatusUpdateEvent | types.TaskArtifactUpdateEvent {
     switch (event.payload?.$case) {
-      case 'msg': {
-        const message = FromProto.message(event.payload.value);
-        if (!message) {
-          throw A2AError.internalError('Invalid message in StreamResponse');
-        }
-        return message;
-      }
+      case 'msg':
+        return FromProto.message(event.payload.value);
       case 'task':
         return FromProto.task(event.payload.value);
       case 'statusUpdate':

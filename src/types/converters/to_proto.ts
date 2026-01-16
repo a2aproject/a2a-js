@@ -36,6 +36,7 @@ import {
   CancelTaskRequest,
   TaskSubscriptionRequest,
   CreateTaskPushNotificationConfigRequest,
+  GetAgentCardRequest,
 } from '../pb/a2a_types.js';
 import { generatePushNotificationConfigName, generateTaskName } from './id_decoding.js';
 
@@ -559,5 +560,9 @@ export class ToProto {
     return {
       name: generateTaskName(params.id),
     };
+  }
+
+  static getAgentCardRequest(): GetAgentCardRequest {
+    return {};
   }
 }
