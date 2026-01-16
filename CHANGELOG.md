@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.9](https://github.com/a2aproject/a2a-js/compare/v0.3.8...v0.3.9) (2026-01-16)
+
+
+### Features
+
+* implement gRPC server ([#279](https://github.com/a2aproject/a2a-js/issues/279)) ([bd4caa2](https://github.com/a2aproject/a2a-js/commit/bd4caa22a09480ba8cebec755528b67b80a95323))
+
 ## [0.3.8](https://github.com/a2aproject/a2a-js/compare/v0.3.7...v0.3.8) (2026-01-15)
 
 
