@@ -63,7 +63,7 @@ export class GrpcTransport implements Transport {
       undefined,
       options,
       this.grpcClient.getAgentCard.bind(this.grpcClient),
-      () => {},
+      () => ({}),
       FromProto.agentCard
     );
     return rpcResponse;
