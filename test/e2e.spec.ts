@@ -68,7 +68,7 @@ describe('Client E2E tests', () => {
     describe(`[${transportConfig.name}]`, () => {
       let app: Express;
       let server: Server;
-      let grpc_server: grpc.Server;
+      let grpcServer: grpc.Server;
       let agentExecutor: TestAgentExecutor;
       let agentCard: AgentCard;
 
