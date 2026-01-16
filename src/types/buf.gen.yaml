@@ -1,0 +1,19 @@
+# buf generate
+# Configuration for the buf generate command
+# Uses remote plugins, no separate install required.
+version: v2
+inputs:
+  - directory: ./pb
+plugins:
+  - remote: buf.build/community/stephenh-ts-proto:v2.11.0
+    opt: 
+      - oneof=unions-value
+      - importSuffix=.js
+      - outputServices=false
+      - env=node
+      - esModuleInterop=true
+      - outputJsonMethods=true
+      - outputPartialMethods=false
+      - outputEncodeMethods=false
+      - snakeToCamel=keys
+    out: ./pb
