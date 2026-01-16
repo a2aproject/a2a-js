@@ -18,7 +18,6 @@ import {
   createMockMessage,
   createMockTask,
 } from '../util.js';
-import { GetAgentCardRequest } from '../../../src/types/pb/a2a_types.js';
 
 // --- Mocks ---
 
