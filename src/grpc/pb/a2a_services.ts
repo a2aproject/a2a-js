@@ -2,7 +2,7 @@
 // versions:
 //   protoc-gen-ts_proto  v2.6.1
 //   protoc               unknown
-// source: a2a.proto
+// source: a2a_services.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
@@ -3608,16 +3608,17 @@ export const A2AServiceClient = makeGenericClientConstructor(A2AServiceService, 
   serviceName: string;
 };
 
-function toTimestamp(date: Date): Timestamp {
+function toTimestamp(dateStr: string): Timestamp {
+  const date = new globalThis.Date(dateStr);
   const seconds = Math.trunc(date.getTime() / 1_000);
   const nanos = (date.getTime() % 1_000) * 1_000_000;
   return { seconds, nanos };
 }
 
-function fromTimestamp(t: Timestamp): Date {
+function fromTimestamp(t: Timestamp): string {
   let millis = (t.seconds || 0) * 1_000;
   millis += (t.nanos || 0) / 1_000_000;
-  return new globalThis.Date(millis);
+  return new globalThis.Date(millis).toISOString();
 }
 
 export interface MessageFns<T> {

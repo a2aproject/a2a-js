@@ -5,7 +5,6 @@
 // source: a2a_types.proto
 
 /* eslint-disable */
-import { Timestamp } from "./google/protobuf/timestamp.js";
 
 export const protobufPackage = "a2a.v1";
 
@@ -216,7 +215,7 @@ export interface TaskStatus {
    * Timestamp when the status was recorded.
    * Example: "2023-10-27T10:00:00Z"
    */
-  timestamp: Date | undefined;
+  timestamp: string | undefined;
 }
 
 /**
@@ -973,7 +972,7 @@ export const TaskStatus: MessageFns<TaskStatus> = {
         : isSet(object.update)
         ? Message.fromJSON(object.update)
         : undefined,
-      timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
+      timestamp: isSet(object.timestamp) ? globalThis.String(object.timestamp) : undefined,
     };
   },
 
@@ -986,7 +985,7 @@ export const TaskStatus: MessageFns<TaskStatus> = {
       obj.message = Message.toJSON(message.update);
     }
     if (message.timestamp !== undefined) {
-      obj.timestamp = message.timestamp.toISOString();
+      obj.timestamp = message.timestamp;
     }
     return obj;
   },
@@ -2465,22 +2464,6 @@ function bytesFromBase64(b64: string): Uint8Array {
 
 function base64FromBytes(arr: Uint8Array): string {
   return globalThis.Buffer.from(arr).toString("base64");
-}
-
-function fromTimestamp(t: Timestamp): Date {
-  let millis = (t.seconds || 0) * 1_000;
-  millis += (t.nanos || 0) / 1_000_000;
-  return new globalThis.Date(millis);
-}
-
-function fromJsonTimestamp(o: any): Date {
-  if (o instanceof globalThis.Date) {
-    return o;
-  } else if (typeof o === "string") {
-    return new globalThis.Date(o);
-  } else {
-    return fromTimestamp(Timestamp.fromJSON(o));
-  }
 }
 
 function isObject(value: any): boolean {

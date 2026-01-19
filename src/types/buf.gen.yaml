@@ -6,6 +6,7 @@ inputs:
   - directory: ./pb
 plugins:
   - remote: buf.build/community/stephenh-ts-proto:v2.11.0
+    out: ./pb
     opt: 
       - oneof=unions-value
       - importSuffix=.js
@@ -16,4 +17,5 @@ plugins:
       - outputPartialMethods=false
       - outputEncodeMethods=false
       - snakeToCamel=keys
-    out: ./pb
+      - emitImportedFiles=false
+      - useDate=string

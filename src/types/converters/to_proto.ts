@@ -446,7 +446,7 @@ export class ToProto {
     return {
       state: ToProto.taskState(status.state),
       update: ToProto.message(status.message),
-      timestamp: status.timestamp ? new Date(status.timestamp) : undefined,
+      timestamp: status.timestamp,
     };
   }
 

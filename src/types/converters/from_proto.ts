@@ -240,7 +240,7 @@ export class FromProto {
     return {
       message: FromProto.message(status.update),
       state: FromProto.taskState(status.state),
-      timestamp: status.timestamp?.toISOString(),
+      timestamp: status.timestamp,
     };
   }
 
