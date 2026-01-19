@@ -481,7 +481,7 @@ export function createMockProtoTask(
     contextId: 'context-123',
     status: {
       state: status,
-      timestamp: new Date('2023-01-01T00:00:00.000Z'),
+      timestamp: '2023-01-01T00:00:00.000Z',
       update: undefined,
     },
     artifacts: [],

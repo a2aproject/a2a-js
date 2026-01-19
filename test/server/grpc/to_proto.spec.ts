@@ -37,7 +37,7 @@ describe('ToProto', () => {
       contextId: 'ctx-1',
       status: {
         state: proto.TaskState.TASK_STATE_COMPLETED,
-        timestamp: new Date('2023-01-01T00:00:00.000Z'),
+        timestamp: '2023-01-01T00:00:00.000Z',
         update: undefined,
       },
       artifacts: [],
