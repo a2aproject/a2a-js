@@ -22,3 +22,8 @@ npx buf generate
 ```
 
 This will generate the TypeScript files in the `./pb` directory (as configured in `buf.gen.yaml`).
+
+## Post-Processing
+
+After generating the types, it may be convenient to remove the files generated in the `google` directory, as
+only the `timestamp.ts` is used in the SDK types without services.

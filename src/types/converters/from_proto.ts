@@ -105,7 +105,7 @@ export class FromProto {
 
     return {
       kind: 'message',
-      messageId: message.messageId || undefined,
+      messageId: message.messageId,
       parts: message.content.map((p) => FromProto.part(p)),
       contextId: message.contextId || undefined,
       taskId: message.taskId || undefined,
@@ -149,7 +149,7 @@ export class FromProto {
 
     return {
       id: config.id,
-      url: config.url || undefined,
+      url: config.url,
       token: config.token || undefined,
       authentication: FromProto.pushNotificationAuthenticationInfo(config.authentication),
     };
@@ -227,9 +227,9 @@ export class FromProto {
   static task(task: Task): types.Task {
     return {
       kind: 'task',
-      id: task.id || undefined,
+      id: task.id,
       status: FromProto.taskStatus(task.status),
-      contextId: task.contextId || undefined,
+      contextId: task.contextId,
       artifacts: task.artifacts?.map((a) => FromProto.artifact(a)),
       history: task.history?.map((h) => FromProto.message(h)),
       metadata: task.metadata,
@@ -271,7 +271,7 @@ export class FromProto {
 
   static artifact(artifact: Artifact): types.Artifact {
     return {
-      artifactId: artifact.artifactId || undefined,
+      artifactId: artifact.artifactId,
       name: artifact.name || undefined,
       description: artifact.description || undefined,
       parts: artifact.parts.map((p) => FromProto.part(p)),
@@ -302,12 +302,12 @@ export class FromProto {
         : {},
       defaultInputModes: agentCard.defaultInputModes,
       defaultOutputModes: agentCard.defaultOutputModes,
-      description: agentCard.description || undefined,
+      description: agentCard.description,
       documentationUrl: agentCard.documentationUrl || undefined,
-      name: agentCard.name || undefined,
+      name: agentCard.name,
       preferredTransport: agentCard.preferredTransport,
       provider: agentCard.provider ? FromProto.agentProvider(agentCard.provider) : undefined,
-      protocolVersion: agentCard.protocolVersion || undefined,
+      protocolVersion: agentCard.protocolVersion,
       security: agentCard.security?.map((s) => FromProto.security(s)),
       securitySchemes: agentCard.securitySchemes
         ? Object.fromEntries(
@@ -320,8 +320,8 @@ export class FromProto {
       skills: agentCard.skills.map((s) => FromProto.skills(s)),
       signatures: agentCard.signatures?.map((s) => FromProto.agentCardSignature(s)),
       supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard,
-      url: agentCard.url || undefined,
-      version: agentCard.version || undefined,
+      url: agentCard.url,
+      version: agentCard.version,
     };
   }
 
@@ -335,7 +335,7 @@ export class FromProto {
 
   static agentExtension(extension: AgentExtension): types.AgentExtension {
     return {
-      uri: extension.uri || undefined,
+      uri: extension.uri,
       description: extension.description || undefined,
       required: extension.required,
       params: extension.params,
@@ -344,15 +344,15 @@ export class FromProto {
 
   static agentInterface(intf: AgentInterface): types.AgentInterface {
     return {
-      transport: intf.transport || undefined,
-      url: intf.url || undefined,
+      transport: intf.transport,
+      url: intf.url,
     };
   }
 
   static agentProvider(provider: AgentProvider): types.AgentProvider {
     return {
-      organization: provider.organization || undefined,
-      url: provider.url || undefined,
+      organization: provider.organization,
+      url: provider.url,
     };
   }
 
@@ -367,14 +367,14 @@ export class FromProto {
       case 'apiKeySecurityScheme':
         return {
           type: 'apiKey',
-          name: securitySchemes.scheme.value.name || undefined,
+          name: securitySchemes.scheme.value.name,
           in: securitySchemes.scheme.value.location as 'query' | 'header' | 'cookie',
           description: securitySchemes.scheme.value.description || undefined,
         };
       case 'httpAuthSecurityScheme':
         return {
           type: 'http',
-          scheme: securitySchemes.scheme.value.scheme || undefined,
+          scheme: securitySchemes.scheme.value.scheme,
           bearerFormat: securitySchemes.scheme.value.bearerFormat || undefined,
           description: securitySchemes.scheme.value.description || undefined,
         };
@@ -394,7 +394,7 @@ export class FromProto {
         return {
           type: 'openIdConnect',
           description: securitySchemes.scheme.value.description || undefined,
-          openIdConnectUrl: securitySchemes.scheme.value.openIdConnectUrl || undefined,
+          openIdConnectUrl: securitySchemes.scheme.value.openIdConnectUrl,
         };
       default:
         throw A2AError.internalError(`Unsupported security scheme type`);
@@ -406,7 +406,7 @@ export class FromProto {
       case 'implicit':
         return {
           implicit: {
-            authorizationUrl: flows.flow.value.authorizationUrl || undefined,
+            authorizationUrl: flows.flow.value.authorizationUrl,
             scopes: flows.flow.value.scopes,
             refreshUrl: flows.flow.value.refreshUrl || undefined,
           },
@@ -416,16 +416,16 @@ export class FromProto {
           password: {
             refreshUrl: flows.flow.value.refreshUrl || undefined,
             scopes: flows.flow.value.scopes,
-            tokenUrl: flows.flow.value.tokenUrl || undefined,
+            tokenUrl: flows.flow.value.tokenUrl,
           },
         };
       case 'authorizationCode':
         return {
           authorizationCode: {
             refreshUrl: flows.flow.value.refreshUrl || undefined,
-            authorizationUrl: flows.flow.value.authorizationUrl || undefined,
+            authorizationUrl: flows.flow.value.authorizationUrl,
             scopes: flows.flow.value.scopes,
-            tokenUrl: flows.flow.value.tokenUrl || undefined,
+            tokenUrl: flows.flow.value.tokenUrl,
           },
         };
       case 'clientCredentials':
@@ -433,7 +433,7 @@ export class FromProto {
           clientCredentials: {
             refreshUrl: flows.flow.value.refreshUrl || undefined,
             scopes: flows.flow.value.scopes,
-            tokenUrl: flows.flow.value.tokenUrl || undefined,
+            tokenUrl: flows.flow.value.tokenUrl,
           },
         };
       default:
@@ -443,9 +443,9 @@ export class FromProto {
 
   static skills(skill: AgentSkill): types.AgentSkill {
     return {
-      id: skill.id || undefined,
-      name: skill.name || undefined,
-      description: skill.description || undefined,
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
       tags: skill.tags,
       examples: skill.examples,
       inputModes: skill.inputModes,
@@ -456,18 +456,18 @@ export class FromProto {
 
   static agentCardSignature(signatures: AgentCardSignature): types.AgentCardSignature {
     return {
-      protected: signatures.protected || undefined,
-      signature: signatures.signature || undefined,
-      header: signatures.header || undefined,
+      protected: signatures.protected,
+      signature: signatures.signature,
+      header: signatures.header,
     };
   }
 
   static taskStatusUpdateEvent(event: TaskStatusUpdateEvent): types.TaskStatusUpdateEvent {
     return {
       kind: 'status-update',
-      taskId: event.taskId || undefined,
+      taskId: event.taskId,
       status: FromProto.taskStatus(event.status),
-      contextId: event.contextId || undefined,
+      contextId: event.contextId,
       metadata: event.metadata,
       final: event.final,
     };
@@ -476,9 +476,9 @@ export class FromProto {
   static taskArtifactUpdateEvent(event: TaskArtifactUpdateEvent): types.TaskArtifactUpdateEvent {
     return {
       kind: 'artifact-update',
-      taskId: event.taskId || undefined,
+      taskId: event.taskId,
       artifact: FromProto.artifact(event.artifact),
-      contextId: event.contextId || undefined,
+      contextId: event.contextId,
       metadata: event.metadata,
       lastChunk: event.lastChunk,
     };
