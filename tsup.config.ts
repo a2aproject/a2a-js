@@ -7,6 +7,7 @@ export default defineConfig({
     'src/server/express/index.ts',
     'src/server/grpc/index.ts',
     'src/client/index.ts',
+    'src/client/transports/grpc/index.ts',
   ],
   format: ['esm', 'cjs'],
   dts: true,
