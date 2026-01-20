@@ -202,6 +202,22 @@ describe('Client E2E tests', () => {
 
           expect(removeUndefinedFields(actual)).to.deep.equal(expected);
         });
+
+        it('should fallback to non-streaming sendMessage if agent does not support streaming', async () => {
+          agentCard.capabilities.streaming = false;
+          const requestMessage = createTestMessage('1', 'request-message');
+          const responseMessage = createTestMessage('2', 'response-message');
+          agentExecutor.events = [responseMessage];
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          const actual: A2AStreamEventData[] = [];
+          for await (const message of client.sendMessageStream({ message: requestMessage })) {
+            actual.push(message);
+          }
+
+          expect(actual).to.have.lengthOf(1);
+          expect(removeUndefinedFields(actual[0])).to.deep.equal(responseMessage);
+        });
       });
     });
   });
