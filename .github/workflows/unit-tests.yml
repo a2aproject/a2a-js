@@ -53,14 +53,15 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-node@v3
-      with:
-        node-version: 24
-
     - name: Checkout Main
       uses: actions/checkout@v4
       with:
         ref: main
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: 'npm'
 
     - name: Install & Test (Main)
       timeout-minutes: 10
