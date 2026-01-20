@@ -29,6 +29,7 @@ import {
   JsonRpcTransportFactory,
   RestTransportFactory,
 } from '../client/index.js';
+import { GrpcTransportFactory } from '../client/transports/grpc/grpc_transport.js';
 
 // --- ANSI Colors ---
 const colors = {
@@ -94,6 +95,7 @@ const factory = new ClientFactory(
     transports: [
       new JsonRpcTransportFactory({ fetchImpl }),
       new RestTransportFactory({ fetchImpl }),
+      new GrpcTransportFactory(),
     ],
   })
 );
@@ -232,6 +234,23 @@ async function fetchAndDisplayAgentCard() {
     } else {
       console.log(`  Streaming:   ${colorize('yellow', 'Not Supported (or not specified)')}`);
     }
+
+    const supportedTransports = new Set<string>();
+    supportedTransports.add(card.preferredTransport || 'JSONRPC');
+    if (card.additionalInterfaces) {
+      for (const iface of card.additionalInterfaces) {
+        supportedTransports.add(iface.transport);
+      }
+    }
+    console.log(`  Supported Transports: ${Array.from(supportedTransports).join(', ')}`);
+
+    // TODO (https://github.com/a2aproject/a2a-js/issues/179): Add a way to get the protocol name from the transport.
+    console.log(
+      colorize(
+        'green',
+        `\n✓ Connected via ${Object.getPrototypeOf(client.transport).constructor.name}`
+      )
+    );
     // Update prompt prefix to use the fetched name
     // The prompt is set dynamically before each rl.prompt() call in the main loop
     // to reflect the current agentName if it changes (though unlikely after initial fetch).

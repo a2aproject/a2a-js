@@ -20,6 +20,8 @@
     "tsx": "^4.19.3"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.10.2",
+    "@grpc/grpc-js": "^1.14.3",
     "google-auth-library": "^10.5.0",
     "uuid": "^11.1.0"
   }
