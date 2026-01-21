@@ -240,7 +240,7 @@ async function main() {
   const server = new Server();
   server.addService(A2AService, grpcHandlerInstance);
   server.bindAsync(`localhost:${GRPC_PORT}`, ServerCredentials.createInsecure(), () => {
-    console.log(`[SUTAgent] gRPC server running at http://localhost:${GRPC_PORT}`);
+    console.log(`[SUTAgent] gRPC server running at localhost:${GRPC_PORT}`);
   });
 }
 
