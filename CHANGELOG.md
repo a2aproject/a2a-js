@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.9](https://github.com/a2aproject/a2a-js/compare/v0.3.8...v0.3.9) (2026-01-21)
+
+
+### Features
+
+* implement gRPC client ([#299](https://github.com/a2aproject/a2a-js/issues/299)) ([dbdb96e](https://github.com/a2aproject/a2a-js/commit/dbdb96eeb14a710ad612f36f371d848fc7cce186))
+* implement gRPC server ([#279](https://github.com/a2aproject/a2a-js/issues/279)) ([bd4caa2](https://github.com/a2aproject/a2a-js/commit/bd4caa22a09480ba8cebec755528b67b80a95323))
+
+
+### Bug Fixes
+
+* use proto default values in generated a2a_types.ts ([#303](https://github.com/a2aproject/a2a-js/issues/303)) ([0215d42](https://github.com/a2aproject/a2a-js/commit/0215d4232654c356c5d48e93cb94da46093576dd))
+
 ## [0.3.8](https://github.com/a2aproject/a2a-js/compare/v0.3.7...v0.3.8) (2026-01-15)
 
 
