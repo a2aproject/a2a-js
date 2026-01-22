@@ -30,6 +30,34 @@ function createMockResponse(sseData: string, chunkSize: number = 2): Response {
   });
 }
 
+function createMockResponseWithoutAsyncIterator(sseData: string): Response {
+  const encoder = new TextEncoder();
+  const chunks = [encoder.encode(sseData)];
+
+  let chunkIndex = 0;
+  const stream = new ReadableStream({
+    pull(controller) {
+      if (chunkIndex < chunks.length) {
+        controller.enqueue(chunks[chunkIndex]);
+        chunkIndex++;
+      } else {
+        controller.close();
+      }
+    },
+  });
+
+  const originalPipeThrough = stream.pipeThrough.bind(stream);
+  stream.pipeThrough = function <T>(transform: ReadableWritablePair<T, Uint8Array>) {
+    const result = originalPipeThrough(transform);
+    delete result[Symbol.asyncIterator];
+    return result;
+  } as typeof stream.pipeThrough;
+
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+}
+
 describe('SSE Utils', () => {
   describe('formatSSEEvent', () => {
     it('should format a data event', () => {
@@ -172,6 +200,75 @@ describe('SSE Utils', () => {
       expect(JSON.parse(parsedEvents[0].data)).toEqual(dataEvent);
       expect(parsedEvents[1].type).toBe('error');
       expect(JSON.parse(parsedEvents[1].data)).toEqual(errorEvent);
+    });
+  });
+
+  describe('Async iterator fallback', () => {
+    it('should work when stream has no native async iterator', async () => {
+      const originalData = { kind: 'task', id: '456' };
+      const formatted = formatSSEEvent(originalData);
+      const response = createMockResponseWithoutAsyncIterator(formatted);
+
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('message');
+      expect(JSON.parse(events[0].data)).toEqual(originalData);
+    });
+
+    it('should parse multiple events without async iterator', async () => {
+      const events_to_format = [
+        { kind: 'status', value: 'started' },
+        { kind: 'status', value: 'completed' },
+      ];
+      const formatted = events_to_format.map(formatSSEEvent).join('');
+      const response = createMockResponseWithoutAsyncIterator(formatted);
+
+      const parsedEvents: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        parsedEvents.push(event);
+      }
+
+      expect(parsedEvents).toHaveLength(2);
+      for (let i = 0; i < events_to_format.length; i++) {
+        expect(JSON.parse(parsedEvents[i].data)).toEqual(events_to_format[i]);
+      }
+    });
+  });
+
+  describe('Early termination', () => {
+    it('should handle breaking out of the loop early', async () => {
+      const events_to_format = [{ kind: 'first' }, { kind: 'second' }, { kind: 'third' }];
+      const formatted = events_to_format.map(formatSSEEvent).join('');
+      const response = createMockResponse(formatted);
+
+      const parsedEvents: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        parsedEvents.push(event);
+        if (parsedEvents.length === 1) {
+          break;
+        }
+      }
+
+      expect(parsedEvents).toHaveLength(1);
+      expect(JSON.parse(parsedEvents[0].data)).toEqual({ kind: 'first' });
+    });
+
+    it('should release reader lock when breaking early without async iterator', async () => {
+      const events_to_format = [{ kind: 'first' }, { kind: 'second' }];
+      const formatted = events_to_format.map(formatSSEEvent).join('');
+      const response = createMockResponseWithoutAsyncIterator(formatted);
+
+      const parsedEvents: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        parsedEvents.push(event);
+        break;
+      }
+
+      expect(parsedEvents).toHaveLength(1);
     });
   });
 });

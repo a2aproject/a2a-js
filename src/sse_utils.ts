@@ -108,7 +108,7 @@ export async function* parseSseStream(
   let eventType = 'message';
   let eventData = '';
 
-  for await (const value of response.body.pipeThrough(new TextDecoderStream())) {
+  for await (const value of pipeThrough(response.body)) {
     buffer += value;
     let lineEndIndex: number;
 
@@ -136,4 +136,44 @@ export async function* parseSseStream(
   if (eventData) {
     yield { type: eventType, data: eventData };
   }
+}
+
+function createAsyncIterator(
+  stream: ReadableStream<string>
+): () => AsyncGenerator<Awaited<string>, void, unknown> {
+  return async function* () {
+    const reader = stream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        yield value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+}
+
+/**
+ * Makes sure the async iterator is available on the stream.
+ * @param body - The body of the response
+ * @returns The stream with the async iterator
+ *
+ * @example
+ * ```ts
+ * for await (const value of pipeThrough(response.body)) {
+ *   console.log(value);
+ * }
+ * ```
+ */
+function pipeThrough(body: ReadableStream<Uint8Array<ArrayBuffer>>): ReadableStream<string> {
+  const stream = body.pipeThrough(new TextDecoderStream());
+  if (!stream[Symbol.asyncIterator]) {
+    stream[Symbol.asyncIterator] = createAsyncIterator(stream);
+  }
+
+  return stream;
 }
