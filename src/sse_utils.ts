@@ -140,7 +140,7 @@ export async function* parseSseStream(
 
 function createAsyncIterator(
   stream: ReadableStream<string>
-): () => AsyncGenerator<Awaited<string>, void, unknown> {
+): () => AsyncGenerator<string, void, void> {
   return async function* () {
     const reader = stream.getReader();
     try {
