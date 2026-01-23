@@ -108,7 +108,9 @@ export async function* parseSseStream(
   let eventType = 'message';
   let eventData = '';
 
-  for await (const value of pipeThrough(response.body)) {
+  const stream = response.body.pipeThrough(new TextDecoderStream());
+
+  for await (const value of readFrom(stream)) {
     buffer += value;
     let lineEndIndex: number;
 
@@ -138,42 +140,27 @@ export async function* parseSseStream(
   }
 }
 
-function createAsyncIterator(
-  stream: ReadableStream<string>
-): () => AsyncGenerator<string, void, void> {
-  return async function* () {
-    const reader = stream.getReader();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        yield value;
-      }
-    } finally {
-      reader.releaseLock();
-    }
-  };
-}
-
 /**
- * Makes sure the async iterator is available on the stream.
- * @param body - The body of the response
- * @returns The stream with the async iterator
+ * Reads string chunks from a ReadableStream using the reader API.
  *
- * @example
- * ```ts
- * for await (const value of pipeThrough(response.body)) {
- *   console.log(value);
- * }
- * ```
+ * We use the manual reader approach the native async iterator directly on the stream
+ * because ReadableStream async iteration is not supported in all environments.
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
+ *
+ * @param stream - The ReadableStream to read from
+ * @yields String chunks from the stream
  */
-function pipeThrough(body: ReadableStream<Uint8Array<ArrayBuffer>>): ReadableStream<string> {
-  const stream = body.pipeThrough(new TextDecoderStream());
-  if (!stream[Symbol.asyncIterator]) {
-    stream[Symbol.asyncIterator] = createAsyncIterator(stream);
+async function* readFrom(stream: ReadableStream<string>): AsyncGenerator<string, void, void> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
   }
-
-  return stream;
 }
