@@ -1,50 +1,56 @@
 import { describe, it, expect } from 'vitest';
 import { formatSSEEvent, formatSSEErrorEvent, parseSseStream, SseEvent } from '../src/sse_utils.js';
 
+const MOCK_CHUNK_SIZE = 2;
+
+/**
+ * Creates a ReadableStream from chunks of Uint8Array data.
+ */
+function createStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
+  let chunkIndex = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (chunkIndex < chunks.length) {
+        controller.enqueue(chunks[chunkIndex]);
+        chunkIndex++;
+      } else {
+        controller.close();
+      }
+    },
+  });
+}
+
+/**
+ * Encodes a string into chunks of Uint8Array data.
+ */
+function encodeChunks(data: string): Uint8Array[] {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  for (let i = 0; i < data.length; i += MOCK_CHUNK_SIZE) {
+    chunks.push(encoder.encode(data.slice(i, i + MOCK_CHUNK_SIZE)));
+  }
+  return chunks;
+}
+
 /**
  * Creates a mock Response object from SSE-formatted strings.
  * Used to test that the parser can understand what the formatter produces.
  */
-function createMockResponse(sseData: string, chunkSize: number = 2): Response {
-  const encoder = new TextEncoder();
-  const chunks: Uint8Array[] = [];
-
-  for (let i = 0; i < sseData.length; i += chunkSize) {
-    chunks.push(encoder.encode(sseData.slice(i, i + chunkSize)));
-  }
-
-  let chunkIndex = 0;
-  const stream = new ReadableStream({
-    pull(controller) {
-      if (chunkIndex < chunks.length) {
-        controller.enqueue(chunks[chunkIndex]);
-        chunkIndex++;
-      } else {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
+function createMockResponse(sseData: string): Response {
+  const chunks = encodeChunks(sseData);
+  return new Response(createStream(chunks), {
     headers: { 'Content-Type': 'text/event-stream' },
   });
 }
 
+/**
+ * Creates a mock Response where the decoded stream has no native async iterator.
+ * Simulates environments where ReadableStream async iteration is not supported.
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
+ */
 function createMockResponseWithoutAsyncIterator(sseData: string): Response {
-  const encoder = new TextEncoder();
-  const chunks = [encoder.encode(sseData)];
-
-  let chunkIndex = 0;
-  const stream = new ReadableStream({
-    pull(controller) {
-      if (chunkIndex < chunks.length) {
-        controller.enqueue(chunks[chunkIndex]);
-        chunkIndex++;
-      } else {
-        controller.close();
-      }
-    },
-  });
+  const chunks = encodeChunks(sseData);
+  const stream = createStream(chunks);
 
   const originalPipeThrough = stream.pipeThrough.bind(stream);
   stream.pipeThrough = function <T>(transform: ReadableWritablePair<T, Uint8Array>) {
@@ -202,73 +208,59 @@ describe('SSE Utils', () => {
       expect(JSON.parse(parsedEvents[1].data)).toEqual(errorEvent);
     });
   });
+});
 
-  describe('Async iterator fallback', () => {
-    it('should work when stream has no native async iterator', async () => {
-      const originalData = { kind: 'task', id: '456' };
-      const formatted = formatSSEEvent(originalData);
-      const response = createMockResponseWithoutAsyncIterator(formatted);
+/**
+ * Tests that parseSseStream works correctly in both environments:
+ * - With native ReadableStream async iterator support
+ * - Without native async iterator (simulating older browsers/runtimes)
+ */
+describe.each([
+  ['with native async iterator', createMockResponse],
+  ['without native async iterator', createMockResponseWithoutAsyncIterator],
+])('parseSseStream environment compatibility (%s)', (_, createResponse) => {
+  it('should parse a single data event', async () => {
+    const sseData = 'data: {"kind":"message"}\n\n';
+    const response = createResponse(sseData);
 
-      const events: SseEvent[] = [];
-      for await (const event of parseSseStream(response)) {
-        events.push(event);
-      }
+    const events: SseEvent[] = [];
+    for await (const event of parseSseStream(response)) {
+      events.push(event);
+    }
 
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('message');
-      expect(JSON.parse(events[0].data)).toEqual(originalData);
-    });
-
-    it('should parse multiple events without async iterator', async () => {
-      const events_to_format = [
-        { kind: 'status', value: 'started' },
-        { kind: 'status', value: 'completed' },
-      ];
-      const formatted = events_to_format.map(formatSSEEvent).join('');
-      const response = createMockResponseWithoutAsyncIterator(formatted);
-
-      const parsedEvents: SseEvent[] = [];
-      for await (const event of parseSseStream(response)) {
-        parsedEvents.push(event);
-      }
-
-      expect(parsedEvents).toHaveLength(2);
-      for (let i = 0; i < events_to_format.length; i++) {
-        expect(JSON.parse(parsedEvents[i].data)).toEqual(events_to_format[i]);
-      }
-    });
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('message');
+    expect(events[0].data).toBe('{"kind":"message"}');
   });
 
-  describe('Early termination', () => {
-    it('should handle breaking out of the loop early', async () => {
-      const events_to_format = [{ kind: 'first' }, { kind: 'second' }, { kind: 'third' }];
-      const formatted = events_to_format.map(formatSSEEvent).join('');
-      const response = createMockResponse(formatted);
+  it('should parse multiple events', async () => {
+    const sseData = 'data: {"id":1}\n\ndata: {"id":2}\n\n';
+    const response = createResponse(sseData);
 
-      const parsedEvents: SseEvent[] = [];
-      for await (const event of parseSseStream(response)) {
-        parsedEvents.push(event);
-        if (parsedEvents.length === 1) {
-          break;
-        }
-      }
+    const events: SseEvent[] = [];
+    for await (const event of parseSseStream(response)) {
+      events.push(event);
+    }
 
-      expect(parsedEvents).toHaveLength(1);
-      expect(JSON.parse(parsedEvents[0].data)).toEqual({ kind: 'first' });
-    });
+    expect(events).toHaveLength(2);
+    expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
+    expect(JSON.parse(events[1].data)).toEqual({ id: 2 });
+  });
 
-    it('should release reader lock when breaking early without async iterator', async () => {
-      const events_to_format = [{ kind: 'first' }, { kind: 'second' }];
-      const formatted = events_to_format.map(formatSSEEvent).join('');
-      const response = createMockResponseWithoutAsyncIterator(formatted);
+  it('should handle breaking out of the loop early', async () => {
+    const events_to_format = [{ kind: 'first' }, { kind: 'second' }, { kind: 'third' }];
+    const formatted = events_to_format.map(formatSSEEvent).join('');
+    const response = createResponse(formatted);
 
-      const parsedEvents: SseEvent[] = [];
-      for await (const event of parseSseStream(response)) {
-        parsedEvents.push(event);
+    const parsedEvents: SseEvent[] = [];
+    for await (const event of parseSseStream(response)) {
+      parsedEvents.push(event);
+      if (parsedEvents.length === 1) {
         break;
       }
+    }
 
-      expect(parsedEvents).toHaveLength(1);
-    });
+    expect(parsedEvents).toHaveLength(1);
+    expect(JSON.parse(parsedEvents[0].data)).toEqual({ kind: 'first' });
   });
 });
