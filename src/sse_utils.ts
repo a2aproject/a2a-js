@@ -108,7 +108,9 @@ export async function* parseSseStream(
   let eventType = 'message';
   let eventData = '';
 
-  for await (const value of response.body.pipeThrough(new TextDecoderStream())) {
+  const stream = response.body.pipeThrough(new TextDecoderStream());
+
+  for await (const value of readFrom(stream)) {
     buffer += value;
     let lineEndIndex: number;
 
@@ -135,5 +137,30 @@ export async function* parseSseStream(
   // Yield any pending event at stream end
   if (eventData) {
     yield { type: eventType, data: eventData };
+  }
+}
+
+/**
+ * Reads string chunks from a ReadableStream using the reader API.
+ *
+ * We use the manual reader approach the native async iterator directly on the stream
+ * because ReadableStream async iteration is not supported in all environments.
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
+ *
+ * @param stream - The ReadableStream to read from
+ * @yields String chunks from the stream
+ */
+async function* readFrom(stream: ReadableStream<string>): AsyncGenerator<string, void, void> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
   }
 }
