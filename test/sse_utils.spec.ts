@@ -93,10 +93,13 @@ describe('SSE Utils', () => {
     });
   });
 
-  describe('parseSseStream', () => {
+  describe.each([
+    ['with native async iterator', createMockResponse],
+    ['without native async iterator', createMockResponseWithoutAsyncIterator],
+  ])('parseSseStream (%s)', (_, createResponse) => {
     it('should parse a single data event', async () => {
       const sseData = 'data: {"kind":"message"}\n\n';
-      const response = createMockResponse(sseData);
+      const response = createResponse(sseData);
 
       const events: SseEvent[] = [];
       for await (const event of parseSseStream(response)) {
@@ -110,7 +113,7 @@ describe('SSE Utils', () => {
 
     it('should parse an error event', async () => {
       const sseData = 'event: error\ndata: {"code":-32001}\n\n';
-      const response = createMockResponse(sseData);
+      const response = createResponse(sseData);
 
       const events: SseEvent[] = [];
       for await (const event of parseSseStream(response)) {
@@ -124,7 +127,7 @@ describe('SSE Utils', () => {
 
     it('should parse multiple events', async () => {
       const sseData = 'data: {"id":1}\n\ndata: {"id":2}\n\n';
-      const response = createMockResponse(sseData);
+      const response = createResponse(sseData);
 
       const events: SseEvent[] = [];
       for await (const event of parseSseStream(response)) {
@@ -207,60 +210,5 @@ describe('SSE Utils', () => {
       expect(parsedEvents[1].type).toBe('error');
       expect(JSON.parse(parsedEvents[1].data)).toEqual(errorEvent);
     });
-  });
-});
-
-/**
- * Tests that parseSseStream works correctly in both environments:
- * - With native ReadableStream async iterator support
- * - Without native async iterator (simulating older browsers/runtimes)
- */
-describe.each([
-  ['with native async iterator', createMockResponse],
-  ['without native async iterator', createMockResponseWithoutAsyncIterator],
-])('parseSseStream environment compatibility (%s)', (_, createResponse) => {
-  it('should parse a single data event', async () => {
-    const sseData = 'data: {"kind":"message"}\n\n';
-    const response = createResponse(sseData);
-
-    const events: SseEvent[] = [];
-    for await (const event of parseSseStream(response)) {
-      events.push(event);
-    }
-
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe('message');
-    expect(events[0].data).toBe('{"kind":"message"}');
-  });
-
-  it('should parse multiple events', async () => {
-    const sseData = 'data: {"id":1}\n\ndata: {"id":2}\n\n';
-    const response = createResponse(sseData);
-
-    const events: SseEvent[] = [];
-    for await (const event of parseSseStream(response)) {
-      events.push(event);
-    }
-
-    expect(events).toHaveLength(2);
-    expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
-    expect(JSON.parse(events[1].data)).toEqual({ id: 2 });
-  });
-
-  it('should handle breaking out of the loop early', async () => {
-    const events_to_format = [{ kind: 'first' }, { kind: 'second' }, { kind: 'third' }];
-    const formatted = events_to_format.map(formatSSEEvent).join('');
-    const response = createResponse(formatted);
-
-    const parsedEvents: SseEvent[] = [];
-    for await (const event of parseSseStream(response)) {
-      parsedEvents.push(event);
-      if (parsedEvents.length === 1) {
-        break;
-      }
-    }
-
-    expect(parsedEvents).toHaveLength(1);
-    expect(JSON.parse(parsedEvents[0].data)).toEqual({ kind: 'first' });
   });
 });
