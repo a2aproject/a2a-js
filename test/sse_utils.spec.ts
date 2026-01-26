@@ -1,20 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { formatSSEEvent, formatSSEErrorEvent, parseSseStream, SseEvent } from '../src/sse_utils.js';
 
+const MOCK_CHUNK_SIZE = 2;
+
 /**
- * Creates a mock Response object from SSE-formatted strings.
- * Used to test that the parser can understand what the formatter produces.
+ * Creates a ReadableStream from chunks of Uint8Array data.
  */
-function createMockResponse(sseData: string, chunkSize: number = 2): Response {
-  const encoder = new TextEncoder();
-  const chunks: Uint8Array[] = [];
-
-  for (let i = 0; i < sseData.length; i += chunkSize) {
-    chunks.push(encoder.encode(sseData.slice(i, i + chunkSize)));
-  }
-
+function createStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   let chunkIndex = 0;
-  const stream = new ReadableStream({
+  return new ReadableStream({
     pull(controller) {
       if (chunkIndex < chunks.length) {
         controller.enqueue(chunks[chunkIndex]);
@@ -24,6 +18,46 @@ function createMockResponse(sseData: string, chunkSize: number = 2): Response {
       }
     },
   });
+}
+
+/**
+ * Encodes a string into chunks of Uint8Array data.
+ */
+function encodeChunks(data: string): Uint8Array[] {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  for (let i = 0; i < data.length; i += MOCK_CHUNK_SIZE) {
+    chunks.push(encoder.encode(data.slice(i, i + MOCK_CHUNK_SIZE)));
+  }
+  return chunks;
+}
+
+/**
+ * Creates a mock Response object from SSE-formatted strings.
+ * Used to test that the parser can understand what the formatter produces.
+ */
+function createMockResponse(sseData: string): Response {
+  const chunks = encodeChunks(sseData);
+  return new Response(createStream(chunks), {
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+}
+
+/**
+ * Creates a mock Response where the decoded stream has no native async iterator.
+ * Simulates environments where ReadableStream async iteration is not supported.
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
+ */
+function createMockResponseWithoutAsyncIterator(sseData: string): Response {
+  const chunks = encodeChunks(sseData);
+  const stream = createStream(chunks);
+
+  const originalPipeThrough = stream.pipeThrough.bind(stream);
+  stream.pipeThrough = function <T>(transform: ReadableWritablePair<T, Uint8Array>) {
+    const result = originalPipeThrough(transform);
+    delete result[Symbol.asyncIterator];
+    return result;
+  } as typeof stream.pipeThrough;
 
   return new Response(stream, {
     headers: { 'Content-Type': 'text/event-stream' },
@@ -59,10 +93,13 @@ describe('SSE Utils', () => {
     });
   });
 
-  describe('parseSseStream', () => {
+  describe.each([
+    ['with native async iterator', createMockResponse],
+    ['without native async iterator', createMockResponseWithoutAsyncIterator],
+  ])('parseSseStream (%s)', (_, createResponse) => {
     it('should parse a single data event', async () => {
       const sseData = 'data: {"kind":"message"}\n\n';
-      const response = createMockResponse(sseData);
+      const response = createResponse(sseData);
 
       const events: SseEvent[] = [];
       for await (const event of parseSseStream(response)) {
@@ -76,7 +113,7 @@ describe('SSE Utils', () => {
 
     it('should parse an error event', async () => {
       const sseData = 'event: error\ndata: {"code":-32001}\n\n';
-      const response = createMockResponse(sseData);
+      const response = createResponse(sseData);
 
       const events: SseEvent[] = [];
       for await (const event of parseSseStream(response)) {
@@ -90,7 +127,7 @@ describe('SSE Utils', () => {
 
     it('should parse multiple events', async () => {
       const sseData = 'data: {"id":1}\n\ndata: {"id":2}\n\n';
-      const response = createMockResponse(sseData);
+      const response = createResponse(sseData);
 
       const events: SseEvent[] = [];
       for await (const event of parseSseStream(response)) {
