@@ -12,6 +12,7 @@ on:
       - '**.md'
       - 'LICENSE'
       - '.github/CODEOWNERS'
+      - 'src/samples/**'
 
 jobs:
   test:
