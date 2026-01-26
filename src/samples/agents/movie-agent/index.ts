@@ -9,6 +9,9 @@ import {
   TextPart,
   Message,
   AGENT_CARD_PATH,
+  TaskArtifactUpdateEvent,
+  Artifact,
+  Part,
 } from '../../../index.js';
 import {
   InMemoryTaskStore,
@@ -192,25 +195,44 @@ class MovieAgentExecutor implements AgentExecutor {
         finalA2AState = 'completed'; // Default if LLM deviates
       }
 
-      // 5. Publish final task status update
+      // 5. Publish artifact with the result
+      const parts: Part[] = [{ kind: 'text', text: agentReplyText || 'Completed.' }];
+      const artifactId = uuidv4();
+      const resultArtifact: Artifact = {
+        artifactId: artifactId,
+        name: 'Result',
+        description: 'The result of the movie agent.',
+        parts: parts,
+      };
+
+      const artifactUpdate: TaskArtifactUpdateEvent = {
+        kind: 'artifact-update',
+        taskId: taskId,
+        contextId: contextId,
+        artifact: resultArtifact,
+        lastChunk: true,
+      };
+      eventBus.publish(artifactUpdate);
+
+      // 6. Update local history context (internal only)
       const agentMessage: Message = {
         kind: 'message',
         role: 'agent',
         messageId: uuidv4(),
-        parts: [{ kind: 'text', text: agentReplyText || 'Completed.' }], // Ensure some text
+        parts: parts,
         taskId: taskId,
         contextId: contextId,
       };
       historyForGenkit.push(agentMessage);
       contexts.set(contextId, historyForGenkit);
 
+      // 7. Publish final task status update
       const finalUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId: taskId,
         contextId: contextId,
         status: {
           state: finalA2AState,
-          message: agentMessage,
           timestamp: new Date().toISOString(),
         },
         final: true,
