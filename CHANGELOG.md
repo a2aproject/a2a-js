@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.10](https://github.com/a2aproject/a2a-js/compare/v0.3.9...v0.3.10) (2026-01-27)
+
+
+### Bug Fixes
+
+* do not use ReadableStream async iterator in SSE stream parsing ([#311](https://github.com/a2aproject/a2a-js/issues/311)) ([5359fa8](https://github.com/a2aproject/a2a-js/commit/5359fa802fc3a3dcf35438f3cee18f7ab9bc3ca3))
+* preserve typed error as cause in SSE errors ([#315](https://github.com/a2aproject/a2a-js/issues/315)) ([d39544e](https://github.com/a2aproject/a2a-js/commit/d39544ea4ba0db004fcca15b9fac870a97725e5c))
+
 ## [0.3.9](https://github.com/a2aproject/a2a-js/compare/v0.3.8...v0.3.9) (2026-01-21)
 
 
