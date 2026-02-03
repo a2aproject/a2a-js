@@ -1,4 +1,5 @@
 import { PushNotificationNotSupportedError } from '../errors.js';
+import { AgentCardSignatureVerifier } from '../signature.js';
 import {
   MessageSendParams,
   TaskPushNotificationConfig,
@@ -75,13 +76,19 @@ export class Client {
    * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
    * Otherwise it will return the current agent card value.
    */
-  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
+  async getAgentCard(
+    options?: RequestOptions,
+    verifyAgentCardSignature?: AgentCardSignatureVerifier
+  ): Promise<AgentCard> {
     if (this.agentCard.supportsAuthenticatedExtendedCard) {
       this.agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
         (_, options) => this.transport.getExtendedAgentCard(options)
       );
+    }
+    if (verifyAgentCardSignature) {
+      await verifyAgentCardSignature(this.agentCard);
     }
     return this.agentCard;
   }
