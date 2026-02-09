@@ -389,9 +389,7 @@ describe('RestTransport', () => {
     });
 
     it('should include HTTP statusCode on TaskNotCancelableError', async () => {
-      mockFetch.mockResolvedValue(
-        createRestErrorResponse(-32002, 'Task cannot be canceled', 409)
-      );
+      mockFetch.mockResolvedValue(createRestErrorResponse(-32002, 'Task cannot be canceled', 409));
 
       try {
         await transport.cancelTask({ id: 'task-123' });
