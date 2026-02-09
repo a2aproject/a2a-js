@@ -11,6 +11,10 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
 } from '../../../src/errors.js';
 import {
   createMessageParams,
@@ -367,6 +371,147 @@ describe('RestTransport', () => {
       mockFetch.mockRejectedValue(new Error('Network error'));
 
       await expect(transport.getTask({ id: 'task-123' })).rejects.toThrow('Network error');
+    });
+
+    it('should include HTTP statusCode on TaskNotFoundError', async () => {
+      mockFetch.mockResolvedValue(createRestErrorResponse(-32001, 'Task not found', 404));
+
+      try {
+        await transport.getTask({ id: 'nonexistent' });
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(TaskNotFoundError);
+        const error = err as TaskNotFoundError;
+        expect(error.statusCode).to.equal(404);
+        expect(error.headers).toBeDefined();
+        expect(error.headers!['content-type']).to.equal('application/json');
+      }
+    });
+
+    it('should include HTTP statusCode on TaskNotCancelableError', async () => {
+      mockFetch.mockResolvedValue(
+        createRestErrorResponse(-32002, 'Task cannot be canceled', 409)
+      );
+
+      try {
+        await transport.cancelTask({ id: 'task-123' });
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(TaskNotCancelableError);
+        const error = err as TaskNotCancelableError;
+        expect(error.statusCode).to.equal(409);
+      }
+    });
+
+    it('should include HTTP statusCode on PushNotificationNotSupportedError', async () => {
+      mockFetch.mockResolvedValue(
+        createRestErrorResponse(-32003, 'Push notifications not supported', 400)
+      );
+
+      const mockConfig: TaskPushNotificationConfig = {
+        taskId: 'task-123',
+        pushNotificationConfig: {
+          id: 'config-1',
+          url: 'https://notify.example.com/webhook',
+          authentication: undefined,
+          token: 'secret',
+        },
+      };
+
+      try {
+        await transport.setTaskPushNotificationConfig(mockConfig);
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(PushNotificationNotSupportedError);
+        const error = err as PushNotificationNotSupportedError;
+        expect(error.statusCode).to.equal(400);
+      }
+    });
+
+    it('should include HTTP statusCode on UnsupportedOperationError', async () => {
+      mockFetch.mockResolvedValue(
+        createRestErrorResponse(-32004, 'This operation is not supported', 405)
+      );
+
+      try {
+        await transport.getTask({ id: 'task-123' });
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(UnsupportedOperationError);
+        const error = err as UnsupportedOperationError;
+        expect(error.statusCode).to.equal(405);
+      }
+    });
+
+    it('should include HTTP statusCode on ContentTypeNotSupportedError', async () => {
+      mockFetch.mockResolvedValue(
+        createRestErrorResponse(-32005, 'Incompatible content types', 415)
+      );
+
+      try {
+        await transport.sendMessage(createMessageParams());
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ContentTypeNotSupportedError);
+        const error = err as ContentTypeNotSupportedError;
+        expect(error.statusCode).to.equal(415);
+      }
+    });
+
+    it('should include HTTP statusCode on InvalidAgentResponseError', async () => {
+      mockFetch.mockResolvedValue(
+        createRestErrorResponse(-32006, 'Invalid agent response type', 502)
+      );
+
+      try {
+        await transport.sendMessage(createMessageParams());
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(InvalidAgentResponseError);
+        const error = err as InvalidAgentResponseError;
+        expect(error.statusCode).to.equal(502);
+      }
+    });
+
+    it('should include HTTP statusCode on AuthenticatedExtendedCardNotConfiguredError', async () => {
+      mockFetch.mockResolvedValue(
+        createRestErrorResponse(-32007, 'Extended card not configured', 401)
+      );
+
+      try {
+        await transport.getExtendedAgentCard();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(AuthenticatedExtendedCardNotConfiguredError);
+        const error = err as AuthenticatedExtendedCardNotConfiguredError;
+        expect(error.statusCode).to.equal(401);
+      }
+    });
+
+    it('should include response headers on errors for HTTP-aware handling', async () => {
+      const customHeaders = {
+        'content-type': 'application/json',
+        'retry-after': '30',
+        'x-ratelimit-remaining': '0',
+      };
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ code: -32001, message: 'Task not found' }), {
+          status: 429,
+          headers: customHeaders,
+        })
+      );
+
+      try {
+        await transport.getTask({ id: 'task-123' });
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(TaskNotFoundError);
+        const error = err as TaskNotFoundError;
+        expect(error.statusCode).to.equal(429);
+        expect(error.headers).toBeDefined();
+        expect(error.headers!['retry-after']).to.equal('30');
+        expect(error.headers!['x-ratelimit-remaining']).to.equal('0');
+      }
     });
   });
 });

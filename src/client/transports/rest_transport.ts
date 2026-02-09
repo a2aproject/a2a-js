@@ -1,6 +1,7 @@
 import { TransportProtocolName } from '../../core.js';
 import {
   A2A_ERROR_CODE,
+  type A2AErrorHttpDetails,
   AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
@@ -260,6 +261,7 @@ export class RestTransport implements Transport {
   private async _handleErrorResponse(response: Response, path: string): Promise<never> {
     let errorBodyText = '(empty or non-JSON response)';
     let errorBody: RestErrorResponse | undefined;
+    const httpDetails = RestTransport.extractHttpDetails(response);
 
     try {
       errorBodyText = await response.text();
@@ -274,7 +276,7 @@ export class RestTransport implements Transport {
     }
 
     if (errorBody && typeof errorBody.code === 'number') {
-      throw RestTransport.mapToError(errorBody);
+      throw RestTransport.mapToError(errorBody, httpDetails);
     }
 
     throw new Error(
@@ -337,22 +339,30 @@ export class RestTransport implements Transport {
     }
   }
 
-  private static mapToError(error: RestErrorResponse): Error {
+  private static extractHttpDetails(response: Response): A2AErrorHttpDetails {
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    return { statusCode: response.status, headers };
+  }
+
+  private static mapToError(error: RestErrorResponse, httpDetails?: A2AErrorHttpDetails): Error {
     switch (error.code) {
       case A2A_ERROR_CODE.TASK_NOT_FOUND:
-        return new TaskNotFoundError(error.message);
+        return new TaskNotFoundError(error.message, httpDetails);
       case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-        return new TaskNotCancelableError(error.message);
+        return new TaskNotCancelableError(error.message, httpDetails);
       case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-        return new PushNotificationNotSupportedError(error.message);
+        return new PushNotificationNotSupportedError(error.message, httpDetails);
       case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-        return new UnsupportedOperationError(error.message);
+        return new UnsupportedOperationError(error.message, httpDetails);
       case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-        return new ContentTypeNotSupportedError(error.message);
+        return new ContentTypeNotSupportedError(error.message, httpDetails);
       case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-        return new InvalidAgentResponseError(error.message);
+        return new InvalidAgentResponseError(error.message, httpDetails);
       case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
-        return new AuthenticatedExtendedCardNotConfiguredError(error.message);
+        return new AuthenticatedExtendedCardNotConfiguredError(error.message, httpDetails);
       default:
         return new Error(
           `REST error: ${error.message} (Code: ${error.code})${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
