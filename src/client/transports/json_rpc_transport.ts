@@ -232,7 +232,7 @@ export class JsonRpcTransport implements Transport {
 
     const rpcResponse: JSONRPCResponse = await httpResponse.json();
     if (rpcResponse.id !== requestId) {
-      console.error(
+      throw new Error(
         `CRITICAL: RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}.`
       );
     }
@@ -321,7 +321,7 @@ export class JsonRpcTransport implements Transport {
       const a2aStreamResponse: JSONRPCResponse = sseJsonRpcResponse as JSONRPCResponse;
 
       if (a2aStreamResponse.id !== originalRequestId) {
-        console.warn(
+        throw new Error(
           `SSE Event's JSON-RPC response ID mismatch. Client request ID: ${originalRequestId}, event response ID: ${a2aStreamResponse.id}.`
         );
       }
@@ -343,7 +343,8 @@ export class JsonRpcTransport implements Transport {
       if (
         e instanceof Error &&
         (e.message.startsWith('SSE event contained an error') ||
-          e.message.startsWith("SSE event JSON-RPC response is missing 'result' field"))
+          e.message.startsWith("SSE event JSON-RPC response is missing 'result' field") ||
+          e.message.startsWith("SSE Event's JSON-RPC response ID mismatch"))
       ) {
         throw e;
       }
