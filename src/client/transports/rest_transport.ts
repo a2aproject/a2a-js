@@ -340,11 +340,10 @@ export class RestTransport implements Transport {
   }
 
   private static extractHttpDetails(response: Response): A2AErrorHttpDetails {
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-    return { statusCode: response.status, headers };
+    return {
+      statusCode: response.status,
+      headers: Object.fromEntries(response.headers),
+    };
   }
 
   private static mapToError(error: RestErrorResponse, httpDetails?: A2AErrorHttpDetails): Error {
