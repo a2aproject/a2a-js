@@ -316,47 +316,36 @@ export class JsonRpcTransport implements Transport {
     if (!jsonData.trim()) {
       throw new Error('Attempted to process empty SSE event data.');
     }
+
+    let a2aStreamResponse: JSONRPCResponse;
     try {
-      const sseJsonRpcResponse = JSON.parse(jsonData);
-      const a2aStreamResponse: JSONRPCResponse = sseJsonRpcResponse as JSONRPCResponse;
-
-      if (a2aStreamResponse.id !== originalRequestId) {
-        throw new Error(
-          `SSE Event's JSON-RPC response ID mismatch. Client request ID: ${originalRequestId}, event response ID: ${a2aStreamResponse.id}.`
-        );
-      }
-
-      if ('error' in a2aStreamResponse) {
-        const err = a2aStreamResponse.error;
-        throw new Error(
-          `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
-          { cause: JsonRpcTransport.mapToError(a2aStreamResponse) }
-        );
-      }
-
-      if (!('result' in a2aStreamResponse) || typeof a2aStreamResponse.result === 'undefined') {
-        throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
-      }
-
-      return a2aStreamResponse.result as TStreamItem;
+      a2aStreamResponse = JSON.parse(jsonData) as JSONRPCResponse;
     } catch (e) {
-      if (
-        e instanceof Error &&
-        (e.message.startsWith('SSE event contained an error') ||
-          e.message.startsWith("SSE event JSON-RPC response is missing 'result' field") ||
-          e.message.startsWith("SSE Event's JSON-RPC response ID mismatch"))
-      ) {
-        throw e;
-      }
-      console.error(
-        'Failed to parse SSE event data string or unexpected JSON-RPC structure:',
-        jsonData,
-        e
-      );
       throw new Error(
-        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof Error && e.message) || 'Unknown error'}`
+        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof Error && e.message) || 'Unknown error'}`,
+        { cause: e }
       );
     }
+
+    if (a2aStreamResponse.id !== originalRequestId) {
+      throw new Error(
+        `SSE Event's JSON-RPC response ID mismatch. Client request ID: ${originalRequestId}, event response ID: ${a2aStreamResponse.id}.`
+      );
+    }
+
+    if ('error' in a2aStreamResponse) {
+      const err = a2aStreamResponse.error;
+      throw new Error(
+        `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
+        { cause: JsonRpcTransport.mapToError(a2aStreamResponse) }
+      );
+    }
+
+    if (!('result' in a2aStreamResponse) || typeof a2aStreamResponse.result === 'undefined') {
+      throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
+    }
+
+    return a2aStreamResponse.result as TStreamItem;
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
