@@ -70,6 +70,8 @@
     "README.md"
   ],
   "devDependencies": {
+    "@betterer/cli": "^6.0.0-alpha.1",
+    "@betterer/typescript": "^6.0.0-alpha.1",
     "@bufbuild/buf": "^1.61.0",
     "@bufbuild/protobuf": "^2.10.2",
     "@cloudflare/vitest-pool-workers": "^0.12.5",
@@ -97,9 +99,9 @@
     "build": "tsup",
     "test": "vitest run",
     "test:edge": "vitest run --config vitest.edge.config.ts",
-    "lint": "tsc --noEmit && npx eslint .",
+    "lint": "tsc --noEmit && npx eslint . --fix && betterer precommit",
+    "lint:ci": "tsc --noEmit && npx eslint . && betterer ci",
     "format:readme": "prettier --write ./README.md",
-    "lint:fix": "npx eslint . --fix",
     "coverage": "vitest run --coverage",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
     "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist"

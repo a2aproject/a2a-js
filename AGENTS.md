@@ -53,8 +53,7 @@ The project is structured into modular entry points to allow tree-shaking and se
 | :--- | :--- |
 | `npm run build` | Builds the SDK using `tsup` into `dist/`. |
 | `npm test` | Runs unit tests using `vitest`. |
-| `npm run lint` | Runs linting checks (ESLint + Prettier). |
-| `npm run lint:fix` | Fixes linting issues which can be fixed automatically. |
+| `npm run lint` | Runs linting checks (ESLint + Prettier + betterer). |
 | `npm run format:readme` | Formats the README file. |
 
 ## Samples

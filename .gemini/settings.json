@@ -8,7 +8,7 @@
       "run_shell_command(npm run test-build)",
       "run_shell_command(npm run coverage)",
       "run_shell_command(npm run lint)",
-      "run_shell_command(npm run lint:fix)",
+      "run_shell_command(npm run lint:ci)",
       "run_shell_command(npm run format:readme)"
     ]
   }
