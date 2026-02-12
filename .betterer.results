@@ -1,0 +1,92 @@
+// BETTERER RESULTS V2.
+//
+// If this file contains merge conflicts, use `betterer merge` to automatically resolve them:
+// https://phenomnomnominal.github.io/betterer/docs/results-file/#merge
+//
+exports[`TypeScript Strict Mode`] = {
+  value: `{
+    "src/client/client.ts:1182451551": [
+      [444, 45, 6, "tsc: Argument of type \'TParams | undefined\' is not assignable to parameter of type \'TParams\'.\\n  \'TParams | undefined\' is assignable to the constraint of type \'TParams\', but \'TParams\' could be instantiated with a different subtype of constraint \'JsonRpcParams\'.\\n    Type \'undefined\' is not assignable to type \'TParams\'.\\n      \'undefined\' is assignable to the constraint of type \'TParams\', but \'TParams\' could be instantiated with a different subtype of constraint \'JsonRpcParams\'.", "1898504825"],
+      [474, 4, 6, "tsc: Type \'undefined\' is not assignable to type \'JSONRPCErrorResponse\'.", "2123913871"]
+    ],
+    "src/client/factory.ts:3559992563": [
+      [119, 29, 37, "tsc: Argument of type \'string | undefined\' is not assignable to parameter of type \'string\'.\\n  Type \'undefined\' is not assignable to type \'string\'.", "176554761"]
+    ],
+    "src/client/multitransport-client.ts:1457951880": [
+      [82, 24, 44, "tsc: Type \'Promise<AgentCard>\' is not assignable to type \'Promise<never>\'.\\n  Type \'AgentCard\' is not assignable to type \'never\'.", "1356744557"],
+      [101, 6, 47, "tsc: Argument of type \'(params: MessageSendParams, options?: RequestOptions | undefined) => Promise<SendMessageResult>\' is not assignable to parameter of type \'(params: MessageSendParams, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<SendMessageResult>\' is not assignable to type \'Promise<never>\'.\\n    Type \'SendMessageResult\' is not assignable to type \'never\'.\\n      Type \'Message\' is not assignable to type \'never\'.", "2571452626"],
+      [178, 6, 65, "tsc: Argument of type \'(params: TaskPushNotificationConfig, options?: RequestOptions | undefined) => Promise<TaskPushNotificationConfig>\' is not assignable to parameter of type \'(params: TaskPushNotificationConfig, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<TaskPushNotificationConfig>\' is not assignable to type \'Promise<never>\'.\\n    Type \'TaskPushNotificationConfig\' is not assignable to type \'never\'.", "2789685747"],
+      [197, 6, 65, "tsc: Argument of type \'(params: GetTaskPushNotificationConfigParams, options?: RequestOptions | undefined) => Promise<TaskPushNotificationConfig>\' is not assignable to parameter of type \'(params: TaskIdParams, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<TaskPushNotificationConfig>\' is not assignable to type \'Promise<never>\'.\\n    Type \'TaskPushNotificationConfig\' is not assignable to type \'never\'.", "1581152103"],
+      [216, 6, 66, "tsc: Argument of type \'(params: ListTaskPushNotificationConfigParams, options?: RequestOptions | undefined) => Promise<TaskPushNotificationConfig[]>\' is not assignable to parameter of type \'(params: ListTaskPushNotificationConfigParams, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<TaskPushNotificationConfig[]>\' is not assignable to type \'Promise<never>\'.\\n    Type \'TaskPushNotificationConfig[]\' is not assignable to type \'never\'.", "4161961235"],
+      [230, 6, 68, "tsc: Argument of type \'(params: DeleteTaskPushNotificationConfigParams, options?: RequestOptions | undefined) => Promise<void>\' is not assignable to parameter of type \'(params: DeleteTaskPushNotificationConfigParams, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<void>\' is not assignable to type \'Promise<never>\'.\\n    Type \'void\' is not assignable to type \'never\'.", "1244975368"],
+      [241, 6, 43, "tsc: Argument of type \'(params: TaskQueryParams, options?: RequestOptions | undefined) => Promise<Task>\' is not assignable to parameter of type \'(params: TaskQueryParams, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<Task>\' is not assignable to type \'Promise<never>\'.\\n    Type \'Task\' is not assignable to type \'never\'.", "2875666270"],
+      [253, 6, 46, "tsc: Argument of type \'(params: TaskIdParams, options?: RequestOptions | undefined) => Promise<Task>\' is not assignable to parameter of type \'(params: TaskIdParams, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<Task>\' is not assignable to type \'Promise<never>\'.\\n    Type \'Task\' is not assignable to type \'never\'.", "588661070"]
+    ],
+    "src/client/transports/json_rpc_transport.ts:956778244": [
+      [54, 6, 9, "tsc: Type \'undefined\' does not satisfy the constraint \'{ [key: string]: any; }\'.", "2620553983"],
+      [169, 38, 16, "tsc: Type \'TExtensionParams\' does not satisfy the constraint \'{ [key: string]: any; }\'.", "3740514676"]
+    ],
+    "src/server/events/execution_event_bus.ts:341476271": [
+      [248, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
+      [271, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
+    ],
+    "src/server/events/execution_event_queue.ts:132062659": [
+      [12, 10, 16, "tsc: Property \'boundHandleEvent\' has no initializer and is not definitely assigned in the constructor.", "1937789361"]
+    ],
+    "src/server/express/rest_handler.ts:684800976": [
+      [154, 35, 4, "tsc: Argument of type \'T | undefined\' is not assignable to parameter of type \'T\'.\\n  \'T\' could be instantiated with an arbitrary type which could be unrelated to \'T | undefined\'.", "2087730517"],
+      [204, 50, 17, "tsc: Argument of type \'unknown\' is not assignable to parameter of type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.", "3749434707"]
+    ],
+    "src/server/request_handler/default_request_handler.ts:1208203039": [
+      [433, 22, 23, "tsc: Type \'Message1 | Message2 | undefined\' is not assignable to type \'Message1\'.\\n  Type \'undefined\' is not assignable to type \'Message1\'.", "1479072653"],
+      [433, 47, 19, "tsc: Type \'Message2 | undefined\' is not assignable to type \'Message1\'.\\n  Type \'undefined\' is not assignable to type \'Message1\'.", "2682097303"],
+      [619, 6, 6, "tsc: Type \'string | undefined\' is not assignable to type \'string\'.\\n  Type \'undefined\' is not assignable to type \'string\'.", "1741934565"]
+    ],
+    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:3071717608": [
+      [55, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
+    ],
+    "src/types/converters/from_proto.ts:3167572508": [
+      [84, 6, 22, "tsc: Type \'PushNotificationConfig | undefined\' is not assignable to type \'PushNotificationConfig1\'.\\n  Type \'undefined\' is not assignable to type \'PushNotificationConfig1\'.", "2368778428"],
+      [138, 63, 30, "tsc: Argument of type \'PushNotificationConfig | undefined\' is not assignable to parameter of type \'PushNotificationConfig\'.\\n  Type \'undefined\' is not assignable to type \'PushNotificationConfig\'.", "4185699816"],
+      [153, 67, 21, "tsc: Argument of type \'AuthenticationInfo | undefined\' is not assignable to parameter of type \'AuthenticationInfo\'.\\n  Type \'undefined\' is not assignable to type \'AuthenticationInfo\'.", "243589825"],
+      [203, 8, 4, "tsc: Type \'undefined | { [key: string]: any; }\' is not assignable to type \'{ [k: string]: unknown; }\'.\\n  Type \'undefined\' is not assignable to type \'{ [k: string]: unknown; }\'.", "2087377941"],
+      [211, 6, 7, "tsc: Type \'Message | undefined\' is not assignable to type \'Message\'.\\n  Type \'undefined\' is not assignable to type \'Message\'.", "1236122734"],
+      [211, 33, 15, "tsc: Argument of type \'Message | undefined\' is not assignable to parameter of type \'Message\'.\\n  Type \'undefined\' is not assignable to type \'Message\'.", "1725852363"],
+      [212, 56, 21, "tsc: Argument of type \'SendMessageConfiguration | undefined\' is not assignable to parameter of type \'SendMessageConfiguration\'.\\n  Type \'undefined\' is not assignable to type \'SendMessageConfiguration\'.", "2141283338"],
+      [221, 6, 6, "tsc: Type \'Message | undefined\' is not assignable to type \'Message | Task\'.\\n  Type \'undefined\' is not assignable to type \'Message | Task\'.", "2123913871"],
+      [230, 35, 11, "tsc: Argument of type \'TaskStatus | undefined\' is not assignable to parameter of type \'TaskStatus\'.\\n  Type \'undefined\' is not assignable to type \'TaskStatus\'.", "3290243250"],
+      [233, 6, 7, "tsc: Type \'(Message | undefined)[]\' is not assignable to type \'Message1[]\'.\\n  Type \'Message | undefined\' is not assignable to type \'Message1\'.\\n    Type \'undefined\' is not assignable to type \'Message1\'.", "502375463"],
+      [240, 33, 13, "tsc: Argument of type \'Message | undefined\' is not assignable to parameter of type \'Message\'.\\n  Type \'undefined\' is not assignable to type \'Message\'.", "586067534"],
+      [286, 6, 22, "tsc: Type \'PushNotificationConfig | undefined\' is not assignable to type \'PushNotificationConfig1\'.\\n  Type \'undefined\' is not assignable to type \'PushNotificationConfig1\'.", "2368778428"],
+      [286, 63, 30, "tsc: Argument of type \'PushNotificationConfig | undefined\' is not assignable to parameter of type \'PushNotificationConfig\'.\\n  Type \'undefined\' is not assignable to type \'PushNotificationConfig\'.", "1238494243"],
+      [389, 38, 34, "tsc: Argument of type \'OAuthFlows | undefined\' is not assignable to parameter of type \'OAuthFlows\'.\\n  Type \'undefined\' is not assignable to type \'OAuthFlows\'.", "2386187236"],
+      [468, 35, 12, "tsc: Argument of type \'TaskStatus | undefined\' is not assignable to parameter of type \'TaskStatus\'.\\n  Type \'undefined\' is not assignable to type \'TaskStatus\'.", "3657456819"],
+      [479, 35, 14, "tsc: Argument of type \'Artifact | undefined\' is not assignable to parameter of type \'Artifact\'.\\n  Type \'undefined\' is not assignable to type \'Artifact\'.", "3619116505"],
+      [491, 8, 6, "tsc: Type \'Message | undefined\' is not assignable to type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.\\n  Type \'undefined\' is not assignable to type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.", "2123913871"]
+    ],
+    "src/types/converters/to_proto.ts:3424105456": [
+      [52, 38, 18, "tsc: Argument of type \'AgentProvider | undefined\' is not assignable to parameter of type \'AgentProvider\'.\\n  Type \'undefined\' is not assignable to type \'AgentProvider\'.", "1428962279"],
+      [68, 6, 33, "tsc: Type \'boolean | undefined\' is not assignable to type \'boolean\'.\\n  Type \'undefined\' is not assignable to type \'boolean\'.", "212802179"],
+      [223, 6, 6, "tsc: Type \'undefined\' is not assignable to type \'AgentProvider\'.", "2123913871"],
+      [233, 6, 9, "tsc: Type \'boolean | undefined\' is not assignable to type \'boolean\'.\\n  Type \'undefined\' is not assignable to type \'boolean\'.", "4113723737"],
+      [234, 6, 17, "tsc: Type \'boolean | undefined\' is not assignable to type \'boolean\'.\\n  Type \'undefined\' is not assignable to type \'boolean\'.", "4249068261"],
+      [263, 58, 31, "tsc: Argument of type \'string | undefined\' is not assignable to parameter of type \'string\'.\\n  Type \'undefined\' is not assignable to type \'string\'.", "113348213"],
+      [303, 6, 8, "tsc: Type \'string | undefined\' is not assignable to type \'string\'.\\n  Type \'undefined\' is not assignable to type \'string\'.", "2373810498"],
+      [309, 6, 6, "tsc: Type \'undefined\' is not assignable to type \'PushNotificationConfig\'.", "2123913871"],
+      [316, 65, 21, "tsc: Argument of type \'PushNotificationAuthenticationInfo | undefined\' is not assignable to parameter of type \'PushNotificationAuthenticationInfo\'.\\n  Type \'undefined\' is not assignable to type \'PushNotificationAuthenticationInfo\'.", "243589825"],
+      [339, 10, 5, "tsc: Type \'Message | undefined\' is not assignable to type \'Message\'.\\n  Type \'undefined\' is not assignable to type \'Message\'.", "189936718"],
+      [384, 6, 6, "tsc: Type \'boolean | undefined\' is not assignable to type \'boolean\'.\\n  Type \'undefined\' is not assignable to type \'boolean\'.", "1326815083"],
+      [385, 6, 9, "tsc: Type \'boolean | undefined\' is not assignable to type \'boolean\'.\\n  Type \'undefined\' is not assignable to type \'boolean\'.", "11251860"],
+      [389, 64, 19, "tsc: Function lacks ending return statement and return type does not include \'undefined\'.", "2245381585"],
+      [394, 10, 5, "tsc: Type \'Message | undefined\' is not assignable to type \'Message\'.\\n  Type \'undefined\' is not assignable to type \'Message\'.", "189936718"],
+      [440, 6, 7, "tsc: Type \'(Message | undefined)[]\' is not assignable to type \'Message[]\'.\\n  Type \'Message | undefined\' is not assignable to type \'Message\'.\\n    Type \'undefined\' is not assignable to type \'Message\'.", "502375463"],
+      [448, 30, 14, "tsc: Argument of type \'Message2 | undefined\' is not assignable to parameter of type \'Message\'.\\n  Type \'undefined\' is not assignable to type \'Message\'.", "3366941076"],
+      [501, 10, 8, "tsc: Type \'string | undefined\' is not assignable to type \'string\'.\\n  Type \'undefined\' is not assignable to type \'string\'.", "3750463409"],
+      [506, 10, 8, "tsc: Type \'string | undefined\' is not assignable to type \'string\'.\\n  Type \'undefined\' is not assignable to type \'string\'.", "3750463409"],
+      [527, 43, 20, "tsc: Argument of type \'MessageSendConfiguration | undefined\' is not assignable to parameter of type \'MessageSendConfiguration\'.\\n  Type \'undefined\' is not assignable to type \'MessageSendConfiguration\'.", "2639404487"],
+      [534, 6, 6, "tsc: Type \'undefined\' is not assignable to type \'SendMessageConfiguration\'.", "2123913871"],
+      [538, 6, 8, "tsc: Type \'boolean | undefined\' is not assignable to type \'boolean\'.\\n  Type \'undefined\' is not assignable to type \'boolean\'.", "3894148428"],
+      [540, 55, 36, "tsc: Argument of type \'PushNotificationConfig | undefined\' is not assignable to parameter of type \'PushNotificationConfig\'.\\n  Type \'undefined\' is not assignable to type \'PushNotificationConfig\'.", "1308984194"]
+    ]
+  }`
+};
