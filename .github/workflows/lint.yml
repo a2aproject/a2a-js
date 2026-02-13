@@ -26,4 +26,4 @@ jobs:
           package-lock.json
           src/samples/package-lock.json
     - run: npm ci && (cd src/samples && npm ci)
-  - run: npm run lint:ci
+    - run: npm run lint:ci
