@@ -10,7 +10,6 @@ export class ExecutionEventQueue {
   private eventQueue: AgentExecutionEvent[] = [];
   private resolvePromise?: (value: void | PromiseLike<void>) => void;
   private stopped: boolean = false;
-  private boundHandleEvent: (event: AgentExecutionEvent) => void;
 
   constructor(eventBus: ExecutionEventBus) {
     this.eventBus = eventBus;
