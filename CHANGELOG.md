@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.11](https://github.com/a2aproject/a2a-js/compare/v0.3.10...v0.3.11) (2026-02-13)
+
+
+### Bug Fixes
+
+* throw on JSON-RPC response id mismatch ([#318](https://github.com/a2aproject/a2a-js/issues/318)) ([5ea1c94](https://github.com/a2aproject/a2a-js/commit/5ea1c94acaf2cae5aa1bc10ea5816f5400a62423))
+
 ## [0.3.10](https://github.com/a2aproject/a2a-js/compare/v0.3.9...v0.3.10) (2026-01-27)
 
 
