@@ -109,18 +109,15 @@ export class ClientFactory {
       ...additionalInterfaces.map((i) => i.transport),
     ];
     for (const transport of transportsByPreference) {
-      if (!urlsPerAgentTransports.has(transport)) {
-        continue;
-      }
+      const url = urlsPerAgentTransports.get(transport);
       const factory = this.transportsByName.get(transport);
-      if (!factory) {
-        continue;
+      if (factory && url) {
+        return new Client(
+          await factory.create(url, agentCard),
+          agentCard,
+          this.options.clientConfig
+        );
       }
-      return new Client(
-        await factory.create(urlsPerAgentTransports.get(transport), agentCard),
-        agentCard,
-        this.options.clientConfig
-      );
     }
     throw new Error(
       'No compatible transport found, available transports: ' +

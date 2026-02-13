@@ -149,8 +149,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     if (statusCode === HTTP_STATUS.NO_CONTENT) {
       res.end();
     } else {
-      if (!responseType) {
-        throw new Error('Bug: toJson serializer must be provided for non-204 responses.');
+      if (!responseType || body === undefined) {
+        throw new Error('Bug: toJson serializer and body must be provided for non-204 responses.');
       }
       res.json(responseType.toJSON(body));
     }
