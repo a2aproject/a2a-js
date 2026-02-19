@@ -8,7 +8,6 @@ import {
   AgentProvider,
   Artifact,
   AuthenticationInfo,
-  FilePart as ProtoFilePart,
   Message,
   OAuthFlows,
   Part,

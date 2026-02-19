@@ -5,20 +5,20 @@ import crypto from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 
 import {
-  // Specific Params/Payload types used by the CLI
-  MessageSendParams, // Changed from TaskSendParams
+  MessageSendParams,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   Message,
-  Task, // Added for direct Task events
-  // Other types needed for message/part handling
-  FilePart,
-  DataPart,
-  // Type for the agent card
+  Task,
   AgentCard,
-  Part, // Added for explicit Part typing
+  Part,
   AGENT_CARD_PATH,
 } from '../index.js';
+import {
+  TaskState,
+  Role,
+  taskStateToJSON,
+} from '../types/pb/a2a_types.js';
 
 import {
   AuthenticationHandler,
@@ -116,63 +116,63 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
   const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
   // Check if it's a TaskStatusUpdateEvent
-  if (event.kind === 'status-update') {
+  if ((event as any).status !== undefined && (event as any).taskId !== undefined) {
     const update = event as TaskStatusUpdateEvent; // Cast for type safety
-    const state = update.status.state;
+    const state = update.status?.state;
     let stateEmoji = '❓';
     let stateColor: keyof typeof colors = 'yellow';
 
     switch (state) {
-      case 'working':
+      case TaskState.TASK_STATE_WORKING:
         stateEmoji = '⏳';
         stateColor = 'blue';
         break;
-      case 'input-required':
+      case TaskState.TASK_STATE_INPUT_REQUIRED:
         stateEmoji = '🤔';
         stateColor = 'yellow';
         break;
-      case 'completed':
+      case TaskState.TASK_STATE_COMPLETED:
         stateEmoji = '✅';
         stateColor = 'green';
         break;
-      case 'canceled':
+      case TaskState.TASK_STATE_CANCELLED:
         stateEmoji = '⏹️';
         stateColor = 'gray';
         break;
-      case 'failed':
+      case TaskState.TASK_STATE_FAILED:
         stateEmoji = '❌';
         stateColor = 'red';
         break;
       default:
-        stateEmoji = 'ℹ️'; // For other states like submitted, rejected etc.
+        stateEmoji = 'ℹ️';
         stateColor = 'dim';
         break;
     }
 
     console.log(
-      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, state)} (Task: ${update.taskId}, Context: ${update.contextId}) ${update.final ? colorize('bright', '[FINAL]') : ''}`
+      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId}) ${update.final ? colorize('bright', '[FINAL]') : ''}`
     );
 
-    if (update.status.message) {
-      printMessageContent(update.status.message);
+    if (update.status?.update) {
+      printMessageContent(update.status.update);
     }
   }
   // Check if it's a TaskArtifactUpdateEvent
-  else if (event.kind === 'artifact-update') {
+  else if ((event as any).artifact !== undefined) {
     const update = event as TaskArtifactUpdateEvent; // Cast for type safety
     console.log(
-      `${prefix} 📄 Artifact Received: ${
-        update.artifact.name || '(unnamed)'
-      } (ID: ${update.artifact.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
+      `${prefix} 📄 Artifact Received: ${update.artifact?.name || '(unnamed)'
+      } (ID: ${update.artifact?.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
     );
     // Create a temporary message-like structure to reuse printMessageContent
     printMessageContent({
-      messageId: generateId(), // Dummy messageId
-      kind: 'message', // Dummy kind
-      role: 'agent', // Assuming artifact parts are from agent
-      parts: update.artifact.parts,
+      messageId: generateId(),
+      role: Role.ROLE_AGENT,
+      content: update.artifact?.parts || [],
       taskId: update.taskId,
       contextId: update.contextId,
+      extensions: [],
+      metadata: {},
     });
   } else {
     // This case should ideally not be reached if called correctly
@@ -185,31 +185,39 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
 }
 
 function printMessageContent(message: Message) {
-  message.parts.forEach((part: Part, index: number) => {
-    // Added explicit Part type
+  message.content.forEach((part: Part, index: number) => {
     const partPrefix = colorize('red', `  Part ${index + 1}:`);
-    if (part.kind === 'text') {
-      // Check kind property
-      console.log(`${partPrefix} ${colorize('green', '📝 Text:')}`, part.text);
-    } else if (part.kind === 'file') {
-      // Check kind property
-      const filePart = part as FilePart;
-      console.log(
-        `${partPrefix} ${colorize('blue', '📄 File:')} Name: ${
-          filePart.file.name || 'N/A'
-        }, Type: ${filePart.file.mimeType || 'N/A'}, Source: ${
-          'bytes' in filePart.file ? 'Inline (bytes)' : filePart.file.uri
-        }`
-      );
-    } else if (part.kind === 'data') {
-      // Check kind property
-      const dataPart = part as DataPart;
-      console.log(
-        `${partPrefix} ${colorize('yellow', '📊 Data:')}`,
-        JSON.stringify(dataPart.data, null, 2)
-      );
-    } else {
-      console.log(`${partPrefix} ${colorize('yellow', 'Unsupported part kind:')}`, part);
+    const p = part.part;
+
+    if (!p) {
+      return;
+    }
+
+    switch (p.$case) {
+      case 'text':
+        console.log(`${partPrefix} ${colorize('green', '📝 Text:')}`, p.value);
+        break;
+      case 'file':
+        const filePart = p.value;
+        let source = 'unknown';
+        if (filePart.file?.$case === 'fileWithUri') {
+          source = filePart.file.value;
+        } else if (filePart.file?.$case === 'fileWithBytes') {
+          source = 'Inline (bytes)';
+        }
+        console.log(
+          `${partPrefix} ${colorize('blue', '📄 File:')} Type: ${filePart.mimeType || 'N/A'}, Source: ${source}`
+        );
+        break;
+      case 'data':
+        console.log(
+          `${partPrefix} ${colorize('yellow', '📊 Data:')}`,
+          JSON.stringify(p.value.data, null, 2)
+        );
+        break;
+      default:
+        console.log(`${partPrefix} ${colorize('yellow', 'Unsupported part case:')}`, (p as any).$case);
+        break;
     }
   });
 }
@@ -307,14 +315,19 @@ async function main() {
 
     const messagePayload: Message = {
       messageId: messageId,
-      kind: 'message', // Required by Message interface
-      role: 'user',
-      parts: [
+      role: Role.ROLE_USER,
+      content: [
         {
-          kind: 'text', // Required by TextPart interface
-          text: input,
+          part: {
+            $case: 'text',
+            value: input,
+          }
         },
       ],
+      taskId: '',
+      contextId: '',
+      extensions: [],
+      metadata: {},
     };
 
     // Conditionally add taskId to the message payload
@@ -345,73 +358,81 @@ async function main() {
         const timestamp = new Date().toLocaleTimeString(); // Get fresh timestamp for each event
         const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
-        if (event.kind === 'status-update' || event.kind === 'artifact-update') {
-          const typedEvent = event as TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
-          printAgentEvent(typedEvent);
+        const payload = (event as any).payload;
+        if (!payload || !payload.$case) {
+          continue;
+        }
 
-          // If the event is a TaskStatusUpdateEvent and it's final, reset currentTaskId
-          if (
-            typedEvent.kind === 'status-update' &&
-            (typedEvent as TaskStatusUpdateEvent).final &&
-            (typedEvent as TaskStatusUpdateEvent).status.state !== 'input-required'
-          ) {
+        switch (payload.$case) {
+          case 'statusUpdate': {
+            const typedEvent = payload.value as TaskStatusUpdateEvent;
+            printAgentEvent(typedEvent);
+
+            if (typedEvent.final && typedEvent.status?.state !== TaskState.TASK_STATE_INPUT_REQUIRED) {
+              console.log(colorize('yellow', `   Task ${typedEvent.taskId} is final. Clearing current task ID.`));
+              currentTaskId = undefined;
+            }
+            break;
+          }
+          case 'artifactUpdate': {
+            const typedEvent = payload.value as TaskArtifactUpdateEvent;
+            printAgentEvent(typedEvent);
+            break;
+          }
+          case 'msg': {
+            const msg = payload.value as Message;
+            console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
+            printMessageContent(msg);
+            if (msg.taskId && msg.taskId !== currentTaskId) {
+              console.log(
+                colorize('dim', `   Task ID context updated to ${msg.taskId} based on message event.`)
+              );
+              currentTaskId = msg.taskId;
+            }
+            if (msg.contextId && msg.contextId !== currentContextId) {
+              console.log(
+                colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
+              );
+              currentContextId = msg.contextId;
+            }
+            break;
+          }
+          case 'task': {
+            const task = payload.value as Task;
             console.log(
-              colorize('yellow', `   Task ${typedEvent.taskId} is final. Clearing current task ID.`)
+              `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${taskStateToJSON(task.status?.state!)}`
             );
-            currentTaskId = undefined;
-            // Optionally, you might want to clear currentContextId as well if a task ending implies context ending.
-            // currentContextId = undefined;
-            // console.log(colorize("dim", `   Context ID also cleared as task is final.`));
+            if (task.id !== currentTaskId) {
+              console.log(
+                colorize('dim', `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`)
+              );
+              currentTaskId = task.id;
+            }
+            if (task.contextId && task.contextId !== currentContextId) {
+              console.log(
+                colorize(
+                  'dim',
+                  `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`
+                )
+              );
+              currentContextId = task.contextId;
+            }
+            if (task.status?.update) {
+              console.log(colorize('gray', '   Task includes message:'));
+              printMessageContent(task.status.update);
+            }
+            if (task.artifacts && task.artifacts.length > 0) {
+              console.log(colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`));
+            }
+            break;
           }
-        } else if (event.kind === 'message') {
-          const msg = event as Message;
-          console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
-          printMessageContent(msg);
-          if (msg.taskId && msg.taskId !== currentTaskId) {
+          default:
             console.log(
-              colorize('dim', `   Task ID context updated to ${msg.taskId} based on message event.`)
+              prefix,
+              colorize('yellow', 'Received unknown event structure from stream:'),
+              event
             );
-            currentTaskId = msg.taskId;
-          }
-          if (msg.contextId && msg.contextId !== currentContextId) {
-            console.log(
-              colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
-            );
-            currentContextId = msg.contextId;
-          }
-        } else if (event.kind === 'task') {
-          const task = event as Task;
-          console.log(
-            `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${task.status.state}`
-          );
-          if (task.id !== currentTaskId) {
-            console.log(
-              colorize('dim', `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`)
-            );
-            currentTaskId = task.id;
-          }
-          if (task.contextId && task.contextId !== currentContextId) {
-            console.log(
-              colorize(
-                'dim',
-                `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`
-              )
-            );
-            currentContextId = task.contextId;
-          }
-          if (task.status.message) {
-            console.log(colorize('gray', '   Task includes message:'));
-            printMessageContent(task.status.message);
-          }
-          if (task.artifacts && task.artifacts.length > 0) {
-            console.log(colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`));
-          }
-        } else {
-          console.log(
-            prefix,
-            colorize('yellow', 'Received unknown event structure from stream:'),
-            event
-          );
+            break;
         }
       }
       console.log(colorize('dim', `--- End of response stream for this input ---`));

@@ -4,7 +4,12 @@ import {
   TaskIdParams,
   A2ARequest,
   JSONRPCResponse,
-} from '../../../types.js';
+  StreamResponse,
+  Message,
+  Task,
+  TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
+} from '../../../index.js';
 import { ServerCallContext } from '../../context.js';
 import { A2AError } from '../../error.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
@@ -86,10 +91,22 @@ export class JsonRpcTransportHandler {
         > {
           try {
             for await (const event of agentEventStream) {
+              let payload: StreamResponse['payload'];
+
+              if ('messageId' in event) {
+                payload = { $case: 'msg', value: event as Message };
+              } else if ('artifacts' in event) {
+                payload = { $case: 'task', value: event as Task };
+              } else if ('status' in event) {
+                payload = { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent };
+              } else if ('artifact' in event) {
+                payload = { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent };
+              }
+
               yield {
                 jsonrpc: '2.0',
                 id: requestId, // Use the original request ID for all streamed responses
-                result: event,
+                result: { payload },
               };
             }
           } catch (streamError) {

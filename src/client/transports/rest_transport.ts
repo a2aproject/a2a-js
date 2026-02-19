@@ -15,11 +15,11 @@ import {
   GetTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigParams,
   MessageSendParams,
-  TaskPushNotificationConfig,
+  JsonRpcTaskPushNotificationConfig,
   TaskIdParams,
   TaskQueryParams,
   Task,
-} from '../../types.js';
+} from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
@@ -86,10 +86,10 @@ export class RestTransport implements Transport {
   }
 
   async setTaskPushNotificationConfig(
-    params: TaskPushNotificationConfig,
+    params: JsonRpcTaskPushNotificationConfig,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig> {
-    const requestBody = ToProto.taskPushNotificationConfig(params);
+  ): Promise<JsonRpcTaskPushNotificationConfig> {
+    const requestBody = ToProto.jsonRpcTaskPushNotificationConfig(params);
     const response = await this._sendRequest<
       a2a.TaskPushNotificationConfig,
       a2a.TaskPushNotificationConfig
@@ -101,13 +101,13 @@ export class RestTransport implements Transport {
       a2a.TaskPushNotificationConfig,
       a2a.TaskPushNotificationConfig
     );
-    return FromProto.taskPushNotificationConfig(response);
+    return FromProto.jsonRpcTaskPushNotificationConfig(response);
   }
 
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig> {
+  ): Promise<JsonRpcTaskPushNotificationConfig> {
     const { pushNotificationConfigId } = params;
     if (!pushNotificationConfigId) {
       throw new Error(
@@ -122,13 +122,13 @@ export class RestTransport implements Transport {
       undefined,
       a2a.TaskPushNotificationConfig
     );
-    return FromProto.taskPushNotificationConfig(response);
+    return FromProto.jsonRpcTaskPushNotificationConfig(response);
   }
 
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
+  ): Promise<JsonRpcTaskPushNotificationConfig[]> {
     const response = await this._sendRequest<undefined, a2a.ListTaskPushNotificationConfigResponse>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
@@ -137,7 +137,8 @@ export class RestTransport implements Transport {
       undefined,
       a2a.ListTaskPushNotificationConfigResponse
     );
-    return FromProto.listTaskPushNotificationConfig(response);
+    const configs = FromProto.listTaskPushNotificationConfig(response);
+    return configs.map(FromProto.jsonRpcTaskPushNotificationConfig);
   }
 
   async deleteTaskPushNotificationConfig(
@@ -204,7 +205,7 @@ export class RestTransport implements Transport {
     }
     throw new Error(
       'A `fetch` implementation was not provided and is not available in the global scope. ' +
-        'Please provide a `fetchImpl` in the RestTransportOptions.'
+      'Please provide a `fetchImpl` in the RestTransportOptions.'
     );
   }
 
@@ -368,7 +369,7 @@ export interface RestTransportFactoryOptions {
 export class RestTransportFactory implements TransportFactory {
   public static readonly name: TransportProtocolName = 'HTTP+JSON';
 
-  constructor(private readonly options?: RestTransportFactoryOptions) {}
+  constructor(private readonly options?: RestTransportFactoryOptions) { }
 
   get protocolName(): string {
     return RestTransportFactory.name;

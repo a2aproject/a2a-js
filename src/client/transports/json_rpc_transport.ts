@@ -9,10 +9,9 @@ import {
   UnsupportedOperationError,
 } from '../../errors.js';
 import {
-  JSONRPCRequest,
   JSONRPCResponse,
   MessageSendParams,
-  TaskPushNotificationConfig,
+  JsonRpcTaskPushNotificationConfig,
   TaskIdParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
@@ -20,16 +19,16 @@ import {
   TaskQueryParams,
   Task,
   JSONRPCErrorResponse,
-  SendMessageSuccessResponse,
-  SetTaskPushNotificationConfigSuccessResponse,
-  GetTaskPushNotificationConfigSuccessResponse,
-  ListTaskPushNotificationConfigSuccessResponse,
-  GetTaskSuccessResponse,
-  CancelTaskSuccessResponse,
   AgentCard,
   GetTaskPushNotificationConfigParams,
+  GetTaskSuccessResponse,
+  CancelTaskSuccessResponse,
+  ListTaskPushNotificationConfigSuccessResponse,
+  GetTaskPushNotificationConfigSuccessResponse,
+  SetTaskPushNotificationConfigSuccessResponse,
+  SendMessageSuccessResponse,
   GetAuthenticatedExtendedCardSuccessResponse,
-} from '../../types.js';
+} from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
@@ -51,11 +50,13 @@ export class JsonRpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions, idOverride?: number): Promise<AgentCard> {
-    const rpcResponse = await this._sendRpcRequest<
+    const rpcResponse = (await this._sendRpcRequest<undefined, GetAuthenticatedExtendedCardSuccessResponse>(
+      'agent/getAuthenticatedExtendedCard',
       undefined,
-      GetAuthenticatedExtendedCardSuccessResponse
-    >('agent/getAuthenticatedExtendedCard', undefined, idOverride, options);
-    return rpcResponse.result;
+      idOverride,
+      options
+    )) as any;
+    return rpcResponse.result as AgentCard;
   }
 
   async sendMessage(
@@ -63,13 +64,13 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<SendMessageResult> {
-    const rpcResponse = await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>(
+    const rpcResponse = (await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>(
       'message/send',
       params,
       idOverride,
       options
-    );
-    return rpcResponse.result;
+    )) as any;
+    return rpcResponse.result as SendMessageResult;
   }
 
   async *sendMessageStream(
@@ -80,12 +81,12 @@ export class JsonRpcTransport implements Transport {
   }
 
   async setTaskPushNotificationConfig(
-    params: TaskPushNotificationConfig,
+    params: JsonRpcTaskPushNotificationConfig,
     options?: RequestOptions,
     idOverride?: number
-  ): Promise<TaskPushNotificationConfig> {
+  ): Promise<JsonRpcTaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
-      TaskPushNotificationConfig,
+      JsonRpcTaskPushNotificationConfig,
       SetTaskPushNotificationConfigSuccessResponse
     >('tasks/pushNotificationConfig/set', params, idOverride, options);
     return rpcResponse.result;
@@ -95,7 +96,7 @@ export class JsonRpcTransport implements Transport {
     params: GetTaskPushNotificationConfigParams,
     options?: RequestOptions,
     idOverride?: number
-  ): Promise<TaskPushNotificationConfig> {
+  ): Promise<JsonRpcTaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       GetTaskPushNotificationConfigParams,
       GetTaskPushNotificationConfigSuccessResponse
@@ -107,7 +108,7 @@ export class JsonRpcTransport implements Transport {
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions,
     idOverride?: number
-  ): Promise<TaskPushNotificationConfig[]> {
+  ): Promise<JsonRpcTaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendRpcRequest<
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigSuccessResponse
@@ -131,13 +132,13 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<Task> {
-    const rpcResponse = await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>(
+    const rpcResponse = (await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>(
       'tasks/get',
       params,
       idOverride,
       options
-    );
-    return rpcResponse.result;
+    )) as any;
+    return rpcResponse.result as Task;
   }
 
   async cancelTask(
@@ -145,13 +146,13 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<Task> {
-    const rpcResponse = await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>(
+    const rpcResponse = (await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>(
       'tasks/cancel',
       params,
       idOverride,
       options
-    );
-    return rpcResponse.result;
+    )) as any;
+    return rpcResponse.result as Task;
   }
 
   async *resubscribeTask(
@@ -184,7 +185,7 @@ export class JsonRpcTransport implements Transport {
     }
     throw new Error(
       'A `fetch` implementation was not provided and is not available in the global scope. ' +
-        'Please provide a `fetchImpl` in the A2ATransportOptions. '
+      'Please provide a `fetchImpl` in the A2ATransportOptions. '
     );
   }
 
@@ -200,7 +201,7 @@ export class JsonRpcTransport implements Transport {
   ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
 
-    const rpcRequest: JSONRPCRequest = {
+    const rpcRequest: any = {
       jsonrpc: '2.0',
       method,
       params: params,
@@ -245,7 +246,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   private async _fetchRpc(
-    rpcRequest: JSONRPCRequest,
+    rpcRequest: any,
     acceptHeader: string = 'application/json',
     options?: RequestOptions
   ): Promise<Response> {
@@ -268,7 +269,7 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
-    const rpcRequest: JSONRPCRequest = {
+    const rpcRequest: any = {
       jsonrpc: '2.0',
       method,
       params: params as { [key: string]: unknown },
@@ -345,7 +346,12 @@ export class JsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    return a2aStreamResponse.result as TStreamItem;
+    const result = a2aStreamResponse.result as any;
+    if (result && typeof result === 'object' && 'payload' in result && result.payload && 'value' in result.payload) {
+      return result.payload.value as TStreamItem;
+    }
+
+    return result as TStreamItem;
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
@@ -377,7 +383,7 @@ export class JsonRpcTransportFactoryOptions {
 export class JsonRpcTransportFactory implements TransportFactory {
   public static readonly name: TransportProtocolName = 'JSONRPC';
 
-  constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
+  constructor(private readonly options?: JsonRpcTransportFactoryOptions) { }
 
   get protocolName(): string {
     return JsonRpcTransportFactory.name;
