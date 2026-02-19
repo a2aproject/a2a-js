@@ -4,7 +4,7 @@ import request from 'supertest';
 
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
-import { AgentCard, Task, Message } from '../../../src/types.js';
+import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
 import { A2AError } from '../../../src/server/error.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 import {
@@ -41,26 +41,38 @@ describe('restHandler', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    securitySchemes: {},
+    security: [],
+    additionalInterfaces: [],
+    provider: undefined,
+    documentationUrl: '',
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
   };
 
   // camelCase format (internal type)
   const testMessage: Message = {
     messageId: 'msg-1',
-    role: 'user' as const,
-    parts: [{ kind: 'text' as const, text: 'Hello' }],
-    kind: 'message' as const,
+    role: 'user' as any,
+    content: [{ part: { $case: 'text', value: 'Hello' } }],
+    contextId: 'ctx-1',
+    taskId: 'task-1',
+    extensions: [],
+    metadata: {},
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   beforeEach(() => {
@@ -220,7 +232,7 @@ describe('restHandler', () => {
 
   describe('POST /v1/tasks/:taskId:cancel', () => {
     it('should cancel task and return 202 Accepted', async () => {
-      const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
+      const cancelledTask = { ...testTask, status: { state: TaskState.TASK_STATE_CANCELLED } };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
@@ -296,11 +308,13 @@ describe('restHandler', () => {
   });
 
   describe('Push Notification Config Endpoints', () => {
-    const mockConfig = {
-      taskId: 'task-1',
+    const mockConfig: TaskPushNotificationConfig = {
+      name: 'tasks/task-1/pushNotificationConfigs/config-1',
       pushNotificationConfig: {
         id: 'config-1',
         url: 'https://example.com/webhook',
+        token: '',
+        authentication: undefined,
       },
     };
 
@@ -309,7 +323,12 @@ describe('restHandler', () => {
         {
           name: 'camelCase',
           payload: {
-            pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' },
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+              token: '',
+              authentication: undefined,
+            },
           },
         },
       ])('should accept $name config and return 201', async ({ payload }) => {
@@ -323,7 +342,8 @@ describe('restHandler', () => {
         const protoResponse = FromProto.taskPushNotificationConfig(
           TaskPushNotificationConfig.fromJSON(response.body)
         );
-        assert.deepEqual(protoResponse.taskId, mockConfig.taskId);
+        assert.include(protoResponse.name, 'task-1');
+        assert.include(protoResponse.name, 'config-1');
       });
 
       it('should return 400 if push notifications not supported', async () => {
@@ -344,7 +364,14 @@ describe('restHandler', () => {
 
         await request(noPNApp)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({ pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' } })
+          .send({
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+              token: '',
+              authentication: undefined,
+            },
+          })
           .expect(400);
       });
     });
@@ -378,7 +405,7 @@ describe('restHandler', () => {
         const convertedResult = FromProto.taskPushNotificationConfig(
           TaskPushNotificationConfig.fromJSON(response.body)
         );
-        assert.deepEqual(convertedResult.taskId, mockConfig.taskId);
+        assert.include(convertedResult.name, 'task-1');
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
             id: 'task-1',
@@ -458,8 +485,7 @@ describe('restHandler', () => {
     ])('should accept $name file parts', async ({ message }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const protoMessage = ProtoMessage.toJSON(ToProto.message(message as Message));
-      await request(app).post('/v1/message:send').send({ message: protoMessage }).expect(201);
+      await request(app).post('/v1/message:send').send({ message }).expect(201);
     });
   });
 

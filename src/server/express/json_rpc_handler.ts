@@ -5,7 +5,7 @@ import express, {
   NextFunction,
   RequestHandler,
 } from 'express';
-import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from '../../types.js';
+import { JSONRPCErrorResponse, JSONRPCResponse } from '../../index.js';
 import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
@@ -53,7 +53,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       // Check if it's an AsyncGenerator (stream)
       if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
         const stream = rpcResponseOrStream as AsyncGenerator<
-          JSONRPCSuccessResponse,
+          JSONRPCResponse,
           void,
           undefined
         >;

@@ -20,7 +20,7 @@ import {
   TaskStatusUpdateEvent,
   A2ARequest,
   JSONRPCErrorResponse,
-} from '../types.js'; // Assuming schema.ts is in the same directory or appropriately pathed
+} from '../index.js';
 import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 import { RequestOptions } from './multitransport-client.js';
@@ -91,8 +91,8 @@ export class A2AClient {
     }
     throw new Error(
       'A `fetch` implementation was not provided and is not available in the global scope. ' +
-        'Please provide a `fetchImpl` in the A2AClientOptions. ' +
-        'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+      'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+      'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
     );
   }
 
@@ -120,8 +120,8 @@ export class A2AClient {
     } else {
       throw new Error(
         'A `fetch` implementation was not provided and is not available in the global scope. ' +
-          'Please provide a `fetchImpl` in the A2AClientOptions. ' +
-          'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
+        'Please provide a `fetchImpl` in the A2AClientOptions. ' +
+        'For earlier Node.js versions (pre-v18), you can use a library like `node-fetch`.'
       );
     }
 
@@ -153,10 +153,10 @@ export class A2AClient {
    * @returns A Promise resolving to SendMessageResponse, which can be a Message, Task, or an error.
    */
   public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
-    return await this.invokeJsonRpc<MessageSendParams, SendMessageResponse>(
+    return (await this.invokeJsonRpc<any, any>(
       (t, p, id) => t.sendMessage(p, A2AClient.emptyOptions, id),
       params
-    );
+    )) as SendMessageResponse;
   }
 
   /**
@@ -197,10 +197,10 @@ export class A2AClient {
         'Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).'
       );
     }
-    return await this.invokeJsonRpc<
-      TaskPushNotificationConfig,
-      SetTaskPushNotificationConfigResponse
-    >((t, p, id) => t.setTaskPushNotificationConfig(p, A2AClient.emptyOptions, id), params);
+    return (await this.invokeJsonRpc<any, any>(
+      (t, p, id) => t.setTaskPushNotificationConfig(p, A2AClient.emptyOptions, id),
+      params
+    )) as SetTaskPushNotificationConfigResponse;
   }
 
   /**

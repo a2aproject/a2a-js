@@ -138,6 +138,7 @@ export function createMockAgentCard(
     capabilities: {
       streaming: options.capabilities?.streaming ?? true,
       pushNotifications: options.capabilities?.pushNotifications ?? true,
+      extensions: [],
       ...options.capabilities,
     },
     skills: options.skills ?? [],
@@ -232,23 +233,24 @@ export function createMockMessage(
   options: {
     messageId?: string;
     text?: string;
-    role?: 'user' | 'agent';
+    role?: Role;
   } = {}
 ): SendMessageResult {
   const messageId = options.messageId ?? 'msg-123';
   const text = options.text ?? 'Hello, agent!';
-  const role = options.role ?? 'user';
+  const role = options.role ?? Role.ROLE_USER;
 
   return {
-    kind: 'message',
     messageId: messageId,
     contextId: 'context-123',
     taskId: 'task-123',
     role: role,
-    parts: [
+    content: [
       {
-        kind: 'text',
-        text: text,
+        part: {
+          $case: 'text',
+          value: text,
+        },
       },
     ],
     metadata: {},
@@ -449,16 +451,18 @@ export function createRestErrorResponse(
  * @param status - Task status state (defaults to 'completed')
  * @returns A mock Task object
  */
-export function createMockTask(id: string = 'task-123', status: string = 'completed'): any {
+export function createMockTask(
+  id: string = 'task-123',
+  status: TaskState = TaskState.TASK_STATE_COMPLETED
+): any {
   return {
     id,
     contextId: 'context-123',
     status: {
       state: status,
-      timestamp: new Date('2023-01-01T00:00:00.000Z').toISOString(),
-      message: undefined,
+      timestamp: '2023-01-01T00:00:00.000Z',
+      update: undefined,
     },
-    kind: 'task',
     artifacts: [],
     history: [],
     metadata: {},

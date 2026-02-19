@@ -9,7 +9,7 @@ import {
   InMemoryTaskStore,
   RequestContext,
 } from '../src/server/index.js';
-import { AgentCard, Message } from '../src/types.js';
+import { AgentCard, Message, Role, TaskState } from '../src/index.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';
@@ -83,10 +83,18 @@ describe('Client E2E tests', () => {
           capabilities: {
             streaming: true,
             pushNotifications: true,
+            extensions: [],
           },
           defaultInputModes: ['text/plain'],
           defaultOutputModes: ['text/plain'],
           skills: [],
+          additionalInterfaces: [],
+          provider: undefined,
+          documentationUrl: '',
+          securitySchemes: {},
+          security: [],
+          supportsAuthenticatedExtendedCard: false,
+          signatures: [],
         };
         const requestHandler = new DefaultRequestHandler(
           agentCard,
@@ -158,7 +166,7 @@ describe('Client E2E tests', () => {
           const actual = await client.sendMessage({
             message: createTestMessage('1', 'test'),
           });
-          expect(removeUndefinedFields(actual)).to.deep.equal(expected);
+          expect(removeUndefinedFields(actual)).to.deep.equal(removeUndefinedFields(expected));
         });
       });
 
@@ -170,24 +178,24 @@ describe('Client E2E tests', () => {
             {
               id: taskId,
               contextId,
-              status: { state: 'submitted' },
-              kind: 'task',
+              status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
               artifacts: [],
               history: [],
+              metadata: {},
             },
             {
               taskId,
               contextId,
-              kind: 'status-update',
-              status: { state: 'working' },
+              status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
               final: false,
+              metadata: {},
             },
             {
               taskId,
               contextId,
-              kind: 'status-update',
-              status: { state: 'completed' },
+              status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
               final: true,
+              metadata: {},
             },
           ];
           agentExecutor.events = expected;
@@ -200,7 +208,7 @@ describe('Client E2E tests', () => {
             actual.push(message);
           }
 
-          expect(removeUndefinedFields(actual)).to.deep.equal(expected);
+          expect(removeUndefinedFields(actual)).to.deep.equal(removeUndefinedFields(expected));
         });
 
         it('should fallback to non-streaming sendMessage if agent does not support streaming', async () => {
@@ -228,8 +236,10 @@ function createTestMessage(id: string, text: string): Message {
   return {
     messageId: id,
     extensions: [],
-    role: 'user',
-    parts: [{ kind: 'text', text }],
-    kind: 'message',
+    role: Role.ROLE_USER,
+    content: [{ part: { $case: 'text', value: text } }],
+    contextId: '',
+    taskId: '',
+    metadata: {},
   };
 }

@@ -1,6 +1,6 @@
 import {
   MessageSendParams,
-  TaskPushNotificationConfig,
+  JsonRpcTaskPushNotificationConfig,
   TaskIdParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
@@ -8,7 +8,7 @@ import {
   Task,
   AgentCard,
   GetTaskPushNotificationConfigParams,
-} from '../../types.js';
+} from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 
@@ -23,19 +23,19 @@ export interface Transport {
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 
   setTaskPushNotificationConfig(
-    params: TaskPushNotificationConfig,
+    params: JsonRpcTaskPushNotificationConfig,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig>;
+  ): Promise<JsonRpcTaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig>;
+  ): Promise<JsonRpcTaskPushNotificationConfig>;
 
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]>;
+  ): Promise<JsonRpcTaskPushNotificationConfig[]>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,

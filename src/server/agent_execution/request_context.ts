@@ -1,4 +1,4 @@
-import { Message, Task } from '../../types.js';
+import { Message, Task } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
 export class RequestContext {

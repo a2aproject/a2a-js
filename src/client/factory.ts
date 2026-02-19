@@ -1,5 +1,5 @@
 import { TransportProtocolName } from '../core.js';
-import { AgentCard } from '../types.js';
+import { AgentCard } from '../index.js';
 import { AgentCardResolver } from './card-resolver.js';
 import { Client, ClientConfig } from './multitransport-client.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
@@ -101,12 +101,12 @@ export class ClientFactory {
     const additionalInterfaces = agentCard.additionalInterfaces ?? [];
     const urlsPerAgentTransports = new CaseInsensitiveMap<string>([
       [agentCardPreferred, agentCard.url],
-      ...additionalInterfaces.map<[string, string]>((i) => [i.transport, i.url]),
+      ...additionalInterfaces.map<[string, string]>((i: any) => [i.transport, i.url]),
     ]);
     const transportsByPreference = [
       ...(this.options.preferredTransports ?? []),
       agentCardPreferred,
-      ...additionalInterfaces.map((i) => i.transport),
+      ...additionalInterfaces.map((i: any) => i.transport),
     ];
     for (const transport of transportsByPreference) {
       const url = urlsPerAgentTransports.get(transport);

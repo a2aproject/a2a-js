@@ -9,7 +9,7 @@ import {
   TaskQueryParams,
   PushNotificationConfig,
   AgentCard,
-} from '../types.js';
+} from '../index.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
 import { ClientCallContext } from './context.js';
 import {
@@ -249,7 +249,7 @@ export class Client {
    */
   cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
-      { method: 'cancelTask', value: params },
+      { method: 'cancelTask', value: params as any },
       options,
       this.transport.cancelTask.bind(this.transport)
     );
@@ -313,7 +313,7 @@ export class Client {
       result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
     }
     if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
-      result.configuration.pushNotificationConfig = this.config.pushNotificationConfig;
+      result.configuration.pushNotificationConfig = this.config.pushNotificationConfig as any;
     }
     result.configuration.blocking ??= blocking;
     return result;

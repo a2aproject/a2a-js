@@ -1,4 +1,4 @@
-import { Task } from '../types.js';
+import { Task } from '../index.js';
 import { ServerCallContext } from './context.js';
 
 /**

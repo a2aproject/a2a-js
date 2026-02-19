@@ -2,7 +2,6 @@ import { describe, it, beforeEach, afterEach, expect, vi, Mock } from 'vitest';
 import { A2AClient } from '../../src/client/client.js';
 import {
   MessageSendParams,
-  TextPart,
   SendMessageResponse,
   SendMessageSuccessResponse,
   ListTaskPushNotificationConfigResponse,
@@ -11,7 +10,7 @@ import {
   DeleteTaskPushNotificationConfigSuccessResponse,
   JSONRPCErrorResponse,
   JSONRPCResponse,
-} from '../../src/types.js';
+} from '../../src/index.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import {
   extractRequestId,
@@ -20,6 +19,7 @@ import {
   createMockAgentCard,
   createMockFetch,
 } from './util.js';
+import { Role } from '../../src/types/pb/a2a_types.js';
 
 // Helper functions to check if responses are success responses
 function isSuccessResponse(response: SendMessageResponse): response is SendMessageSuccessResponse {
@@ -52,7 +52,7 @@ describe('A2AClient Basic Tests', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => {};
+    console.error = () => { };
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -196,15 +196,20 @@ describe('A2AClient Basic Tests', () => {
     it('should send message successfully', async () => {
       const messageParams: MessageSendParams = {
         message: {
-          kind: 'message',
           messageId: 'test-msg-1',
-          role: 'user',
-          parts: [
+          role: Role.ROLE_USER,
+          content: [
             {
-              kind: 'text',
-              text: 'Hello, agent!',
-            } as TextPart,
+              part: {
+                $case: 'text',
+                value: 'Hello, agent!',
+              }
+            },
           ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
         },
       };
 
@@ -228,7 +233,6 @@ describe('A2AClient Basic Tests', () => {
       // Verify the result
       expect(isSuccessResponse(result)).to.be.true;
       if (isSuccessResponse(result)) {
-        expect(result.result).to.have.property('kind', 'message');
         expect(result.result).to.have.property('messageId', 'msg-123');
       }
     });
@@ -266,15 +270,20 @@ describe('A2AClient Basic Tests', () => {
 
       const messageParams: MessageSendParams = {
         message: {
-          kind: 'message',
           messageId: 'test-msg-error',
-          role: 'user',
-          parts: [
+          role: Role.ROLE_USER,
+          content: [
             {
-              kind: 'text',
-              text: 'This should fail',
-            } as TextPart,
+              part: {
+                $case: 'text',
+                value: 'This should fail',
+              }
+            },
           ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
         },
       };
 
@@ -387,15 +396,20 @@ describe('A2AClient Basic Tests', () => {
       // Test sending a message to ensure serviceEndpointUrl is set
       const messageParams: MessageSendParams = {
         message: {
-          kind: 'message',
           messageId: 'test-msg-static',
-          role: 'user',
-          parts: [
+          role: Role.ROLE_USER,
+          content: [
             {
-              kind: 'text',
-              text: 'Hello, static agent!',
-            } as TextPart,
+              part: {
+                $case: 'text',
+                value: 'Hello, static agent!',
+              }
+            },
           ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
         },
       };
 
@@ -445,7 +459,7 @@ describe('Extension Methods', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => {};
+    console.error = () => { };
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -603,7 +617,7 @@ describe('Push Notification Config Operations', () => {
   beforeEach(() => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => {};
+    console.error = () => { };
   });
 
   afterEach(() => {

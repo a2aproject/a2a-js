@@ -2,10 +2,12 @@ import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
   Task,
+  TaskState,
   TaskStatusUpdateEvent,
   Message,
   TaskArtifactUpdateEvent,
   Artifact,
+  Role,
 } from '../../../index.js';
 import { AgentExecutor, RequestContext, ExecutionEventBus } from '../../../server/index.js';
 
@@ -13,7 +15,7 @@ import { AgentExecutor, RequestContext, ExecutionEventBus } from '../../../serve
  * SampleAgentExecutor implements the agent's core logic.
  */
 export class SampleAgentExecutor implements AgentExecutor {
-  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {};
+  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => { };
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const userMessage = requestContext.userMessage;
@@ -30,13 +32,14 @@ export class SampleAgentExecutor implements AgentExecutor {
     // 1. Publish initial Task event if it's a new task
     if (!existingTask) {
       const initialTask: Task = {
-        kind: 'task',
         id: taskId,
         contextId: contextId,
         status: {
-          state: 'submitted',
+          state: TaskState.TASK_STATE_SUBMITTED,
           timestamp: new Date().toISOString(),
+          update: undefined,
         },
+        artifacts: [],
         history: [userMessage], // Start history with the current user message
         metadata: userMessage.metadata, // Carry over metadata from message if any
       };
@@ -45,22 +48,23 @@ export class SampleAgentExecutor implements AgentExecutor {
 
     // 2. Publish "working" status update
     const workingStatusUpdate: TaskStatusUpdateEvent = {
-      kind: 'status-update',
       taskId: taskId,
       contextId: contextId,
       status: {
-        state: 'working',
-        message: {
-          kind: 'message',
-          role: 'agent',
+        state: TaskState.TASK_STATE_WORKING,
+        update: {
+          role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          parts: [{ kind: 'text', text: 'Processing your question' }],
+          content: [{ part: { $case: 'text', value: 'Processing your question' } }],
           taskId: taskId,
           contextId: contextId,
+          extensions: [],
+          metadata: {},
         },
         timestamp: new Date().toISOString(),
       },
       final: false,
+      metadata: {},
     };
     eventBus.publish(workingStatusUpdate);
 
@@ -73,29 +77,33 @@ export class SampleAgentExecutor implements AgentExecutor {
       artifactId: artifactId,
       name: 'Result',
       description: 'The final result from the agent.',
-      parts: [{ kind: 'text', text: agentReplyText }],
+      parts: [{ part: { $case: 'text', value: agentReplyText } }],
+      metadata: undefined,
+      extensions: [],
     };
 
     const artifactUpdate: TaskArtifactUpdateEvent = {
-      kind: 'artifact-update',
       taskId: taskId,
       contextId: contextId,
       artifact: resultArtifact,
       lastChunk: true,
+      append: false,
+      metadata: undefined,
     };
     await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing delay
     eventBus.publish(artifactUpdate);
 
     // 4. Publish final task status update (completed, no message)
     const finalUpdate: TaskStatusUpdateEvent = {
-      kind: 'status-update',
       taskId: taskId,
       contextId: contextId,
       status: {
-        state: 'completed',
+        state: TaskState.TASK_STATE_COMPLETED,
         timestamp: new Date().toISOString(),
+        update: undefined,
       },
       final: true,
+      metadata: undefined,
     };
     eventBus.publish(finalUpdate);
 
@@ -104,8 +112,8 @@ export class SampleAgentExecutor implements AgentExecutor {
 
   parseInputMessage(message: Message): string {
     /** Process the user query and return a response. */
-    const textPart = message.parts.find((part) => part.kind === 'text');
-    const query = textPart ? textPart.text.trim() : '';
+    const textPart = message.content.find((part) => part.part?.$case === 'text');
+    const query = textPart?.part?.$case === 'text' ? textPart.part.value.trim() : '';
 
     if (!query) {
       return 'Hello! Please provide a message for me to respond to.';

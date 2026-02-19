@@ -1,5 +1,5 @@
 import express, { Request, RequestHandler, Response } from 'express';
-import { AgentCard } from '../../types.js';
+import { AgentCard } from '../../index.js';
 
 export interface AgentCardHandlerOptions {
   agentCardProvider: AgentCardProvider;
