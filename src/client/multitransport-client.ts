@@ -250,7 +250,7 @@ export class Client {
    */
   cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
-      { method: 'cancelTask', value: params as any },
+      { method: 'cancelTask', value: params },
       options,
       this.transport.cancelTask.bind(this.transport)
     );

@@ -112,7 +112,7 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
   const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
   // Check if it's a TaskStatusUpdateEvent
-  if ((event as any).status !== undefined && (event as any).taskId !== undefined) {
+  if ('status' in event && 'taskId' in event) {
     const update = event as TaskStatusUpdateEvent; // Cast for type safety
     const state = update.status?.state;
     let stateEmoji = '❓';
@@ -154,7 +154,7 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     }
   }
   // Check if it's a TaskArtifactUpdateEvent
-  else if ((event as any).artifact !== undefined) {
+  else if ('artifact' in event) {
     const update = event as TaskArtifactUpdateEvent; // Cast for type safety
     console.log(
       `${prefix} 📄 Artifact Received: ${

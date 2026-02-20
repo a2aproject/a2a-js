@@ -199,7 +199,13 @@ export class JsonRpcTransport implements Transport {
   ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
 
-    const rpcRequest: any = {
+    interface JSONRPCRequest {
+      jsonrpc: '2.0';
+      method: string;
+      params: TParams;
+      id: number;
+    }
+    const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
       params: params,
