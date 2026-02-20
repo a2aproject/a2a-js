@@ -56,13 +56,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     name: 'Test Agent',
     description: 'An agent for testing purposes',
     url: 'http://localhost:8080',
+    preferredTransport: 'json-rpc',
+    additionalInterfaces: [],
+    provider: undefined,
     version: '1.0.0',
+    documentationUrl: '',
     protocolVersion: '0.3.0',
     capabilities: {
-      extensions: [{ uri: 'requested-extension-uri' }],
+      extensions: [{
+        uri: 'requested-extension-uri',
+        description: 'description',
+        required: false,
+        params: {},
+      }],
       streaming: true,
       pushNotifications: true,
     },
+    securitySchemes: {},
+    security: [],
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [
@@ -71,8 +82,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         name: 'Test Skill',
         description: 'A skill for testing',
         tags: ['test'],
+        examples: [],
+        inputModes: ['text/plain'],
+        outputModes: ['text/plain'],
+        security: [],
       },
     ],
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
   };
 
   const serverCallContext = new ServerCallContext();
@@ -1517,7 +1534,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         contextId: contextId,
       },
       configuration: {
-        pushNotificationConfig: { pushNotificationConfig: { ...pushNotificationConfig, taskId: '' } },
+        pushNotificationConfig: { pushNotificationConfig, taskId: '' },
       },
     };
 
@@ -1841,6 +1858,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         contextId: taskContextId,
         status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
         metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
@@ -1997,7 +2016,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         return extendedAgentCard;
       }
       // Remove the extensions that are not allowed for unauthenticated clients
-      extendedAgentCard.capabilities.extensions = [{ uri: 'requested-extension-uri' }];
+      extendedAgentCard.capabilities.extensions = [
+        {
+          uri: 'requested-extension-uri',
+          description: 'A requested extension',
+          required: false,
+          params: undefined,
+        },
+      ];
       return extendedAgentCard;
     };
 
@@ -2008,33 +2034,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       version: '1.0.0',
       protocolVersion: '0.3.0',
       capabilities: {
-        extensions: [{ uri: 'requested-extension-uri' }],
-        streaming: true,
-        pushNotifications: true,
-      },
-      defaultInputModes: ['text/plain'],
-      defaultOutputModes: ['text/plain'],
-      skills: [
-        {
-          id: 'test-skill',
-          name: 'Test Skill',
-          description: 'A skill for testing',
-          tags: ['test'],
-        },
-      ],
-      supportsAuthenticatedExtendedCard: true,
-    };
-
-    const extendedAgentCard: AgentCard = {
-      name: 'Test ExtendedAgentCard Agent',
-      description: 'An agent for testing the extended agent card functionality',
-      url: 'http://localhost:8080',
-      version: '1.0.0',
-      protocolVersion: '0.3.0',
-      capabilities: {
         extensions: [
-          { uri: 'requested-extension-uri' },
-          { uri: 'extension-uri-for-authenticated-clients' },
+          {
+            uri: 'requested-extension-uri',
+            description: 'A requested extension',
+            required: false,
+            params: undefined,
+          },
         ],
         streaming: true,
         pushNotifications: true,
@@ -2047,8 +2053,68 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           name: 'Test Skill',
           description: 'A skill for testing',
           tags: ['test'],
+          examples: [],
+          inputModes: ['text/plain'],
+          outputModes: ['text/plain'],
+          security: [],
         },
       ],
+      preferredTransport: 'jsonrpc',
+      additionalInterfaces: [],
+      provider: undefined,
+      documentationUrl: '',
+      securitySchemes: {},
+      security: [],
+      supportsAuthenticatedExtendedCard: true,
+      signatures: [],
+    };
+
+    const extendedAgentCard: AgentCard = {
+      name: 'Test ExtendedAgentCard Agent',
+      description: 'An agent for testing the extended agent card functionality',
+      url: 'http://localhost:8080',
+      version: '1.0.0',
+      protocolVersion: '0.3.0',
+      capabilities: {
+        extensions: [
+          {
+            uri: 'requested-extension-uri',
+            description: 'A requested extension',
+            required: false,
+            params: undefined,
+          },
+          {
+            uri: 'extension-uri-for-authenticated-clients',
+            description: 'Extension for authenticated clients',
+            required: false,
+            params: undefined,
+          },
+        ],
+        streaming: true,
+        pushNotifications: true,
+      },
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: [
+        {
+          id: 'test-skill',
+          name: 'Test Skill',
+          description: 'A skill for testing',
+          tags: ['test'],
+          examples: [],
+          inputModes: ['text/plain'],
+          outputModes: ['text/plain'],
+          security: [],
+        },
+      ],
+      preferredTransport: 'jsonrpc',
+      additionalInterfaces: [],
+      provider: undefined,
+      documentationUrl: '',
+      securitySchemes: {},
+      security: [],
+      supportsAuthenticatedExtendedCard: true,
+      signatures: [],
     };
 
     it('getAuthenticatedExtendedAgentCard should fail if the agent card does not support extended agent card', async () => {
@@ -2113,7 +2179,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       const context = new ServerCallContext(undefined, new A2AUser(false));
       const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
       assert(agentCard.capabilities.extensions.length === 1);
-      assert.deepEqual(agentCard.capabilities.extensions[0], { uri: 'requested-extension-uri' });
+      assert.deepEqual(agentCard.capabilities.extensions[0], {
+        uri: 'requested-extension-uri',
+        description: 'A requested extension',
+        required: false,
+        params: undefined,
+      });
       assert.deepEqual(agentCard.name, extendedAgentCard.name);
     });
   });
