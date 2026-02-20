@@ -23,12 +23,15 @@ const sampleAgentCard: AgentCard = {
   version: '1.0.0', // Incremented version
   protocolVersion: '0.3.0',
   capabilities: {
-    streaming: true, // The new framework supports streaming
-    pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
+    streaming: true,
+    pushNotifications: false,
+    extensions: [],
+
   },
+  securitySchemes: {},
+  security: [],
   defaultInputModes: ['text'],
-  defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
+  defaultOutputModes: ['text', 'task-status'],
   skills: [
     {
       id: 'sample_agent',
@@ -36,11 +39,16 @@ const sampleAgentCard: AgentCard = {
       description: 'Simulate the general flow of a streaming agent.',
       tags: ['sample'],
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
-      inputModes: ['text'], // Explicitly defining for skill
-      outputModes: ['text', 'task-status'], // Explicitly defining for skill
+      inputModes: ['text'],
+      outputModes: ['text', 'task-status'],
+      security: [],
     },
   ],
   supportsAuthenticatedExtendedCard: false,
+  preferredTransport: 'jsonrpc',
+  additionalInterfaces: [],
+  documentationUrl: '',
+  signatures: [],
 };
 
 async function main() {

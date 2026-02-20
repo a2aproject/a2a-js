@@ -19,18 +19,18 @@ import {
   TaskIdParams,
   Part,
   AgentCard,
-  FileWithBytes,
-  FileWithUri,
-} from '../../../types.js';
+  Role,
+  JsonRpcTaskPushNotificationConfig,
+} from '../../../index.js';
 import {
-  RestMessage,
-  RestMessageSendParams,
-  RestTaskPushNotificationConfig,
+  RestPart,
   PartInput,
   MessageInput,
   MessageSendParamsInput,
   TaskPushNotificationConfigInput,
   FileInput,
+  FileWithBytes,
+  FileWithUri,
 } from './rest_types.js';
 import { A2A_ERROR_CODE } from '../../../errors.js';
 
@@ -233,7 +233,26 @@ export class RestTransportHandler {
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
     const normalized = this.normalizeTaskPushNotificationConfig(config);
-    return this.requestHandler.setTaskPushNotificationConfig(normalized, context);
+
+    // Extract taskId from name: tasks/{taskId}/pushNotificationConfigs/{configId}
+    // define default regex for name parsing
+    const match = normalized.name.match(/^tasks\/(.+)\/pushNotificationConfigs\/(.+)$/);
+    if (!match) {
+      throw A2AError.invalidParams('Invalid name format in TaskPushNotificationConfig');
+    }
+    const taskId = match[1];
+
+    const jsonRpcConfig: JsonRpcTaskPushNotificationConfig = {
+      taskId: taskId,
+      pushNotificationConfig: normalized.pushNotificationConfig,
+    };
+
+    const result = await this.requestHandler.setTaskPushNotificationConfig(jsonRpcConfig, context);
+
+    return {
+      name: `tasks/${result.taskId}/pushNotificationConfigs/${result.pushNotificationConfig.id}`,
+      pushNotificationConfig: result.pushNotificationConfig,
+    };
   }
 
   /**
@@ -243,7 +262,14 @@ export class RestTransportHandler {
     taskId: string,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
-    return this.requestHandler.listTaskPushNotificationConfigs({ id: taskId }, context);
+    const configs = await this.requestHandler.listTaskPushNotificationConfigs(
+      { id: taskId },
+      context
+    );
+    return configs.map((c) => ({
+      name: `tasks/${c.taskId}/pushNotificationConfigs/${c.pushNotificationConfig.id}`,
+      pushNotificationConfig: c.pushNotificationConfig,
+    }));
   }
 
   /**
@@ -254,10 +280,14 @@ export class RestTransportHandler {
     configId: string,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
-    return this.requestHandler.getTaskPushNotificationConfig(
+    const config = await this.requestHandler.getTaskPushNotificationConfig(
       { id: taskId, pushNotificationConfigId: configId },
       context
     );
+    return {
+      name: `tasks/${config.taskId}/pushNotificationConfigs/${config.pushNotificationConfig.id}`,
+      pushNotificationConfig: config.pushNotificationConfig,
+    };
   }
 
   /**
@@ -306,9 +336,9 @@ export class RestTransportHandler {
     'streaming' | 'pushNotifications',
     () => A2AError
   > = {
-    streaming: () => A2AError.unsupportedOperation('Agent does not support streaming'),
-    pushNotifications: () => A2AError.pushNotificationNotSupported(),
-  };
+      streaming: () => A2AError.unsupportedOperation('Agent does not support streaming'),
+      pushNotifications: () => A2AError.pushNotificationNotSupported(),
+    };
 
   /**
    * Validates that the agent supports a required capability.
@@ -342,21 +372,56 @@ export class RestTransportHandler {
    * Normalizes Part input - accepts both snake_case and camelCase for file mimeType.
    */
   private normalizePart(part: PartInput): Part {
-    if (part.kind === 'text') return { kind: 'text', text: part.text };
-    if (part.kind === 'file') {
-      const file = this.normalizeFile(part.file);
-      return { kind: 'file', file, metadata: part.metadata };
+    // Check if it's already a Protobuf Part (has 'part' field with $case)
+    if ('part' in part && part.part && '$case' in part.part) {
+      return part as Part;
     }
-    return { kind: 'data', data: part.data, metadata: part.metadata };
+
+    // Otherwise it's a RestPart (legacy kind-based)
+    const p = part as RestPart;
+
+    if (p.kind === 'text') {
+      return { part: { $case: 'text', value: p.text } };
+    }
+    if (p.kind === 'file') {
+      const file = this.normalizeFile(p.file);
+      // Convert normalized file to Protobuf FilePart
+      let fileValue: FileWithUri | FileWithBytes;
+      if ('bytes' in file) {
+        fileValue = { ...file } as FileWithBytes;
+        return {
+          part: {
+            $case: 'file',
+            value: {
+              file: { $case: 'fileWithBytes', value: Buffer.from(fileValue.bytes, 'base64') },
+              mimeType: fileValue.mimeType,
+            },
+          },
+        };
+      } else {
+        fileValue = { ...file } as FileWithUri;
+        return {
+          part: {
+            $case: 'file',
+            value: {
+              file: { $case: 'fileWithUri', value: fileValue.uri },
+              mimeType: fileValue.mimeType,
+            },
+          },
+        };
+      }
+    }
+    return { part: { $case: 'data', value: { data: p.data } } };
   }
 
   /**
    * Normalizes File input - accepts both snake_case (mime_type) and camelCase (mimeType).
+   * Returns intermediate internal file type (not Protobuf FilePart yet, helper for normalizePart).
    */
   private normalizeFile(f: FileInput): FileWithBytes | FileWithUri {
     // Access both formats via intersection cast
     const file = f as FileInput & { mimeType?: string; mime_type?: string };
-    const mimeType = file.mimeType ?? file.mime_type;
+    const mimeType = file.mimeType ?? file.mime_type ?? 'application/octet-stream';
     if ('bytes' in file) {
       return { bytes: file.bytes, mimeType, name: file.name };
     }
@@ -368,25 +433,40 @@ export class RestTransportHandler {
    */
   private normalizeMessage(input: MessageInput): Message {
     // Cast to access both formats
-    const m = input as Message & RestMessage;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = input as any;
     const messageId = m.messageId ?? m.message_id;
     if (!messageId) {
       throw A2AError.invalidParams('message.messageId is required');
     }
-    if (!m.parts || !Array.isArray(m.parts)) {
-      throw A2AError.invalidParams('message.parts must be an array');
+
+    let content: Part[] = [];
+    if (m.content && Array.isArray(m.content)) {
+      content = m.content;
+    } else if (m.parts && Array.isArray(m.parts)) {
+      content = m.parts.map((p: PartInput) => this.normalizePart(p));
+    } else {
+      throw A2AError.invalidParams('message.content or message.parts must be an array');
+    }
+
+    // Map Role
+    let role = Role.ROLE_UNSPECIFIED;
+    if (typeof m.role === 'number') {
+      role = m.role;
+    } else if (m.role === 'user') {
+      role = Role.ROLE_USER;
+    } else if (m.role === 'agent') {
+      role = Role.ROLE_AGENT;
     }
 
     return {
-      contextId: m.contextId ?? m.context_id,
-      extensions: m.extensions,
-      kind: 'message',
+      contextId: m.contextId ?? m.context_id ?? '',
+      extensions: m.extensions ?? [],
       messageId,
       metadata: m.metadata,
-      parts: m.parts.map((p) => this.normalizePart(p)),
-      referenceTaskIds: m.referenceTaskIds ?? m.reference_task_ids,
-      role: m.role,
-      taskId: m.taskId ?? m.task_id,
+      content,
+      role,
+      taskId: m.taskId ?? m.task_id ?? '',
     };
   }
 
@@ -395,18 +475,17 @@ export class RestTransportHandler {
    */
   private normalizeMessageSendParams(input: MessageSendParamsInput): MessageSendParams {
     // Cast to access both formats
-    const p = input as MessageSendParams & RestMessageSendParams;
-    const config = p.configuration as
-      | (MessageSendParams['configuration'] & RestMessageSendParams['configuration'])
-      | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = input as any;
+    const config = p.configuration;
 
     return {
       configuration: config
         ? {
-            acceptedOutputModes: config.acceptedOutputModes ?? config.accepted_output_modes,
-            blocking: config.blocking,
-            historyLength: config.historyLength ?? config.history_length,
-          }
+          acceptedOutputModes: config.acceptedOutputModes ?? config.accepted_output_modes,
+          blocking: config.blocking,
+          historyLength: config.historyLength ?? config.history_length,
+        }
         : undefined,
       message: this.normalizeMessage(p.message),
       metadata: p.metadata,
@@ -419,8 +498,14 @@ export class RestTransportHandler {
   private normalizeTaskPushNotificationConfig(
     input: TaskPushNotificationConfigInput
   ): TaskPushNotificationConfig {
+    // Check if it's already a Protobuf type (has 'name')
+    if ('name' in input && input.name) {
+      return input as TaskPushNotificationConfig;
+    }
+
     // Cast to access both formats
-    const c = input as TaskPushNotificationConfig & RestTaskPushNotificationConfig;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = input as any;
     const taskId = c.taskId ?? c.task_id;
     if (!taskId) {
       throw A2AError.invalidParams('taskId is required');
@@ -431,8 +516,8 @@ export class RestTransportHandler {
     }
 
     return {
+      name: `tasks/${taskId}/pushNotificationConfigs/${pnConfig.id}`,
       pushNotificationConfig: pnConfig,
-      taskId,
     };
   }
 }

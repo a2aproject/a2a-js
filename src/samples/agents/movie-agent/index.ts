@@ -6,12 +6,12 @@ import {
   Task,
   TaskState,
   TaskStatusUpdateEvent,
-  TextPart,
   Message,
   AGENT_CARD_PATH,
   TaskArtifactUpdateEvent,
   Artifact,
   Part,
+  Role,
 } from '../../../index.js';
 import {
   InMemoryTaskStore,
@@ -63,13 +63,14 @@ class MovieAgentExecutor implements AgentExecutor {
     // 1. Publish initial Task event if it's a new task
     if (!existingTask) {
       const initialTask: Task = {
-        kind: 'task',
         id: taskId,
         contextId: contextId,
         status: {
-          state: 'submitted',
+          state: TaskState.TASK_STATE_SUBMITTED,
           timestamp: new Date().toISOString(),
+          update: undefined,
         },
+        artifacts: [],
         history: [userMessage], // Start history with the current user message
         metadata: userMessage.metadata, // Carry over metadata from message if any
       };
@@ -78,22 +79,25 @@ class MovieAgentExecutor implements AgentExecutor {
 
     // 2. Publish "working" status update
     const workingStatusUpdate: TaskStatusUpdateEvent = {
-      kind: 'status-update',
       taskId: taskId,
       contextId: contextId,
       status: {
-        state: 'working',
-        message: {
-          kind: 'message',
-          role: 'agent',
+        state: TaskState.TASK_STATE_WORKING,
+        update: {
+          role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          parts: [{ kind: 'text', text: 'Processing your question, hang tight!' }],
+          content: [
+            { part: { $case: 'text', value: 'Processing your question, hang tight!' } },
+          ],
           taskId: taskId,
           contextId: contextId,
+          extensions: [],
+          metadata: {},
         },
         timestamp: new Date().toISOString(),
       },
       final: false,
+      metadata: {},
     };
     eventBus.publish(workingStatusUpdate);
 
@@ -105,14 +109,17 @@ class MovieAgentExecutor implements AgentExecutor {
     contexts.set(contextId, historyForGenkit);
 
     const messages: MessageData[] = historyForGenkit
-      .map((m) => ({
-        role: (m.role === 'agent' ? 'model' : 'user') as 'user' | 'model',
-        content: m.parts
-          .filter((p): p is TextPart => p.kind === 'text' && !!(p as TextPart).text)
-          .map((p) => ({
-            text: (p as TextPart).text,
-          })),
-      }))
+      .map((m) => {
+        const textContent = m.content
+          .map((p) => (p.part?.$case === 'text' ? p.part.value : ''))
+          .filter((t) => !!t)
+          .join('\n');
+
+        return {
+          role: (m.role === Role.ROLE_AGENT ? 'model' : 'user') as 'user' | 'model',
+          content: textContent ? [{ text: textContent }] : [],
+        };
+      })
       .filter((m) => m.content.length > 0);
 
     if (messages.length === 0) {
@@ -120,22 +127,23 @@ class MovieAgentExecutor implements AgentExecutor {
         `[MovieAgentExecutor] No valid text messages found in history for task ${taskId}.`
       );
       const failureUpdate: TaskStatusUpdateEvent = {
-        kind: 'status-update',
         taskId: taskId,
         contextId: contextId,
         status: {
-          state: 'failed',
-          message: {
-            kind: 'message',
-            role: 'agent',
+          state: TaskState.TASK_STATE_FAILED,
+          update: {
+            role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            parts: [{ kind: 'text', text: 'No message found to process.' }],
+            content: [{ part: { $case: 'text', value: 'No message found to process.' } }],
             taskId: taskId,
             contextId: contextId,
+            extensions: [],
+            metadata: {},
           },
           timestamp: new Date().toISOString(),
         },
         final: true,
+        metadata: {},
       };
       eventBus.publish(failureUpdate);
       return;
@@ -160,14 +168,15 @@ class MovieAgentExecutor implements AgentExecutor {
         console.log(`[MovieAgentExecutor] Request cancelled for task: ${taskId}`);
 
         const cancelledUpdate: TaskStatusUpdateEvent = {
-          kind: 'status-update',
           taskId: taskId,
           contextId: contextId,
           status: {
-            state: 'canceled',
+            state: TaskState.TASK_STATE_CANCELLED,
             timestamp: new Date().toISOString(),
+            update: undefined,
           },
           final: true, // Cancellation is a final state
+          metadata: {},
         };
         eventBus.publish(cancelledUpdate);
         return;
@@ -182,60 +191,67 @@ class MovieAgentExecutor implements AgentExecutor {
         .join('\n')
         .trim();
 
-      let finalA2AState: TaskState = 'unknown';
+      let finalA2AState: TaskState = TaskState.TASK_STATE_UNSPECIFIED;
 
       if (finalStateLine === 'COMPLETED') {
-        finalA2AState = 'completed';
+        finalA2AState = TaskState.TASK_STATE_COMPLETED;
       } else if (finalStateLine === 'AWAITING_USER_INPUT') {
-        finalA2AState = 'input-required';
+        finalA2AState = TaskState.TASK_STATE_INPUT_REQUIRED;
       } else {
         console.warn(
           `[MovieAgentExecutor] Unexpected final state line from prompt: ${finalStateLine}. Defaulting to 'completed'.`
         );
-        finalA2AState = 'completed'; // Default if LLM deviates
+        finalA2AState = TaskState.TASK_STATE_COMPLETED; // Default if LLM deviates
       }
 
       // 5. Publish artifact with the result
-      const parts: Part[] = [{ kind: 'text', text: agentReplyText || 'Completed.' }];
+      const parts: Part[] = [
+        { part: { $case: 'text', value: agentReplyText || 'Completed.' } },
+      ];
       const artifactId = uuidv4();
       const resultArtifact: Artifact = {
         artifactId: artifactId,
         name: 'Result',
         description: 'The result of the movie agent.',
         parts: parts,
+        metadata: undefined,
+        extensions: [],
       };
 
       const artifactUpdate: TaskArtifactUpdateEvent = {
-        kind: 'artifact-update',
         taskId: taskId,
         contextId: contextId,
         artifact: resultArtifact,
         lastChunk: true,
+        append: false,
+        metadata: {},
       };
       eventBus.publish(artifactUpdate);
 
       // 6. Update local history context (internal only)
       const agentMessage: Message = {
-        kind: 'message',
-        role: 'agent',
+        role: Role.ROLE_AGENT,
         messageId: uuidv4(),
-        parts: parts,
+        content: parts,
         taskId: taskId,
         contextId: contextId,
+        extensions: [],
+        metadata: {},
       };
       historyForGenkit.push(agentMessage);
       contexts.set(contextId, historyForGenkit);
 
       // 7. Publish final task status update
       const finalUpdate: TaskStatusUpdateEvent = {
-        kind: 'status-update',
         taskId: taskId,
         contextId: contextId,
         status: {
           state: finalA2AState,
           timestamp: new Date().toISOString(),
+          update: undefined,
         },
         final: true,
+        metadata: {},
       };
       eventBus.publish(finalUpdate);
 
@@ -243,22 +259,23 @@ class MovieAgentExecutor implements AgentExecutor {
     } catch (error: any) {
       console.error(`[MovieAgentExecutor] Error processing task ${taskId}:`, error);
       const errorUpdate: TaskStatusUpdateEvent = {
-        kind: 'status-update',
         taskId: taskId,
         contextId: contextId,
         status: {
-          state: 'failed',
-          message: {
-            kind: 'message',
-            role: 'agent',
+          state: TaskState.TASK_STATE_FAILED,
+          update: {
+            role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            parts: [{ kind: 'text', text: `Agent error: ${error.message}` }],
+            content: [{ part: { $case: 'text', value: `Agent error: ${error.message}` } }],
             taskId: taskId,
             contextId: contextId,
+            extensions: [],
+            metadata: undefined,
           },
           timestamp: new Date().toISOString(),
         },
         final: true,
+        metadata: undefined,
       };
       eventBus.publish(errorUpdate);
     }
@@ -280,9 +297,8 @@ const movieAgentCard: AgentCard = {
   capabilities: {
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
+    extensions: [],
   },
-  // authentication: null, // Property 'authentication' does not exist on type 'AgentCard'.
   securitySchemes: undefined, // Or define actual security schemes if any
   security: undefined,
   defaultInputModes: ['text'],
@@ -303,9 +319,14 @@ const movieAgentCard: AgentCard = {
       ],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
+      security: [],
     },
   ],
   supportsAuthenticatedExtendedCard: false,
+  preferredTransport: 'jsonrpc',
+  additionalInterfaces: [],
+  documentationUrl: '',
+  signatures: [],
 };
 
 async function main() {

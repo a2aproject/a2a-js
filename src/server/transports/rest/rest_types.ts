@@ -10,9 +10,29 @@ import {
   Message,
   MessageSendParams,
   TaskPushNotificationConfig,
-  FileWithBytes,
-  FileWithUri,
-} from '../../../types.js';
+} from '../../../index.js';
+
+// ============================================================================
+// Internal Types (camelCase format) - mirrored for input normalizers
+// ============================================================================
+
+/**
+ * File with bytes (camelCase mimeType).
+ */
+export interface FileWithBytes {
+  bytes: string;
+  mimeType?: string;
+  name?: string;
+}
+
+/**
+ * File with URI (camelCase mimeType).
+ */
+export interface FileWithUri {
+  uri: string;
+  mimeType?: string;
+  name?: string;
+}
 
 // ============================================================================
 // REST Types (snake_case format)
