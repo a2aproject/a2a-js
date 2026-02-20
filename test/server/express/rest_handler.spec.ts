@@ -308,8 +308,8 @@ describe('restHandler', () => {
   });
 
   describe('Push Notification Config Endpoints', () => {
-    const mockConfig: TaskPushNotificationConfig = {
-      name: 'tasks/task-1/pushNotificationConfigs/config-1',
+    const mockConfig: any = {
+      taskId: 'task-1',
       pushNotificationConfig: {
         id: 'config-1',
         url: 'https://example.com/webhook',

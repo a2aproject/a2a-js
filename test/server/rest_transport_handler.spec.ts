@@ -349,6 +349,11 @@ describe('RestTransportHandler', () => {
       },
     };
 
+    const expectedRestConfig = {
+      name: 'tasks/task-1/pushNotificationConfigs/config-1',
+      pushNotificationConfig: mockConfig.pushNotificationConfig,
+    };
+
     describe('setTaskPushNotificationConfig', () => {
       it('should throw PushNotificationNotSupported if not supported', async () => {
         (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
@@ -369,7 +374,7 @@ describe('RestTransportHandler', () => {
           mockContext
         );
 
-        expect(result).to.deep.equal(mockConfig);
+        expect(result).to.deep.equal(expectedRestConfig);
       });
 
       it('should normalize snake_case config', async () => {
@@ -387,7 +392,7 @@ describe('RestTransportHandler', () => {
 
         expect(mockRequestHandler.setTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           expect.objectContaining({
-            name: 'tasks/task-1/pushNotificationConfigs/config-1',
+            taskId: 'task-1',
             pushNotificationConfig: expect.objectContaining({ id: 'config-1' }),
           }),
           mockContext
@@ -425,7 +430,7 @@ describe('RestTransportHandler', () => {
           mockContext
         );
 
-        expect(result).to.deep.equal(configs);
+        expect(result).to.deep.equal([expectedRestConfig]);
         expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
           { id: 'task-1' },
           mockContext
@@ -443,11 +448,25 @@ describe('RestTransportHandler', () => {
           mockContext
         );
 
-        expect(result).to.deep.equal(mockConfig);
+        expect(result).to.deep.equal(expectedRestConfig);
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           { id: 'task-1', pushNotificationConfigId: 'config-1' },
           mockContext
         );
+      });
+
+      it('should return config with correct name format', async () => {
+        (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        const result = await transportHandler.getTaskPushNotificationConfig(
+          'task-1',
+          'config-1',
+          mockContext
+        );
+
+        expect(result.name).to.equal('tasks/task-1/pushNotificationConfigs/config-1');
+        // Check that taskId is NOT present (as per TaskPushNotificationConfig definition)
+        expect((result as any).taskId).toBeUndefined();
       });
     });
 
