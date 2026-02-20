@@ -187,6 +187,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             firstResult = event;
           } else if ('artifacts' in event) {
             firstResult = event as Task;
+          } else {
+            const finalResult = resultManager.getFinalResult();
+            if (finalResult && ('messageId' in finalResult || 'id' in finalResult)) {
+              firstResult = finalResult;
+            }
           }
           if (firstResult) {
             options.firstResultResolver(firstResult);
