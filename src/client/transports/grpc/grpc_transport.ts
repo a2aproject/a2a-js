@@ -101,8 +101,8 @@ export class GrpcTransport implements Transport {
     options?: RequestOptions
   ): Promise<JsonRpcTaskPushNotificationConfig> {
     const rpcResponse = await this._sendGrpcRequest<
-      any, // Proto Request type (hard to reuse imports specific to proto without generated types in scope, but we use ToProto)
-      any, // Proto Response type
+      any,
+      any,
       JsonRpcTaskPushNotificationConfig,
       JsonRpcTaskPushNotificationConfig
     >(

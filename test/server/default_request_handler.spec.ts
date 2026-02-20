@@ -24,7 +24,6 @@ import {
   MessageSendParams,
   PushNotificationConfig,
   Task,
-  TaskPushNotificationConfig,
   TaskState,
   TaskStatusUpdateEvent,
   Role,
@@ -302,7 +301,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         artifacts: [],
         history: [],
         metadata: {},
-
       });
 
       // Simulate work before publishing more events
@@ -311,7 +309,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
         final: true,
         metadata: {},
@@ -381,7 +378,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         artifacts: [],
         history: [],
         metadata: {},
-
       });
 
       // Simulate work before publishing more events
@@ -390,7 +386,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
         final: true,
         metadata: {},
@@ -480,14 +475,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         artifacts: [],
         history: [],
         metadata: {},
-
       });
 
       // Publish working status
       bus.publish({
         taskId,
         contextId,
-
         status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
         final: false,
         metadata: {},
@@ -497,7 +490,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: {
           state: TaskState.TASK_STATE_INPUT_REQUIRED,
           timestamp: undefined,
@@ -556,7 +548,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
         final: false,
         metadata: {},
@@ -566,7 +557,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: {
           state: TaskState.TASK_STATE_WORKING,
           timestamp: undefined,
@@ -588,7 +578,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         artifact: {
           artifactId: 'artifact-1',
           name: 'Test Document',
@@ -606,7 +595,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
@@ -715,7 +703,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: {
           state: TaskState.TASK_STATE_INPUT_REQUIRED,
           timestamp: undefined,

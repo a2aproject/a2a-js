@@ -26,7 +26,6 @@ const sampleAgentCard: AgentCard = {
     streaming: true,
     pushNotifications: false,
     extensions: [],
-
   },
   securitySchemes: {},
   security: [],

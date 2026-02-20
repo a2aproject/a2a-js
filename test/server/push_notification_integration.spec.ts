@@ -234,6 +234,22 @@ describe('Push Notification Integration Tests', () => {
       assert.equal(firstNotification.url, '/notify/delay_on_submitted');
       assert.equal(firstNotification.headers['content-type'], 'application/json');
       assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
+      assert.deepEqual(firstNotification.body, {
+        ...expectedTaskResult,
+        status: { state: TaskState.TASK_STATE_SUBMITTED },
+      });
+
+      const secondNotification = receivedNotifications[1];
+      assert.deepEqual(secondNotification.body, {
+        ...expectedTaskResult,
+        status: { state: TaskState.TASK_STATE_WORKING },
+      });
+
+      const thirdNotification = receivedNotifications[2];
+      assert.deepEqual(thirdNotification.body, {
+        ...expectedTaskResult,
+        status: { state: TaskState.TASK_STATE_COMPLETED },
+      });
     });
 
     it('should handle multiple push notification endpoints for the same task', async () => {
