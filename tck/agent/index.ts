@@ -2,7 +2,7 @@ import express from 'express';
 import { Server, ServerCredentials } from '@grpc/grpc-js';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import { AgentCard, Task, TaskStatusUpdateEvent, Message } from '../../src/index.js';
+import { AgentCard, Task, TaskStatusUpdateEvent, Message, TaskState, Role } from '../../src/index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -29,14 +29,15 @@ class SUTAgentExecutor implements AgentExecutor {
   public cancelTask = async (taskId: string, eventBus: ExecutionEventBus): Promise<void> => {
     this.runningTask.delete(taskId);
     const cancelledUpdate: TaskStatusUpdateEvent = {
-      kind: 'status-update',
       taskId: taskId,
       contextId: this.lastContextId ?? uuidv4(),
+      final: true,
       status: {
-        state: 'canceled',
+        state: TaskState.TASK_STATE_CANCELLED,
         timestamp: new Date().toISOString(),
+        update: undefined,
       },
-      final: true, // Cancellation is a final state
+      metadata: {},
     };
     eventBus.publish(cancelledUpdate);
   };
@@ -59,13 +60,14 @@ class SUTAgentExecutor implements AgentExecutor {
     // 1. Publish initial Task event if it's a new task
     if (!existingTask) {
       const initialTask: Task = {
-        kind: 'task',
         id: taskId,
         contextId: contextId,
         status: {
-          state: 'submitted',
+          state: TaskState.TASK_STATE_SUBMITTED,
           timestamp: new Date().toISOString(),
+          update: undefined,
         },
+        artifacts: [],
         history: [userMessage], // Start history with the current user message
         metadata: userMessage.metadata, // Carry over metadata from message if any
       };
@@ -74,22 +76,23 @@ class SUTAgentExecutor implements AgentExecutor {
 
     // 2. Publish "working" status update
     const workingStatusUpdate: TaskStatusUpdateEvent = {
-      kind: 'status-update',
       taskId: taskId,
       contextId: contextId,
+      final: false,
       status: {
-        state: 'working',
-        message: {
-          kind: 'message',
-          role: 'agent',
+        state: TaskState.TASK_STATE_WORKING,
+        update: {
+          role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          parts: [{ kind: 'text', text: 'Processing your question' }],
+          content: [{ part: { $case: 'text', value: 'Processing your question' } }],
           taskId: taskId,
           contextId: contextId,
+          extensions: [],
+          metadata: {},
         },
         timestamp: new Date().toISOString(),
       },
-      final: false,
+      metadata: {},
     };
     eventBus.publish(workingStatusUpdate);
 
@@ -105,32 +108,33 @@ class SUTAgentExecutor implements AgentExecutor {
     console.info(`[SUTAgentExecutor] Prompt response: ${agentReplyText}`);
 
     const agentMessage: Message = {
-      kind: 'message',
-      role: 'agent',
+      role: Role.ROLE_AGENT,
       messageId: uuidv4(),
-      parts: [{ kind: 'text', text: agentReplyText }],
+      content: [{ part: { $case: 'text', value: agentReplyText } }],
       taskId: taskId,
       contextId: contextId,
+      extensions: [],
+      metadata: {},
     };
 
     const finalUpdate: TaskStatusUpdateEvent = {
-      kind: 'status-update',
       taskId: taskId,
       contextId: contextId,
+      final: true,
       status: {
-        state: 'input-required',
-        message: agentMessage,
+        state: TaskState.TASK_STATE_INPUT_REQUIRED,
+        update: agentMessage,
         timestamp: new Date().toISOString(),
       },
-      final: true,
+      metadata: {},
     };
     eventBus.publish(finalUpdate);
   }
 
   parseInputMessage(message: Message): string {
     /** Process the user query and return a response. */
-    const textPart = message.parts.find((part) => part.kind === 'text');
-    const query = textPart ? textPart.text.trim() : '';
+    const textPart = message.content.find((part) => part.part?.$case === 'text');
+    const query = textPart?.part?.$case === 'text' ? textPart.part.value.trim() : '';
 
     if (!query) {
       return 'Hello! Please provide a message for me to respond to.';
@@ -159,12 +163,16 @@ const SUTAgentCard: AgentCard = {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples', // Added provider URL
   },
+  documentationUrl: 'https://example.com/docs',
+  securitySchemes: {},
+  signatures: [],
+  security: [],
   version: '1.0.0', // Incremented version
   protocolVersion: '0.3.0',
   capabilities: {
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
+    extensions: [],
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
@@ -177,6 +185,7 @@ const SUTAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
+      security: [],
     },
   ],
   supportsAuthenticatedExtendedCard: false,

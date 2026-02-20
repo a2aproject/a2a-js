@@ -1,6 +1,6 @@
 import { JsonRpcTransport } from '../../../src/client/transports/json_rpc_transport.js';
 import { describe, it, beforeEach, expect, vi, type Mock } from 'vitest';
-import { MessageSendParams, TextPart } from '../../../src/types.js';
+import { MessageSendParams, Role } from '../../../src/index.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
@@ -22,15 +22,20 @@ describe('JsonRpcTransport', () => {
     it('should correctly add the extension headers', async () => {
       const messageParams: MessageSendParams = {
         message: {
-          kind: 'message',
           messageId: 'test-msg-1',
-          role: 'user',
-          parts: [
+          role: Role.ROLE_USER,
+          content: [
             {
-              kind: 'text',
-              text: 'Hello, agent!',
-            } as TextPart,
+              part: {
+                $case: 'text',
+                value: 'Hello, agent!',
+              },
+            },
           ],
+          contextId: 'ctx1',
+          taskId: 'task1',
+          extensions: [],
+          metadata: {},
         },
       };
 

@@ -4,7 +4,7 @@ import {
   ExecutionEventBus,
   AgentExecutionEvent,
 } from '../../server/index.js';
-import { TaskStatusUpdateEvent } from '../../types.js';
+import { TaskStatusUpdateEvent } from '../../index.js';
 
 const URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1';
 
@@ -19,13 +19,13 @@ class TimeStampExtension {
   }
 
   timestampEvent(event: AgentExecutionEvent): void {
-    if (event.kind === 'status-update') {
+    if ('status' in event && 'taskId' in event) {
       const statusUpdateEvent = event as TaskStatusUpdateEvent;
-      if (statusUpdateEvent.status.message) {
-        if (!statusUpdateEvent.status.message.metadata) {
-          statusUpdateEvent.status.message.metadata = {};
+      if (statusUpdateEvent.status?.update) {
+        if (!statusUpdateEvent.status.update.metadata) {
+          statusUpdateEvent.status.update.metadata = {};
         }
-        statusUpdateEvent.status.message.metadata['timestamp'] = new Date().toISOString();
+        statusUpdateEvent.status.update.metadata['timestamp'] = new Date().toISOString();
       }
     }
   }

@@ -25,10 +25,14 @@ const extensionAgentCard: AgentCard = {
   version: '1.0.0', // Incremented version
   protocolVersion: '0.3.0',
   capabilities: {
-    extensions: [{ uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1' }],
+    extensions: [{
+      uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1',
+      description: 'Timestamp extension',
+      required: false,
+      params: {},
+    }],
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
@@ -41,9 +45,16 @@ const extensionAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
+      security: [],
     },
   ],
   supportsAuthenticatedExtendedCard: false,
+  documentationUrl: 'https://example.com/docs',
+  security: [],
+  securitySchemes: {},
+  signatures: [],
+  preferredTransport: 'json-rpc',
+  additionalInterfaces: [],
 };
 
 async function main() {

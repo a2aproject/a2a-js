@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
-import { AgentCard } from '../../src/types.js';
+import { AgentCard } from '../../src/index.js';
 
 describe('DefaultAgentCardResolver', () => {
   let mockFetch: Mock;
@@ -15,10 +15,18 @@ describe('DefaultAgentCardResolver', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    documentationUrl: 'http://test-agent.com/docs',
+    security: [],
+    securitySchemes: {},
+    signatures: [],
+    provider: { url: '', organization: '' },
+    additionalInterfaces: [],
+    supportsAuthenticatedExtendedCard: false,
   };
 
   beforeEach(() => {
