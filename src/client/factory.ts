@@ -101,12 +101,12 @@ export class ClientFactory {
     const additionalInterfaces = agentCard.additionalInterfaces ?? [];
     const urlsPerAgentTransports = new CaseInsensitiveMap<string>([
       [agentCardPreferred, agentCard.url],
-      ...additionalInterfaces.map<[string, string]>((i: any) => [i.transport, i.url]),
+      ...additionalInterfaces.map<[string, string]>((i) => [i.transport, i.url]),
     ]);
     const transportsByPreference = [
       ...(this.options.preferredTransports ?? []),
       agentCardPreferred,
-      ...additionalInterfaces.map((i: any) => i.transport),
+      ...additionalInterfaces.map((i) => i.transport),
     ];
     for (const transport of transportsByPreference) {
       const url = urlsPerAgentTransports.get(transport);

@@ -28,10 +28,14 @@ describe('FromProto', () => {
     const task: proto.Task = {
       id: 'task-1',
       contextId: 'ctx-1',
-      status: { state: proto.TaskState.TASK_STATE_COMPLETED, timestamp: undefined, update: undefined },
+      status: {
+        state: proto.TaskState.TASK_STATE_COMPLETED,
+        timestamp: undefined,
+        update: undefined,
+      },
       history: [],
       artifacts: [],
-      metadata: undefined
+      metadata: undefined,
     };
     const result = FromProto.task(task);
     expect(result).toEqual(task);
@@ -90,7 +94,7 @@ describe('FromProto', () => {
         blocking: false,
         acceptedOutputModes: [],
         pushNotificationConfig: undefined,
-        historyLength: 0
+        historyLength: 0,
       },
       metadata: { client: 'test' },
     });

@@ -14,11 +14,7 @@ import {
   Part,
   AGENT_CARD_PATH,
 } from '../index.js';
-import {
-  TaskState,
-  Role,
-  taskStateToJSON,
-} from '../types/pb/a2a_types.js';
+import { TaskState, Role, taskStateToJSON } from '../types/pb/a2a_types.js';
 
 import {
   AuthenticationHandler,
@@ -161,7 +157,8 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
   else if ((event as any).artifact !== undefined) {
     const update = event as TaskArtifactUpdateEvent; // Cast for type safety
     console.log(
-      `${prefix} 📄 Artifact Received: ${update.artifact?.name || '(unnamed)'
+      `${prefix} 📄 Artifact Received: ${
+        update.artifact?.name || '(unnamed)'
       } (ID: ${update.artifact?.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
     );
     // Create a temporary message-like structure to reuse printMessageContent
@@ -216,7 +213,10 @@ function printMessageContent(message: Message) {
         );
         break;
       default:
-        console.log(`${partPrefix} ${colorize('yellow', 'Unsupported part case:')}`, (p as any).$case);
+        console.log(
+          `${partPrefix} ${colorize('yellow', 'Unsupported part case:')}`,
+          (p as any).$case
+        );
         break;
     }
   });
@@ -321,7 +321,7 @@ async function main() {
           part: {
             $case: 'text',
             value: input,
-          }
+          },
         },
       ],
       taskId: '',
@@ -368,8 +368,16 @@ async function main() {
             const typedEvent = payload.value as TaskStatusUpdateEvent;
             printAgentEvent(typedEvent);
 
-            if (typedEvent.final && typedEvent.status?.state !== TaskState.TASK_STATE_INPUT_REQUIRED) {
-              console.log(colorize('yellow', `   Task ${typedEvent.taskId} is final. Clearing current task ID.`));
+            if (
+              typedEvent.final &&
+              typedEvent.status?.state !== TaskState.TASK_STATE_INPUT_REQUIRED
+            ) {
+              console.log(
+                colorize(
+                  'yellow',
+                  `   Task ${typedEvent.taskId} is final. Clearing current task ID.`
+                )
+              );
               currentTaskId = undefined;
             }
             break;
@@ -385,7 +393,10 @@ async function main() {
             printMessageContent(msg);
             if (msg.taskId && msg.taskId !== currentTaskId) {
               console.log(
-                colorize('dim', `   Task ID context updated to ${msg.taskId} based on message event.`)
+                colorize(
+                  'dim',
+                  `   Task ID context updated to ${msg.taskId} based on message event.`
+                )
               );
               currentTaskId = msg.taskId;
             }
@@ -422,7 +433,9 @@ async function main() {
               printMessageContent(task.status.update);
             }
             if (task.artifacts && task.artifacts.length > 0) {
-              console.log(colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`));
+              console.log(
+                colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`)
+              );
             }
             break;
           }

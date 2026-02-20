@@ -2,7 +2,14 @@ import express from 'express';
 import { Server, ServerCredentials } from '@grpc/grpc-js';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-import { AgentCard, Task, TaskStatusUpdateEvent, Message, TaskState, Role } from '../../src/index.js';
+import {
+  AgentCard,
+  Task,
+  TaskStatusUpdateEvent,
+  Message,
+  TaskState,
+  Role,
+} from '../../src/index.js';
 import {
   InMemoryTaskStore,
   TaskStore,

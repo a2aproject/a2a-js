@@ -3,7 +3,14 @@ import * as grpc from '@grpc/grpc-js';
 import * as proto from '../../../src/grpc/pb/a2a_services.js';
 import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
-import { AgentCard, HTTP_EXTENSION_HEADER, MessageSendParams, Task, Role, TaskState } from '../../../src/index.js';
+import {
+  AgentCard,
+  HTTP_EXTENSION_HEADER,
+  MessageSendParams,
+  Task,
+  Role,
+  TaskState,
+} from '../../../src/index.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
@@ -154,7 +161,9 @@ describe('grpcHandler', () => {
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const call = createMockWritableStream({ message: { role: Role.ROLE_USER, content: [] as any } });
+      const call = createMockWritableStream({
+        message: { role: Role.ROLE_USER, content: [] as any },
+      });
 
       await handler.sendStreamingMessage(call);
 

@@ -86,9 +86,7 @@ class MovieAgentExecutor implements AgentExecutor {
         update: {
           role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          content: [
-            { part: { $case: 'text', value: 'Processing your question, hang tight!' } },
-          ],
+          content: [{ part: { $case: 'text', value: 'Processing your question, hang tight!' } }],
           taskId: taskId,
           contextId: contextId,
           extensions: [],
@@ -205,9 +203,7 @@ class MovieAgentExecutor implements AgentExecutor {
       }
 
       // 5. Publish artifact with the result
-      const parts: Part[] = [
-        { part: { $case: 'text', value: agentReplyText || 'Completed.' } },
-      ];
+      const parts: Part[] = [{ part: { $case: 'text', value: agentReplyText || 'Completed.' } }];
       const artifactId = uuidv4();
       const resultArtifact: Artifact = {
         artifactId: artifactId,

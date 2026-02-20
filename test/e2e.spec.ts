@@ -178,7 +178,11 @@ describe('Client E2E tests', () => {
             {
               id: taskId,
               contextId,
-              status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+              status: {
+                state: TaskState.TASK_STATE_SUBMITTED,
+                update: undefined,
+                timestamp: undefined,
+              },
               artifacts: [],
               history: [],
               metadata: {},
@@ -186,14 +190,22 @@ describe('Client E2E tests', () => {
             {
               taskId,
               contextId,
-              status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                update: undefined,
+                timestamp: undefined,
+              },
               final: false,
               metadata: {},
             },
             {
               taskId,
               contextId,
-              status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                update: undefined,
+                timestamp: undefined,
+              },
               final: true,
               metadata: {},
             },

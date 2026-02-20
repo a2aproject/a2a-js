@@ -1,8 +1,6 @@
 import { vi, type Mock, type MockInstance } from 'vitest';
 import { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
-import {
-  TaskState,
-} from '../../../src/types/pb/a2a_types.js';
+import { TaskState } from '../../../src/types/pb/a2a_types.js';
 import { RequestContext } from '../../../src/server/agent_execution/request_context.js';
 import { ExecutionEventBus } from '../../../src/server/events/execution_event_bus.js';
 
@@ -45,7 +43,7 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
     append: false,
     lastChunk: false,
     artifact: undefined,
-    history: []
+    history: [],
   });
 
   // Publish completion
@@ -58,7 +56,7 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
     append: false,
     lastChunk: false,
     artifact: undefined,
-    history: []
+    history: [],
   });
 
   bus.finished();
@@ -89,7 +87,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
       final: false,
       append: false,
       lastChunk: false,
-      artifact: undefined
+      artifact: undefined,
     });
     eventBus.publish({
       taskId,
@@ -101,7 +99,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
       lastChunk: false,
       artifact: undefined,
       history: [],
-      artifacts: []
+      artifacts: [],
     });
 
     // Simulate a long-running process
@@ -112,21 +110,25 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
         eventBus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_CANCELLED, update: undefined, timestamp: undefined },
+          status: {
+            state: TaskState.TASK_STATE_CANCELLED,
+            update: undefined,
+            timestamp: undefined,
+          },
           metadata: {},
           final: true,
           append: false,
           lastChunk: false,
           artifact: undefined,
           history: [],
-          artifacts: []
+          artifacts: [],
         });
         eventBus.finished();
         return;
       }
       // Use fake timers to simulate work
       // In real code we'd need to yield or wait for timer.
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     eventBus.publish({
@@ -139,7 +141,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
       lastChunk: false,
       artifact: undefined,
       history: [],
-      artifacts: []
+      artifacts: [],
     });
     eventBus.finished();
   }
@@ -175,7 +177,7 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
       final: false,
       append: false,
       lastChunk: false,
-      artifact: undefined
+      artifact: undefined,
     });
     eventBus.publish({
       taskId,
@@ -187,7 +189,7 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
       lastChunk: false,
       artifact: undefined,
       history: [],
-      artifacts: []
+      artifacts: [],
     });
 
     // Simulate a long-running process
@@ -196,19 +198,23 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
         eventBus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_CANCELLED, update: undefined, timestamp: undefined },
+          status: {
+            state: TaskState.TASK_STATE_CANCELLED,
+            update: undefined,
+            timestamp: undefined,
+          },
           metadata: {},
           final: true,
           append: false,
           lastChunk: false,
           artifact: undefined,
           history: [],
-          artifacts: []
+          artifacts: [],
         });
         eventBus.finished();
         return;
       }
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     eventBus.publish({
@@ -221,7 +227,7 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
       lastChunk: false,
       artifact: undefined,
       history: [],
-      artifacts: []
+      artifacts: [],
     });
     eventBus.finished();
   }

@@ -15,7 +15,7 @@ import { AgentExecutor, RequestContext, ExecutionEventBus } from '../../../serve
  * SampleAgentExecutor implements the agent's core logic.
  */
 export class SampleAgentExecutor implements AgentExecutor {
-  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => { };
+  public cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {};
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const userMessage = requestContext.userMessage;

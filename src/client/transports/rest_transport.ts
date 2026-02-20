@@ -205,7 +205,7 @@ export class RestTransport implements Transport {
     }
     throw new Error(
       'A `fetch` implementation was not provided and is not available in the global scope. ' +
-      'Please provide a `fetchImpl` in the RestTransportOptions.'
+        'Please provide a `fetchImpl` in the RestTransportOptions.'
     );
   }
 
@@ -369,7 +369,7 @@ export interface RestTransportFactoryOptions {
 export class RestTransportFactory implements TransportFactory {
   public static readonly name: TransportProtocolName = 'HTTP+JSON';
 
-  constructor(private readonly options?: RestTransportFactoryOptions) { }
+  constructor(private readonly options?: RestTransportFactoryOptions) {}
 
   get protocolName(): string {
     return RestTransportFactory.name;

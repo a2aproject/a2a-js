@@ -9,6 +9,7 @@ import {
   TaskQueryParams,
   PushNotificationConfig,
   AgentCard,
+  JsonRpcTaskPushNotificationConfig,
 } from '../index.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
 import { ClientCallContext } from './context.js';
@@ -313,7 +314,12 @@ export class Client {
       result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
     }
     if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
-      result.configuration.pushNotificationConfig = this.config.pushNotificationConfig as any;
+      if (params.message.taskId) {
+        result.configuration.pushNotificationConfig = {
+          taskId: params.message.taskId,
+          pushNotificationConfig: this.config.pushNotificationConfig,
+        };
+      }
     }
     result.configuration.blocking ??= blocking;
     return result;

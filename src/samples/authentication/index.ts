@@ -26,7 +26,7 @@ const authenticationAgentCard: AgentCard = {
   capabilities: {
     streaming: false,
     pushNotifications: false,
-    extensions: []
+    extensions: [],
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'],

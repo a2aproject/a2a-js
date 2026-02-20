@@ -549,9 +549,9 @@ describe('RestTransportHandler', () => {
                   value: expect.objectContaining({
                     file: {
                       $case: 'fileWithUri',
-                      value: 'https://example.com/file.pdf'
+                      value: 'https://example.com/file.pdf',
                     },
-                    mimeType: 'application/pdf'
+                    mimeType: 'application/pdf',
                   }),
                 },
               }),

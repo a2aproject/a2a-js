@@ -52,7 +52,7 @@ describe('A2AClient Basic Tests', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => { };
+    console.error = () => {};
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -203,7 +203,7 @@ describe('A2AClient Basic Tests', () => {
               part: {
                 $case: 'text',
                 value: 'Hello, agent!',
-              }
+              },
             },
           ],
           contextId: '',
@@ -277,7 +277,7 @@ describe('A2AClient Basic Tests', () => {
               part: {
                 $case: 'text',
                 value: 'This should fail',
-              }
+              },
             },
           ],
           contextId: '',
@@ -403,7 +403,7 @@ describe('A2AClient Basic Tests', () => {
               part: {
                 $case: 'text',
                 value: 'Hello, static agent!',
-              }
+              },
             },
           ],
           contextId: '',
@@ -459,7 +459,7 @@ describe('Extension Methods', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => { };
+    console.error = () => {};
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -617,7 +617,7 @@ describe('Push Notification Config Operations', () => {
   beforeEach(() => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => { };
+    console.error = () => {};
   });
 
   afterEach(() => {

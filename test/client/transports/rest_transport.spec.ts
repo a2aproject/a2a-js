@@ -3,9 +3,7 @@ import {
   RestTransportFactory,
 } from '../../../src/client/transports/rest_transport.js';
 import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
-import {
-  JsonRpcTaskPushNotificationConfig,
-} from '../../../src/index.js';
+import { JsonRpcTaskPushNotificationConfig } from '../../../src/index.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';

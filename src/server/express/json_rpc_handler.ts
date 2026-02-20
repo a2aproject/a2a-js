@@ -52,11 +52,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       }
       // Check if it's an AsyncGenerator (stream)
       if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
-        const stream = rpcResponseOrStream as AsyncGenerator<
-          JSONRPCResponse,
-          void,
-          undefined
-        >;
+        const stream = rpcResponseOrStream as AsyncGenerator<JSONRPCResponse, void, undefined>;
 
         // Set SSE headers using shared utility
         Object.entries(SSE_HEADERS).forEach(([key, value]) => {

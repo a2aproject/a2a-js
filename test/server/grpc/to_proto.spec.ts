@@ -67,7 +67,7 @@ describe('ToProto', () => {
         taskId: '',
         role: 0,
         extensions: [],
-        metadata: {}
+        metadata: {},
       };
       const result = ToProto.messageSendResult(message);
       expect(result.payload?.$case).toBe('msg');
@@ -81,7 +81,7 @@ describe('ToProto', () => {
         status: undefined,
         history: [],
         artifacts: [],
-        metadata: undefined
+        metadata: undefined,
       };
       const result = ToProto.messageSendResult(task);
       expect(result.payload?.$case).toBe('task');

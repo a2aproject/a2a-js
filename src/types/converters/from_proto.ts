@@ -119,17 +119,15 @@ export class FromProto {
       acceptedOutputModes: configuration.acceptedOutputModes,
       pushNotificationConfig: configuration.pushNotification
         ? {
-          taskId: '',
-          pushNotificationConfig: configuration.pushNotification,
-        }
+            taskId: '',
+            pushNotificationConfig: configuration.pushNotification,
+          }
         : undefined,
       historyLength: configuration.historyLength,
     };
   }
 
-  static pushNotificationConfig(
-    config: PushNotificationConfig
-  ): PushNotificationConfig {
+  static pushNotificationConfig(config: PushNotificationConfig): PushNotificationConfig {
     return config;
   }
 

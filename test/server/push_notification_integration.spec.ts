@@ -17,10 +17,7 @@ import {
   TaskState,
   TaskStatus,
 } from '../../src/types/pb/a2a_types.js';
-import {
-  MessageSendParams,
-  JsonRpcTaskPushNotificationConfig,
-} from '../../src/json_rpc_types.js';
+import { MessageSendParams, JsonRpcTaskPushNotificationConfig } from '../../src/json_rpc_types.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
@@ -210,7 +207,11 @@ describe('Push Notification Integration Tests', () => {
         id: taskId,
         contextId,
         history: [params.message as Message],
-        status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined } as TaskStatus,
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          update: undefined,
+          timestamp: undefined,
+        } as TaskStatus,
         artifacts: [],
         metadata: {},
       };
@@ -278,7 +279,11 @@ describe('Push Notification Integration Tests', () => {
       const task: Task = {
         id: 'test-multi-endpoints',
         contextId: 'test-context',
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined } as TaskStatus,
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          update: undefined,
+          timestamp: undefined,
+        } as TaskStatus,
         history: [],
         artifacts: [],
         metadata: {},
@@ -286,15 +291,21 @@ describe('Push Notification Integration Tests', () => {
       await taskStore.save(task);
 
       // Set multiple push notification configs for this message
-      await handler.setTaskPushNotificationConfig({
-        taskId: task.id,
-        pushNotificationConfig: pushConfig1,
-      }, new ServerCallContext());
+      await handler.setTaskPushNotificationConfig(
+        {
+          taskId: task.id,
+          pushNotificationConfig: pushConfig1,
+        },
+        new ServerCallContext()
+      );
 
-      await handler.setTaskPushNotificationConfig({
-        taskId: task.id,
-        pushNotificationConfig: pushConfig2,
-      }, new ServerCallContext());
+      await handler.setTaskPushNotificationConfig(
+        {
+          taskId: task.id,
+          pushNotificationConfig: pushConfig2,
+        },
+        new ServerCallContext()
+      );
 
       // Mock the agent executor to publish only completed state
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
@@ -305,7 +316,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           final: false,
           metadata: {},
         });
@@ -314,7 +329,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           final: true,
           metadata: {},
         });
@@ -393,7 +412,11 @@ describe('Push Notification Integration Tests', () => {
         id: taskId,
         contextId,
         history: [params.message as Message],
-        status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined } as TaskStatus,
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          update: undefined,
+          timestamp: undefined,
+        } as TaskStatus,
         artifacts: [],
         metadata: {},
       };
@@ -439,7 +462,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           id: taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           artifacts: [],
           history: [],
           metadata: {},
@@ -448,7 +475,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           final: true,
           metadata: {},
         });
@@ -526,7 +557,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           id: taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           artifacts: [],
           history: [],
           metadata: {},
@@ -535,7 +570,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           final: true,
           metadata: {},
         });
@@ -599,7 +638,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           id: taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           artifacts: [],
           history: [],
           metadata: {},
@@ -608,7 +651,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           final: true,
           metadata: {},
         });
@@ -685,22 +732,32 @@ describe('Push Notification Integration Tests', () => {
       const task: Task = {
         id: 'multi-config-test',
         contextId: 'test-context',
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined } as TaskStatus,
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          update: undefined,
+          timestamp: undefined,
+        } as TaskStatus,
         history: [],
         artifacts: [],
         metadata: {},
       };
       await taskStore.save(task);
 
-      await customHandler.setTaskPushNotificationConfig({
-        taskId: task.id,
-        pushNotificationConfig: pushConfig1,
-      }, new ServerCallContext());
+      await customHandler.setTaskPushNotificationConfig(
+        {
+          taskId: task.id,
+          pushNotificationConfig: pushConfig1,
+        },
+        new ServerCallContext()
+      );
 
-      await customHandler.setTaskPushNotificationConfig({
-        taskId: task.id,
-        pushNotificationConfig: pushConfig2,
-      }, new ServerCallContext());
+      await customHandler.setTaskPushNotificationConfig(
+        {
+          taskId: task.id,
+          pushNotificationConfig: pushConfig2,
+        },
+        new ServerCallContext()
+      );
 
       // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
@@ -710,7 +767,11 @@ describe('Push Notification Integration Tests', () => {
         bus.publish({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined } as TaskStatus,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            update: undefined,
+            timestamp: undefined,
+          } as TaskStatus,
           final: true,
           metadata: {},
         });

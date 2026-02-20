@@ -25,12 +25,14 @@ const extensionAgentCard: AgentCard = {
   version: '1.0.0', // Incremented version
   protocolVersion: '0.3.0',
   capabilities: {
-    extensions: [{
-      uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1',
-      description: 'Timestamp extension',
-      required: false,
-      params: {},
-    }],
+    extensions: [
+      {
+        uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1',
+        description: 'Timestamp extension',
+        required: false,
+        params: {},
+      },
+    ],
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
   },

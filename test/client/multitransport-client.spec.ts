@@ -130,7 +130,15 @@ describe('Client', () => {
 
   it('should call transport.sendMessageStream with blocking=true', async () => {
     const params: MessageSendParams = {
-      message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+      message: {
+        messageId: '1',
+        role: Role.ROLE_USER,
+        content: [],
+        contextId: '',
+        taskId: '',
+        extensions: [],
+        metadata: {},
+      },
     };
     const events: A2AStreamEventData[] = [
       {
@@ -171,7 +179,12 @@ describe('Client', () => {
   it('should call transport.setTaskPushNotificationConfig', async () => {
     const params: TaskPushNotificationConfig = {
       name: 'tasks/123/pushNotificationConfigs/abc',
-      pushNotificationConfig: { url: 'http://example.com', id: 'abc', token: 'tok', authentication: undefined },
+      pushNotificationConfig: {
+        url: 'http://example.com',
+        id: 'abc',
+        token: 'tok',
+        authentication: undefined,
+      },
     };
     transport.setTaskPushNotificationConfig.mockResolvedValue(params);
 
@@ -192,7 +205,12 @@ describe('Client', () => {
     };
     const config: TaskPushNotificationConfig = {
       name: 'tasks/123/pushNotificationConfigs/abc',
-      pushNotificationConfig: { url: 'http://example.com', id: 'abc', token: 'tok', authentication: undefined },
+      pushNotificationConfig: {
+        url: 'http://example.com',
+        id: 'abc',
+        token: 'tok',
+        authentication: undefined,
+      },
     };
     transport.getTaskPushNotificationConfig.mockResolvedValue(config);
 
@@ -209,7 +227,15 @@ describe('Client', () => {
   it('should call transport.listTaskPushNotificationConfig', async () => {
     const params: ListTaskPushNotificationConfigParams = { id: '123' };
     const configs: TaskPushNotificationConfig[] = [
-      { name: 'tasks/123/pushNotificationConfigs/abc', pushNotificationConfig: { url: 'http://example.com', id: 'abc', token: 'tok', authentication: undefined } },
+      {
+        name: 'tasks/123/pushNotificationConfigs/abc',
+        pushNotificationConfig: {
+          url: 'http://example.com',
+          id: 'abc',
+          token: 'tok',
+          authentication: undefined,
+        },
+      },
     ];
     transport.listTaskPushNotificationConfig.mockResolvedValue(configs);
 
@@ -240,7 +266,14 @@ describe('Client', () => {
 
   it('should call transport.getTask', async () => {
     const params: TaskQueryParams = { id: '123' };
-    const task: Task = { id: '123', contextId: 'ctx1', status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined }, artifacts: [], history: [], metadata: {} };
+    const task: Task = {
+      id: '123',
+      contextId: 'ctx1',
+      status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
     transport.getTask.mockResolvedValue(task);
 
     const result = await client.getTask(params);
@@ -307,7 +340,15 @@ describe('Client', () => {
       const config: ClientConfig = { polling: true };
       client = new Client(transport, agentCard, config);
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
       };
 
       await client.sendMessage(params);
@@ -322,7 +363,15 @@ describe('Client', () => {
     it('should set blocking=false when explicitly provided in request', async () => {
       client = new Client(transport, agentCard);
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
         configuration: { blocking: false },
       };
 
@@ -339,7 +388,15 @@ describe('Client', () => {
       const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
       client = new Client(transport, agentCard, config);
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
       };
 
       await client.sendMessage(params);
@@ -355,7 +412,15 @@ describe('Client', () => {
       const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
       client = new Client(transport, agentCard, config);
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
         configuration: { acceptedOutputModes: ['text/plain'] },
       };
 
@@ -369,11 +434,24 @@ describe('Client', () => {
     });
 
     it('should apply pushNotificationConfig', async () => {
-      const pushConfig = { url: 'http://test.com', id: '1', token: 't', authentication: undefined as any };
+      const pushConfig = {
+        url: 'http://test.com',
+        id: '1',
+        token: 't',
+        authentication: undefined as any,
+      };
       const config: ClientConfig = { polling: false, pushNotificationConfig: pushConfig as any };
       client = new Client(transport, agentCard, config);
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
       };
 
       await client.sendMessage(params);
@@ -388,12 +466,30 @@ describe('Client', () => {
     it('should use pushNotificationConfig from request when provided', async () => {
       const config: ClientConfig = {
         polling: false,
-        pushNotificationConfig: { url: 'http://test.com', id: '1', token: 't', authentication: undefined },
+        pushNotificationConfig: {
+          url: 'http://test.com',
+          id: '1',
+          token: 't',
+          authentication: undefined,
+        },
       };
       client = new Client(transport, agentCard, config);
-      const pushConfig = { url: 'http://test2.com', id: '2', token: 't', authentication: undefined as any };
+      const pushConfig = {
+        url: 'http://test2.com',
+        id: '2',
+        token: 't',
+        authentication: undefined as any,
+      };
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
         configuration: { pushNotificationConfig: pushConfig as any },
       };
 
@@ -412,7 +508,15 @@ describe('Client', () => {
       agentCard.capabilities.streaming = false;
       client = new Client(transport, agentCard);
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
       };
       const response: Message = {
         messageId: '2',
@@ -695,7 +799,15 @@ describe('Client', () => {
 
     it('should intercept each iterator item', async () => {
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
       };
       const events: A2AStreamEventData[] = [
         {
@@ -709,7 +821,11 @@ describe('Client', () => {
           taskId: '123',
           contextId: 'ctx1',
           final: false,
-          status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, update: undefined },
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            update: undefined,
+          },
           metadata: {},
         },
       ];
@@ -753,7 +869,15 @@ describe('Client', () => {
 
     it('should intercept after non-streaming sendMessage for sendMessageStream', async () => {
       const params: MessageSendParams = {
-        message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          content: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
       };
       const message: Message = {
         messageId: '2',
@@ -777,7 +901,11 @@ describe('Client', () => {
           },
         ],
       };
-      client = new Client(transport, { ...agentCard, capabilities: { ...agentCard.capabilities, streaming: false } }, config);
+      client = new Client(
+        transport,
+        { ...agentCard, capabilities: { ...agentCard.capabilities, streaming: false } },
+        config
+      );
 
       const result = client.sendMessageStream(params);
 
@@ -794,7 +922,15 @@ describe('Client', () => {
         transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.sendMessageStream,
         caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
           c.sendMessageStream({
-            message: { messageId: '1', role: Role.ROLE_USER, content: [], contextId: '', taskId: '', extensions: [], metadata: {} },
+            message: {
+              messageId: '1',
+              role: Role.ROLE_USER,
+              content: [],
+              contextId: '',
+              taskId: '',
+              extensions: [],
+              metadata: {},
+            },
           }),
       },
       {
@@ -812,14 +948,22 @@ describe('Client', () => {
               taskId: '123',
               contextId: 'ctx1',
               final: false,
-              status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                timestamp: undefined,
+                update: undefined,
+              },
               metadata: {},
             },
             {
               taskId: '123',
               contextId: 'ctx1',
               final: false,
-              status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, update: undefined },
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                timestamp: undefined,
+                update: undefined,
+              },
               metadata: {},
             },
           ];
@@ -881,14 +1025,22 @@ describe('Client', () => {
               taskId: '123',
               contextId: 'ctx1',
               final: false,
-              status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                timestamp: undefined,
+                update: undefined,
+              },
               metadata: {},
             },
             {
               taskId: '123',
               contextId: 'ctx1',
               final: false,
-              status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, update: undefined },
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                timestamp: undefined,
+                update: undefined,
+              },
               metadata: {},
             },
           ];

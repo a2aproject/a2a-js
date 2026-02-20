@@ -62,12 +62,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     documentationUrl: '',
     protocolVersion: '0.3.0',
     capabilities: {
-      extensions: [{
-        uri: 'requested-extension-uri',
-        description: 'description',
-        required: false,
-        params: {},
-      }],
+      extensions: [
+        {
+          uri: 'requested-extension-uri',
+          description: 'description',
+          required: false,
+          params: {},
+        },
+      ],
       streaming: true,
       pushNotifications: true,
     },
@@ -170,7 +172,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.finished();
     });
 
-    const result = await handler.sendMessage(params, serverCallContext) as Message;
+    const result = (await handler.sendMessage(params, serverCallContext)) as Message;
 
     // TODO(bgralewicz): fix the deepEqual - it fails because of the taskId
     // assert.deepEqual(result, agentResponse);
@@ -206,7 +208,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         artifacts: [],
         history: [],
         metadata: {},
-
       });
       bus.publish({
         taskId,
@@ -251,7 +252,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const result = await handler.sendMessage(params, serverCallContext);
     const taskResult = result as Task;
 
-
     assert.equal(taskResult.id, taskId);
     assert.equal(taskResult.status.state, TaskState.TASK_STATE_COMPLETED);
     assert.isDefined(taskResult.artifacts, 'Task result should have artifacts');
@@ -272,7 +272,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const blockingResult = await handler.sendMessage(blockingParams, serverCallContext);
     const blockingTask = blockingResult as Task;
 
-    assert.equal(blockingTask.status.state, TaskState.TASK_STATE_FAILED, 'Task status should be failed');
+    assert.equal(
+      blockingTask.status.state,
+      TaskState.TASK_STATE_FAILED,
+      'Task status should be failed'
+    );
     assert.include(
       (blockingTask.status.update?.content[0].part as any).value,
       errorMessage,
@@ -326,7 +330,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(
       taskResult.status.state,
       TaskState.TASK_STATE_SUBMITTED,
-      "Should return immediately with TaskState.TASK_STATE_SUBMITTED state"
+      'Should return immediately with TaskState.TASK_STATE_SUBMITTED state'
     );
 
     // The background processing should not have completed yet
@@ -342,7 +346,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(
       finalTask!.status.state,
       TaskState.TASK_STATE_COMPLETED,
-      "Task should be TaskState.TASK_STATE_COMPLETED in the store after background processing"
+      'Task should be TaskState.TASK_STATE_COMPLETED in the store after background processing'
     );
     expect(saveSpy).toHaveBeenCalledTimes(2);
     assert.equal(saveSpy.mock.calls[1][0].status.state, TaskState.TASK_STATE_COMPLETED);
@@ -415,7 +419,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(
       taskResult.status.state,
       TaskState.TASK_STATE_SUBMITTED,
-      "Should return immediately with TaskState.TASK_STATE_SUBMITTED state"
+      'Should return immediately with TaskState.TASK_STATE_SUBMITTED state'
     );
 
     // Allow the background processing to complete
@@ -444,7 +448,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const nonBlockingResult = await handler.sendMessage(nonBlockingParams, serverCallContext);
     const nonBlockingTask = nonBlockingResult as Task;
 
-    assert.equal(nonBlockingTask.status.state, TaskState.TASK_STATE_FAILED, 'Task status should be failed');
+    assert.equal(
+      nonBlockingTask.status.state,
+      TaskState.TASK_STATE_FAILED,
+      'Task status should be failed'
+    );
     assert.include(
       (nonBlockingTask.status.update?.content[0].part as any).value,
       errorMessage,
@@ -930,7 +938,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
     const taskId = 'task-terminal-1';
-    const terminalStates: TaskState[] = [TaskState.TASK_STATE_COMPLETED, TaskState.TASK_STATE_FAILED, TaskState.TASK_STATE_CANCELLED, TaskState.TASK_STATE_REJECTED];
+    const terminalStates: TaskState[] = [
+      TaskState.TASK_STATE_COMPLETED,
+      TaskState.TASK_STATE_FAILED,
+      TaskState.TASK_STATE_CANCELLED,
+      TaskState.TASK_STATE_REJECTED,
+    ];
 
     for (const state of terminalStates) {
       const fakeTask: Task = {
@@ -1005,7 +1018,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_INPUT_REQUIRED, update: undefined, timestamp: undefined },
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          update: undefined,
+          timestamp: undefined,
+        },
         final: true,
         metadata: {},
       });
@@ -1093,13 +1110,22 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await vi.runAllTimersAsync();
     await Promise.all([p1, p2]);
 
-    assert.equal((results1[0] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_SUBMITTED);
+    assert.equal(
+      (results1[0] as TaskStatusUpdateEvent).status.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
     assert.equal((results1[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((results1[2] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (results1[2] as TaskStatusUpdateEvent).status.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     // First event of resubscribe is always a task.
     assert.equal((results2[0] as Task).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((results2[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (results2[1] as TaskStatusUpdateEvent).status.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     expect(saveSpy).toHaveBeenCalledTimes(3);
     const lastSaveCall = saveSpy.mock.calls[saveSpy.mock.calls.length - 1][0];
@@ -1439,7 +1465,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       configuration: {
         pushNotificationConfig: {
           taskId: 'task-1',
-          pushNotificationConfig: pushNotificationConfig
+          pushNotificationConfig: pushNotificationConfig,
         },
       },
     };
@@ -1766,7 +1792,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let thrownError: any;
     try {
       const cancelPromise = handler.cancelTask({ id: taskId }, serverCallContext);
-      cancelPromise.catch(() => { });
+      cancelPromise.catch(() => {});
       await vi.runAllTimersAsync();
       try {
         cancelResponse = await cancelPromise;
@@ -1909,8 +1935,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('ExecutionEventQueue should be instantiable and return an object', () => {
     const fakeBus = {
-      on: () => { },
-      off: () => { },
+      on: () => {},
+      off: () => {},
     } as any;
     const queue = new ExecutionEventQueue(fakeBus);
     expect(queue).to.be.instanceOf(ExecutionEventQueue);
@@ -1942,7 +1968,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         bus.publish({
           id: ctx.taskId,
           contextId: ctx.contextId,
-          status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            update: undefined,
+            timestamp: undefined,
+          },
           artifacts: [],
           history: [],
           metadata: {},
@@ -1954,7 +1984,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const fakeTask: Task = {
       id: params.message.taskId!,
       contextId: params.message.contextId!,
-      status: { state: TaskState.TASK_STATE_SUBMITTED as TaskState, update: undefined, timestamp: undefined },
+      status: {
+        state: TaskState.TASK_STATE_SUBMITTED as TaskState,
+        update: undefined,
+        timestamp: undefined,
+      },
       artifacts: [],
       history: [],
       metadata: {},
@@ -1987,7 +2021,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   describe('getAuthenticatedExtendedAgentCard tests', async () => {
     class A2AUser implements User {
-      constructor(private _isAuthenticated: boolean) { }
+      constructor(private _isAuthenticated: boolean) {}
 
       get isAuthenticated(): boolean {
         return this._isAuthenticated;

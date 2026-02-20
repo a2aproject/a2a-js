@@ -50,12 +50,10 @@ export class JsonRpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions, idOverride?: number): Promise<AgentCard> {
-    const rpcResponse = (await this._sendRpcRequest<undefined, GetAuthenticatedExtendedCardSuccessResponse>(
-      'agent/getAuthenticatedExtendedCard',
+    const rpcResponse = (await this._sendRpcRequest<
       undefined,
-      idOverride,
-      options
-    )) as any;
+      GetAuthenticatedExtendedCardSuccessResponse
+    >('agent/getAuthenticatedExtendedCard', undefined, idOverride, options)) as any;
     return rpcResponse.result as AgentCard;
   }
 
@@ -185,7 +183,7 @@ export class JsonRpcTransport implements Transport {
     }
     throw new Error(
       'A `fetch` implementation was not provided and is not available in the global scope. ' +
-      'Please provide a `fetchImpl` in the A2ATransportOptions. '
+        'Please provide a `fetchImpl` in the A2ATransportOptions. '
     );
   }
 
@@ -347,7 +345,13 @@ export class JsonRpcTransport implements Transport {
     }
 
     const result = a2aStreamResponse.result as any;
-    if (result && typeof result === 'object' && 'payload' in result && result.payload && 'value' in result.payload) {
+    if (
+      result &&
+      typeof result === 'object' &&
+      'payload' in result &&
+      result.payload &&
+      'value' in result.payload
+    ) {
       return result.payload.value as TStreamItem;
     }
 
@@ -383,7 +387,7 @@ export class JsonRpcTransportFactoryOptions {
 export class JsonRpcTransportFactory implements TransportFactory {
   public static readonly name: TransportProtocolName = 'JSONRPC';
 
-  constructor(private readonly options?: JsonRpcTransportFactoryOptions) { }
+  constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
   get protocolName(): string {
     return JsonRpcTransportFactory.name;

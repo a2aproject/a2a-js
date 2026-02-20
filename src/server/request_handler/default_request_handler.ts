@@ -125,7 +125,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Ensure taskId is present
     const taskId = incomingMessage.taskId || uuidv4();
 
-    if ((incomingMessage as any).referenceTaskIds && (incomingMessage as any).referenceTaskIds.length > 0) {
+    if (
+      (incomingMessage as any).referenceTaskIds &&
+      (incomingMessage as any).referenceTaskIds.length > 0
+    ) {
       referenceTasks = [];
       for (const refId of (incomingMessage as any).referenceTaskIds) {
         const refTask = await this.taskStore.load(refId, context);
@@ -686,7 +689,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           update: {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            content: [{ part: { $case: 'text', value: `Event processing loop failed: ${errorMessage}` } }],
+            content: [
+              { part: { $case: 'text', value: `Event processing loop failed: ${errorMessage}` } },
+            ],
             taskId: currentTask.id,
             contextId: currentTask.contextId,
             extensions: [],

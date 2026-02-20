@@ -336,9 +336,9 @@ export class RestTransportHandler {
     'streaming' | 'pushNotifications',
     () => A2AError
   > = {
-      streaming: () => A2AError.unsupportedOperation('Agent does not support streaming'),
-      pushNotifications: () => A2AError.pushNotificationNotSupported(),
-    };
+    streaming: () => A2AError.unsupportedOperation('Agent does not support streaming'),
+    pushNotifications: () => A2AError.pushNotificationNotSupported(),
+  };
 
   /**
    * Validates that the agent supports a required capability.
@@ -482,10 +482,10 @@ export class RestTransportHandler {
     return {
       configuration: config
         ? {
-          acceptedOutputModes: config.acceptedOutputModes ?? config.accepted_output_modes,
-          blocking: config.blocking,
-          historyLength: config.historyLength ?? config.history_length,
-        }
+            acceptedOutputModes: config.acceptedOutputModes ?? config.accepted_output_modes,
+            blocking: config.blocking,
+            historyLength: config.historyLength ?? config.history_length,
+          }
         : undefined,
       message: this.normalizeMessage(p.message),
       metadata: p.metadata,

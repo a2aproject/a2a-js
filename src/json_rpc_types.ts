@@ -349,14 +349,26 @@ export interface PushNotificationAuthenticationInfo {
 }
 
 export type SendMessageResponse = SendMessageSuccessResponse | JSONRPCErrorResponse;
-export type SendStreamingMessageResponse = SendStreamingMessageSuccessResponse | JSONRPCErrorResponse;
+export type SendStreamingMessageResponse =
+  | SendStreamingMessageSuccessResponse
+  | JSONRPCErrorResponse;
 export type GetTaskResponse = GetTaskSuccessResponse | JSONRPCErrorResponse;
 export type CancelTaskResponse = CancelTaskSuccessResponse | JSONRPCErrorResponse;
-export type SetTaskPushNotificationConfigResponse = SetTaskPushNotificationConfigSuccessResponse | JSONRPCErrorResponse;
-export type GetTaskPushNotificationConfigResponse = GetTaskPushNotificationConfigSuccessResponse | JSONRPCErrorResponse;
-export type ListTaskPushNotificationConfigResponse = ListTaskPushNotificationConfigSuccessResponse | JSONRPCErrorResponse;
-export type DeleteTaskPushNotificationConfigResponse = DeleteTaskPushNotificationConfigSuccessResponse | JSONRPCErrorResponse;
-export type GetAuthenticatedExtendedCardResponse = GetAuthenticatedExtendedCardSuccessResponse | JSONRPCErrorResponse;
+export type SetTaskPushNotificationConfigResponse =
+  | SetTaskPushNotificationConfigSuccessResponse
+  | JSONRPCErrorResponse;
+export type GetTaskPushNotificationConfigResponse =
+  | GetTaskPushNotificationConfigSuccessResponse
+  | JSONRPCErrorResponse;
+export type ListTaskPushNotificationConfigResponse =
+  | ListTaskPushNotificationConfigSuccessResponse
+  | JSONRPCErrorResponse;
+export type DeleteTaskPushNotificationConfigResponse =
+  | DeleteTaskPushNotificationConfigSuccessResponse
+  | JSONRPCErrorResponse;
+export type GetAuthenticatedExtendedCardResponse =
+  | GetAuthenticatedExtendedCardSuccessResponse
+  | JSONRPCErrorResponse;
 
 export type JSONRPCResponse =
   | JSONRPCErrorResponse

@@ -217,8 +217,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         streamError instanceof A2AError
           ? streamError
           : A2AError.internalError(
-            streamError instanceof Error ? streamError.message : 'Streaming error'
-          );
+              streamError instanceof Error ? streamError.message : 'Streaming error'
+            );
       if (!res.writableEnded) {
         res.write(formatSSEErrorEvent(toHTTPError(a2aError)));
       }
