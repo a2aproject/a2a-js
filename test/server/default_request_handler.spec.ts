@@ -1371,6 +1371,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         contextId: 'ctx-delete-last',
         status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
         metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
@@ -1431,7 +1433,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         contextId: contextId,
       },
       configuration: {
-        pushNotificationConfig: { pushNotificationConfig },
+        pushNotificationConfig: {
+          taskId: 'task-1',
+          pushNotificationConfig: pushNotificationConfig
+        },
       },
     };
 
@@ -1704,10 +1709,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const taskId = createdTask.id;
 
     // Now, issue the cancel request
-    const cancelResponse = await handler.cancelTask({ id: taskId }, serverCallContext);
+    const cancelPromise = handler.cancelTask({ id: taskId }, serverCallContext);
 
     // Let the executor's loop run to completion to detect the cancellation
     await vi.runAllTimersAsync();
+
+    const cancelResponse = await cancelPromise;
 
     expect(cancellableExecutor.cancelTaskSpy).toHaveBeenCalledExactlyOnceWith(
       taskId,
