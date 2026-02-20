@@ -52,7 +52,7 @@ describe('A2AClient Basic Tests', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => {};
+    console.error = () => { };
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -233,7 +233,7 @@ describe('A2AClient Basic Tests', () => {
       // Verify the result
       expect(isSuccessResponse(result)).to.be.true;
       if (isSuccessResponse(result)) {
-        expect(result.result).to.have.property('messageId', 'msg-123');
+        expect(result.result.payload.value).to.have.property('messageId', 'msg-123');
       }
     });
 
@@ -459,7 +459,7 @@ describe('Extension Methods', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => {};
+    console.error = () => { };
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -617,7 +617,7 @@ describe('Push Notification Config Operations', () => {
   beforeEach(() => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => {};
+    console.error = () => { };
   });
 
   afterEach(() => {

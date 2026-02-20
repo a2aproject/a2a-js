@@ -84,7 +84,7 @@ describe('A2AClient Authentication Tests', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => {};
+    console.error = () => { };
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch({
@@ -161,7 +161,7 @@ describe('A2AClient Authentication Tests', () => {
       expect(isSuccessResponse(result)).to.be.true;
       if (isSuccessResponse(result)) {
         expect(result).to.have.property('result');
-        expect(result.result).to.have.property('messageId', 'msg-123');
+        expect(result.result.payload.value).to.have.property('messageId', 'msg-123');
       }
     });
 
