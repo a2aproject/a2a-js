@@ -273,7 +273,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
             content: [{ part: { $case: 'text', value: `Agent execution error: ${err.message}` } }],
-            taskId: requestContext.task?.id || '',
+            taskId: requestContext.taskId,
             contextId: finalMessageForAgent.contextId!,
             extensions: [],
             metadata: {},
@@ -376,7 +376,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
             content: [{ part: { $case: 'text', value: `Agent execution error: ${err.message}` } }],
-            taskId: requestContext.task?.id || '',
+            taskId: requestContext.taskId,
             contextId: finalMessageForAgent.contextId!,
             extensions: [],
             metadata: {},
@@ -457,7 +457,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         timestamp: new Date().toISOString(),
       };
       // Add cancellation message to history
-      task.history = [...(task.history || []), task.status!.update!];
+      if (task.status?.update) {
+        task.history = [...(task.history || []), task.status.update];
+      }
 
       await this.taskStore.save(task, context);
     }
