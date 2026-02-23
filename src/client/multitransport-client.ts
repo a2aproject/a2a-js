@@ -9,7 +9,6 @@ import {
   TaskQueryParams,
   PushNotificationConfig,
   AgentCard,
-  JsonRpcTaskPushNotificationConfig,
 } from '../index.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
 import { ClientCallContext } from './context.js';

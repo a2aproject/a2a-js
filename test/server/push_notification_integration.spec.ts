@@ -17,7 +17,7 @@ import {
   TaskState,
   TaskStatus,
 } from '../../src/types/pb/a2a_types.js';
-import { MessageSendParams, JsonRpcTaskPushNotificationConfig } from '../../src/json_rpc_types.js';
+import { MessageSendParams } from '../../src/json_rpc_types.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
 

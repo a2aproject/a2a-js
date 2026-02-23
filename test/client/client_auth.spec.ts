@@ -84,7 +84,7 @@ describe('A2AClient Authentication Tests', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => { };
+    console.error = () => {};
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch({

@@ -52,7 +52,7 @@ describe('A2AClient Basic Tests', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => { };
+    console.error = () => {};
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -459,7 +459,7 @@ describe('Extension Methods', () => {
   beforeEach(async () => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => { };
+    console.error = () => {};
 
     // Create a fresh mock fetch for each test
     mockFetch = createMockFetch();
@@ -617,7 +617,7 @@ describe('Push Notification Config Operations', () => {
   beforeEach(() => {
     // Suppress console.error during tests to avoid noise
     originalConsoleError = console.error;
-    console.error = () => { };
+    console.error = () => {};
   });
 
   afterEach(() => {
