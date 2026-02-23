@@ -458,7 +458,13 @@ describe('Client', () => {
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, pushNotificationConfig: pushConfig },
+        configuration: {
+          blocking: true,
+          pushNotificationConfig: {
+            taskId: params.message.taskId,
+            pushNotificationConfig: pushConfig,
+          },
+        },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
@@ -490,14 +496,25 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
-        configuration: { pushNotificationConfig: pushConfig as any },
+        configuration: {
+          pushNotificationConfig: {
+            taskId: '',
+            pushNotificationConfig: pushConfig as any,
+          },
+        },
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, pushNotificationConfig: pushConfig },
+        configuration: {
+          blocking: true,
+          pushNotificationConfig: {
+            taskId: params.message.taskId,
+            pushNotificationConfig: pushConfig,
+          },
+        },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });

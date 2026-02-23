@@ -390,7 +390,18 @@ export function createMockFetch(
         text: messageConfig.text || 'Hello, agent!',
       });
 
-      return createResponse(requestId, mockMessage);
+      const requestBody = JSON.parse((options?.body as string) || '{}');
+      const wrappedResult =
+        requestBody.method === 'message/send'
+          ? {
+              payload: {
+                $case: 'msg',
+                value: mockMessage,
+              },
+            }
+          : mockMessage;
+
+      return createResponse(requestId, wrappedResult);
     }
 
     // Default: return 404 for unknown endpoints

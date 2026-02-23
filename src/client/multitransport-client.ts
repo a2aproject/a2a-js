@@ -313,7 +313,7 @@ export class Client {
       result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
     }
     if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
-      if (params.message.taskId) {
+      if (params.message.taskId !== undefined) {
         result.configuration.pushNotificationConfig = {
           taskId: params.message.taskId,
           pushNotificationConfig: this.config.pushNotificationConfig,

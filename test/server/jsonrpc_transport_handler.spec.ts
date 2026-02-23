@@ -12,7 +12,7 @@ describe('JsonRpcTransportHandler', () => {
     mockRequestHandler = {
       getAgentCard: vi.fn(),
       getAuthenticatedExtendedAgentCard: vi.fn(),
-      sendMessage: vi.fn(),
+      sendMessage: vi.fn().mockResolvedValue({ messageId: 'default-id' }),
       sendMessageStream: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),

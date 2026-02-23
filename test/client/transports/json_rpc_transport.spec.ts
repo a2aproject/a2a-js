@@ -46,9 +46,25 @@ describe('JsonRpcTransport', () => {
       };
 
       mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({ jsonrpc: '2.0', result: {}, id: 1 }), {
-          status: 200,
-        })
+        new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            result: {
+              payload: {
+                $case: 'msg',
+                value: {
+                  messageId: 'response-msg-1',
+                  role: Role.ROLE_AGENT,
+                  content: [{ part: { $case: 'text', value: 'Response' } }],
+                },
+              },
+            },
+            id: 1,
+          }),
+          {
+            status: 200,
+          }
+        )
       );
       await transport.sendMessage(messageParams, options);
       const fetchArgs = mockFetch.mock.calls[0][1];

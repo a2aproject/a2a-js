@@ -129,7 +129,13 @@ export class JsonRpcTransportHandler {
         let result: unknown;
         switch (method) {
           case 'message/send':
-            result = await this.requestHandler.sendMessage(rpcRequest.params, context);
+            const messageOrTask = await this.requestHandler.sendMessage(rpcRequest.params, context);
+            result = {
+              payload: {
+                $case: 'messageId' in messageOrTask ? 'msg' : 'task',
+                value: messageOrTask,
+              },
+            };
             break;
           case 'tasks/get':
             result = await this.requestHandler.getTask(rpcRequest.params, context);
