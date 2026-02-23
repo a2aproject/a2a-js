@@ -381,12 +381,12 @@ export class JsonRpcTransportFactoryOptions {
 }
 
 export class JsonRpcTransportFactory implements TransportFactory {
-  public static readonly transportProtocolName: TransportProtocolName = 'JSONRPC';
+  public static readonly name: TransportProtocolName = 'JSONRPC';
 
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return JsonRpcTransportFactory.transportProtocolName;
+    return JsonRpcTransportFactory.name;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {

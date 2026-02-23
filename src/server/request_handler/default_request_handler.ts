@@ -124,14 +124,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
     // Ensure taskId is present
     const taskId = incomingMessage.taskId || uuidv4();
+    const referenceTaskIds =
+      (incomingMessage as Message & { referenceTaskIds?: string[] }).referenceTaskIds || [];
 
-    if (
-      (incomingMessage as Message & { referenceTaskIds?: string[] }).referenceTaskIds &&
-      (incomingMessage as Message & { referenceTaskIds?: string[] }).referenceTaskIds!.length > 0
-    ) {
+    if (referenceTaskIds.length > 0) {
       referenceTasks = [];
-      for (const refId of (incomingMessage as Message & { referenceTaskIds?: string[] })
-        .referenceTaskIds!) {
+      for (const refId of referenceTaskIds) {
         const refTask = await this.taskStore.load(refId, context);
         if (refTask) {
           referenceTasks.push(refTask);

@@ -174,13 +174,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const result = (await handler.sendMessage(params, serverCallContext)) as Message;
 
-    // TODO(bgralewicz): fix the deepEqual - it fails because of the taskId
-    // assert.deepEqual(result, agentResponse);
-
-    assert.equal(result.messageId, agentResponse.messageId);
-    assert.equal(result.role, agentResponse.role);
-    assert.deepEqual(result.metadata, agentResponse.metadata);
-    assert.isString(result.taskId);
+    // Not comparing the taskId as it is assigned by the handler
+    assert.deepEqual(result, { ...agentResponse, taskId: result.taskId });
     expect((mockAgentExecutor as MockAgentExecutor).execute).toHaveBeenCalledTimes(1);
   });
 
