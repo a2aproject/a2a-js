@@ -90,9 +90,10 @@ export interface RestMessage {
 export interface RestPushNotificationConfig {
   id: string;
   url: string;
+  token: string;
   authentication?: {
     schemes: string[];
-    credentials?: string;
+    credentials: string;
   };
 }
 

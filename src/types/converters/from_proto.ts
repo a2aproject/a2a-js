@@ -86,11 +86,14 @@ export class FromProto {
 
   static createTaskPushNotificationConfig(
     request: CreateTaskPushNotificationConfigRequest
-  ): TaskPushNotificationConfig {
-    if (!request.config) {
-      throw new Error('Request must include a `config`');
+  ): JsonRpcTaskPushNotificationConfig {
+    if (!request.config || !request.config.pushNotificationConfig) {
+      throw new Error('Request must include a `config` with `pushNotificationConfig`');
     }
-    return request.config;
+    return {
+      taskId: extractTaskId(request.parent),
+      pushNotificationConfig: request.config.pushNotificationConfig,
+    };
   }
 
   static deleteTaskPushNotificationConfigParams(
@@ -246,11 +249,8 @@ export class FromProto {
   static messageStreamResult(
     event: StreamResponse
   ): Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent {
-    if (
-      event.payload?.$case &&
-      (['msg', 'task', 'statusUpdate', 'artifactUpdate'] as string[]).includes(event.payload.$case)
-    ) {
-      return (event.payload as any).value;
+    if (event.payload) {
+      return event.payload.value;
     }
     throw A2AError.internalError('Invalid event type in StreamResponse');
   }

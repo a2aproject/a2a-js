@@ -133,7 +133,7 @@ export class Client {
       return;
     }
 
-    if (!this.agentCard.capabilities.streaming) {
+    if (!this.agentCard.capabilities?.streaming) {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
       const afterArgs: AfterArgs<'sendMessageStream'> = {
         result: { method, value: result },
@@ -169,7 +169,7 @@ export class Client {
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -188,7 +188,7 @@ export class Client {
     params: TaskIdParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -207,7 +207,7 @@ export class Client {
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 

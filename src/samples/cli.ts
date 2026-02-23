@@ -194,7 +194,7 @@ function printMessageContent(message: Message) {
       case 'text':
         console.log(`${partPrefix} ${colorize('green', '📝 Text:')}`, p.value);
         break;
-      case 'file':
+      case 'file': {
         const filePart = p.value;
         let source = 'unknown';
         if (filePart.file?.$case === 'fileWithUri') {
@@ -206,6 +206,7 @@ function printMessageContent(message: Message) {
           `${partPrefix} ${colorize('blue', '📄 File:')} Type: ${filePart.mimeType || 'N/A'}, Source: ${source}`
         );
         break;
+      }
       case 'data':
         console.log(
           `${partPrefix} ${colorize('yellow', '📊 Data:')}`,
@@ -411,7 +412,7 @@ async function main() {
           case 'task': {
             const task = payload.value as Task;
             console.log(
-              `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${taskStateToJSON(task.status?.state!)}`
+              `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${taskStateToJSON(task.status!.state)}`
             );
             if (task.id !== currentTaskId) {
               console.log(

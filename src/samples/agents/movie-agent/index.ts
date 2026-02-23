@@ -295,8 +295,8 @@ const movieAgentCard: AgentCard = {
     pushNotifications: false, // Assuming not implemented for this agent yet
     extensions: [],
   },
-  securitySchemes: undefined, // Or define actual security schemes if any
-  security: undefined,
+  securitySchemes: {}, // Or define actual security schemes if any
+  security: [],
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [

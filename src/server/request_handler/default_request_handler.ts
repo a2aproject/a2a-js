@@ -72,7 +72,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // If push notifications are supported, use the provided store and sender.
     // Otherwise, use the default in-memory store and sender.
-    if (agentCard.capabilities.pushNotifications) {
+    if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
       this.pushNotificationSender =
         pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
@@ -126,11 +126,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const taskId = incomingMessage.taskId || uuidv4();
 
     if (
-      (incomingMessage as any).referenceTaskIds &&
-      (incomingMessage as any).referenceTaskIds.length > 0
+      (incomingMessage as Message & { referenceTaskIds?: string[] }).referenceTaskIds &&
+      (incomingMessage as Message & { referenceTaskIds?: string[] }).referenceTaskIds!.length > 0
     ) {
       referenceTasks = [];
-      for (const refId of (incomingMessage as any).referenceTaskIds) {
+      for (const refId of (incomingMessage as Message & { referenceTaskIds?: string[] })
+        .referenceTaskIds!) {
         const refTask = await this.taskStore.load(refId, context);
         if (refTask) {
           referenceTasks.push(refTask);
@@ -145,9 +146,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Validate requested extensions against agent capabilities
     if (context?.requestedExtensions) {
-      const agentCard = await this.getAgentCard();
+      await this.getAgentCard();
       const exposedExtensions = new Set(
-        agentCard.capabilities.extensions?.map((ext) => ext.uri) || []
+        this.agentCard.capabilities?.extensions?.map((ext) => ext.uri) || []
       );
       const validExtensions = context.requestedExtensions.filter((extension) =>
         exposedExtensions.has(extension)
@@ -245,7 +246,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // If push notification config is provided, save it to the store.
     if (
       params.configuration?.pushNotificationConfig &&
-      this.agentCard.capabilities.pushNotifications
+      this.agentCard.capabilities?.pushNotifications
     ) {
       await this.pushNotificationStore?.save(
         taskId,
@@ -351,7 +352,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // If push notification config is provided, save it to the store.
     if (
       params.configuration?.pushNotificationConfig &&
-      this.agentCard.capabilities.pushNotifications
+      this.agentCard.capabilities?.pushNotifications
     ) {
       await this.pushNotificationStore?.save(
         taskId,
@@ -475,7 +476,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: JsonRpcTaskPushNotificationConfig,
     context?: ServerCallContext
   ): Promise<JsonRpcTaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
     const task = await this.taskStore.load(params.taskId, context);
@@ -499,7 +500,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: TaskIdParams | GetTaskPushNotificationConfigParams,
     context?: ServerCallContext
   ): Promise<JsonRpcTaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
     const task = await this.taskStore.load(params.id, context);
@@ -534,7 +535,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: ListTaskPushNotificationConfigParams,
     context?: ServerCallContext
   ): Promise<JsonRpcTaskPushNotificationConfig[]> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
     const task = await this.taskStore.load(params.id, context);
@@ -554,7 +555,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: DeleteTaskPushNotificationConfigParams,
     context?: ServerCallContext
   ): Promise<void> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
     const task = await this.taskStore.load(params.id, context);
@@ -577,7 +578,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     void,
     undefined
   > {
-    if (!this.agentCard.capabilities.streaming) {
+    if (!this.agentCard.capabilities?.streaming) {
       throw A2AError.unsupportedOperation('Streaming (and thus resubscription) is not supported.');
     }
 
@@ -632,7 +633,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     event: AgentExecutionEvent,
     context: ServerCallContext | undefined
   ): Promise<void> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       return;
     }
 

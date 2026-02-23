@@ -75,7 +75,7 @@ export class JsonRpcTransportHandler {
       if (method === 'message/stream' || method === 'tasks/resubscribe') {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();
-        if (!agentCard.capabilities.streaming) {
+        if (!agentCard.capabilities?.streaming) {
           throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
         }
         const agentEventStream =
@@ -128,7 +128,7 @@ export class JsonRpcTransportHandler {
         // Handle non-streaming methods
         let result: unknown;
         switch (method) {
-          case 'message/send':
+          case 'message/send': {
             const messageOrTask = await this.requestHandler.sendMessage(rpcRequest.params, context);
             result = {
               payload: {
@@ -137,6 +137,7 @@ export class JsonRpcTransportHandler {
               },
             };
             break;
+          }
           case 'tasks/get':
             result = await this.requestHandler.getTask(rpcRequest.params, context);
             break;

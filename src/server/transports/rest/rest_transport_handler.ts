@@ -244,7 +244,7 @@ export class RestTransportHandler {
 
     const jsonRpcConfig: JsonRpcTaskPushNotificationConfig = {
       taskId: taskId,
-      pushNotificationConfig: normalized.pushNotificationConfig,
+      pushNotificationConfig: normalized.pushNotificationConfig!,
     };
 
     const result = await this.requestHandler.setTaskPushNotificationConfig(jsonRpcConfig, context);
@@ -267,9 +267,9 @@ export class RestTransportHandler {
       context
     );
     return configs.map((c) => ({
-      name: `tasks/${c.taskId}/pushNotificationConfigs/${c.pushNotificationConfig.id}`,
+      name: `tasks/${c.taskId}/pushNotificationConfigs/${c.pushNotificationConfig!.id}`,
       pushNotificationConfig: c.pushNotificationConfig,
-    }));
+    })) as TaskPushNotificationConfig[];
   }
 
   /**
@@ -394,7 +394,7 @@ export class RestTransportHandler {
             $case: 'file',
             value: {
               file: { $case: 'fileWithBytes', value: Buffer.from(fileValue.bytes, 'base64') },
-              mimeType: fileValue.mimeType,
+              mimeType: fileValue.mimeType || 'application/octet-stream',
             },
           },
         };
@@ -405,7 +405,7 @@ export class RestTransportHandler {
             $case: 'file',
             value: {
               file: { $case: 'fileWithUri', value: fileValue.uri },
-              mimeType: fileValue.mimeType,
+              mimeType: fileValue.mimeType || 'application/octet-stream',
             },
           },
         };
@@ -433,8 +433,24 @@ export class RestTransportHandler {
    */
   private normalizeMessage(input: MessageInput): Message {
     // Cast to access both formats
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const m = input as any;
+
+    const m = input as unknown as {
+      messageId?: string;
+      message_id?: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      content?: any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      parts?: any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      role?: any;
+      contextId?: string;
+      context_id?: string;
+      taskId?: string;
+      task_id?: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      metadata?: any;
+      extensions?: string[];
+    };
     const messageId = m.messageId ?? m.message_id;
     if (!messageId) {
       throw A2AError.invalidParams('message.messageId is required');
@@ -444,7 +460,7 @@ export class RestTransportHandler {
     if (m.content && Array.isArray(m.content)) {
       content = m.content;
     } else if (m.parts && Array.isArray(m.parts)) {
-      content = m.parts.map((p: PartInput) => this.normalizePart(p));
+      content = m.parts.map((p) => this.normalizePart(p));
     } else {
       throw A2AError.invalidParams('message.content or message.parts must be an array');
     }
@@ -475,8 +491,15 @@ export class RestTransportHandler {
    */
   private normalizeMessageSendParams(input: MessageSendParamsInput): MessageSendParams {
     // Cast to access both formats
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p = input as any;
+
+    const p = input as unknown as {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      configuration?: any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      message: any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      metadata?: any;
+    };
     const config = p.configuration;
 
     return {
@@ -504,8 +527,16 @@ export class RestTransportHandler {
     }
 
     // Cast to access both formats
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const c = input as any;
+
+    const c = input as unknown as {
+      taskId?: string;
+      task_id?: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      pushNotificationConfig?: any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      push_notification_config?: any;
+      name?: string;
+    };
     const taskId = c.taskId ?? c.task_id;
     if (!taskId) {
       throw A2AError.invalidParams('taskId is required');
@@ -517,7 +548,12 @@ export class RestTransportHandler {
 
     return {
       name: `tasks/${taskId}/pushNotificationConfigs/${pnConfig.id}`,
-      pushNotificationConfig: pnConfig,
+      pushNotificationConfig: {
+        id: pnConfig.id,
+        url: pnConfig.url,
+        token: pnConfig.token,
+        authentication: pnConfig.authentication,
+      },
     };
   }
 }

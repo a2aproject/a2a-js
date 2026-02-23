@@ -117,7 +117,7 @@ export interface SendMessageRequest {
   method: 'message/send';
   params: {
     message: Message;
-    configuration?: any; // Will use protobuf's SendMessageConfiguration if needed
+    configuration?: MessageSendConfiguration; // Will use protobuf's SendMessageConfiguration if needed
     metadata?: { [k: string]: unknown };
   };
 }
@@ -128,7 +128,7 @@ export interface SendStreamingMessageRequest {
   method: 'message/stream';
   params: {
     message: Message;
-    configuration?: any;
+    configuration?: MessageSendConfiguration;
     metadata?: { [k: string]: unknown };
   };
 }
@@ -160,7 +160,7 @@ export interface CancelTaskRequest {
  * Configuration for push notifications.
  */
 export interface PushNotificationConfigItem {
-  pushNotificationConfig: any;
+  pushNotificationConfig: ProtoPushNotificationConfig;
 }
 
 /**
