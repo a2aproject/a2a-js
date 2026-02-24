@@ -5,13 +5,14 @@ import crypto from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 
 import {
-  MessageSendParams,
+  // Specific Params/Payload types used by the CLI
+  MessageSendParams, // Changed from TaskSendParams
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   Message,
-  Task,
+  Task, // Added for direct Task events
   AgentCard,
-  Part,
+  Part, // Added for explicit Part typing
   AGENT_CARD_PATH,
 } from '../index.js';
 import { TaskState, Role, taskStateToJSON } from '../types/pb/a2a_types.js';
@@ -163,8 +164,8 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     );
     // Create a temporary message-like structure to reuse printMessageContent
     printMessageContent({
-      messageId: generateId(),
-      role: Role.ROLE_AGENT,
+      messageId: generateId(), // Dummy messageId
+      role: Role.ROLE_AGENT, // Assuming artifact parts are from agent
       content: update.artifact?.parts || [],
       taskId: update.taskId,
       contextId: update.contextId,

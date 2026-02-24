@@ -201,7 +201,7 @@ export class JsonRpcTransport implements Transport {
   ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
 
-    const rpcRequest: JsonRpcRequest = {
+    const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
       params: params,
@@ -246,7 +246,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   private async _fetchRpc(
-    rpcRequest: JsonRpcRequest,
+    rpcRequest: JSONRPCRequest,
     acceptHeader: string = 'application/json',
     options?: RequestOptions
   ): Promise<Response> {
@@ -269,7 +269,7 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
-    const rpcRequest: JsonRpcRequest = {
+    const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
       params: params,
@@ -346,7 +346,7 @@ export class JsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    const result = (a2aStreamResponse as JsonRpcSuccessResponse<ProtoStreamResponse>).result;
+    const result = (a2aStreamResponse as JSONRPCSuccessResponse<ProtoStreamResponse>).result;
     if (result?.payload?.value) {
       return result.payload.value as TStreamItem;
     }
@@ -397,14 +397,14 @@ export class JsonRpcTransportFactory implements TransportFactory {
   }
 }
 
-interface JsonRpcRequest {
+interface JSONRPCRequest {
   jsonrpc: '2.0';
   method: string;
   params: unknown;
   id: string | number | null;
 }
 
-interface JsonRpcSuccessResponse<T> {
+interface JSONRPCSuccessResponse<T> {
   jsonrpc: '2.0';
   result: T;
   id: string | number | null;
