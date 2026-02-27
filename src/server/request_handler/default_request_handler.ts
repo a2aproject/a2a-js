@@ -140,7 +140,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       const validExtensions = context.requestedExtensions.filter((extension) =>
         exposedExtensions.has(extension)
       );
-      context = new ServerCallContext(validExtensions, context.user);
+      context = context.withRequestedExtensions(validExtensions);
     }
 
     const messageForContext = {

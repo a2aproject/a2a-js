@@ -27,10 +27,10 @@ exports[`TypeScript Strict Mode`] = {
       [248, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
       [271, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
     ],
-    "src/server/express/rest_handler.ts:2436698925": [
-      [204, 50, 17, "tsc: Argument of type \'unknown\' is not assignable to parameter of type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.", "3749434707"]
+    "src/server/express/rest_handler.ts:325944132": [
+      [211, 50, 17, "tsc: Argument of type \'unknown\' is not assignable to parameter of type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.", "3749434707"]
     ],
-    "src/server/request_handler/default_request_handler.ts:1208203039": [
+    "src/server/request_handler/default_request_handler.ts:3221398462": [
       [433, 22, 23, "tsc: Type \'Message1 | Message2 | undefined\' is not assignable to type \'Message1\'.\\n  Type \'undefined\' is not assignable to type \'Message1\'.", "1479072653"],
       [433, 47, 19, "tsc: Type \'Message2 | undefined\' is not assignable to type \'Message1\'.\\n  Type \'undefined\' is not assignable to type \'Message1\'.", "2682097303"],
       [619, 6, 6, "tsc: Type \'string | undefined\' is not assignable to type \'string\'.\\n  Type \'undefined\' is not assignable to type \'string\'.", "1741934565"]

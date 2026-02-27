@@ -14,7 +14,11 @@ import {
   mapErrorToStatus,
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
-import { ServerCallContext } from '../context.js';
+import {
+  ServerCallContext,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../context.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
@@ -30,6 +34,7 @@ import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '.
 export interface RestHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /**
@@ -108,9 +113,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
-    return new ServerCallContext(
+    const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
+    return ctxBuilder(
       Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
-      user
+      user,
+      req.headers
     );
   };
 
