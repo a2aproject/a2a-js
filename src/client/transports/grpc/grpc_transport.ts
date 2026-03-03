@@ -1,18 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../core.js';
-import {
-  A2AServiceClient,
-  TaskPushNotificationConfig,
-  ListTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigResponse,
-  DeleteTaskPushNotificationConfigRequest,
-  GetTaskRequest,
-  CancelTaskRequest,
-  TaskSubscriptionRequest,
-  SendMessageRequest,
-  StreamResponse,
-} from '../../../grpc/pb/a2a_services.js';
-import { Empty } from '../../../grpc/pb/google/protobuf/empty.js';
+import { A2AServiceClient, TaskPushNotificationConfig } from '../../../grpc/pb/a2a_services.js';
 import {
   MessageSendParams,
   TaskIdParams,
@@ -98,7 +86,7 @@ export class GrpcTransport implements Transport {
     params: MessageSendParams,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendGrpcStreamingRequest<SendMessageRequest, StreamResponse, MessageSendParams>(
+    yield* this._sendGrpcStreamingRequest(
       'sendStreamingMessage',
       params,
       options,
@@ -141,12 +129,7 @@ export class GrpcTransport implements Transport {
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    const rpcResponse = await this._sendGrpcRequest<
-      ListTaskPushNotificationConfigRequest,
-      ListTaskPushNotificationConfigResponse,
-      ListTaskPushNotificationConfigParams,
-      TaskPushNotificationConfig[]
-    >(
+    const rpcResponse = await this._sendGrpcRequest(
       'listTaskPushNotificationConfig',
       params,
       options,
@@ -161,12 +144,7 @@ export class GrpcTransport implements Transport {
     params: DeleteTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<void> {
-    await this._sendGrpcRequest<
-      DeleteTaskPushNotificationConfigRequest,
-      Empty,
-      DeleteTaskPushNotificationConfigParams,
-      void
-    >(
+    await this._sendGrpcRequest(
       'deleteTaskPushNotificationConfig',
       params,
       options,
@@ -177,7 +155,7 @@ export class GrpcTransport implements Transport {
   }
 
   async getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest<GetTaskRequest, Task, TaskQueryParams, Task>(
+    const rpcResponse = await this._sendGrpcRequest(
       'getTask',
       params,
       options,
@@ -189,7 +167,7 @@ export class GrpcTransport implements Transport {
   }
 
   async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest<CancelTaskRequest, Task, TaskIdParams, Task>(
+    const rpcResponse = await this._sendGrpcRequest(
       'cancelTask',
       params,
       options,
@@ -204,7 +182,7 @@ export class GrpcTransport implements Transport {
     params: TaskIdParams,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendGrpcStreamingRequest<TaskSubscriptionRequest, StreamResponse, TaskIdParams>(
+    yield* this._sendGrpcStreamingRequest(
       'taskSubscription',
       params,
       options,
