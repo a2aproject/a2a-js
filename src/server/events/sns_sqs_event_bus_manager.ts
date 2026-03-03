@@ -36,10 +36,12 @@
  * Rationale: Point-to-point delivery — each instance only processes events
  *   relevant to its own SSE connections.  Scales horizontally: N instances →
  *   N SQS queues, no single-queue bottleneck.
- * Trade-offs: Queue/subscription lifecycle is managed by the operator (CDK/CF).
- *   The application never creates or deletes queues at runtime.
+ * Trade-offs: Queue lifecycle is managed by QueueLifecycleManager, which
+ *   creates and destroys the queue at process start/stop.  In ECS each task
+ *   creates exactly one queue on boot and removes it on SIGTERM.
  * Compliance impact: SQS SSE (server-side encryption) and SNS topic policy must
- *   be configured at the infrastructure layer (CDK stack).
+ *   be configured at the infrastructure layer (CDK stack).  The queue policy
+ *   allowing SNS→SQS delivery is applied by QueueLifecycleManager.provision().
  *
  * Decision: Publish to SNS fire-and-forget (non-blocking).
  * Rationale: ExecutionEventBus.publish() is synchronous (void return).  Blocking
@@ -96,6 +98,16 @@ export interface SnsEventBusConfig {
   snsTopicArn: string;
   /** URL of the SQS queue assigned to this server instance. */
   sqsQueueUrl: string;
+  /**
+   * Unique identifier for this server instance.
+   *
+   * When using `QueueLifecycleManager`, pass `provisionResult.instanceId` here
+   * so that both components share the same identity (critical for dedup).
+   *
+   * If omitted a random UUID is generated, which is correct for standalone use
+   * but will cause double-delivery if the queue was created under a different ID.
+   */
+  instanceId?: string;
   /** Interval between SQS long-poll cycles in milliseconds. Default: 1000. */
   pollIntervalMs?: number;
   /** SQS long-poll wait time in seconds (0-20). Default: 5. */
@@ -379,8 +391,15 @@ export class SqsEventPoller {
  * ```
  */
 export class SnsEventBusManager implements ExecutionEventBusManager {
-  /** Unique identifier for this server instance; injected into SNS messages. */
-  readonly instanceId: string = randomUUID();
+  /**
+   * Unique identifier for this server instance; injected into SNS messages.
+   *
+   * Set from `config.instanceId` when provided (e.g. from
+   * `QueueLifecycleManager.provisionResult.instanceId`), otherwise a fresh
+   * UUID is generated.  Must match the ID embedded in the queue name to
+   * ensure the SqsEventPoller correctly discards self-originated messages.
+   */
+  readonly instanceId: string;
 
   private readonly sns: SNSClient;
   private readonly snsTopicArn: string;
@@ -388,6 +407,9 @@ export class SnsEventBusManager implements ExecutionEventBusManager {
   private readonly buses: Map<string, DistributedExecutionEventBus> = new Map();
 
   constructor(config: SnsEventBusConfig) {
+    // Accept an externally supplied instanceId (from QueueLifecycleManager) so
+    // both components stay in sync.  Fallback to a fresh UUID for standalone use.
+    this.instanceId = config.instanceId ?? randomUUID();
     this.sns = config.snsClient ?? new SNSClient({});
     this.snsTopicArn = config.snsTopicArn;
 

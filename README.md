@@ -776,6 +776,316 @@ app.post('/webhook/task-updates', (req, res) => {
 });
 ```
 
+---
+
+## Production-Grade: Persistent Store & Distributed Event Bus
+
+By default the SDK ships with `InMemoryTaskStore` and `DefaultExecutionEventBusManager`, which are perfect for a single-process server. In a production deployment with multiple server instances behind a load balancer you need:
+
+- **Persistent task state** — so any instance can serve a `tasks/get` request regardless of which instance originally handled the task.
+- **Distributed SSE fan-out** — so a client that opens an SSE stream on Instance B receives events published by the executor running on Instance A.
+
+The SDK ships three drop-in implementations for these scenarios.
+
+### Installation
+
+Install the required AWS SDK v3 packages:
+
+```bash
+npm install @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb @aws-sdk/client-sns @aws-sdk/client-sqs
+```
+
+### Infrastructure requirements
+
+| Resource | Purpose |
+| :--- | :--- |
+| **DynamoDB table** | Persistent task storage. Partition key: `taskId` (String). Enable TTL on the `ttl` attribute (optional). Encrypt with a KMS CMK. |
+| **SNS topic** | Cross-instance event fan-out. One topic shared by all instances. |
+| **SQS queue per instance** | Created automatically by `QueueLifecycleManager` on instance boot; deleted on shutdown. No pre-provisioning required — the ECS task role needs the permissions listed below. |
+| **Dead-letter queue (optional)** | Pre-created SQS queue for undeliverable messages. Pass its ARN as `dlqArn` to `QueueLifecycleManager`. |
+
+#### Required IAM permissions for the ECS task role
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "sqs:CreateQueue",
+    "sqs:DeleteQueue",
+    "sqs:GetQueueAttributes",
+    "sqs:SetQueueAttributes",
+    "sqs:ReceiveMessage",
+    "sqs:DeleteMessage",
+    "sns:Subscribe",
+    "sns:Unsubscribe",
+    "sns:Publish"
+  ],
+  "Resource": "*"
+}
+```
+
+> **Principle of least privilege**: scope `sqs:CreateQueue` / `sqs:DeleteQueue` to a resource pattern such as `arn:aws:sqs:*:*:a2a-*` and `sns:Publish` to your specific topic ARN.
+
+### Queue lifecycle in ECS auto-scaling
+
+The core operational challenge is that the auto-scaler controls how many ECS tasks are running at any moment. Pre-provisioning a fixed set of SQS queues does not work because:
+
+- **Scale-out**: new tasks have no queue to receive SNS fan-out messages.
+- **Scale-in**: terminated tasks leave queues permanently subscribed to SNS, wasting throughput and requiring manual cleanup.
+- **Rolling update**: old task's queue is deleted, new task's queue is not created yet — there is a delivery gap.
+
+`QueueLifecycleManager` solves this by treating the SQS queue as ephemeral process-local state:
+
+```
+ECS Task boot
+     │
+     ▼
+QueueLifecycleManager.provision()
+     ├─ SQS.CreateQueue("{prefix}-{instanceId}")
+     ├─ SQS.GetQueueAttributes  → queueArn
+     ├─ SQS.SetQueueAttributes  → SNS→SQS allow policy
+     └─ SNS.Subscribe(protocol=sqs, endpoint=queueArn)
+                │
+                ▼
+         SnsEventBusManager(instanceId, queueUrl)  ← start polling
+                │
+                ▼
+         DefaultRequestHandler  ← ready to serve requests
+
+ECS Task SIGTERM (graceful shutdown)
+     │
+     ▼
+SnsEventBusManager.stop()         ← drain in-flight SQS messages
+QueueLifecycleManager.teardown()
+     ├─ SNS.Unsubscribe(subscriptionArn)
+     └─ SQS.DeleteQueue(queueUrl)
+```
+
+**Crash / OOM / SIGKILL safety** — if the process exits without calling `teardown()`, the orphaned queue's messages expire after `messageRetentionPeriod` seconds (default 5 min). AWS auto-disables the SNS subscription once it detects the queue is unreachable. For production, schedule a periodic Lambda to sweep queues tagged `ManagedBy=a2a-server` whose heartbeat is stale.
+
+### Server: Distributed Hello World Agent
+
+This example wires `QueueLifecycleManager`, `DynamoDBTaskStore` and `SnsEventBusManager` into the standard `DefaultRequestHandler`, replacing the in-memory defaults with no changes required to the `AgentExecutor` logic.
+
+```typescript
+// server.ts
+import express from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import { AgentCard, Message, AGENT_CARD_PATH } from '@a2a-js/sdk';
+import {
+  AgentExecutor,
+  RequestContext,
+  ExecutionEventBus,
+  DefaultRequestHandler,
+} from '@a2a-js/sdk/server';
+import {
+  agentCardHandler,
+  jsonRpcHandler,
+  restHandler,
+  UserBuilder,
+} from '@a2a-js/sdk/server/express';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { SNSClient } from '@aws-sdk/client-sns';
+import { SQSClient } from '@aws-sdk/client-sqs';
+
+// ── Local implementations (ship with this repo, not part of @a2a-js/sdk) ────
+import { DynamoDBTaskStore } from './src/server/store/dynamo_task_store.js';
+import { QueueLifecycleManager } from './src/server/events/queue_lifecycle_manager.js';
+import { SnsEventBusManager } from './src/server/events/sns_sqs_event_bus_manager.js';
+
+// ── 1. Agent card ─────────────────────────────────────────────────────────────
+const agentCard: AgentCard = {
+  name: 'Hello Agent (Distributed)',
+  description: 'A simple agent backed by DynamoDB + SNS/SQS for multi-instance deployments.',
+  protocolVersion: '0.3.0',
+  version: '1.0.0',
+  url: 'http://localhost:4000/a2a/jsonrpc',
+  skills: [{ id: 'chat', name: 'Chat', description: 'Say hello', tags: ['chat'] }],
+  capabilities: { streaming: true, pushNotifications: false },
+  defaultInputModes: ['text'],
+  defaultOutputModes: ['text'],
+};
+
+// ── 2. Agent logic (unchanged from the single-instance version) ───────────────
+class HelloExecutor implements AgentExecutor {
+  async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
+    const response: Message = {
+      kind: 'message',
+      messageId: uuidv4(),
+      role: 'agent',
+      parts: [{ kind: 'text', text: 'Hello from a distributed agent!' }],
+      contextId: requestContext.contextId,
+    };
+    eventBus.publish(response);
+    eventBus.finished();
+  }
+  cancelTask = async (): Promise<void> => {};
+}
+
+// ── 3. AWS clients ─────────────────────────────────────────────────────────────
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+  marshallOptions: { removeUndefinedValues: true },
+});
+const snsClient = new SNSClient({});
+const sqsClient = new SQSClient({});
+
+// ── 4. Persistent task store ──────────────────────────────────────────────────
+const taskStore = new DynamoDBTaskStore({
+  client: dynamoClient,
+  tableName: process.env.DYNAMODB_TABLE_NAME ?? 'a2a-tasks',
+  taskTtlSeconds: 86_400,
+  maxConflictRetries: 3,
+});
+
+// ── 5. Per-instance queue lifecycle ──────────────────────────────────────────
+// QueueLifecycleManager creates a dedicated SQS queue on boot and destroys it
+// on shutdown.  No pre-provisioned queues are required.
+const queueLifecycle = new QueueLifecycleManager({
+  snsTopicArn: process.env.SNS_TOPIC_ARN!,
+  queueNamePrefix: process.env.QUEUE_NAME_PREFIX ?? 'a2a',
+  messageRetentionPeriod: 300,  // 5 min crash-safety window
+  visibilityTimeout: 30,
+  dlqArn: process.env.SQS_DLQ_ARN,          // optional
+  serviceName: process.env.SERVICE_NAME ?? 'a2a-server',
+  sqsClient,
+  snsClient,
+});
+
+// ── 6. Bootstrap: provision queue BEFORE initialising the request handler ────
+// provision() is async — await it before constructing DefaultRequestHandler.
+// The returned instanceId is the single source of truth for this process's
+// identity and MUST be passed to SnsEventBusManager.
+const { queueUrl, instanceId } = await queueLifecycle.provision();
+
+// ── 7. Distributed event bus manager ─────────────────────────────────────────
+const eventBusManager = new SnsEventBusManager({
+  snsTopicArn: process.env.SNS_TOPIC_ARN!,
+  sqsQueueUrl: queueUrl,  // ← URL of the queue just created above
+  instanceId,             // ← same identity as QueueLifecycleManager (critical for dedup)
+  snsClient,
+  sqsClient,
+  pollIntervalMs: 500,
+  waitTimeSeconds: 5,
+  maxMessages: 10,
+});
+eventBusManager.start();
+
+// ── 8. Request handler ────────────────────────────────────────────────────────
+const requestHandler = new DefaultRequestHandler(
+  agentCard,
+  taskStore,
+  new HelloExecutor(),
+  eventBusManager,
+);
+
+// ── 9. Express server ─────────────────────────────────────────────────────────
+const app = express();
+app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
+app.use('/a2a/jsonrpc', jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+app.use('/a2a/rest',    restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+
+const httpServer = app.listen(4000, () => {
+  console.log(`Agent started | instanceId=${instanceId} | queue=${queueUrl}`);
+});
+
+// ── 10. Graceful shutdown ─────────────────────────────────────────────────────
+// ECS sends SIGTERM and waits `stopTimeout` seconds before SIGKILL.
+// Use that window to drain in-flight events and clean up AWS resources.
+process.on('SIGTERM', async () => {
+  eventBusManager.stop();          // stop polling; in-flight messages re-queue
+  await queueLifecycle.teardown(); // unsubscribe from SNS + delete SQS queue
+  httpServer.close(() => process.exit(0));
+});
+```
+
+### How the pieces connect
+
+```
+ECS Task (boot)
+      │
+      ▼
+QueueLifecycleManager.provision()
+      │  CreateQueue("{prefix}-{instanceId}") + SetQueueAttributes + Subscribe
+      ▼
+SnsEventBusManager(instanceId, queueUrl)  ← start() begins long-polling
+      │
+      ▼
+DefaultRequestHandler
+   ├── DynamoDBTaskStore    ← persists Task objects (survives instance restarts)
+   ├── HelloExecutor        ← your AgentExecutor, no changes required
+   └── SnsEventBusManager
+            │
+            ├─ createOrGetByTaskId(taskId)
+            │       └─ DistributedExecutionEventBus
+            │              ├─ publish(event)  → local SSE   (synchronous)
+            │              └─ publish(event)  → SNS.publish (fire-and-forget)
+            │                                       │ fan-out
+            │                          ┌────────────┴────────────┐
+            │               SQS Queue (Instance A)     SQS Queue (Instance B)
+            │               auto-created by A           auto-created by B
+            │                          │                         │
+            └─ SqsPoller A             │             SqsPoller B
+                 (skips own instanceId)│                   │
+                 discards ─────────────┘           publishLocal(event)
+                                                         │
+                                                 SSE clients on B
+
+ECS Task (SIGTERM)
+      │
+      ├─ SnsEventBusManager.stop()
+      └─ QueueLifecycleManager.teardown()
+               │  Unsubscribe + DeleteQueue
+               ▼
+          (no orphaned queues or subscriptions)
+```
+
+### Environment variables
+
+| Variable | Description |
+| :--- | :--- |
+| `DYNAMODB_TABLE_NAME` | DynamoDB table name (default: `a2a-tasks`). |
+| `SNS_TOPIC_ARN` | ARN of the SNS topic used for cross-instance fan-out. |
+| `QUEUE_NAME_PREFIX` | Prefix for the auto-created SQS queue (default: `a2a`). Final name: `{prefix}-{instanceId}`. |
+| `SQS_DLQ_ARN` | *(Optional)* ARN of a pre-created dead-letter queue for undeliverable messages. |
+| `SERVICE_NAME` | *(Optional)* Service name added as a `ServiceName` tag to the queue for cost-allocation and cleanup automation. |
+
+### DynamoDBTaskStore — key behaviours
+
+`DynamoDBTaskStore` implements the `TaskStore` interface identically to `InMemoryTaskStore`, so it is a transparent drop-in replacement.
+
+**Optimistic locking** — every `save()` reads the current `version` attribute, then issues a conditional `PutItem`. If another instance updated the same task concurrently the condition fails and the write is retried with exponential back-off and full jitter up to `maxConflictRetries` times. On persistent conflict a `TaskConflictError` is thrown (non-retryable); on infrastructure failures a `StoreUnavailableError` is thrown (retryable).
+
+**Consistent reads** — `load()` always uses `ConsistentRead: true` so the latest committed state is always visible, which is important when a `getTask` request follows a `sendMessage` request to the same instance.
+
+**TTL** — when `taskTtlSeconds` is configured each item's `ttl` attribute is set to `now + taskTtlSeconds`. Enable the DynamoDB TTL feature on the `ttl` attribute via your CDK/CloudFormation stack to automatically purge expired tasks without application-level cleanup.
+
+### QueueLifecycleManager — key behaviours
+
+`QueueLifecycleManager` is responsible for the entire lifecycle of the per-instance SQS queue. It is intentionally separated from `SnsEventBusManager` so that the two concerns — *queue existence* and *message routing* — are independently testable and replaceable.
+
+**Idempotent provision** — calling `provision()` a second time returns the cached `QueueProvisionResult` without contacting AWS, making it safe to call in retried bootstrap sequences.
+
+**Atomic instanceId** — `QueueLifecycleManager` generates a single `instanceId` UUID on construction. This same ID is embedded in the queue name (`{prefix}-{instanceId}`) and must be passed as `instanceId` to `SnsEventBusManager`. Sharing one UUID is what makes the deduplication logic in `SqsEventPoller` correct.
+
+**Rollback on partial failure** — if `SNS.Subscribe` fails after the queue is already created, `provision()` deletes the queue before re-throwing the error, leaving no orphaned resources.
+
+**Best-effort unsubscribe** — `teardown()` attempts `SNS.Unsubscribe` first but continues to `SQS.DeleteQueue` even if the call fails. Once the queue is deleted the subscription becomes unreachable and AWS auto-disables it.
+
+**Crash safety** — set `messageRetentionPeriod` to cover your worst-case rolling deployment window (default: 300 s). Tag-based garbage collection (`ManagedBy=a2a-server`, `ServiceName`) can be implemented as a periodic Lambda sweep.
+
+### SnsEventBusManager — key behaviours
+
+`SnsEventBusManager` implements the `ExecutionEventBusManager` interface, making it a drop-in replacement for `DefaultExecutionEventBusManager`.
+
+**Immediate local delivery** — `publish()` calls the parent `DefaultExecutionEventBus.publish()` first, so SSE clients on the same instance receive events with zero additional latency.
+
+**Fire-and-forget SNS** — the SNS publish is asynchronous and does not block the executor. A failed SNS publish is logged as a structured error but does not crash the executor. Configure an SNS dead-letter queue at the infrastructure level for guaranteed delivery.
+
+**Instance deduplication** — the `instanceId` injected from `QueueLifecycleManager` is embedded in every SNS message. The `SqsEventPoller` discards messages whose `instanceId` matches the local instance, preventing same-instance double-delivery. Passing a mismatched `instanceId` would cause every message to be delivered twice locally.
+
+**SSE client on a different instance** — when a client connects for `tasks/resubscribe` on Instance B before any events arrive, `createOrGetByTaskId` creates a local `DistributedExecutionEventBus`. As events arrive via SQS the poller calls `publishLocal()` on that bus, delivering them directly to the waiting SSE generator.
+
 ## License
 
 This project is licensed under the terms of the [Apache 2.0 License](https://raw.githubusercontent.com/google-a2a/a2a-python/refs/heads/main/LICENSE).

@@ -575,6 +575,59 @@ describe('SnsEventBusManager', () => {
     });
   });
 
+  describe('instanceId injection (QueueLifecycleManager integration)', () => {
+    it('uses the provided instanceId instead of generating a new one', () => {
+      const injectedId = 'lifecycle-manager-instance-uuid';
+      const manager = new SnsEventBusManager({
+        snsTopicArn: TOPIC_ARN,
+        sqsQueueUrl: QUEUE_URL,
+        instanceId: injectedId,
+        snsClient: new SNSClient({}),
+        sqsClient: new SQSClient({}),
+      });
+
+      expect(manager.instanceId).toBe(injectedId);
+    });
+
+    it('generates a unique UUID when instanceId is not supplied', () => {
+      const cfg = {
+        snsTopicArn: TOPIC_ARN,
+        sqsQueueUrl: QUEUE_URL,
+        snsClient: new SNSClient({}),
+        sqsClient: new SQSClient({}),
+      };
+      const m1 = new SnsEventBusManager(cfg);
+      const m2 = new SnsEventBusManager(cfg);
+
+      // Managers with no injected instanceId must still be unique.
+      expect(m1.instanceId).not.toBe(m2.instanceId);
+    });
+
+    it('the injected instanceId is propagated into published SNS messages', () => {
+      snsMock.on(PublishCommand).resolves({ MessageId: 'sns-ok' });
+
+      const injectedId = 'my-ecs-task-id';
+      const manager = new SnsEventBusManager({
+        snsTopicArn: TOPIC_ARN,
+        sqsQueueUrl: QUEUE_URL,
+        instanceId: injectedId,
+        snsClient: new SNSClient({}),
+        sqsClient: new SQSClient({}),
+      });
+
+      const bus = manager.createOrGetByTaskId(TASK_ID) as DistributedExecutionEventBus;
+      bus.publish(makeStatusEvent(TASK_ID, 'working'));
+
+      // Allow the fire-and-forget SNS publish to settle.
+      return new Promise<void>((resolve) => setTimeout(() => {
+        const [call] = snsMock.commandCalls(PublishCommand);
+        const body = JSON.parse(call.args[0].input.Message ?? '{}');
+        expect(body.instanceId).toBe(injectedId);
+        resolve();
+      }, 20));
+    });
+  });
+
   describe('stop()', () => {
     it('cleans up all buses and stops polling', () => {
       sqsMock.on(ReceiveMessageCommand).resolves({ Messages: [] });
