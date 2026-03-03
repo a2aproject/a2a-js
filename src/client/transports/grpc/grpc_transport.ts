@@ -2,24 +2,19 @@ import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../core.js';
 import {
   A2AServiceClient,
-  CreateTaskPushNotificationConfigRequest,
   TaskPushNotificationConfig,
-  GetTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigResponse,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskRequest,
   CancelTaskRequest,
   TaskSubscriptionRequest,
-  GetAgentCardRequest,
   SendMessageRequest,
-  SendMessageResponse,
   StreamResponse,
 } from '../../../grpc/pb/a2a_services.js';
 import { Empty } from '../../../grpc/pb/google/protobuf/empty.js';
 import {
   MessageSendParams,
-  JsonRpcTaskPushNotificationConfig,
   TaskIdParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
@@ -73,12 +68,7 @@ export class GrpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendGrpcRequest<
-      GetAgentCardRequest,
-      AgentCard,
-      RequestOptions | undefined,
-      AgentCard
-    >(
+    const rpcResponse = await this._sendGrpcRequest(
       'getAgentCard',
       undefined,
       options,
@@ -93,12 +83,7 @@ export class GrpcTransport implements Transport {
     params: MessageSendParams,
     options?: RequestOptions
   ): Promise<SendMessageResult> {
-    const rpcResponse = await this._sendGrpcRequest<
-      SendMessageRequest,
-      SendMessageResponse,
-      MessageSendParams,
-      SendMessageResult
-    >(
+    const rpcResponse = await this._sendGrpcRequest(
       'sendMessage',
       params,
       options,
@@ -123,21 +108,16 @@ export class GrpcTransport implements Transport {
   }
 
   async setTaskPushNotificationConfig(
-    params: JsonRpcTaskPushNotificationConfig,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
-    const rpcResponse = await this._sendGrpcRequest<
-      CreateTaskPushNotificationConfigRequest,
-      TaskPushNotificationConfig,
-      JsonRpcTaskPushNotificationConfig,
-      JsonRpcTaskPushNotificationConfig
-    >(
+  ): Promise<TaskPushNotificationConfig> {
+    const rpcResponse = await this._sendGrpcRequest(
       'createTaskPushNotificationConfig',
       params,
       options,
       this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
-      (p) => ToProto.taskPushNotificationConfigCreate(ToProto.jsonRpcTaskPushNotificationConfig(p)),
-      FromProto.jsonRpcTaskPushNotificationConfig
+      ToProto.taskPushNotificationConfigCreate,
+      FromProto.taskPushNotificationConfig
     );
     return rpcResponse;
   }
@@ -145,19 +125,14 @@ export class GrpcTransport implements Transport {
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
-    const rpcResponse = await this._sendGrpcRequest<
-      GetTaskPushNotificationConfigRequest,
-      TaskPushNotificationConfig,
-      GetTaskPushNotificationConfigParams,
-      JsonRpcTaskPushNotificationConfig
-    >(
+  ): Promise<TaskPushNotificationConfig> {
+    const rpcResponse = await this._sendGrpcRequest(
       'getTaskPushNotificationConfig',
       params,
       options,
       this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient),
       ToProto.getTaskPushNotificationConfigParams,
-      FromProto.jsonRpcTaskPushNotificationConfig
+      FromProto.taskPushNotificationConfig
     );
     return rpcResponse;
   }
@@ -165,22 +140,19 @@ export class GrpcTransport implements Transport {
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig[]> {
+  ): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendGrpcRequest<
       ListTaskPushNotificationConfigRequest,
       ListTaskPushNotificationConfigResponse,
       ListTaskPushNotificationConfigParams,
-      JsonRpcTaskPushNotificationConfig[]
+      TaskPushNotificationConfig[]
     >(
       'listTaskPushNotificationConfig',
       params,
       options,
       this.grpcClient.listTaskPushNotificationConfig.bind(this.grpcClient),
       ToProto.listTaskPushNotificationConfigParams,
-      (res) =>
-        FromProto.listTaskPushNotificationConfig(res).map(
-          FromProto.jsonRpcTaskPushNotificationConfig
-        )
+      FromProto.listTaskPushNotificationConfig
     );
     return rpcResponse;
   }

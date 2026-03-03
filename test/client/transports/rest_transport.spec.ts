@@ -3,7 +3,7 @@ import {
   RestTransportFactory,
 } from '../../../src/client/transports/rest_transport.js';
 import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
-import { JsonRpcTaskPushNotificationConfig } from '../../../src/index.js';
+import { TaskPushNotificationConfig } from '../../../src/types/pb/a2a_types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
@@ -25,7 +25,6 @@ import {
 import {
   AgentCard,
   ListTaskPushNotificationConfigResponse,
-  TaskPushNotificationConfig as TaskPushNotificationConfigProto,
   TaskState,
 } from '../../../src/types/pb/a2a_types.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
@@ -233,8 +232,8 @@ describe('RestTransport', () => {
   describe('Push Notification Config', () => {
     const taskId = 'task-123';
     const configId = 'config-456';
-    const mockConfig: JsonRpcTaskPushNotificationConfig = {
-      taskId,
+    const mockConfig: TaskPushNotificationConfig = {
+      name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
       pushNotificationConfig: {
         id: configId,
         url: 'https://notify.example.com/webhook',
@@ -242,12 +241,12 @@ describe('RestTransport', () => {
         token: 'secret-token',
       },
     };
-    const mockProtoConfig = ToProto.jsonRpcTaskPushNotificationConfig(mockConfig);
+    const mockProtoConfig = ToProto.taskPushNotificationConfig(mockConfig);
 
     describe('setTaskPushNotificationConfig', () => {
       it('should set push notification config successfully', async () => {
         mockFetch.mockResolvedValue(
-          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
+          createRestResponse(ToProto.taskPushNotificationConfig(mockProtoConfig))
         );
 
         const result = await transport.setTaskPushNotificationConfig(mockConfig);
@@ -274,7 +273,7 @@ describe('RestTransport', () => {
     describe('getTaskPushNotificationConfig', () => {
       it('should get push notification config successfully', async () => {
         mockFetch.mockResolvedValue(
-          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
+          createRestResponse(ToProto.taskPushNotificationConfig(mockProtoConfig))
         );
 
         const result = await transport.getTaskPushNotificationConfig({
@@ -302,7 +301,7 @@ describe('RestTransport', () => {
 
     describe('listTaskPushNotificationConfig', () => {
       it('should list push notification configs successfully', async () => {
-        const protoConfigs: TaskPushNotificationConfigProto[] = [
+        const protoConfigs: TaskPushNotificationConfig[] = [
           {
             name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
             pushNotificationConfig: mockConfig.pushNotificationConfig,
@@ -317,10 +316,10 @@ describe('RestTransport', () => {
             },
           },
         ];
-        const expectedConfigs: JsonRpcTaskPushNotificationConfig[] = [
+        const expectedConfigs: TaskPushNotificationConfig[] = [
           mockConfig,
           {
-            taskId,
+            name: `tasks/${taskId}/pushNotificationConfigs/config-789`,
             pushNotificationConfig: {
               id: 'config-789',
               url: 'https://test.com',

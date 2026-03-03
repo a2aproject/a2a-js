@@ -287,7 +287,7 @@ describe('GrpcTransport', () => {
     const taskId = 'task-123';
     const configId = 'config-456';
     const mockConfig = {
-      taskId,
+      name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
       pushNotificationConfig: {
         id: configId,
         url: 'http://test',

@@ -25,6 +25,7 @@ import {
 import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 import { RequestOptions } from './multitransport-client.js';
+import { FromProto } from '../types/converters/from_proto.js';
 
 export type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
@@ -220,7 +221,10 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       JsonRpcTaskPushNotificationConfig,
       SetTaskPushNotificationConfigResponse
-    >((t, p, id) => t.setTaskPushNotificationConfig(p, A2AClient.emptyOptions, id), jsonRpcParams);
+    >(async (t, _p, id) => {
+      const result = await t.setTaskPushNotificationConfig(params, A2AClient.emptyOptions, id);
+      return FromProto.jsonRpcTaskPushNotificationConfig(result);
+    }, jsonRpcParams);
   }
 
   /**
@@ -232,7 +236,10 @@ export class A2AClient {
     params: TaskIdParams
   ): Promise<GetTaskPushNotificationConfigResponse> {
     return await this.invokeJsonRpc<TaskIdParams, GetTaskPushNotificationConfigResponse>(
-      (t, p, id) => t.getTaskPushNotificationConfig(p, A2AClient.emptyOptions, id),
+      async (t, p, id) => {
+        const result = await t.getTaskPushNotificationConfig(p, A2AClient.emptyOptions, id);
+        return FromProto.jsonRpcTaskPushNotificationConfig(result);
+      },
       params
     );
   }
@@ -248,7 +255,10 @@ export class A2AClient {
     return await this.invokeJsonRpc<
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigResponse
-    >((t, p, id) => t.listTaskPushNotificationConfig(p, A2AClient.emptyOptions, id), params);
+    >(async (t, p, id) => {
+      const result = await t.listTaskPushNotificationConfig(p, A2AClient.emptyOptions, id);
+      return result.map(FromProto.jsonRpcTaskPushNotificationConfig);
+    }, params);
   }
 
   /**

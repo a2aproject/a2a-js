@@ -29,11 +29,14 @@ import {
   SendMessageSuccessResponse,
   GetAuthenticatedExtendedCardSuccessResponse,
   StreamResponse as ProtoStreamResponse,
+  TaskPushNotificationConfig,
 } from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
+import { FromProto } from '../../types/converters/from_proto.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
@@ -85,39 +88,44 @@ export class JsonRpcTransport implements Transport {
   }
 
   async setTaskPushNotificationConfig(
-    params: JsonRpcTaskPushNotificationConfig,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions,
     idOverride?: number
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
+  ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       JsonRpcTaskPushNotificationConfig,
       SetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/set', params, idOverride, options);
-    return rpcResponse.result;
+    >(
+      'tasks/pushNotificationConfig/set',
+      FromProto.jsonRpcTaskPushNotificationConfig(params),
+      idOverride,
+      options
+    );
+    return ToProto.taskPushNotificationConfig(rpcResponse.result);
   }
 
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigParams,
     options?: RequestOptions,
     idOverride?: number
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
+  ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       GetTaskPushNotificationConfigParams,
       GetTaskPushNotificationConfigSuccessResponse
     >('tasks/pushNotificationConfig/get', params, idOverride, options);
-    return rpcResponse.result;
+    return ToProto.taskPushNotificationConfig(rpcResponse.result);
   }
 
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions,
     idOverride?: number
-  ): Promise<JsonRpcTaskPushNotificationConfig[]> {
+  ): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendRpcRequest<
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigSuccessResponse
     >('tasks/pushNotificationConfig/list', params, idOverride, options);
-    return rpcResponse.result;
+    return ToProto.listTaskPushNotificationConfig(rpcResponse.result).configs;
   }
 
   async deleteTaskPushNotificationConfig(

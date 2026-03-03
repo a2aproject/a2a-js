@@ -1,6 +1,6 @@
 import {
   MessageSendParams,
-  JsonRpcTaskPushNotificationConfig,
+  TaskPushNotificationConfig,
   TaskIdParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
@@ -23,19 +23,19 @@ export interface Transport {
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 
   setTaskPushNotificationConfig(
-    params: JsonRpcTaskPushNotificationConfig,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig>;
+  ): Promise<TaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig>;
+  ): Promise<TaskPushNotificationConfig>;
 
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig[]>;
+  ): Promise<TaskPushNotificationConfig[]>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,

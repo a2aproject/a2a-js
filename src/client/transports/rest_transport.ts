@@ -15,7 +15,7 @@ import {
   GetTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigParams,
   MessageSendParams,
-  JsonRpcTaskPushNotificationConfig,
+  TaskPushNotificationConfig,
   TaskIdParams,
   TaskQueryParams,
   Task,
@@ -27,6 +27,7 @@ import { Transport, TransportFactory } from './transport.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import * as a2a from '../../types/pb/a2a_types.js';
+import { extractTaskId } from '../../types/converters/id_decoding.js';
 
 export interface RestTransportOptions {
   endpoint: string;
@@ -86,28 +87,29 @@ export class RestTransport implements Transport {
   }
 
   async setTaskPushNotificationConfig(
-    params: JsonRpcTaskPushNotificationConfig,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
-    const requestBody = ToProto.jsonRpcTaskPushNotificationConfig(params);
+  ): Promise<TaskPushNotificationConfig> {
+    const requestBody = ToProto.taskPushNotificationConfig(params);
+    const taskId = extractTaskId(params.name);
     const response = await this._sendRequest<
       a2a.TaskPushNotificationConfig,
       a2a.TaskPushNotificationConfig
     >(
       'POST',
-      `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      `/v1/tasks/${encodeURIComponent(taskId)}/pushNotificationConfigs`,
       requestBody,
       options,
       a2a.TaskPushNotificationConfig,
       a2a.TaskPushNotificationConfig
     );
-    return FromProto.jsonRpcTaskPushNotificationConfig(response);
+    return FromProto.taskPushNotificationConfig(response);
   }
 
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
+  ): Promise<TaskPushNotificationConfig> {
     const { pushNotificationConfigId } = params;
     if (!pushNotificationConfigId) {
       throw new Error(
@@ -122,13 +124,13 @@ export class RestTransport implements Transport {
       undefined,
       a2a.TaskPushNotificationConfig
     );
-    return FromProto.jsonRpcTaskPushNotificationConfig(response);
+    return FromProto.taskPushNotificationConfig(response);
   }
 
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
-  ): Promise<JsonRpcTaskPushNotificationConfig[]> {
+  ): Promise<TaskPushNotificationConfig[]> {
     const response = await this._sendRequest<undefined, a2a.ListTaskPushNotificationConfigResponse>(
       'GET',
       `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
@@ -138,7 +140,7 @@ export class RestTransport implements Transport {
       a2a.ListTaskPushNotificationConfigResponse
     );
     const configs = FromProto.listTaskPushNotificationConfig(response);
-    return configs.map(FromProto.jsonRpcTaskPushNotificationConfig);
+    return configs.map(FromProto.taskPushNotificationConfig);
   }
 
   async deleteTaskPushNotificationConfig(
