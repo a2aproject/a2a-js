@@ -20,7 +20,10 @@ import { SQSClient, CreateQueueCommand, DeleteQueueCommand, GetQueueAttributesCo
 import { SNSClient, SubscribeCommand, UnsubscribeCommand } from '@aws-sdk/client-sns';
 
 import { QueueLifecycleManager } from '../../../src/server/events/queue_lifecycle_manager.js';
-import type { QueueProvisionResult } from '../../../src/server/events/queue_lifecycle_manager.js';
+import type {
+  QueueLifecycleConfig,
+  QueueProvisionResult,
+} from '../../../src/server/events/queue_lifecycle_manager.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Fixtures
@@ -53,7 +56,7 @@ function setupHappyPath(): void {
 }
 
 /** Creates a manager wired to the mocked clients. */
-function makeManager(overrides: Partial<Parameters<typeof QueueLifecycleManager>[0]> = {}): QueueLifecycleManager {
+function makeManager(overrides: Partial<QueueLifecycleConfig> = {}): QueueLifecycleManager {
   return new QueueLifecycleManager({
     snsTopicArn: TOPIC_ARN,
     sqsClient: new SQSClient({}),

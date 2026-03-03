@@ -789,7 +789,7 @@ The SDK ships three drop-in implementations for these scenarios.
 
 ### Installation
 
-Install the required AWS SDK v3 packages:
+The distributed components are exported from the `@a2a-js/sdk/server/distributed` sub-path. The AWS SDK packages are declared as **optional peer dependencies** — they are not installed automatically with the base SDK so that single-instance deployments remain lightweight. Install them explicitly when using this sub-path:
 
 ```bash
 npm install @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb @aws-sdk/client-sns @aws-sdk/client-sqs
@@ -889,10 +889,12 @@ import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { SNSClient } from '@aws-sdk/client-sns';
 import { SQSClient } from '@aws-sdk/client-sqs';
 
-// ── Local implementations (ship with this repo, not part of @a2a-js/sdk) ────
-import { DynamoDBTaskStore } from './src/server/store/dynamo_task_store.js';
-import { QueueLifecycleManager } from './src/server/events/queue_lifecycle_manager.js';
-import { SnsEventBusManager } from './src/server/events/sns_sqs_event_bus_manager.js';
+// ── Distributed components (part of @a2a-js/sdk — optional peer deps required) ──
+import {
+  DynamoDBTaskStore,
+  QueueLifecycleManager,
+  SnsEventBusManager,
+} from '@a2a-js/sdk/server/distributed';
 
 // ── 1. Agent card ─────────────────────────────────────────────────────────────
 const agentCard: AgentCard = {
