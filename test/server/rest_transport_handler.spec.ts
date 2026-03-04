@@ -367,7 +367,9 @@ describe('RestTransportHandler', () => {
       });
 
       it('should normalize and set config if supported', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(
+          expectedRestConfig
+        );
 
         const result = await transportHandler.setTaskPushNotificationConfig(
           mockConfig as any,
@@ -378,7 +380,9 @@ describe('RestTransportHandler', () => {
       });
 
       it('should normalize snake_case config', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(
+          expectedRestConfig
+        );
 
         const snakeCaseConfig = {
           task_id: 'task-1',
@@ -392,7 +396,7 @@ describe('RestTransportHandler', () => {
 
         expect(mockRequestHandler.setTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           expect.objectContaining({
-            taskId: 'task-1',
+            name: 'tasks/task-1/pushNotificationConfigs/config-1',
             pushNotificationConfig: expect.objectContaining({ id: 'config-1' }),
           }),
           mockContext

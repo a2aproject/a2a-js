@@ -86,12 +86,12 @@ export class FromProto {
 
   static createTaskPushNotificationConfig(
     request: CreateTaskPushNotificationConfigRequest
-  ): JsonRpcTaskPushNotificationConfig {
+  ): TaskPushNotificationConfig {
     if (!request.config || !request.config.pushNotificationConfig) {
       throw new Error('Request must include a `config` with `pushNotificationConfig`');
     }
     return {
-      taskId: extractTaskId(request.parent),
+      name: `tasks/${extractTaskId(request.parent)}/pushNotificationConfigs/${request.config.pushNotificationConfig.id}`,
       pushNotificationConfig: request.config.pushNotificationConfig,
     };
   }

@@ -27,7 +27,7 @@ import {
   TaskState,
   TaskStatusUpdateEvent,
   Role,
-  JsonRpcTaskPushNotificationConfig,
+  TaskPushNotificationConfig,
 } from '../../src/index.js';
 type TextPart = { $case: 'text'; value: string };
 import {
@@ -1162,8 +1162,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       authentication: undefined,
     };
 
-    const setParams: JsonRpcTaskPushNotificationConfig = {
-      taskId,
+    const setParams: TaskPushNotificationConfig = {
+      name: `tasks/${taskId}/pushNotificationConfigs/${pushConfig.id}`,
       pushNotificationConfig: pushConfig,
     };
     const setResponse = await handler.setTaskPushNotificationConfig(setParams, serverCallContext);
@@ -1208,7 +1208,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${pushConfig.id}`,
         pushNotificationConfig: pushConfig,
       },
       serverCallContext
@@ -1245,7 +1245,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${initialConfig.id}`,
         pushNotificationConfig: initialConfig,
       },
       serverCallContext
@@ -1259,7 +1259,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${newConfig.id}`,
         pushNotificationConfig: newConfig,
       },
       serverCallContext
@@ -1302,14 +1302,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${config1.id}`,
         pushNotificationConfig: config1,
       },
       serverCallContext
     );
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${config2.id}`,
         pushNotificationConfig: config2,
       },
       serverCallContext
@@ -1323,11 +1323,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     expect(listResponse).to.be.an('array').with.lengthOf(2);
     assert.deepInclude(listResponse, {
-      taskId,
+      name: `tasks/${taskId}/pushNotificationConfigs/${config1.id}`,
       pushNotificationConfig: config1,
     });
     assert.deepInclude(listResponse, {
-      taskId,
+      name: `tasks/${taskId}/pushNotificationConfigs/${config2.id}`,
       pushNotificationConfig: config2,
     });
   });
@@ -1359,14 +1359,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${config1.id}`,
         pushNotificationConfig: config1,
       },
       serverCallContext
     );
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${config2.id}`,
         pushNotificationConfig: config2,
       },
       serverCallContext
@@ -1409,7 +1409,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        taskId,
+        name: `tasks/${taskId}/pushNotificationConfigs/${config.id}`,
         pushNotificationConfig: config,
       },
       serverCallContext
@@ -1618,7 +1618,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const methodsToTest = [
       {
         name: 'setTaskPushNotificationConfig',
-        params: { taskId: nonExistentTaskId, pushNotificationConfig: config },
+        params: {
+          name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/${config.id}`,
+          pushNotificationConfig: config,
+        },
       },
       {
         name: 'getTaskPushNotificationConfig',

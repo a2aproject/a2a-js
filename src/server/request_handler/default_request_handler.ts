@@ -10,12 +10,12 @@ import {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   Role,
+  TaskPushNotificationConfig,
 } from '../../index.js';
 import {
   MessageSendParams,
   TaskIdParams,
   TaskQueryParams,
-  JsonRpcTaskPushNotificationConfig,
   DeleteTaskPushNotificationConfigParams,
   GetTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigParams,
@@ -38,6 +38,7 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
+import { extractTaskAndPushNotificationConfigId } from '../../types/converters/id_decoding.js';
 
 const terminalStates: TaskState[] = [
   TaskState.TASK_STATE_COMPLETED,
@@ -473,22 +474,27 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   async setTaskPushNotificationConfig(
-    params: JsonRpcTaskPushNotificationConfig,
+    params: TaskPushNotificationConfig,
     context?: ServerCallContext
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
+  ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.taskId, context);
+    const { taskId, configId } = extractTaskAndPushNotificationConfigId(params.name);
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw A2AError.taskNotFound(params.taskId);
+      throw A2AError.taskNotFound(taskId);
     }
 
-    const { taskId, pushNotificationConfig } = params;
+    const pushNotificationConfig = params.pushNotificationConfig;
+
+    if (!pushNotificationConfig) {
+      throw A2AError.invalidParams('pushNotificationConfig is required.');
+    }
 
     // Default the config ID to the task ID if not provided for backward compatibility.
     if (!pushNotificationConfig.id) {
-      pushNotificationConfig.id = taskId;
+      pushNotificationConfig.id = configId;
     }
 
     await this.pushNotificationStore?.save(taskId, pushNotificationConfig);
@@ -499,7 +505,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async getTaskPushNotificationConfig(
     params: TaskIdParams | GetTaskPushNotificationConfigParams,
     context?: ServerCallContext
-  ): Promise<JsonRpcTaskPushNotificationConfig> {
+  ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
@@ -528,13 +534,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         `Push notification config with id '${configId}' not found for task ${params.id}.`
       );
     }
-    return { taskId: params.id, pushNotificationConfig: config };
+    return {
+      name: `tasks/${params.id}/pushNotificationConfigs/${configId}`,
+      pushNotificationConfig: config,
+    };
   }
 
   async listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigParams,
     context?: ServerCallContext
-  ): Promise<JsonRpcTaskPushNotificationConfig[]> {
+  ): Promise<TaskPushNotificationConfig[]> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
@@ -546,7 +555,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const configs = (await this.pushNotificationStore?.load(params.id)) || [];
 
     return configs.map((config) => ({
-      taskId: params.id,
+      name: `tasks/${params.id}/pushNotificationConfigs/${config.id}`,
       pushNotificationConfig: config,
     }));
   }

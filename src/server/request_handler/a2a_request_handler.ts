@@ -7,7 +7,7 @@ import {
   TaskArtifactUpdateEvent,
   TaskQueryParams,
   TaskIdParams,
-  JsonRpcTaskPushNotificationConfig,
+  TaskPushNotificationConfig,
   GetTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
@@ -34,19 +34,19 @@ export interface A2ARequestHandler {
   cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task>;
 
   setTaskPushNotificationConfig(
-    params: JsonRpcTaskPushNotificationConfig,
+    params: TaskPushNotificationConfig,
     context?: ServerCallContext
-  ): Promise<JsonRpcTaskPushNotificationConfig>;
+  ): Promise<TaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
     params: TaskIdParams | GetTaskPushNotificationConfigParams,
     context?: ServerCallContext
-  ): Promise<JsonRpcTaskPushNotificationConfig>;
+  ): Promise<TaskPushNotificationConfig>;
 
   listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigParams,
     context?: ServerCallContext
-  ): Promise<JsonRpcTaskPushNotificationConfig[]>;
+  ): Promise<TaskPushNotificationConfig[]>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigParams,

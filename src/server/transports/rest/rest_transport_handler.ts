@@ -20,7 +20,6 @@ import {
   Part,
   AgentCard,
   Role,
-  JsonRpcTaskPushNotificationConfig,
 } from '../../../index.js';
 import {
   RestPart,
@@ -233,26 +232,9 @@ export class RestTransportHandler {
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
     const normalized = this.normalizeTaskPushNotificationConfig(config);
+    const result = await this.requestHandler.setTaskPushNotificationConfig(normalized, context);
 
-    // Extract taskId from name: tasks/{taskId}/pushNotificationConfigs/{configId}
-    // define default regex for name parsing
-    const match = normalized.name.match(/^tasks\/(.+)\/pushNotificationConfigs\/(.+)$/);
-    if (!match) {
-      throw A2AError.invalidParams('Invalid name format in TaskPushNotificationConfig');
-    }
-    const taskId = match[1];
-
-    const jsonRpcConfig: JsonRpcTaskPushNotificationConfig = {
-      taskId: taskId,
-      pushNotificationConfig: normalized.pushNotificationConfig!,
-    };
-
-    const result = await this.requestHandler.setTaskPushNotificationConfig(jsonRpcConfig, context);
-
-    return {
-      name: `tasks/${result.taskId}/pushNotificationConfigs/${result.pushNotificationConfig.id}`,
-      pushNotificationConfig: result.pushNotificationConfig,
-    };
+    return result;
   }
 
   /**
@@ -267,7 +249,7 @@ export class RestTransportHandler {
       context
     );
     return configs.map((c) => ({
-      name: `tasks/${c.taskId}/pushNotificationConfigs/${c.pushNotificationConfig!.id}`,
+      name: `tasks/${taskId}/pushNotificationConfigs/${c.pushNotificationConfig!.id}`,
       pushNotificationConfig: c.pushNotificationConfig,
     })) as TaskPushNotificationConfig[];
   }
@@ -285,7 +267,7 @@ export class RestTransportHandler {
       context
     );
     return {
-      name: `tasks/${config.taskId}/pushNotificationConfigs/${config.pushNotificationConfig.id}`,
+      name: `tasks/${taskId}/pushNotificationConfigs/${config.pushNotificationConfig?.id}`,
       pushNotificationConfig: config.pushNotificationConfig,
     };
   }

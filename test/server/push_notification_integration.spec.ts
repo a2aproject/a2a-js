@@ -293,7 +293,7 @@ describe('Push Notification Integration Tests', () => {
       // Set multiple push notification configs for this message
       await handler.setTaskPushNotificationConfig(
         {
-          taskId: task.id,
+          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig1.id}`,
           pushNotificationConfig: pushConfig1,
         },
         new ServerCallContext()
@@ -301,7 +301,7 @@ describe('Push Notification Integration Tests', () => {
 
       await handler.setTaskPushNotificationConfig(
         {
-          taskId: task.id,
+          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig2.id}`,
           pushNotificationConfig: pushConfig2,
         },
         new ServerCallContext()
@@ -745,7 +745,7 @@ describe('Push Notification Integration Tests', () => {
 
       await customHandler.setTaskPushNotificationConfig(
         {
-          taskId: task.id,
+          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig1.id}`,
           pushNotificationConfig: pushConfig1,
         },
         new ServerCallContext()
@@ -753,7 +753,7 @@ describe('Push Notification Integration Tests', () => {
 
       await customHandler.setTaskPushNotificationConfig(
         {
-          taskId: task.id,
+          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig2.id}`,
           pushNotificationConfig: pushConfig2,
         },
         new ServerCallContext()

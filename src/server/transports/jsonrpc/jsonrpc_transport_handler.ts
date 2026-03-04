@@ -9,6 +9,7 @@ import {
   Task,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
+  JsonRpcTaskPushNotificationConfig,
 } from '../../../index.js';
 import { ServerCallContext } from '../../context.js';
 import { A2AError } from '../../error.js';
@@ -144,12 +145,19 @@ export class JsonRpcTransportHandler {
           case 'tasks/cancel':
             result = await this.requestHandler.cancelTask(rpcRequest.params, context);
             break;
-          case 'tasks/pushNotificationConfig/set':
-            result = await this.requestHandler.setTaskPushNotificationConfig(
-              rpcRequest.params,
-              context
-            );
+          case 'tasks/pushNotificationConfig/set': {
+            const params = rpcRequest.params as JsonRpcTaskPushNotificationConfig & {
+              name?: string;
+            };
+            const config = params.name
+              ? { name: params.name, pushNotificationConfig: params.pushNotificationConfig }
+              : {
+                  name: `tasks/${params.taskId}/pushNotificationConfigs/${params.pushNotificationConfig.id}`,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                };
+            result = await this.requestHandler.setTaskPushNotificationConfig(config, context);
             break;
+          }
           case 'tasks/pushNotificationConfig/get':
             result = await this.requestHandler.getTaskPushNotificationConfig(
               rpcRequest.params,
