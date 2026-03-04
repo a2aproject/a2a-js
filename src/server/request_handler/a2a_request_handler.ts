@@ -11,7 +11,7 @@ import {
   GetTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
-} from '../../types.js';
+} from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
 export interface A2ARequestHandler {

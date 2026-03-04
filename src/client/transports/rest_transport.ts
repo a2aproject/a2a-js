@@ -19,7 +19,7 @@ import {
   TaskIdParams,
   TaskQueryParams,
   Task,
-} from '../../types.js';
+} from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
@@ -27,6 +27,7 @@ import { Transport, TransportFactory } from './transport.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import * as a2a from '../../types/pb/a2a_types.js';
+import { extractTaskId } from '../../types/converters/id_decoding.js';
 
 export interface RestTransportOptions {
   endpoint: string;
@@ -90,12 +91,13 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     const requestBody = ToProto.taskPushNotificationConfig(params);
+    const taskId = extractTaskId(params.name);
     const response = await this._sendRequest<
       a2a.TaskPushNotificationConfig,
       a2a.TaskPushNotificationConfig
     >(
       'POST',
-      `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      `/v1/tasks/${encodeURIComponent(taskId)}/pushNotificationConfigs`,
       requestBody,
       options,
       a2a.TaskPushNotificationConfig,
@@ -137,7 +139,8 @@ export class RestTransport implements Transport {
       undefined,
       a2a.ListTaskPushNotificationConfigResponse
     );
-    return FromProto.listTaskPushNotificationConfig(response);
+    const configs = FromProto.listTaskPushNotificationConfig(response);
+    return configs.map(FromProto.taskPushNotificationConfig);
   }
 
   async deleteTaskPushNotificationConfig(

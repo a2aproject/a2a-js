@@ -19,10 +19,15 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
-import { FromProto } from '../../types/converters/from_proto.js';
 import * as a2a from '../../types/pb/a2a_types.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../types.js';
+import {
+  Message,
+  Task,
+  TaskArtifactUpdateEvent,
+  TaskStatusUpdateEvent,
+  MessageSendParams,
+} from '../../index.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -306,9 +311,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
-      const params = FromProto.messageSendParams(protoReq);
-      const result = await restTransportHandler.sendMessage(params, context);
+      const result = await restTransportHandler.sendMessage(req.body as MessageSendParams, context);
       const protoResult = ToProto.messageSendResult(result);
       sendResponse<a2a.SendMessageResponse>(
         res,
@@ -336,9 +339,10 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
-      const params = FromProto.messageSendParams(protoReq);
-      const stream = await restTransportHandler.sendMessageStream(params, context);
+      const stream = await restTransportHandler.sendMessageStream(
+        req.body as MessageSendParams,
+        context
+      );
       await sendStreamResponse(res, stream, context);
     })
   );

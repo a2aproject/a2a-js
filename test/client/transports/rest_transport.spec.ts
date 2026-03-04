@@ -3,7 +3,7 @@ import {
   RestTransportFactory,
 } from '../../../src/client/transports/rest_transport.js';
 import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
-import { TaskPushNotificationConfig } from '../../../src/types.js';
+import { TaskPushNotificationConfig } from '../../../src/types/pb/a2a_types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
@@ -25,7 +25,6 @@ import {
 import {
   AgentCard,
   ListTaskPushNotificationConfigResponse,
-  TaskPushNotificationConfig as TaskPushNotificationConfigProto,
   TaskState,
 } from '../../../src/types/pb/a2a_types.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
@@ -171,7 +170,7 @@ describe('RestTransport', () => {
 
       const result = await transport.cancelTask({ id: taskId });
 
-      expect(result).to.deep.equal(createMockTask(taskId, 'canceled'));
+      expect(result).to.deep.equal(createMockTask(taskId, TaskState.TASK_STATE_CANCELLED));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
@@ -234,7 +233,7 @@ describe('RestTransport', () => {
     const taskId = 'task-123';
     const configId = 'config-456';
     const mockConfig: TaskPushNotificationConfig = {
-      taskId,
+      name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
       pushNotificationConfig: {
         id: configId,
         url: 'https://notify.example.com/webhook',
@@ -247,7 +246,7 @@ describe('RestTransport', () => {
     describe('setTaskPushNotificationConfig', () => {
       it('should set push notification config successfully', async () => {
         mockFetch.mockResolvedValue(
-          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
+          createRestResponse(ToProto.taskPushNotificationConfig(mockProtoConfig))
         );
 
         const result = await transport.setTaskPushNotificationConfig(mockConfig);
@@ -274,7 +273,7 @@ describe('RestTransport', () => {
     describe('getTaskPushNotificationConfig', () => {
       it('should get push notification config successfully', async () => {
         mockFetch.mockResolvedValue(
-          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
+          createRestResponse(ToProto.taskPushNotificationConfig(mockProtoConfig))
         );
 
         const result = await transport.getTaskPushNotificationConfig({
@@ -302,10 +301,25 @@ describe('RestTransport', () => {
 
     describe('listTaskPushNotificationConfig', () => {
       it('should list push notification configs successfully', async () => {
-        const mockConfigs: TaskPushNotificationConfig[] = [
+        const protoConfigs: TaskPushNotificationConfig[] = [
+          {
+            name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
+            pushNotificationConfig: mockConfig.pushNotificationConfig,
+          },
+          {
+            name: `tasks/${taskId}/pushNotificationConfigs/config-789`,
+            pushNotificationConfig: {
+              id: 'config-789',
+              url: 'https://test.com',
+              authentication: undefined,
+              token: 'secret-token',
+            },
+          },
+        ];
+        const expectedConfigs: TaskPushNotificationConfig[] = [
           mockConfig,
           {
-            ...mockConfig,
+            name: `tasks/${taskId}/pushNotificationConfigs/config-789`,
             pushNotificationConfig: {
               id: 'config-789',
               url: 'https://test.com',
@@ -317,14 +331,14 @@ describe('RestTransport', () => {
         mockFetch.mockResolvedValue(
           createRestResponse(
             ListTaskPushNotificationConfigResponse.toJSON(
-              ToProto.listTaskPushNotificationConfig(mockConfigs)
+              ToProto.listTaskPushNotificationConfig(protoConfigs)
             )
           )
         );
 
         const result = await transport.listTaskPushNotificationConfig({ id: taskId });
 
-        expect(result).to.deep.equal(mockConfigs);
+        expect(result).to.deep.equal(expectedConfigs);
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];

@@ -15,7 +15,7 @@ import request from 'supertest';
 import { A2AExpressApp } from '../../../src/server/express/a2a_express_app.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
-import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../../src/index.js';
+import { AgentCard, JSONRPCResponse, JSONRPCErrorResponse } from '../../../src/index.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { A2AError } from '../../../src/server/error.js';
 import { ServerCallContext } from '../../../src/server/context.js';
@@ -45,10 +45,18 @@ describe('A2AExpressApp', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    documentationUrl: 'http://test-agent.com/docs',
+    security: [],
+    securitySchemes: {},
+    signatures: [],
+    provider: { url: '', organization: '' },
+    additionalInterfaces: [],
+    supportsAuthenticatedExtendedCard: false,
   };
 
   beforeEach(() => {
@@ -131,10 +139,10 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle single JSON-RPC response', async () => {
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse: JSONRPCResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
 
       handleStub.mockResolvedValue(mockResponse);
@@ -258,10 +266,10 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle extensions headers in request', async () => {
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse: JSONRPCResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
       handleStub.mockResolvedValue(mockResponse);
 
@@ -285,10 +293,10 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle extensions headers in response', async () => {
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse: JSONRPCResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
 
       const requestBody = createRpcRequest('test-id');
@@ -346,10 +354,10 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse: JSONRPCResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
       handleStub.mockResolvedValue(mockResponse);
 
@@ -387,10 +395,10 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse: JSONRPCResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
       handleStub.mockResolvedValue(mockResponse);
 
@@ -436,10 +444,10 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse: JSONRPCResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
       handleStub.mockResolvedValue(mockResponse);
 
@@ -473,10 +481,10 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse: JSONRPCResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
       handleStub.mockResolvedValue(mockResponse);
 

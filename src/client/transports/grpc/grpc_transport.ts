@@ -1,17 +1,15 @@
 import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../core.js';
-import { A2AServiceClient } from '../../../grpc/pb/a2a_services.js';
+import { A2AServiceClient, TaskPushNotificationConfig } from '../../../grpc/pb/a2a_services.js';
 import {
   MessageSendParams,
-  TaskPushNotificationConfig,
   TaskIdParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
   TaskQueryParams,
-  Task,
-  AgentCard,
   GetTaskPushNotificationConfigParams,
-} from '../../../types.js';
+} from '../../../json_rpc_types.js';
+import { Task, AgentCard } from '../../../types/pb/a2a_types.js';
 import { A2AStreamEventData, SendMessageResult } from '../../client.js';
 import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';

@@ -1,4 +1,4 @@
-import { Task, PushNotificationConfig } from '../../types.js';
+import { Task, PushNotificationConfig } from '../../index.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore } from './push_notification_store.js';
 

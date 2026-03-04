@@ -9,7 +9,7 @@ import {
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { A2AError } from '../../src/server/error.js';
 import { A2A_ERROR_CODE } from '../../src/errors.js';
-import { AgentCard, Task, Message } from '../../src/types.js';
+import { AgentCard, Task, Message, Role, TaskState, TaskStatus } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 
 describe('RestTransportHandler', () => {
@@ -27,25 +27,41 @@ describe('RestTransportHandler', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    provider: undefined,
+    documentationUrl: '',
+    securitySchemes: {},
+    security: [],
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
+    additionalInterfaces: [],
   };
 
   const testMessage: Message = {
     messageId: 'msg-1',
-    role: 'user' as const,
-    parts: [{ kind: 'text' as const, text: 'Hello' }],
-    kind: 'message' as const,
+    role: Role.ROLE_USER,
+    content: [{ part: { $case: 'text', value: 'Hello' } }],
+    contextId: 'ctx-1',
+    taskId: '',
+    extensions: [],
+    metadata: {},
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: {
+      state: TaskState.TASK_STATE_COMPLETED,
+      update: undefined,
+      timestamp: undefined,
+    } as TaskStatus,
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   beforeEach(() => {
@@ -130,9 +146,12 @@ describe('RestTransportHandler', () => {
         input: {
           message: {
             messageId: 'msg-1',
-            role: 'user' as const,
-            parts: [{ kind: 'text' as const, text: 'Hello' }],
-            kind: 'message' as const,
+            role: Role.ROLE_USER,
+            content: [{ part: { $case: 'text', value: 'Hello' } }],
+            contextId: '',
+            taskId: '',
+            extensions: [],
+            metadata: {},
           },
         },
         expectedMessageId: 'msg-1',
@@ -143,8 +162,11 @@ describe('RestTransportHandler', () => {
           message: {
             message_id: 'msg-2',
             role: 'user' as const,
-            parts: [{ kind: 'text' as const, text: 'Hello snake' }],
-            kind: 'message' as const,
+            parts: [{ kind: 'text', text: 'Hello snake' }],
+            context_id: '',
+            task_id: '',
+            extensions: [],
+            metadata: {},
           },
         },
         expectedMessageId: 'msg-2',
@@ -173,8 +195,8 @@ describe('RestTransportHandler', () => {
     it('should throw InvalidParams if message.messageId is missing', async () => {
       const invalidMessage = {
         message: {
-          role: 'user' as const,
-          parts: [{ kind: 'text' as const, text: 'Hello' }],
+          role: Role.ROLE_USER as const,
+          parts: [{ part: { $case: 'text', text: 'Hello' } }],
           kind: 'message' as const,
         },
       };
@@ -270,12 +292,19 @@ describe('RestTransportHandler', () => {
 
   describe('cancelTask', () => {
     it('should cancel task by ID', async () => {
-      const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
+      const cancelledTask = {
+        ...testTask,
+        status: {
+          state: TaskState.TASK_STATE_CANCELLED,
+          update: undefined,
+          timestamp: undefined,
+        } as TaskStatus,
+      };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const result = await transportHandler.cancelTask('task-1', mockContext);
 
-      expect(result.status.state).to.equal('canceled');
+      expect(result.status?.state).to.equal(TaskState.TASK_STATE_CANCELLED);
       expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
         { id: 'task-1' },
         mockContext
@@ -320,6 +349,11 @@ describe('RestTransportHandler', () => {
       },
     };
 
+    const expectedRestConfig = {
+      name: 'tasks/task-1/pushNotificationConfigs/config-1',
+      pushNotificationConfig: mockConfig.pushNotificationConfig,
+    };
+
     describe('setTaskPushNotificationConfig', () => {
       it('should throw PushNotificationNotSupported if not supported', async () => {
         (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
@@ -328,23 +362,27 @@ describe('RestTransportHandler', () => {
         });
 
         await expect(
-          transportHandler.setTaskPushNotificationConfig(mockConfig, mockContext)
+          transportHandler.setTaskPushNotificationConfig(mockConfig as any, mockContext)
         ).rejects.toThrow('Push Notification is not supported');
       });
 
       it('should normalize and set config if supported', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(
+          expectedRestConfig
+        );
 
         const result = await transportHandler.setTaskPushNotificationConfig(
-          mockConfig,
+          mockConfig as any,
           mockContext
         );
 
-        expect(result).to.deep.equal(mockConfig);
+        expect(result).to.deep.equal(expectedRestConfig);
       });
 
       it('should normalize snake_case config', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(
+          expectedRestConfig
+        );
 
         const snakeCaseConfig = {
           task_id: 'task-1',
@@ -358,7 +396,7 @@ describe('RestTransportHandler', () => {
 
         expect(mockRequestHandler.setTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           expect.objectContaining({
-            taskId: 'task-1',
+            name: 'tasks/task-1/pushNotificationConfigs/config-1',
             pushNotificationConfig: expect.objectContaining({ id: 'config-1' }),
           }),
           mockContext
@@ -396,7 +434,7 @@ describe('RestTransportHandler', () => {
           mockContext
         );
 
-        expect(result).to.deep.equal(configs);
+        expect(result).to.deep.equal([expectedRestConfig]);
         expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
           { id: 'task-1' },
           mockContext
@@ -414,11 +452,25 @@ describe('RestTransportHandler', () => {
           mockContext
         );
 
-        expect(result).to.deep.equal(mockConfig);
+        expect(result).to.deep.equal(expectedRestConfig);
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           { id: 'task-1', pushNotificationConfigId: 'config-1' },
           mockContext
         );
+      });
+
+      it('should return config with correct name format', async () => {
+        (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        const result = await transportHandler.getTaskPushNotificationConfig(
+          'task-1',
+          'config-1',
+          mockContext
+        );
+
+        expect(result.name).to.equal('tasks/task-1/pushNotificationConfigs/config-1');
+        // Check that taskId is NOT present (as per TaskPushNotificationConfig definition)
+        expect((result as any).taskId).toBeUndefined();
       });
     });
 
@@ -442,36 +494,50 @@ describe('RestTransportHandler', () => {
         name: 'camelCase',
         message: {
           messageId: 'msg-file',
-          role: 'user' as const,
-          parts: [
+          role: Role.ROLE_USER,
+          content: [
             {
-              kind: 'file' as const,
-              file: {
-                uri: 'https://example.com/file.pdf',
-                mimeType: 'application/pdf',
-                name: 'document.pdf',
+              part: {
+                $case: 'file',
+                value: {
+                  file: {
+                    $case: 'fileWithUri',
+                    value: 'https://example.com/file.pdf',
+                  },
+                  mimeType: 'application/pdf',
+                },
               },
             },
           ],
-          kind: 'message' as const,
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
         },
       },
       {
         name: 'snake_case',
         message: {
           message_id: 'msg-file',
-          role: 'user' as const,
-          parts: [
+          role: Role.ROLE_USER,
+          content: [
             {
-              kind: 'file' as const,
-              file: {
-                uri: 'https://example.com/file.pdf',
-                mime_type: 'application/pdf',
-                name: 'document.pdf',
+              part: {
+                $case: 'file',
+                value: {
+                  file: {
+                    $case: 'fileWithUri',
+                    value: 'https://example.com/file.pdf',
+                  },
+                  mimeType: 'application/pdf',
+                },
               },
             },
           ],
-          kind: 'message' as const,
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
         },
       },
     ])('should normalize $name file parts to camelCase', async ({ message }) => {
@@ -480,10 +546,18 @@ describe('RestTransportHandler', () => {
       expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.objectContaining({
-            parts: [
+            content: [
               expect.objectContaining({
-                kind: 'file',
-                file: expect.objectContaining({ mimeType: 'application/pdf' }),
+                part: {
+                  $case: 'file',
+                  value: expect.objectContaining({
+                    file: {
+                      $case: 'fileWithUri',
+                      value: 'https://example.com/file.pdf',
+                    },
+                    mimeType: 'application/pdf',
+                  }),
+                },
               }),
             ],
           }),

@@ -9,10 +9,9 @@ import {
   UnsupportedOperationError,
 } from '../../errors.js';
 import {
-  JSONRPCRequest,
   JSONRPCResponse,
   MessageSendParams,
-  TaskPushNotificationConfig,
+  JsonRpcTaskPushNotificationConfig,
   TaskIdParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
@@ -20,20 +19,24 @@ import {
   TaskQueryParams,
   Task,
   JSONRPCErrorResponse,
-  SendMessageSuccessResponse,
-  SetTaskPushNotificationConfigSuccessResponse,
-  GetTaskPushNotificationConfigSuccessResponse,
-  ListTaskPushNotificationConfigSuccessResponse,
-  GetTaskSuccessResponse,
-  CancelTaskSuccessResponse,
   AgentCard,
   GetTaskPushNotificationConfigParams,
+  GetTaskSuccessResponse,
+  CancelTaskSuccessResponse,
+  ListTaskPushNotificationConfigSuccessResponse,
+  GetTaskPushNotificationConfigSuccessResponse,
+  SetTaskPushNotificationConfigSuccessResponse,
+  SendMessageSuccessResponse,
   GetAuthenticatedExtendedCardSuccessResponse,
-} from '../../types.js';
+  StreamResponse as ProtoStreamResponse,
+  TaskPushNotificationConfig,
+} from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
+import { FromProto } from '../../types/converters/from_proto.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
@@ -69,7 +72,12 @@ export class JsonRpcTransport implements Transport {
       idOverride,
       options
     );
-    return rpcResponse.result;
+
+    if (!rpcResponse.result.payload?.value) {
+      throw new Error('Response payload is missing or empty');
+    }
+
+    return rpcResponse.result.payload.value;
   }
 
   async *sendMessageStream(
@@ -85,10 +93,15 @@ export class JsonRpcTransport implements Transport {
     idOverride?: number
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
-      TaskPushNotificationConfig,
+      JsonRpcTaskPushNotificationConfig,
       SetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/set', params, idOverride, options);
-    return rpcResponse.result;
+    >(
+      'tasks/pushNotificationConfig/set',
+      FromProto.jsonRpcTaskPushNotificationConfig(params),
+      idOverride,
+      options
+    );
+    return ToProto.taskPushNotificationConfig(rpcResponse.result);
   }
 
   async getTaskPushNotificationConfig(
@@ -100,7 +113,7 @@ export class JsonRpcTransport implements Transport {
       GetTaskPushNotificationConfigParams,
       GetTaskPushNotificationConfigSuccessResponse
     >('tasks/pushNotificationConfig/get', params, idOverride, options);
-    return rpcResponse.result;
+    return ToProto.taskPushNotificationConfig(rpcResponse.result);
   }
 
   async listTaskPushNotificationConfig(
@@ -112,7 +125,7 @@ export class JsonRpcTransport implements Transport {
       ListTaskPushNotificationConfigParams,
       ListTaskPushNotificationConfigSuccessResponse
     >('tasks/pushNotificationConfig/list', params, idOverride, options);
-    return rpcResponse.result;
+    return ToProto.listTaskPushNotificationConfig(rpcResponse.result).configs;
   }
 
   async deleteTaskPushNotificationConfig(
@@ -188,11 +201,7 @@ export class JsonRpcTransport implements Transport {
     );
   }
 
-  private async _sendRpcRequest<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TParams extends { [key: string]: any },
-    TResponse extends JSONRPCResponse,
-  >(
+  private async _sendRpcRequest<TParams, TResponse extends JSONRPCResponse>(
     method: string,
     params: TParams,
     idOverride: number | undefined,
@@ -271,7 +280,7 @@ export class JsonRpcTransport implements Transport {
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
-      params: params as { [key: string]: unknown },
+      params: params,
       id: clientRequestId,
     };
 
@@ -345,7 +354,12 @@ export class JsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    return a2aStreamResponse.result as TStreamItem;
+    const result = (a2aStreamResponse as JSONRPCSuccessResponse<ProtoStreamResponse>).result;
+    if (result?.payload?.value) {
+      return result.payload.value as TStreamItem;
+    }
+
+    return result as TStreamItem;
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
@@ -389,6 +403,19 @@ export class JsonRpcTransportFactory implements TransportFactory {
       fetchImpl: this.options?.fetchImpl,
     });
   }
+}
+
+interface JSONRPCRequest {
+  jsonrpc: '2.0';
+  method: string;
+  params: unknown;
+  id: string | number | null;
+}
+
+interface JSONRPCSuccessResponse<T> {
+  jsonrpc: '2.0';
+  result: T;
+  id: string | number | null;
 }
 
 export class JSONRPCTransportError extends Error {

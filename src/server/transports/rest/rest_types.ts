@@ -5,14 +5,29 @@
  * to support TCK and clients that send snake_case payloads.
  */
 
-import {
-  Part,
-  Message,
-  MessageSendParams,
-  TaskPushNotificationConfig,
-  FileWithBytes,
-  FileWithUri,
-} from '../../../types.js';
+import { Part, Message, MessageSendParams, TaskPushNotificationConfig } from '../../../index.js';
+
+// ============================================================================
+// Internal Types (camelCase format) - mirrored for input normalizers
+// ============================================================================
+
+/**
+ * File with bytes (camelCase mimeType).
+ */
+export interface FileWithBytes {
+  bytes: string;
+  mimeType?: string;
+  name?: string;
+}
+
+/**
+ * File with URI (camelCase mimeType).
+ */
+export interface FileWithUri {
+  uri: string;
+  mimeType?: string;
+  name?: string;
+}
 
 // ============================================================================
 // REST Types (snake_case format)
@@ -75,9 +90,10 @@ export interface RestMessage {
 export interface RestPushNotificationConfig {
   id: string;
   url: string;
+  token: string;
   authentication?: {
     schemes: string[];
-    credentials?: string;
+    credentials: string;
   };
 }
 

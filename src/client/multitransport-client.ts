@@ -9,7 +9,7 @@ import {
   TaskQueryParams,
   PushNotificationConfig,
   AgentCard,
-} from '../types.js';
+} from '../index.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
 import { ClientCallContext } from './context.js';
 import {
@@ -133,7 +133,7 @@ export class Client {
       return;
     }
 
-    if (!this.agentCard.capabilities.streaming) {
+    if (!this.agentCard.capabilities?.streaming) {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
       const afterArgs: AfterArgs<'sendMessageStream'> = {
         result: { method, value: result },
@@ -169,7 +169,7 @@ export class Client {
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -188,7 +188,7 @@ export class Client {
     params: TaskIdParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -207,7 +207,7 @@ export class Client {
     params: ListTaskPushNotificationConfigParams,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -313,7 +313,12 @@ export class Client {
       result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
     }
     if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
-      result.configuration.pushNotificationConfig = this.config.pushNotificationConfig;
+      if (params.message.taskId !== undefined) {
+        result.configuration.pushNotificationConfig = {
+          taskId: params.message.taskId,
+          pushNotificationConfig: this.config.pushNotificationConfig,
+        };
+      }
     }
     result.configuration.blocking ??= blocking;
     return result;

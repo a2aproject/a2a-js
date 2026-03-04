@@ -1,4 +1,4 @@
-import { PushNotificationConfig } from '../../types.js';
+import { PushNotificationConfig } from '../../index.js';
 
 export interface PushNotificationStore {
   save(taskId: string, pushNotificationConfig: PushNotificationConfig): Promise<void>;

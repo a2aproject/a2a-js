@@ -1,5 +1,4 @@
 import { A2AError } from '../../server/error.js';
-import * as types from '../../types.js';
 import {
   AgentCard,
   AgentCardSignature,
@@ -9,7 +8,6 @@ import {
   AgentProvider,
   Artifact,
   AuthenticationInfo,
-  FilePart as ProtoFilePart,
   Message,
   OAuthFlows,
   Part,
@@ -38,235 +36,87 @@ import {
   CreateTaskPushNotificationConfigRequest,
   GetAgentCardRequest,
 } from '../pb/a2a_types.js';
+import {
+  JsonRpcTaskPushNotificationConfig,
+  TaskQueryParams,
+  TaskIdParams,
+  GetTaskPushNotificationConfigParams,
+  ListTaskPushNotificationConfigParams,
+  DeleteTaskPushNotificationConfigParams,
+  MessageSendParams,
+  MessageSendConfiguration,
+  PushNotificationAuthenticationInfo,
+} from '../../json_rpc_types.js';
 import { generatePushNotificationConfigName, generateTaskName } from './id_decoding.js';
 
 export class ToProto {
-  static agentCard(agentCard: types.AgentCard): AgentCard {
-    return {
-      protocolVersion: agentCard.protocolVersion,
-      name: agentCard.name,
-      description: agentCard.description,
-      url: agentCard.url,
-      preferredTransport: agentCard.preferredTransport ?? '',
-      additionalInterfaces:
-        agentCard.additionalInterfaces?.map((i) => ToProto.agentInterface(i)) ?? [],
-      provider: ToProto.agentProvider(agentCard.provider),
-      version: agentCard.version,
-      documentationUrl: agentCard.documentationUrl ?? '',
-      capabilities: ToProto.agentCapabilities(agentCard.capabilities),
-      securitySchemes: agentCard.securitySchemes
-        ? Object.fromEntries(
-            Object.entries(agentCard.securitySchemes).map(([key, value]) => [
-              key,
-              ToProto.securityScheme(value),
-            ])
-          )
-        : {},
-      security: agentCard.security?.map((s) => ToProto.security(s)) ?? [],
-      defaultInputModes: agentCard.defaultInputModes,
-      defaultOutputModes: agentCard.defaultOutputModes,
-      skills: agentCard.skills.map((s) => ToProto.agentSkill(s)),
-      supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard,
-      signatures: agentCard.signatures?.map((s) => ToProto.agentCardSignature(s)) ?? [],
-    };
+  static agentCard(agentCard: AgentCard): AgentCard {
+    return agentCard;
   }
 
-  static agentCardSignature(signatures: types.AgentCardSignature): AgentCardSignature {
-    return {
-      protected: signatures.protected,
-      signature: signatures.signature,
-      header: signatures.header,
-    };
+  static agentCardSignature(signatures: AgentCardSignature): AgentCardSignature {
+    return signatures;
   }
 
-  static agentSkill(skill: types.AgentSkill): AgentSkill {
-    return {
-      id: skill.id,
-      name: skill.name,
-      description: skill.description,
-      tags: skill.tags ?? [],
-      examples: skill.examples ?? [],
-      inputModes: skill.inputModes ?? [],
-      outputModes: skill.outputModes ?? [],
-      security: skill.security ? skill.security.map((s) => ToProto.security(s)) : [],
-    };
+  static agentSkill(skill: AgentSkill): AgentSkill {
+    return skill;
   }
 
-  static security(security: { [k: string]: string[] }): Security {
-    return {
-      schemes: Object.fromEntries(
-        Object.entries(security).map(([key, value]) => {
-          return [key, { list: value }];
-        })
-      ),
-    };
+  static security(security: Security): Security {
+    return security;
   }
 
-  static securityScheme(scheme: types.SecurityScheme): SecurityScheme {
-    switch (scheme.type) {
-      case 'apiKey':
-        return {
-          scheme: {
-            $case: 'apiKeySecurityScheme',
-            value: {
-              name: scheme.name,
-              location: scheme.in,
-              description: scheme.description ?? '',
-            },
-          },
-        };
-      case 'http':
-        return {
-          scheme: {
-            $case: 'httpAuthSecurityScheme',
-            value: {
-              description: scheme.description ?? '',
-              scheme: scheme.scheme,
-              bearerFormat: scheme.bearerFormat ?? '',
-            },
-          },
-        };
-      case 'mutualTLS':
-        return {
-          scheme: {
-            $case: 'mtlsSecurityScheme',
-            value: {
-              description: scheme.description ?? '',
-            },
-          },
-        };
-      case 'oauth2':
-        return {
-          scheme: {
-            $case: 'oauth2SecurityScheme',
-            value: {
-              description: scheme.description ?? '',
-              flows: ToProto.oauthFlows(scheme.flows),
-              oauth2MetadataUrl: scheme.oauth2MetadataUrl ?? '',
-            },
-          },
-        };
-      case 'openIdConnect':
-        return {
-          scheme: {
-            $case: 'openIdConnectSecurityScheme',
-            value: {
-              description: scheme.description ?? '',
-              openIdConnectUrl: scheme.openIdConnectUrl,
-            },
-          },
-        };
-      default:
-        throw A2AError.internalError(`Unsupported security scheme type`);
-    }
+  static securityScheme(scheme: SecurityScheme): SecurityScheme {
+    return scheme;
   }
 
-  static oauthFlows(flows: types.OAuthFlows): OAuthFlows {
-    if (flows.implicit) {
-      return {
-        flow: {
-          $case: 'implicit',
-          value: {
-            authorizationUrl: flows.implicit.authorizationUrl,
-            scopes: flows.implicit.scopes,
-            refreshUrl: flows.implicit.refreshUrl ?? '',
-          },
-        },
-      };
-    } else if (flows.password) {
-      return {
-        flow: {
-          $case: 'password',
-          value: {
-            tokenUrl: flows.password.tokenUrl,
-            scopes: flows.password.scopes,
-            refreshUrl: flows.password.refreshUrl ?? '',
-          },
-        },
-      };
-    } else if (flows.clientCredentials) {
-      return {
-        flow: {
-          $case: 'clientCredentials',
-          value: {
-            tokenUrl: flows.clientCredentials.tokenUrl,
-            scopes: flows.clientCredentials.scopes,
-            refreshUrl: flows.clientCredentials.refreshUrl ?? '',
-          },
-        },
-      };
-    } else if (flows.authorizationCode) {
-      return {
-        flow: {
-          $case: 'authorizationCode',
-          value: {
-            authorizationUrl: flows.authorizationCode.authorizationUrl,
-            tokenUrl: flows.authorizationCode.tokenUrl,
-            scopes: flows.authorizationCode.scopes,
-            refreshUrl: flows.authorizationCode.refreshUrl ?? '',
-          },
-        },
-      };
-    } else {
-      throw A2AError.internalError(`Unsupported OAuth flows`);
-    }
+  static oauthFlows(flows: OAuthFlows): OAuthFlows {
+    return flows;
   }
 
-  static agentInterface(agentInterface: types.AgentInterface): AgentInterface {
-    return {
-      transport: agentInterface.transport,
-      url: agentInterface.url,
-    };
+  static agentInterface(agentInterface: AgentInterface): AgentInterface {
+    return agentInterface;
   }
 
-  static agentProvider(agentProvider: types.AgentProvider): AgentProvider {
-    if (!agentProvider) {
-      return undefined;
-    }
-    return {
-      url: agentProvider.url,
-      organization: agentProvider.organization,
-    };
+  static agentProvider(agentProvider: AgentProvider): AgentProvider {
+    return agentProvider;
   }
 
-  static agentCapabilities(capabilities: types.AgentCapabilities): AgentCapabilities {
-    return {
-      streaming: capabilities.streaming,
-      pushNotifications: capabilities.pushNotifications,
-      extensions: capabilities.extensions
-        ? capabilities.extensions.map((e) => ToProto.agentExtension(e))
-        : [],
-    };
+  static agentCapabilities(capabilities: AgentCapabilities): AgentCapabilities {
+    return capabilities;
   }
 
-  static agentExtension(extension: types.AgentExtension): AgentExtension {
-    return {
-      uri: extension.uri,
-      description: extension.description ?? '',
-      required: extension.required ?? false,
-      params: extension.params,
-    };
+  static agentExtension(extension: AgentExtension): AgentExtension {
+    return extension;
   }
 
   static listTaskPushNotificationConfig(
-    config: types.TaskPushNotificationConfig[]
+    configs: (JsonRpcTaskPushNotificationConfig | TaskPushNotificationConfig)[]
   ): ListTaskPushNotificationConfigResponse {
     return {
-      configs: config.map((c) => ToProto.taskPushNotificationConfig(c)),
+      configs: configs.map((c) => {
+        if ('taskId' in c) {
+          return {
+            name: generatePushNotificationConfigName(c.taskId, c.pushNotificationConfig.id),
+            pushNotificationConfig: c.pushNotificationConfig,
+          };
+        }
+        return c;
+      }),
       nextPageToken: '',
     };
   }
 
   static getTaskPushNotificationConfigParams(
-    config: types.GetTaskPushNotificationConfigParams
+    config: GetTaskPushNotificationConfigParams
   ): GetTaskPushNotificationConfigRequest {
     return {
-      name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId),
+      name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId ?? ''),
     };
   }
 
   static listTaskPushNotificationConfigParams(
-    config: types.ListTaskPushNotificationConfigParams
+    config: ListTaskPushNotificationConfigParams
   ): ListTaskPushNotificationConfigRequest {
     return {
       parent: generateTaskName(config.id),
@@ -276,7 +126,7 @@ export class ToProto {
   }
 
   static deleteTaskPushNotificationConfigParams(
-    config: types.DeleteTaskPushNotificationConfigParams
+    config: DeleteTaskPushNotificationConfigParams
   ): DeleteTaskPushNotificationConfigRequest {
     return {
       name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId),
@@ -284,279 +134,179 @@ export class ToProto {
   }
 
   static taskPushNotificationConfig(
-    config: types.TaskPushNotificationConfig
+    config: JsonRpcTaskPushNotificationConfig | TaskPushNotificationConfig
   ): TaskPushNotificationConfig {
-    return {
-      name: generatePushNotificationConfigName(
-        config.taskId,
-        config.pushNotificationConfig.id ?? ''
-      ),
-      pushNotificationConfig: ToProto.pushNotificationConfig(config.pushNotificationConfig),
-    };
+    if ('taskId' in config) {
+      return {
+        name: generatePushNotificationConfigName(config.taskId, config.pushNotificationConfig.id),
+        pushNotificationConfig: config.pushNotificationConfig,
+      };
+    }
+    return config;
   }
 
   static taskPushNotificationConfigCreate(
-    config: types.TaskPushNotificationConfig
+    config: TaskPushNotificationConfig
   ): CreateTaskPushNotificationConfigRequest {
+    const taskId = extractTaskIdFromName(config.name);
     return {
-      parent: generateTaskName(config.taskId),
-      config: ToProto.taskPushNotificationConfig(config),
-      configId: config.pushNotificationConfig.id,
+      parent: generateTaskName(taskId),
+      config: config,
+      configId: config.pushNotificationConfig?.id ?? '',
     };
   }
 
-  static pushNotificationConfig(config: types.PushNotificationConfig): PushNotificationConfig {
-    if (!config) {
-      return undefined;
-    }
-
-    return {
-      id: config.id ?? '',
-      url: config.url,
-      token: config.token ?? '',
-      authentication: ToProto.pushNotificationAuthenticationInfo(config.authentication),
-    };
+  static pushNotificationConfig(config: PushNotificationConfig): PushNotificationConfig {
+    return config;
   }
 
   static pushNotificationAuthenticationInfo(
-    authInfo: types.PushNotificationAuthenticationInfo
-  ): AuthenticationInfo | undefined {
-    if (!authInfo) {
-      return undefined;
-    }
+    authInfo: PushNotificationAuthenticationInfo
+  ): AuthenticationInfo {
     return {
       schemes: authInfo.schemes,
       credentials: authInfo.credentials ?? '',
     };
   }
 
+  static jsonRpcTaskPushNotificationConfig(
+    config: JsonRpcTaskPushNotificationConfig
+  ): TaskPushNotificationConfig {
+    return {
+      name: generatePushNotificationConfigName(
+        config.taskId,
+        config.pushNotificationConfig?.id ?? ''
+      ),
+      pushNotificationConfig: config.pushNotificationConfig,
+    };
+  }
+
   static messageStreamResult(
-    event: types.Message | types.Task | types.TaskStatusUpdateEvent | types.TaskArtifactUpdateEvent
+    event: Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
   ): StreamResponse {
-    if (event.kind === 'message') {
+    if ('messageId' in event) {
       return {
         payload: {
           $case: 'msg',
-          value: ToProto.message(event),
+          value: event,
         },
       };
-    } else if (event.kind === 'task') {
+    } else if ('artifacts' in event) {
       return {
         payload: {
           $case: 'task',
-          value: ToProto.task(event),
+          value: event,
         },
       };
-    } else if (event.kind === 'status-update') {
+    } else if ('status' in event) {
       return {
         payload: {
           $case: 'statusUpdate',
-          value: ToProto.taskStatusUpdateEvent(event),
+          value: event,
         },
       };
-    } else if (event.kind === 'artifact-update') {
+    } else if ('artifact' in event) {
       return {
         payload: {
           $case: 'artifactUpdate',
-          value: ToProto.taskArtifactUpdateEvent(event),
+          value: event,
         },
       };
-    } else {
-      throw A2AError.internalError('Invalid event type');
     }
+    throw A2AError.internalError('Invalid event type');
   }
 
-  static taskStatusUpdateEvent(event: types.TaskStatusUpdateEvent): TaskStatusUpdateEvent {
-    return {
-      taskId: event.taskId,
-      status: ToProto.taskStatus(event.status),
-      contextId: event.contextId,
-      metadata: event.metadata,
-      final: event.final,
-    };
+  static taskStatusUpdateEvent(event: TaskStatusUpdateEvent): TaskStatusUpdateEvent {
+    return event;
   }
 
-  static taskArtifactUpdateEvent(event: types.TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
-    return {
-      taskId: event.taskId,
-      artifact: ToProto.artifact(event.artifact),
-      contextId: event.contextId,
-      metadata: event.metadata,
-      append: event.append,
-      lastChunk: event.lastChunk,
-    };
+  static taskArtifactUpdateEvent(event: TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
+    return event;
   }
 
-  static messageSendResult(params: types.Message | types.Task): SendMessageResponse {
-    if (params.kind === 'message') {
+  static messageSendResult(params: Message | Task): SendMessageResponse {
+    if ('messageId' in params) {
       return {
         payload: {
           $case: 'msg',
-          value: ToProto.message(params),
+          value: params,
         },
       };
-    } else if (params.kind === 'task') {
+    } else if ('artifacts' in params) {
       return {
         payload: {
           $case: 'task',
-          value: ToProto.task(params),
+          value: params,
         },
       };
     }
   }
 
-  static message(message: types.Message): Message | undefined {
-    if (!message) {
-      return undefined;
-    }
+  static message(message: Message): Message {
+    return message;
+  }
 
+  static role(role: Role): Role {
+    return role;
+  }
+
+  static task(task: Task): Task {
+    return task;
+  }
+
+  static taskStatus(status: TaskStatus): TaskStatus {
+    return status;
+  }
+
+  static artifact(artifact: Artifact): Artifact {
+    return artifact;
+  }
+
+  static taskState(state: TaskState): TaskState {
+    return state;
+  }
+
+  static part(part: Part): Part {
+    return part;
+  }
+
+  static messageSendParams(params: MessageSendParams): SendMessageRequest {
     return {
-      messageId: message.messageId,
-      content: message.parts.map((p) => ToProto.part(p)),
-      contextId: message.contextId ?? '',
-      taskId: message.taskId ?? '',
-      role: ToProto.role(message.role),
-      metadata: message.metadata,
-      extensions: message.extensions ?? [],
-    };
-  }
-
-  static role(role: string): Role {
-    switch (role) {
-      case 'agent':
-        return Role.ROLE_AGENT;
-      case 'user':
-        return Role.ROLE_USER;
-      default:
-        throw A2AError.internalError(`Invalid role`);
-    }
-  }
-
-  static task(task: types.Task): Task {
-    return {
-      id: task.id,
-      contextId: task.contextId,
-      status: ToProto.taskStatus(task.status),
-      artifacts: task.artifacts?.map((a) => ToProto.artifact(a)) ?? [],
-      history: task.history?.map((m) => ToProto.message(m)) ?? [],
-      metadata: task.metadata,
-    };
-  }
-
-  static taskStatus(status: types.TaskStatus): TaskStatus {
-    return {
-      state: ToProto.taskState(status.state),
-      update: ToProto.message(status.message),
-      timestamp: status.timestamp,
-    };
-  }
-
-  static artifact(artifact: types.Artifact): Artifact {
-    return {
-      artifactId: artifact.artifactId,
-      name: artifact.name ?? '',
-      description: artifact.description ?? '',
-      parts: artifact.parts.map((p) => ToProto.part(p)),
-      metadata: artifact.metadata,
-      extensions: artifact.extensions ? artifact.extensions : [],
-    };
-  }
-
-  static taskState(state: types.TaskState): TaskState {
-    switch (state) {
-      case 'submitted':
-        return TaskState.TASK_STATE_SUBMITTED;
-      case 'working':
-        return TaskState.TASK_STATE_WORKING;
-      case 'input-required':
-        return TaskState.TASK_STATE_INPUT_REQUIRED;
-      case 'rejected':
-        return TaskState.TASK_STATE_REJECTED;
-      case 'auth-required':
-        return TaskState.TASK_STATE_AUTH_REQUIRED;
-      case 'completed':
-        return TaskState.TASK_STATE_COMPLETED;
-      case 'failed':
-        return TaskState.TASK_STATE_FAILED;
-      case 'canceled':
-        return TaskState.TASK_STATE_CANCELLED;
-      case 'unknown':
-        return TaskState.TASK_STATE_UNSPECIFIED;
-      default:
-        return TaskState.UNRECOGNIZED;
-    }
-  }
-
-  static part(part: types.Part): Part {
-    if (part.kind === 'text') {
-      return {
-        part: { $case: 'text', value: part.text },
-      };
-    }
-
-    if (part.kind === 'file') {
-      let filePart: ProtoFilePart;
-      if ('uri' in part.file) {
-        filePart = {
-          file: { $case: 'fileWithUri', value: part.file.uri },
-          mimeType: part.file.mimeType,
-        };
-      } else if ('bytes' in part.file) {
-        filePart = {
-          file: { $case: 'fileWithBytes', value: Buffer.from(part.file.bytes, 'base64') },
-          mimeType: part.file.mimeType,
-        };
-      } else {
-        throw A2AError.internalError('Invalid file part');
-      }
-      return {
-        part: { $case: 'file', value: filePart },
-      };
-    }
-
-    if (part.kind === 'data') {
-      return {
-        part: { $case: 'data', value: { data: part.data } },
-      };
-    }
-    throw A2AError.internalError('Invalid part type');
-  }
-
-  static messageSendParams(params: types.MessageSendParams): SendMessageRequest {
-    return {
-      request: ToProto.message(params.message),
-      configuration: ToProto.configuration(params.configuration),
+      request: params.message,
+      configuration: ToProto.configuration(params.configuration!),
       metadata: params.metadata,
     };
   }
 
-  static configuration(configuration: types.MessageSendConfiguration): SendMessageConfiguration {
+  static configuration(
+    configuration: MessageSendConfiguration
+  ): SendMessageConfiguration | undefined {
     if (!configuration) {
       return undefined;
     }
 
     return {
-      blocking: configuration.blocking,
+      blocking: configuration.blocking ?? false,
       acceptedOutputModes: configuration.acceptedOutputModes ?? [],
-      pushNotification: ToProto.pushNotificationConfig(configuration.pushNotificationConfig),
+      pushNotification: configuration.pushNotificationConfig?.pushNotificationConfig,
       historyLength: configuration.historyLength ?? 0,
     };
   }
 
-  static taskQueryParams(params: types.TaskQueryParams): GetTaskRequest {
+  static taskQueryParams(params: TaskQueryParams): GetTaskRequest {
     return {
       name: generateTaskName(params.id),
       historyLength: params.historyLength ?? 0,
     };
   }
 
-  static cancelTaskRequest(params: types.TaskIdParams): CancelTaskRequest {
+  static cancelTaskRequest(params: TaskIdParams): CancelTaskRequest {
     return {
       name: generateTaskName(params.id),
     };
   }
 
-  static taskIdParams(params: types.TaskIdParams): TaskSubscriptionRequest {
+  static taskIdParams(params: TaskIdParams): TaskSubscriptionRequest {
     return {
       name: generateTaskName(params.id),
     };
@@ -565,4 +315,12 @@ export class ToProto {
   static getAgentCardRequest(): GetAgentCardRequest {
     return {};
   }
+}
+
+function extractTaskIdFromName(name: string): string {
+  const parts = name.split('/');
+  if (parts.length >= 2 && parts[0] === 'tasks') {
+    return parts[1];
+  }
+  return name;
 }

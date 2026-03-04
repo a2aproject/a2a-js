@@ -18,6 +18,7 @@ import {
   createMockMessage,
   createMockTask,
 } from '../util.js';
+import { TaskState } from '../../../src/index.js';
 
 // --- Mocks ---
 
@@ -50,6 +51,7 @@ vi.mock('../../../src/types/converters/to_proto.js', () => ({
     cancelTaskRequest: vi.fn((x) => x),
     taskIdParams: vi.fn((x) => x),
     taskPushNotificationConfigCreate: vi.fn((x) => x),
+    jsonRpcTaskPushNotificationConfig: vi.fn((x) => x),
     taskQueryParams: vi.fn((x) => x),
     getAgentCardRequest: vi.fn((x) => x),
   },
@@ -61,13 +63,14 @@ vi.mock('../../../src/types/converters/from_proto.js', () => ({
     sendMessageResult: vi.fn((x) => x),
     message: vi.fn((x) => x),
     setTaskPushNotificationConfigParams: vi.fn((x) => x),
-    getTaskPushNoticationConfig: vi.fn((x) => x),
+    getTaskPushNotificationConfig: vi.fn((x) => x),
     listTaskPushNotificationConfig: vi.fn((x) => x),
     task: vi.fn((x) => x),
     taskStatusUpdate: vi.fn((x) => x),
     taskArtifactUpdate: vi.fn((x) => x),
     taskPushNotificationConfig: vi.fn((x) => x),
     messageStreamResult: vi.fn((x) => x),
+    jsonRpcTaskPushNotificationConfig: vi.fn((x) => x),
   },
 }));
 
@@ -259,7 +262,7 @@ describe('GrpcTransport', () => {
   describe('cancelTask', () => {
     it('should cancel task successfully', async () => {
       const taskId = 'task-123';
-      const mockTask = createMockTask(taskId, 'canceled');
+      const mockTask = createMockTask(taskId, TaskState.TASK_STATE_CANCELLED);
       mockUnarySuccess(mockGrpcClient.cancelTask as Mock, mockTask);
 
       const result = await transport.cancelTask({ id: taskId });
@@ -284,8 +287,13 @@ describe('GrpcTransport', () => {
     const taskId = 'task-123';
     const configId = 'config-456';
     const mockConfig = {
-      taskId,
-      pushNotificationConfig: { id: configId, url: 'http://test' },
+      name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
+      pushNotificationConfig: {
+        id: configId,
+        url: 'http://test',
+        token: 'test-token',
+        authentication: { schemes: [] as string[], credentials: '' },
+      },
     };
 
     describe('setTaskPushNotificationConfig', () => {

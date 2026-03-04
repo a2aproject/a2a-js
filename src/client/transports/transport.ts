@@ -8,7 +8,7 @@ import {
   Task,
   AgentCard,
   GetTaskPushNotificationConfigParams,
-} from '../../types.js';
+} from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 

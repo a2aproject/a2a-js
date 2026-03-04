@@ -4,7 +4,13 @@ import {
   TaskIdParams,
   A2ARequest,
   JSONRPCResponse,
-} from '../../../types.js';
+  StreamResponse,
+  Message,
+  Task,
+  TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
+  JsonRpcTaskPushNotificationConfig,
+} from '../../../index.js';
 import { ServerCallContext } from '../../context.js';
 import { A2AError } from '../../error.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
@@ -70,7 +76,7 @@ export class JsonRpcTransportHandler {
       if (method === 'message/stream' || method === 'tasks/resubscribe') {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();
-        if (!agentCard.capabilities.streaming) {
+        if (!agentCard.capabilities?.streaming) {
           throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
         }
         const agentEventStream =
@@ -86,10 +92,22 @@ export class JsonRpcTransportHandler {
         > {
           try {
             for await (const event of agentEventStream) {
+              let payload: StreamResponse['payload'];
+
+              if ('messageId' in event) {
+                payload = { $case: 'msg', value: event as Message };
+              } else if ('artifacts' in event) {
+                payload = { $case: 'task', value: event as Task };
+              } else if ('status' in event) {
+                payload = { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent };
+              } else if ('artifact' in event) {
+                payload = { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent };
+              }
+
               yield {
                 jsonrpc: '2.0',
                 id: requestId, // Use the original request ID for all streamed responses
-                result: event,
+                result: { payload },
               };
             }
           } catch (streamError) {
@@ -111,21 +129,35 @@ export class JsonRpcTransportHandler {
         // Handle non-streaming methods
         let result: unknown;
         switch (method) {
-          case 'message/send':
-            result = await this.requestHandler.sendMessage(rpcRequest.params, context);
+          case 'message/send': {
+            const messageOrTask = await this.requestHandler.sendMessage(rpcRequest.params, context);
+            result = {
+              payload: {
+                $case: 'messageId' in messageOrTask ? 'msg' : 'task',
+                value: messageOrTask,
+              },
+            };
             break;
+          }
           case 'tasks/get':
             result = await this.requestHandler.getTask(rpcRequest.params, context);
             break;
           case 'tasks/cancel':
             result = await this.requestHandler.cancelTask(rpcRequest.params, context);
             break;
-          case 'tasks/pushNotificationConfig/set':
-            result = await this.requestHandler.setTaskPushNotificationConfig(
-              rpcRequest.params,
-              context
-            );
+          case 'tasks/pushNotificationConfig/set': {
+            const params = rpcRequest.params as JsonRpcTaskPushNotificationConfig & {
+              name?: string;
+            };
+            const config = params.name
+              ? { name: params.name, pushNotificationConfig: params.pushNotificationConfig }
+              : {
+                  name: `tasks/${params.taskId}/pushNotificationConfigs/${params.pushNotificationConfig.id}`,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                };
+            result = await this.requestHandler.setTaskPushNotificationConfig(config, context);
             break;
+          }
           case 'tasks/pushNotificationConfig/get':
             result = await this.requestHandler.getTaskPushNotificationConfig(
               rpcRequest.params,

@@ -5,7 +5,7 @@ import {
   HttpHeaders,
   createAuthenticatingFetchWithRetry,
 } from '../../src/client/auth-handler.js';
-import { SendMessageResponse, SendMessageSuccessResponse } from '../../src/types.js';
+import { SendMessageResponse, SendMessageSuccessResponse } from '../../src/index.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { createMessageParams, createMockFetch } from './util.js';
 
@@ -160,7 +160,8 @@ describe('A2AClient Authentication Tests', () => {
       // Verify the result
       expect(isSuccessResponse(result)).to.be.true;
       if (isSuccessResponse(result)) {
-        expect(result.result).to.have.property('kind', 'message');
+        expect(result).to.have.property('result');
+        expect(result.result.payload.value).to.have.property('messageId', 'msg-123');
       }
     });
 
