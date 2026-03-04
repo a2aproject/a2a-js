@@ -87,11 +87,7 @@ import {
   GetQueueAttributesCommand,
   SetQueueAttributesCommand,
 } from '@aws-sdk/client-sqs';
-import {
-  SNSClient,
-  SubscribeCommand,
-  UnsubscribeCommand,
-} from '@aws-sdk/client-sns';
+import { SNSClient, SubscribeCommand, UnsubscribeCommand } from '@aws-sdk/client-sns';
 import { randomUUID } from 'node:crypto';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -338,19 +334,17 @@ export class QueueLifecycleManager {
       subscriptionArn = subResp.SubscriptionArn!;
     } catch (subscribeErr) {
       // Rollback: remove the queue we just created to avoid orphaned resources.
-      await this.sqs
-        .send(new DeleteQueueCommand({ QueueUrl: queueUrl }))
-        .catch((deleteErr) => {
-          console.error(
-            JSON.stringify({
-              level: 'error',
-              msg: 'queue_lifecycle.rollback_delete_failed',
-              instanceId: this.instanceId,
-              queueUrl,
-              error: String(deleteErr),
-            })
-          );
-        });
+      await this.sqs.send(new DeleteQueueCommand({ QueueUrl: queueUrl })).catch((deleteErr) => {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            msg: 'queue_lifecycle.rollback_delete_failed',
+            instanceId: this.instanceId,
+            queueUrl,
+            error: String(deleteErr),
+          })
+        );
+      });
       throw subscribeErr;
     }
 

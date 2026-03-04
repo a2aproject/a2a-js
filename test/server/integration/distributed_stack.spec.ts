@@ -39,11 +39,7 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 import { mockClient } from 'aws-sdk-client-mock';
 
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';
 
@@ -52,10 +48,7 @@ import {
   SnsEventBusManager,
   DistributedExecutionEventBus,
 } from '../../../src/server/events/sns_sqs_event_bus_manager.js';
-import {
-  DefaultRequestHandler,
-  ExecutionEventQueue,
-} from '../../../src/server/index.js';
+import { DefaultRequestHandler, ExecutionEventQueue } from '../../../src/server/index.js';
 import type { AgentExecutionEvent, ExecutionEventBus } from '../../../src/server/index.js';
 import type { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
 import { RequestContext } from '../../../src/server/agent_execution/request_context.js';
@@ -367,11 +360,13 @@ describe('Distributed stack integration', () => {
       sqsMock
         .on(ReceiveMessageCommand)
         .resolvesOnce({
-          Messages: [{
-            MessageId: 'dup-msg',
-            ReceiptHandle: 'rh-dup',
-            Body: sqsEnvelopeBody,
-          }],
+          Messages: [
+            {
+              MessageId: 'dup-msg',
+              ReceiptHandle: 'rh-dup',
+              Body: sqsEnvelopeBody,
+            },
+          ],
         })
         .resolves({ Messages: [] });
       sqsMock.on(DeleteMessageCommand).resolves({});
@@ -412,7 +407,12 @@ describe('Distributed stack integration', () => {
       })();
 
       // Publish a standard task lifecycle.
-      bus.publish({ kind: 'task', id: 'task-queue-test', contextId: 'ctx', status: { state: 'submitted' } });
+      bus.publish({
+        kind: 'task',
+        id: 'task-queue-test',
+        contextId: 'ctx',
+        status: { state: 'submitted' },
+      });
       bus.publish({
         kind: 'status-update',
         taskId: 'task-queue-test',

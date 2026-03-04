@@ -14,11 +14,7 @@ import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 import { mockClient } from 'aws-sdk-client-mock';
 
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-import {
-  SQSClient,
-  ReceiveMessageCommand,
-  DeleteMessageCommand,
-} from '@aws-sdk/client-sqs';
+import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';
 
 import {
   DistributedExecutionEventBus,
@@ -154,7 +150,9 @@ describe('DistributedExecutionEventBus', () => {
       const bus = new DistributedExecutionEventBus(TASK_ID, INSTANCE_A, snsClient, TOPIC_ARN);
 
       let finishedFired = false;
-      bus.on('finished', () => { finishedFired = true; });
+      bus.on('finished', () => {
+        finishedFired = true;
+      });
 
       bus.finished();
 
@@ -198,7 +196,9 @@ describe('DistributedExecutionEventBus', () => {
       const bus = new DistributedExecutionEventBus(TASK_ID, INSTANCE_A, snsClient, TOPIC_ARN);
 
       let fired = false;
-      bus.on('finished', () => { fired = true; });
+      bus.on('finished', () => {
+        fired = true;
+      });
 
       bus.finishedLocal();
 
@@ -214,7 +214,9 @@ describe('DistributedExecutionEventBus', () => {
       const bus = new DistributedExecutionEventBus(TASK_ID, INSTANCE_A, snsClient, TOPIC_ARN);
 
       let count = 0;
-      const listener = () => { count++; };
+      const listener = () => {
+        count++;
+      };
 
       bus.on('event', listener);
       bus.off('event', listener);
@@ -291,13 +293,10 @@ describe('SqsEventPoller', () => {
 
       const received: unknown[] = [];
       const sqs = new SQSClient({});
-      const poller = new SqsEventPoller(
-        sqs,
-        QUEUE_URL,
-        INSTANCE_A,
-        (msg) => received.push(msg),
-        { pollIntervalMs: 0, waitTimeSeconds: 0 }
-      );
+      const poller = new SqsEventPoller(sqs, QUEUE_URL, INSTANCE_A, (msg) => received.push(msg), {
+        pollIntervalMs: 0,
+        waitTimeSeconds: 0,
+      });
 
       poller.start();
       await new Promise<void>((r) => setTimeout(r, 30));
@@ -321,13 +320,10 @@ describe('SqsEventPoller', () => {
 
       const received: Array<{ type: string }> = [];
       const sqs = new SQSClient({});
-      const poller = new SqsEventPoller(
-        sqs,
-        QUEUE_URL,
-        INSTANCE_A,
-        (msg) => received.push(msg),
-        { pollIntervalMs: 0, waitTimeSeconds: 0 }
-      );
+      const poller = new SqsEventPoller(sqs, QUEUE_URL, INSTANCE_A, (msg) => received.push(msg), {
+        pollIntervalMs: 0,
+        waitTimeSeconds: 0,
+      });
 
       poller.start();
       await new Promise<void>((r) => setTimeout(r, 30));
@@ -343,24 +339,23 @@ describe('SqsEventPoller', () => {
       sqsMock
         .on(ReceiveMessageCommand)
         .resolvesOnce({
-          Messages: [{
-            MessageId: 'bad-msg',
-            ReceiptHandle: 'rh-bad',
-            Body: 'not-json-at-all{{{',
-          }],
+          Messages: [
+            {
+              MessageId: 'bad-msg',
+              ReceiptHandle: 'rh-bad',
+              Body: 'not-json-at-all{{{',
+            },
+          ],
         })
         .resolves({ Messages: [] });
 
       sqsMock.on(DeleteMessageCommand).resolves({});
 
       const sqs = new SQSClient({});
-      const poller = new SqsEventPoller(
-        sqs,
-        QUEUE_URL,
-        INSTANCE_A,
-        () => {},
-        { pollIntervalMs: 0, waitTimeSeconds: 0 }
-      );
+      const poller = new SqsEventPoller(sqs, QUEUE_URL, INSTANCE_A, () => {}, {
+        pollIntervalMs: 0,
+        waitTimeSeconds: 0,
+      });
 
       poller.start();
       await new Promise<void>((r) => setTimeout(r, 30));
@@ -411,6 +406,40 @@ describe('SqsEventPoller', () => {
       await new Promise<void>((r) => setTimeout(r, 30));
 
       expect(sqsMock.commandCalls(ReceiveMessageCommand).length).toBe(countAtStop);
+    });
+
+    it('stop() cancels the inter-poll sleep immediately (no memory leak)', async () => {
+      // Use a 60-second poll interval so the sleep would never expire within
+      // the test. If stop() did NOT resolve the pending sleep Promise, the
+      // poll() execution context would remain alive in memory until the timer
+      // fires — this test would still pass but a real deployment would leak.
+      //
+      // What we CAN verify: after stop() + a tiny drain delay, no further
+      // ReceiveMessageCommand calls are made, demonstrating the loop exited
+      // rather than re-entering after the sleep.
+      sqsMock.on(ReceiveMessageCommand).resolves({ Messages: [] });
+
+      const sqs = new SQSClient({});
+      const poller = new SqsEventPoller(sqs, QUEUE_URL, INSTANCE_A, () => {}, {
+        pollIntervalMs: 60_000, // Would never expire during a test
+        waitTimeSeconds: 0,
+      });
+
+      poller.start();
+      // Let the first receive cycle complete so the poller enters its sleep.
+      await new Promise<void>((r) => setTimeout(r, 20));
+
+      const countBeforeStop = sqsMock.commandCalls(ReceiveMessageCommand).length;
+
+      // stop() must resolve the sleep promise so the loop exits quickly.
+      poller.stop();
+
+      // Drain the microtask queue so the resolved Promise propagates.
+      await new Promise<void>((r) => setTimeout(r, 10));
+
+      // Confirm no new receives occurred after stop().
+      await new Promise<void>((r) => setTimeout(r, 30));
+      expect(sqsMock.commandCalls(ReceiveMessageCommand).length).toBe(countBeforeStop);
     });
   });
 });
@@ -488,10 +517,17 @@ describe('SnsEventBusManager', () => {
       });
 
       let count = 0;
-      const bus = manager.createOrGetByTaskId(TASK_ID);
-      bus.on('event', () => { count++; });
+      const bus = manager.createOrGetByTaskId(TASK_ID) as DistributedExecutionEventBus;
+      bus.on('event', () => {
+        count++;
+      });
 
       manager.cleanupByTaskId(TASK_ID);
+
+      // cleanupByTaskId calls removeAllListeners() — publishing on the old
+      // bus reference must not fire the previously attached listener.
+      bus.publishLocal(makeStatusEvent(TASK_ID, 'working'));
+      expect(count).toBe(0);
 
       expect(manager.getByTaskId(TASK_ID)).toBeUndefined();
 
@@ -541,7 +577,9 @@ describe('SnsEventBusManager', () => {
 
       const bus = manager.createOrGetByTaskId(TASK_ID) as DistributedExecutionEventBus;
       let finished = false;
-      bus.on('finished', () => { finished = true; });
+      bus.on('finished', () => {
+        finished = true;
+      });
 
       (bus as DistributedExecutionEventBus).finishedLocal();
 
@@ -595,8 +633,14 @@ describe('SnsEventBusManager', () => {
       // No bus has been created for TASK_ID — simulates a message that arrived
       // on an instance where no SSE client is connected.
       expect(() => {
-        (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
-          .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'event', event: makeStatusEvent(TASK_ID, 'working') });
+        (
+          manager as unknown as { handleIncomingMessage: (m: unknown) => void }
+        ).handleIncomingMessage({
+          taskId: TASK_ID,
+          instanceId: 'remote-id',
+          type: 'event',
+          event: makeStatusEvent(TASK_ID, 'working'),
+        });
       }).not.toThrow();
 
       // No bus should have been created as a side-effect.
@@ -607,8 +651,9 @@ describe('SnsEventBusManager', () => {
       const manager = makeManager();
 
       expect(() => {
-        (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
-          .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'finished' });
+        (
+          manager as unknown as { handleIncomingMessage: (m: unknown) => void }
+        ).handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'finished' });
       }).not.toThrow();
 
       expect(manager.getByTaskId(TASK_ID)).toBeUndefined();
@@ -621,8 +666,9 @@ describe('SnsEventBusManager', () => {
       bus.on('event', (e) => received.push(e));
 
       const evt = makeStatusEvent(TASK_ID, 'working');
-      (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
-        .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'event', event: evt });
+      (manager as unknown as { handleIncomingMessage: (m: unknown) => void }).handleIncomingMessage(
+        { taskId: TASK_ID, instanceId: 'remote-id', type: 'event', event: evt }
+      );
 
       expect(received).toHaveLength(1);
       expect(received[0]).toEqual(evt);
@@ -632,10 +678,13 @@ describe('SnsEventBusManager', () => {
       const manager = makeManager();
       const bus = manager.createOrGetByTaskId(TASK_ID) as DistributedExecutionEventBus;
       let finishedFired = false;
-      bus.on('finished', () => { finishedFired = true; });
+      bus.on('finished', () => {
+        finishedFired = true;
+      });
 
-      (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
-        .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'finished' });
+      (manager as unknown as { handleIncomingMessage: (m: unknown) => void }).handleIncomingMessage(
+        { taskId: TASK_ID, instanceId: 'remote-id', type: 'finished' }
+      );
 
       // The finished signal must have been delivered.
       expect(finishedFired).toBe(true);
@@ -688,12 +737,14 @@ describe('SnsEventBusManager', () => {
       bus.publish(makeStatusEvent(TASK_ID, 'working'));
 
       // Allow the fire-and-forget SNS publish to settle.
-      return new Promise<void>((resolve) => setTimeout(() => {
-        const [call] = snsMock.commandCalls(PublishCommand);
-        const body = JSON.parse(call.args[0].input.Message ?? '{}');
-        expect(body.instanceId).toBe(injectedId);
-        resolve();
-      }, 20));
+      return new Promise<void>((resolve) =>
+        setTimeout(() => {
+          const [call] = snsMock.commandCalls(PublishCommand);
+          const body = JSON.parse(call.args[0].input.Message ?? '{}');
+          expect(body.instanceId).toBe(injectedId);
+          resolve();
+        }, 20)
+      );
     });
   });
 

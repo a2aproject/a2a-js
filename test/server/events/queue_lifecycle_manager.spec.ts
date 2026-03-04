@@ -16,7 +16,13 @@
 import { describe, it, beforeEach, expect, vi } from 'vitest';
 import { mockClient } from 'aws-sdk-client-mock';
 
-import { SQSClient, CreateQueueCommand, DeleteQueueCommand, GetQueueAttributesCommand, SetQueueAttributesCommand } from '@aws-sdk/client-sqs';
+import {
+  SQSClient,
+  CreateQueueCommand,
+  DeleteQueueCommand,
+  GetQueueAttributesCommand,
+  SetQueueAttributesCommand,
+} from '@aws-sdk/client-sqs';
 import { SNSClient, SubscribeCommand, UnsubscribeCommand } from '@aws-sdk/client-sns';
 
 import { QueueLifecycleManager } from '../../../src/server/events/queue_lifecycle_manager.js';

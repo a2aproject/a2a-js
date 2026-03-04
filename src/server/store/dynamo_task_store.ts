@@ -32,10 +32,7 @@
  *       ttl      Number  — (optional) Unix epoch; enables DynamoDB TTL
  */
 
-import {
-  DynamoDBClient,
-  ConditionalCheckFailedException,
-} from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   GetCommand,

@@ -141,12 +141,7 @@ export class DistributedExecutionEventBus extends DefaultExecutionEventBus {
   private readonly taskId: string;
   private readonly instanceId: string;
 
-  constructor(
-    taskId: string,
-    instanceId: string,
-    sns: SNSClient,
-    snsTopicArn: string
-  ) {
+  constructor(taskId: string, instanceId: string, sns: SNSClient, snsTopicArn: string) {
     super();
     this.taskId = taskId;
     this.instanceId = instanceId;
@@ -246,6 +241,12 @@ export class SqsEventPoller {
   private readonly pollIntervalMs: number;
   private running = false;
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * Stored resolver for the current inter-poll sleep promise.
+   * Calling this immediately wakes the poll loop so `stop()` does not leave
+   * the async function suspended until the next timer tick.
+   */
+  private sleepResolve: (() => void) | undefined;
 
   /** Callback invoked for each decoded SNS message. */
   private readonly onMessage: (msg: SnsEventMessage) => void;
@@ -273,12 +274,26 @@ export class SqsEventPoller {
     void this.poll();
   }
 
-  /** Stops the polling loop. In-flight receives complete normally. */
+  /**
+   * Stops the polling loop.
+   *
+   * In-flight `ReceiveMessage` calls complete normally, but the inter-poll
+   * sleep is cancelled immediately by resolving the pending sleep promise so
+   * the `poll()` execution context is released without waiting for the next
+   * timer tick.  This prevents the async function — and any object it closes
+   * over — from being held in memory indefinitely.
+   */
   stop(): void {
     this.running = false;
     if (this.pollTimer !== undefined) {
       clearTimeout(this.pollTimer);
       this.pollTimer = undefined;
+    }
+    // Wake the sleeping poll loop so the Promise resolves and the execution
+    // context is freed.  No-op if the loop is not currently sleeping.
+    if (this.sleepResolve !== undefined) {
+      this.sleepResolve();
+      this.sleepResolve = undefined;
     }
   }
 
@@ -303,9 +318,13 @@ export class SqsEventPoller {
 
       if (this.running) {
         // Brief pause between polls to avoid tight loops on empty queues.
+        // The resolve function is stored so stop() can cancel the sleep
+        // immediately rather than leaving this await permanently suspended.
         await new Promise<void>((resolve) => {
+          this.sleepResolve = resolve;
           this.pollTimer = setTimeout(resolve, this.pollIntervalMs);
         });
+        this.sleepResolve = undefined;
       }
     }
   }

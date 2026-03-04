@@ -13,20 +13,11 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 import { mockClient } from 'aws-sdk-client-mock';
 
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-} from '@aws-sdk/lib-dynamodb';
-import {
-  ConditionalCheckFailedException,
-} from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 
 import { DynamoDBTaskStore } from '../../../src/server/store/dynamo_task_store.js';
-import {
-  TaskConflictError,
-  StoreUnavailableError,
-} from '../../../src/server/store/errors.js';
+import { TaskConflictError, StoreUnavailableError } from '../../../src/server/store/errors.js';
 import type { Task } from '../../../src/types.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -319,9 +310,7 @@ describe('DynamoDBTaskStore', () => {
       const getCalls = ddbMock.commandCalls(GetCommand);
       // One call from readVersion in save is absent here (pure load).
       // The load call itself issues one GetCommand.
-      const loadCall = getCalls.find(
-        (c) => c.args[0].input.ProjectionExpression === undefined
-      );
+      const loadCall = getCalls.find((c) => c.args[0].input.ProjectionExpression === undefined);
       expect(loadCall).toBeDefined();
       expect(loadCall!.args[0].input.TableName).toBe(TABLE);
       expect(loadCall!.args[0].input.Key).toEqual({ taskId: 'task-123' });
