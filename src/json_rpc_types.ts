@@ -24,77 +24,24 @@ export type A2AError =
   | InvalidAgentResponseError
   | AuthenticatedExtendedCardNotConfiguredError;
 
-export interface JSONParseError {
-  code: -32700;
+interface BaseError<T extends number> {
+  code: T;
   data?: { [k: string]: unknown };
   message: string;
 }
 
-export interface InvalidRequestError {
-  code: -32600;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface MethodNotFoundError {
-  code: -32601;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface InvalidParamsError {
-  code: -32602;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface InternalError {
-  code: -32603;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface TaskNotFoundError {
-  code: -32001;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface TaskNotCancelableError {
-  code: -32002;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface PushNotificationNotSupportedError {
-  code: -32003;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface UnsupportedOperationError {
-  code: -32004;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface ContentTypeNotSupportedError {
-  code: -32005;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface InvalidAgentResponseError {
-  code: -32006;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface AuthenticatedExtendedCardNotConfiguredError {
-  code: -32007;
-  data?: { [k: string]: unknown };
-  message: string;
-}
+export type JSONParseError = BaseError<-32700>;
+export type InvalidRequestError = BaseError<-32600>;
+export type MethodNotFoundError = BaseError<-32601>;
+export type InvalidParamsError = BaseError<-32602>;
+export type InternalError = BaseError<-32603>;
+export type TaskNotFoundError = BaseError<-32001>;
+export type TaskNotCancelableError = BaseError<-32002>;
+export type PushNotificationNotSupportedError = BaseError<-32003>;
+export type UnsupportedOperationError = BaseError<-32004>;
+export type ContentTypeNotSupportedError = BaseError<-32005>;
+export type InvalidAgentResponseError = BaseError<-32006>;
+export type AuthenticatedExtendedCardNotConfiguredError = BaseError<-32007>;
 
 /**
  * A discriminated union representing all possible JSON-RPC 2.0 requests supported by the A2A specification.
@@ -111,9 +58,14 @@ export type A2ARequest =
   | DeleteTaskPushNotificationConfigRequest
   | GetAuthenticatedExtendedCardRequest;
 
-export interface SendMessageRequest {
+interface BaseRequest {
   id: string | number;
   jsonrpc: '2.0';
+  method: string;
+  params?: { [k: string]: unknown } | JsonRpcTaskPushNotificationConfig;
+}
+
+export interface SendMessageRequest extends BaseRequest {
   method: 'message/send';
   params: {
     message: Message;
@@ -122,9 +74,7 @@ export interface SendMessageRequest {
   };
 }
 
-export interface SendStreamingMessageRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface SendStreamingMessageRequest extends BaseRequest {
   method: 'message/stream';
   params: {
     message: Message;
@@ -133,9 +83,7 @@ export interface SendStreamingMessageRequest {
   };
 }
 
-export interface GetTaskRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface GetTaskRequest extends BaseRequest {
   method: 'tasks/get';
   params: {
     id: string;
@@ -144,9 +92,7 @@ export interface GetTaskRequest {
   };
 }
 
-export interface CancelTaskRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface CancelTaskRequest extends BaseRequest {
   method: 'tasks/cancel';
   params: {
     id: string;
@@ -171,16 +117,12 @@ export interface JsonRpcTaskPushNotificationConfig {
   pushNotificationConfig: ProtoPushNotificationConfig;
 }
 
-export interface SetTaskPushNotificationConfigRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface SetTaskPushNotificationConfigRequest extends BaseRequest {
   method: 'tasks/pushNotificationConfig/set';
   params: JsonRpcTaskPushNotificationConfig;
 }
 
-export interface GetTaskPushNotificationConfigRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface GetTaskPushNotificationConfigRequest extends BaseRequest {
   method: 'tasks/pushNotificationConfig/get';
   params: {
     id: string;
@@ -189,9 +131,7 @@ export interface GetTaskPushNotificationConfigRequest {
   };
 }
 
-export interface TaskResubscriptionRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface TaskResubscriptionRequest extends BaseRequest {
   method: 'tasks/resubscribe';
   params: {
     id: string;
@@ -199,9 +139,7 @@ export interface TaskResubscriptionRequest {
   };
 }
 
-export interface ListTaskPushNotificationConfigRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface ListTaskPushNotificationConfigRequest extends BaseRequest {
   method: 'tasks/pushNotificationConfig/list';
   params: {
     id: string;
@@ -209,9 +147,7 @@ export interface ListTaskPushNotificationConfigRequest {
   };
 }
 
-export interface DeleteTaskPushNotificationConfigRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface DeleteTaskPushNotificationConfigRequest extends BaseRequest {
   method: 'tasks/pushNotificationConfig/delete';
   params: {
     id: string;
@@ -220,9 +156,7 @@ export interface DeleteTaskPushNotificationConfigRequest {
   };
 }
 
-export interface GetAuthenticatedExtendedCardRequest {
-  id: string | number;
-  jsonrpc: '2.0';
+export interface GetAuthenticatedExtendedCardRequest extends BaseRequest {
   method: 'agent/getAuthenticatedExtendedCard';
 }
 
@@ -248,86 +182,45 @@ export interface JSONRPCErrorResponse {
  * JSON-RPC Success responses.
  */
 
-export interface SendMessageSuccessResponse {
+interface BaseSuccessResponse<T> {
   id: string | number | null;
   jsonrpc: '2.0';
-  result: ProtoSendMessageResponse;
+  result: T;
 }
 
-export interface SendStreamingMessageSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: ProtoStreamResponse;
-}
+export type SendMessageSuccessResponse = BaseSuccessResponse<ProtoSendMessageResponse>;
+export type SendStreamingMessageSuccessResponse = BaseSuccessResponse<ProtoStreamResponse>;
+export type GetTaskSuccessResponse = BaseSuccessResponse<Task>;
+export type CancelTaskSuccessResponse = BaseSuccessResponse<Task>;
+export type SetTaskPushNotificationConfigSuccessResponse =
+  BaseSuccessResponse<JsonRpcTaskPushNotificationConfig>;
+export type GetTaskPushNotificationConfigSuccessResponse =
+  BaseSuccessResponse<JsonRpcTaskPushNotificationConfig>;
+export type ListTaskPushNotificationConfigSuccessResponse = BaseSuccessResponse<
+  JsonRpcTaskPushNotificationConfig[]
+>;
+export type DeleteTaskPushNotificationConfigSuccessResponse = BaseSuccessResponse<null>;
+export type GetAuthenticatedExtendedCardSuccessResponse = BaseSuccessResponse<AgentCard>;
 
-export interface GetTaskSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: Task;
-}
-
-export interface CancelTaskSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: Task;
-}
-
-export interface SetTaskPushNotificationConfigSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: JsonRpcTaskPushNotificationConfig;
-}
-
-export interface GetTaskPushNotificationConfigSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: JsonRpcTaskPushNotificationConfig;
-}
-
-export interface ListTaskPushNotificationConfigSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: JsonRpcTaskPushNotificationConfig[];
-}
-
-export interface DeleteTaskPushNotificationConfigSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: null;
-}
-
-export interface GetAuthenticatedExtendedCardSuccessResponse {
-  id: string | number | null;
-  jsonrpc: '2.0';
-  result: AgentCard;
-}
-
-export interface TaskQueryParams {
+interface BaseParams {
   id: string;
+  metadata?: { [k: string]: unknown };
+}
+
+export interface TaskQueryParams extends BaseParams {
   historyLength?: number;
-  metadata?: { [k: string]: unknown };
 }
 
-export interface TaskIdParams {
-  id: string;
-  metadata?: { [k: string]: unknown };
-}
+export type TaskIdParams = BaseParams;
 
-export interface GetTaskPushNotificationConfigParams {
-  id: string;
+export interface GetTaskPushNotificationConfigParams extends BaseParams {
   pushNotificationConfigId?: string;
-  metadata?: { [k: string]: unknown };
 }
 
-export interface ListTaskPushNotificationConfigParams {
-  id: string;
-  metadata?: { [k: string]: unknown };
-}
+export type ListTaskPushNotificationConfigParams = BaseParams;
 
-export interface DeleteTaskPushNotificationConfigParams {
-  id: string;
+export interface DeleteTaskPushNotificationConfigParams extends BaseParams {
   pushNotificationConfigId: string;
-  metadata?: { [k: string]: unknown };
 }
 
 export interface MessageSendParams {
