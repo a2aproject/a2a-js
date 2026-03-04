@@ -575,6 +575,75 @@ describe('SnsEventBusManager', () => {
     });
   });
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // handleIncomingMessage (memory-leak guard)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe('handleIncomingMessage (memory-leak guard)', () => {
+    function makeManager() {
+      return new SnsEventBusManager({
+        snsTopicArn: TOPIC_ARN,
+        sqsQueueUrl: QUEUE_URL,
+        snsClient: new SNSClient({}),
+        sqsClient: new SQSClient({}),
+      });
+    }
+
+    it('silently drops an event message when no local bus exists', () => {
+      const manager = makeManager();
+
+      // No bus has been created for TASK_ID — simulates a message that arrived
+      // on an instance where no SSE client is connected.
+      expect(() => {
+        (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
+          .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'event', event: makeStatusEvent(TASK_ID, 'working') });
+      }).not.toThrow();
+
+      // No bus should have been created as a side-effect.
+      expect(manager.getByTaskId(TASK_ID)).toBeUndefined();
+    });
+
+    it('silently drops a finished message when no local bus exists', () => {
+      const manager = makeManager();
+
+      expect(() => {
+        (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
+          .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'finished' });
+      }).not.toThrow();
+
+      expect(manager.getByTaskId(TASK_ID)).toBeUndefined();
+    });
+
+    it('delivers event to an existing local bus', () => {
+      const manager = makeManager();
+      const bus = manager.createOrGetByTaskId(TASK_ID) as DistributedExecutionEventBus;
+      const received: AgentExecutionEvent[] = [];
+      bus.on('event', (e) => received.push(e));
+
+      const evt = makeStatusEvent(TASK_ID, 'working');
+      (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
+        .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'event', event: evt });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]).toEqual(evt);
+    });
+
+    it('signals finished and cleans up the bus on finished message', () => {
+      const manager = makeManager();
+      const bus = manager.createOrGetByTaskId(TASK_ID) as DistributedExecutionEventBus;
+      let finishedFired = false;
+      bus.on('finished', () => { finishedFired = true; });
+
+      (manager as unknown as { handleIncomingMessage: (m: unknown) => void })
+        .handleIncomingMessage({ taskId: TASK_ID, instanceId: 'remote-id', type: 'finished' });
+
+      // The finished signal must have been delivered.
+      expect(finishedFired).toBe(true);
+      // The bus must have been evicted to prevent memory leaks.
+      expect(manager.getByTaskId(TASK_ID)).toBeUndefined();
+    });
+  });
+
   describe('instanceId injection (QueueLifecycleManager integration)', () => {
     it('uses the provided instanceId instead of generating a new one', () => {
       const injectedId = 'lifecycle-manager-instance-uuid';

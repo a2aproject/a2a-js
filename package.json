@@ -78,6 +78,10 @@
     "README.md"
   ],
   "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.596.0",
+    "@aws-sdk/client-sns": "^3.596.0",
+    "@aws-sdk/client-sqs": "^3.596.0",
+    "@aws-sdk/lib-dynamodb": "^3.596.0",
     "@betterer/cli": "^6.0.0-alpha.1",
     "@betterer/typescript": "^6.0.0-alpha.1",
     "@bufbuild/buf": "^1.61.0",
@@ -120,10 +124,10 @@
     "uuid": "^11.1.0"
   },
   "peerDependencies": {
-    "@aws-sdk/client-dynamodb": "^3.1000.0",
-    "@aws-sdk/client-sns": "^3.1000.0",
-    "@aws-sdk/client-sqs": "^3.1000.0",
-    "@aws-sdk/lib-dynamodb": "^3.1000.0",
+    "@aws-sdk/client-dynamodb": "^3.596.0",
+    "@aws-sdk/client-sns": "^3.596.0",
+    "@aws-sdk/client-sqs": "^3.596.0",
+    "@aws-sdk/lib-dynamodb": "^3.596.0",
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.11.0",
     "express": "^4.21.2 || ^5.1.0"

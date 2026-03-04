@@ -496,17 +496,22 @@ export class SnsEventBusManager implements ExecutionEventBusManager {
 
   /**
    * Handles a decoded SNS message received via SQS.
-   * Finds (or creates) the local bus for the taskId and delivers the event.
+   * Looks up the local bus for the taskId and delivers the event.
    *
-   * Note: We use `createOrGetByTaskId` here so that even if an SSE client
-   * connected *before* the task's first event arrived, the bus already exists
-   * and its listeners will receive this delivery.
+   * We intentionally use `getByTaskId` (not `createOrGetByTaskId`) so that
+   * cross-instance fan-out messages that arrive on an instance with no active
+   * SSE subscriber are silently dropped rather than leaking bus instances
+   * indefinitely. The bus is cleaned up immediately after the `finished`
+   * signal to release event-listener memory.
    */
   private handleIncomingMessage(msg: SnsEventMessage): void {
-    const bus = this.createOrGetByTaskId(msg.taskId) as DistributedExecutionEventBus;
+    const bus = this.getByTaskId(msg.taskId) as DistributedExecutionEventBus | undefined;
+
+    if (!bus) return;
 
     if (msg.type === 'finished') {
       bus.finishedLocal();
+      this.cleanupByTaskId(msg.taskId);
       return;
     }
 

@@ -927,7 +927,7 @@ class HelloExecutor implements AgentExecutor {
 
 // ── 3. AWS clients ─────────────────────────────────────────────────────────────
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
-  marshallOptions: { removeUndefinedValues: true },
+  marshallOptions: { removeUndefinedValues: false },
 });
 const snsClient = new SNSClient({});
 const sqsClient = new SQSClient({});
