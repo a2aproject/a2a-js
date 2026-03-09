@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
 import { AgentCard } from '../../src/types.js';
+import { AgentCard as PBAgentCard } from '../../src/types/pb/a2a_types.js';
 
 describe('DefaultAgentCardResolver', () => {
   let mockFetch: Mock;
@@ -135,5 +136,88 @@ describe('DefaultAgentCardResolver', () => {
     } catch (e: any) {
       expect(e.message).to.include('Failed to fetch Agent Card from https://example.com');
     }
+  });
+
+  const expectedAgentCard: AgentCard = {
+    protocolVersion: '1.0.0',
+    name: 'Unified Agent',
+    description: '',
+    documentationUrl: undefined,
+    version: '1.0.0',
+    capabilities: {},
+    additionalInterfaces: [],
+    provider: undefined,
+    defaultInputModes: [],
+    defaultOutputModes: [],
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
+    url: 'https://unified-agent.example.com/a2a/v1',
+    preferredTransport: 'GRPC',
+    securitySchemes: {
+      google: {
+        type: 'openIdConnect',
+        openIdConnectUrl: 'https://accounts.google.com/.well-known/openid-configuration',
+      },
+    },
+    security: [{ google: ['openid', 'profile', 'email'] }],
+    skills: [],
+  };
+
+  const v03AgentCard: AgentCard = {
+    // A v0.3 json-schema shape is essentially identical to the internal format
+    ...expectedAgentCard,
+  };
+
+  const v1ProtoAgentCard: PBAgentCard = {
+    protocolVersion: '1.0.0',
+    name: 'Unified Agent',
+    description: '',
+    documentationUrl: '',
+    version: '1.0.0',
+    capabilities: undefined,
+    additionalInterfaces: [],
+    provider: undefined,
+    defaultInputModes: [],
+    defaultOutputModes: [],
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
+    url: 'https://unified-agent.example.com/a2a/v1',
+    preferredTransport: 'GRPC',
+    securitySchemes: {
+      google: {
+        scheme: {
+          $case: 'openIdConnectSecurityScheme',
+          value: {
+            description: '',
+            openIdConnectUrl: 'https://accounts.google.com/.well-known/openid-configuration',
+          },
+        },
+      },
+    },
+    security: [
+      {
+        schemes: {
+          google: { list: ['openid', 'profile', 'email'] },
+        },
+      },
+    ],
+    skills: [],
+  };
+
+  it.each([
+    ['v0.3 JSON schema', v03AgentCard],
+    ['v1.0 protobuf mapping', PBAgentCard.toJSON(v1ProtoAgentCard)],
+  ])('should parse and normalize %s agent card correctly', async (_, payload) => {
+    const resolver = new DefaultAgentCardResolver({ fetchImpl: mockFetch });
+    mockFetch.mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+
+    const actual = await resolver.resolve('https://example.com');
+
+    // Both should normalize to the exact same internal AgentCard format
+    // Strip undefined properties before comparison using JSON
+    const expected = JSON.parse(JSON.stringify(expectedAgentCard));
+    const actualClean = JSON.parse(JSON.stringify(actual));
+
+    expect(actualClean).to.deep.equal(expected);
   });
 });
