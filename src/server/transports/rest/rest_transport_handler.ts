@@ -13,14 +13,12 @@ import {
   Task,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
-  MessageSendParams,
   TaskPushNotificationConfig,
-  TaskQueryParams,
-  TaskIdParams,
   Part,
   AgentCard,
   Role,
 } from '../../../index.js';
+import { MessageSendParams, TaskQueryParams, TaskIdParams } from '../../../json_rpc_types.js';
 import {
   RestPart,
   PartInput,

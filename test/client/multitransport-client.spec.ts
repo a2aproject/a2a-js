@@ -2,20 +2,24 @@ import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { Client, ClientConfig, RequestOptions } from '../../src/client/multitransport-client.js';
 import { Transport } from '../../src/client/transports/transport.js';
 import {
-  MessageSendParams,
   TaskPushNotificationConfig,
-  DeleteTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  TaskIdParams,
-  TaskQueryParams,
   Task,
   Message,
   TaskStatusUpdateEvent,
   AgentCard,
-  GetTaskPushNotificationConfigParams,
   Role,
   TaskState,
 } from '../../src/index.js';
+import {
+  CancelTaskRequest,
+  CreateTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  ListTaskPushNotificationConfigRequest,
+  SendMessageRequest,
+  TaskSubscriptionRequest,
+} from '../../src/types/pb/a2a_types.js';
 import { A2AStreamEventData } from '../../src/client/client.js';
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
@@ -95,8 +99,8 @@ describe('Client', () => {
   });
 
   it('should call transport.sendMessage with default blocking=true', async () => {
-    const params: MessageSendParams = {
-      message: {
+    const params: SendMessageRequest = {
+      request: {
         contextId: '123',
         messageId: 'msg1',
         role: Role.ROLE_USER,
@@ -105,6 +109,8 @@ describe('Client', () => {
         extensions: [],
         metadata: {},
       },
+      configuration: undefined,
+      metadata: {},
     };
     const response: Message = {
       messageId: 'abc',
@@ -121,7 +127,12 @@ describe('Client', () => {
 
     const expectedParams = {
       ...params,
-      configuration: { ...params.configuration, blocking: true },
+      configuration: {
+        ...params.configuration,
+        blocking: true,
+        historyLength: 0,
+        acceptedOutputModes: [] as string[],
+      },
     };
     expect(transport.sendMessage.mock.contexts[0]).toBe(transport);
     expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -129,8 +140,8 @@ describe('Client', () => {
   });
 
   it('should call transport.sendMessageStream with blocking=true', async () => {
-    const params: MessageSendParams = {
-      message: {
+    const params: SendMessageRequest = {
+      request: {
         messageId: '1',
         role: Role.ROLE_USER,
         content: [],
@@ -139,6 +150,8 @@ describe('Client', () => {
         extensions: [],
         metadata: {},
       },
+      configuration: undefined,
+      metadata: {},
     };
     const events: A2AStreamEventData[] = [
       {
@@ -169,7 +182,12 @@ describe('Client', () => {
     }
     const expectedParams = {
       ...params,
-      configuration: { ...params.configuration, blocking: true },
+      configuration: {
+        ...params.configuration,
+        blocking: true,
+        historyLength: 0,
+        acceptedOutputModes: [] as string[],
+      },
     };
     expect(transport.sendMessageStream).toHaveBeenCalledTimes(1);
     expect(transport.sendMessageStream).toHaveBeenCalledWith(expectedParams, undefined);
@@ -177,16 +195,21 @@ describe('Client', () => {
   });
 
   it('should call transport.setTaskPushNotificationConfig', async () => {
-    const params: TaskPushNotificationConfig = {
-      name: 'tasks/123/pushNotificationConfigs/abc',
-      pushNotificationConfig: {
-        url: 'http://example.com',
-        id: 'abc',
-        token: 'tok',
-        authentication: undefined,
+    const params: CreateTaskPushNotificationConfigRequest = {
+      parent: 'tasks/123',
+      configId: 'abc',
+      config: {
+        name: 'tasks/123/pushNotificationConfigs/abc',
+        pushNotificationConfig: {
+          url: 'http://example.com',
+          id: 'abc',
+          token: 'tok',
+          authentication: undefined,
+        },
       },
     };
-    transport.setTaskPushNotificationConfig.mockResolvedValue(params);
+    const config = params.config!;
+    transport.setTaskPushNotificationConfig.mockResolvedValue(config);
 
     const result = await client.setTaskPushNotificationConfig(params);
 
@@ -195,13 +218,12 @@ describe('Client', () => {
       params,
       undefined
     );
-    expect(result).to.equal(params);
+    expect(result).to.equal(config);
   });
 
   it('should call transport.getTaskPushNotificationConfig', async () => {
-    const params: GetTaskPushNotificationConfigParams = {
-      id: '123',
-      pushNotificationConfigId: 'abc',
+    const params: GetTaskPushNotificationConfigRequest = {
+      name: 'tasks/123/pushNotificationConfigs/abc',
     };
     const config: TaskPushNotificationConfig = {
       name: 'tasks/123/pushNotificationConfigs/abc',
@@ -225,7 +247,11 @@ describe('Client', () => {
   });
 
   it('should call transport.listTaskPushNotificationConfig', async () => {
-    const params: ListTaskPushNotificationConfigParams = { id: '123' };
+    const params: ListTaskPushNotificationConfigRequest = {
+      parent: 'tasks/123',
+      pageSize: 0,
+      pageToken: '',
+    };
     const configs: TaskPushNotificationConfig[] = [
       {
         name: 'tasks/123/pushNotificationConfigs/abc',
@@ -249,9 +275,8 @@ describe('Client', () => {
   });
 
   it('should call transport.deleteTaskPushNotificationConfig', async () => {
-    const params: DeleteTaskPushNotificationConfigParams = {
-      id: '123',
-      pushNotificationConfigId: 'abc',
+    const params: DeleteTaskPushNotificationConfigRequest = {
+      name: 'tasks/123/pushNotificationConfigs/abc',
     };
     transport.deleteTaskPushNotificationConfig.mockResolvedValue(undefined);
 
@@ -265,7 +290,7 @@ describe('Client', () => {
   });
 
   it('should call transport.getTask', async () => {
-    const params: TaskQueryParams = { id: '123' };
+    const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
     const task: Task = {
       id: '123',
       contextId: 'ctx1',
@@ -283,7 +308,7 @@ describe('Client', () => {
   });
 
   it('should call transport.cancelTask', async () => {
-    const params: TaskIdParams = { id: '123' };
+    const params: CancelTaskRequest = { name: 'tasks/123' };
     const task: Task = {
       id: '123',
       contextId: 'ctx1',
@@ -302,7 +327,7 @@ describe('Client', () => {
   });
 
   it('should call transport.resubscribeTask', async () => {
-    const params: TaskIdParams = { id: '123' };
+    const params: TaskSubscriptionRequest = { name: 'tasks/123' };
     const events: TaskStatusUpdateEvent[] = [
       {
         taskId: '123',
@@ -339,8 +364,8 @@ describe('Client', () => {
     it('should set blocking=false when polling is enabled', async () => {
       const config: ClientConfig = { polling: true };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -349,21 +374,23 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: false },
+        configuration: { blocking: false, historyLength: 0, acceptedOutputModes: [] as string[] },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
 
     it('should set blocking=false when explicitly provided in request', async () => {
       client = new Client(transport, agentCard);
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -372,14 +399,25 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
-        configuration: { blocking: false },
+        configuration: {
+          blocking: false,
+          historyLength: 0,
+          acceptedOutputModes: [] as string[],
+          pushNotification: undefined as any,
+        },
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: false },
+        configuration: {
+          blocking: false,
+          historyLength: 0,
+          acceptedOutputModes: [] as string[],
+          pushNotification: undefined as any,
+        },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
@@ -387,8 +425,8 @@ describe('Client', () => {
     it('should apply acceptedOutputModes', async () => {
       const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -397,13 +435,20 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, acceptedOutputModes: ['application/json'] },
+        configuration: {
+          blocking: true,
+          historyLength: 0,
+          acceptedOutputModes: ['application/json'],
+          pushNotification: undefined as any,
+        },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
@@ -411,8 +456,8 @@ describe('Client', () => {
     it('should use acceptedOutputModes from request when provided', async () => {
       const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -421,14 +466,25 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
-        configuration: { acceptedOutputModes: ['text/plain'] },
+        configuration: {
+          acceptedOutputModes: ['text/plain'],
+          blocking: false,
+          historyLength: 0,
+          pushNotification: undefined as any,
+        },
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, acceptedOutputModes: ['text/plain'] },
+        configuration: {
+          blocking: false,
+          historyLength: 0,
+          acceptedOutputModes: ['text/plain'],
+          pushNotification: undefined as any,
+        },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
     });
@@ -442,8 +498,8 @@ describe('Client', () => {
       };
       const config: ClientConfig = { polling: false, pushNotificationConfig: pushConfig as any };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -452,6 +508,8 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
 
       await client.sendMessage(params);
@@ -460,10 +518,9 @@ describe('Client', () => {
         ...params,
         configuration: {
           blocking: true,
-          pushNotificationConfig: {
-            taskId: params.message.taskId,
-            pushNotificationConfig: pushConfig,
-          },
+          historyLength: 0,
+          acceptedOutputModes: [] as string[],
+          pushNotification: pushConfig,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -486,8 +543,8 @@ describe('Client', () => {
         token: 't',
         authentication: undefined as any,
       };
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -497,11 +554,12 @@ describe('Client', () => {
           metadata: {},
         },
         configuration: {
-          pushNotificationConfig: {
-            taskId: '',
-            pushNotificationConfig: pushConfig as any,
-          },
+          pushNotification: pushConfig as any,
+          blocking: false,
+          historyLength: 0,
+          acceptedOutputModes: [] as string[],
         },
+        metadata: {},
       };
 
       await client.sendMessage(params);
@@ -509,11 +567,10 @@ describe('Client', () => {
       const expectedParams = {
         ...params,
         configuration: {
-          blocking: true,
-          pushNotificationConfig: {
-            taskId: params.message.taskId,
-            pushNotificationConfig: pushConfig,
-          },
+          blocking: false,
+          historyLength: 0,
+          acceptedOutputModes: [] as string[],
+          pushNotification: pushConfig,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -524,8 +581,8 @@ describe('Client', () => {
     it('should fallback to sendMessage if streaming is not supported', async () => {
       agentCard.capabilities.streaming = false;
       client = new Client(transport, agentCard);
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -534,6 +591,8 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
       const response: Message = {
         messageId: '2',
@@ -551,7 +610,12 @@ describe('Client', () => {
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true },
+        configuration: {
+          blocking: true,
+          historyLength: 0,
+          acceptedOutputModes: [] as string[],
+          pushNotification: undefined as any,
+        },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
       expect(yielded.value).to.deep.equal(response);
@@ -565,7 +629,7 @@ describe('Client', () => {
           {
             before: async (args) => {
               if (args.input.method === 'getTask') {
-                args.input.value = { ...args.input.value, metadata: { foo: 'bar' } };
+                args.input.value = { ...args.input.value, historyLength: 99 };
               }
             },
             after: async () => {},
@@ -573,7 +637,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
@@ -587,7 +651,7 @@ describe('Client', () => {
       const result = await client.getTask(params);
 
       expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(
-        { id: '123', metadata: { foo: 'bar' } },
+        { name: 'tasks/123', historyLength: 99 },
         undefined
       );
       expect(result).to.equal(task);
@@ -607,7 +671,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
@@ -636,7 +700,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
@@ -668,7 +732,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
@@ -706,7 +770,7 @@ describe('Client', () => {
           {
             before: async (args) => {
               if (args.input.method === 'getTask') {
-                args.input.value = { ...args.input.value, metadata: { foo: 'bar' } };
+                args.input.value = { ...args.input.value };
               }
             },
             after: async () => {},
@@ -714,7 +778,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
@@ -751,7 +815,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
@@ -802,7 +866,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { name: 'tasks/123', historyLength: 0 };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
@@ -815,8 +879,8 @@ describe('Client', () => {
     });
 
     it('should intercept each iterator item', async () => {
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -825,6 +889,8 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
       const events: A2AStreamEventData[] = [
         {
@@ -875,7 +941,12 @@ describe('Client', () => {
       }
       const expectedParams = {
         ...params,
-        configuration: { ...params.configuration, blocking: true },
+        configuration: {
+          ...params.configuration,
+          blocking: true,
+          historyLength: 0,
+          acceptedOutputModes: [] as string[],
+        },
       };
       expect(transport.sendMessageStream).toHaveBeenCalledExactlyOnceWith(
         expectedParams,
@@ -885,8 +956,8 @@ describe('Client', () => {
     });
 
     it('should intercept after non-streaming sendMessage for sendMessageStream', async () => {
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           messageId: '1',
           role: Role.ROLE_USER,
           content: [],
@@ -895,8 +966,10 @@ describe('Client', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
-      const message: Message = {
+      const responseMock: Message = {
         messageId: '2',
         role: Role.ROLE_AGENT,
         content: [],
@@ -905,7 +978,7 @@ describe('Client', () => {
         extensions: [],
         metadata: {},
       };
-      transport.sendMessage.mockResolvedValue(message);
+      transport.sendMessage.mockResolvedValue(responseMock);
       const config: ClientConfig = {
         interceptors: [
           {
@@ -930,7 +1003,7 @@ describe('Client', () => {
       for await (const event of result) {
         got.push(event);
       }
-      expect(got).to.deep.equal([{ ...message, metadata: { foo: 'bar' } }]);
+      expect(got).to.deep.equal([{ ...responseMock, metadata: { foo: 'bar' } }]);
     });
 
     const iteratorsTests = [
@@ -939,7 +1012,7 @@ describe('Client', () => {
         transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.sendMessageStream,
         caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
           c.sendMessageStream({
-            message: {
+            request: {
               messageId: '1',
               role: Role.ROLE_USER,
               content: [],
@@ -948,12 +1021,15 @@ describe('Client', () => {
               extensions: [],
               metadata: {},
             },
+            configuration: undefined,
+            metadata: {},
           }),
       },
       {
         name: 'resubscribeTask',
         transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.resubscribeTask,
-        caller: (c: Client): AsyncGenerator<A2AStreamEventData> => c.resubscribeTask({ id: '123' }),
+        caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
+          c.resubscribeTask({ name: 'tasks/123' }),
       },
     ];
 

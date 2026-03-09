@@ -1,12 +1,13 @@
 import { JsonRpcTransport } from '../../../src/client/transports/json_rpc_transport.js';
 import { describe, it, beforeEach, expect, vi, type Mock } from 'vitest';
+import { Role } from '../../../src/index.js';
 import {
-  MessageSendParams,
-  Role,
+  CreateTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigRequest,
+  SendMessageRequest,
   TaskPushNotificationConfig,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-} from '../../../src/index.js';
+} from '../../../src/types/pb/a2a_types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
@@ -26,8 +27,8 @@ describe('JsonRpcTransport', () => {
 
   describe('sendMessage', () => {
     it('should correctly add the extension headers', async () => {
-      const messageParams: MessageSendParams = {
-        message: {
+      const messageParams: SendMessageRequest = {
+        request: {
           messageId: 'test-msg-1',
           role: Role.ROLE_USER,
           content: [
@@ -43,6 +44,8 @@ describe('JsonRpcTransport', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: undefined,
       };
 
       const expectedExtensions = 'extension1,extension2';
@@ -81,13 +84,17 @@ describe('JsonRpcTransport', () => {
 
   describe('TaskPushNotificationConfig', () => {
     it('setTaskPushNotificationConfig should send correct params and return config', async () => {
-      const config: TaskPushNotificationConfig = {
-        name: 'tasks/task1/pushNotificationConfigs/config1',
-        pushNotificationConfig: {
-          id: 'config1',
-          url: 'https://webhook.site',
-          token: 'token123',
-          authentication: undefined,
+      const config: CreateTaskPushNotificationConfigRequest = {
+        parent: 'tasks/task1',
+        configId: 'config1',
+        config: {
+          name: 'tasks/task1/pushNotificationConfigs/config1',
+          pushNotificationConfig: {
+            id: 'config1',
+            url: 'https://webhook.site',
+            token: 'token123',
+            authentication: undefined,
+          },
         },
       };
 
@@ -97,7 +104,7 @@ describe('JsonRpcTransport', () => {
             jsonrpc: '2.0',
             result: {
               taskId: 'task1',
-              pushNotificationConfig: config.pushNotificationConfig,
+              pushNotificationConfig: config.config?.pushNotificationConfig,
             },
             id: 1,
           }),
@@ -112,15 +119,14 @@ describe('JsonRpcTransport', () => {
       expect(body.method).toBe('tasks/pushNotificationConfig/set');
       expect(body.params).toEqual({
         taskId: 'task1',
-        pushNotificationConfig: config.pushNotificationConfig,
+        pushNotificationConfig: config.config?.pushNotificationConfig,
       });
-      expect(result).toEqual(config);
+      expect(result).toEqual(config.config);
     });
 
     it('getTaskPushNotificationConfig should return config', async () => {
-      const params: GetTaskPushNotificationConfigParams = {
-        id: 'task1',
-        pushNotificationConfigId: 'config1',
+      const params: GetTaskPushNotificationConfigRequest = {
+        name: 'tasks/task1/pushNotificationConfigs/config1',
       };
 
       const expectedConfig: TaskPushNotificationConfig = {
@@ -152,13 +158,15 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfig/get');
-      expect(body.params).toEqual(params);
+      expect(body.params).toEqual({ id: 'task1', pushNotificationConfigId: 'config1' });
       expect(result).toEqual(expectedConfig);
     });
 
     it('listTaskPushNotificationConfig should return list of configs', async () => {
-      const params: ListTaskPushNotificationConfigParams = {
-        id: 'task1',
+      const params: ListTaskPushNotificationConfigRequest = {
+        parent: 'tasks/task1',
+        pageSize: 0,
+        pageToken: '',
       };
 
       const expectedConfig: TaskPushNotificationConfig = {
@@ -192,7 +200,7 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfig/list');
-      expect(body.params).toEqual(params);
+      expect(body.params).toEqual({ id: 'task1' });
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(expectedConfig);
     });

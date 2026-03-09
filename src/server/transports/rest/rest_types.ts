@@ -5,7 +5,8 @@
  * to support TCK and clients that send snake_case payloads.
  */
 
-import { Part, Message, MessageSendParams, TaskPushNotificationConfig } from '../../../index.js';
+import { Part, Message, TaskPushNotificationConfig } from '../../../index.js';
+import { MessageSendParams } from '../../../json_rpc_types.js';
 
 // ============================================================================
 // Internal Types (camelCase format) - mirrored for input normalizers

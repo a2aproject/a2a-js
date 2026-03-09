@@ -1,17 +1,12 @@
 import { describe, it, beforeEach, afterEach, expect, vi, Mock } from 'vitest';
 import { A2AClient } from '../../src/client/client.js';
 import {
-  MessageSendParams,
-  SendMessageResponse,
-  SendMessageSuccessResponse,
-  ListTaskPushNotificationConfigResponse,
-  ListTaskPushNotificationConfigSuccessResponse,
-  DeleteTaskPushNotificationConfigResponse,
-  DeleteTaskPushNotificationConfigSuccessResponse,
-  JSONRPCErrorResponse,
-  JSONRPCResponse,
-} from '../../src/index.js';
+  DeleteTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigRequest,
+  SendMessageRequest,
+} from '../../src/types/pb/a2a_types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
+import { JSONRPCResponse } from '../../src/json_rpc_types.js';
 import {
   extractRequestId,
   createResponse,
@@ -20,28 +15,6 @@ import {
   createMockFetch,
 } from './util.js';
 import { Role } from '../../src/types/pb/a2a_types.js';
-
-// Helper functions to check if responses are success responses
-function isSuccessResponse(response: SendMessageResponse): response is SendMessageSuccessResponse {
-  return 'result' in response;
-}
-
-function isListConfigSuccessResponse(
-  response: ListTaskPushNotificationConfigResponse
-): response is ListTaskPushNotificationConfigSuccessResponse {
-  return 'result' in response;
-}
-
-function isDeleteConfigSuccessResponse(
-  response: DeleteTaskPushNotificationConfigResponse
-): response is DeleteTaskPushNotificationConfigSuccessResponse {
-  return 'result' in response;
-}
-
-function isErrorResponse(response: any): response is JSONRPCErrorResponse {
-  return 'error' in response;
-}
-
 describe('A2AClient Basic Tests', () => {
   let client: A2AClient;
   let mockFetch: Mock & { capturedAuthHeaders: string[] };
@@ -194,8 +167,8 @@ describe('A2AClient Basic Tests', () => {
 
   describe('Message Sending', () => {
     it('should send message successfully', async () => {
-      const messageParams: MessageSendParams = {
-        message: {
+      const messageParams: SendMessageRequest = {
+        request: {
           messageId: 'test-msg-1',
           role: Role.ROLE_USER,
           content: [
@@ -211,6 +184,8 @@ describe('A2AClient Basic Tests', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
 
       const result = await client.sendMessage(messageParams);
@@ -231,10 +206,8 @@ describe('A2AClient Basic Tests', () => {
       expect(rpcCall[1].body).to.include('"method":"message/send"');
 
       // Verify the result
-      expect(isSuccessResponse(result)).to.be.true;
-      if (isSuccessResponse(result)) {
-        expect(result.result.payload.value).to.have.property('messageId', 'msg-123');
-      }
+      expect(result).to.exist;
+      expect(result).to.have.property('messageId', 'msg-123');
     });
 
     it('should handle message sending errors', async () => {
@@ -268,8 +241,8 @@ describe('A2AClient Basic Tests', () => {
         fetchImpl: errorFetch,
       });
 
-      const messageParams: MessageSendParams = {
-        message: {
+      const messageParams: SendMessageRequest = {
+        request: {
           messageId: 'test-msg-error',
           role: Role.ROLE_USER,
           content: [
@@ -285,6 +258,8 @@ describe('A2AClient Basic Tests', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
 
       try {
@@ -394,8 +369,8 @@ describe('A2AClient Basic Tests', () => {
       expect(mockFetchForStatic.mock.calls.length).to.equal(0);
 
       // Test sending a message to ensure serviceEndpointUrl is set
-      const messageParams: MessageSendParams = {
-        message: {
+      const messageParams: SendMessageRequest = {
+        request: {
           messageId: 'test-msg-static',
           role: Role.ROLE_USER,
           content: [
@@ -411,6 +386,8 @@ describe('A2AClient Basic Tests', () => {
           extensions: [],
           metadata: {},
         },
+        configuration: undefined,
+        metadata: {},
       };
 
       const result = await clientFromCard.sendMessage(messageParams);
@@ -419,7 +396,7 @@ describe('A2AClient Basic Tests', () => {
       expect(mockFetchForStatic.mock.calls.length).to.equal(1);
       const rpcCall = mockFetchForStatic.mock.calls[0];
       expect(rpcCall[0]).to.equal('https://static-agent.example.com/api');
-      expect(isSuccessResponse(result)).to.be.true;
+      expect(result).to.exist;
     });
 
     it('should throw an error if agent card is missing url in constructor', () => {
@@ -596,16 +573,13 @@ describe('Extension Methods', () => {
         message: 'Extension method error: Invalid parameters',
       };
 
-      const response = await errorClient.callExtensionMethod(extensionMethod, customParams);
-
-      // Check that we got a JSON-RPC error response
-      expect(isErrorResponse(response)).to.be.true;
-      if (isErrorResponse(response)) {
-        // Verify the error details match what we expect
-        expect(response.error.code).to.equal(expectedError.code);
-        expect(response.error.message).to.equal(expectedError.message);
-      } else {
-        expect.fail('Expected JSON-RPC error response but got success response');
+      try {
+        await errorClient.callExtensionMethod(extensionMethod, customParams);
+        expect.fail('Expected error to be thrown');
+      } catch (error) {
+        expect(error).to.be.instanceOf(Error);
+        expect((error as any).errorResponse.error.code).to.equal(expectedError.code);
+        expect((error as any).errorResponse.error.message).to.equal(expectedError.message);
       }
     });
   });
@@ -628,10 +602,12 @@ describe('Push Notification Config Operations', () => {
 
   describe('listTaskPushNotificationConfig', () => {
     it('should list push notification configurations successfully', async () => {
-      // Define mock params
-      const params = {
-        id: 'test-task-123',
+      const params: ListTaskPushNotificationConfigRequest = {
+        parent: 'tasks/test-task-123',
+        pageSize: 0,
+        pageToken: '',
       };
+      const rpcParams = { id: 'test-task-123' };
 
       // Define mock response data for the push notification configs
       const mockConfigsData = [
@@ -663,12 +639,12 @@ describe('Push Notification Config Operations', () => {
           const body = JSON.parse(options?.body as string);
           if (body.method === 'tasks/pushNotificationConfig/list') {
             // Verify the params were sent correctly
-            expect(body.params).to.deep.equal(params);
+            expect(body.params).to.deep.equal(rpcParams);
 
             // Return a successful response with mock configs
             // The result is an array of TaskPushNotificationConfig objects
             const configs = mockConfigsData.map((config) => ({
-              taskId: params.id,
+              taskId: rpcParams.id,
               pushNotificationConfig: config,
             }));
             return createResponse(requestId, configs);
@@ -686,39 +662,41 @@ describe('Push Notification Config Operations', () => {
       // Call the method and verify the result
       const result = await testClient.listTaskPushNotificationConfig(params);
 
-      // Verify the result is a success response
-      expect(isListConfigSuccessResponse(result)).to.be.true;
-      if (isListConfigSuccessResponse(result)) {
-        // Define expected result structure
-        const expectedConfigs = [
-          {
-            taskId: params.id,
-            pushNotificationConfig: {
-              id: 'config-1',
-              url: 'https://notify1.example.com/webhook',
-              token: 'token-1',
-            },
-          },
-          {
-            taskId: params.id,
-            pushNotificationConfig: {
-              id: 'config-2',
-              url: 'https://notify2.example.com/webhook',
-              token: 'token-2',
-            },
-          },
-        ];
+      // Verify the result is successful
+      expect(result).to.exist;
+      expect(Array.isArray(result)).to.be.true;
 
-        // Use deep.equal for more readable assertion
-        expect(result.result).to.deep.equal(expectedConfigs);
-      }
+      // Define expected result structure
+      const expectedConfigs = [
+        {
+          name: `tasks/${rpcParams.id}/pushNotificationConfigs/config-1`,
+          pushNotificationConfig: {
+            id: 'config-1',
+            url: 'https://notify1.example.com/webhook',
+            token: 'token-1',
+          },
+        },
+        {
+          name: `tasks/${rpcParams.id}/pushNotificationConfigs/config-2`,
+          pushNotificationConfig: {
+            id: 'config-2',
+            url: 'https://notify2.example.com/webhook',
+            token: 'token-2',
+          },
+        },
+      ];
+
+      // Use deep.equal for more readable assertion
+      expect(result).to.deep.equal(expectedConfigs);
     });
   });
 
   describe('deleteTaskPushNotificationConfig', () => {
     it('should delete push notification configuration successfully', async () => {
-      // Define mock params
-      const params = {
+      const params: DeleteTaskPushNotificationConfigRequest = {
+        name: 'tasks/test-task-123/pushNotificationConfigs/config-to-delete',
+      };
+      const rpcParams = {
         id: 'test-task-123',
         pushNotificationConfigId: 'config-to-delete',
       };
@@ -739,7 +717,7 @@ describe('Push Notification Config Operations', () => {
           const body = JSON.parse(options?.body as string);
           if (body.method === 'tasks/pushNotificationConfig/delete') {
             // Verify the params were sent correctly
-            expect(body.params).to.deep.equal(params);
+            expect(body.params).to.deep.equal(rpcParams);
 
             // Return a successful response,
             // 'result' should just be 'null' according to the spec:
@@ -759,11 +737,8 @@ describe('Push Notification Config Operations', () => {
       // Call the method and verify the result
       const result = await testClient.deleteTaskPushNotificationConfig(params);
 
-      // Verify the result is a success response
-      expect(isDeleteConfigSuccessResponse(result)).to.be.true;
-      if (isDeleteConfigSuccessResponse(result)) {
-        expect(result.result).to.be.null;
-      }
+      // Verify the result is successful (void return type means no error was thrown)
+      expect(result).to.be.undefined;
     });
   });
 });

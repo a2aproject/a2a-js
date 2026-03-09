@@ -19,15 +19,18 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
-import * as a2a from '../../types/pb/a2a_types.js';
-import { ToProto } from '../../types/converters/to_proto.js';
 import {
-  Message,
+  AgentCard,
+  ListTaskPushNotificationConfigResponse,
+  MessageFns,
+  SendMessageResponse,
+  StreamResponse,
   Task,
-  TaskArtifactUpdateEvent,
-  TaskStatusUpdateEvent,
-  MessageSendParams,
-} from '../../index.js';
+  TaskPushNotificationConfig,
+} from '../../types/pb/a2a_types.js';
+import { ToProto } from '../../types/converters/to_proto.js';
+import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
+import { MessageSendParams } from '../../json_rpc_types.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -147,7 +150,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     statusCode: number,
     context: ServerCallContext,
     body?: T,
-    responseType?: a2a.MessageFns<T>
+    responseType?: MessageFns<T>
   ): void => {
     setExtensionsHeader(res, context);
     res.status(statusCode);
@@ -208,12 +211,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       // Write first event
       if (!firstResult.done) {
         const proto = ToProto.messageStreamResult(firstResult.value);
-        const result = a2a.StreamResponse.toJSON(proto);
+        const result = StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
       for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
         const proto = ToProto.messageStreamResult(event);
-        const result = a2a.StreamResponse.toJSON(proto);
+        const result = StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
     } catch (streamError: unknown) {
@@ -292,7 +295,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
       const protoResult = ToProto.agentCard(result);
-      sendResponse<a2a.AgentCard>(res, HTTP_STATUS.OK, context, protoResult, a2a.AgentCard);
+      sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, protoResult, AgentCard);
     })
   );
 
@@ -313,12 +316,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.sendMessage(req.body as MessageSendParams, context);
       const protoResult = ToProto.messageSendResult(result);
-      sendResponse<a2a.SendMessageResponse>(
+      sendResponse<SendMessageResponse>(
         res,
         HTTP_STATUS.CREATED,
         context,
         protoResult,
-        a2a.SendMessageResponse
+        SendMessageResponse
       );
     })
   );
@@ -369,7 +372,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.query.historyLength ?? req.query.history_length
       );
       const protoResult = ToProto.task(result);
-      sendResponse<a2a.Task>(res, HTTP_STATUS.OK, context, protoResult, a2a.Task);
+      sendResponse<Task>(res, HTTP_STATUS.OK, context, protoResult, Task);
     })
   );
 
@@ -390,7 +393,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
       const protoResult = ToProto.task(result);
-      sendResponse<a2a.Task>(res, HTTP_STATUS.ACCEPTED, context, protoResult, a2a.Task);
+      sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, protoResult, Task);
     })
   );
 
@@ -436,12 +439,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       };
       const result = await restTransportHandler.setTaskPushNotificationConfig(config, context);
       const protoResult = ToProto.taskPushNotificationConfig(result);
-      sendResponse<a2a.TaskPushNotificationConfig>(
+      sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.CREATED,
         context,
         protoResult,
-        a2a.TaskPushNotificationConfig
+        TaskPushNotificationConfig
       );
     })
   );
@@ -464,12 +467,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context
       );
       const protoResult = ToProto.listTaskPushNotificationConfig(result);
-      sendResponse<a2a.ListTaskPushNotificationConfigResponse>(
+      sendResponse<ListTaskPushNotificationConfigResponse>(
         res,
         HTTP_STATUS.OK,
         context,
         protoResult,
-        a2a.ListTaskPushNotificationConfigResponse
+        ListTaskPushNotificationConfigResponse
       );
     })
   );
@@ -494,12 +497,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context
       );
       const protoResult = ToProto.taskPushNotificationConfig(result);
-      sendResponse<a2a.TaskPushNotificationConfig>(
+      sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.OK,
         context,
         protoResult,
-        a2a.TaskPushNotificationConfig
+        TaskPushNotificationConfig
       );
     })
   );

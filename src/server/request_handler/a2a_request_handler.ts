@@ -1,17 +1,19 @@
 import {
   Message,
   AgentCard,
-  MessageSendParams,
   Task,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
+  TaskPushNotificationConfig,
+} from '../../index.js';
+import {
+  MessageSendParams,
   TaskQueryParams,
   TaskIdParams,
-  TaskPushNotificationConfig,
   GetTaskPushNotificationConfigParams,
   ListTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigParams,
-} from '../../index.js';
+} from '../../json_rpc_types.js';
 import { ServerCallContext } from '../context.js';
 
 export interface A2ARequestHandler {

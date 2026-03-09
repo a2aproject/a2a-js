@@ -1,33 +1,24 @@
 import {
   AgentCard,
-  JSONRPCResponse,
-  MessageSendParams,
-  SendMessageResponse,
-  TaskQueryParams,
-  GetTaskResponse,
-  TaskIdParams,
-  CancelTaskResponse,
   TaskPushNotificationConfig, // Renamed from PushNotificationConfigParams for direct schema alignment
-  SetTaskPushNotificationConfigResponse,
-  GetTaskPushNotificationConfigResponse,
-  ListTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigResponse,
-  DeleteTaskPushNotificationConfigResponse,
-  DeleteTaskPushNotificationConfigParams,
   Message,
   Task,
   TaskArtifactUpdateEvent,
   TaskStatusUpdateEvent,
-  A2ARequest,
-  JSONRPCErrorResponse,
-  JsonRpcTaskPushNotificationConfig,
 } from '../index.js';
 import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 import { RequestOptions } from './multitransport-client.js';
-import { FromProto } from '../types/converters/from_proto.js';
-import { ToProto } from '../types/converters/to_proto.js';
-import { extractTaskId } from '../types/converters/id_decoding.js';
+import {
+  CancelTaskRequest,
+  CreateTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  ListTaskPushNotificationConfigRequest,
+  SendMessageRequest,
+  TaskSubscriptionRequest,
+} from '../types/pb/a2a_types.js';
 
 export type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
@@ -156,13 +147,9 @@ export class A2AClient {
    * @param params The parameters for sending the message, including the message content and configuration.
    * @returns A Promise resolving to SendMessageResponse, which can be a Message, Task, or an error.
    */
-  public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
-    const resultFn: JsonRpcCaller<MessageSendParams, SendMessageResponse> = async (t, p, id) => {
-      const result = await t.sendMessage(p, A2AClient.emptyOptions, id);
-      return ToProto.messageSendResult(result);
-    };
-
-    return await this.invokeJsonRpc<MessageSendParams, SendMessageResponse>(resultFn, params);
+  public async sendMessage(params: SendMessageRequest): Promise<SendMessageResult> {
+    const transport = await this._getOrCreateTransport();
+    return transport.sendMessage(params, A2AClient.emptyOptions, this.requestIdCounter++);
   }
 
   /**
@@ -175,7 +162,7 @@ export class A2AClient {
    * The generator throws an error if streaming is not supported or if an HTTP/SSE error occurs.
    */
   public async *sendMessageStream(
-    params: MessageSendParams
+    params: SendMessageRequest
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const agentCard = await this.agentCardPromise; // Ensure agent card is fetched
     if (!agentCard.capabilities?.streaming) {
@@ -195,31 +182,24 @@ export class A2AClient {
    * @returns A Promise resolving to SetTaskPushNotificationConfigResponse.
    */
   public async setTaskPushNotificationConfig(
-    params: TaskPushNotificationConfig
-  ): Promise<SetTaskPushNotificationConfigResponse> {
+    params: CreateTaskPushNotificationConfigRequest
+  ): Promise<TaskPushNotificationConfig> {
     const agentCard = await this.agentCardPromise;
     if (!agentCard.capabilities?.pushNotifications) {
       throw new Error(
         'Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).'
       );
     }
-    const taskId = extractTaskId(params.name);
-    if (!params.pushNotificationConfig) {
+    if (!params.config?.pushNotificationConfig) {
       throw new Error('Push notification configuration is required.');
     }
 
-    const jsonRpcParams: JsonRpcTaskPushNotificationConfig = {
-      taskId: taskId,
-      pushNotificationConfig: params.pushNotificationConfig,
-    };
-
-    return await this.invokeJsonRpc<
-      JsonRpcTaskPushNotificationConfig,
-      SetTaskPushNotificationConfigResponse
-    >(async (t, _p, id) => {
-      const result = await t.setTaskPushNotificationConfig(params, A2AClient.emptyOptions, id);
-      return FromProto.jsonRpcTaskPushNotificationConfig(result);
-    }, jsonRpcParams);
+    const transport = await this._getOrCreateTransport();
+    return transport.setTaskPushNotificationConfig(
+      params,
+      A2AClient.emptyOptions,
+      this.requestIdCounter++
+    );
   }
 
   /**
@@ -228,14 +208,13 @@ export class A2AClient {
    * @returns A Promise resolving to GetTaskPushNotificationConfigResponse.
    */
   public async getTaskPushNotificationConfig(
-    params: TaskIdParams
-  ): Promise<GetTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<TaskIdParams, GetTaskPushNotificationConfigResponse>(
-      async (t, p, id) => {
-        const result = await t.getTaskPushNotificationConfig(p, A2AClient.emptyOptions, id);
-        return FromProto.jsonRpcTaskPushNotificationConfig(result);
-      },
-      params
+    params: GetTaskPushNotificationConfigRequest
+  ): Promise<TaskPushNotificationConfig> {
+    const transport = await this._getOrCreateTransport();
+    return transport.getTaskPushNotificationConfig(
+      params,
+      A2AClient.emptyOptions,
+      this.requestIdCounter++
     );
   }
 
@@ -245,15 +224,14 @@ export class A2AClient {
    * @returns A Promise resolving to ListTaskPushNotificationConfigResponse.
    */
   public async listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigParams
-  ): Promise<ListTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<
-      ListTaskPushNotificationConfigParams,
-      ListTaskPushNotificationConfigResponse
-    >(async (t, p, id) => {
-      const result = await t.listTaskPushNotificationConfig(p, A2AClient.emptyOptions, id);
-      return result.map(FromProto.jsonRpcTaskPushNotificationConfig);
-    }, params);
+    params: ListTaskPushNotificationConfigRequest
+  ): Promise<TaskPushNotificationConfig[]> {
+    const transport = await this._getOrCreateTransport();
+    return transport.listTaskPushNotificationConfig(
+      params,
+      A2AClient.emptyOptions,
+      this.requestIdCounter++
+    );
   }
 
   /**
@@ -262,12 +240,14 @@ export class A2AClient {
    * @returns A Promise resolving to DeleteTaskPushNotificationConfigResponse.
    */
   public async deleteTaskPushNotificationConfig(
-    params: DeleteTaskPushNotificationConfigParams
-  ): Promise<DeleteTaskPushNotificationConfigResponse> {
-    return await this.invokeJsonRpc<
-      DeleteTaskPushNotificationConfigParams,
-      DeleteTaskPushNotificationConfigResponse
-    >((t, p, id) => t.deleteTaskPushNotificationConfig(p, A2AClient.emptyOptions, id), params);
+    params: DeleteTaskPushNotificationConfigRequest
+  ): Promise<void> {
+    const transport = await this._getOrCreateTransport();
+    return transport.deleteTaskPushNotificationConfig(
+      params,
+      A2AClient.emptyOptions,
+      this.requestIdCounter++
+    );
   }
 
   /**
@@ -275,11 +255,9 @@ export class A2AClient {
    * @param params Parameters containing the taskId and optional historyLength.
    * @returns A Promise resolving to GetTaskResponse, which contains the Task object or an error.
    */
-  public async getTask(params: TaskQueryParams): Promise<GetTaskResponse> {
-    return await this.invokeJsonRpc<TaskQueryParams, GetTaskResponse>(
-      (t, p, id) => t.getTask(p, A2AClient.emptyOptions, id),
-      params
-    );
+  public async getTask(params: GetTaskRequest): Promise<Task> {
+    const transport = await this._getOrCreateTransport();
+    return transport.getTask(params, A2AClient.emptyOptions, this.requestIdCounter++);
   }
 
   /**
@@ -287,11 +265,9 @@ export class A2AClient {
    * @param params Parameters containing the taskId.
    * @returns A Promise resolving to CancelTaskResponse, which contains the updated Task object or an error.
    */
-  public async cancelTask(params: TaskIdParams): Promise<CancelTaskResponse> {
-    return await this.invokeJsonRpc<TaskIdParams, CancelTaskResponse>(
-      (t, p, id) => t.cancelTask(p, A2AClient.emptyOptions, id),
-      params
-    );
+  public async cancelTask(params: CancelTaskRequest): Promise<Task> {
+    const transport = await this._getOrCreateTransport();
+    return transport.cancelTask(params, A2AClient.emptyOptions, this.requestIdCounter++);
   }
 
   /**
@@ -302,26 +278,16 @@ export class A2AClient {
    * @param params Extension paramters defined in the AgentCard's extensions.
    * @returns A Promise that resolves to the RPC response.
    */
-  public async callExtensionMethod<TExtensionParams, TExtensionResponse extends JSONRPCResponse>(
+  public async callExtensionMethod<TExtensionParams, TExtensionResponse>(
     method: string,
     params: TExtensionParams
   ) {
     const transport = await this._getOrCreateTransport();
-    try {
-      return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(
-        method,
-        params,
-        this.requestIdCounter++
-      );
-    } catch (e) {
-      // For compatibility, return JSON-RPC errors as errors instead of throwing transport-agnostic errors
-      // produced by JsonRpcTransport.
-      const errorResponse = extractJSONRPCError(e);
-      if (errorResponse) {
-        return errorResponse as TExtensionResponse;
-      }
-      throw e;
-    }
+    return await transport.callExtensionMethod<TExtensionParams, TExtensionResponse>(
+      method,
+      params,
+      this.requestIdCounter++
+    );
   }
 
   /**
@@ -332,7 +298,7 @@ export class A2AClient {
    * @returns An AsyncGenerator yielding A2AStreamEventData (Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent).
    */
   public async *resubscribeTask(
-    params: TaskIdParams
+    params: TaskSubscriptionRequest
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const agentCard = await this.agentCardPromise;
     if (!agentCard.capabilities?.streaming) {
@@ -459,54 +425,4 @@ export class A2AClient {
     }
     return this.serviceEndpointUrl;
   }
-
-  private async invokeJsonRpc<TParams extends JsonRpcParams, TResponse extends JSONRPCResponse>(
-    caller: JsonRpcCaller<TParams, TResponse>,
-    params?: TParams
-  ): Promise<TResponse> {
-    const transport = await this._getOrCreateTransport();
-    const requestId = this.requestIdCounter++;
-    try {
-      const result = await caller(transport, params, requestId);
-      return {
-        id: requestId,
-        jsonrpc: '2.0',
-        result: result ?? null, // JSON-RPC requires result property on success, it will be null for "void" methods.
-      } as TResponse;
-    } catch (e) {
-      // For compatibility, return JSON-RPC errors as response objects instead of throwing transport-agnostic errors
-      // produced by JsonRpcTransport.
-      const errorResponse = extractJSONRPCError(e);
-      if (errorResponse) {
-        return errorResponse as TResponse;
-      }
-      throw e;
-    }
-  }
 }
-
-function extractJSONRPCError(error: unknown): JSONRPCErrorResponse {
-  if (
-    error instanceof Object &&
-    'errorResponse' in error &&
-    error.errorResponse instanceof Object &&
-    'jsonrpc' in error.errorResponse &&
-    error.errorResponse.jsonrpc === '2.0' &&
-    'error' in error.errorResponse &&
-    error.errorResponse.error !== null
-  ) {
-    return error.errorResponse as JSONRPCErrorResponse;
-  } else {
-    return undefined;
-  }
-}
-
-// Utility unexported types to properly factor out common "compatibility" logic via invokeJsonRpc.
-type ParamsOf<T> = T extends { params: unknown } ? T['params'] : undefined;
-type ResultOf<T> = T extends { result: unknown } ? T['result'] : void;
-type JsonRpcParams = ParamsOf<A2ARequest>;
-type JsonRpcCaller<TParams extends JsonRpcParams, TResponse extends JSONRPCResponse> = (
-  transport: JsonRpcTransport,
-  params: TParams,
-  idOverride: number
-) => Promise<ResultOf<TResponse>>;

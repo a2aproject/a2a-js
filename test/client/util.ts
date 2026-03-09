@@ -168,17 +168,24 @@ export function createMessageParams(
   const role = options.role ?? 'user';
 
   return {
-    message: {
-      kind: 'message',
+    request: {
       messageId: messageId,
-      role: role,
-      parts: [
+      role: role === 'user' ? Role.ROLE_USER : Role.ROLE_AGENT,
+      content: [
         {
-          kind: 'text',
-          text: text,
+          part: {
+            $case: 'text',
+            value: text,
+          },
         },
       ],
+      contextId: 'context-123',
+      taskId: 'task-123',
+      metadata: {},
+      extensions: [],
     },
+    configuration: undefined,
+    metadata: undefined,
   };
 }
 

@@ -5,8 +5,6 @@ import crypto from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 
 import {
-  // Specific Params/Payload types used by the CLI
-  MessageSendParams, // Changed from TaskSendParams
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   Message,
@@ -15,7 +13,7 @@ import {
   Part, // Added for explicit Part typing
   AGENT_CARD_PATH,
 } from '../index.js';
-import { TaskState, Role, taskStateToJSON } from '../types/pb/a2a_types.js';
+import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/pb/a2a_types.js';
 
 import {
   AuthenticationHandler,
@@ -341,8 +339,10 @@ async function main() {
       messagePayload.contextId = currentContextId;
     }
 
-    const params: MessageSendParams = {
-      message: messagePayload,
+    const params: SendMessageRequest = {
+      request: messagePayload,
+      configuration: undefined,
+      metadata: {},
       // Optional: configuration for streaming, blocking, etc.
       // configuration: {
       //   acceptedOutputModes: ['text/plain', 'application/json'], // Example

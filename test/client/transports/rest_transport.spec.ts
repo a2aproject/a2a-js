@@ -127,13 +127,13 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.getTask({ id: taskId });
+      const result = await transport.getTask({ name: `tasks/${taskId}`, historyLength: 0 });
 
       expect(result).to.deep.equal(createMockTask(taskId));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}`);
+      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}?historyLength=0`);
       expect(options?.method).to.equal('GET');
     });
 
@@ -144,7 +144,7 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.getTask({ id: taskId, historyLength });
+      const result = await transport.getTask({ name: `tasks/${taskId}`, historyLength });
 
       expect(result).to.deep.equal(createMockTask(taskId));
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -157,7 +157,9 @@ describe('RestTransport', () => {
     it('should throw TaskNotFoundError when task does not exist', async () => {
       mockFetch.mockResolvedValue(createRestErrorResponse(-32001, 'Task not found', 404));
 
-      await expect(transport.getTask({ id: 'nonexistent' })).rejects.toThrow(TaskNotFoundError);
+      await expect(
+        transport.getTask({ name: 'tasks/nonexistent', historyLength: 0 })
+      ).rejects.toThrow(TaskNotFoundError);
     });
   });
 
@@ -168,7 +170,7 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.cancelTask({ id: taskId });
+      const result = await transport.cancelTask({ name: `tasks/${taskId}` });
 
       expect(result).to.deep.equal(createMockTask(taskId, TaskState.TASK_STATE_CANCELLED));
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -181,7 +183,7 @@ describe('RestTransport', () => {
     it('should throw TaskNotCancelableError on -32002', async () => {
       mockFetch.mockResolvedValue(createRestErrorResponse(-32002, 'Task cannot be canceled', 409));
 
-      await expect(transport.cancelTask({ id: 'task-123' })).rejects.toThrow(
+      await expect(transport.cancelTask({ name: 'tasks/task-123' })).rejects.toThrow(
         TaskNotCancelableError
       );
     });
@@ -249,7 +251,11 @@ describe('RestTransport', () => {
           createRestResponse(ToProto.taskPushNotificationConfig(mockProtoConfig))
         );
 
-        const result = await transport.setTaskPushNotificationConfig(mockConfig);
+        const result = await transport.setTaskPushNotificationConfig({
+          parent: `tasks/${taskId}`,
+          configId,
+          config: mockConfig,
+        });
 
         expect(result).to.deep.equal(mockConfig);
         expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -264,9 +270,13 @@ describe('RestTransport', () => {
           createRestErrorResponse(-32003, 'Push notifications not supported', 400)
         );
 
-        await expect(transport.setTaskPushNotificationConfig(mockConfig)).rejects.toThrow(
-          PushNotificationNotSupportedError
-        );
+        await expect(
+          transport.setTaskPushNotificationConfig({
+            parent: `tasks/${taskId}`,
+            configId,
+            config: mockConfig,
+          })
+        ).rejects.toThrow(PushNotificationNotSupportedError);
       });
     });
 
@@ -277,8 +287,7 @@ describe('RestTransport', () => {
         );
 
         const result = await transport.getTaskPushNotificationConfig({
-          id: taskId,
-          pushNotificationConfigId: configId,
+          name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
         });
 
         expect(result).to.deep.equal(mockConfig);
@@ -287,15 +296,6 @@ describe('RestTransport', () => {
         const [url, options] = mockFetch.mock.calls[0];
         expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
         expect(options?.method).to.equal('GET');
-      });
-
-      it('should throw error when pushNotificationConfigId is missing', async () => {
-        await expect(
-          transport.getTaskPushNotificationConfig({
-            id: taskId,
-            pushNotificationConfigId: undefined as unknown as string,
-          })
-        ).rejects.toThrow('pushNotificationConfigId is required');
       });
     });
 
@@ -336,7 +336,11 @@ describe('RestTransport', () => {
           )
         );
 
-        const result = await transport.listTaskPushNotificationConfig({ id: taskId });
+        const result = await transport.listTaskPushNotificationConfig({
+          parent: `tasks/${taskId}`,
+          pageSize: 0,
+          pageToken: '',
+        });
 
         expect(result).to.deep.equal(expectedConfigs);
         expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -352,8 +356,7 @@ describe('RestTransport', () => {
         mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
 
         await transport.deleteTaskPushNotificationConfig({
-          id: taskId,
-          pushNotificationConfigId: configId,
+          name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
         });
 
         expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -374,13 +377,17 @@ describe('RestTransport', () => {
         })
       );
 
-      await expect(transport.getTask({ id: 'task-123' })).rejects.toThrow('HTTP error');
+      await expect(transport.getTask({ name: 'tasks/task-123', historyLength: 0 })).rejects.toThrow(
+        'HTTP error'
+      );
     });
 
     it('should handle network errors', async () => {
       mockFetch.mockRejectedValue(new Error('Network error'));
 
-      await expect(transport.getTask({ id: 'task-123' })).rejects.toThrow('Network error');
+      await expect(transport.getTask({ name: 'tasks/task-123', historyLength: 0 })).rejects.toThrow(
+        'Network error'
+      );
     });
   });
 });

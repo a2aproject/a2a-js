@@ -164,7 +164,9 @@ describe('Client E2E tests', () => {
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual = await client.sendMessage({
-            message: createTestMessage('1', 'test'),
+            request: createTestMessage('1', 'test'),
+            configuration: undefined,
+            metadata: {},
           });
           expect(removeUndefinedFields(actual)).to.deep.equal(removeUndefinedFields(expected));
         });
@@ -215,7 +217,9 @@ describe('Client E2E tests', () => {
 
           const actual: A2AStreamEventData[] = [];
           for await (const message of client.sendMessageStream({
-            message: createTestMessage('1', 'test'),
+            request: createTestMessage('1', 'test'),
+            configuration: undefined,
+            metadata: {},
           })) {
             actual.push(message);
           }
@@ -231,7 +235,11 @@ describe('Client E2E tests', () => {
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual: A2AStreamEventData[] = [];
-          for await (const message of client.sendMessageStream({ message: requestMessage })) {
+          for await (const message of client.sendMessageStream({
+            request: requestMessage,
+            configuration: undefined,
+            metadata: {},
+          })) {
             actual.push(message);
           }
 

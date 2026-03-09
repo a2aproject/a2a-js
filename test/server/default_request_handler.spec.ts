@@ -6,7 +6,6 @@ import {
   InMemoryTaskStore,
   DefaultRequestHandler,
   ExecutionEventQueue,
-  A2AError,
   InMemoryPushNotificationStore,
   RequestContext,
   ExecutionEventBus,
@@ -14,14 +13,11 @@ import {
   ExtendedAgentCardProvider,
   User,
 } from '../../src/server/index.js';
+import { A2AError } from '../../src/server/index.js';
 import {
   AgentCard,
   Artifact,
-  DeleteTaskPushNotificationConfigParams,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
   Message,
-  MessageSendParams,
   PushNotificationConfig,
   Task,
   TaskState,
@@ -29,6 +25,12 @@ import {
   Role,
   TaskPushNotificationConfig,
 } from '../../src/index.js';
+import {
+  DeleteTaskPushNotificationConfigParams,
+  GetTaskPushNotificationConfigParams,
+  ListTaskPushNotificationConfigParams,
+  MessageSendParams,
+} from '../../src/json_rpc_types.js';
 type TextPart = { $case: 'text'; value: string };
 import {
   DefaultExecutionEventBusManager,

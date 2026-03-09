@@ -5,7 +5,7 @@ import express, {
   NextFunction,
   RequestHandler,
 } from 'express';
-import { JSONRPCErrorResponse, JSONRPCResponse } from '../../index.js';
+import { JSONRPCErrorResponse, JSONRPCResponse } from '../../json_rpc_types.js';
 import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
