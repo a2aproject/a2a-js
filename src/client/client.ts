@@ -26,6 +26,7 @@ import { AGENT_CARD_PATH } from '../constants.js';
 import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 import { RequestOptions } from './multitransport-client.js';
 import { FromProto } from '../types/converters/from_proto.js';
+import { ToProto } from '../types/converters/to_proto.js';
 
 export type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
@@ -157,10 +158,7 @@ export class A2AClient {
   public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
     const resultFn: JsonRpcCaller<MessageSendParams, SendMessageResponse> = async (t, p, id) => {
       const result = await t.sendMessage(p, A2AClient.emptyOptions, id);
-      if ('messageId' in result) {
-        return { payload: { $case: 'msg', value: result } };
-      }
-      return { payload: { $case: 'task', value: result } };
+      return ToProto.messageSendResult(result);
     };
 
     return await this.invokeJsonRpc<MessageSendParams, SendMessageResponse>(resultFn, params);
