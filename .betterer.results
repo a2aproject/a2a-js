@@ -5,9 +5,9 @@
 //
 exports[`TypeScript Strict Mode`] = {
   value: `{
-    "src/client/client.ts:2006156515": [
-      [472, 45, 6, "tsc: Argument of type \'TParams | undefined\' is not assignable to parameter of type \'TParams\'.\\n  \'TParams | undefined\' is assignable to the constraint of type \'TParams\', but \'TParams\' could be instantiated with a different subtype of constraint \'JsonRpcParams\'.\\n    Type \'undefined\' is not assignable to type \'TParams\'.\\n      \'undefined\' is assignable to the constraint of type \'TParams\', but \'TParams\' could be instantiated with a different subtype of constraint \'JsonRpcParams\'.", "1898504825"],
-      [502, 4, 6, "tsc: Type \'undefined\' is not assignable to type \'JSONRPCErrorResponse\'.", "2123913871"]
+    "src/client/client.ts:2078401924": [
+      [469, 45, 6, "tsc: Argument of type \'TParams | undefined\' is not assignable to parameter of type \'TParams\'.\\n  \'TParams | undefined\' is assignable to the constraint of type \'TParams\', but \'TParams\' could be instantiated with a different subtype of constraint \'JsonRpcParams\'.\\n    Type \'undefined\' is not assignable to type \'TParams\'.\\n      \'undefined\' is assignable to the constraint of type \'TParams\', but \'TParams\' could be instantiated with a different subtype of constraint \'JsonRpcParams\'.", "1898504825"],
+      [499, 4, 6, "tsc: Type \'undefined\' is not assignable to type \'JSONRPCErrorResponse\'.", "2123913871"]
     ],
     "src/client/multitransport-client.ts:2958852571": [
       [82, 24, 44, "tsc: Type \'Promise<AgentCard>\' is not assignable to type \'Promise<never>\'.\\n  Type \'AgentCard\' is not assignable to type \'never\'.", "1356744557"],

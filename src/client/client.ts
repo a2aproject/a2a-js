@@ -27,6 +27,7 @@ import { JsonRpcTransport } from './transports/json_rpc_transport.js';
 import { RequestOptions } from './multitransport-client.js';
 import { FromProto } from '../types/converters/from_proto.js';
 import { ToProto } from '../types/converters/to_proto.js';
+import { extractTaskId } from '../types/converters/id_decoding.js';
 
 export type A2AStreamEventData = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
@@ -202,11 +203,7 @@ export class A2AClient {
         'Agent does not support push notifications (AgentCard.capabilities.pushNotifications is not true).'
       );
     }
-    const taskIdMatch = params.name.match(/^tasks\/([^/]+)/);
-    if (!taskIdMatch) {
-      throw new Error(`Invalid task name format: ${params.name}`);
-    }
-    const taskId = taskIdMatch[1];
+    const taskId = extractTaskId(params.name);
     if (!params.pushNotificationConfig) {
       throw new Error('Push notification configuration is required.');
     }
