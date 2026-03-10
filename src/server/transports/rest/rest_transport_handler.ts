@@ -219,7 +219,6 @@ export class RestTransportHandler {
 
   /**
    * Sets a push notification configuration.
-   * Accepts both snake_case and camelCase input, returns camelCase.
    * @throws {A2AError} PushNotificationNotSupported if push notifications not supported
    */
   async setTaskPushNotificationConfig(
