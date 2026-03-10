@@ -516,9 +516,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const firstResult = await handler.sendMessage(firstParams, serverCallContext);
     const firstTask = firstResult as Task;
-
-    // Check the first result is a task with `input-required` status
-
     assert.equal(firstTask.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
 
     // Check the history
@@ -614,9 +611,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const secondResult = await handler.sendMessage(secondParams, serverCallContext);
     const secondTask = secondResult as Task;
-
-    // Check the second result is a task with `completed` status
-
     assert.equal(secondTask.id, taskId, 'Should be the same task');
     assert.equal(secondTask.status.state, TaskState.TASK_STATE_COMPLETED);
 
@@ -1071,7 +1065,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
         final: true,
         metadata: {},
