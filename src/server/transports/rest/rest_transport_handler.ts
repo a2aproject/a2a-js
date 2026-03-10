@@ -14,21 +14,9 @@ import {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
-  Part,
   AgentCard,
-  Role,
 } from '../../../index.js';
 import { MessageSendParams, TaskQueryParams, TaskIdParams } from '../../../json_rpc_types.js';
-import {
-  RestPart,
-  PartInput,
-  MessageInput,
-  MessageSendParamsInput,
-  TaskPushNotificationConfigInput,
-  FileInput,
-  FileWithBytes,
-  FileWithUri,
-} from './rest_types.js';
 import { A2A_ERROR_CODE } from '../../../errors.js';
 
 // ============================================================================
@@ -148,24 +136,34 @@ export class RestTransportHandler {
   }
 
   /**
+   * Validates the message send parameters.
+   */
+  private validateMessageSendParams(params: MessageSendParams): void {
+    if (!params.message) {
+      throw A2AError.invalidParams('message is required');
+    }
+    if (!params.message.messageId) {
+      throw A2AError.invalidParams('message.messageId is required');
+    }
+  }
+
+  /**
    * Sends a message to the agent.
-   * Accepts both snake_case and camelCase input, returns camelCase.
    */
   async sendMessage(
-    params: MessageSendParamsInput,
+    params: MessageSendParams,
     context: ServerCallContext
   ): Promise<Message | Task> {
-    const normalized = this.normalizeMessageParams(params);
-    return this.requestHandler.sendMessage(normalized, context);
+    this.validateMessageSendParams(params);
+    return this.requestHandler.sendMessage(params, context);
   }
 
   /**
    * Sends a message with streaming response.
-   * Accepts both snake_case and camelCase input, returns camelCase stream.
    * @throws {A2AError} UnsupportedOperation if streaming not supported
    */
   async sendMessageStream(
-    params: MessageSendParamsInput,
+    params: MessageSendParams,
     context: ServerCallContext
   ): Promise<
     AsyncGenerator<
@@ -175,8 +173,8 @@ export class RestTransportHandler {
     >
   > {
     await this.requireCapability('streaming');
-    const normalized = this.normalizeMessageParams(params);
-    return this.requestHandler.sendMessageStream(normalized, context);
+    this.validateMessageSendParams(params);
+    return this.requestHandler.sendMessageStream(params, context);
   }
 
   /**
@@ -221,16 +219,20 @@ export class RestTransportHandler {
 
   /**
    * Sets a push notification configuration.
-   * Accepts both snake_case and camelCase input, returns camelCase.
    * @throws {A2AError} PushNotificationNotSupported if push notifications not supported
    */
   async setTaskPushNotificationConfig(
-    config: TaskPushNotificationConfigInput,
+    config: TaskPushNotificationConfig,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
-    const normalized = this.normalizeTaskPushNotificationConfig(config);
-    return this.requestHandler.setTaskPushNotificationConfig(normalized, context);
+    if (!config.pushNotificationConfig) {
+      throw A2AError.invalidParams('pushNotificationConfig is required');
+    }
+    if (!config.pushNotificationConfig.id) {
+      throw A2AError.invalidParams('pushNotificationConfig.id is required');
+    }
+    return this.requestHandler.setTaskPushNotificationConfig(config, context);
   }
 
   /**
@@ -282,31 +284,6 @@ export class RestTransportHandler {
     );
   }
 
-  // ==========================================================================
-  // Private Transformation Methods
-  // ==========================================================================
-  // All type conversion between REST (snake_case) and internal (camelCase) formats
-
-  /**
-   * Validates and normalizes message parameters.
-   * Accepts both snake_case and camelCase input.
-   * @throws {A2AError} InvalidParams if message is missing or conversion fails
-   */
-  private normalizeMessageParams(input: MessageSendParamsInput): MessageSendParams {
-    if (!input.message) {
-      throw A2AError.invalidParams('message is required');
-    }
-
-    try {
-      return this.normalizeMessageSendParams(input);
-    } catch (error) {
-      if (error instanceof A2AError) throw error;
-      throw A2AError.invalidParams(
-        error instanceof Error ? error.message : 'Invalid message parameters'
-      );
-    }
-  }
-
   /**
    * Static map of capability to error for missing capabilities.
    */
@@ -344,194 +321,5 @@ export class RestTransportHandler {
       throw A2AError.invalidParams('historyLength must be non-negative');
     }
     return parsed;
-  }
-
-  /**
-   * Normalizes Part input - accepts both snake_case and camelCase for file mimeType.
-   */
-  private normalizePart(part: PartInput): Part {
-    // Check if it's already a Protobuf Part (has 'part' field with $case)
-    if ('part' in part && part.part && '$case' in part.part) {
-      return part as Part;
-    }
-
-    // Otherwise it's a RestPart (legacy kind-based)
-    const p = part as RestPart;
-
-    if (p.kind === 'text') {
-      return { part: { $case: 'text', value: p.text } };
-    }
-    if (p.kind === 'file') {
-      const file = this.normalizeFile(p.file);
-      // Convert normalized file to Protobuf FilePart
-      let fileValue: FileWithUri | FileWithBytes;
-      if ('bytes' in file) {
-        fileValue = { ...file } as FileWithBytes;
-        return {
-          part: {
-            $case: 'file',
-            value: {
-              file: { $case: 'fileWithBytes', value: Buffer.from(fileValue.bytes, 'base64') },
-              mimeType: fileValue.mimeType || 'application/octet-stream',
-            },
-          },
-        };
-      } else {
-        fileValue = { ...file } as FileWithUri;
-        return {
-          part: {
-            $case: 'file',
-            value: {
-              file: { $case: 'fileWithUri', value: fileValue.uri },
-              mimeType: fileValue.mimeType || 'application/octet-stream',
-            },
-          },
-        };
-      }
-    }
-    return { part: { $case: 'data', value: { data: p.data } } };
-  }
-
-  /**
-   * Normalizes File input - accepts both snake_case (mime_type) and camelCase (mimeType).
-   * Returns intermediate internal file type (not Protobuf FilePart yet, helper for normalizePart).
-   */
-  private normalizeFile(f: FileInput): FileWithBytes | FileWithUri {
-    // Access both formats via intersection cast
-    const file = f as FileInput & { mimeType?: string; mime_type?: string };
-    const mimeType = file.mimeType ?? file.mime_type ?? 'application/octet-stream';
-    if ('bytes' in file) {
-      return { bytes: file.bytes, mimeType, name: file.name };
-    }
-    return { uri: file.uri, mimeType, name: file.name };
-  }
-
-  /**
-   * Normalizes Message input - accepts both snake_case and camelCase.
-   */
-  private normalizeMessage(input: MessageInput): Message {
-    // Cast to access both formats
-
-    const m = input as unknown as {
-      messageId?: string;
-      message_id?: string;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      content?: any[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      parts?: any[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      role?: any;
-      contextId?: string;
-      context_id?: string;
-      taskId?: string;
-      task_id?: string;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      metadata?: any;
-      extensions?: string[];
-    };
-    const messageId = m.messageId ?? m.message_id;
-    if (!messageId) {
-      throw A2AError.invalidParams('message.messageId is required');
-    }
-
-    let content: Part[] = [];
-    if (m.content && Array.isArray(m.content)) {
-      content = m.content;
-    } else if (m.parts && Array.isArray(m.parts)) {
-      content = m.parts.map((p) => this.normalizePart(p));
-    } else {
-      throw A2AError.invalidParams('message.content or message.parts must be an array');
-    }
-
-    // Map Role
-    let role = Role.ROLE_UNSPECIFIED;
-    if (typeof m.role === 'number') {
-      role = m.role;
-    } else if (m.role === 'user') {
-      role = Role.ROLE_USER;
-    } else if (m.role === 'agent') {
-      role = Role.ROLE_AGENT;
-    }
-
-    return {
-      contextId: m.contextId ?? m.context_id ?? '',
-      extensions: m.extensions ?? [],
-      messageId,
-      metadata: m.metadata,
-      content,
-      role,
-      taskId: m.taskId ?? m.task_id ?? '',
-    };
-  }
-
-  /**
-   * Normalizes MessageSendParams - accepts both snake_case and camelCase.
-   */
-  private normalizeMessageSendParams(input: MessageSendParamsInput): MessageSendParams {
-    // Cast to access both formats
-
-    const p = input as unknown as {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      configuration?: any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      message: any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      metadata?: any;
-    };
-    const config = p.configuration;
-
-    return {
-      configuration: config
-        ? {
-            acceptedOutputModes: config.acceptedOutputModes ?? config.accepted_output_modes,
-            blocking: config.blocking,
-            historyLength: config.historyLength ?? config.history_length,
-          }
-        : undefined,
-      message: this.normalizeMessage(p.message),
-      metadata: p.metadata,
-    };
-  }
-
-  /**
-   * Normalizes TaskPushNotificationConfig - accepts both snake_case and camelCase.
-   */
-  private normalizeTaskPushNotificationConfig(
-    input: TaskPushNotificationConfigInput
-  ): TaskPushNotificationConfig {
-    // Check if it's already a Protobuf type (has 'name')
-    if ('name' in input && input.name) {
-      return input as TaskPushNotificationConfig;
-    }
-
-    // Cast to access both formats
-
-    const c = input as unknown as {
-      taskId?: string;
-      task_id?: string;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pushNotificationConfig?: any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      push_notification_config?: any;
-      name?: string;
-    };
-    const taskId = c.taskId ?? c.task_id;
-    if (!taskId) {
-      throw A2AError.invalidParams('taskId is required');
-    }
-    const pnConfig = c.pushNotificationConfig ?? c.push_notification_config;
-    if (!pnConfig) {
-      throw A2AError.invalidParams('pushNotificationConfig is required');
-    }
-
-    return {
-      name: `tasks/${taskId}/pushNotificationConfigs/${pnConfig.id}`,
-      pushNotificationConfig: {
-        id: pnConfig.id,
-        url: pnConfig.url,
-        token: pnConfig.token,
-        authentication: pnConfig.authentication,
-      },
-    };
   }
 }
