@@ -188,8 +188,13 @@ describe('RestTransportHandler', () => {
       const inputWithConfig = {
         message: testMessage,
         configuration: {
+          blocking: true,
           accepted_output_modes: ['text/plain'],
           history_length: 5,
+          push_notification_config: {
+            id: 'push-1',
+            url: 'https://example.com',
+          },
         },
       };
 
@@ -198,8 +203,13 @@ describe('RestTransportHandler', () => {
       expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
         expect.objectContaining({
           configuration: expect.objectContaining({
+            blocking: true,
             acceptedOutputModes: ['text/plain'],
             historyLength: 5,
+            pushNotificationConfig: {
+              id: 'push-1',
+              url: 'https://example.com',
+            },
           }),
         }),
         mockContext
