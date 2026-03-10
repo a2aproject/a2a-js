@@ -138,18 +138,25 @@ export class RestTransportHandler {
   }
 
   /**
-   * Sends a message to the agent.
+   * Validate MessageSendParams.
    */
-  async sendMessage(
-    params: MessageSendParams,
-    context: ServerCallContext
-  ): Promise<Message | Task> {
+  private validateMessageSendParams(params: MessageSendParams): void {
     if (!params.message) {
       throw A2AError.invalidParams('message is required');
     }
     if (!params.message.messageId) {
       throw A2AError.invalidParams('message.messageId is required');
     }
+  }
+
+  /**
+   * Sends a message to the agent.
+   */
+  async sendMessage(
+    params: MessageSendParams,
+    context: ServerCallContext
+  ): Promise<Message | Task> {
+    this.validateMessageSendParams(params);
     return this.requestHandler.sendMessage(params, context);
   }
 
@@ -168,12 +175,7 @@ export class RestTransportHandler {
     >
   > {
     await this.requireCapability('streaming');
-    if (!params.message) {
-      throw A2AError.invalidParams('message is required');
-    }
-    if (!params.message.messageId) {
-      throw A2AError.invalidParams('message.messageId is required');
-    }
+    this.validateMessageSendParams(params);
     return this.requestHandler.sendMessageStream(params, context);
   }
 
