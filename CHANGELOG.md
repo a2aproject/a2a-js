@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.12](https://github.com/a2aproject/a2a-js/compare/v0.3.11...v0.3.12) (2026-03-10)
+
+
+### Bug Fixes
+
+* Fixing missing push configuration after normalization for rest transport ([#346](https://github.com/a2aproject/a2a-js/issues/346)) ([54ac8c4](https://github.com/a2aproject/a2a-js/commit/54ac8c41cacc54fb0d80526b79c87ba3aede14af))
+
 ## [0.3.11](https://github.com/a2aproject/a2a-js/compare/v0.3.10...v0.3.11) (2026-03-10)
 
 
