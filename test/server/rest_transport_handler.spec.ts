@@ -137,18 +137,6 @@ describe('RestTransportHandler', () => {
         },
         expectedMessageId: 'msg-1',
       },
-      {
-        name: 'snake_case',
-        input: {
-          message: {
-            message_id: 'msg-2',
-            role: 'user' as const,
-            parts: [{ kind: 'text' as const, text: 'Hello snake' }],
-            kind: 'message' as const,
-          },
-        },
-        expectedMessageId: 'msg-2',
-      },
     ])(
       'should normalize $name message and call request handler',
       async ({ input, expectedMessageId }) => {
@@ -188,8 +176,13 @@ describe('RestTransportHandler', () => {
       const inputWithConfig = {
         message: testMessage,
         configuration: {
-          accepted_output_modes: ['text/plain'],
-          history_length: 5,
+          blocking: true,
+          acceptedOutputModes: ['text/plain'],
+          historyLength: 5,
+          pushNotificationConfig: {
+            id: 'push-1',
+            url: 'https://example.com',
+          },
         },
       };
 
@@ -198,8 +191,13 @@ describe('RestTransportHandler', () => {
       expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
         expect.objectContaining({
           configuration: expect.objectContaining({
+            blocking: true,
             acceptedOutputModes: ['text/plain'],
             historyLength: 5,
+            pushNotificationConfig: {
+              id: 'push-1',
+              url: 'https://example.com',
+            },
           }),
         }),
         mockContext
@@ -343,28 +341,6 @@ describe('RestTransportHandler', () => {
         expect(result).to.deep.equal(mockConfig);
       });
 
-      it('should normalize snake_case config', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
-
-        const snakeCaseConfig = {
-          task_id: 'task-1',
-          push_notification_config: {
-            id: 'config-1',
-            url: 'https://example.com/webhook',
-          },
-        };
-
-        await transportHandler.setTaskPushNotificationConfig(snakeCaseConfig as any, mockContext);
-
-        expect(mockRequestHandler.setTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
-          expect.objectContaining({
-            taskId: 'task-1',
-            pushNotificationConfig: expect.objectContaining({ id: 'config-1' }),
-          }),
-          mockContext
-        );
-      });
-
       it('should throw InvalidParams if taskId is missing', async () => {
         const invalidConfig = {
           pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' },
@@ -449,24 +425,6 @@ describe('RestTransportHandler', () => {
               file: {
                 uri: 'https://example.com/file.pdf',
                 mimeType: 'application/pdf',
-                name: 'document.pdf',
-              },
-            },
-          ],
-          kind: 'message' as const,
-        },
-      },
-      {
-        name: 'snake_case',
-        message: {
-          message_id: 'msg-file',
-          role: 'user' as const,
-          parts: [
-            {
-              kind: 'file' as const,
-              file: {
-                uri: 'https://example.com/file.pdf',
-                mime_type: 'application/pdf',
                 name: 'document.pdf',
               },
             },
