@@ -204,10 +204,57 @@ describe('DefaultAgentCardResolver', () => {
     skills: [],
   };
 
+  const expectedAgentCardWithSkill: AgentCard = {
+    ...expectedAgentCard,
+    security: [],
+    securitySchemes: {},
+    skills: [
+      {
+        id: 'test-skill',
+        name: 'Test Skill',
+        description: 'A skill for testing',
+        tags: [],
+        examples: [],
+        inputModes: [],
+        outputModes: [],
+        security: [{ google: ['openid'] }],
+      },
+    ],
+  };
+
+  const v1ProtoAgentCardWithSkill: PBAgentCard = {
+    ...v1ProtoAgentCard,
+    security: [],
+    securitySchemes: {},
+    skills: [
+      {
+        id: 'test-skill',
+        name: 'Test Skill',
+        description: 'A skill for testing',
+        tags: [],
+        examples: [],
+        inputModes: [],
+        outputModes: [],
+        security: [
+          {
+            schemes: {
+              google: { list: ['openid'] },
+            },
+          },
+        ],
+      },
+    ],
+  };
+
   it.each([
-    ['v0.3 JSON schema', v03AgentCard],
-    ['v1.0 protobuf mapping', PBAgentCard.toJSON(v1ProtoAgentCard)],
-  ])('should parse and normalize %s agent card correctly', async (_, payload) => {
+    ['v0.3 JSON schema', v03AgentCard, expectedAgentCard],
+    ['v1.0 protobuf mapping', PBAgentCard.toJSON(v1ProtoAgentCard), expectedAgentCard],
+    [
+      'v1.0 protobuf mapping (skills only)',
+      PBAgentCard.toJSON(v1ProtoAgentCardWithSkill),
+      expectedAgentCardWithSkill,
+    ],
+  ])('should parse and normalize %s agent card correctly', async (_, payload, expectedResult) => {
     const resolver = new DefaultAgentCardResolver({ fetchImpl: mockFetch });
     mockFetch.mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
 
@@ -215,7 +262,7 @@ describe('DefaultAgentCardResolver', () => {
 
     // Both should normalize to the exact same internal AgentCard format
     // Strip undefined properties before comparison using JSON
-    const expected = JSON.parse(JSON.stringify(expectedAgentCard));
+    const expected = JSON.parse(JSON.stringify(expectedResult));
     const actualClean = JSON.parse(JSON.stringify(actual));
 
     expect(actualClean).to.deep.equal(expected);
