@@ -230,9 +230,7 @@ export class RestTransportHandler {
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
     const normalized = this.normalizeTaskPushNotificationConfig(config);
-    const result = await this.requestHandler.setTaskPushNotificationConfig(normalized, context);
-
-    return result;
+    return this.requestHandler.setTaskPushNotificationConfig(normalized, context);
   }
 
   /**

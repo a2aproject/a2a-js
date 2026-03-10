@@ -107,7 +107,6 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
-
       (req: CreateTaskPushNotificationConfigRequest) => req,
       FromProto.taskPushNotificationConfig
     );
@@ -123,7 +122,6 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient),
-
       (req: GetTaskPushNotificationConfigRequest) => req,
       FromProto.taskPushNotificationConfig
     );
@@ -139,7 +137,6 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.listTaskPushNotificationConfig.bind(this.grpcClient),
-
       (req: ListTaskPushNotificationConfigRequest) => req,
       FromProto.listTaskPushNotificationConfig
     );
@@ -155,7 +152,6 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.deleteTaskPushNotificationConfig.bind(this.grpcClient),
-
       (req: DeleteTaskPushNotificationConfigRequest) => req,
       () => {}
     );
@@ -167,7 +163,6 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.getTask.bind(this.grpcClient),
-
       (req: GetTaskRequest) => req,
       FromProto.task
     );
@@ -180,7 +175,6 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.cancelTask.bind(this.grpcClient),
-
       (req: CancelTaskRequest) => req,
       FromProto.task
     );

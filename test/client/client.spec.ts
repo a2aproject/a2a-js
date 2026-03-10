@@ -15,6 +15,7 @@ import {
   createMockFetch,
 } from './util.js';
 import { Role } from '../../src/types/pb/a2a_types.js';
+
 describe('A2AClient Basic Tests', () => {
   let client: A2AClient;
   let mockFetch: Mock & { capturedAuthHeaders: string[] };
