@@ -1,7 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../core.js';
 import { A2AServiceClient, TaskPushNotificationConfig } from '../../../grpc/pb/a2a_services.js';
-
 import { Task, AgentCard } from '../../../types/pb/a2a_types.js';
 import {
   CancelTaskRequest,
