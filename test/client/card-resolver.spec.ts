@@ -139,7 +139,7 @@ describe('DefaultAgentCardResolver', () => {
   });
 
   const expectedAgentCard: AgentCard = {
-    protocolVersion: '1.0.0',
+    protocolVersion: '0.3.0',
     name: 'Unified Agent',
     description: '',
     documentationUrl: undefined,
@@ -163,13 +163,13 @@ describe('DefaultAgentCardResolver', () => {
     skills: [],
   };
 
-  const v03AgentCard: AgentCard = {
-    // A v0.3 json-schema shape is essentially identical to the internal format
+  const JsonSchemaAgentCard: AgentCard = {
+    // A JSON Schema shape is essentially identical to the internal format
     ...expectedAgentCard,
   };
 
-  const v1ProtoAgentCard: PBAgentCard = {
-    protocolVersion: '1.0.0',
+  const ProtoAgentCard: PBAgentCard = {
+    protocolVersion: '0.3.0',
     name: 'Unified Agent',
     description: '',
     documentationUrl: '',
@@ -222,8 +222,8 @@ describe('DefaultAgentCardResolver', () => {
     ],
   };
 
-  const v1ProtoAgentCardWithSkill: PBAgentCard = {
-    ...v1ProtoAgentCard,
+  const ProtoAgentCardWithSkill: PBAgentCard = {
+    ...ProtoAgentCard,
     security: [],
     securitySchemes: {},
     skills: [
@@ -247,11 +247,11 @@ describe('DefaultAgentCardResolver', () => {
   };
 
   it.each([
-    ['v0.3 JSON schema', v03AgentCard, expectedAgentCard],
-    ['v1.0 protobuf mapping', PBAgentCard.toJSON(v1ProtoAgentCard), expectedAgentCard],
+    ['JSON schema', JsonSchemaAgentCard, expectedAgentCard],
+    ['protobuf', PBAgentCard.toJSON(ProtoAgentCard), expectedAgentCard],
     [
-      'v1.0 protobuf mapping (skills only)',
-      PBAgentCard.toJSON(v1ProtoAgentCardWithSkill),
+      'protobuf (skills only)',
+      PBAgentCard.toJSON(ProtoAgentCardWithSkill),
       expectedAgentCardWithSkill,
     ],
   ])('should parse and normalize %s agent card correctly', async (_, payload, expectedResult) => {
