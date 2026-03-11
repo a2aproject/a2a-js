@@ -94,7 +94,7 @@ export class RestTransport implements Transport {
     params: CreateTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const requestBody = params.config as TaskPushNotificationConfig;
+    const requestBody = params.config!;
     const taskId = extractTaskId(params.parent);
     const response = await this._sendRequest<
       TaskPushNotificationConfig,
