@@ -1,35 +1,20 @@
 import { A2AError } from '../../server/error.js';
 import {
   AgentCard,
-  AgentCardSignature,
-  AgentCapabilities,
-  AgentExtension,
-  AgentInterface,
-  AgentProvider,
-  Artifact,
   AuthenticationInfo,
   Message,
-  OAuthFlows,
   Part,
   PushNotificationConfig,
-  Role,
-  Security,
-  SecurityScheme,
   SendMessageResponse,
   StreamResponse,
   Task,
   TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
-  TaskState,
-  TaskStatus,
   TaskStatusUpdateEvent,
   ListTaskPushNotificationConfigResponse,
-  AgentSkill,
   SendMessageRequest,
   SendMessageConfiguration,
   GetTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigRequest,
-  DeleteTaskPushNotificationConfigRequest,
   GetTaskRequest,
   CancelTaskRequest,
   TaskSubscriptionRequest,
@@ -41,42 +26,6 @@ import { generatePushNotificationConfigName, generateTaskName } from './id_decod
 export class ToProto {
   static agentCard(agentCard: AgentCard): AgentCard {
     return agentCard;
-  }
-
-  static agentCardSignature(signatures: AgentCardSignature): AgentCardSignature {
-    return signatures;
-  }
-
-  static agentSkill(skill: AgentSkill): AgentSkill {
-    return skill;
-  }
-
-  static security(security: Security): Security {
-    return security;
-  }
-
-  static securityScheme(scheme: SecurityScheme): SecurityScheme {
-    return scheme;
-  }
-
-  static oauthFlows(flows: OAuthFlows): OAuthFlows {
-    return flows;
-  }
-
-  static agentInterface(agentInterface: AgentInterface): AgentInterface {
-    return agentInterface;
-  }
-
-  static agentProvider(agentProvider: AgentProvider): AgentProvider {
-    return agentProvider;
-  }
-
-  static agentCapabilities(capabilities: AgentCapabilities): AgentCapabilities {
-    return capabilities;
-  }
-
-  static agentExtension(extension: AgentExtension): AgentExtension {
-    return extension;
   }
 
   static listTaskPushNotificationConfig(
@@ -108,25 +57,6 @@ export class ToProto {
     };
   }
 
-  static listTaskPushNotificationConfigParams(config: {
-    id: string;
-  }): ListTaskPushNotificationConfigRequest {
-    return {
-      parent: generateTaskName(config.id),
-      pageToken: '',
-      pageSize: 0,
-    };
-  }
-
-  static deleteTaskPushNotificationConfigParams(config: {
-    id: string;
-    pushNotificationConfigId: string;
-  }): DeleteTaskPushNotificationConfigRequest {
-    return {
-      name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId),
-    };
-  }
-
   static taskPushNotificationConfig(
     config:
       | { taskId: string; pushNotificationConfig: PushNotificationConfig }
@@ -150,10 +80,6 @@ export class ToProto {
       config: config,
       configId: config.pushNotificationConfig?.id ?? '',
     };
-  }
-
-  static pushNotificationConfig(config: PushNotificationConfig): PushNotificationConfig {
-    return config;
   }
 
   static pushNotificationAuthenticationInfo(authInfo: {
@@ -214,14 +140,6 @@ export class ToProto {
     throw A2AError.internalError('Invalid event type');
   }
 
-  static taskStatusUpdateEvent(event: TaskStatusUpdateEvent): TaskStatusUpdateEvent {
-    return event;
-  }
-
-  static taskArtifactUpdateEvent(event: TaskArtifactUpdateEvent): TaskArtifactUpdateEvent {
-    return event;
-  }
-
   static messageSendResult(params: Message | Task): SendMessageResponse {
     if ('messageId' in params) {
       return {
@@ -240,28 +158,8 @@ export class ToProto {
     }
   }
 
-  static message(message: Message): Message {
-    return message;
-  }
-
-  static role(role: Role): Role {
-    return role;
-  }
-
   static task(task: Task): Task {
     return task;
-  }
-
-  static taskStatus(status: TaskStatus): TaskStatus {
-    return status;
-  }
-
-  static artifact(artifact: Artifact): Artifact {
-    return artifact;
-  }
-
-  static taskState(state: TaskState): TaskState {
-    return state;
   }
 
   static part(part: Part): Part {

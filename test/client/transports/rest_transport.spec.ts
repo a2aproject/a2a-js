@@ -27,7 +27,6 @@ import {
   ListTaskPushNotificationConfigResponse,
   TaskState,
 } from '../../../src/types/pb/a2a_types.js';
-import { FromProto } from '../../../src/types/converters/from_proto.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 
 describe('RestTransport', () => {
@@ -222,7 +221,7 @@ describe('RestTransport', () => {
 
       const result = await transport.getExtendedAgentCard();
 
-      expect(result).to.deep.equal(FromProto.agentCard(mockCard));
+      expect(result).to.deep.equal(mockCard);
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];

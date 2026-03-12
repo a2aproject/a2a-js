@@ -103,7 +103,7 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
-      FromProto.taskPushNotificationConfig
+      (req) => req as TaskPushNotificationConfig
     );
     return rpcResponse;
   }
@@ -117,7 +117,7 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient),
-      FromProto.taskPushNotificationConfig
+      (req) => req as TaskPushNotificationConfig
     );
     return rpcResponse;
   }

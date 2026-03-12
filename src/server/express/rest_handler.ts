@@ -294,8 +294,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
-      const protoResult = ToProto.agentCard(result);
-      sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, protoResult, AgentCard);
+      sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
     })
   );
 
@@ -370,8 +369,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         //TODO: clarify for version 1.0.0 the format of the historyLength query parameter, and if history should always be added to the returned object
         req.query.historyLength ?? req.query.history_length
       );
-      const protoResult = ToProto.task(result);
-      sendResponse<Task>(res, HTTP_STATUS.OK, context, protoResult, Task);
+      sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
     })
   );
 
@@ -391,8 +389,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
-      const protoResult = ToProto.task(result);
-      sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, protoResult, Task);
+      sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, result, Task);
     })
   );
 

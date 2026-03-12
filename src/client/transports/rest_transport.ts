@@ -63,7 +63,7 @@ export class RestTransport implements Transport {
       undefined,
       AgentCard
     );
-    return FromProto.agentCard(response);
+    return response;
   }
 
   async sendMessage(
@@ -107,7 +107,7 @@ export class RestTransport implements Transport {
       TaskPushNotificationConfig,
       TaskPushNotificationConfig
     );
-    return FromProto.taskPushNotificationConfig(response);
+    return response;
   }
 
   async getTaskPushNotificationConfig(
@@ -122,7 +122,7 @@ export class RestTransport implements Transport {
       undefined,
       TaskPushNotificationConfig
     );
-    return FromProto.taskPushNotificationConfig(response);
+    return response;
   }
 
   async listTaskPushNotificationConfig(
@@ -137,8 +137,7 @@ export class RestTransport implements Transport {
       undefined,
       ListTaskPushNotificationConfigResponse
     );
-    const configs = FromProto.listTaskPushNotificationConfig(response);
-    return configs.map(FromProto.taskPushNotificationConfig);
+    return FromProto.listTaskPushNotificationConfig(response);
   }
 
   async deleteTaskPushNotificationConfig(
@@ -170,7 +169,7 @@ export class RestTransport implements Transport {
       undefined,
       Task
     );
-    return FromProto.task(response);
+    return response;
   }
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
@@ -182,7 +181,7 @@ export class RestTransport implements Transport {
       undefined,
       Task
     );
-    return FromProto.task(response);
+    return response;
   }
 
   async *resubscribeTask(

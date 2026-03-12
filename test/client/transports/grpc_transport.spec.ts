@@ -116,7 +116,6 @@ describe('GrpcTransport', () => {
 
       expect(result).toEqual(mockCard);
       expect(mockGrpcClient.getAgentCard).toHaveBeenCalled();
-      expect(FromProto.agentCard).toHaveBeenCalledWith(mockCard);
     });
   });
 

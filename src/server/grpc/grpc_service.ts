@@ -143,7 +143,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.deleteTaskPushNotificationConfigParams,
+        (req) => req,
         requestHandler.deleteTaskPushNotificationConfig.bind(requestHandler),
         () => ({})
       );
@@ -159,7 +159,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.listTaskPushNotificationConfigParams,
+        (req) => req,
         requestHandler.listTaskPushNotificationConfigs.bind(requestHandler),
         ToProto.listTaskPushNotificationConfig
       );
@@ -188,7 +188,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.getTaskPushNotificationConfigParams,
+        (req) => req,
         requestHandler.getTaskPushNotificationConfig.bind(requestHandler),
         ToProto.taskPushNotificationConfig
       );

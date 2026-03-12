@@ -6,7 +6,6 @@ import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
 import { A2AError } from '../../../src/server/error.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
 import {
   ListTaskPushNotificationConfigResponse,
   Message as ProtoMessage,
@@ -126,7 +125,7 @@ describe('restHandler', () => {
 
   describe('POST /v1/message:send', () => {
     it('should accept camelCase message and return 201 with Task', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
       const response = await request(app)
@@ -153,7 +152,7 @@ describe('restHandler', () => {
 
   describe('POST /v1/message:stream', () => {
     it('should accept camelCase message and stream via SSE', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const message = ProtoMessage.toJSON(testMessage);
       async function* mockStream() {
         yield testMessage;
         yield testTask;
@@ -345,9 +344,7 @@ describe('restHandler', () => {
           .send(payload)
           .expect(201);
 
-        const protoResponse = FromProto.taskPushNotificationConfig(
-          TaskPushNotificationConfig.fromJSON(response.body)
-        );
+        const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
         assert.include(protoResponse.name, 'task-1');
         assert.include(protoResponse.name, 'config-1');
       });
@@ -408,9 +405,7 @@ describe('restHandler', () => {
           .expect(200);
 
         // REST API returns camelCase
-        const convertedResult = FromProto.taskPushNotificationConfig(
-          TaskPushNotificationConfig.fromJSON(response.body)
-        );
+        const convertedResult = TaskPushNotificationConfig.fromJSON(response.body);
         assert.include(convertedResult.name, 'task-1');
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
@@ -508,7 +503,7 @@ describe('restHandler', () => {
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const protoMessage = ProtoMessage.toJSON(ToProto.message(payload.request as Message));
+      const protoMessage = ProtoMessage.toJSON(payload.request as Message);
       await request(app)
         .post('/v1/message:send')
         .send({ request: protoMessage, configuration: payload.configuration })
@@ -532,7 +527,7 @@ describe('restHandler', () => {
         new Error('Unexpected internal error')
       );
 
-      const messageProto = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const messageProto = ProtoMessage.toJSON(testMessage);
       const response = await request(app)
         .post('/v1/message:send')
         .send({ request: messageProto })

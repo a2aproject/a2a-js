@@ -36,21 +36,6 @@ describe('ToProto', () => {
     expect(result).toEqual(task);
   });
 
-  it('should pass through valid Message', () => {
-    const message: proto.Message = {
-      messageId: 'msg-1',
-      content: [{ part: { $case: 'text', value: 'hello' } }],
-      contextId: 'ctx-1',
-      taskId: 'task-1',
-      role: proto.Role.ROLE_USER,
-      metadata: { key: 'value' },
-      extensions: ['ext1'],
-    };
-
-    const result = ToProto.message(message);
-    expect(result).toEqual(message);
-  });
-
   describe('parts', () => {
     it('should pass through text part', () => {
       const part: proto.Part = { part: { $case: 'text', value: 'hello' } };
