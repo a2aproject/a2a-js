@@ -54,16 +54,13 @@ describe('FromProto', () => {
       historyLength: 10,
     };
     const result = FromProto.taskQueryParams(request);
-    expect(result).toEqual({
-      id: 'task-123',
-      historyLength: 10,
-    });
+    expect(result).toEqual(request);
   });
 
   it('should convert CancelTaskRequest to taskIdParams', () => {
     const request: proto.CancelTaskRequest = { name: 'tasks/task-123' };
     const result = FromProto.taskIdParams(request);
-    expect(result).toEqual({ id: 'task-123' });
+    expect(result).toEqual(request);
   });
 
   it('should convert SendMessageRequest to messageSendParams', () => {
@@ -88,15 +85,6 @@ describe('FromProto', () => {
 
     const result = FromProto.messageSendParams(request);
 
-    expect(result).toEqual({
-      message: request.request,
-      configuration: {
-        blocking: false,
-        acceptedOutputModes: [],
-        pushNotificationConfig: undefined,
-        historyLength: 0,
-      },
-      metadata: { client: 'test' },
-    });
+    expect(result).toEqual(request);
   });
 });

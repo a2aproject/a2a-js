@@ -34,18 +34,7 @@ import {
   AgentCapabilities,
   AgentExtension,
 } from '../pb/a2a_types.js';
-import {
-  JsonRpcTaskPushNotificationConfig,
-  TaskQueryParams,
-  TaskIdParams,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  DeleteTaskPushNotificationConfigParams,
-  MessageSendParams,
-  MessageSendConfiguration,
-  PushNotificationAuthenticationInfo,
-} from '../../json_rpc_types.js';
-import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_decoding.js';
+import { extractTaskId } from './id_decoding.js';
 
 /**
  * Converts proto types to internal types.
@@ -53,35 +42,24 @@ import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_deco
  * or handles minor structural differences if any legacy support is needed. Planned to be removed completely in the future.
  */
 export class FromProto {
-  static taskQueryParams(request: GetTaskRequest): TaskQueryParams {
-    return {
-      id: extractTaskId(request.name),
-      historyLength: request.historyLength,
-    };
+  static taskQueryParams(request: GetTaskRequest): GetTaskRequest {
+    return request;
   }
 
-  static taskIdParams(request: CancelTaskRequest): TaskIdParams {
-    return {
-      id: extractTaskId(request.name),
-    };
+  static taskIdParams(request: CancelTaskRequest): CancelTaskRequest {
+    return request;
   }
 
   static getTaskPushNotificationConfigParams(
     request: GetTaskPushNotificationConfigRequest
-  ): GetTaskPushNotificationConfigParams {
-    const { taskId, configId } = extractTaskAndPushNotificationConfigId(request.name);
-    return {
-      id: taskId,
-      pushNotificationConfigId: configId,
-    };
+  ): GetTaskPushNotificationConfigRequest {
+    return request;
   }
 
   static listTaskPushNotificationConfigParams(
     request: ListTaskPushNotificationConfigRequest
-  ): ListTaskPushNotificationConfigParams {
-    return {
-      id: extractTaskId(request.parent),
-    };
+  ): ListTaskPushNotificationConfigRequest {
+    return request;
   }
 
   static createTaskPushNotificationConfig(
@@ -98,12 +76,8 @@ export class FromProto {
 
   static deleteTaskPushNotificationConfigParams(
     request: DeleteTaskPushNotificationConfigRequest
-  ): DeleteTaskPushNotificationConfigParams {
-    const { taskId, configId } = extractTaskAndPushNotificationConfigId(request.name);
-    return {
-      id: taskId,
-      pushNotificationConfigId: configId,
-    };
+  ): DeleteTaskPushNotificationConfigRequest {
+    return request;
   }
 
   static message(message: Message): Message {
@@ -116,27 +90,15 @@ export class FromProto {
 
   static messageSendConfiguration(
     configuration: SendMessageConfiguration
-  ): MessageSendConfiguration {
-    return {
-      blocking: configuration.blocking,
-      acceptedOutputModes: configuration.acceptedOutputModes,
-      pushNotificationConfig: configuration.pushNotification
-        ? {
-            taskId: '',
-            pushNotificationConfig: configuration.pushNotification,
-          }
-        : undefined,
-      historyLength: configuration.historyLength,
-    };
+  ): SendMessageConfiguration {
+    return configuration;
   }
 
   static pushNotificationConfig(config: PushNotificationConfig): PushNotificationConfig {
     return config;
   }
 
-  static pushNotificationAuthenticationInfo(
-    authInfo: AuthenticationInfo
-  ): PushNotificationAuthenticationInfo {
+  static pushNotificationAuthenticationInfo(authInfo: AuthenticationInfo): AuthenticationInfo {
     return authInfo;
   }
 
@@ -144,12 +106,8 @@ export class FromProto {
     return part;
   }
 
-  static messageSendParams(request: SendMessageRequest): MessageSendParams {
-    return {
-      message: FromProto.message(request.request!),
-      configuration: FromProto.messageSendConfiguration(request.configuration!),
-      metadata: request.metadata,
-    };
+  static messageSendParams(request: SendMessageRequest): SendMessageRequest {
+    return request;
   }
 
   static sendMessageResult(response: SendMessageResponse): Task | Message {
@@ -185,11 +143,8 @@ export class FromProto {
 
   static jsonRpcTaskPushNotificationConfig(
     config: TaskPushNotificationConfig
-  ): JsonRpcTaskPushNotificationConfig {
-    return {
-      taskId: extractTaskId(config.name),
-      pushNotificationConfig: config.pushNotificationConfig,
-    };
+  ): TaskPushNotificationConfig {
+    return config;
   }
 
   static listTaskPushNotificationConfig(

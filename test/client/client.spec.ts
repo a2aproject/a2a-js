@@ -4,6 +4,7 @@ import {
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigRequest,
   SendMessageRequest,
+  TaskPushNotificationConfig,
 } from '../../src/types/pb/a2a_types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { JSONRPCResponse } from '../../src/json_rpc_types.js';
@@ -608,7 +609,6 @@ describe('Push Notification Config Operations', () => {
         pageSize: 0,
         pageToken: '',
       };
-      const rpcParams = { id: 'test-task-123' };
 
       // Define mock response data for the push notification configs
       const mockConfigsData = [
@@ -639,16 +639,15 @@ describe('Push Notification Config Operations', () => {
           // Check if the request is for the list operation
           const body = JSON.parse(options?.body as string);
           if (body.method === 'tasks/pushNotificationConfig/list') {
-            // Verify the params were sent correctly
-            expect(body.params).to.deep.equal(rpcParams);
+            expect(body.params).to.deep.equal({ parent: params.parent });
 
             // Return a successful response with mock configs
             // The result is an array of TaskPushNotificationConfig objects
             const configs = mockConfigsData.map((config) => ({
-              taskId: rpcParams.id,
+              name: `tasks/test-task-123/pushNotificationConfigs/${config.id}`,
               pushNotificationConfig: config,
             }));
-            return createResponse(requestId, configs);
+            return createResponse(requestId, { configs });
           }
         }
 
@@ -668,21 +667,23 @@ describe('Push Notification Config Operations', () => {
       expect(Array.isArray(result)).to.be.true;
 
       // Define expected result structure
-      const expectedConfigs = [
+      const expectedConfigs: TaskPushNotificationConfig[] = [
         {
-          name: `tasks/${rpcParams.id}/pushNotificationConfigs/config-1`,
+          name: `tasks/test-task-123/pushNotificationConfigs/config-1`,
           pushNotificationConfig: {
             id: 'config-1',
             url: 'https://notify1.example.com/webhook',
             token: 'token-1',
+            authentication: undefined,
           },
         },
         {
-          name: `tasks/${rpcParams.id}/pushNotificationConfigs/config-2`,
+          name: `tasks/test-task-123/pushNotificationConfigs/config-2`,
           pushNotificationConfig: {
             id: 'config-2',
             url: 'https://notify2.example.com/webhook',
             token: 'token-2',
+            authentication: undefined,
           },
         },
       ];
@@ -696,10 +697,6 @@ describe('Push Notification Config Operations', () => {
     it('should delete push notification configuration successfully', async () => {
       const params: DeleteTaskPushNotificationConfigRequest = {
         name: 'tasks/test-task-123/pushNotificationConfigs/config-to-delete',
-      };
-      const rpcParams = {
-        id: 'test-task-123',
-        pushNotificationConfigId: 'config-to-delete',
       };
 
       // Setup custom mock fetch for this specific test
@@ -718,7 +715,7 @@ describe('Push Notification Config Operations', () => {
           const body = JSON.parse(options?.body as string);
           if (body.method === 'tasks/pushNotificationConfig/delete') {
             // Verify the params were sent correctly
-            expect(body.params).to.deep.equal(rpcParams);
+            expect(body.params).to.deep.equal(params);
 
             // Return a successful response,
             // 'result' should just be 'null' according to the spec:

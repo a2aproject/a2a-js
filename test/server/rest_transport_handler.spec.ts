@@ -144,7 +144,7 @@ describe('RestTransportHandler', () => {
       {
         name: 'camelCase',
         input: {
-          message: {
+          request: {
             messageId: 'msg-1',
             role: Role.ROLE_USER,
             content: [{ part: { $case: 'text', value: 'Hello' } }],
@@ -153,6 +153,8 @@ describe('RestTransportHandler', () => {
             extensions: [],
             metadata: {},
           },
+          metadata: {},
+          configuration: undefined,
         },
         expectedMessageId: 'msg-1',
       },
@@ -164,63 +166,33 @@ describe('RestTransportHandler', () => {
         expect(result).to.deep.equal(testTask);
         expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
           expect.objectContaining({
-            message: expect.objectContaining({ messageId: expectedMessageId }),
+            request: expect.objectContaining({ messageId: expectedMessageId }),
           }),
           mockContext
         );
       }
     );
 
-    it('should throw InvalidParams if message is missing', async () => {
+    it('should throw InvalidParams if request is missing', async () => {
       await expect(transportHandler.sendMessage({} as any, mockContext)).rejects.toThrow(
-        'message is required'
+        'request is required'
       );
     });
 
-    it('should throw InvalidParams if message.messageId is missing', async () => {
+    it('should throw InvalidParams if request.messageId is missing', async () => {
       const invalidMessage = {
-        message: {
+        request: {
           role: Role.ROLE_USER as const,
           parts: [{ part: { $case: 'text', text: 'Hello' } }],
           kind: 'message' as const,
         },
+        metadata: {},
+        configuration: undefined as any,
       };
 
       await expect(
         transportHandler.sendMessage(invalidMessage as any, mockContext)
-      ).rejects.toThrow('message.messageId is required');
-    });
-
-    it('should normalize configuration with snake_case fields', async () => {
-      const inputWithConfig = {
-        message: testMessage,
-        configuration: {
-          blocking: true,
-          acceptedOutputModes: ['text/plain'],
-          historyLength: 5,
-          pushNotificationConfig: {
-            name: 'push-1',
-            pushNotificationConfig: {},
-          },
-        },
-      };
-
-      await transportHandler.sendMessage(inputWithConfig as any, mockContext);
-
-      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          configuration: expect.objectContaining({
-            blocking: true,
-            acceptedOutputModes: ['text/plain'],
-            historyLength: 5,
-            pushNotificationConfig: {
-              name: 'push-1',
-              pushNotificationConfig: {},
-            },
-          }),
-        }),
-        mockContext
-      );
+      ).rejects.toThrow('request.messageId is required');
     });
   });
 
@@ -232,7 +204,10 @@ describe('RestTransportHandler', () => {
       });
 
       await expect(
-        transportHandler.sendMessageStream({ message: testMessage }, mockContext)
+        transportHandler.sendMessageStream(
+          { request: testMessage, metadata: {}, configuration: undefined },
+          mockContext
+        )
       ).rejects.toThrow('Agent does not support streaming');
     });
 
@@ -243,7 +218,7 @@ describe('RestTransportHandler', () => {
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
       const stream = await transportHandler.sendMessageStream(
-        { message: testMessage },
+        { request: testMessage, metadata: {}, configuration: undefined },
         mockContext
       );
 
@@ -258,7 +233,7 @@ describe('RestTransportHandler', () => {
 
       expect(result).to.deep.equal(testTask);
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { name: 'tasks/task-1', historyLength: 0 },
         mockContext
       );
     });
@@ -267,7 +242,7 @@ describe('RestTransportHandler', () => {
       await transportHandler.getTask('task-1', mockContext, '10');
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1', historyLength: 10 },
+        { name: 'tasks/task-1', historyLength: 10 },
         mockContext
       );
     });
@@ -301,7 +276,7 @@ describe('RestTransportHandler', () => {
 
       expect(result.status?.state).to.equal(TaskState.TASK_STATE_CANCELLED);
       expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { name: 'tasks/task-1' },
         mockContext
       );
     });
@@ -329,7 +304,7 @@ describe('RestTransportHandler', () => {
 
       expect(stream).toBeDefined();
       expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { name: 'tasks/task-1' },
         mockContext
       );
     });
@@ -407,7 +382,7 @@ describe('RestTransportHandler', () => {
 
         expect(result).to.deep.equal([expectedRestConfig]);
         expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
-          { id: 'task-1' },
+          { parent: 'tasks/task-1', pageSize: 0, pageToken: '' },
           mockContext
         );
       });
@@ -425,7 +400,7 @@ describe('RestTransportHandler', () => {
 
         expect(result).to.deep.equal(expectedRestConfig);
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+          { name: 'tasks/task-1/pushNotificationConfigs/config-1' },
           mockContext
         );
       });
@@ -452,7 +427,7 @@ describe('RestTransportHandler', () => {
         await transportHandler.deleteTaskPushNotificationConfig('task-1', 'config-1', mockContext);
 
         expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+          { name: 'tasks/task-1/pushNotificationConfigs/config-1' },
           mockContext
         );
       });
@@ -463,7 +438,7 @@ describe('RestTransportHandler', () => {
     it.each([
       {
         name: 'camelCase',
-        message: {
+        request: {
           messageId: 'msg-file',
           role: Role.ROLE_USER,
           content: [
@@ -485,31 +460,39 @@ describe('RestTransportHandler', () => {
           extensions: [],
           metadata: {},
         },
+        metadata: {},
+        configuration: undefined,
       },
-    ])('should normalize $name file parts to camelCase', async ({ message }) => {
-      await transportHandler.sendMessage({ message } as any, mockContext);
+    ])(
+      'should normalize $name file parts to camelCase',
+      async ({ request, metadata, configuration }) => {
+        await transportHandler.sendMessage(
+          { request, metadata, configuration } as any,
+          mockContext
+        );
 
-      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.objectContaining({
-            content: [
-              expect.objectContaining({
-                part: {
-                  $case: 'file',
-                  value: expect.objectContaining({
-                    file: {
-                      $case: 'fileWithUri',
-                      value: 'https://example.com/file.pdf',
-                    },
-                    mimeType: 'application/pdf',
-                  }),
-                },
-              }),
-            ],
+        expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            request: expect.objectContaining({
+              content: [
+                expect.objectContaining({
+                  part: {
+                    $case: 'file',
+                    value: expect.objectContaining({
+                      file: {
+                        $case: 'fileWithUri',
+                        value: 'https://example.com/file.pdf',
+                      },
+                      mimeType: 'application/pdf',
+                    }),
+                  },
+                }),
+              ],
+            }),
           }),
-        }),
-        mockContext
-      );
-    });
+          mockContext
+        );
+      }
+    );
   });
 });

@@ -5,10 +5,10 @@ import {
   CancelTaskResponse,
   SetTaskPushNotificationConfigResponse,
   GetTaskPushNotificationConfigResponse,
-  JSONRPCErrorResponse,
   ListTaskPushNotificationConfigSuccessResponse,
   DeleteTaskPushNotificationConfigSuccessResponse,
   GetAuthenticatedExtendedCardSuccessResponse,
+  JSONRPCErrorResponse,
 } from './json_rpc_types.js';
 
 /**

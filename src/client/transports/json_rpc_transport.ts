@@ -16,15 +16,8 @@ import {
 } from '../../index.js';
 import {
   JSONRPCResponse,
-  MessageSendParams,
-  JsonRpcTaskPushNotificationConfig,
-  TaskIdParams,
-  ListTaskPushNotificationConfigParams,
-  DeleteTaskPushNotificationConfigParams,
   DeleteTaskPushNotificationConfigResponse,
-  TaskQueryParams,
   JSONRPCErrorResponse,
-  GetTaskPushNotificationConfigParams,
   GetTaskSuccessResponse,
   CancelTaskSuccessResponse,
   ListTaskPushNotificationConfigSuccessResponse,
@@ -37,18 +30,17 @@ import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
-import { ToProto } from '../../types/converters/to_proto.js';
 import {
   CancelTaskRequest,
   CreateTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
+  MessageFns,
+  SendMessageRequest,
+  TaskSubscriptionRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   ListTaskPushNotificationConfigRequest,
-  SendMessageRequest,
-  TaskSubscriptionRequest,
 } from '../../types/pb/a2a_types.js';
-import { extractTaskId } from '../../types/converters/id_decoding.js';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
@@ -69,7 +61,7 @@ export class JsonRpcTransport implements Transport {
     const rpcResponse = await this._sendRpcRequest<
       undefined,
       GetAuthenticatedExtendedCardSuccessResponse
-    >('agent/getAuthenticatedExtendedCard', undefined, idOverride, options);
+    >('agent/getAuthenticatedExtendedCard', undefined, idOverride, options, undefined);
     return rpcResponse.result;
   }
 
@@ -78,20 +70,16 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<SendMessageResult> {
-    const rpcParams: MessageSendParams = {
-      message: params.request!,
-      configuration: params.configuration,
-      metadata: params.metadata,
-    };
-    const rpcResponse = await this._sendRpcRequest<MessageSendParams, SendMessageSuccessResponse>(
+    const rpcResponse = await this._sendRpcRequest<SendMessageRequest, SendMessageSuccessResponse>(
       'message/send',
-      rpcParams,
+      params,
       idOverride,
-      options
+      options,
+      SendMessageRequest
     );
 
-    if (!rpcResponse.result.payload?.value) {
-      throw new Error('Response payload is missing or empty');
+    if (!rpcResponse.result?.payload?.value) {
+      throw new Error('Invalid response structure from agent.');
     }
 
     return rpcResponse.result.payload.value;
@@ -101,12 +89,12 @@ export class JsonRpcTransport implements Transport {
     params: SendMessageRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    const rpcParams: MessageSendParams = {
-      message: params.request!,
-      configuration: params.configuration,
-      metadata: params.metadata,
-    };
-    yield* this._sendStreamingRequest('message/stream', rpcParams, options);
+    yield* this._sendStreamingRequest<SendMessageRequest>(
+      'message/stream',
+      params,
+      options,
+      SendMessageRequest
+    );
   }
 
   async setTaskPushNotificationConfig(
@@ -114,15 +102,17 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<TaskPushNotificationConfig> {
-    const rpcParams: JsonRpcTaskPushNotificationConfig = {
-      taskId: extractTaskId(params.parent),
-      pushNotificationConfig: params.config!.pushNotificationConfig!,
-    };
     const rpcResponse = await this._sendRpcRequest<
-      JsonRpcTaskPushNotificationConfig,
+      CreateTaskPushNotificationConfigRequest,
       SetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/set', rpcParams, idOverride, options);
-    return ToProto.taskPushNotificationConfig(rpcResponse.result);
+    >(
+      'tasks/pushNotificationConfig/set',
+      params,
+      idOverride,
+      options,
+      CreateTaskPushNotificationConfigRequest
+    );
+    return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
 
   async getTaskPushNotificationConfig(
@@ -130,15 +120,17 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<TaskPushNotificationConfig> {
-    const rpcParams: GetTaskPushNotificationConfigParams = {
-      id: extractTaskId(params.name),
-      pushNotificationConfigId: params.name.split('/').pop()!,
-    };
     const rpcResponse = await this._sendRpcRequest<
-      GetTaskPushNotificationConfigParams,
+      GetTaskPushNotificationConfigRequest,
       GetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/get', rpcParams, idOverride, options);
-    return ToProto.taskPushNotificationConfig(rpcResponse.result);
+    >(
+      'tasks/pushNotificationConfig/get',
+      params,
+      idOverride,
+      options,
+      GetTaskPushNotificationConfigRequest
+    );
+    return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
 
   async listTaskPushNotificationConfig(
@@ -146,14 +138,18 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<TaskPushNotificationConfig[]> {
-    const rpcParams: ListTaskPushNotificationConfigParams = {
-      id: extractTaskId(params.parent),
-    };
     const rpcResponse = await this._sendRpcRequest<
-      ListTaskPushNotificationConfigParams,
+      ListTaskPushNotificationConfigRequest,
       ListTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/list', rpcParams, idOverride, options);
-    return ToProto.listTaskPushNotificationConfig(rpcResponse.result).configs;
+    >(
+      'tasks/pushNotificationConfig/list',
+      params,
+      idOverride,
+      options,
+      ListTaskPushNotificationConfigRequest
+    );
+    const configs = rpcResponse.result.configs || [];
+    return configs.map((c: unknown) => TaskPushNotificationConfig.fromJSON(c));
   }
 
   async deleteTaskPushNotificationConfig(
@@ -161,14 +157,16 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<void> {
-    const rpcParams: DeleteTaskPushNotificationConfigParams = {
-      id: extractTaskId(params.name),
-      pushNotificationConfigId: params.name.split('/').pop()!,
-    };
     await this._sendRpcRequest<
-      DeleteTaskPushNotificationConfigParams,
+      DeleteTaskPushNotificationConfigRequest,
       DeleteTaskPushNotificationConfigResponse
-    >('tasks/pushNotificationConfig/delete', rpcParams, idOverride, options);
+    >(
+      'tasks/pushNotificationConfig/delete',
+      params,
+      idOverride,
+      options,
+      DeleteTaskPushNotificationConfigRequest
+    );
   }
 
   async getTask(
@@ -176,17 +174,14 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<Task> {
-    const rpcParams: TaskQueryParams = {
-      id: extractTaskId(params.name),
-      historyLength: params.historyLength,
-    };
-    const rpcResponse = await this._sendRpcRequest<TaskQueryParams, GetTaskSuccessResponse>(
+    const rpcResponse = await this._sendRpcRequest<GetTaskRequest, GetTaskSuccessResponse>(
       'tasks/get',
-      rpcParams,
+      params,
       idOverride,
-      options
+      options,
+      GetTaskRequest
     );
-    return rpcResponse.result;
+    return Task.fromJSON(rpcResponse.result);
   }
 
   async cancelTask(
@@ -194,26 +189,26 @@ export class JsonRpcTransport implements Transport {
     options?: RequestOptions,
     idOverride?: number
   ): Promise<Task> {
-    const rpcParams: TaskIdParams = {
-      id: extractTaskId(params.name),
-    };
-    const rpcResponse = await this._sendRpcRequest<TaskIdParams, CancelTaskSuccessResponse>(
+    const rpcResponse = await this._sendRpcRequest<CancelTaskRequest, CancelTaskSuccessResponse>(
       'tasks/cancel',
-      rpcParams,
+      params,
       idOverride,
-      options
+      options,
+      CancelTaskRequest
     );
-    return rpcResponse.result;
+    return Task.fromJSON(rpcResponse.result);
   }
 
   async *resubscribeTask(
     params: TaskSubscriptionRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    const rpcParams: TaskIdParams = {
-      id: extractTaskId(params.name),
-    };
-    yield* this._sendStreamingRequest('tasks/resubscribe', rpcParams, options);
+    yield* this._sendStreamingRequest<TaskSubscriptionRequest>(
+      'tasks/resubscribe',
+      params,
+      options,
+      TaskSubscriptionRequest
+    );
   }
 
   async callExtensionMethod<TExtensionParams, TExtensionResponse>(
@@ -222,11 +217,12 @@ export class JsonRpcTransport implements Transport {
     idOverride: number,
     options?: RequestOptions
   ) {
-    return await this._sendRpcRequest<TExtensionParams, TExtensionResponse & JSONRPCResponse>(
+    return await this._sendRpcRequest<TExtensionParams, TExtensionResponse>(
       method,
       params,
       idOverride,
-      options
+      options,
+      undefined
     );
   }
 
@@ -243,18 +239,19 @@ export class JsonRpcTransport implements Transport {
     );
   }
 
-  private async _sendRpcRequest<TParams, TResponse extends JSONRPCResponse>(
+  private async _sendRpcRequest<TParams, TResponse>(
     method: string,
     params: TParams,
     idOverride: number | undefined,
-    options: RequestOptions | undefined
+    options: RequestOptions | undefined,
+    requestType: MessageFns<TParams> | undefined
   ): Promise<TResponse> {
     const requestId = idOverride ?? this.requestIdCounter++;
 
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
-      params: params,
+      params: requestType?.toJSON(params) ?? params,
       id: requestId,
     };
 
@@ -289,7 +286,7 @@ export class JsonRpcTransport implements Transport {
     }
 
     if ('error' in rpcResponse) {
-      throw JsonRpcTransport.mapToError(rpcResponse);
+      throw JsonRpcTransport.mapToError(rpcResponse as JSONRPCErrorResponse);
     }
 
     return rpcResponse as TResponse;
@@ -313,16 +310,17 @@ export class JsonRpcTransport implements Transport {
     return this._fetch(this.endpoint, requestInit);
   }
 
-  private async *_sendStreamingRequest(
+  private async *_sendStreamingRequest<TParams>(
     method: string,
-    params: unknown,
-    options?: RequestOptions
+    params: TParams,
+    options: RequestOptions | undefined,
+    requestType: MessageFns<TParams> | undefined
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
       method,
-      params: params,
+      params: requestType?.toJSON(params) ?? params,
       id: clientRequestId,
     };
 

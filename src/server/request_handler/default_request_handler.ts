@@ -11,15 +11,14 @@ import {
   TaskArtifactUpdateEvent,
   Role,
   TaskPushNotificationConfig,
+  SendMessageRequest,
+  GetTaskRequest,
+  CancelTaskRequest,
+  GetTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  TaskSubscriptionRequest,
 } from '../../index.js';
-import {
-  MessageSendParams,
-  TaskIdParams,
-  TaskQueryParams,
-  DeleteTaskPushNotificationConfigParams,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-} from '../../json_rpc_types.js';
 import { AgentExecutor } from '../agent_execution/agent_executor.js';
 import { RequestContext } from '../agent_execution/request_context.js';
 import {
@@ -38,7 +37,10 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
-import { extractTaskAndPushNotificationConfigId } from '../../types/converters/id_decoding.js';
+import {
+  extractTaskAndPushNotificationConfigId,
+  extractTaskId,
+} from '../../types/converters/id_decoding.js';
 
 const terminalStates: TaskState[] = [
   TaskState.TASK_STATE_COMPLETED,
@@ -222,11 +224,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   async sendMessage(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     context?: ServerCallContext
   ): Promise<Message | Task> {
-    const incomingMessage = params.message;
-    if (!incomingMessage.messageId) {
+    const incomingMessage = params.request;
+    if (!incomingMessage?.messageId) {
       throw A2AError.invalidParams('message.messageId is required.');
     }
 
@@ -243,14 +245,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const finalMessageForAgent = requestContext.userMessage;
 
     // If push notification config is provided, save it to the store.
-    if (
-      params.configuration?.pushNotificationConfig &&
-      this.agentCard.capabilities?.pushNotifications
-    ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        params.configuration.pushNotificationConfig.pushNotificationConfig
-      );
+    if (params.configuration?.pushNotification && this.agentCard.capabilities?.pushNotifications) {
+      await this.pushNotificationStore?.save(taskId, params.configuration.pushNotification);
     }
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
@@ -323,15 +319,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   async *sendMessageStream(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     context?: ServerCallContext
   ): AsyncGenerator<
     Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
     void,
     undefined
   > {
-    const incomingMessage = params.message;
-    if (!incomingMessage.messageId) {
+    const incomingMessage = params.request;
+    if (!incomingMessage?.messageId) {
       // For streams, messageId might be set by client, or server can generate if not present.
       // Let's assume client provides it or throw for now.
       throw A2AError.invalidParams('message.messageId is required for streaming.');
@@ -349,14 +345,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const eventQueue = new ExecutionEventQueue(eventBus);
 
     // If push notification config is provided, save it to the store.
-    if (
-      params.configuration?.pushNotificationConfig &&
-      this.agentCard.capabilities?.pushNotifications
-    ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        params.configuration.pushNotificationConfig.pushNotificationConfig
-      );
+    if (params.configuration?.pushNotification && this.agentCard.capabilities?.pushNotifications) {
+      await this.pushNotificationStore?.save(taskId, params.configuration.pushNotification);
     }
 
     // Start agent execution (non-blocking)
@@ -400,10 +390,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  async getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task> {
-    const task = await this.taskStore.load(params.id, context);
+  async getTask(params: GetTaskRequest, context?: ServerCallContext): Promise<Task> {
+    const taskId = extractTaskId(params.name);
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw A2AError.taskNotFound(params.id);
+      throw A2AError.taskNotFound(params.name);
     }
     if (params.historyLength !== undefined && params.historyLength >= 0) {
       if (task.history) {
@@ -416,25 +407,26 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return task;
   }
 
-  async cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task> {
-    const task = await this.taskStore.load(params.id, context);
+  async cancelTask(params: CancelTaskRequest, context?: ServerCallContext): Promise<Task> {
+    const taskId = extractTaskId(params.name);
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw A2AError.taskNotFound(params.id);
+      throw A2AError.taskNotFound(params.name);
     }
 
     // Check if task is in a cancelable state
     if (terminalStates.includes(task.status!.state)) {
-      throw A2AError.taskNotCancelable(params.id);
+      throw A2AError.taskNotCancelable(params.name);
     }
 
-    const eventBus = this.eventBusManager.getByTaskId(params.id);
+    const eventBus = this.eventBusManager.getByTaskId(taskId);
 
     if (eventBus) {
       const eventQueue = new ExecutionEventQueue(eventBus);
-      await this.agentExecutor.cancelTask(params.id, eventBus);
+      await this.agentExecutor.cancelTask(taskId, eventBus);
       // Consume all the events until the task reaches a terminal state.
       await this._processEvents(
-        params.id,
+        taskId,
         new ResultManager(this.taskStore, context),
         eventQueue,
         context
@@ -463,12 +455,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this.taskStore.save(task, context);
     }
 
-    const latestTask = await this.taskStore.load(params.id, context);
+    const latestTask = await this.taskStore.load(taskId, context);
     if (!latestTask) {
-      throw A2AError.internalError(`Task ${params.id} not found after cancellation.`);
+      throw A2AError.internalError(`Task ${params.name} not found after cancellation.`);
     }
     if (latestTask.status!.state != TaskState.TASK_STATE_CANCELLED) {
-      throw A2AError.taskNotCancelable(params.id);
+      throw A2AError.taskNotCancelable(params.name);
     }
     return latestTask;
   }
@@ -503,82 +495,85 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   async getTaskPushNotificationConfig(
-    params: TaskIdParams | GetTaskPushNotificationConfigParams,
+    params: GetTaskPushNotificationConfigRequest,
     context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.id, context);
+    const { taskId, configId: legacyConfigId } = extractTaskAndPushNotificationConfigId(
+      params.name
+    );
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw A2AError.taskNotFound(params.id);
+      throw A2AError.taskNotFound(taskId);
     }
 
-    const configs = (await this.pushNotificationStore?.load(params.id)) || [];
+    const configs = (await this.pushNotificationStore?.load(taskId)) || [];
     if (configs.length === 0) {
-      throw A2AError.internalError(`Push notification config not found for task ${params.id}.`);
+      throw A2AError.internalError(`Push notification config not found for task ${taskId}.`);
     }
 
     let configId: string;
     if ('pushNotificationConfigId' in params && params.pushNotificationConfigId) {
-      configId = params.pushNotificationConfigId;
+      configId = params.pushNotificationConfigId as string;
     } else {
       // For backward compatibility, if no config ID is given, assume it's the task ID.
-      configId = params.id;
+      configId = legacyConfigId;
     }
 
     const config = configs.find((c) => c.id === configId);
 
     if (!config) {
       throw A2AError.internalError(
-        `Push notification config with id '${configId}' not found for task ${params.id}.`
+        `Push notification config with id '${configId}' not found for task ${taskId}.`
       );
     }
     return {
-      name: `tasks/${params.id}/pushNotificationConfigs/${configId}`,
+      name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
       pushNotificationConfig: config,
     };
   }
 
   async listTaskPushNotificationConfigs(
-    params: ListTaskPushNotificationConfigParams,
+    params: ListTaskPushNotificationConfigRequest,
     context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.id, context);
+    const taskId = extractTaskId(params.parent);
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw A2AError.taskNotFound(params.id);
+      throw A2AError.taskNotFound(taskId);
     }
 
-    const configs = (await this.pushNotificationStore?.load(params.id)) || [];
+    const configs = (await this.pushNotificationStore?.load(taskId)) || [];
 
     return configs.map((config) => ({
-      name: `tasks/${params.id}/pushNotificationConfigs/${config.id}`,
+      name: `tasks/${taskId}/pushNotificationConfigs/${config.id}`,
       pushNotificationConfig: config,
     }));
   }
 
   async deleteTaskPushNotificationConfig(
-    params: DeleteTaskPushNotificationConfigParams,
+    params: DeleteTaskPushNotificationConfigRequest,
     context?: ServerCallContext
   ): Promise<void> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw A2AError.pushNotificationNotSupported();
     }
-    const task = await this.taskStore.load(params.id, context);
+    const { taskId, configId } = extractTaskAndPushNotificationConfigId(params.name);
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw A2AError.taskNotFound(params.id);
+      throw A2AError.taskNotFound(taskId);
     }
 
-    const { id: taskId, pushNotificationConfigId } = params;
-
-    await this.pushNotificationStore?.delete(taskId, pushNotificationConfigId);
+    await this.pushNotificationStore?.delete(taskId, configId);
   }
 
   async *resubscribe(
-    params: TaskIdParams,
+    params: TaskSubscriptionRequest,
     context?: ServerCallContext
   ): AsyncGenerator<
     | Task // Initial task state
@@ -591,9 +586,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw A2AError.unsupportedOperation('Streaming (and thus resubscription) is not supported.');
     }
 
-    const task = await this.taskStore.load(params.id, context);
+    const taskId = extractTaskId(params.name);
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw A2AError.taskNotFound(params.id);
+      throw A2AError.taskNotFound(taskId);
     }
 
     // Yield the current task state first
@@ -604,10 +600,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       return;
     }
 
-    const eventBus = this.eventBusManager.getByTaskId(params.id);
+    const eventBus = this.eventBusManager.getByTaskId(taskId);
     if (!eventBus) {
       // No active execution for this task, so no live events.
-      console.warn(`Resubscribe: No active event bus for task ${params.id}.`);
+      console.warn(`Resubscribe: No active event bus for task ${taskId}.`);
       return;
     }
 
@@ -621,11 +617,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // We only care about updates related to *this* task.
         // The event bus might be shared if messageId was reused, though
         // ExecutionEventBusManager tries to give one bus per original message.
-        if ('status' in event && 'taskId' in event && event.taskId === params.id) {
+        if ('status' in event && 'taskId' in event && event.taskId === taskId) {
           yield event as TaskStatusUpdateEvent;
-        } else if ('artifact' in event && event.taskId === params.id) {
+        } else if ('artifact' in event && event.taskId === taskId) {
           yield event as TaskArtifactUpdateEvent;
-        } else if ('artifacts' in event && (event as Task).id === params.id) {
+        } else if ('artifacts' in event && (event as Task).id === taskId) {
           // This implies the task was re-emitted, yield it.
           yield event as Task;
         }

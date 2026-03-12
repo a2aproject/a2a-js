@@ -4,7 +4,7 @@ import * as proto from '../../../src/grpc/pb/a2a_services.js';
 import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import { AgentCard, HTTP_EXTENSION_HEADER, Task, Role, TaskState } from '../../../src/index.js';
-import { MessageSendParams } from '../../../src/json_rpc_types.js';
+import { SendMessageRequest } from '../../../src/index.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
@@ -132,7 +132,7 @@ describe('grpcHandler', () => {
       const call = createMockUnaryCall({ message: { role: Role.ROLE_USER, content: [] as any } });
       const callback = vi.fn();
 
-      const messageSendParams = { message: { role: Role.ROLE_USER } as any } as MessageSendParams;
+      const messageSendParams = { request: { role: Role.ROLE_USER } as any } as SendMessageRequest;
       (FromProto.messageSendParams as Mock).mockReturnValue(messageSendParams);
       const sendMessageResponse = {
         payload: { $case: 'task', value: { id: 'task-1' } } as proto.SendMessageResponse,

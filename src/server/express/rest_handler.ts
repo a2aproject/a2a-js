@@ -23,6 +23,7 @@ import {
   AgentCard,
   ListTaskPushNotificationConfigResponse,
   MessageFns,
+  SendMessageRequest,
   SendMessageResponse,
   StreamResponse,
   Task,
@@ -30,7 +31,6 @@ import {
 } from '../../types/pb/a2a_types.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
-import { MessageSendParams } from '../../json_rpc_types.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -314,7 +314,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const result = await restTransportHandler.sendMessage(req.body as MessageSendParams, context);
+      const params = SendMessageRequest.fromJSON(req.body);
+      const result = await restTransportHandler.sendMessage(params, context);
       const protoResult = ToProto.messageSendResult(result);
       sendResponse<SendMessageResponse>(
         res,
@@ -342,10 +343,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const stream = await restTransportHandler.sendMessageStream(
-        req.body as MessageSendParams,
-        context
-      );
+      const params = SendMessageRequest.fromJSON(req.body);
+      const stream = await restTransportHandler.sendMessageStream(params, context);
       await sendStreamResponse(res, stream, context);
     })
   );

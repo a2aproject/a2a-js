@@ -36,17 +36,6 @@ import {
   CreateTaskPushNotificationConfigRequest,
   GetAgentCardRequest,
 } from '../pb/a2a_types.js';
-import {
-  JsonRpcTaskPushNotificationConfig,
-  TaskQueryParams,
-  TaskIdParams,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  DeleteTaskPushNotificationConfigParams,
-  MessageSendParams,
-  MessageSendConfiguration,
-  PushNotificationAuthenticationInfo,
-} from '../../json_rpc_types.js';
 import { generatePushNotificationConfigName, generateTaskName } from './id_decoding.js';
 
 export class ToProto {
@@ -91,7 +80,10 @@ export class ToProto {
   }
 
   static listTaskPushNotificationConfig(
-    configs: (JsonRpcTaskPushNotificationConfig | TaskPushNotificationConfig)[]
+    configs: (
+      | { taskId: string; pushNotificationConfig: PushNotificationConfig }
+      | TaskPushNotificationConfig
+    )[]
   ): ListTaskPushNotificationConfigResponse {
     return {
       configs: configs.map((c) => {
@@ -107,17 +99,18 @@ export class ToProto {
     };
   }
 
-  static getTaskPushNotificationConfigParams(
-    config: GetTaskPushNotificationConfigParams
-  ): GetTaskPushNotificationConfigRequest {
+  static getTaskPushNotificationConfigParams(config: {
+    id: string;
+    pushNotificationConfigId?: string;
+  }): GetTaskPushNotificationConfigRequest {
     return {
       name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId ?? ''),
     };
   }
 
-  static listTaskPushNotificationConfigParams(
-    config: ListTaskPushNotificationConfigParams
-  ): ListTaskPushNotificationConfigRequest {
+  static listTaskPushNotificationConfigParams(config: {
+    id: string;
+  }): ListTaskPushNotificationConfigRequest {
     return {
       parent: generateTaskName(config.id),
       pageToken: '',
@@ -125,16 +118,19 @@ export class ToProto {
     };
   }
 
-  static deleteTaskPushNotificationConfigParams(
-    config: DeleteTaskPushNotificationConfigParams
-  ): DeleteTaskPushNotificationConfigRequest {
+  static deleteTaskPushNotificationConfigParams(config: {
+    id: string;
+    pushNotificationConfigId: string;
+  }): DeleteTaskPushNotificationConfigRequest {
     return {
       name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId),
     };
   }
 
   static taskPushNotificationConfig(
-    config: JsonRpcTaskPushNotificationConfig | TaskPushNotificationConfig
+    config:
+      | { taskId: string; pushNotificationConfig: PushNotificationConfig }
+      | TaskPushNotificationConfig
   ): TaskPushNotificationConfig {
     if ('taskId' in config) {
       return {
@@ -160,18 +156,20 @@ export class ToProto {
     return config;
   }
 
-  static pushNotificationAuthenticationInfo(
-    authInfo: PushNotificationAuthenticationInfo
-  ): AuthenticationInfo {
+  static pushNotificationAuthenticationInfo(authInfo: {
+    schemes: string[];
+    credentials?: string;
+  }): AuthenticationInfo {
     return {
       schemes: authInfo.schemes,
       credentials: authInfo.credentials ?? '',
     };
   }
 
-  static jsonRpcTaskPushNotificationConfig(
-    config: JsonRpcTaskPushNotificationConfig
-  ): TaskPushNotificationConfig {
+  static jsonRpcTaskPushNotificationConfig(config: {
+    taskId: string;
+    pushNotificationConfig?: PushNotificationConfig;
+  }): TaskPushNotificationConfig {
     return {
       name: generatePushNotificationConfigName(
         config.taskId,
@@ -270,7 +268,16 @@ export class ToProto {
     return part;
   }
 
-  static messageSendParams(params: MessageSendParams): SendMessageRequest {
+  static messageSendParams(params: {
+    message: Message;
+    configuration?: {
+      blocking?: boolean;
+      acceptedOutputModes?: string[];
+      pushNotificationConfig?: { pushNotificationConfig: PushNotificationConfig };
+      historyLength?: number;
+    };
+    metadata?: { [k: string]: unknown };
+  }): SendMessageRequest {
     return {
       request: params.message,
       configuration: ToProto.configuration(params.configuration!),
@@ -279,7 +286,15 @@ export class ToProto {
   }
 
   static configuration(
-    configuration: MessageSendConfiguration
+    configuration:
+      | {
+          blocking?: boolean;
+          acceptedOutputModes?: string[];
+          pushNotificationConfig?: { pushNotificationConfig: PushNotificationConfig };
+          historyLength?: number;
+        }
+      | undefined
+      | null
   ): SendMessageConfiguration | undefined {
     if (!configuration) {
       return undefined;
@@ -293,20 +308,20 @@ export class ToProto {
     };
   }
 
-  static taskQueryParams(params: TaskQueryParams): GetTaskRequest {
+  static taskQueryParams(params: { id: string; historyLength?: number }): GetTaskRequest {
     return {
       name: generateTaskName(params.id),
       historyLength: params.historyLength ?? 0,
     };
   }
 
-  static cancelTaskRequest(params: TaskIdParams): CancelTaskRequest {
+  static cancelTaskRequest(params: { id: string }): CancelTaskRequest {
     return {
       name: generateTaskName(params.id),
     };
   }
 
-  static taskIdParams(params: TaskIdParams): TaskSubscriptionRequest {
+  static taskIdParams(params: { id: string }): TaskSubscriptionRequest {
     return {
       name: generateTaskName(params.id),
     };

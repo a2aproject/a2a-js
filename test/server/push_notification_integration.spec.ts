@@ -17,7 +17,7 @@ import {
   TaskState,
   TaskStatus,
 } from '../../src/types/pb/a2a_types.js';
-import { MessageSendParams } from '../../src/json_rpc_types.js';
+import { SendMessageRequest } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
@@ -176,16 +176,19 @@ describe('Push Notification Integration Tests', () => {
       };
 
       const contextId = 'test-push-context';
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           ...createTestMessage('Test task with push notifications'),
           contextId: contextId,
+          extensions: [],
+          metadata: {},
         },
+        metadata: {},
         configuration: {
-          pushNotificationConfig: {
-            taskId: contextId,
-            pushNotificationConfig: pushConfig,
-          },
+          pushNotification: pushConfig,
+          historyLength: 0,
+          blocking: true,
+          acceptedOutputModes: [],
         },
       };
 
@@ -206,7 +209,7 @@ describe('Push Notification Integration Tests', () => {
       const expectedTaskResult: Task = {
         id: taskId,
         contextId,
-        history: [params.message as Message],
+        history: [params.request as Message],
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           update: undefined,
@@ -268,11 +271,15 @@ describe('Push Notification Integration Tests', () => {
         authentication: undefined,
       };
 
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           ...createTestMessage('Test task with multiple push endpoints', 'test-multi-endpoints'),
           contextId: 'test-context',
+          extensions: [],
+          metadata: {},
         },
+        metadata: {},
+        configuration: undefined,
       };
 
       // Assume the task is created by a previous message
@@ -380,16 +387,19 @@ describe('Push Notification Integration Tests', () => {
       };
 
       const contextId = 'test-error-context';
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           ...createTestMessage('Test task with error endpoint'),
           contextId: contextId,
+          extensions: [],
+          metadata: {},
         },
+        metadata: {},
         configuration: {
-          pushNotificationConfig: {
-            taskId: contextId,
-            pushNotificationConfig: pushConfig,
-          },
+          pushNotification: pushConfig,
+          historyLength: 0,
+          blocking: true,
+          acceptedOutputModes: [],
         },
       };
 
@@ -411,7 +421,7 @@ describe('Push Notification Integration Tests', () => {
       const expectedTaskResult: Task = {
         id: taskId,
         contextId,
-        history: [params.message as Message],
+        history: [params.request as Message],
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           update: undefined,
@@ -444,13 +454,14 @@ describe('Push Notification Integration Tests', () => {
         authentication: undefined,
       };
 
-      const params: MessageSendParams = {
-        message: createTestMessage('Test with default header name'),
+      const params: SendMessageRequest = {
+        request: createTestMessage('Test with default header name'),
+        metadata: {},
         configuration: {
-          pushNotificationConfig: {
-            taskId: 'default-header-test',
-            pushNotificationConfig: pushConfig,
-          },
+          pushNotification: pushConfig,
+          historyLength: 0,
+          blocking: true,
+          acceptedOutputModes: [],
         },
       };
 
@@ -539,13 +550,14 @@ describe('Push Notification Integration Tests', () => {
         authentication: undefined,
       };
 
-      const params: MessageSendParams = {
-        message: createTestMessage('Test with custom header name'),
+      const params: SendMessageRequest = {
+        request: createTestMessage('Test with custom header name'),
+        metadata: {},
         configuration: {
-          pushNotificationConfig: {
-            taskId: 'custom-header-test',
-            pushNotificationConfig: pushConfig,
-          },
+          pushNotification: pushConfig,
+          historyLength: 0,
+          blocking: true,
+          acceptedOutputModes: [],
         },
       };
 
@@ -620,13 +632,14 @@ describe('Push Notification Integration Tests', () => {
         authentication: undefined,
       };
 
-      const params: MessageSendParams = {
-        message: createTestMessage('Test without token'),
+      const params: SendMessageRequest = {
+        request: createTestMessage('Test without token'),
+        metadata: {},
         configuration: {
-          pushNotificationConfig: {
-            taskId: 'no-token-test',
-            pushNotificationConfig: pushConfig,
-          },
+          pushNotification: pushConfig,
+          historyLength: 0,
+          blocking: true,
+          acceptedOutputModes: [],
         },
       };
 
@@ -721,11 +734,15 @@ describe('Push Notification Integration Tests', () => {
         authentication: undefined,
       };
 
-      const params: MessageSendParams = {
-        message: {
+      const params: SendMessageRequest = {
+        request: {
           ...createTestMessage('Test with multiple configs', 'multi-config-test'),
           contextId: 'test-context',
+          extensions: [],
+          metadata: {},
         },
+        metadata: {},
+        configuration: undefined,
       };
 
       // Create task and set multiple push configs

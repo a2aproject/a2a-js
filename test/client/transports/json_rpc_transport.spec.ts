@@ -103,7 +103,7 @@ describe('JsonRpcTransport', () => {
           JSON.stringify({
             jsonrpc: '2.0',
             result: {
-              taskId: 'task1',
+              name: 'tasks/task1/pushNotificationConfigs/config1',
               pushNotificationConfig: config.config?.pushNotificationConfig,
             },
             id: 1,
@@ -118,8 +118,9 @@ describe('JsonRpcTransport', () => {
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfig/set');
       expect(body.params).toEqual({
-        taskId: 'task1',
-        pushNotificationConfig: config.config?.pushNotificationConfig,
+        parent: 'tasks/task1',
+        configId: 'config1',
+        config: config.config,
       });
       expect(result).toEqual(config.config);
     });
@@ -144,7 +145,7 @@ describe('JsonRpcTransport', () => {
           JSON.stringify({
             jsonrpc: '2.0',
             result: {
-              taskId: 'task1',
+              name: 'tasks/task1/pushNotificationConfigs/config1',
               pushNotificationConfig: expectedConfig.pushNotificationConfig,
             },
             id: 1,
@@ -158,7 +159,7 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfig/get');
-      expect(body.params).toEqual({ id: 'task1', pushNotificationConfigId: 'config1' });
+      expect(body.params).toEqual({ name: 'tasks/task1/pushNotificationConfigs/config1' });
       expect(result).toEqual(expectedConfig);
     });
 
@@ -183,12 +184,14 @@ describe('JsonRpcTransport', () => {
         new Response(
           JSON.stringify({
             jsonrpc: '2.0',
-            result: [
-              {
-                taskId: 'task1',
-                pushNotificationConfig: expectedConfig.pushNotificationConfig,
-              },
-            ],
+            result: {
+              configs: [
+                {
+                  name: 'tasks/task1/pushNotificationConfigs/config1',
+                  pushNotificationConfig: expectedConfig.pushNotificationConfig,
+                },
+              ],
+            },
             id: 1,
           }),
           { status: 200 }
@@ -200,7 +203,7 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfig/list');
-      expect(body.params).toEqual({ id: 'task1' });
+      expect(body.params).toEqual({ parent: 'tasks/task1' });
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(expectedConfig);
     });
