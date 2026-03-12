@@ -64,7 +64,7 @@ export interface JSONRPCErrorResponse {
  * JSON-RPC Success responses.
  */
 
-export interface BaseSuccessResponse<T> {
+interface BaseSuccessResponse<T> {
   id: string | number | null;
   jsonrpc: '2.0';
   result: T;
