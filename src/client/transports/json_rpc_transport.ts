@@ -1,5 +1,6 @@
 import { TransportProtocolName } from '../../core.js';
 import {
+  A2A_ERROR_CODE,
   AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
@@ -406,19 +407,19 @@ export class JsonRpcTransport implements Transport {
   private static mapToError(response: JSONRPCErrorResponse): Error {
     const errorMessage = response.error.message;
     switch (response.error.code) {
-      case -32001:
+      case A2A_ERROR_CODE.TASK_NOT_FOUND:
         return new TaskNotFoundError(errorMessage);
-      case -32002:
+      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
         return new TaskNotCancelableError(errorMessage);
-      case -32003:
+      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
         return new PushNotificationNotSupportedError(errorMessage);
-      case -32004:
+      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
         return new UnsupportedOperationError(errorMessage);
-      case -32005:
+      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
         return new ContentTypeNotSupportedError(errorMessage);
-      case -32006:
+      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
         return new InvalidAgentResponseError(errorMessage);
-      case -32007:
+      case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
         return new AuthenticatedExtendedCardNotConfiguredError(errorMessage);
       default:
         return new JSONRPCTransportError(response);
