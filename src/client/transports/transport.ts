@@ -1,53 +1,53 @@
+import { TaskPushNotificationConfig, Task, AgentCard } from '../../index.js';
 import {
-  MessageSendParams,
-  TaskPushNotificationConfig,
-  TaskIdParams,
-  ListTaskPushNotificationConfigParams,
-  DeleteTaskPushNotificationConfigParams,
-  TaskQueryParams,
-  Task,
-  AgentCard,
-  GetTaskPushNotificationConfigParams,
-} from '../../types.js';
+  SendMessageRequest,
+  CancelTaskRequest,
+  ListTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  GetTaskPushNotificationConfigRequest,
+  CreateTaskPushNotificationConfigRequest,
+  TaskSubscriptionRequest,
+} from '../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 
 export interface Transport {
   getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard>;
 
-  sendMessage(params: MessageSendParams, options?: RequestOptions): Promise<SendMessageResult>;
+  sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult>;
 
   sendMessageStream(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 
   setTaskPushNotificationConfig(
-    params: TaskPushNotificationConfig,
+    params: CreateTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
-    params: GetTaskPushNotificationConfigParams,
+    params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig>;
 
   listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigParams,
+    params: ListTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]>;
 
   deleteTaskPushNotificationConfig(
-    params: DeleteTaskPushNotificationConfigParams,
+    params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void>;
 
-  getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task>;
+  getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task>;
 
-  cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task>;
+  cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task>;
 
   resubscribeTask(
-    params: TaskIdParams,
+    params: TaskSubscriptionRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 }

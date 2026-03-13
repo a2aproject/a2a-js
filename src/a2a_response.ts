@@ -5,11 +5,11 @@ import {
   CancelTaskResponse,
   SetTaskPushNotificationConfigResponse,
   GetTaskPushNotificationConfigResponse,
-  JSONRPCErrorResponse,
   ListTaskPushNotificationConfigSuccessResponse,
   DeleteTaskPushNotificationConfigSuccessResponse,
   GetAuthenticatedExtendedCardSuccessResponse,
-} from './types.js';
+  JSONRPCErrorResponse,
+} from './json_rpc_types.js';
 
 /**
  * Represents any valid JSON-RPC response defined in the A2A protocol.

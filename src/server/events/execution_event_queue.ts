@@ -1,4 +1,4 @@
-import { TaskStatusUpdateEvent } from '../../types.js';
+import { TaskStatusUpdateEvent } from '../../index.js';
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
 
 /**
@@ -40,8 +40,8 @@ export class ExecutionEventQueue {
         const event = this.eventQueue.shift()!;
         yield event;
         if (
-          event.kind === 'message' ||
-          (event.kind === 'status-update' && (event as TaskStatusUpdateEvent).final)
+          'messageId' in event ||
+          ('status' in event && 'taskId' in event && (event as TaskStatusUpdateEvent).final)
         ) {
           this.handleFinished();
           break;

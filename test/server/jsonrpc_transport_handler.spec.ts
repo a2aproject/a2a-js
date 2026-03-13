@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vite
 
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { JSONRPCErrorResponse, JSONRPCRequest } from '../../src/index.js';
+import { JSONRPCErrorResponse } from '../../src/json_rpc_types.js';
 
 describe('JsonRpcTransportHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -12,7 +12,7 @@ describe('JsonRpcTransportHandler', () => {
     mockRequestHandler = {
       getAgentCard: vi.fn(),
       getAuthenticatedExtendedAgentCard: vi.fn(),
-      sendMessage: vi.fn(),
+      sendMessage: vi.fn().mockResolvedValue({ messageId: 'default-id' }),
       sendMessageStream: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
@@ -113,12 +113,12 @@ describe('JsonRpcTransportHandler', () => {
     });
 
     it('should handle valid request with null id', async () => {
-      const request: JSONRPCRequest = {
+      const request = {
         jsonrpc: '2.0',
         method: 'message/send',
         id: null,
         params: {},
-      };
+      } as any;
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockResolvedValue({
         card: 'data',
       });

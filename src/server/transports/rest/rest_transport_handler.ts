@@ -13,12 +13,12 @@ import {
   Task,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
-  MessageSendParams,
   TaskPushNotificationConfig,
-  TaskQueryParams,
-  TaskIdParams,
   AgentCard,
-} from '../../../types.js';
+  SendMessageRequest,
+  GetTaskRequest,
+  CancelTaskRequest,
+} from '../../../index.js';
 import { A2A_ERROR_CODE } from '../../../errors.js';
 
 // ============================================================================
@@ -138,14 +138,14 @@ export class RestTransportHandler {
   }
 
   /**
-   * Validate MessageSendParams.
+   * Validates the message send parameters.
    */
-  private validateMessageSendParams(params: MessageSendParams): void {
-    if (!params.message) {
-      throw A2AError.invalidParams('message is required');
+  private validateSendMessageRequest(params: SendMessageRequest): void {
+    if (!params.request) {
+      throw A2AError.invalidParams('request is required');
     }
-    if (!params.message.messageId) {
-      throw A2AError.invalidParams('message.messageId is required');
+    if (!params.request.messageId) {
+      throw A2AError.invalidParams('request.messageId is required');
     }
   }
 
@@ -153,10 +153,10 @@ export class RestTransportHandler {
    * Sends a message to the agent.
    */
   async sendMessage(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     context: ServerCallContext
   ): Promise<Message | Task> {
-    this.validateMessageSendParams(params);
+    this.validateSendMessageRequest(params);
     return this.requestHandler.sendMessage(params, context);
   }
 
@@ -165,7 +165,7 @@ export class RestTransportHandler {
    * @throws {A2AError} UnsupportedOperation if streaming not supported
    */
   async sendMessageStream(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     context: ServerCallContext
   ): Promise<
     AsyncGenerator<
@@ -175,7 +175,7 @@ export class RestTransportHandler {
     >
   > {
     await this.requireCapability('streaming');
-    this.validateMessageSendParams(params);
+    this.validateSendMessageRequest(params);
     return this.requestHandler.sendMessageStream(params, context);
   }
 
@@ -188,7 +188,7 @@ export class RestTransportHandler {
     context: ServerCallContext,
     historyLength?: unknown
   ): Promise<Task> {
-    const params: TaskQueryParams = { id: taskId };
+    const params: GetTaskRequest = { name: `tasks/${taskId}`, historyLength: 0 };
     if (historyLength !== undefined) {
       params.historyLength = this.parseHistoryLength(historyLength);
     }
@@ -199,7 +199,7 @@ export class RestTransportHandler {
    * Cancels a task.
    */
   async cancelTask(taskId: string, context: ServerCallContext): Promise<Task> {
-    const params: TaskIdParams = { id: taskId };
+    const params: CancelTaskRequest = { name: `tasks/${taskId}` };
     return this.requestHandler.cancelTask(params, context);
   }
 
@@ -215,8 +215,7 @@ export class RestTransportHandler {
     AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>
   > {
     await this.requireCapability('streaming');
-    const params: TaskIdParams = { id: taskId };
-    return this.requestHandler.resubscribe(params, context);
+    return this.requestHandler.resubscribe({ name: `tasks/${taskId}` }, context);
   }
 
   /**
@@ -228,11 +227,11 @@ export class RestTransportHandler {
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
-    if (!config.taskId) {
-      throw A2AError.invalidParams('taskId is required');
-    }
     if (!config.pushNotificationConfig) {
       throw A2AError.invalidParams('pushNotificationConfig is required');
+    }
+    if (!config.pushNotificationConfig.id) {
+      throw A2AError.invalidParams('pushNotificationConfig.id is required');
     }
     return this.requestHandler.setTaskPushNotificationConfig(config, context);
   }
@@ -244,7 +243,14 @@ export class RestTransportHandler {
     taskId: string,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
-    return this.requestHandler.listTaskPushNotificationConfigs({ id: taskId }, context);
+    const configs = await this.requestHandler.listTaskPushNotificationConfigs(
+      { parent: `tasks/${taskId}`, pageSize: 0, pageToken: '' },
+      context
+    );
+    return configs.map((c) => ({
+      name: `tasks/${taskId}/pushNotificationConfigs/${c.pushNotificationConfig!.id}`,
+      pushNotificationConfig: c.pushNotificationConfig,
+    })) as TaskPushNotificationConfig[];
   }
 
   /**
@@ -255,10 +261,14 @@ export class RestTransportHandler {
     configId: string,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
-    return this.requestHandler.getTaskPushNotificationConfig(
-      { id: taskId, pushNotificationConfigId: configId },
+    const config = await this.requestHandler.getTaskPushNotificationConfig(
+      { name: `tasks/${taskId}/pushNotificationConfigs/${configId}` },
       context
     );
+    return {
+      name: `tasks/${taskId}/pushNotificationConfigs/${config.pushNotificationConfig?.id}`,
+      pushNotificationConfig: config.pushNotificationConfig,
+    };
   }
 
   /**
@@ -270,7 +280,7 @@ export class RestTransportHandler {
     context: ServerCallContext
   ): Promise<void> {
     await this.requestHandler.deleteTaskPushNotificationConfig(
-      { id: taskId, pushNotificationConfigId: configId },
+      { name: `tasks/${taskId}/pushNotificationConfigs/${configId}` },
       context
     );
   }

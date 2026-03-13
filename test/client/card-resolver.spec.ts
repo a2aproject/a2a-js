@@ -1,7 +1,6 @@
 import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
-import { AgentCard } from '../../src/types.js';
-import { AgentCard as PBAgentCard } from '../../src/types/pb/a2a_types.js';
+import { AgentCard } from '../../src/index.js';
 
 describe('DefaultAgentCardResolver', () => {
   let mockFetch: Mock;
@@ -16,10 +15,18 @@ describe('DefaultAgentCardResolver', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    documentationUrl: 'http://test-agent.com/docs',
+    security: [],
+    securitySchemes: {},
+    signatures: [],
+    provider: { url: '', organization: '' },
+    additionalInterfaces: [],
+    supportsAuthenticatedExtendedCard: false,
   };
 
   beforeEach(() => {
@@ -136,135 +143,5 @@ describe('DefaultAgentCardResolver', () => {
     } catch (e: any) {
       expect(e.message).to.include('Failed to fetch Agent Card from https://example.com');
     }
-  });
-
-  const expectedAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
-    name: 'Unified Agent',
-    description: '',
-    documentationUrl: undefined,
-    version: '1.0.0',
-    capabilities: {},
-    additionalInterfaces: [],
-    provider: undefined,
-    defaultInputModes: [],
-    defaultOutputModes: [],
-    supportsAuthenticatedExtendedCard: false,
-    signatures: [],
-    url: 'https://unified-agent.example.com/a2a/v1',
-    preferredTransport: 'GRPC',
-    securitySchemes: {
-      google: {
-        type: 'openIdConnect',
-        openIdConnectUrl: 'https://accounts.google.com/.well-known/openid-configuration',
-      },
-    },
-    security: [{ google: ['openid', 'profile', 'email'] }],
-    skills: [],
-  };
-
-  const JsonSchemaAgentCard: AgentCard = {
-    // A JSON Schema shape is essentially identical to the internal format
-    ...expectedAgentCard,
-  };
-
-  const ProtoAgentCard: PBAgentCard = {
-    protocolVersion: '0.3.0',
-    name: 'Unified Agent',
-    description: '',
-    documentationUrl: '',
-    version: '1.0.0',
-    capabilities: undefined,
-    additionalInterfaces: [],
-    provider: undefined,
-    defaultInputModes: [],
-    defaultOutputModes: [],
-    supportsAuthenticatedExtendedCard: false,
-    signatures: [],
-    url: 'https://unified-agent.example.com/a2a/v1',
-    preferredTransport: 'GRPC',
-    securitySchemes: {
-      google: {
-        scheme: {
-          $case: 'openIdConnectSecurityScheme',
-          value: {
-            description: '',
-            openIdConnectUrl: 'https://accounts.google.com/.well-known/openid-configuration',
-          },
-        },
-      },
-    },
-    security: [
-      {
-        schemes: {
-          google: { list: ['openid', 'profile', 'email'] },
-        },
-      },
-    ],
-    skills: [],
-  };
-
-  const expectedAgentCardWithSkill: AgentCard = {
-    ...expectedAgentCard,
-    security: [],
-    securitySchemes: {},
-    skills: [
-      {
-        id: 'test-skill',
-        name: 'Test Skill',
-        description: 'A skill for testing',
-        tags: [],
-        examples: [],
-        inputModes: [],
-        outputModes: [],
-        security: [{ google: ['openid'] }],
-      },
-    ],
-  };
-
-  const ProtoAgentCardWithSkill: PBAgentCard = {
-    ...ProtoAgentCard,
-    security: [],
-    securitySchemes: {},
-    skills: [
-      {
-        id: 'test-skill',
-        name: 'Test Skill',
-        description: 'A skill for testing',
-        tags: [],
-        examples: [],
-        inputModes: [],
-        outputModes: [],
-        security: [
-          {
-            schemes: {
-              google: { list: ['openid'] },
-            },
-          },
-        ],
-      },
-    ],
-  };
-
-  it.each([
-    ['JSON schema', JsonSchemaAgentCard, expectedAgentCard],
-    ['protobuf', PBAgentCard.toJSON(ProtoAgentCard), expectedAgentCard],
-    [
-      'protobuf (skills only)',
-      PBAgentCard.toJSON(ProtoAgentCardWithSkill),
-      expectedAgentCardWithSkill,
-    ],
-  ])('should parse and normalize %s agent card correctly', async (_, payload, expectedResult) => {
-    const resolver = new DefaultAgentCardResolver({ fetchImpl: mockFetch });
-    mockFetch.mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
-
-    const actual = await resolver.resolve('https://example.com');
-
-    // Both should normalize to the exact same internal AgentCard format
-    // Strip undefined properties before comparison using JSON
-    const expected = JSON.parse(JSON.stringify(expectedResult));
-    const actualClean = JSON.parse(JSON.stringify(actual));
-
-    expect(actualClean).to.deep.equal(expected);
   });
 });

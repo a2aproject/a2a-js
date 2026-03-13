@@ -1,4 +1,4 @@
-import * as schema from '../types.js';
+import { JSONRPCError } from '../json_rpc_types.js';
 
 /**
  * Custom error class for A2A server operations, incorporating JSON-RPC error codes.
@@ -19,8 +19,8 @@ export class A2AError extends Error {
   /**
    * Formats the error into a standard JSON-RPC error object structure.
    */
-  toJSONRPCError(): schema.JSONRPCError {
-    const errorObject: schema.JSONRPCError = {
+  toJSONRPCError(): JSONRPCError {
+    const errorObject: JSONRPCError = {
       code: this.code,
       message: this.message,
     };

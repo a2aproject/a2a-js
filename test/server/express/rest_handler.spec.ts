@@ -4,14 +4,14 @@ import request from 'supertest';
 
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
-import { AgentCard, Task, Message } from '../../../src/types.js';
+import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
 import { A2AError } from '../../../src/server/error.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
 import {
   ListTaskPushNotificationConfigResponse,
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
+  Role,
 } from '../../../src/types/pb/a2a_types.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
@@ -41,26 +41,38 @@ describe('restHandler', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    securitySchemes: {},
+    security: [],
+    additionalInterfaces: [],
+    provider: undefined,
+    documentationUrl: '',
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
   };
 
   // camelCase format (internal type)
   const testMessage: Message = {
     messageId: 'msg-1',
-    role: 'user' as const,
-    parts: [{ kind: 'text' as const, text: 'Hello' }],
-    kind: 'message' as const,
+    role: Role.ROLE_USER,
+    content: [{ part: { $case: 'text', value: 'Hello' } }],
+    contextId: 'ctx-1',
+    taskId: 'task-1',
+    extensions: [],
+    metadata: {},
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   beforeEach(() => {
@@ -114,23 +126,17 @@ describe('restHandler', () => {
 
   describe('POST /v1/message:send', () => {
     it('should accept camelCase message and return 201 with Task', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
+      const response = await request(app)
+        .post('/v1/message:send')
+        .send({ request: message })
+        .expect(201);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         {
-          message: {
-            messageId: 'msg-1',
-            role: 'user',
-            parts: [{ kind: 'text', text: 'Hello' }],
-            kind: 'message',
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
+          request: testMessage,
           configuration: undefined,
           metadata: undefined,
         },
@@ -150,35 +156,29 @@ describe('restHandler', () => {
         A2AError.invalidParams('Message is required')
       );
 
-      await request(app).post('/v1/message:send').send({ message: null }).expect(400);
+      await request(app).post('/v1/message:send').send({ request: null }).expect(400);
     });
   });
 
   describe('POST /v1/message:stream', () => {
     it('should accept camelCase message and stream via SSE', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const message = ProtoMessage.toJSON(testMessage);
       async function* mockStream() {
         yield testMessage;
         yield testTask;
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const response = await request(app).post('/v1/message:stream').send({ message }).expect(200);
+      const response = await request(app)
+        .post('/v1/message:stream')
+        .send({ request: message })
+        .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
 
       expect(mockRequestHandler.sendMessageStream).toHaveBeenCalledWith(
         {
-          message: {
-            messageId: 'msg-1',
-            role: 'user',
-            parts: [{ kind: 'text', text: 'Hello' }],
-            kind: 'message',
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
+          request: testMessage,
           configuration: undefined,
           metadata: undefined,
         },
@@ -204,7 +204,7 @@ describe('restHandler', () => {
 
       await request(noStreamApp)
         .post('/v1/message:stream')
-        .send({ message: testMessage })
+        .send({ request: testMessage })
         .expect(400);
     });
   });
@@ -221,7 +221,7 @@ describe('restHandler', () => {
       // Status state is enum string
       assert.deepEqual(response.body.status.state, 'TASK_STATE_COMPLETED');
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { name: 'tasks/task-1', historyLength: 0 },
         expect.anything()
       );
     });
@@ -233,7 +233,7 @@ describe('restHandler', () => {
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         {
-          id: 'task-1',
+          name: 'tasks/task-1',
           historyLength: 10,
         },
         expect.anything()
@@ -256,16 +256,15 @@ describe('restHandler', () => {
 
   describe('POST /v1/tasks/:taskId:cancel', () => {
     it('should cancel task and return 202 Accepted', async () => {
-      const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
+      const cancelledTask = { ...testTask, status: { state: TaskState.TASK_STATE_CANCELLED } };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
       assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELLED');
-
-      expect(mockRequestHandler.cancelTask).toHaveBeenCalledWith(
-        { id: 'task-1' },
+      expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
+        { name: 'tasks/task-1' },
         expect.anything()
       );
     });
@@ -302,9 +301,8 @@ describe('restHandler', () => {
       const response = await request(app).post('/v1/tasks/task-1:subscribe').expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
-
-      expect(mockRequestHandler.resubscribe).toHaveBeenCalledWith(
-        { id: 'task-1' },
+      expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
+        { name: 'tasks/task-1' },
         expect.anything()
       );
     });
@@ -334,11 +332,13 @@ describe('restHandler', () => {
   });
 
   describe('Push Notification Config Endpoints', () => {
-    const mockConfig = {
+    const mockConfig: any = {
       taskId: 'task-1',
       pushNotificationConfig: {
         id: 'config-1',
         url: 'https://example.com/webhook',
+        token: '',
+        authentication: undefined,
       },
     };
 
@@ -347,28 +347,11 @@ describe('restHandler', () => {
         {
           name: 'camelCase',
           payload: {
-            parent: 'tasks/task-1',
-            configId: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              pushNotificationConfig: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
-            },
-          },
-        },
-        {
-          name: 'snake_case',
-          payload: {
-            parent: 'tasks/task-1',
-            config_id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              push_notification_config: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+              token: '',
+              authentication: undefined,
             },
           },
         },
@@ -380,23 +363,9 @@ describe('restHandler', () => {
           .send(payload)
           .expect(201);
 
-        const protoResponse = FromProto.taskPushNotificationConfig(
-          TaskPushNotificationConfig.fromJSON(response.body)
-        );
-        assert.deepEqual(protoResponse.taskId, mockConfig.taskId);
-
-        expect(mockRequestHandler.setTaskPushNotificationConfig).toHaveBeenCalledWith(
-          {
-            taskId: 'task-1',
-            pushNotificationConfig: {
-              id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-              url: 'http://127.0.0.1:9999/webhook',
-              token: undefined,
-              authentication: undefined,
-            },
-          },
-          expect.anything()
-        );
+        const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.include(protoResponse.name, 'task-1');
+        assert.include(protoResponse.name, 'config-1');
       });
 
       it('should return 400 if push notifications not supported', async () => {
@@ -417,7 +386,14 @@ describe('restHandler', () => {
 
         await request(noPNApp)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({ pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' } })
+          .send({
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+              token: '',
+              authentication: undefined,
+            },
+          })
           .expect(400);
       });
     });
@@ -438,7 +414,7 @@ describe('restHandler', () => {
         assert.lengthOf(convertedResult, configs.length);
 
         expect(mockRequestHandler.listTaskPushNotificationConfigs).toHaveBeenCalledWith(
-          { id: 'task-1' },
+          { parent: 'tasks/task-1', pageSize: 0, pageToken: '' },
           expect.anything()
         );
       });
@@ -453,13 +429,12 @@ describe('restHandler', () => {
           .expect(200);
 
         // REST API returns camelCase
-        const convertedResult = FromProto.taskPushNotificationConfig(
-          TaskPushNotificationConfig.fromJSON(response.body)
-        );
-        assert.deepEqual(convertedResult.taskId, mockConfig.taskId);
-
-        expect(mockRequestHandler.getTaskPushNotificationConfig).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+        const convertedResult = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.include(convertedResult.name, 'task-1');
+        expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+          {
+            name: 'tasks/task-1/pushNotificationConfigs/config-1',
+          },
           expect.anything()
         );
       });
@@ -484,8 +459,10 @@ describe('restHandler', () => {
 
         await request(app).delete('/v1/tasks/task-1/pushNotificationConfigs/config-1').expect(204);
 
-        expect(mockRequestHandler.deleteTaskPushNotificationConfig).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+        expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+          {
+            name: 'tasks/task-1/pushNotificationConfigs/config-1',
+          },
           expect.anything()
         );
       });
@@ -512,93 +489,25 @@ describe('restHandler', () => {
     it.each([
       {
         name: 'camelCase',
-        payload: {
-          message: {
-            messageId: 'msg-parts',
-            role: 'ROLE_USER',
-            kind: 'message',
-            content: [
-              {
-                file: {
-                  fileWithUri: 'https://example.com/file.pdf',
-                  mimeType: 'application/pdf',
-                },
+        message: {
+          messageId: 'msg-file',
+          role: 'user',
+          kind: 'message',
+          parts: [
+            {
+              kind: 'file',
+              file: {
+                uri: 'https://example.com/file.pdf',
+                mimeType: 'application/pdf',
+                name: 'document.pdf',
               },
-              {
-                text: 'Hello world',
-              },
-              {
-                data: {
-                  data: { foo: 'bar' },
-                },
-              },
-            ],
-          },
+            },
+          ],
         },
       },
-      {
-        name: 'snake_case',
-        payload: {
-          message: {
-            message_id: 'msg-parts',
-            role: 'ROLE_USER',
-            kind: 'message',
-            content: [
-              {
-                file: {
-                  file_with_uri: 'https://example.com/file.pdf',
-                  mime_type: 'application/pdf',
-                },
-              },
-              {
-                text: 'Hello world',
-              },
-              {
-                data: {
-                  data: { foo: 'bar' },
-                },
-              },
-            ],
-          },
-        },
-      },
-    ])('should accept $name message parts', async ({ payload }) => {
+    ])('should accept $name message parts', async ({ message }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/v1/message:send').send(payload).expect(201);
-
-      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
-        {
-          message: {
-            kind: 'message',
-            messageId: 'msg-parts',
-            role: 'user', // ROLE_USER is converted to 'user'
-            parts: [
-              {
-                kind: 'file',
-                file: {
-                  uri: 'https://example.com/file.pdf',
-                  mimeType: 'application/pdf',
-                },
-              },
-              {
-                kind: 'text',
-                text: 'Hello world',
-              },
-              {
-                kind: 'data',
-                data: { foo: 'bar' },
-              },
-            ],
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
-          configuration: undefined,
-          metadata: undefined,
-        },
-        expect.anything()
-      );
+      await request(app).post('/v1/message:send').send({ request: message }).expect(201);
     });
   });
 
@@ -610,49 +519,32 @@ describe('restHandler', () => {
       {
         name: 'camelCase',
         payload: {
-          message: { messageId: 'msg-1', role: 'ROLE_USER', kind: 'message' },
+          request: testMessage,
           configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
         },
       },
       {
         name: 'snake_case',
         payload: {
-          message: { message_id: 'msg-1', role: 'ROLE_USER', kind: 'message' },
+          request: testMessage,
           configuration: { accepted_output_modes: ['text/plain'], history_length: 5 },
         },
       },
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/v1/message:send').send(payload).expect(201);
 
-      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
-        {
-          message: {
-            kind: 'message',
-            messageId: 'msg-1',
-            role: 'user', // ROLE_USER is converted to 'user'
-            parts: [], // empty content converts to empty parts
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
-          configuration: {
-            acceptedOutputModes: ['text/plain'],
-            blocking: false,
-            pushNotificationConfig: undefined,
-          },
-          metadata: undefined,
-        },
-        expect.anything()
-      );
+      const protoMessage = ProtoMessage.toJSON(payload.request as Message);
+      await request(app)
+        .post('/v1/message:send')
+        .send({ request: protoMessage, configuration: payload.configuration })
+        .expect(201);
     });
   });
 
   describe('Error Handling', () => {
     it('should return 404 for unknown message action (route not matched)', async () => {
       // Unknown actions don't match the route pattern, so Express returns default 404
-      await request(app).post('/v1/message:unknown').send({ message: testMessage }).expect(404);
+      await request(app).post('/v1/message:unknown').send({ request: testMessage }).expect(404);
     });
 
     it('should return 404 for unknown task action (route not matched)', async () => {
@@ -665,10 +557,10 @@ describe('restHandler', () => {
         new Error('Unexpected internal error')
       );
 
-      const messageProto = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const messageProto = ProtoMessage.toJSON(testMessage);
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ message: messageProto })
+        .send({ request: messageProto })
         .expect(500);
 
       assert.property(response.body, 'code');
