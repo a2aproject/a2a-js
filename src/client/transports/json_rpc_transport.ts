@@ -404,21 +404,22 @@ export class JsonRpcTransport implements Transport {
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
+    const errorMessage = response.error.message;
     switch (response.error.code) {
       case -32001:
-        return new TaskNotFoundJSONRPCError(response);
+        return new TaskNotFoundError(errorMessage);
       case -32002:
-        return new TaskNotCancelableJSONRPCError(response);
+        return new TaskNotCancelableError(errorMessage);
       case -32003:
-        return new PushNotificationNotSupportedJSONRPCError(response);
+        return new PushNotificationNotSupportedError(errorMessage);
       case -32004:
-        return new UnsupportedOperationJSONRPCError(response);
+        return new UnsupportedOperationError(errorMessage);
       case -32005:
-        return new ContentTypeNotSupportedJSONRPCError(response);
+        return new ContentTypeNotSupportedError(errorMessage);
       case -32006:
-        return new InvalidAgentResponseJSONRPCError(response);
+        return new InvalidAgentResponseError(errorMessage);
       case -32007:
-        return new AuthenticatedExtendedCardNotConfiguredJSONRPCError(response);
+        return new AuthenticatedExtendedCardNotConfiguredError(errorMessage);
       default:
         return new JSONRPCTransportError(response);
     }
@@ -464,50 +465,5 @@ export class JSONRPCTransportError extends Error {
     super(
       `JSON-RPC error: ${errorResponse.error.message} (Code: ${errorResponse.error.code}) Data: ${JSON.stringify(errorResponse.error.data || {})}`
     );
-  }
-}
-
-// Redeclare domain errors with the original JSON-RPC response as a field to be compatible
-// with the legacy A2AClient built around JSON-RPC interface.
-
-export class TaskNotFoundJSONRPCError extends TaskNotFoundError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class TaskNotCancelableJSONRPCError extends TaskNotCancelableError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class PushNotificationNotSupportedJSONRPCError extends PushNotificationNotSupportedError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class UnsupportedOperationJSONRPCError extends UnsupportedOperationError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class ContentTypeNotSupportedJSONRPCError extends ContentTypeNotSupportedError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class InvalidAgentResponseJSONRPCError extends InvalidAgentResponseError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class AuthenticatedExtendedCardNotConfiguredJSONRPCError extends AuthenticatedExtendedCardNotConfiguredError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
   }
 }
