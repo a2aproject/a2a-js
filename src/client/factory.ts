@@ -1,5 +1,5 @@
 import { TransportProtocolName } from '../core.js';
-import { AgentCard } from '../types.js';
+import { AgentCard } from '../index.js';
 import { AgentCardResolver } from './card-resolver.js';
 import { Client, ClientConfig } from './multitransport-client.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';

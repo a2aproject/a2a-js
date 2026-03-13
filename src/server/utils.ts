@@ -1,4 +1,4 @@
-import { TaskStatus, Artifact } from '../types.js';
+import { TaskStatus, Artifact } from '../index.js';
 
 /**
  * Generates a timestamp in ISO 8601 format.

@@ -1,5 +1,5 @@
 import { AGENT_CARD_PATH } from '../constants.js';
-import { AgentCard } from '../types.js';
+import { AgentCard } from '../index.js';
 
 export interface AgentCardResolverOptions {
   path?: string;

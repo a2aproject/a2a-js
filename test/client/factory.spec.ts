@@ -2,7 +2,7 @@ import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { ClientFactory, ClientFactoryOptions } from '../../src/client/factory.js';
 import { Transport } from '../../src/client/transports/transport.js';
 import { JsonRpcTransportFactory } from '../../src/client/transports/json_rpc_transport.js';
-import { AgentCard } from '../../src/types.js';
+import { AgentCard } from '../../src/index.js';
 import { Client } from '../../src/client/multitransport-client.js';
 import { CallInterceptor } from '../../src/client/interceptors.js';
 
@@ -108,10 +108,21 @@ describe('ClientFactory', () => {
         url: 'http://transport1.com',
         preferredTransport: 'Transport1',
         version: '1.0.0',
-        capabilities: {},
+        capabilities: {
+          extensions: [],
+          streaming: true,
+          pushNotifications: true,
+        },
         defaultInputModes: [],
         defaultOutputModes: [],
         skills: [],
+        documentationUrl: 'http://test-agent.com/docs',
+        security: [],
+        securitySchemes: {},
+        signatures: [],
+        provider: { url: '', organization: '' },
+        additionalInterfaces: [],
+        supportsAuthenticatedExtendedCard: false,
       };
     });
 

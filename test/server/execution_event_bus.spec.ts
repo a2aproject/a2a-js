@@ -4,7 +4,7 @@ import {
   DefaultExecutionEventBus,
   AgentExecutionEvent,
 } from '../../src/server/events/execution_event_bus.js';
-import { Message } from '../../src/types.js';
+import { Message, Role } from '../../src/index.js';
 
 describe('DefaultExecutionEventBus', () => {
   let eventBus: DefaultExecutionEventBus;
@@ -16,10 +16,13 @@ describe('DefaultExecutionEventBus', () => {
   const createMessage = (() => {
     let counter = 0;
     return (text: string): Message => ({
-      kind: 'message',
       messageId: `msg-${counter++}`,
-      role: 'agent',
-      parts: [{ kind: 'text', text }],
+      role: Role.ROLE_AGENT,
+      content: [{ part: { $case: 'text', value: text } }],
+      taskId: '',
+      contextId: '',
+      extensions: [],
+      metadata: {},
     });
   })();
 

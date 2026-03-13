@@ -1,10 +1,33 @@
 import {
-  JSONRPCErrorResponse,
-  MessageSendParams,
-  TaskIdParams,
-  A2ARequest,
-  JSONRPCResponse,
-} from '../../../types.js';
+  StreamResponse,
+  Message,
+  Task,
+  TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
+  SendMessageRequest,
+  TaskSubscriptionRequest,
+  GetTaskRequest,
+  CancelTaskRequest,
+  TaskPushNotificationConfig,
+  GetTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigRequest,
+} from '../../../index.js';
+import { JSONRPCErrorResponse } from '../../../json_rpc_types.js';
+
+export type A2ARequest = {
+  jsonrpc: '2.0';
+  method: string;
+  params?: unknown;
+  id?: string | number | null;
+};
+
+export type JSONRPCResponse = {
+  jsonrpc: string;
+  id: string | number | null;
+  result?: unknown;
+  error?: unknown;
+};
 import { ServerCallContext } from '../../context.js';
 import { A2AError } from '../../error.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
@@ -70,13 +93,13 @@ export class JsonRpcTransportHandler {
       if (method === 'message/stream' || method === 'tasks/resubscribe') {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();
-        if (!agentCard.capabilities.streaming) {
+        if (!agentCard.capabilities?.streaming) {
           throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
         }
         const agentEventStream =
           method === 'message/stream'
-            ? this.requestHandler.sendMessageStream(params as MessageSendParams, context)
-            : this.requestHandler.resubscribe(params as TaskIdParams, context);
+            ? this.requestHandler.sendMessageStream(SendMessageRequest.fromJSON(params), context)
+            : this.requestHandler.resubscribe(TaskSubscriptionRequest.fromJSON(params), context);
 
         // Wrap the agent event stream into a JSON-RPC result stream
         return (async function* jsonRpcEventStream(): AsyncGenerator<
@@ -86,10 +109,22 @@ export class JsonRpcTransportHandler {
         > {
           try {
             for await (const event of agentEventStream) {
+              let payload: StreamResponse['payload'];
+
+              if ('messageId' in event) {
+                payload = { $case: 'msg', value: event as Message };
+              } else if ('artifacts' in event) {
+                payload = { $case: 'task', value: event as Task };
+              } else if ('status' in event) {
+                payload = { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent };
+              } else if ('artifact' in event) {
+                payload = { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent };
+              }
+
               yield {
                 jsonrpc: '2.0',
                 id: requestId, // Use the original request ID for all streamed responses
-                result: event,
+                result: { payload },
               };
             }
           } catch (streamError) {
@@ -111,34 +146,65 @@ export class JsonRpcTransportHandler {
         // Handle non-streaming methods
         let result: unknown;
         switch (method) {
-          case 'message/send':
-            result = await this.requestHandler.sendMessage(rpcRequest.params, context);
+          case 'message/send': {
+            const messageOrTask = await this.requestHandler.sendMessage(
+              SendMessageRequest.fromJSON(rpcRequest.params),
+              context
+            );
+            result = {
+              payload: {
+                $case: 'messageId' in messageOrTask ? 'msg' : 'task',
+                value: messageOrTask,
+              },
+            };
             break;
+          }
           case 'tasks/get':
-            result = await this.requestHandler.getTask(rpcRequest.params, context);
-            break;
-          case 'tasks/cancel':
-            result = await this.requestHandler.cancelTask(rpcRequest.params, context);
-            break;
-          case 'tasks/pushNotificationConfig/set':
-            result = await this.requestHandler.setTaskPushNotificationConfig(
-              rpcRequest.params,
+            result = await this.requestHandler.getTask(
+              GetTaskRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
+          case 'tasks/cancel':
+            result = await this.requestHandler.cancelTask(
+              CancelTaskRequest.fromJSON(rpcRequest.params),
+              context
+            );
+            break;
+          case 'tasks/pushNotificationConfig/set': {
+            const params = rpcRequest.params as {
+              name?: string;
+              taskId?: string;
+              pushNotificationConfig?: TaskPushNotificationConfig['pushNotificationConfig'];
+            };
+            const config = params.name
+              ? TaskPushNotificationConfig.fromJSON({
+                  name: params.name,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                })
+              : TaskPushNotificationConfig.fromJSON({
+                  name: `tasks/${params.taskId}/pushNotificationConfigs/${params.pushNotificationConfig?.id}`,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                });
+            result = await this.requestHandler.setTaskPushNotificationConfig(config, context);
+            break;
+          }
           case 'tasks/pushNotificationConfig/get':
             result = await this.requestHandler.getTaskPushNotificationConfig(
-              rpcRequest.params,
+              GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
           case 'tasks/pushNotificationConfig/delete':
-            await this.requestHandler.deleteTaskPushNotificationConfig(rpcRequest.params, context);
+            await this.requestHandler.deleteTaskPushNotificationConfig(
+              DeleteTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
+              context
+            );
             result = null;
             break;
           case 'tasks/pushNotificationConfig/list':
             result = await this.requestHandler.listTaskPushNotificationConfigs(
-              rpcRequest.params,
+              ListTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
               context
             );
             break;

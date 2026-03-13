@@ -1,16 +1,17 @@
 import { PushNotificationNotSupportedError } from '../errors.js';
-import {
-  MessageSendParams,
-  TaskPushNotificationConfig,
-  DeleteTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  Task,
-  TaskIdParams,
-  TaskQueryParams,
-  PushNotificationConfig,
-  AgentCard,
-} from '../types.js';
+import { TaskPushNotificationConfig, Task, PushNotificationConfig, AgentCard } from '../index.js';
 import { A2AStreamEventData, SendMessageResult } from './client.js';
+import {
+  CancelTaskRequest,
+  CreateTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  ListTaskPushNotificationConfigRequest,
+  SendMessageConfiguration,
+  SendMessageRequest,
+  TaskSubscriptionRequest,
+} from '../types/pb/a2a_types.js';
 import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
@@ -90,7 +91,7 @@ export class Client {
    * Sends a message to an agent to initiate a new interaction or to continue an existing one.
    * Uses blocking mode by default.
    */
-  sendMessage(params: MessageSendParams, options?: RequestOptions): Promise<SendMessageResult> {
+  sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
       blocking: !(this.config?.polling ?? false),
@@ -108,7 +109,7 @@ export class Client {
    * Performs fallback to non-streaming if not supported by the agent.
    */
   async *sendMessageStream(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const method = 'sendMessageStream';
@@ -133,7 +134,7 @@ export class Client {
       return;
     }
 
-    if (!this.agentCard.capabilities.streaming) {
+    if (!this.agentCard.capabilities?.streaming) {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
       const afterArgs: AfterArgs<'sendMessageStream'> = {
         result: { method, value: result },
@@ -166,10 +167,10 @@ export class Client {
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
   setTaskPushNotificationConfig(
-    params: TaskPushNotificationConfig,
+    params: CreateTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -185,10 +186,10 @@ export class Client {
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
   getTaskPushNotificationConfig(
-    params: TaskIdParams,
+    params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -204,10 +205,10 @@ export class Client {
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
   listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigParams,
+    params: ListTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -222,7 +223,7 @@ export class Client {
    * Deletes an associated push notification configuration for a task.
    */
   deleteTaskPushNotificationConfig(
-    params: DeleteTaskPushNotificationConfigParams,
+    params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
     return this.executeWithInterceptors(
@@ -235,7 +236,7 @@ export class Client {
   /**
    * Retrieves the current state (including status, artifacts, and optionally history) of a previously initiated task.
    */
-  getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
+  getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
       { method: 'getTask', value: params },
       options,
@@ -247,7 +248,7 @@ export class Client {
    * Requests the cancellation of an ongoing task. The server will attempt to cancel the task,
    * but success is not guaranteed (e.g., the task might have already completed or failed, or cancellation might not be supported at its current stage).
    */
-  cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
+  cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
       { method: 'cancelTask', value: params },
       options,
@@ -259,7 +260,7 @@ export class Client {
    * Allows a client to reconnect to an updates stream for an ongoing task after a previous connection was interrupted.
    */
   async *resubscribeTask(
-    params: TaskIdParams,
+    params: TaskSubscriptionRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const method = 'resubscribeTask';
@@ -304,16 +305,24 @@ export class Client {
     params,
     blocking,
   }: {
-    params: MessageSendParams;
+    params: SendMessageRequest;
     blocking: boolean;
-  }): MessageSendParams {
-    const result = { ...params, configuration: params.configuration ?? {} };
+  }): SendMessageRequest {
+    const result = {
+      ...params,
+      configuration: params.configuration ?? ({} as SendMessageConfiguration),
+    };
 
-    if (!result.configuration.acceptedOutputModes && this.config?.acceptedOutputModes) {
-      result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
-    }
-    if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
-      result.configuration.pushNotificationConfig = this.config.pushNotificationConfig;
+    result.configuration.acceptedOutputModes =
+      result.configuration.acceptedOutputModes ??
+      this.config?.acceptedOutputModes ??
+      ([] as string[]);
+    result.configuration.historyLength ??= 0;
+
+    if (!result.configuration.pushNotification && this.config?.pushNotificationConfig) {
+      if (params.request?.taskId !== undefined) {
+        result.configuration.pushNotification = this.config.pushNotificationConfig;
+      }
     }
     result.configuration.blocking ??= blocking;
     return result;

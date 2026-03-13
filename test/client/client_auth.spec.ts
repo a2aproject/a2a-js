@@ -5,7 +5,6 @@ import {
   HttpHeaders,
   createAuthenticatingFetchWithRetry,
 } from '../../src/client/auth-handler.js';
-import { SendMessageResponse, SendMessageSuccessResponse } from '../../src/types.js';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { createMessageParams, createMockFetch } from './util.js';
 
@@ -67,11 +66,6 @@ class MockAuthHandler implements AuthenticationHandler {
     const auth = headers['Authorization'];
     if (auth) this.authorization = auth;
   }
-}
-
-// Helper function to check if response is a success response
-function isSuccessResponse(response: SendMessageResponse): response is SendMessageSuccessResponse {
-  return 'result' in response;
 }
 
 describe('A2AClient Authentication Tests', () => {
@@ -158,10 +152,8 @@ describe('A2AClient Authentication Tests', () => {
       expect(mockFetch.mock.calls[2][1].body).to.include('"method":"message/send"');
 
       // Verify the result
-      expect(isSuccessResponse(result)).to.be.true;
-      if (isSuccessResponse(result)) {
-        expect(result.result).to.have.property('kind', 'message');
-      }
+      expect(result).to.exist;
+      expect(result).to.have.property('messageId', 'msg-123');
     });
 
     it('should reuse authentication token for subsequent requests', async () => {
@@ -195,7 +187,7 @@ describe('A2AClient Authentication Tests', () => {
       // Should use the exact same token from the first request
       expect(secondRequestCalls[0][1].headers['Authorization']).to.equal(firstRequestToken);
 
-      expect(isSuccessResponse(result2)).to.be.true;
+      expect(result2).to.exist;
     });
   });
 
@@ -277,7 +269,7 @@ describe('A2AClient Authentication Tests', () => {
       expect(capturedAuthHeaders[1]).to.be.a('string').and.not.be.empty; // Second call: with Authorization header
 
       // Verify the result
-      expect(isSuccessResponse(result)).to.be.true;
+      expect(result).to.exist;
     });
 
     it('should continue without authentication when server does not return 401', async () => {
@@ -310,12 +302,10 @@ describe('A2AClient Authentication Tests', () => {
       expect(capturedAuthHeaders[0]).to.equal(''); // No auth header sent
 
       // Verify the result
-      expect(isSuccessResponse(result)).to.be.true;
-      if (isSuccessResponse(result)) {
-        // Check if result is a Message1 (which has messageId) or Task2
-        if ('messageId' in result.result) {
-          expect(result.result.messageId).to.equal('msg-no-auth-required');
-        }
+      expect(result).to.exist;
+      // Check if result is a Message1 (which has messageId) or Task2
+      if ('messageId' in result) {
+        expect(result.messageId).to.equal('msg-no-auth-required');
       }
     });
 
@@ -336,14 +326,15 @@ describe('A2AClient Authentication Tests', () => {
         text: 'Test without auth handler',
       });
 
-      // The client should return a JSON-RPC error response rather than throwing an error
-      const result = await clientNoAuthHandler.sendMessage(messageParams);
-
-      // Verify that the result is a JSON-RPC error response
-      expect(result).to.have.property('jsonrpc', '2.0');
-      expect(result).to.have.property('error');
-      expect((result as any).error).to.have.property('code', -32001);
-      expect((result as any).error).to.have.property('message', 'Authentication required');
+      // The client should return a TaskNotFoundError (since the error code is -32001) rather than throwing an error directly, but A2AClient maps it back out to be thrown
+      try {
+        await clientNoAuthHandler.sendMessage(messageParams);
+        expect.fail('Expected error to be thrown');
+      } catch (error) {
+        // Verify that the result is a JSON-RPC mapped error
+        expect(error).to.be.instanceOf(Error);
+        expect((error as Error).name).to.equal('TaskNotFoundError');
+      }
 
       // Verify that fetch was called only once (no retry attempted)
       expect(fetchWithApiError.mock.calls.length).to.equal(2); // One for agent card, one for API call

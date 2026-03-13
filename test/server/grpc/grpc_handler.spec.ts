@@ -3,7 +3,8 @@ import * as grpc from '@grpc/grpc-js';
 import * as proto from '../../../src/grpc/pb/a2a_services.js';
 import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
-import { AgentCard, HTTP_EXTENSION_HEADER, MessageSendParams, Task } from '../../../src/index.js';
+import { AgentCard, HTTP_EXTENSION_HEADER, Task, Role, TaskState } from '../../../src/index.js';
+import { SendMessageRequest } from '../../../src/index.js';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
@@ -20,18 +21,26 @@ describe('grpcHandler', () => {
     url: 'http://localhost:8080',
     preferredTransport: 'gRPC',
     version: '1.0.0',
-    capabilities: { streaming: true, pushNotifications: true },
+    capabilities: { streaming: true, pushNotifications: true, extensions: [] },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    documentationUrl: 'http://test-agent.com/docs',
+    security: [],
+    securitySchemes: {},
+    signatures: [],
+    provider: { url: '', organization: '' },
+    additionalInterfaces: [],
+    supportsAuthenticatedExtendedCard: false,
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, update: undefined },
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   // Helper to create a mock gRPC Unary Call
@@ -120,10 +129,10 @@ describe('grpcHandler', () => {
 
   describe('sendMessage', () => {
     it('should successfully send a message and return a task', async () => {
-      const call = createMockUnaryCall({ message: { role: 'user', parts: [] } });
+      const call = createMockUnaryCall({ message: { role: Role.ROLE_USER, content: [] as any } });
       const callback = vi.fn();
 
-      const messageSendParams = { message: { role: 'user' } } as MessageSendParams;
+      const messageSendParams = { request: { role: Role.ROLE_USER } as any } as SendMessageRequest;
       (FromProto.messageSendParams as Mock).mockReturnValue(messageSendParams);
       const sendMessageResponse = {
         payload: { $case: 'task', value: { id: 'task-1' } } as proto.SendMessageResponse,
@@ -141,12 +150,14 @@ describe('grpcHandler', () => {
   describe('sendStreamingMessage', () => {
     it('should stream multiple parts and end correctly', async () => {
       async function* mockStream() {
-        yield { kind: 'message', messageId: 'm1' };
-        yield { kind: 'task', id: 't1' };
+        yield { messageId: 'm1', role: Role.ROLE_AGENT, content: [] as any };
+        yield { id: 't1', status: { state: TaskState.TASK_STATE_COMPLETED } };
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const call = createMockWritableStream({ message: { role: 'user', parts: [] } });
+      const call = createMockWritableStream({
+        message: { role: Role.ROLE_USER, content: [] as any },
+      });
 
       await handler.sendStreamingMessage(call);
 
