@@ -10,7 +10,7 @@ import {
   UnsupportedOperationError,
 } from '../../errors.js';
 
-import { A2AStreamEventData, SendMessageResult } from '../client.js';
+import { A2AStreamEventData, SendMessageResult } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';

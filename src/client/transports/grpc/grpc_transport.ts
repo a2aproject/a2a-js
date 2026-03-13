@@ -12,8 +12,9 @@ import {
   ListTaskPushNotificationConfigRequest,
   SendMessageRequest,
   TaskSubscriptionRequest,
+  A2AStreamEventData,
+  SendMessageResult,
 } from '../../../index.js';
-import { A2AStreamEventData, SendMessageResult } from '../../client.js';
 import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
 import { FromProto } from '../../../types/converters/from_proto.js';
