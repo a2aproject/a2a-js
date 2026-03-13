@@ -9,14 +9,13 @@ import {
   InMemoryTaskStore,
   RequestContext,
 } from '../src/server/index.js';
-import { AgentCard, Message, Role, TaskState } from '../src/index.js';
+import { AgentCard, Message, Role, TaskState, A2AStreamEventData } from '../src/index.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';
 import { ClientFactory, ClientFactoryOptions } from '../src/client/factory.js';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
-import { A2AStreamEventData } from '../src/client/client.js';
 import { UserBuilder } from '../src/server/express/common.js';
 import { A2AService, grpcService } from '../src/server/grpc/index.js';
 import { GrpcTransportFactory } from '../src/client/transports/grpc/grpc_transport.js';
