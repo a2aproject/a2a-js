@@ -147,9 +147,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Validate requested extensions against agent capabilities
     if (context?.requestedExtensions) {
-      await this.getAgentCard();
+      const agentCard = await this.getAgentCard();
       const exposedExtensions = new Set(
-        this.agentCard.capabilities?.extensions?.map((ext) => ext.uri) || []
+        agentCard.capabilities?.extensions?.map((ext) => ext.uri) || []
       );
       const validExtensions = context.requestedExtensions.filter((extension) =>
         exposedExtensions.has(extension)

@@ -12,7 +12,7 @@ import {
   ListTaskPushNotificationConfigRequest,
   SendMessageRequest,
   TaskSubscriptionRequest,
-} from '../../../types/pb/a2a_types.js';
+} from '../../../index.js';
 import { A2AStreamEventData, SendMessageResult } from '../../client.js';
 import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
