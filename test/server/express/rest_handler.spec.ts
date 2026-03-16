@@ -388,9 +388,9 @@ describe('restHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs')
           .expect(200);
 
-        const convertedResult = FromProto.listTaskPushNotificationConfig(
-          ListTaskPushNotificationConfigResponse.fromJSON(response.body)
-        );
+        const convertedResult = ListTaskPushNotificationConfigResponse.fromJSON(
+          response.body
+        ).configs;
         assert.isArray(convertedResult);
         assert.lengthOf(convertedResult, configs.length);
       });
