@@ -9,6 +9,7 @@ import {
   AgentCard,
   Role,
   TaskState,
+  A2AStreamEventData,
 } from '../../src/index.js';
 import {
   CancelTaskRequest,
@@ -20,7 +21,6 @@ import {
   SendMessageRequest,
   TaskSubscriptionRequest,
 } from '../../src/types/pb/a2a_types.js';
-import { A2AStreamEventData } from '../../src/client/client.js';
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {

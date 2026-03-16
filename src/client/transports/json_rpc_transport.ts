@@ -1,5 +1,6 @@
 import { TransportProtocolName } from '../../core.js';
 import {
+  A2A_ERROR_CODE,
   AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
@@ -13,6 +14,8 @@ import {
   AgentCard,
   StreamResponse as ProtoStreamResponse,
   TaskPushNotificationConfig,
+  A2AStreamEventData,
+  SendMessageResult,
 } from '../../index.js';
 import {
   JSONRPCResponse,
@@ -26,7 +29,6 @@ import {
   SendMessageSuccessResponse,
   GetAuthenticatedExtendedCardSuccessResponse,
 } from '../../json_rpc_types.js';
-import { A2AStreamEventData, SendMessageResult } from '../client.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -57,23 +59,21 @@ export class JsonRpcTransport implements Transport {
     this.customFetchImpl = options.fetchImpl;
   }
 
-  async getExtendedAgentCard(options?: RequestOptions, idOverride?: number): Promise<AgentCard> {
+  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const rpcResponse = await this._sendRpcRequest<
       undefined,
       GetAuthenticatedExtendedCardSuccessResponse
-    >('agent/getAuthenticatedExtendedCard', undefined, idOverride, options, undefined);
+    >('agent/getAuthenticatedExtendedCard', undefined, options, undefined);
     return rpcResponse.result;
   }
 
   async sendMessage(
     params: SendMessageRequest,
-    options?: RequestOptions,
-    idOverride?: number
+    options?: RequestOptions
   ): Promise<SendMessageResult> {
     const rpcResponse = await this._sendRpcRequest<SendMessageRequest, SendMessageSuccessResponse>(
       'message/send',
       params,
-      idOverride,
       options,
       SendMessageRequest
     );
@@ -99,63 +99,41 @@ export class JsonRpcTransport implements Transport {
 
   async setTaskPushNotificationConfig(
     params: CreateTaskPushNotificationConfigRequest,
-    options?: RequestOptions,
-    idOverride?: number
+    options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       CreateTaskPushNotificationConfigRequest,
       SetTaskPushNotificationConfigSuccessResponse
-    >(
-      'tasks/pushNotificationConfig/set',
-      params,
-      idOverride,
-      options,
-      CreateTaskPushNotificationConfigRequest
-    );
+    >('tasks/pushNotificationConfig/set', params, options, CreateTaskPushNotificationConfigRequest);
     return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
 
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
-    options?: RequestOptions,
-    idOverride?: number
+    options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       GetTaskPushNotificationConfigRequest,
       GetTaskPushNotificationConfigSuccessResponse
-    >(
-      'tasks/pushNotificationConfig/get',
-      params,
-      idOverride,
-      options,
-      GetTaskPushNotificationConfigRequest
-    );
+    >('tasks/pushNotificationConfig/get', params, options, GetTaskPushNotificationConfigRequest);
     return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
 
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigRequest,
-    options?: RequestOptions,
-    idOverride?: number
+    options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendRpcRequest<
       ListTaskPushNotificationConfigRequest,
       ListTaskPushNotificationConfigSuccessResponse
-    >(
-      'tasks/pushNotificationConfig/list',
-      params,
-      idOverride,
-      options,
-      ListTaskPushNotificationConfigRequest
-    );
+    >('tasks/pushNotificationConfig/list', params, options, ListTaskPushNotificationConfigRequest);
     const configs = rpcResponse.result.configs || [];
     return configs.map((c: unknown) => TaskPushNotificationConfig.fromJSON(c));
   }
 
   async deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,
-    options?: RequestOptions,
-    idOverride?: number
+    options?: RequestOptions
   ): Promise<void> {
     await this._sendRpcRequest<
       DeleteTaskPushNotificationConfigRequest,
@@ -163,36 +141,25 @@ export class JsonRpcTransport implements Transport {
     >(
       'tasks/pushNotificationConfig/delete',
       params,
-      idOverride,
       options,
       DeleteTaskPushNotificationConfigRequest
     );
   }
 
-  async getTask(
-    params: GetTaskRequest,
-    options?: RequestOptions,
-    idOverride?: number
-  ): Promise<Task> {
+  async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     const rpcResponse = await this._sendRpcRequest<GetTaskRequest, GetTaskSuccessResponse>(
       'tasks/get',
       params,
-      idOverride,
       options,
       GetTaskRequest
     );
     return Task.fromJSON(rpcResponse.result);
   }
 
-  async cancelTask(
-    params: CancelTaskRequest,
-    options?: RequestOptions,
-    idOverride?: number
-  ): Promise<Task> {
+  async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
     const rpcResponse = await this._sendRpcRequest<CancelTaskRequest, CancelTaskSuccessResponse>(
       'tasks/cancel',
       params,
-      idOverride,
       options,
       CancelTaskRequest
     );
@@ -214,13 +181,11 @@ export class JsonRpcTransport implements Transport {
   async callExtensionMethod<TExtensionParams, TExtensionResponse>(
     method: string,
     params: TExtensionParams,
-    idOverride: number,
     options?: RequestOptions
   ) {
     return await this._sendRpcRequest<TExtensionParams, TExtensionResponse>(
       method,
       params,
-      idOverride,
       options,
       undefined
     );
@@ -242,11 +207,10 @@ export class JsonRpcTransport implements Transport {
   private async _sendRpcRequest<TParams, TResponse>(
     method: string,
     params: TParams,
-    idOverride: number | undefined,
     options: RequestOptions | undefined,
     requestType: MessageFns<TParams> | undefined
   ): Promise<TResponse> {
-    const requestId = idOverride ?? this.requestIdCounter++;
+    const requestId = this.requestIdCounter++;
 
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
@@ -403,21 +367,22 @@ export class JsonRpcTransport implements Transport {
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
+    const errorMessage = response.error.message;
     switch (response.error.code) {
-      case -32001:
-        return new TaskNotFoundJSONRPCError(response);
-      case -32002:
-        return new TaskNotCancelableJSONRPCError(response);
-      case -32003:
-        return new PushNotificationNotSupportedJSONRPCError(response);
-      case -32004:
-        return new UnsupportedOperationJSONRPCError(response);
-      case -32005:
-        return new ContentTypeNotSupportedJSONRPCError(response);
-      case -32006:
-        return new InvalidAgentResponseJSONRPCError(response);
-      case -32007:
-        return new AuthenticatedExtendedCardNotConfiguredJSONRPCError(response);
+      case A2A_ERROR_CODE.TASK_NOT_FOUND:
+        return new TaskNotFoundError(errorMessage);
+      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
+        return new TaskNotCancelableError(errorMessage);
+      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
+        return new PushNotificationNotSupportedError(errorMessage);
+      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
+        return new UnsupportedOperationError(errorMessage);
+      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
+        return new ContentTypeNotSupportedError(errorMessage);
+      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
+        return new InvalidAgentResponseError(errorMessage);
+      case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
+        return new AuthenticatedExtendedCardNotConfiguredError(errorMessage);
       default:
         return new JSONRPCTransportError(response);
     }
@@ -463,50 +428,5 @@ export class JSONRPCTransportError extends Error {
     super(
       `JSON-RPC error: ${errorResponse.error.message} (Code: ${errorResponse.error.code}) Data: ${JSON.stringify(errorResponse.error.data || {})}`
     );
-  }
-}
-
-// Redeclare domain errors with the original JSON-RPC response as a field to be compatible
-// with the legacy A2AClient built around JSON-RPC interface.
-
-export class TaskNotFoundJSONRPCError extends TaskNotFoundError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class TaskNotCancelableJSONRPCError extends TaskNotCancelableError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class PushNotificationNotSupportedJSONRPCError extends PushNotificationNotSupportedError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class UnsupportedOperationJSONRPCError extends UnsupportedOperationError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class ContentTypeNotSupportedJSONRPCError extends ContentTypeNotSupportedError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class InvalidAgentResponseJSONRPCError extends InvalidAgentResponseError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
-  }
-}
-
-export class AuthenticatedExtendedCardNotConfiguredJSONRPCError extends AuthenticatedExtendedCardNotConfiguredError {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super();
   }
 }

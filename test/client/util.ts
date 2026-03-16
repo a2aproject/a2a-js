@@ -5,7 +5,7 @@
 import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
 import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a_types.js';
-import { SendMessageResult } from '../../src/client/client.js';
+import { SendMessageResult } from '../../src/index.js';
 
 /**
  * Extracts the request ID from a RequestInit options object.
