@@ -425,12 +425,9 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const config = {
-        ...req.body,
-        taskId: req.params.taskId,
-        task_id: req.params.taskId,
-      };
-      const result = await restTransportHandler.setTaskPushNotificationConfig(config, context);
+      const protoReq = a2a.CreateTaskPushNotificationConfigRequest.fromJSON(req.body);
+      const params = FromProto.createTaskPushNotificationConfig(protoReq);
+      const result = await restTransportHandler.setTaskPushNotificationConfig(params, context);
       const protoResult = ToProto.taskPushNotificationConfig(result);
       sendResponse<a2a.TaskPushNotificationConfig>(
         res,
