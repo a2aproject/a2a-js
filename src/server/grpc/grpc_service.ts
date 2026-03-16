@@ -203,7 +203,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         FromProto.taskQueryParams,
         requestHandler.getTask.bind(requestHandler),
-        ToProto.task
+        (res) => res
       );
     },
 
@@ -216,7 +216,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         FromProto.taskIdParams,
         requestHandler.cancelTask.bind(requestHandler),
-        ToProto.task
+        (res) => res
       );
     },
 
@@ -229,7 +229,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         () => ({}),
         (_params, context) => requestHandler.getAuthenticatedExtendedAgentCard(context),
-        ToProto.agentCard
+        (res) => res
       );
     },
   };

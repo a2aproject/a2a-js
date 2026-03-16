@@ -5,11 +5,9 @@ import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import { AgentCard, HTTP_EXTENSION_HEADER, Task, Role, TaskState } from '../../../src/index.js';
 import { SendMessageRequest } from '../../../src/index.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
 vi.mock('../../../src/types/converters/from_proto.js');
-vi.mock('../../../src/types/converters/to_proto.js');
 describe('grpcHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let handler: ReturnType<typeof grpcService>;
@@ -98,17 +96,12 @@ describe('grpcHandler', () => {
     it('should return agent card via gRPC callback', async () => {
       const call = createMockUnaryCall({});
       const callback = vi.fn();
-      const mockProtoAgentCard = { name: 'Proto Test Agent' } as proto.AgentCard;
-
-      (ToProto.agentCard as Mock).mockReturnValue(mockProtoAgentCard);
-
       await handler.getAgentCard(call, callback);
 
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalled();
-      expect(ToProto.agentCard).toHaveBeenCalledWith(testAgentCard);
       const [err, response] = callback.mock.calls[0];
       assert.isNull(err);
-      assert.deepEqual(response, mockProtoAgentCard);
+      assert.deepEqual(response, testAgentCard as unknown as proto.AgentCard);
       expect(call.sendMetadata).toHaveBeenCalled();
     });
 
@@ -134,10 +127,6 @@ describe('grpcHandler', () => {
 
       const messageSendParams = { request: { role: Role.ROLE_USER } as any } as SendMessageRequest;
       (FromProto.messageSendParams as Mock).mockReturnValue(messageSendParams);
-      const sendMessageResponse = {
-        payload: { $case: 'task', value: { id: 'task-1' } } as proto.SendMessageResponse,
-      };
-      (ToProto.messageSendResult as Mock).mockReturnValue(sendMessageResponse);
       await handler.sendMessage(call, callback);
 
       const [err, response] = callback.mock.calls[0];
@@ -194,7 +183,6 @@ describe('grpcHandler', () => {
       const callback = vi.fn();
 
       (FromProto.taskQueryParams as Mock).mockReturnValue({ id: 'task-1' });
-      (ToProto.task as Mock).mockReturnValue({ id: 'task-1', contextId: 'ctx-1' });
       await handler.getTask(call, callback);
 
       const contextArg = (mockRequestHandler.getTask as Mock).mock.calls[0][1];
@@ -218,7 +206,6 @@ describe('grpcHandler', () => {
       });
 
       (FromProto.taskQueryParams as Mock).mockReturnValue({ id: 'task-1' });
-      (ToProto.task as Mock).mockReturnValue({ id: 'task-1', contextId: 'ctx-1' });
       await handler.getTask(call, callback);
 
       const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
