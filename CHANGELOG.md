@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.13](https://github.com/a2aproject/a2a-js/compare/v0.3.12...v0.3.13) (2026-03-16)
+
+
+### Bug Fixes
+
+* properly parse ProtoJSON body for POST pushNotificationConfigs ([#352](https://github.com/a2aproject/a2a-js/issues/352)) ([57696a8](https://github.com/a2aproject/a2a-js/commit/57696a8001416ae2c5c592406c1f46b3e9209eca)), closes [#336](https://github.com/a2aproject/a2a-js/issues/336)
+
 ## [0.3.12](https://github.com/a2aproject/a2a-js/compare/v0.3.11...v0.3.12) (2026-03-10)
 
 
