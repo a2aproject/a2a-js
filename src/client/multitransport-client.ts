@@ -1,6 +1,12 @@
 import { PushNotificationNotSupportedError } from '../errors.js';
-import { TaskPushNotificationConfig, Task, PushNotificationConfig, AgentCard } from '../index.js';
-import { A2AStreamEventData, SendMessageResult } from './client.js';
+import {
+  TaskPushNotificationConfig,
+  Task,
+  PushNotificationConfig,
+  AgentCard,
+  A2AStreamEventData,
+  SendMessageResult,
+} from '../index.js';
 import {
   CancelTaskRequest,
   CreateTaskPushNotificationConfigRequest,
