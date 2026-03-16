@@ -22,7 +22,9 @@ export class FromProto {
     request: CreateTaskPushNotificationConfigRequest
   ): TaskPushNotificationConfig {
     if (!request.config || !request.config.pushNotificationConfig) {
-      throw new Error('Request must include a `config` with `pushNotificationConfig`');
+      throw A2AError.invalidParams(
+        'Request must include a `config` with `pushNotificationConfig`'
+      );
     }
     return {
       name: `tasks/${extractTaskId(request.parent)}/pushNotificationConfigs/${request.config.pushNotificationConfig.id}`,

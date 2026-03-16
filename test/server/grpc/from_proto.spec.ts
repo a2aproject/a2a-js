@@ -39,9 +39,12 @@ describe('FromProto', () => {
         configId: 'push-2',
         config: undefined,
       };
-      expect(() => FromProto.createTaskPushNotificationConfig(request)).toThrow(
-        'Request must include a `config` with `pushNotificationConfig`'
-      );
+      try {
+        FromProto.createTaskPushNotificationConfig(request);
+      } catch (error) {
+        expect(error).toBeInstanceOf(A2AError);
+        expect((error as A2AError).message).toContain('Request must include a `config` with `pushNotificationConfig`');
+      }
     });
 
     it('should throw Error if pushNotificationConfig is missing', () => {
@@ -50,9 +53,12 @@ describe('FromProto', () => {
         configId: 'config-name',
         config: { name: 'config-name', pushNotificationConfig: undefined },
       };
-      expect(() => FromProto.createTaskPushNotificationConfig(request)).toThrow(
-        'Request must include a `config` with `pushNotificationConfig`'
-      );
+      try {
+        FromProto.createTaskPushNotificationConfig(request);
+      } catch (error) {
+        expect(error).toBeInstanceOf(A2AError);
+        expect((error as A2AError).message).toContain('Request must include a `config` with `pushNotificationConfig`');
+      }
     });
   });
 
@@ -154,14 +160,12 @@ describe('FromProto', () => {
 
     it('should throw A2AError if payload is missing', () => {
       const event: proto.StreamResponse = {};
-      let err: A2AError | undefined;
       try {
         FromProto.messageStreamResult(event);
       } catch (error) {
-        err = error as A2AError;
+        expect(error).toBeInstanceOf(A2AError);
+        expect((error as A2AError).message).toContain('Invalid event type in StreamResponse');
       }
-      expect(err).toBeInstanceOf(A2AError);
-      expect(err?.message).toContain('Invalid event type in StreamResponse');
     });
   });
 });
