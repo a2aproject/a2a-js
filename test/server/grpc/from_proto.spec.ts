@@ -43,7 +43,9 @@ describe('FromProto', () => {
         FromProto.createTaskPushNotificationConfig(request);
       } catch (error) {
         expect(error).toBeInstanceOf(A2AError);
-        expect((error as A2AError).message).toContain('Request must include a `config` with `pushNotificationConfig`');
+        expect((error as A2AError).message).toContain(
+          'Request must include a `config` with `pushNotificationConfig`'
+        );
       }
     });
 
@@ -57,7 +59,9 @@ describe('FromProto', () => {
         FromProto.createTaskPushNotificationConfig(request);
       } catch (error) {
         expect(error).toBeInstanceOf(A2AError);
-        expect((error as A2AError).message).toContain('Request must include a `config` with `pushNotificationConfig`');
+        expect((error as A2AError).message).toContain(
+          'Request must include a `config` with `pushNotificationConfig`'
+        );
       }
     });
   });
