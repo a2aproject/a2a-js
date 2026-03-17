@@ -21,13 +21,13 @@ export class ToProto {
   ): ListTaskPushNotificationConfigResponse {
     return {
       configs: configs.map((c) => {
-        if (!('taskId' in c)) {
-          return c;
+        if ('taskId' in c) {
+          return {
+            name: generatePushNotificationConfigName(c.taskId, c.pushNotificationConfig.id),
+            pushNotificationConfig: c.pushNotificationConfig,
+          };
         }
-        return {
-          name: generatePushNotificationConfigName(c.taskId, c.pushNotificationConfig.id),
-          pushNotificationConfig: c.pushNotificationConfig,
-        };
+        return c;
       }),
       nextPageToken: '',
     };
@@ -38,13 +38,13 @@ export class ToProto {
       | { taskId: string; pushNotificationConfig: PushNotificationConfig }
       | TaskPushNotificationConfig
   ): TaskPushNotificationConfig {
-    if (!('taskId' in config)) {
-      return config;
+    if ('taskId' in config) {
+      return {
+        name: generatePushNotificationConfigName(config.taskId, config.pushNotificationConfig.id),
+        pushNotificationConfig: config.pushNotificationConfig,
+      };
     }
-    return {
-      name: generatePushNotificationConfigName(config.taskId, config.pushNotificationConfig.id),
-      pushNotificationConfig: config.pushNotificationConfig,
-    };
+    return config;
   }
 
   static messageStreamResult(
