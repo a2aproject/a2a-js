@@ -233,11 +233,10 @@ export class JsonRpcTransportHandler {
         } as JSONRPCResponse;
       }
     } catch (error) {
-      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(error);
       return {
         jsonrpc: '2.0',
         id: requestId,
-        error: mappedError,
+        error: JsonRpcTransportHandler.mapToJSONRPCError(error),
       } as JSONRPCErrorResponse;
     }
   }

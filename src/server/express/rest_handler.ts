@@ -56,8 +56,7 @@ const restErrorHandler: ErrorRequestHandler = (
   next: NextFunction
 ) => {
   if (err instanceof SyntaxError && 'body' in err) {
-    const parseError = new ParseError('Invalid JSON payload.');
-    return res.status(400).json(toHTTPError(parseError));
+    return res.status(400).json(toHTTPError(new ParseError('Invalid JSON payload.')));
   }
   next(err);
 };
@@ -191,8 +190,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       firstResult = await iterator.next();
     } catch (error) {
       // Early error - return proper HTTP error
-      const statusCode = mapErrorToStatus(error);
-      sendResponse(res, statusCode, context, toHTTPError(error));
+      sendResponse(res, mapErrorToStatus(error), context, toHTTPError(error));
       return;
     }
 

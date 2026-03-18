@@ -390,8 +390,8 @@ export class RestTransport implements Transport {
       }
     }
 
-    if (status === 404) return new TaskNotFoundError(message);
     if (status === 400) return new InvalidParamsError(message);
+    if (status === 404) return new TaskNotFoundError(message);
     if (status === 409) return new TaskNotCancelableError(message);
 
     return new Error(
