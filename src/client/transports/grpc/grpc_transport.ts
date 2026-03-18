@@ -66,7 +66,7 @@ export class GrpcTransport implements Transport {
       {} as GetAgentCardRequest,
       options,
       this.grpcClient.getAgentCard.bind(this.grpcClient),
-      FromProto.agentCard
+      (req) => req as AgentCard
     );
     return rpcResponse;
   }
@@ -158,7 +158,7 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.getTask.bind(this.grpcClient),
-      FromProto.task
+      (req) => req as Task
     );
     return rpcResponse;
   }
@@ -169,7 +169,7 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.cancelTask.bind(this.grpcClient),
-      FromProto.task
+      (req) => req as Task
     );
     return rpcResponse;
   }

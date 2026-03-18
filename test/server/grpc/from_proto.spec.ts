@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import * as proto from '../../../src/types/pb/a2a_types.js';
+import { A2AError } from '../../../src/server/error.js';
 
 vi.mock('../../../src/types/converters/id_decoding.js', () => ({
   extractTaskId: vi.fn((name) => name.replace('tasks/', '')),
@@ -8,39 +9,167 @@ vi.mock('../../../src/types/converters/id_decoding.js', () => ({
 }));
 
 describe('FromProto', () => {
-  it('should convert part (identity)', () => {
-    const part: proto.Part = { part: { $case: 'text', value: 'hello' } };
-    expect(FromProto.part(part)).toEqual(part);
+  describe('createTaskPushNotificationConfig', () => {
+    it('should convert valid request', () => {
+      const request: proto.CreateTaskPushNotificationConfigRequest = {
+        parent: 'tasks/task-123',
+        configId: 'push-1',
+        config: {
+          name: 'ignored',
+          pushNotificationConfig: {
+            id: 'push-1',
+            url: 'http://example.com',
+            token: 'test-token',
+            authentication: undefined,
+          },
+        },
+      };
+
+      const result = FromProto.createTaskPushNotificationConfig(request);
+
+      expect(result).toEqual({
+        name: 'tasks/task-123/pushNotificationConfigs/push-1',
+        pushNotificationConfig: request.config?.pushNotificationConfig,
+      });
+    });
+
+    it('should throw Error if config is missing', () => {
+      const request: proto.CreateTaskPushNotificationConfigRequest = {
+        parent: 'tasks/task-123',
+        configId: 'push-2',
+        config: undefined,
+      };
+      try {
+        FromProto.createTaskPushNotificationConfig(request);
+      } catch (error) {
+        expect(error).toBeInstanceOf(A2AError);
+        expect((error as A2AError).message).toContain(
+          'Request must include a `config` with `pushNotificationConfig`'
+        );
+      }
+    });
+
+    it('should throw Error if pushNotificationConfig is missing', () => {
+      const request: proto.CreateTaskPushNotificationConfigRequest = {
+        parent: 'tasks/task-123',
+        configId: 'config-name',
+        config: { name: 'config-name', pushNotificationConfig: undefined },
+      };
+      try {
+        FromProto.createTaskPushNotificationConfig(request);
+      } catch (error) {
+        expect(error).toBeInstanceOf(A2AError);
+        expect((error as A2AError).message).toContain(
+          'Request must include a `config` with `pushNotificationConfig`'
+        );
+      }
+    });
   });
 
-  it('should convert CancelTaskRequest to taskIdParams', () => {
-    const request: proto.CancelTaskRequest = { name: 'tasks/task-123' };
-    const result = FromProto.taskIdParams(request);
-    expect(result).toEqual(request);
-  });
-
-  it('should convert SendMessageRequest to messageSendParams', () => {
-    const request: proto.SendMessageRequest = {
-      request: {
-        messageId: 'msg-1',
-        content: [],
-        contextId: 'ctx-1',
-        taskId: 'task-1',
-        role: proto.Role.ROLE_USER,
+  describe('sendMessageResult', () => {
+    it('should return task if payload is task', () => {
+      const task: proto.Task = {
+        id: 'task-1',
+        history: [],
+        artifacts: [],
         metadata: {},
+        status: {
+          state: proto.TaskState.TASK_STATE_COMPLETED,
+          timestamp: undefined,
+          update: undefined,
+        },
+        contextId: '',
+      };
+      const response: proto.SendMessageResponse = {
+        payload: { $case: 'task', value: task },
+      };
+      expect(FromProto.sendMessageResult(response)).toEqual(task);
+    });
+
+    it('should return message if payload is msg', () => {
+      const msg: proto.Message = {
+        messageId: 'msg-1',
+        role: proto.Role.ROLE_USER,
+        content: [],
         extensions: [],
-      },
-      configuration: {
-        blocking: false,
-        acceptedOutputModes: [],
-        pushNotification: undefined,
-        historyLength: 0,
-      },
-      metadata: { client: 'test' },
-    };
+        metadata: {},
+        taskId: '',
+        contextId: '',
+      };
+      const response: proto.SendMessageResponse = {
+        payload: { $case: 'msg', value: msg },
+      };
+      expect(FromProto.sendMessageResult(response)).toEqual(msg);
+    });
 
-    const result = FromProto.messageSendParams(request);
+    it('should throw A2AError if payload is missing', () => {
+      const response: proto.SendMessageResponse = {};
+      let err: A2AError | undefined;
+      try {
+        FromProto.sendMessageResult(response);
+      } catch (error) {
+        err = error as A2AError;
+      }
+      expect(err).toBeInstanceOf(A2AError);
+      expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
+    });
 
-    expect(result).toEqual(request);
+    it('should throw A2AError if payload case is invalid', () => {
+      const response = {
+        payload: { $case: 'streamError', value: undefined as any },
+      } as unknown as proto.SendMessageResponse;
+      let err: A2AError | undefined;
+      try {
+        FromProto.sendMessageResult(response);
+      } catch (error) {
+        err = error as A2AError;
+      }
+      expect(err).toBeInstanceOf(A2AError);
+      expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
+    });
+  });
+
+  describe('listTaskPushNotificationConfig', () => {
+    it('should return configs array', () => {
+      const configs: proto.TaskPushNotificationConfig[] = [
+        { name: 'config-1', pushNotificationConfig: undefined },
+      ];
+      const response: proto.ListTaskPushNotificationConfigResponse = {
+        configs,
+        nextPageToken: '',
+      };
+      expect(FromProto.listTaskPushNotificationConfig(response)).toEqual(configs);
+    });
+  });
+
+  describe('messageStreamResult', () => {
+    it('should return payload value if payload is present', () => {
+      const task: proto.Task = {
+        id: 'task-1',
+        history: [],
+        artifacts: [],
+        metadata: {},
+        status: {
+          state: proto.TaskState.TASK_STATE_COMPLETED,
+          timestamp: undefined,
+          update: undefined,
+        },
+        contextId: '',
+      };
+      const event: proto.StreamResponse = {
+        payload: { $case: 'task', value: task },
+      };
+      expect(FromProto.messageStreamResult(event)).toEqual(task);
+    });
+
+    it('should throw A2AError if payload is missing', () => {
+      const event: proto.StreamResponse = {};
+      try {
+        FromProto.messageStreamResult(event);
+      } catch (error) {
+        expect(error).toBeInstanceOf(A2AError);
+        expect((error as A2AError).message).toContain('Invalid event type in StreamResponse');
+      }
+    });
   });
 });
