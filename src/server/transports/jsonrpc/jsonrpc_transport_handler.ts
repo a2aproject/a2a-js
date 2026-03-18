@@ -20,7 +20,6 @@ import {
   InvalidRequestError,
   MethodNotFoundError,
   InvalidParamsError,
-  InternalError,
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
@@ -317,10 +316,7 @@ export class JsonRpcTransportHandler {
       };
     }
 
-    const message =
-      error instanceof InternalError
-        ? error.message
-        : (error instanceof Error && error.message) || 'An unexpected error occurred.';
+    const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
     return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
   }
 }
