@@ -1,7 +1,8 @@
 import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import * as grpc from '@grpc/grpc-js';
 import * as proto from '../../../src/grpc/pb/a2a_services.js';
-import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
+import { A2ARequestHandler } from '../../../src/server/index.js';
+import { TaskNotFoundError } from '../../../src/errors.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import { AgentCard, HTTP_EXTENSION_HEADER, Task, Role, TaskState } from '../../../src/index.js';
 import { SendMessageRequest } from '../../../src/index.js';
@@ -114,7 +115,7 @@ describe('grpcHandler', () => {
 
     it('should return gRPC error code on failure', async () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
-        new A2AError(-32001, 'Not Found')
+        new TaskNotFoundError('Not Found')
       );
       const call = createMockUnaryCall({});
       const callback = vi.fn();
@@ -175,7 +176,7 @@ describe('grpcHandler', () => {
       expect(call.emit).toHaveBeenCalledWith(
         'error',
         expect.objectContaining({
-          code: grpc.status.INTERNAL,
+          code: grpc.status.UNKNOWN,
         })
       );
       expect(call.end).toHaveBeenCalled();

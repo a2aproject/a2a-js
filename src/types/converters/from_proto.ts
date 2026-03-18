@@ -1,4 +1,4 @@
-import { A2AError } from '../../server/error.js';
+import { InternalError, InvalidParamsError } from '../../errors.js';
 import {
   CancelTaskRequest,
   GetTaskRequest,
@@ -57,7 +57,7 @@ export class FromProto {
     } else if (response.payload?.$case === 'msg') {
       return response.payload.value;
     }
-    throw A2AError.invalidParams('Invalid SendMessageResponse: missing result');
+    throw new InvalidParamsError('Invalid SendMessageResponse: missing result');
   }
 
   static task(task: Task): Task {
@@ -80,6 +80,6 @@ export class FromProto {
     if (event.payload) {
       return event.payload.value;
     }
-    throw A2AError.internalError('Invalid event type in StreamResponse');
+    throw new InternalError('Invalid event type in StreamResponse');
   }
 }

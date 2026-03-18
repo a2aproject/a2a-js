@@ -5,7 +5,6 @@
  * Returns camelCase (internal types).
  */
 
-import { A2AError } from '../../error.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 import { ServerCallContext } from '../../context.js';
 import {
@@ -19,7 +18,17 @@ import {
   GetTaskRequest,
   CancelTaskRequest,
 } from '../../../index.js';
-import { A2A_ERROR_CODE } from '../../../errors.js';
+import {
+  AuthenticatedExtendedCardNotConfiguredError,
+  InvalidParamsError,
+  InvalidRequestError,
+  MethodNotFoundError,
+  ParseError,
+  PushNotificationNotSupportedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+} from '../../../errors.js';
 
 // ============================================================================
 // HTTP Status Codes and Error Mapping
@@ -42,32 +51,22 @@ export const HTTP_STATUS = {
 } as const;
 
 /**
- * Maps A2A error codes to appropriate HTTP status codes.
+ * Maps varying errors to appropriate HTTP status codes.
  *
- * @param errorCode - A2A error code (e.g., -32700, -32600, -32602, etc.)
+ * @param error - The actual error instance
  * @returns Corresponding HTTP status code
- *
- * @example
- * mapErrorToStatus(-32602) // returns 400 (Bad Request)
- * mapErrorToStatus(-32001) // returns 404 (Not Found)
  */
-export function mapErrorToStatus(errorCode: number): number {
-  switch (errorCode) {
-    case A2A_ERROR_CODE.PARSE_ERROR:
-    case A2A_ERROR_CODE.INVALID_REQUEST:
-    case A2A_ERROR_CODE.INVALID_PARAMS:
-      return HTTP_STATUS.BAD_REQUEST;
-    case A2A_ERROR_CODE.METHOD_NOT_FOUND:
-    case A2A_ERROR_CODE.TASK_NOT_FOUND:
-      return HTTP_STATUS.NOT_FOUND;
-    case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-      return HTTP_STATUS.CONFLICT;
-    case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-    case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-      return HTTP_STATUS.BAD_REQUEST;
-    default:
-      return HTTP_STATUS.INTERNAL_SERVER_ERROR;
-  }
+export function mapErrorToStatus(error: unknown): number {
+  if (error instanceof ParseError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof InvalidRequestError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof InvalidParamsError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof MethodNotFoundError) return HTTP_STATUS.NOT_FOUND;
+  if (error instanceof TaskNotFoundError) return HTTP_STATUS.NOT_FOUND;
+  if (error instanceof TaskNotCancelableError) return HTTP_STATUS.CONFLICT;
+  if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof AuthenticatedExtendedCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
+  return HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 
 // ============================================================================
@@ -75,29 +74,19 @@ export function mapErrorToStatus(errorCode: number): number {
 // ============================================================================
 
 /**
- * Converts an A2AError to HTTP+JSON transport format.
- * This conversion is private to the HTTP transport layer - errors are currently
- * tied to JSON-RPC format in A2AError, but for HTTP transport we need a simpler
- * format without the JSON-RPC wrapper.
+ * Converts any Error to an HTTP+JSON transport format.
  *
- * @param error - The A2AError to convert
- * @returns Error object with code, message, and optional data
+ * @param error - The error to convert
+ * @returns Error payload
  */
-export function toHTTPError(error: A2AError): {
-  code: number;
+export function toHTTPError(error: unknown): {
+  name: string;
   message: string;
-  data?: Record<string, unknown>;
 } {
-  const errorObject: { code: number; message: string; data?: Record<string, unknown> } = {
-    code: error.code,
-    message: error.message,
+  return {
+    name: error instanceof Error ? error.name : 'Error',
+    message: error instanceof Error ? error.message : 'An unexpected error occurred.',
   };
-
-  if (error.data !== undefined) {
-    errorObject.data = error.data;
-  }
-
-  return errorObject;
 }
 
 // ============================================================================
@@ -142,10 +131,10 @@ export class RestTransportHandler {
    */
   private validateSendMessageRequest(params: SendMessageRequest): void {
     if (!params.request) {
-      throw A2AError.invalidParams('request is required');
+      throw new InvalidParamsError('request is required');
     }
     if (!params.request.messageId) {
-      throw A2AError.invalidParams('request.messageId is required');
+      throw new InvalidParamsError('request.messageId is required');
     }
   }
 
@@ -228,10 +217,10 @@ export class RestTransportHandler {
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
     if (!config.pushNotificationConfig) {
-      throw A2AError.invalidParams('pushNotificationConfig is required');
+      throw new InvalidParamsError('pushNotificationConfig is required');
     }
     if (!config.pushNotificationConfig.id) {
-      throw A2AError.invalidParams('pushNotificationConfig.id is required');
+      throw new InvalidParamsError('pushNotificationConfig.id is required');
     }
     return this.requestHandler.setTaskPushNotificationConfig(config, context);
   }
@@ -290,10 +279,10 @@ export class RestTransportHandler {
    */
   private static readonly CAPABILITY_ERRORS: Record<
     'streaming' | 'pushNotifications',
-    () => A2AError
+    () => Error
   > = {
-    streaming: () => A2AError.unsupportedOperation('Agent does not support streaming'),
-    pushNotifications: () => A2AError.pushNotificationNotSupported(),
+    streaming: () => new UnsupportedOperationError('Agent does not support streaming'),
+    pushNotifications: () => new PushNotificationNotSupportedError(),
   };
 
   /**
@@ -312,14 +301,14 @@ export class RestTransportHandler {
    */
   private parseHistoryLength(value: unknown): number {
     if (value === undefined || value === null) {
-      throw A2AError.invalidParams('historyLength is required');
+      throw new InvalidParamsError('historyLength is required');
     }
     const parsed = parseInt(String(value), 10);
     if (isNaN(parsed)) {
-      throw A2AError.invalidParams('historyLength must be a valid integer');
+      throw new InvalidParamsError('historyLength must be a valid integer');
     }
     if (parsed < 0) {
-      throw A2AError.invalidParams('historyLength must be non-negative');
+      throw new InvalidParamsError('historyLength must be non-negative');
     }
     return parsed;
   }

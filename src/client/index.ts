@@ -42,4 +42,9 @@ export {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
+  ParseError,
+  InvalidRequestError,
+  MethodNotFoundError,
+  InvalidParamsError,
+  InternalError,
 } from '../errors.js';

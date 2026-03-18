@@ -1,4 +1,4 @@
-import { A2AError } from '../../server/error.js';
+import { InternalError } from '../../errors.js';
 import {
   AgentCard,
   AuthenticationInfo,
@@ -137,7 +137,7 @@ export class ToProto {
         },
       };
     }
-    throw A2AError.internalError('Invalid event type');
+    throw new InternalError('Invalid event type');
   }
 
   static messageSendResult(params: Message | Task): SendMessageResponse {

@@ -6,7 +6,6 @@ import express, {
   NextFunction,
 } from 'express';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-import { A2AError } from '../error.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import {
   RestTransportHandler,
@@ -31,6 +30,7 @@ import {
 } from '../../types/pb/a2a_types.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
+import { ParseError } from '../../errors.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -56,8 +56,8 @@ const restErrorHandler: ErrorRequestHandler = (
   next: NextFunction
 ) => {
   if (err instanceof SyntaxError && 'body' in err) {
-    const a2aError = A2AError.parseError('Invalid JSON payload.');
-    return res.status(400).json(toHTTPError(a2aError));
+    const parseError = new ParseError('Invalid JSON payload.');
+    return res.status(400).json(toHTTPError(parseError));
   }
   next(err);
 };
@@ -191,12 +191,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       firstResult = await iterator.next();
     } catch (error) {
       // Early error - return proper HTTP error
-      const a2aError =
-        error instanceof A2AError
-          ? error
-          : A2AError.internalError(error instanceof Error ? error.message : 'Streaming error');
-      const statusCode = mapErrorToStatus(a2aError.code);
-      sendResponse(res, statusCode, context, toHTTPError(a2aError));
+      const statusCode = mapErrorToStatus(error);
+      sendResponse(res, statusCode, context, toHTTPError(error));
       return;
     }
 
@@ -221,14 +217,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       }
     } catch (streamError: unknown) {
       console.error('SSE streaming error:', streamError);
-      const a2aError =
-        streamError instanceof A2AError
-          ? streamError
-          : A2AError.internalError(
-              streamError instanceof Error ? streamError.message : 'Streaming error'
-            );
       if (!res.writableEnded) {
-        res.write(formatSSEErrorEvent(toHTTPError(a2aError)));
+        res.write(formatSSEErrorEvent(toHTTPError(streamError)));
       }
     } finally {
       if (!res.writableEnded) {
@@ -252,12 +242,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       }
       return;
     }
-    const a2aError =
-      error instanceof A2AError
-        ? error
-        : A2AError.internalError(error instanceof Error ? error.message : 'Internal server error');
-    const statusCode = mapErrorToStatus(a2aError.code);
-    res.status(statusCode).json(toHTTPError(a2aError));
+    const statusCode = mapErrorToStatus(error);
+    res.status(statusCode).json(toHTTPError(error));
   };
 
   /**

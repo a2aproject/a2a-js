@@ -8,6 +8,11 @@ import {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
+  ParseError,
+  InvalidRequestError,
+  MethodNotFoundError,
+  InvalidParamsError,
+  InternalError,
 } from '../../errors.js';
 import {
   Task,
@@ -369,6 +374,16 @@ export class JsonRpcTransport implements Transport {
   private static mapToError(response: JSONRPCErrorResponse): Error {
     const errorMessage = response.error.message;
     switch (response.error.code) {
+      case A2A_ERROR_CODE.PARSE_ERROR:
+        return new ParseError(errorMessage);
+      case A2A_ERROR_CODE.INVALID_REQUEST:
+        return new InvalidRequestError(errorMessage);
+      case A2A_ERROR_CODE.METHOD_NOT_FOUND:
+        return new MethodNotFoundError(errorMessage);
+      case A2A_ERROR_CODE.INVALID_PARAMS:
+        return new InvalidParamsError(errorMessage);
+      case A2A_ERROR_CODE.INTERNAL_ERROR:
+        return new InternalError(errorMessage);
       case A2A_ERROR_CODE.TASK_NOT_FOUND:
         return new TaskNotFoundError(errorMessage);
       case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:

@@ -14,6 +14,21 @@ import {
   ListTaskPushNotificationConfigRequest,
 } from '../../../index.js';
 import { JSONRPCErrorResponse } from '../../../json_rpc_types.js';
+import {
+  A2A_ERROR_CODE,
+  ParseError,
+  InvalidRequestError,
+  MethodNotFoundError,
+  InvalidParamsError,
+  InternalError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
+} from '../../../errors.js';
 
 export type A2ARequest = {
   jsonrpc: '2.0';
@@ -29,7 +44,6 @@ export type JSONRPCResponse = {
   error?: unknown;
 };
 import { ServerCallContext } from '../../context.js';
-import { A2AError } from '../../error.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 
 /**
@@ -61,23 +75,22 @@ export class JsonRpcTransportHandler {
       } else if (typeof requestBody === 'object' && requestBody !== null) {
         rpcRequest = requestBody as A2ARequest;
       } else {
-        throw A2AError.parseError('Invalid request body type.');
+        throw new ParseError('Invalid request body type.');
       }
 
       if (!this.isRequestValid(rpcRequest)) {
-        throw A2AError.invalidRequest('Invalid JSON-RPC Request.');
+        throw new InvalidRequestError('Invalid JSON-RPC Request.');
       }
     } catch (error) {
-      const a2aError =
-        error instanceof A2AError
-          ? error
-          : A2AError.parseError(
-              (error instanceof SyntaxError && error.message) || 'Failed to parse JSON request.'
-            );
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        error instanceof SyntaxError
+          ? new ParseError(error.message || 'Failed to parse JSON request.')
+          : error
+      );
       return {
         jsonrpc: '2.0',
         id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
-        error: a2aError.toJSONRPCError(),
+        error: mappedError,
       } as JSONRPCErrorResponse;
     }
 
@@ -87,14 +100,14 @@ export class JsonRpcTransportHandler {
         method !== 'agent/getAuthenticatedExtendedCard' &&
         !this.paramsAreValid(rpcRequest.params)
       ) {
-        throw A2AError.invalidParams(`Invalid method parameters.`);
+        throw new InvalidParamsError(`Invalid method parameters.`);
       }
 
       if (method === 'message/stream' || method === 'tasks/resubscribe') {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();
         if (!agentCard.capabilities?.streaming) {
-          throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
+          throw new UnsupportedOperationError(`Method ${method} requires streaming capability.`);
         }
         const agentEventStream =
           method === 'message/stream'
@@ -212,7 +225,7 @@ export class JsonRpcTransportHandler {
             result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
             break;
           default:
-            throw A2AError.methodNotFound(method);
+            throw new MethodNotFoundError();
         }
         return {
           jsonrpc: '2.0',
@@ -221,18 +234,11 @@ export class JsonRpcTransportHandler {
         } as JSONRPCResponse;
       }
     } catch (error) {
-      let a2aError: A2AError;
-      if (error instanceof A2AError) {
-        a2aError = error;
-      } else {
-        a2aError = A2AError.internalError(
-          (error instanceof Error && error.message) || 'An unexpected error occurred.'
-        );
-      }
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(error);
       return {
         jsonrpc: '2.0',
         id: requestId,
-        error: a2aError.toJSONRPCError(),
+        error: mappedError,
       } as JSONRPCErrorResponse;
     }
   }
@@ -271,5 +277,50 @@ export class JsonRpcTransportHandler {
       }
     }
     return true;
+  }
+
+  public static mapToJSONRPCError(error: unknown) {
+    if (error instanceof ParseError) {
+      return { code: A2A_ERROR_CODE.PARSE_ERROR, message: error.message };
+    }
+    if (error instanceof InvalidRequestError) {
+      return { code: A2A_ERROR_CODE.INVALID_REQUEST, message: error.message };
+    }
+    if (error instanceof MethodNotFoundError) {
+      return { code: A2A_ERROR_CODE.METHOD_NOT_FOUND, message: error.message };
+    }
+    if (error instanceof InvalidParamsError) {
+      return { code: A2A_ERROR_CODE.INVALID_PARAMS, message: error.message };
+    }
+    if (error instanceof TaskNotFoundError) {
+      return { code: A2A_ERROR_CODE.TASK_NOT_FOUND, message: error.message };
+    }
+    if (error instanceof TaskNotCancelableError) {
+      return { code: A2A_ERROR_CODE.TASK_NOT_CANCELABLE, message: error.message };
+    }
+    if (error instanceof PushNotificationNotSupportedError) {
+      return { code: A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED, message: error.message };
+    }
+    if (error instanceof UnsupportedOperationError) {
+      return { code: A2A_ERROR_CODE.UNSUPPORTED_OPERATION, message: error.message };
+    }
+    if (error instanceof ContentTypeNotSupportedError) {
+      return { code: A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED, message: error.message };
+    }
+    if (error instanceof InvalidAgentResponseError) {
+      return { code: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE, message: error.message };
+    }
+    if (error instanceof AuthenticatedExtendedCardNotConfiguredError) {
+      return {
+        code: A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED,
+        message: error.message,
+      };
+    }
+
+    const message =
+      error instanceof InternalError
+        ? error.message
+        : (error instanceof Error && error.message) || 'An unexpected error occurred.';
+    return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
   }
 }

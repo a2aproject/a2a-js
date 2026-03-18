@@ -67,3 +67,38 @@ export class AuthenticatedExtendedCardNotConfiguredError extends Error {
     this.name = 'AuthenticatedExtendedCardNotConfiguredError';
   }
 }
+
+export class ParseError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Parse error');
+    this.name = 'ParseError';
+  }
+}
+
+export class InvalidRequestError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Invalid request');
+    this.name = 'InvalidRequestError';
+  }
+}
+
+export class MethodNotFoundError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Method not found');
+    this.name = 'MethodNotFoundError';
+  }
+}
+
+export class InvalidParamsError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Invalid params');
+    this.name = 'InvalidParamsError';
+  }
+}
+
+export class InternalError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Internal error');
+    this.name = 'InternalError';
+  }
+}

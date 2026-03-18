@@ -18,7 +18,7 @@ import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/
 import { AgentCard } from '../../../src/index.js';
 import { JSONRPCErrorResponse } from '../../../src/json_rpc_types.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
-import { A2AError } from '../../../src/server/error.js';
+import { InternalError, InvalidRequestError } from '../../../src/errors.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { User, UnauthenticatedUser } from '../../../src/server/authentication/user.js';
 
@@ -183,7 +183,7 @@ describe('A2AExpressApp', () => {
       const mockErrorStream = {
         async *[Symbol.asyncIterator]() {
           yield { jsonrpc: '2.0', id: 'stream-1', result: { step: 1 } };
-          throw new A2AError(-32603, 'Streaming error');
+          throw new InternalError('Streaming error');
         },
       };
 
@@ -202,7 +202,7 @@ describe('A2AExpressApp', () => {
       const mockImmediateErrorStream = {
         // eslint-disable-next-line require-yield
         async *[Symbol.asyncIterator]() {
-          throw new A2AError(-32603, 'Immediate streaming error');
+          throw new InternalError('Immediate streaming error');
         },
       };
 
@@ -223,7 +223,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle general processing error', async () => {
-      const error = new A2AError(-32603, 'Processing error');
+      const error = new InternalError('Processing error');
       handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest('error-test');
@@ -252,11 +252,11 @@ describe('A2AExpressApp', () => {
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.equal(response.body.id, 'generic-error-test');
-      assert.equal(response.body.error.message, 'General processing error.');
+      assert.equal(response.body.error.message, 'Generic error');
     });
 
     it('should handle request without id', async () => {
-      const error = new A2AError(-32600, 'No ID error');
+      const error = new InvalidRequestError('No ID error');
       handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest(null);

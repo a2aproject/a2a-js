@@ -8,6 +8,11 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   UnsupportedOperationError,
+  ParseError,
+  InvalidRequestError,
+  MethodNotFoundError,
+  InvalidParamsError,
+  InternalError,
 } from '../../errors.js';
 
 import { A2AStreamEventData, SendMessageResult } from '../../index.js';
@@ -40,8 +45,9 @@ export interface RestTransportOptions {
 }
 
 interface RestErrorResponse {
-  code: number;
-  message: string;
+  name?: string;
+  message?: string;
+  code?: number;
   data?: Record<string, unknown>;
 }
 
@@ -269,8 +275,8 @@ export class RestTransport implements Transport {
       );
     }
 
-    if (errorBody && typeof errorBody.code === 'number') {
-      throw RestTransport.mapToError(errorBody);
+    if (errorBody && (typeof errorBody.name === 'string' || typeof errorBody.code === 'number')) {
+      throw RestTransport.mapToError(errorBody, response.status);
     }
 
     throw new Error(
@@ -333,27 +339,64 @@ export class RestTransport implements Transport {
     }
   }
 
-  private static mapToError(error: RestErrorResponse): Error {
-    switch (error.code) {
-      case A2A_ERROR_CODE.TASK_NOT_FOUND:
-        return new TaskNotFoundError(error.message);
-      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-        return new TaskNotCancelableError(error.message);
-      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-        return new PushNotificationNotSupportedError(error.message);
-      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-        return new UnsupportedOperationError(error.message);
-      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-        return new ContentTypeNotSupportedError(error.message);
-      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-        return new InvalidAgentResponseError(error.message);
-      case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
-        return new AuthenticatedExtendedCardNotConfiguredError(error.message);
-      default:
-        return new Error(
-          `REST error: ${error.message} (Code: ${error.code})${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
-        );
+  private static mapToError(error: RestErrorResponse, status?: number): Error {
+    const message = error.message || 'Unknown error';
+
+    if (error.name) {
+      switch (error.name) {
+        case 'TaskNotFoundError':
+          return new TaskNotFoundError(message);
+        case 'TaskNotCancelableError':
+          return new TaskNotCancelableError(message);
+        case 'PushNotificationNotSupportedError':
+          return new PushNotificationNotSupportedError(message);
+        case 'UnsupportedOperationError':
+          return new UnsupportedOperationError(message);
+        case 'ContentTypeNotSupportedError':
+          return new ContentTypeNotSupportedError(message);
+        case 'InvalidAgentResponseError':
+          return new InvalidAgentResponseError(message);
+        case 'AuthenticatedExtendedCardNotConfiguredError':
+          return new AuthenticatedExtendedCardNotConfiguredError(message);
+        case 'ParseError':
+          return new ParseError(message);
+        case 'InvalidRequestError':
+          return new InvalidRequestError(message);
+        case 'MethodNotFoundError':
+          return new MethodNotFoundError(message);
+        case 'InvalidParamsError':
+          return new InvalidParamsError(message);
+        case 'InternalError':
+          return new InternalError(message);
+      }
     }
+
+    if (error.code !== undefined) {
+      switch (error.code) {
+        case A2A_ERROR_CODE.TASK_NOT_FOUND:
+          return new TaskNotFoundError(message);
+        case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
+          return new TaskNotCancelableError(message);
+        case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
+          return new PushNotificationNotSupportedError(message);
+        case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
+          return new UnsupportedOperationError(message);
+        case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
+          return new ContentTypeNotSupportedError(message);
+        case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
+          return new InvalidAgentResponseError(message);
+        case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
+          return new AuthenticatedExtendedCardNotConfiguredError(message);
+      }
+    }
+
+    if (status === 404) return new TaskNotFoundError(message);
+    if (status === 400) return new InvalidParamsError(message);
+    if (status === 409) return new TaskNotCancelableError(message);
+
+    return new Error(
+      `REST error: ${error.name || 'Error'} - ${message}${status ? ` (Status: ${status})` : ''}${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
+    );
   }
 }
 
