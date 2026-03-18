@@ -61,11 +61,7 @@ export class GrpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendGrpcRequest<
-      GetAgentCardRequest,
-      AgentCard,
-      AgentCard
-    >(
+    const rpcResponse = await this._sendGrpcRequest<GetAgentCardRequest, AgentCard, AgentCard>(
       'getAgentCard',
       {},
       options,
@@ -165,11 +161,7 @@ export class GrpcTransport implements Transport {
   }
 
   async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest<
-      GetTaskRequest,
-      Task,
-      Task
-    >(
+    const rpcResponse = await this._sendGrpcRequest<GetTaskRequest, Task, Task>(
       'getTask',
       params,
       options,
@@ -180,11 +172,7 @@ export class GrpcTransport implements Transport {
   }
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest<
-      CancelTaskRequest,
-      Task,
-      Task
-    >(
+    const rpcResponse = await this._sendGrpcRequest<CancelTaskRequest, Task, Task>(
       'cancelTask',
       params,
       options,

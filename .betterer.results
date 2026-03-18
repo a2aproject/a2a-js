@@ -25,8 +25,8 @@ exports[`TypeScript Strict Mode`] = {
     "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:99419053": [
       [91, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
     ],
-    "src/types/converters/to_proto.ts:2002748548": [
-      [142, 52, 19, "tsc: Function lacks ending return statement and return type does not include \'undefined\'.", "2245381585"]
+    "src/types/converters/to_proto.ts:1126093392": [
+      [84, 52, 19, "tsc: Function lacks ending return statement and return type does not include \'undefined\'.", "2245381585"]
     ]
   }`
 };
