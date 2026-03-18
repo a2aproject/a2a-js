@@ -137,7 +137,7 @@ export class RestTransport implements Transport {
       undefined,
       ListTaskPushNotificationConfigResponse
     );
-    return FromProto.listTaskPushNotificationConfig(response);
+    return response.configs;
   }
 
   async deleteTaskPushNotificationConfig(
