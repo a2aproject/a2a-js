@@ -3,6 +3,20 @@ import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vite
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { JSONRPCErrorResponse } from '../../src/json_rpc_types.js';
+import {
+  ParseError,
+  InvalidRequestError,
+  MethodNotFoundError,
+  InvalidParamsError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
+  A2A_ERROR_CODE,
+} from '../../src/errors.js';
 
 describe('JsonRpcTransportHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -158,6 +172,96 @@ describe('JsonRpcTransportHandler', () => {
       };
       const response = await transportHandler.handle(request);
       expect(response).to.have.property('result');
+    });
+  });
+
+  describe('Error mapping', () => {
+    it('should map ParseError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(new ParseError('Invalid JSON'));
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.PARSE_ERROR);
+      expect(mappedError.message).to.equal('Invalid JSON');
+    });
+
+    it('should map InvalidRequestError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new InvalidRequestError('Invalid Request')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INVALID_REQUEST);
+      expect(mappedError.message).to.equal('Invalid Request');
+    });
+
+    it('should map MethodNotFoundError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new MethodNotFoundError('Method Not Found')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.METHOD_NOT_FOUND);
+      expect(mappedError.message).to.equal('Method Not Found');
+    });
+
+    it('should map InvalidParamsError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new InvalidParamsError('Invalid Params')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
+      expect(mappedError.message).to.equal('Invalid Params');
+    });
+
+    it('should map TaskNotFoundError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new TaskNotFoundError('Task Not Found')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.TASK_NOT_FOUND);
+      expect(mappedError.message).to.equal('Task Not Found');
+    });
+
+    it('should map TaskNotCancelableError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new TaskNotCancelableError('Task Not Cancelable')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.TASK_NOT_CANCELABLE);
+      expect(mappedError.message).to.equal('Task Not Cancelable');
+    });
+
+    it('should map PushNotificationNotSupportedError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new PushNotificationNotSupportedError('Push Notification Not Supported')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED);
+      expect(mappedError.message).to.equal('Push Notification Not Supported');
+    });
+
+    it('should map UnsupportedOperationError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new UnsupportedOperationError('Unsupported Operation')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.UNSUPPORTED_OPERATION);
+      expect(mappedError.message).to.equal('Unsupported Operation');
+    });
+
+    it('should map ContentTypeNotSupportedError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new ContentTypeNotSupportedError('Content Type Not Supported')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED);
+      expect(mappedError.message).to.equal('Content Type Not Supported');
+    });
+
+    it('should map InvalidAgentResponseError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new InvalidAgentResponseError('Invalid Agent Response')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INVALID_AGENT_RESPONSE);
+      expect(mappedError.message).to.equal('Invalid Agent Response');
+    });
+
+    it('should map AuthenticatedExtendedCardNotConfiguredError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new AuthenticatedExtendedCardNotConfiguredError(
+          'Authenticated Extended Card Not Configured'
+        )
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED);
+      expect(mappedError.message).to.equal('Authenticated Extended Card Not Configured');
     });
   });
 });
