@@ -1333,6 +1333,7 @@ export interface OAuthFlows {
   clientCredentials?: ClientCredentialsOAuthFlow;
   implicit?: ImplicitOAuthFlow;
   password?: PasswordOAuthFlow;
+  deviceCode?: DeviceCodeOAuthFlow;
 }
 /**
  * Configuration for the OAuth Authorization Code flow. Previously called accessCode in OpenAPI 2.0.
@@ -1420,6 +1421,33 @@ export interface PasswordOAuthFlow {
    * The token URL to be used for this flow. This MUST be a URL.
    */
   tokenUrl: string;
+}
+/**
+ * Configuration for the OAuth Device Code flow (RFC 8628).
+ */
+export interface DeviceCodeOAuthFlow {
+  /**
+   * The device authorization endpoint URL.
+   * This MUST be a URL and use TLS.
+   */
+  deviceAuthorizationUrl: string;
+  /**
+   * The token URL to be used for this flow.
+   * This MUST be a URL and use TLS.
+   */
+  tokenUrl: string;
+  /**
+   * The URL to be used for obtaining refresh tokens.
+   * This MUST be a URL and use TLS.
+   */
+  refreshUrl?: string;
+  /**
+   * The available scopes for the OAuth2 security scheme. A map between the scope
+   * name and a short description for it.
+   */
+  scopes: {
+    [k: string]: string;
+  };
 }
 /**
  * Defines a security scheme using OpenID Connect.

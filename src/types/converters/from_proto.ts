@@ -436,6 +436,15 @@ export class FromProto {
             tokenUrl: flows.flow.value.tokenUrl,
           },
         };
+      case 'deviceCode':
+        return {
+          deviceCode: {
+            deviceAuthorizationUrl: flows.flow.value.deviceAuthorizationUrl,
+            tokenUrl: flows.flow.value.tokenUrl,
+            scopes: flows.flow.value.scopes,
+            refreshUrl: flows.flow.value.refreshUrl || undefined,
+          },
+        };
       default:
         throw A2AError.internalError(`Unsupported OAuth flows`);
     }

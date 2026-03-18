@@ -676,6 +676,7 @@ export interface OAuthFlows {
     | { $case: "clientCredentials"; value: ClientCredentialsOAuthFlow }
     | { $case: "implicit"; value: ImplicitOAuthFlow }
     | { $case: "password"; value: PasswordOAuthFlow }
+    | { $case: "deviceCode"; value: DeviceCodeOAuthFlow }
     | undefined;
 }
 
@@ -772,6 +773,34 @@ export interface PasswordOAuthFlow {
 }
 
 export interface PasswordOAuthFlow_ScopesEntry {
+  key: string;
+  value: string;
+}
+
+export interface DeviceCodeOAuthFlow {
+  /**
+   * The device authorization endpoint URL.
+   * This MUST be in the form of a URL. The OAuth2 standard requires the use of TLS.
+   */
+  deviceAuthorizationUrl: string;
+  /**
+   * The token URL to be used for this flow. This MUST be in the form of a URL.
+   * The OAuth2 standard requires the use of TLS.
+   */
+  tokenUrl: string;
+  /**
+   * The URL to be used for obtaining refresh tokens. This MUST be in the
+   * form of a URL. The OAuth2 standard requires the use of TLS.
+   */
+  refreshUrl: string;
+  /**
+   * The available scopes for the OAuth2 security scheme. A map between the
+   * scope name and a short description for it. The map MAY be empty.
+   */
+  scopes: { [key: string]: string };
+}
+
+export interface DeviceCodeOAuthFlow_ScopesEntry {
   key: string;
   value: string;
 }

@@ -207,6 +207,18 @@ export class ToProto {
           },
         },
       };
+    } else if (flows.deviceCode) {
+      return {
+        flow: {
+          $case: 'deviceCode',
+          value: {
+            deviceAuthorizationUrl: flows.deviceCode.deviceAuthorizationUrl,
+            tokenUrl: flows.deviceCode.tokenUrl,
+            scopes: flows.deviceCode.scopes,
+            refreshUrl: flows.deviceCode.refreshUrl ?? '',
+          },
+        },
+      };
     } else {
       throw A2AError.internalError(`Unsupported OAuth flows`);
     }
