@@ -1,16 +1,11 @@
 import { A2AError } from '../../server/error.js';
 import {
-  CancelTaskRequest,
-  GetTaskRequest,
   CreateTaskPushNotificationConfigRequest,
   Message,
-  SendMessageRequest,
-  Part,
   SendMessageResponse,
   Task,
   TaskPushNotificationConfig,
   ListTaskPushNotificationConfigResponse,
-  AgentCard,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   StreamResponse,
@@ -23,32 +18,16 @@ import { extractTaskId } from './id_decoding.js';
  * or handles minor structural differences if any legacy support is needed. Planned to be removed completely in the future.
  */
 export class FromProto {
-  static taskQueryParams(request: GetTaskRequest): GetTaskRequest {
-    return request;
-  }
-
-  static taskIdParams(request: CancelTaskRequest): CancelTaskRequest {
-    return request;
-  }
-
   static createTaskPushNotificationConfig(
     request: CreateTaskPushNotificationConfigRequest
   ): TaskPushNotificationConfig {
     if (!request.config || !request.config.pushNotificationConfig) {
-      throw new Error('Request must include a `config` with `pushNotificationConfig`');
+      throw A2AError.invalidParams('Request must include a `config` with `pushNotificationConfig`');
     }
     return {
       name: `tasks/${extractTaskId(request.parent)}/pushNotificationConfigs/${request.config.pushNotificationConfig.id}`,
       pushNotificationConfig: request.config.pushNotificationConfig,
     };
-  }
-
-  static part(part: Part): Part {
-    return part;
-  }
-
-  static messageSendParams(request: SendMessageRequest): SendMessageRequest {
-    return request;
   }
 
   static sendMessageResult(response: SendMessageResponse): Task | Message {
@@ -60,18 +39,10 @@ export class FromProto {
     throw A2AError.invalidParams('Invalid SendMessageResponse: missing result');
   }
 
-  static task(task: Task): Task {
-    return task;
-  }
-
   static listTaskPushNotificationConfig(
     request: ListTaskPushNotificationConfigResponse
   ): TaskPushNotificationConfig[] {
     return request.configs;
-  }
-
-  static agentCard(agentCard: AgentCard): AgentCard {
-    return agentCard;
   }
 
   static messageStreamResult(

@@ -15,34 +15,6 @@ describe('ToProto', () => {
     );
   });
 
-  // Since "internal types" ARE "proto types" now, ToProto is mostly identity or simple formatting.
-  // These tests ensure it correctly passes through conformant objects.
-
-  it('should pass through valid Task', () => {
-    const task: proto.Task = {
-      id: 'task-123',
-      contextId: 'ctx-1',
-      status: {
-        state: proto.TaskState.TASK_STATE_COMPLETED,
-        timestamp: '2023-01-01T00:00:00.000Z',
-        update: undefined,
-      },
-      artifacts: [],
-      history: [],
-      metadata: { key: 'value' },
-    };
-
-    const result = ToProto.task(task);
-    expect(result).toEqual(task);
-  });
-
-  describe('parts', () => {
-    it('should pass through text part', () => {
-      const part: proto.Part = { part: { $case: 'text', value: 'hello' } };
-      expect(ToProto.part(part)).toEqual(part);
-    });
-  });
-
   describe('messageSendResult', () => {
     it('should wrap Message in SendMessageResponse', () => {
       const message: proto.Message = {

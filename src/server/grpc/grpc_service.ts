@@ -108,7 +108,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.messageSendParams,
+        (req) => req,
         requestHandler.sendMessage.bind(requestHandler),
         ToProto.messageSendResult
       );
@@ -119,7 +119,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     ): Promise<void> {
       return wrapStreaming(
         call,
-        FromProto.messageSendParams,
+        (req) => req,
         requestHandler.sendMessageStream.bind(requestHandler),
         ToProto.messageStreamResult
       );
@@ -130,7 +130,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     ): Promise<void> {
       return wrapStreaming(
         call,
-        FromProto.taskIdParams,
+        (req) => req,
         requestHandler.resubscribe.bind(requestHandler),
         ToProto.messageStreamResult
       );
@@ -201,9 +201,9 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.taskQueryParams,
+        (req) => req,
         requestHandler.getTask.bind(requestHandler),
-        ToProto.task
+        (res) => res
       );
     },
 
@@ -214,9 +214,9 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.taskIdParams,
+        (req) => req,
         requestHandler.cancelTask.bind(requestHandler),
-        ToProto.task
+        (res) => res
       );
     },
 
@@ -229,7 +229,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         () => ({}),
         (_params, context) => requestHandler.getAuthenticatedExtendedAgentCard(context),
-        ToProto.agentCard
+        (res) => res
       );
     },
   };
