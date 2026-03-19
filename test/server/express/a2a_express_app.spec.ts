@@ -18,7 +18,7 @@ import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/
 import { AgentCard } from '../../../src/index.js';
 import { JSONRPCErrorResponse } from '../../../src/json_rpc_types.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
-import { InternalError, InvalidRequestError } from '../../../src/errors.js';
+import { A2A_ERROR_CODE, RequestMalformedError } from '../../../src/errors.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { User, UnauthenticatedUser } from '../../../src/server/authentication/user.js';
 
@@ -183,7 +183,7 @@ describe('A2AExpressApp', () => {
       const mockErrorStream = {
         async *[Symbol.asyncIterator]() {
           yield { jsonrpc: '2.0', id: 'stream-1', result: { step: 1 } };
-          throw new InternalError('Streaming error');
+          throw new RequestMalformedError('Streaming error');
         },
       };
 
@@ -202,7 +202,7 @@ describe('A2AExpressApp', () => {
       const mockImmediateErrorStream = {
         // eslint-disable-next-line require-yield
         async *[Symbol.asyncIterator]() {
-          throw new InternalError('Immediate streaming error');
+          throw new RequestMalformedError('Immediate streaming error');
         },
       };
 
@@ -223,7 +223,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle general processing error', async () => {
-      const error = new InternalError('Processing error');
+      const error = new RequestMalformedError('Processing error');
       handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest('error-test');
@@ -256,7 +256,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle request without id', async () => {
-      const error = new InvalidRequestError('No ID error');
+      const error = new RequestMalformedError('No ID error');
       handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest(null);
@@ -544,7 +544,7 @@ describe('A2AExpressApp', () => {
         jsonrpc: '2.0',
         id: null,
         error: {
-          code: -32700,
+          code: A2A_ERROR_CODE.INTERNAL_ERROR,
           message: 'Invalid JSON payload.',
         },
       };

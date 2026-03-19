@@ -20,11 +20,8 @@ import {
 } from '../../../index.js';
 import {
   AuthenticatedExtendedCardNotConfiguredError,
-  InvalidParamsError,
-  InvalidRequestError,
-  MethodNotFoundError,
-  ParseError,
   PushNotificationNotSupportedError,
+  RequestMalformedError,
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
@@ -57,10 +54,7 @@ export const HTTP_STATUS = {
  * @returns Corresponding HTTP status code
  */
 export function mapErrorToStatus(error: unknown): number {
-  if (error instanceof ParseError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof InvalidRequestError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof InvalidParamsError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof MethodNotFoundError) return HTTP_STATUS.NOT_FOUND;
+  if (error instanceof RequestMalformedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof TaskNotFoundError) return HTTP_STATUS.NOT_FOUND;
   if (error instanceof TaskNotCancelableError) return HTTP_STATUS.CONFLICT;
   if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
@@ -131,10 +125,10 @@ export class RestTransportHandler {
    */
   private validateSendMessageRequest(params: SendMessageRequest): void {
     if (!params.request) {
-      throw new InvalidParamsError('request is required');
+      throw new RequestMalformedError('request is required');
     }
     if (!params.request.messageId) {
-      throw new InvalidParamsError('request.messageId is required');
+      throw new RequestMalformedError('request.messageId is required');
     }
   }
 
@@ -217,10 +211,10 @@ export class RestTransportHandler {
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
     if (!config.pushNotificationConfig) {
-      throw new InvalidParamsError('pushNotificationConfig is required');
+      throw new RequestMalformedError('pushNotificationConfig is required');
     }
     if (!config.pushNotificationConfig.id) {
-      throw new InvalidParamsError('pushNotificationConfig.id is required');
+      throw new RequestMalformedError('pushNotificationConfig.id is required');
     }
     return this.requestHandler.setTaskPushNotificationConfig(config, context);
   }
@@ -301,14 +295,14 @@ export class RestTransportHandler {
    */
   private parseHistoryLength(value: unknown): number {
     if (value === undefined || value === null) {
-      throw new InvalidParamsError('historyLength is required');
+      throw new RequestMalformedError('historyLength is required');
     }
     const parsed = parseInt(String(value), 10);
     if (isNaN(parsed)) {
-      throw new InvalidParamsError('historyLength must be a valid integer');
+      throw new RequestMalformedError('historyLength must be a valid integer');
     }
     if (parsed < 0) {
-      throw new InvalidParamsError('historyLength must be non-negative');
+      throw new RequestMalformedError('historyLength must be non-negative');
     }
     return parsed;
   }

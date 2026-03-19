@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import * as proto from '../../../src/types/pb/a2a_types.js';
-import { InvalidParamsError, InternalError } from '../../../src/errors.js';
+import { RequestMalformedError } from '../../../src/errors.js';
 
 vi.mock('../../../src/types/converters/id_decoding.js', () => ({
   extractTaskId: vi.fn((name) => name.replace('tasks/', '')),
@@ -33,7 +33,7 @@ describe('FromProto', () => {
       });
     });
 
-    it('should throw InvalidParamsError if config is missing', () => {
+    it('should throw RequestMalformedError if config is missing', () => {
       const request: proto.CreateTaskPushNotificationConfigRequest = {
         parent: 'tasks/task-123',
         configId: 'push-2',
@@ -42,14 +42,14 @@ describe('FromProto', () => {
       try {
         FromProto.createTaskPushNotificationConfig(request);
       } catch (error) {
-        expect(error).toBeInstanceOf(InvalidParamsError);
-        expect((error as InvalidParamsError).message).toContain(
+        expect(error).toBeInstanceOf(RequestMalformedError);
+        expect((error as RequestMalformedError).message).toContain(
           'Request must include a `config` with `pushNotificationConfig`'
         );
       }
     });
 
-    it('should throw InvalidParamsError if pushNotificationConfig is missing', () => {
+    it('should throw RequestMalformedError if pushNotificationConfig is missing', () => {
       const request: proto.CreateTaskPushNotificationConfigRequest = {
         parent: 'tasks/task-123',
         configId: 'config-name',
@@ -58,8 +58,8 @@ describe('FromProto', () => {
       try {
         FromProto.createTaskPushNotificationConfig(request);
       } catch (error) {
-        expect(error).toBeInstanceOf(InvalidParamsError);
-        expect((error as InvalidParamsError).message).toContain(
+        expect(error).toBeInstanceOf(RequestMalformedError);
+        expect((error as RequestMalformedError).message).toContain(
           'Request must include a `config` with `pushNotificationConfig`'
         );
       }
@@ -102,29 +102,29 @@ describe('FromProto', () => {
       expect(FromProto.sendMessageResult(response)).toEqual(msg);
     });
 
-    it('should throw InvalidParamsError if payload is missing', () => {
+    it('should throw RequestMalformedError if payload is missing', () => {
       const response: proto.SendMessageResponse = {};
-      let err: InvalidParamsError | undefined;
+      let err: RequestMalformedError | undefined;
       try {
         FromProto.sendMessageResult(response);
       } catch (error) {
-        err = error as InvalidParamsError;
+        err = error as RequestMalformedError;
       }
-      expect(err).toBeInstanceOf(InvalidParamsError);
+      expect(err).toBeInstanceOf(RequestMalformedError);
       expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
     });
 
-    it('should throw InvalidParamsError if payload case is invalid', () => {
+    it('should throw RequestMalformedError if payload case is invalid', () => {
       const response = {
         payload: { $case: 'streamError', value: undefined as any },
       } as unknown as proto.SendMessageResponse;
-      let err: InvalidParamsError | undefined;
+      let err: RequestMalformedError | undefined;
       try {
         FromProto.sendMessageResult(response);
       } catch (error) {
-        err = error as InvalidParamsError;
+        err = error as RequestMalformedError;
       }
-      expect(err).toBeInstanceOf(InvalidParamsError);
+      expect(err).toBeInstanceOf(RequestMalformedError);
       expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
     });
   });
@@ -162,13 +162,15 @@ describe('FromProto', () => {
       expect(FromProto.messageStreamResult(event)).toEqual(task);
     });
 
-    it('should throw InternalError if payload is missing', () => {
+    it('should throw RequestMalformedError if payload is missing', () => {
       const event: proto.StreamResponse = {};
       try {
         FromProto.messageStreamResult(event);
       } catch (error) {
-        expect(error).toBeInstanceOf(InternalError);
-        expect((error as InternalError).message).toContain('Invalid event type in StreamResponse');
+        expect(error).toBeInstanceOf(RequestMalformedError);
+        expect((error as RequestMalformedError).message).toContain(
+          'Invalid event type in StreamResponse'
+        );
       }
     });
   });

@@ -1,4 +1,4 @@
-import { InternalError, InvalidParamsError } from '../../errors.js';
+import { RequestMalformedError } from '../../errors.js';
 import {
   CreateTaskPushNotificationConfigRequest,
   Message,
@@ -22,7 +22,9 @@ export class FromProto {
     request: CreateTaskPushNotificationConfigRequest
   ): TaskPushNotificationConfig {
     if (!request.config || !request.config.pushNotificationConfig) {
-      throw new InvalidParamsError('Request must include a `config` with `pushNotificationConfig`');
+      throw new RequestMalformedError(
+        'Request must include a `config` with `pushNotificationConfig`'
+      );
     }
     return {
       name: `tasks/${extractTaskId(request.parent)}/pushNotificationConfigs/${request.config.pushNotificationConfig.id}`,
@@ -36,7 +38,7 @@ export class FromProto {
     } else if (response.payload?.$case === 'msg') {
       return response.payload.value;
     }
-    throw new InvalidParamsError('Invalid SendMessageResponse: missing result');
+    throw new RequestMalformedError('Invalid SendMessageResponse: missing result');
   }
 
   static listTaskPushNotificationConfig(
@@ -51,6 +53,6 @@ export class FromProto {
     if (event.payload) {
       return event.payload.value;
     }
-    throw new InternalError('Invalid event type in StreamResponse');
+    throw new RequestMalformedError('Invalid event type in StreamResponse');
   }
 }

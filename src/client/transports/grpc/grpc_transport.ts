@@ -25,8 +25,7 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   UnsupportedOperationError,
-  InvalidParamsError,
-  InternalError,
+  RequestMalformedError,
 } from '../../../errors.js';
 
 type GrpcUnaryCall<TReq, TRes> = (
@@ -311,9 +310,8 @@ export class GrpcTransport implements Transport {
         }
         break;
       case grpc.status.INVALID_ARGUMENT:
-        return new InvalidParamsError(error.details);
       case grpc.status.INTERNAL:
-        return new InternalError(error.details);
+        return new RequestMalformedError(error.details);
       default:
         break;
     }

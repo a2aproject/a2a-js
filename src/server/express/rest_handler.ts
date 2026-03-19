@@ -30,7 +30,7 @@ import {
 } from '../../types/pb/a2a_types.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
-import { ParseError } from '../../errors.js';
+import { RequestMalformedError } from '../../errors.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -56,7 +56,7 @@ const restErrorHandler: ErrorRequestHandler = (
   next: NextFunction
 ) => {
   if (err instanceof SyntaxError && 'body' in err) {
-    return res.status(400).json(toHTTPError(new ParseError('Invalid JSON payload.')));
+    return res.status(400).json(toHTTPError(new RequestMalformedError('Invalid JSON payload.')));
   }
   next(err);
 };

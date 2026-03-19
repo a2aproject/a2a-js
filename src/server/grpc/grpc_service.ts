@@ -28,12 +28,8 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import {
   AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
-  InternalError,
   InvalidAgentResponseError,
-  InvalidParamsError,
-  InvalidRequestError,
-  MethodNotFoundError,
-  ParseError,
+  RequestMalformedError,
   PushNotificationNotSupportedError,
   TaskNotCancelableError,
   TaskNotFoundError,
@@ -263,11 +259,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
   else if (error instanceof AuthenticatedExtendedCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
-  else if (error instanceof InvalidRequestError) code = grpc.status.INVALID_ARGUMENT;
-  else if (error instanceof InvalidParamsError) code = grpc.status.INVALID_ARGUMENT;
-  else if (error instanceof InternalError) code = grpc.status.INTERNAL;
-  else if (error instanceof ParseError) code = grpc.status.INVALID_ARGUMENT;
-  else if (error instanceof MethodNotFoundError) code = grpc.status.UNIMPLEMENTED;
+  else if (error instanceof RequestMalformedError) code = grpc.status.INTERNAL;
 
   const message = error instanceof Error ? error.message : 'Internal server error';
 

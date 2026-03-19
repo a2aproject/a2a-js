@@ -13,7 +13,7 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
-import { ParseError } from '../../errors.js';
+import { RequestMalformedError } from '../../errors.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -123,7 +123,9 @@ export const jsonErrorHandler: ErrorRequestHandler = (
     const errorResponse: JSONRPCErrorResponse = {
       jsonrpc: '2.0',
       id: null,
-      error: JsonRpcTransportHandler.mapToJSONRPCError(new ParseError('Invalid JSON payload.')),
+      error: JsonRpcTransportHandler.mapToJSONRPCError(
+        new RequestMalformedError('Invalid JSON payload.')
+      ),
     };
     return res.status(400).json(errorResponse);
   }

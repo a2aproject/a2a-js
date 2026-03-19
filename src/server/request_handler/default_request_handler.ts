@@ -2,9 +2,7 @@ import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
   AuthenticatedExtendedCardNotConfiguredError,
-  InternalError,
-  InvalidParamsError,
-  InvalidRequestError,
+  RequestMalformedError,
   PushNotificationNotSupportedError,
   TaskNotCancelableError,
   TaskNotFoundError,
@@ -126,7 +124,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
       if (task.status?.state !== undefined && terminalStates.includes(task.status.state)) {
         // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
-        throw new InvalidRequestError(
+        throw new RequestMalformedError(
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
         );
       }
@@ -215,7 +213,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
       if (options?.firstResultRejector && !firstResultSent) {
         options.firstResultRejector(
-          new InternalError('Execution finished before a message or task was produced.')
+          new RequestMalformedError('Execution finished before a message or task was produced.')
         );
       }
     } catch (error) {
@@ -238,7 +236,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   ): Promise<Message | Task> {
     const incomingMessage = params.request;
     if (!incomingMessage?.messageId) {
-      throw new InvalidParamsError('message.messageId is required.');
+      throw new RequestMalformedError('message.messageId is required.');
     }
 
     // Default to blocking behavior if 'blocking' is not explicitly false.
@@ -310,7 +308,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this._processEvents(taskId, resultManager, eventQueue, context);
       const finalResult = resultManager.getFinalResult();
       if (!finalResult) {
-        throw new InternalError(
+        throw new RequestMalformedError(
           'Agent execution finished without a result, and no task context found.'
         );
       }
@@ -339,7 +337,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!incomingMessage?.messageId) {
       // For streams, messageId might be set by client, or server can generate if not present.
       // Let's assume client provides it or throw for now.
-      throw new InvalidParamsError('message.messageId is required for streaming.');
+      throw new RequestMalformedError('message.messageId is required for streaming.');
     }
 
     // Instantiate ResultManager before creating RequestContext
@@ -466,7 +464,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const latestTask = await this.taskStore.load(taskId, context);
     if (!latestTask) {
-      throw new InternalError(`Task ${params.name} not found after cancellation.`);
+      throw new RequestMalformedError(`Task ${params.name} not found after cancellation.`);
     }
     if (latestTask.status!.state != TaskState.TASK_STATE_CANCELLED) {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.name}`);
@@ -490,7 +488,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const pushNotificationConfig = params.pushNotificationConfig;
 
     if (!pushNotificationConfig) {
-      throw new InvalidParamsError('pushNotificationConfig is required.');
+      throw new RequestMalformedError('pushNotificationConfig is required.');
     }
 
     // Default the config ID to the task ID if not provided for backward compatibility.
@@ -520,7 +518,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const configs = (await this.pushNotificationStore?.load(taskId)) || [];
     if (configs.length === 0) {
-      throw new InternalError(`Push notification config not found for task ${taskId}.`);
+      throw new RequestMalformedError(`Push notification config not found for task ${taskId}.`);
     }
 
     let configId: string;
@@ -534,7 +532,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const config = configs.find((c) => c.id === configId);
 
     if (!config) {
-      throw new InternalError(
+      throw new RequestMalformedError(
         `Push notification config with id '${configId}' not found for task ${taskId}.`
       );
     }

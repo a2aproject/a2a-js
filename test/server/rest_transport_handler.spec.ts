@@ -8,10 +8,7 @@ import {
 } from '../../src/server/transports/rest/rest_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import {
-  InvalidParamsError,
-  ParseError,
-  InvalidRequestError,
-  MethodNotFoundError,
+  RequestMalformedError,
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
@@ -96,10 +93,7 @@ describe('RestTransportHandler', () => {
 
   describe('mapErrorToStatus', () => {
     it.each([
-      [new ParseError(''), HTTP_STATUS.BAD_REQUEST],
-      [new InvalidRequestError(''), HTTP_STATUS.BAD_REQUEST],
-      [new InvalidParamsError(''), HTTP_STATUS.BAD_REQUEST],
-      [new MethodNotFoundError(''), HTTP_STATUS.NOT_FOUND],
+      [new RequestMalformedError(''), HTTP_STATUS.BAD_REQUEST],
       [new TaskNotFoundError(''), HTTP_STATUS.NOT_FOUND],
       [new TaskNotCancelableError(''), HTTP_STATUS.CONFLICT],
       [new PushNotificationNotSupportedError(''), HTTP_STATUS.BAD_REQUEST],
@@ -112,10 +106,10 @@ describe('RestTransportHandler', () => {
 
   describe('toHTTPError', () => {
     it('should convert A2AError to HTTP error format', () => {
-      const error = new InvalidParamsError('Invalid input');
+      const error = new RequestMalformedError('Invalid input');
       const httpError = toHTTPError(error);
 
-      expect(httpError.name).to.equal('InvalidParamsError');
+      expect(httpError.name).to.equal('RequestMalformedError');
       expect(httpError.message).to.equal('Invalid input');
     });
   });

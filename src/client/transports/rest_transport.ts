@@ -8,11 +8,7 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   UnsupportedOperationError,
-  ParseError,
-  InvalidRequestError,
-  MethodNotFoundError,
-  InvalidParamsError,
-  InternalError,
+  RequestMalformedError,
 } from '../../errors.js';
 
 import { A2AStreamEventData, SendMessageResult } from '../../index.js';
@@ -358,16 +354,8 @@ export class RestTransport implements Transport {
           return new InvalidAgentResponseError(message);
         case 'AuthenticatedExtendedCardNotConfiguredError':
           return new AuthenticatedExtendedCardNotConfiguredError(message);
-        case 'ParseError':
-          return new ParseError(message);
-        case 'InvalidRequestError':
-          return new InvalidRequestError(message);
-        case 'MethodNotFoundError':
-          return new MethodNotFoundError(message);
-        case 'InvalidParamsError':
-          return new InvalidParamsError(message);
-        case 'InternalError':
-          return new InternalError(message);
+        case 'RequestMalformedError':
+          return new RequestMalformedError(message);
       }
     }
 
@@ -390,7 +378,7 @@ export class RestTransport implements Transport {
       }
     }
 
-    if (status === 400) return new InvalidParamsError(message);
+    if (status === 400) return new RequestMalformedError(message);
     if (status === 404) return new TaskNotFoundError(message);
     if (status === 409) return new TaskNotCancelableError(message);
 

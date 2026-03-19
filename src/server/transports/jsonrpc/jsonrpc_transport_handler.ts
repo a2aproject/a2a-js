@@ -16,10 +16,7 @@ import {
 import { JSONRPCErrorResponse } from '../../../json_rpc_types.js';
 import {
   A2A_ERROR_CODE,
-  ParseError,
-  InvalidRequestError,
-  MethodNotFoundError,
-  InvalidParamsError,
+  RequestMalformedError,
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
@@ -74,16 +71,16 @@ export class JsonRpcTransportHandler {
       } else if (typeof requestBody === 'object' && requestBody !== null) {
         rpcRequest = requestBody as A2ARequest;
       } else {
-        throw new ParseError('Invalid request body type.');
+        throw new RequestMalformedError('Invalid request body type.');
       }
 
       if (!this.isRequestValid(rpcRequest)) {
-        throw new InvalidRequestError('Invalid JSON-RPC Request.');
+        throw new RequestMalformedError('Invalid JSON-RPC Request.');
       }
     } catch (error) {
       const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
         error instanceof SyntaxError
-          ? new ParseError(error.message || 'Failed to parse JSON request.')
+          ? new RequestMalformedError(error.message || 'Failed to parse JSON request.')
           : error
       );
       return {
@@ -99,7 +96,7 @@ export class JsonRpcTransportHandler {
         method !== 'agent/getAuthenticatedExtendedCard' &&
         !this.paramsAreValid(rpcRequest.params)
       ) {
-        throw new InvalidParamsError(`Invalid method parameters.`);
+        throw new RequestMalformedError(`Invalid method parameters.`);
       }
 
       if (method === 'message/stream' || method === 'tasks/resubscribe') {
@@ -224,7 +221,11 @@ export class JsonRpcTransportHandler {
             result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
             break;
           default:
-            throw new MethodNotFoundError();
+            return {
+              jsonrpc: '2.0',
+              id: requestId,
+              error: { code: A2A_ERROR_CODE.METHOD_NOT_FOUND, message: 'Invalid method.' },
+            };
         }
         return {
           jsonrpc: '2.0',
@@ -278,18 +279,6 @@ export class JsonRpcTransportHandler {
   }
 
   public static mapToJSONRPCError(error: unknown) {
-    if (error instanceof ParseError) {
-      return { code: A2A_ERROR_CODE.PARSE_ERROR, message: error.message };
-    }
-    if (error instanceof InvalidRequestError) {
-      return { code: A2A_ERROR_CODE.INVALID_REQUEST, message: error.message };
-    }
-    if (error instanceof MethodNotFoundError) {
-      return { code: A2A_ERROR_CODE.METHOD_NOT_FOUND, message: error.message };
-    }
-    if (error instanceof InvalidParamsError) {
-      return { code: A2A_ERROR_CODE.INVALID_PARAMS, message: error.message };
-    }
     if (error instanceof TaskNotFoundError) {
       return { code: A2A_ERROR_CODE.TASK_NOT_FOUND, message: error.message };
     }

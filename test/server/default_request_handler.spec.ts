@@ -5,7 +5,7 @@ import {
   TaskNotFoundError,
   PushNotificationNotSupportedError,
   UnsupportedOperationError,
-  InvalidRequestError,
+  RequestMalformedError,
   TaskNotCancelableError,
   AuthenticatedExtendedCardNotConfiguredError,
 } from '../../src/errors.js';
@@ -962,7 +962,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await handler.sendMessage(params, serverCallContext);
         assert.fail(`Should have thrown for state: ${state}`);
       } catch (error: any) {
-        expect(error).to.be.instanceOf(InvalidRequestError);
+        expect(error).to.be.instanceOf(RequestMalformedError);
         expect(error.message).to.contain(
           `Task ${taskId} is in a terminal state (${state}) and cannot be modified.`
         );
@@ -992,7 +992,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       await generator.next();
       assert.fail('sendMessageStream should have thrown an error');
     } catch (error: any) {
-      expect(error).to.be.instanceOf(InvalidRequestError);
+      expect(error).to.be.instanceOf(RequestMalformedError);
       expect(error.message).toContain(`Task ${taskId} is in a terminal state`);
     }
   });

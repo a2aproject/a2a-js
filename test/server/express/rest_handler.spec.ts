@@ -6,8 +6,7 @@ import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
 import {
-  InternalError,
-  InvalidParamsError,
+  RequestMalformedError,
   TaskNotFoundError,
   TaskNotCancelableError,
 } from '../../../src/errors.js';
@@ -116,12 +115,12 @@ describe('restHandler', () => {
       assert.deepEqual(response.body.name, testAgentCard.name);
     });
 
-    it('should return 500 if getAuthenticatedExtendedAgentCard fails', async () => {
+    it('should return 400 if getAuthenticatedExtendedAgentCard fails', async () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
-        new InternalError('Card fetch failed')
+        new RequestMalformedError('Card fetch failed')
       );
 
-      const response = await request(app).get('/v1/card').expect(500);
+      const response = await request(app).get('/v1/card').expect(400);
 
       assert.property(response.body, 'name');
       assert.property(response.body, 'message');
@@ -148,7 +147,7 @@ describe('restHandler', () => {
 
     it('should return 400 when message is invalid', async () => {
       (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
-        new InvalidParamsError('Message is required')
+        new RequestMalformedError('Message is required')
       );
 
       await request(app).post('/v1/message:send').send({ request: null }).expect(400);

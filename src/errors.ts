@@ -14,10 +14,16 @@ export const A2A_ERROR_CODE = {
   AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED: -32007,
 } as const;
 
+// This error is a2a-js SDK specific and not covered by the protocol's documentation.
+// It is used when the error does not fit into any of the other error categories.
+export class RequestMalformedError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Request malformed');
+    this.name = 'RequestMalformedError';
+  }
+}
+
 // Transport-agnostic errors according to https://a2a-protocol.org/v0.3.0/specification/#82-a2a-specific-errors.
-// Due to a name conflict with legacy JSON-RPC types reexported from src/index.ts
-// below errors are going to be exported via src/client/index.ts to allow usage
-// from external transport implementations.
 
 export class TaskNotFoundError extends Error {
   constructor(message?: string) {
@@ -65,40 +71,5 @@ export class AuthenticatedExtendedCardNotConfiguredError extends Error {
   constructor(message?: string) {
     super(message ?? 'Authenticated Extended Card not configured');
     this.name = 'AuthenticatedExtendedCardNotConfiguredError';
-  }
-}
-
-export class ParseError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Parse error');
-    this.name = 'ParseError';
-  }
-}
-
-export class InvalidRequestError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Invalid request');
-    this.name = 'InvalidRequestError';
-  }
-}
-
-export class MethodNotFoundError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Method not found');
-    this.name = 'MethodNotFoundError';
-  }
-}
-
-export class InvalidParamsError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Invalid params');
-    this.name = 'InvalidParamsError';
-  }
-}
-
-export class InternalError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Internal error');
-    this.name = 'InternalError';
   }
 }

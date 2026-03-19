@@ -26,11 +26,7 @@ export { InMemoryTaskStore } from './store.js';
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
 export { ServerCallContext } from './context.js';
 export {
-  ParseError,
-  InvalidRequestError,
-  MethodNotFoundError,
-  InvalidParamsError,
-  InternalError,
+  RequestMalformedError,
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,

@@ -4,10 +4,7 @@ import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jso
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { JSONRPCErrorResponse } from '../../src/json_rpc_types.js';
 import {
-  ParseError,
-  InvalidRequestError,
-  MethodNotFoundError,
-  InvalidParamsError,
+  RequestMalformedError,
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
@@ -44,62 +41,62 @@ describe('JsonRpcTransportHandler', () => {
   });
 
   describe('Check JSON-RPC request format', () => {
-    it('should return a parse error for an invalid JSON string', async () => {
+    it('should return an internal error for an invalid JSON string', async () => {
       const invalidJson = '{ "jsonrpc": "2.0", "method": "foo", "id": 1, }'; // trailing comma
       const response = (await transportHandler.handle(invalidJson)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32700); // Parse error
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
     });
 
-    it('should return a parse error for a non-string/non-object request body', async () => {
+    it('should return an internal error for a non-string/non-object request body', async () => {
       const response = (await transportHandler.handle(123)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32700); // Parse error
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(response.error.message).to.equal('Invalid request body type.');
     });
 
-    it('should return an invalid request error for missing jsonrpc property', async () => {
+    it('should return an internal error for missing jsonrpc property', async () => {
       const request = { method: 'foo', id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32600); // Invalid Request
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an invalid request error for incorrect jsonrpc version', async () => {
+    it('should return an internal error for incorrect jsonrpc version', async () => {
       const request = { jsonrpc: '1.0', method: 'foo', id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32600); // Invalid Request
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an invalid request error for missing method property', async () => {
+    it('should return an internal error for missing method property', async () => {
       const request = { jsonrpc: '2.0', id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32600); // Invalid Request
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an invalid request error for non-string method property', async () => {
+    it('should return an internal error for non-string method property', async () => {
       const request = { jsonrpc: '2.0', method: 123, id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32600); // Invalid Request
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an invalid request error for invalid id type (object)', async () => {
+    it('should return an internal error for invalid id type (object)', async () => {
       const request = { jsonrpc: '2.0', method: 'foo', id: {} };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32600); // Invalid Request
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.deep.equal({});
     });
 
-    it('should return an invalid request error for invalid id type (float)', async () => {
+    it('should return an internal error for invalid id type (float)', async () => {
       const request = { jsonrpc: '2.0', method: 'foo', id: 1.23 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(-32600); // Invalid Request
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1.23);
     });
@@ -157,7 +154,7 @@ describe('JsonRpcTransportHandler', () => {
           params,
         };
         const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-        expect(response.error.code).to.equal(-32602); // Invalid Params
+        expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
         expect(response.error.message).to.equal('Invalid method parameters.');
         expect(response.id).to.equal(1);
       });
@@ -176,34 +173,12 @@ describe('JsonRpcTransportHandler', () => {
   });
 
   describe('Error mapping', () => {
-    it('should map ParseError to code and message', async () => {
-      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(new ParseError('Invalid JSON'));
-      expect(mappedError.code).to.equal(A2A_ERROR_CODE.PARSE_ERROR);
-      expect(mappedError.message).to.equal('Invalid JSON');
-    });
-
-    it('should map InvalidRequestError to code and message', async () => {
+    it('should map RequestMalformedError to code and message', async () => {
       const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
-        new InvalidRequestError('Invalid Request')
+        new RequestMalformedError('Error message')
       );
-      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INVALID_REQUEST);
-      expect(mappedError.message).to.equal('Invalid Request');
-    });
-
-    it('should map MethodNotFoundError to code and message', async () => {
-      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
-        new MethodNotFoundError('Method Not Found')
-      );
-      expect(mappedError.code).to.equal(A2A_ERROR_CODE.METHOD_NOT_FOUND);
-      expect(mappedError.message).to.equal('Method Not Found');
-    });
-
-    it('should map InvalidParamsError to code and message', async () => {
-      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
-        new InvalidParamsError('Invalid Params')
-      );
-      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
-      expect(mappedError.message).to.equal('Invalid Params');
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(mappedError.message).to.equal('Error message');
     });
 
     it('should map TaskNotFoundError to code and message', async () => {
