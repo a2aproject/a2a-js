@@ -10,6 +10,7 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
+  RequestMalformedError,
 } from '../../../src/errors.js';
 import {
   createMessageParams,
@@ -199,7 +200,7 @@ describe('GrpcTransport', () => {
       (mockGrpcClient.sendStreamingMessage as Mock).mockReturnValue(mockStream);
 
       const iterator = transport.sendMessageStream(params);
-      await expect(iterator.next()).rejects.toThrow('GRPC error for sendStreamingMessage!');
+      await expect(iterator.next()).rejects.toThrow(RequestMalformedError);
     });
 
     it('should cancel stream when signal is aborted', async () => {

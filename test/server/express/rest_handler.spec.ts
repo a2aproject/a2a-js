@@ -5,7 +5,11 @@ import request from 'supertest';
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
-import { A2AError } from '../../../src/server/error.js';
+import {
+  RequestMalformedError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+} from '../../../src/errors.js';
 import {
   ListTaskPushNotificationConfigResponse,
   Message as ProtoMessage,
@@ -111,14 +115,14 @@ describe('restHandler', () => {
       assert.deepEqual(response.body.name, testAgentCard.name);
     });
 
-    it('should return 500 if getAuthenticatedExtendedAgentCard fails', async () => {
+    it('should return 400 if getAuthenticatedExtendedAgentCard fails', async () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
-        A2AError.internalError('Card fetch failed')
+        new RequestMalformedError('Card fetch failed')
       );
 
-      const response = await request(app).get('/v1/card').expect(500);
+      const response = await request(app).get('/v1/card').expect(400);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
@@ -143,7 +147,7 @@ describe('restHandler', () => {
 
     it('should return 400 when message is invalid', async () => {
       (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
-        A2AError.invalidParams('Message is required')
+        new RequestMalformedError('Message is required')
       );
 
       await request(app).post('/v1/message:send').send({ request: null }).expect(400);
@@ -226,11 +230,11 @@ describe('restHandler', () => {
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.getTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.getTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
       const response = await request(app).get('/v1/tasks/task-1').expect(404);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
@@ -251,22 +255,22 @@ describe('restHandler', () => {
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(404);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
 
     it('should return 409 if task is not cancelable', async () => {
       (mockRequestHandler.cancelTask as Mock).mockRejectedValue(
-        A2AError.taskNotCancelable('task-1')
+        new TaskNotCancelableError('task-1')
       );
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(409);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
@@ -307,7 +311,7 @@ describe('restHandler', () => {
 
       const response = await request(noStreamApp).post('/v1/tasks/task-1:subscribe').expect(400);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
@@ -417,14 +421,14 @@ describe('restHandler', () => {
 
       it('should return 404 if config not found', async () => {
         (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockRejectedValue(
-          A2AError.taskNotFound('task-1')
+          new TaskNotFoundError('task-1')
         );
 
         const response = await request(app)
           .get('/v1/tasks/task-1/pushNotificationConfigs/config-1')
           .expect(404);
 
-        assert.property(response.body, 'code');
+        assert.property(response.body, 'name');
         assert.property(response.body, 'message');
       });
     });
@@ -445,14 +449,14 @@ describe('restHandler', () => {
 
       it('should return 404 if config not found', async () => {
         (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockRejectedValue(
-          A2AError.taskNotFound('task-1')
+          new TaskNotFoundError('task-1')
         );
 
         const response = await request(app)
           .delete('/v1/tasks/task-1/pushNotificationConfigs/config-1')
           .expect(404);
 
-        assert.property(response.body, 'code');
+        assert.property(response.body, 'name');
         assert.property(response.body, 'message');
       });
     });
@@ -533,9 +537,9 @@ describe('restHandler', () => {
         .send({ request: messageProto })
         .expect(500);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
-      assert.deepEqual(response.body.code, -32603); // Internal error code
+      assert.deepEqual(response.body.name, 'Error'); // Generic Error instance
     });
   });
 });

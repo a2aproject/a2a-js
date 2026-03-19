@@ -42,4 +42,5 @@ export {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
+  RequestMalformedError,
 } from '../errors.js';
