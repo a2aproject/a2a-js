@@ -5,7 +5,6 @@
  * Returns camelCase (internal types).
  */
 
-import { A2AError } from '../../error.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 import { ServerCallContext } from '../../context.js';
 import {
@@ -13,7 +12,6 @@ import {
   Task,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
-  MessageSendParams,
   TaskPushNotificationConfig,
   TaskQueryParams,
   TaskIdParams,
@@ -42,32 +40,19 @@ export const HTTP_STATUS = {
 } as const;
 
 /**
- * Maps A2A error codes to appropriate HTTP status codes.
+ * Maps varying errors to appropriate HTTP status codes.
  *
- * @param errorCode - A2A error code (e.g., -32700, -32600, -32602, etc.)
+ * @param error - The actual error instance
  * @returns Corresponding HTTP status code
- *
- * @example
- * mapErrorToStatus(-32602) // returns 400 (Bad Request)
- * mapErrorToStatus(-32001) // returns 404 (Not Found)
  */
-export function mapErrorToStatus(errorCode: number): number {
-  switch (errorCode) {
-    case A2A_ERROR_CODE.PARSE_ERROR:
-    case A2A_ERROR_CODE.INVALID_REQUEST:
-    case A2A_ERROR_CODE.INVALID_PARAMS:
-      return HTTP_STATUS.BAD_REQUEST;
-    case A2A_ERROR_CODE.METHOD_NOT_FOUND:
-    case A2A_ERROR_CODE.TASK_NOT_FOUND:
-      return HTTP_STATUS.NOT_FOUND;
-    case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-      return HTTP_STATUS.CONFLICT;
-    case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-    case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-      return HTTP_STATUS.BAD_REQUEST;
-    default:
-      return HTTP_STATUS.INTERNAL_SERVER_ERROR;
-  }
+export function mapErrorToStatus(error: unknown): number {
+  if (error instanceof RequestMalformedError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof TaskNotFoundError) return HTTP_STATUS.NOT_FOUND;
+  if (error instanceof TaskNotCancelableError) return HTTP_STATUS.CONFLICT;
+  if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof AuthenticatedExtendedCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
+  return HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 
 // ============================================================================
@@ -75,29 +60,19 @@ export function mapErrorToStatus(errorCode: number): number {
 // ============================================================================
 
 /**
- * Converts an A2AError to HTTP+JSON transport format.
- * This conversion is private to the HTTP transport layer - errors are currently
- * tied to JSON-RPC format in A2AError, but for HTTP transport we need a simpler
- * format without the JSON-RPC wrapper.
+ * Converts any Error to an HTTP+JSON transport format.
  *
- * @param error - The A2AError to convert
- * @returns Error object with code, message, and optional data
+ * @param error - The error to convert
+ * @returns Error payload
  */
-export function toHTTPError(error: A2AError): {
-  code: number;
+export function toHTTPError(error: unknown): {
+  name: string;
   message: string;
-  data?: Record<string, unknown>;
 } {
-  const errorObject: { code: number; message: string; data?: Record<string, unknown> } = {
-    code: error.code,
-    message: error.message,
+  return {
+    name: error instanceof Error ? error.name : 'Error',
+    message: error instanceof Error ? error.message : 'An unexpected error occurred.',
   };
-
-  if (error.data !== undefined) {
-    errorObject.data = error.data;
-  }
-
-  return errorObject;
 }
 
 // ============================================================================
@@ -188,7 +163,7 @@ export class RestTransportHandler {
     context: ServerCallContext,
     historyLength?: unknown
   ): Promise<Task> {
-    const params: TaskQueryParams = { id: taskId };
+    const params: GetTaskRequest = { name: `tasks/${taskId}`, historyLength: 0 };
     if (historyLength !== undefined) {
       params.historyLength = this.parseHistoryLength(historyLength);
     }
@@ -199,7 +174,7 @@ export class RestTransportHandler {
    * Cancels a task.
    */
   async cancelTask(taskId: string, context: ServerCallContext): Promise<Task> {
-    const params: TaskIdParams = { id: taskId };
+    const params: CancelTaskRequest = { name: `tasks/${taskId}` };
     return this.requestHandler.cancelTask(params, context);
   }
 
@@ -215,8 +190,7 @@ export class RestTransportHandler {
     AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>
   > {
     await this.requireCapability('streaming');
-    const params: TaskIdParams = { id: taskId };
-    return this.requestHandler.resubscribe(params, context);
+    return this.requestHandler.resubscribe({ name: `tasks/${taskId}` }, context);
   }
 
   /**
@@ -244,7 +218,14 @@ export class RestTransportHandler {
     taskId: string,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
-    return this.requestHandler.listTaskPushNotificationConfigs({ id: taskId }, context);
+    const configs = await this.requestHandler.listTaskPushNotificationConfigs(
+      { parent: `tasks/${taskId}`, pageSize: 0, pageToken: '' },
+      context
+    );
+    return configs.map((c) => ({
+      name: `tasks/${taskId}/pushNotificationConfigs/${c.pushNotificationConfig!.id}`,
+      pushNotificationConfig: c.pushNotificationConfig,
+    })) as TaskPushNotificationConfig[];
   }
 
   /**
@@ -255,10 +236,14 @@ export class RestTransportHandler {
     configId: string,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
-    return this.requestHandler.getTaskPushNotificationConfig(
-      { id: taskId, pushNotificationConfigId: configId },
+    const config = await this.requestHandler.getTaskPushNotificationConfig(
+      { name: `tasks/${taskId}/pushNotificationConfigs/${configId}` },
       context
     );
+    return {
+      name: `tasks/${taskId}/pushNotificationConfigs/${config.pushNotificationConfig?.id}`,
+      pushNotificationConfig: config.pushNotificationConfig,
+    };
   }
 
   /**
@@ -270,7 +255,7 @@ export class RestTransportHandler {
     context: ServerCallContext
   ): Promise<void> {
     await this.requestHandler.deleteTaskPushNotificationConfig(
-      { id: taskId, pushNotificationConfigId: configId },
+      { name: `tasks/${taskId}/pushNotificationConfigs/${configId}` },
       context
     );
   }
@@ -280,10 +265,10 @@ export class RestTransportHandler {
    */
   private static readonly CAPABILITY_ERRORS: Record<
     'streaming' | 'pushNotifications',
-    () => A2AError
+    () => Error
   > = {
-    streaming: () => A2AError.unsupportedOperation('Agent does not support streaming'),
-    pushNotifications: () => A2AError.pushNotificationNotSupported(),
+    streaming: () => new UnsupportedOperationError('Agent does not support streaming'),
+    pushNotifications: () => new PushNotificationNotSupportedError(),
   };
 
   /**
@@ -302,14 +287,14 @@ export class RestTransportHandler {
    */
   private parseHistoryLength(value: unknown): number {
     if (value === undefined || value === null) {
-      throw A2AError.invalidParams('historyLength is required');
+      throw new RequestMalformedError('historyLength is required');
     }
     const parsed = parseInt(String(value), 10);
     if (isNaN(parsed)) {
-      throw A2AError.invalidParams('historyLength must be a valid integer');
+      throw new RequestMalformedError('historyLength must be a valid integer');
     }
     if (parsed < 0) {
-      throw A2AError.invalidParams('historyLength must be non-negative');
+      throw new RequestMalformedError('historyLength must be non-negative');
     }
     return parsed;
   }

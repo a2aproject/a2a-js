@@ -24,7 +24,9 @@ const authenticationAgentCard: AgentCard = {
   version: '1.0.0',
   protocolVersion: '0.3.0',
   capabilities: {
-    stateTransitionHistory: true, // Agent uses history
+    streaming: false,
+    pushNotifications: false,
+    extensions: [],
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'],
@@ -37,11 +39,27 @@ const authenticationAgentCard: AgentCard = {
       examples: ['hello, who am i?'],
       inputModes: ['text'],
       outputModes: ['text', 'task-status'],
+      security: [],
     },
   ],
   supportsAuthenticatedExtendedCard: false,
-  security: [{ Bearer: [] }],
-  securitySchemes: { Bearer: { type: 'http', scheme: 'bearer' } },
+  security: [{ schemes: { Bearer: { list: [] } } }],
+  securitySchemes: {
+    Bearer: {
+      scheme: {
+        $case: 'httpAuthSecurityScheme',
+        value: {
+          description: 'Bearer Token',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+  documentationUrl: 'https://example.com/docs',
+  signatures: [],
+  preferredTransport: 'json-rpc',
+  additionalInterfaces: [],
 };
 
 async function main() {

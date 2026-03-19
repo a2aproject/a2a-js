@@ -1,5 +1,4 @@
-import { AgentCard } from '../types.js';
-import { A2AStreamEventData } from './client.js';
+import { AgentCard, A2AStreamEventData } from '../index.js';
 import { Client } from './multitransport-client.js';
 import { RequestOptions } from './multitransport-client.js';
 

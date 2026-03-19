@@ -5,8 +5,7 @@ import express, {
   NextFunction,
   RequestHandler,
 } from 'express';
-import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from '../../types.js';
-import { A2AError } from '../error.js';
+import { JSONRPCErrorResponse, JSONRPCResponse } from '../../json_rpc_types.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
@@ -14,6 +13,7 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
+import { RequestMalformedError } from '../../errors.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -52,11 +52,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       }
       // Check if it's an AsyncGenerator (stream)
       if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
-        const stream = rpcResponseOrStream as AsyncGenerator<
-          JSONRPCSuccessResponse,
-          void,
-          undefined
-        >;
+        const stream = rpcResponseOrStream as AsyncGenerator<JSONRPCResponse, void, undefined>;
 
         // Set SSE headers using shared utility
         Object.entries(SSE_HEADERS).forEach(([key, value]) => {
@@ -73,19 +69,10 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           }
         } catch (streamError) {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
-          // If the stream itself throws an error, send a final JSONRPCErrorResponse
-          let a2aError: A2AError;
-          if (streamError instanceof A2AError) {
-            a2aError = streamError;
-          } else {
-            a2aError = A2AError.internalError(
-              (streamError instanceof Error && streamError.message) || 'Streaming error.'
-            );
-          }
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
             id: req.body?.id || null, // Use original request ID if available
-            error: a2aError.toJSONRPCError(),
+            error: JsonRpcTransportHandler.mapToJSONRPCError(streamError),
           };
           if (!res.headersSent) {
             // Should not happen if flushHeaders worked
@@ -108,12 +95,10 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
     } catch (error) {
       // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
       console.error('Unhandled error in JSON-RPC POST handler:', error);
-      const a2aError =
-        error instanceof A2AError ? error : A2AError.internalError('General processing error.');
       const errorResponse: JSONRPCErrorResponse = {
         jsonrpc: '2.0',
         id: req.body?.id || null,
-        error: a2aError.toJSONRPCError(),
+        error: JsonRpcTransportHandler.mapToJSONRPCError(error),
       };
       if (!res.headersSent) {
         res.status(500).json(errorResponse);
@@ -135,11 +120,12 @@ export const jsonErrorHandler: ErrorRequestHandler = (
 ) => {
   // Handle JSON parse errors from express.json() (https://github.com/expressjs/body-parser/issues/122)
   if (err instanceof SyntaxError && 'body' in err) {
-    const a2aError = A2AError.parseError('Invalid JSON payload.');
     const errorResponse: JSONRPCErrorResponse = {
       jsonrpc: '2.0',
       id: null,
-      error: a2aError.toJSONRPCError(),
+      error: JsonRpcTransportHandler.mapToJSONRPCError(
+        new RequestMalformedError('Invalid JSON payload.')
+      ),
     };
     return res.status(400).json(errorResponse);
   }

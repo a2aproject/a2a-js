@@ -15,9 +15,10 @@ import request from 'supertest';
 import { A2AExpressApp } from '../../../src/server/express/a2a_express_app.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
-import { AgentCard, JSONRPCSuccessResponse, JSONRPCErrorResponse } from '../../../src/index.js';
+import { AgentCard } from '../../../src/index.js';
+import { JSONRPCErrorResponse } from '../../../src/json_rpc_types.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
-import { A2AError } from '../../../src/server/error.js';
+import { A2A_ERROR_CODE, GenericError, RequestMalformedError } from '../../../src/errors.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { User, UnauthenticatedUser } from '../../../src/server/authentication/user.js';
 
@@ -45,10 +46,18 @@ describe('A2AExpressApp', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    documentationUrl: 'http://test-agent.com/docs',
+    security: [],
+    securitySchemes: {},
+    signatures: [],
+    provider: { url: '', organization: '' },
+    additionalInterfaces: [],
+    supportsAuthenticatedExtendedCard: false,
   };
 
   beforeEach(() => {
@@ -131,7 +140,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle single JSON-RPC response', async () => {
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
         result: { message: 'success' },
@@ -174,7 +183,7 @@ describe('A2AExpressApp', () => {
       const mockErrorStream = {
         async *[Symbol.asyncIterator]() {
           yield { jsonrpc: '2.0', id: 'stream-1', result: { step: 1 } };
-          throw new A2AError(-32603, 'Streaming error');
+          throw new RequestMalformedError('Streaming error');
         },
       };
 
@@ -193,7 +202,7 @@ describe('A2AExpressApp', () => {
       const mockImmediateErrorStream = {
         // eslint-disable-next-line require-yield
         async *[Symbol.asyncIterator]() {
-          throw new A2AError(-32603, 'Immediate streaming error');
+          throw new RequestMalformedError('Immediate streaming error');
         },
       };
 
@@ -214,14 +223,14 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle general processing error', async () => {
-      const error = new A2AError(-32603, 'Processing error');
+      const error = new GenericError('Processing error');
       handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest('error-test');
 
       const response = await request(expressApp).post('/').send(requestBody).expect(500);
 
-      const expectedErrorResponse: JSONRPCErrorResponse = {
+      const expectedErrorResponse = {
         jsonrpc: '2.0',
         id: 'error-test',
         error: {
@@ -243,11 +252,11 @@ describe('A2AExpressApp', () => {
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.equal(response.body.id, 'generic-error-test');
-      assert.equal(response.body.error.message, 'General processing error.');
+      assert.equal(response.body.error.message, 'Generic error');
     });
 
     it('should handle request without id', async () => {
-      const error = new A2AError(-32600, 'No ID error');
+      const error = new RequestMalformedError('No ID error');
       handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest(null);
@@ -258,7 +267,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle extensions headers in request', async () => {
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
         result: { message: 'success' },
@@ -285,7 +294,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle extensions headers in response', async () => {
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
         result: { message: 'success' },
@@ -346,7 +355,7 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
         result: { message: 'success' },
@@ -387,7 +396,7 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
         result: { message: 'success' },
@@ -436,7 +445,7 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
         result: { message: 'success' },
@@ -473,10 +482,10 @@ describe('A2AExpressApp', () => {
       const middlewareApp = express();
       app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
 
-      const mockResponse: JSONRPCSuccessResponse = {
+      const mockResponse = {
         jsonrpc: '2.0',
         id: 'test-id',
-        result: { message: 'success' },
+        result: { message: 'success' } as any,
       };
       handleStub.mockResolvedValue(mockResponse);
 
@@ -535,7 +544,7 @@ describe('A2AExpressApp', () => {
         jsonrpc: '2.0',
         id: null,
         error: {
-          code: -32700,
+          code: A2A_ERROR_CODE.INVALID_PARAMS,
           message: 'Invalid JSON payload.',
         },
       };

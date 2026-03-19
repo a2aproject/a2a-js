@@ -1,12 +1,46 @@
 import {
-  JSONRPCErrorResponse,
-  MessageSendParams,
-  TaskIdParams,
-  A2ARequest,
-  JSONRPCResponse,
-} from '../../../types.js';
+  StreamResponse,
+  Message,
+  Task,
+  TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
+  SendMessageRequest,
+  TaskSubscriptionRequest,
+  GetTaskRequest,
+  CancelTaskRequest,
+  TaskPushNotificationConfig,
+  GetTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigRequest,
+} from '../../../index.js';
+import { JSONRPCErrorResponse } from '../../../json_rpc_types.js';
+import {
+  A2A_ERROR_CODE,
+  RequestMalformedError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
+  GenericError,
+} from '../../../errors.js';
+
+export type A2ARequest = {
+  jsonrpc: '2.0';
+  method: string;
+  params?: unknown;
+  id?: string | number | null;
+};
+
+export type JSONRPCResponse = {
+  jsonrpc: string;
+  id: string | number | null;
+  result?: unknown;
+  error?: unknown;
+};
 import { ServerCallContext } from '../../context.js';
-import { A2AError } from '../../error.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 
 /**
@@ -38,23 +72,22 @@ export class JsonRpcTransportHandler {
       } else if (typeof requestBody === 'object' && requestBody !== null) {
         rpcRequest = requestBody as A2ARequest;
       } else {
-        throw A2AError.parseError('Invalid request body type.');
+        throw new RequestMalformedError('Invalid request body type.');
       }
 
       if (!this.isRequestValid(rpcRequest)) {
-        throw A2AError.invalidRequest('Invalid JSON-RPC Request.');
+        throw new RequestMalformedError('Invalid JSON-RPC Request.');
       }
     } catch (error) {
-      const a2aError =
-        error instanceof A2AError
-          ? error
-          : A2AError.parseError(
-              (error instanceof SyntaxError && error.message) || 'Failed to parse JSON request.'
-            );
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        error instanceof SyntaxError
+          ? new RequestMalformedError(error.message || 'Failed to parse JSON request.')
+          : error
+      );
       return {
         jsonrpc: '2.0',
         id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
-        error: a2aError.toJSONRPCError(),
+        error: mappedError,
       } as JSONRPCErrorResponse;
     }
 
@@ -64,19 +97,19 @@ export class JsonRpcTransportHandler {
         method !== 'agent/getAuthenticatedExtendedCard' &&
         !this.paramsAreValid(rpcRequest.params)
       ) {
-        throw A2AError.invalidParams(`Invalid method parameters.`);
+        throw new RequestMalformedError(`Invalid method parameters.`);
       }
 
       if (method === 'message/stream' || method === 'tasks/resubscribe') {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();
-        if (!agentCard.capabilities.streaming) {
-          throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
+        if (!agentCard.capabilities?.streaming) {
+          throw new UnsupportedOperationError(`Method ${method} requires streaming capability.`);
         }
         const agentEventStream =
           method === 'message/stream'
-            ? this.requestHandler.sendMessageStream(params as MessageSendParams, context)
-            : this.requestHandler.resubscribe(params as TaskIdParams, context);
+            ? this.requestHandler.sendMessageStream(SendMessageRequest.fromJSON(params), context)
+            : this.requestHandler.resubscribe(TaskSubscriptionRequest.fromJSON(params), context);
 
         // Wrap the agent event stream into a JSON-RPC result stream
         return (async function* jsonRpcEventStream(): AsyncGenerator<
@@ -86,10 +119,22 @@ export class JsonRpcTransportHandler {
         > {
           try {
             for await (const event of agentEventStream) {
+              let payload: StreamResponse['payload'];
+
+              if ('messageId' in event) {
+                payload = { $case: 'msg', value: event as Message };
+              } else if ('artifacts' in event) {
+                payload = { $case: 'task', value: event as Task };
+              } else if ('status' in event) {
+                payload = { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent };
+              } else if ('artifact' in event) {
+                payload = { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent };
+              }
+
               yield {
                 jsonrpc: '2.0',
                 id: requestId, // Use the original request ID for all streamed responses
-                result: event,
+                result: { payload },
               };
             }
           } catch (streamError) {
@@ -111,34 +156,65 @@ export class JsonRpcTransportHandler {
         // Handle non-streaming methods
         let result: unknown;
         switch (method) {
-          case 'message/send':
-            result = await this.requestHandler.sendMessage(rpcRequest.params, context);
+          case 'message/send': {
+            const messageOrTask = await this.requestHandler.sendMessage(
+              SendMessageRequest.fromJSON(rpcRequest.params),
+              context
+            );
+            result = {
+              payload: {
+                $case: 'messageId' in messageOrTask ? 'msg' : 'task',
+                value: messageOrTask,
+              },
+            };
             break;
+          }
           case 'tasks/get':
-            result = await this.requestHandler.getTask(rpcRequest.params, context);
-            break;
-          case 'tasks/cancel':
-            result = await this.requestHandler.cancelTask(rpcRequest.params, context);
-            break;
-          case 'tasks/pushNotificationConfig/set':
-            result = await this.requestHandler.setTaskPushNotificationConfig(
-              rpcRequest.params,
+            result = await this.requestHandler.getTask(
+              GetTaskRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
+          case 'tasks/cancel':
+            result = await this.requestHandler.cancelTask(
+              CancelTaskRequest.fromJSON(rpcRequest.params),
+              context
+            );
+            break;
+          case 'tasks/pushNotificationConfig/set': {
+            const params = rpcRequest.params as {
+              name?: string;
+              taskId?: string;
+              pushNotificationConfig?: TaskPushNotificationConfig['pushNotificationConfig'];
+            };
+            const config = params.name
+              ? TaskPushNotificationConfig.fromJSON({
+                  name: params.name,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                })
+              : TaskPushNotificationConfig.fromJSON({
+                  name: `tasks/${params.taskId}/pushNotificationConfigs/${params.pushNotificationConfig?.id}`,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                });
+            result = await this.requestHandler.setTaskPushNotificationConfig(config, context);
+            break;
+          }
           case 'tasks/pushNotificationConfig/get':
             result = await this.requestHandler.getTaskPushNotificationConfig(
-              rpcRequest.params,
+              GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
           case 'tasks/pushNotificationConfig/delete':
-            await this.requestHandler.deleteTaskPushNotificationConfig(rpcRequest.params, context);
+            await this.requestHandler.deleteTaskPushNotificationConfig(
+              DeleteTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
+              context
+            );
             result = null;
             break;
           case 'tasks/pushNotificationConfig/list':
             result = await this.requestHandler.listTaskPushNotificationConfigs(
-              rpcRequest.params,
+              ListTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
@@ -146,7 +222,11 @@ export class JsonRpcTransportHandler {
             result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
             break;
           default:
-            throw A2AError.methodNotFound(method);
+            return {
+              jsonrpc: '2.0',
+              id: requestId,
+              error: { code: A2A_ERROR_CODE.METHOD_NOT_FOUND, message: 'Invalid method.' },
+            };
         }
         return {
           jsonrpc: '2.0',
@@ -155,18 +235,10 @@ export class JsonRpcTransportHandler {
         } as JSONRPCResponse;
       }
     } catch (error) {
-      let a2aError: A2AError;
-      if (error instanceof A2AError) {
-        a2aError = error;
-      } else {
-        a2aError = A2AError.internalError(
-          (error instanceof Error && error.message) || 'An unexpected error occurred.'
-        );
-      }
       return {
         jsonrpc: '2.0',
         id: requestId,
-        error: a2aError.toJSONRPCError(),
+        error: JsonRpcTransportHandler.mapToJSONRPCError(error),
       } as JSONRPCErrorResponse;
     }
   }
@@ -205,5 +277,41 @@ export class JsonRpcTransportHandler {
       }
     }
     return true;
+  }
+
+  public static mapToJSONRPCError(error: unknown) {
+    if (error instanceof TaskNotFoundError) {
+      return { code: A2A_ERROR_CODE.TASK_NOT_FOUND, message: error.message };
+    }
+    if (error instanceof TaskNotCancelableError) {
+      return { code: A2A_ERROR_CODE.TASK_NOT_CANCELABLE, message: error.message };
+    }
+    if (error instanceof PushNotificationNotSupportedError) {
+      return { code: A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED, message: error.message };
+    }
+    if (error instanceof UnsupportedOperationError) {
+      return { code: A2A_ERROR_CODE.UNSUPPORTED_OPERATION, message: error.message };
+    }
+    if (error instanceof ContentTypeNotSupportedError) {
+      return { code: A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED, message: error.message };
+    }
+    if (error instanceof InvalidAgentResponseError) {
+      return { code: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE, message: error.message };
+    }
+    if (error instanceof AuthenticatedExtendedCardNotConfiguredError) {
+      return {
+        code: A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED,
+        message: error.message,
+      };
+    }
+    if (error instanceof RequestMalformedError) {
+      return { code: A2A_ERROR_CODE.INVALID_PARAMS, message: error.message };
+    }
+    if (error instanceof GenericError) {
+      return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message: error.message };
+    }
+
+    const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
+    return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
   }
 }

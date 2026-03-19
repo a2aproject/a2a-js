@@ -8,25 +8,32 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   UnsupportedOperationError,
+  RequestMalformedError,
 } from '../../errors.js';
-import {
-  AgentCard,
-  DeleteTaskPushNotificationConfigParams,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  MessageSendParams,
-  TaskPushNotificationConfig,
-  TaskIdParams,
-  TaskQueryParams,
-  Task,
-} from '../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../client.js';
+
+import { A2AStreamEventData, SendMessageResult } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
-import { ToProto } from '../../types/converters/to_proto.js';
 import { FromProto } from '../../types/converters/from_proto.js';
-import * as a2a from '../../types/pb/a2a_types.js';
+import {
+  AgentCard,
+  CancelTaskRequest,
+  CreateTaskPushNotificationConfigRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigResponse,
+  MessageFns,
+  SendMessageRequest,
+  SendMessageResponse,
+  StreamResponse,
+  Task,
+  TaskPushNotificationConfig,
+  TaskSubscriptionRequest,
+} from '../../types/pb/a2a_types.js';
+import { extractTaskId } from '../../types/converters/id_decoding.js';
 
 export interface RestTransportOptions {
   endpoint: string;
@@ -34,8 +41,9 @@ export interface RestTransportOptions {
 }
 
 interface RestErrorResponse {
-  code: number;
-  message: string;
+  name?: string;
+  message?: string;
+  code?: number;
   data?: Record<string, unknown>;
 }
 
@@ -49,104 +57,98 @@ export class RestTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const response = await this._sendRequest<undefined, a2a.AgentCard>(
+    const response = await this._sendRequest<undefined, AgentCard>(
       'GET',
       '/v1/card',
       undefined,
       options,
       undefined,
-      a2a.AgentCard
+      AgentCard
     );
-    return FromProto.agentCard(response);
+    return response;
   }
 
   async sendMessage(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     options?: RequestOptions
   ): Promise<SendMessageResult> {
-    const requestBody = ToProto.messageSendParams(params);
-    const response = await this._sendRequest<a2a.SendMessageRequest, a2a.SendMessageResponse>(
+    const requestBody = params;
+    const response = await this._sendRequest<SendMessageRequest, SendMessageResponse>(
       'POST',
       '/v1/message:send',
       requestBody,
       options,
-      a2a.SendMessageRequest,
-      a2a.SendMessageResponse
+      SendMessageRequest,
+      SendMessageResponse
     );
     return FromProto.sendMessageResult(response);
   }
 
   async *sendMessageStream(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    const protoParams = ToProto.messageSendParams(params);
-    const requestBody = a2a.SendMessageRequest.toJSON(protoParams);
+    const requestBody = SendMessageRequest.toJSON(params);
     yield* this._sendStreamingRequest('/v1/message:stream', requestBody, options);
   }
 
   async setTaskPushNotificationConfig(
-    params: TaskPushNotificationConfig,
+    params: CreateTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const requestBody = ToProto.taskPushNotificationConfig(params);
+    const requestBody = params.config!;
+    const taskId = extractTaskId(params.parent);
     const response = await this._sendRequest<
-      a2a.TaskPushNotificationConfig,
-      a2a.TaskPushNotificationConfig
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
     >(
       'POST',
-      `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      `/v1/tasks/${encodeURIComponent(taskId)}/pushNotificationConfigs`,
       requestBody,
       options,
-      a2a.TaskPushNotificationConfig,
-      a2a.TaskPushNotificationConfig
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
     );
-    return FromProto.taskPushNotificationConfig(response);
+    return response;
   }
 
   async getTaskPushNotificationConfig(
-    params: GetTaskPushNotificationConfigParams,
+    params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const { pushNotificationConfigId } = params;
-    if (!pushNotificationConfigId) {
-      throw new Error(
-        'pushNotificationConfigId is required for getTaskPushNotificationConfig with REST transport.'
-      );
-    }
-    const response = await this._sendRequest<undefined, a2a.TaskPushNotificationConfig>(
+    const response = await this._sendRequest<undefined, TaskPushNotificationConfig>(
       'GET',
-      `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(pushNotificationConfigId)}`,
+      `/v1/${params.name}`,
       undefined,
       options,
       undefined,
-      a2a.TaskPushNotificationConfig
+      TaskPushNotificationConfig
     );
-    return FromProto.taskPushNotificationConfig(response);
+    return response;
   }
 
   async listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigParams,
+    params: ListTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
-    const response = await this._sendRequest<undefined, a2a.ListTaskPushNotificationConfigResponse>(
+    const response = await this._sendRequest<undefined, ListTaskPushNotificationConfigResponse>(
       'GET',
-      `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
+      `/v1/${params.parent}/pushNotificationConfigs`,
       undefined,
       options,
       undefined,
-      a2a.ListTaskPushNotificationConfigResponse
+      ListTaskPushNotificationConfigResponse
     );
-    return FromProto.listTaskPushNotificationConfig(response);
+    return response.configs;
   }
 
   async deleteTaskPushNotificationConfig(
-    params: DeleteTaskPushNotificationConfigParams,
+    params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
     await this._sendRequest<undefined, void>(
       'DELETE',
-      `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(params.pushNotificationConfigId)}`,
+      `/v1/${params.name}`,
       undefined,
       options,
       undefined,
@@ -154,45 +156,41 @@ export class RestTransport implements Transport {
     );
   }
 
-  async getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
+  async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     const queryParams = new URLSearchParams();
     if (params.historyLength !== undefined) {
       queryParams.set('historyLength', String(params.historyLength));
     }
     const queryString = queryParams.toString();
-    const path = `/v1/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`;
-    const response = await this._sendRequest<undefined, a2a.Task>(
+    const path = `/v1/${params.name}${queryString ? `?${queryString}` : ''}`;
+    const response = await this._sendRequest<undefined, Task>(
       'GET',
       path,
       undefined,
       options,
       undefined,
-      a2a.Task
+      Task
     );
-    return FromProto.task(response);
+    return response;
   }
 
-  async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
-    const response = await this._sendRequest<undefined, a2a.Task>(
+  async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
+    const response = await this._sendRequest<undefined, Task>(
       'POST',
-      `/v1/tasks/${encodeURIComponent(params.id)}:cancel`,
+      `/v1/${params.name}:cancel`,
       undefined,
       options,
       undefined,
-      a2a.Task
+      Task
     );
-    return FromProto.task(response);
+    return response;
   }
 
   async *resubscribeTask(
-    params: TaskIdParams,
+    params: TaskSubscriptionRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest(
-      `/v1/tasks/${encodeURIComponent(params.id)}:subscribe`,
-      undefined,
-      options
-    );
+    yield* this._sendStreamingRequest(`/v1/${params.name}:subscribe`, undefined, options);
   }
 
   private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
@@ -224,8 +222,8 @@ export class RestTransport implements Transport {
     path: string,
     body: TRequest,
     options: RequestOptions | undefined,
-    requestType: a2a.MessageFns<TRequest> | undefined,
-    responseType: a2a.MessageFns<TResponse> | undefined
+    requestType: MessageFns<TRequest> | undefined,
+    responseType: MessageFns<TResponse> | undefined
   ): Promise<TResponse> {
     const url = `${this.endpoint}${path}`;
     const requestInit: RequestInit = {
@@ -273,8 +271,8 @@ export class RestTransport implements Transport {
       );
     }
 
-    if (errorBody && typeof errorBody.code === 'number') {
-      throw RestTransport.mapToError(errorBody);
+    if (errorBody && (typeof errorBody.name === 'string' || typeof errorBody.code === 'number')) {
+      throw RestTransport.mapToError(errorBody, response.status);
     }
 
     throw new Error(
@@ -327,7 +325,7 @@ export class RestTransport implements Transport {
 
     try {
       const response = JSON.parse(jsonData);
-      const protoResponse = a2a.StreamResponse.fromJSON(response);
+      const protoResponse = StreamResponse.fromJSON(response);
       return FromProto.messageStreamResult(protoResponse);
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
@@ -337,27 +335,56 @@ export class RestTransport implements Transport {
     }
   }
 
-  private static mapToError(error: RestErrorResponse): Error {
-    switch (error.code) {
-      case A2A_ERROR_CODE.TASK_NOT_FOUND:
-        return new TaskNotFoundError(error.message);
-      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-        return new TaskNotCancelableError(error.message);
-      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-        return new PushNotificationNotSupportedError(error.message);
-      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-        return new UnsupportedOperationError(error.message);
-      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-        return new ContentTypeNotSupportedError(error.message);
-      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-        return new InvalidAgentResponseError(error.message);
-      case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
-        return new AuthenticatedExtendedCardNotConfiguredError(error.message);
-      default:
-        return new Error(
-          `REST error: ${error.message} (Code: ${error.code})${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
-        );
+  private static mapToError(error: RestErrorResponse, status?: number): Error {
+    const message = error.message || 'Unknown error';
+
+    if (error.name) {
+      switch (error.name) {
+        case 'TaskNotFoundError':
+          return new TaskNotFoundError(message);
+        case 'TaskNotCancelableError':
+          return new TaskNotCancelableError(message);
+        case 'PushNotificationNotSupportedError':
+          return new PushNotificationNotSupportedError(message);
+        case 'UnsupportedOperationError':
+          return new UnsupportedOperationError(message);
+        case 'ContentTypeNotSupportedError':
+          return new ContentTypeNotSupportedError(message);
+        case 'InvalidAgentResponseError':
+          return new InvalidAgentResponseError(message);
+        case 'AuthenticatedExtendedCardNotConfiguredError':
+          return new AuthenticatedExtendedCardNotConfiguredError(message);
+        case 'RequestMalformedError':
+          return new RequestMalformedError(message);
+      }
     }
+
+    if (error.code !== undefined) {
+      switch (error.code) {
+        case A2A_ERROR_CODE.TASK_NOT_FOUND:
+          return new TaskNotFoundError(message);
+        case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
+          return new TaskNotCancelableError(message);
+        case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
+          return new PushNotificationNotSupportedError(message);
+        case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
+          return new UnsupportedOperationError(message);
+        case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
+          return new ContentTypeNotSupportedError(message);
+        case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
+          return new InvalidAgentResponseError(message);
+        case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
+          return new AuthenticatedExtendedCardNotConfiguredError(message);
+      }
+    }
+
+    if (status === 400) return new RequestMalformedError(message);
+    if (status === 404) return new TaskNotFoundError(message);
+    if (status === 409) return new TaskNotCancelableError(message);
+
+    return new Error(
+      `REST error: ${error.name || 'Error'} - ${message}${status ? ` (Status: ${status})` : ''}${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
+    );
   }
 }
 

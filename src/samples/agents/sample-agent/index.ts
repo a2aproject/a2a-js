@@ -25,8 +25,10 @@ const sampleAgentCard: AgentCard = {
   capabilities: {
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
+    extensions: [],
   },
+  securitySchemes: {},
+  security: [],
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [
@@ -38,9 +40,14 @@ const sampleAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
+      security: [],
     },
   ],
   supportsAuthenticatedExtendedCard: false,
+  preferredTransport: 'jsonrpc',
+  additionalInterfaces: [],
+  documentationUrl: '',
+  signatures: [],
 };
 
 async function main() {

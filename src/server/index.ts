@@ -25,7 +25,16 @@ export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
 export { ServerCallContext } from './context.js';
-export { A2AError } from './error.js';
+export {
+  RequestMalformedError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
+} from '../errors.js';
 
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';
 export { DefaultPushNotificationSender } from './push_notification/default_push_notification_sender.js';

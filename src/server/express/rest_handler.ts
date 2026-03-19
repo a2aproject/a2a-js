@@ -6,7 +6,6 @@ import express, {
   NextFunction,
 } from 'express';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-import { A2AError } from '../error.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import {
   RestTransportHandler,
@@ -19,10 +18,19 @@ import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 
-import { FromProto } from '../../types/converters/from_proto.js';
-import * as a2a from '../../types/pb/a2a_types.js';
+import {
+  AgentCard,
+  ListTaskPushNotificationConfigResponse,
+  MessageFns,
+  SendMessageRequest,
+  SendMessageResponse,
+  StreamResponse,
+  Task,
+  TaskPushNotificationConfig,
+} from '../../types/pb/a2a_types.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../types.js';
+import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
+import { RequestMalformedError } from '../../errors.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -48,8 +56,7 @@ const restErrorHandler: ErrorRequestHandler = (
   next: NextFunction
 ) => {
   if (err instanceof SyntaxError && 'body' in err) {
-    const a2aError = A2AError.parseError('Invalid JSON payload.');
-    return res.status(400).json(toHTTPError(a2aError));
+    return res.status(400).json(toHTTPError(new RequestMalformedError('Invalid JSON payload.')));
   }
   next(err);
 };
@@ -142,7 +149,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     statusCode: number,
     context: ServerCallContext,
     body?: T,
-    responseType?: a2a.MessageFns<T>
+    responseType?: MessageFns<T>
   ): void => {
     setExtensionsHeader(res, context);
     res.status(statusCode);
@@ -183,12 +190,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       firstResult = await iterator.next();
     } catch (error) {
       // Early error - return proper HTTP error
-      const a2aError =
-        error instanceof A2AError
-          ? error
-          : A2AError.internalError(error instanceof Error ? error.message : 'Streaming error');
-      const statusCode = mapErrorToStatus(a2aError.code);
-      sendResponse(res, statusCode, context, toHTTPError(a2aError));
+      sendResponse(res, mapErrorToStatus(error), context, toHTTPError(error));
       return;
     }
 
@@ -203,24 +205,18 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       // Write first event
       if (!firstResult.done) {
         const proto = ToProto.messageStreamResult(firstResult.value);
-        const result = a2a.StreamResponse.toJSON(proto);
+        const result = StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
       for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
         const proto = ToProto.messageStreamResult(event);
-        const result = a2a.StreamResponse.toJSON(proto);
+        const result = StreamResponse.toJSON(proto);
         res.write(formatSSEEvent(result));
       }
     } catch (streamError: unknown) {
       console.error('SSE streaming error:', streamError);
-      const a2aError =
-        streamError instanceof A2AError
-          ? streamError
-          : A2AError.internalError(
-              streamError instanceof Error ? streamError.message : 'Streaming error'
-            );
       if (!res.writableEnded) {
-        res.write(formatSSEErrorEvent(toHTTPError(a2aError)));
+        res.write(formatSSEErrorEvent(toHTTPError(streamError)));
       }
     } finally {
       if (!res.writableEnded) {
@@ -244,12 +240,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       }
       return;
     }
-    const a2aError =
-      error instanceof A2AError
-        ? error
-        : A2AError.internalError(error instanceof Error ? error.message : 'Internal server error');
-    const statusCode = mapErrorToStatus(a2aError.code);
-    res.status(statusCode).json(toHTTPError(a2aError));
+    const statusCode = mapErrorToStatus(error);
+    res.status(statusCode).json(toHTTPError(error));
   };
 
   /**
@@ -286,8 +278,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
-      const protoResult = ToProto.agentCard(result);
-      sendResponse<a2a.AgentCard>(res, HTTP_STATUS.OK, context, protoResult, a2a.AgentCard);
+      sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
     })
   );
 
@@ -306,16 +297,15 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
-      const params = FromProto.messageSendParams(protoReq);
+      const params = SendMessageRequest.fromJSON(req.body);
       const result = await restTransportHandler.sendMessage(params, context);
       const protoResult = ToProto.messageSendResult(result);
-      sendResponse<a2a.SendMessageResponse>(
+      sendResponse<SendMessageResponse>(
         res,
         HTTP_STATUS.CREATED,
         context,
         protoResult,
-        a2a.SendMessageResponse
+        SendMessageResponse
       );
     })
   );
@@ -336,8 +326,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
-      const params = FromProto.messageSendParams(protoReq);
+      const params = SendMessageRequest.fromJSON(req.body);
       const stream = await restTransportHandler.sendMessageStream(params, context);
       await sendStreamResponse(res, stream, context);
     })
@@ -364,8 +353,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         //TODO: clarify for version 1.0.0 the format of the historyLength query parameter, and if history should always be added to the returned object
         req.query.historyLength ?? req.query.history_length
       );
-      const protoResult = ToProto.task(result);
-      sendResponse<a2a.Task>(res, HTTP_STATUS.OK, context, protoResult, a2a.Task);
+      sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
     })
   );
 
@@ -385,8 +373,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
-      const protoResult = ToProto.task(result);
-      sendResponse<a2a.Task>(res, HTTP_STATUS.ACCEPTED, context, protoResult, a2a.Task);
+      sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, result, Task);
     })
   );
 
@@ -429,12 +416,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const params = FromProto.createTaskPushNotificationConfig(protoReq);
       const result = await restTransportHandler.setTaskPushNotificationConfig(params, context);
       const protoResult = ToProto.taskPushNotificationConfig(result);
-      sendResponse<a2a.TaskPushNotificationConfig>(
+      sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.CREATED,
         context,
         protoResult,
-        a2a.TaskPushNotificationConfig
+        TaskPushNotificationConfig
       );
     })
   );
@@ -457,12 +444,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context
       );
       const protoResult = ToProto.listTaskPushNotificationConfig(result);
-      sendResponse<a2a.ListTaskPushNotificationConfigResponse>(
+      sendResponse<ListTaskPushNotificationConfigResponse>(
         res,
         HTTP_STATUS.OK,
         context,
         protoResult,
-        a2a.ListTaskPushNotificationConfigResponse
+        ListTaskPushNotificationConfigResponse
       );
     })
   );
@@ -487,12 +474,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context
       );
       const protoResult = ToProto.taskPushNotificationConfig(result);
-      sendResponse<a2a.TaskPushNotificationConfig>(
+      sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.OK,
         context,
         protoResult,
-        a2a.TaskPushNotificationConfig
+        TaskPushNotificationConfig
       );
     })
   );

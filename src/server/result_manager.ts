@@ -1,4 +1,4 @@
-import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../types.js';
+import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../index.js';
 import { ServerCallContext } from './context.js';
 import { AgentExecutionEvent } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
@@ -25,12 +25,12 @@ export class ResultManager {
    * @param event The agent execution event.
    */
   public async processEvent(event: AgentExecutionEvent): Promise<void> {
-    if (event.kind === 'message') {
+    if ('messageId' in event) {
       this.finalMessageResult = event as Message;
       // If a message is received, it's usually the final result,
       // but we continue processing to ensure task state (if any) is also saved.
       // The ExecutionEventQueue will stop after a message event.
-    } else if (event.kind === 'task') {
+    } else if ('id' in event) {
       const taskEvent = event as Task;
       this.currentTask = { ...taskEvent }; // Make a copy
 
@@ -38,28 +38,22 @@ export class ResultManager {
       if (this.latestUserMessage) {
         if (
           !this.currentTask.history?.find(
-            (msg) => msg.messageId === this.latestUserMessage!.messageId
+            (msg) => msg.messageId === this.latestUserMessage?.messageId
           )
         ) {
           this.currentTask.history = [this.latestUserMessage, ...(this.currentTask.history || [])];
         }
       }
       await this.saveCurrentTask();
-    } else if (event.kind === 'status-update') {
+    } else if ('status' in event && 'taskId' in event) {
       const updateEvent = event as TaskStatusUpdateEvent;
       if (this.currentTask && this.currentTask.id === updateEvent.taskId) {
         this.currentTask.status = updateEvent.status;
-        if (updateEvent.status.message) {
+        const update = updateEvent.status?.update;
+        if (update) {
           // Add message to history if not already present
-          if (
-            !this.currentTask.history?.find(
-              (msg) => msg.messageId === updateEvent.status.message!.messageId
-            )
-          ) {
-            this.currentTask.history = [
-              ...(this.currentTask.history || []),
-              updateEvent.status.message,
-            ];
+          if (!this.currentTask.history?.find((msg) => msg.messageId === update.messageId)) {
+            this.currentTask.history = [...(this.currentTask.history || []), update];
           }
         }
         await this.saveCurrentTask();
@@ -70,16 +64,10 @@ export class ResultManager {
         if (loaded) {
           this.currentTask = loaded;
           this.currentTask.status = updateEvent.status;
-          if (updateEvent.status.message) {
-            if (
-              !this.currentTask.history?.find(
-                (msg) => msg.messageId === updateEvent.status.message!.messageId
-              )
-            ) {
-              this.currentTask.history = [
-                ...(this.currentTask.history || []),
-                updateEvent.status.message,
-              ];
+          const update = updateEvent.status?.update;
+          if (update) {
+            if (!this.currentTask.history?.find((msg) => msg.messageId === update.messageId)) {
+              this.currentTask.history = [...(this.currentTask.history || []), update];
             }
           }
           await this.saveCurrentTask();
@@ -91,37 +79,37 @@ export class ResultManager {
       }
       // If it's a final status update, the ExecutionEventQueue will stop.
       // The final result will be the currentTask.
-    } else if (event.kind === 'artifact-update') {
+    } else if ('artifact' in event) {
       const artifactEvent = event as TaskArtifactUpdateEvent;
-      if (this.currentTask && this.currentTask.id === artifactEvent.taskId) {
+      const artifact = artifactEvent.artifact;
+      if (this.currentTask && this.currentTask.id === artifactEvent.taskId && artifact) {
         if (!this.currentTask.artifacts) {
           this.currentTask.artifacts = [];
         }
         const existingArtifactIndex = this.currentTask.artifacts.findIndex(
-          (art) => art.artifactId === artifactEvent.artifact.artifactId
+          (art) => art.artifactId === artifact.artifactId
         );
         if (existingArtifactIndex !== -1) {
           if (artifactEvent.append) {
             // Basic append logic, assuming parts are compatible
             // More sophisticated merging might be needed for specific part types
             const existingArtifact = this.currentTask.artifacts[existingArtifactIndex];
-            existingArtifact.parts.push(...artifactEvent.artifact.parts);
-            if (artifactEvent.artifact.description)
-              existingArtifact.description = artifactEvent.artifact.description;
-            if (artifactEvent.artifact.name) existingArtifact.name = artifactEvent.artifact.name;
-            if (artifactEvent.artifact.metadata)
+            existingArtifact.parts.push(...(artifact.parts || []));
+            if (artifact.description) existingArtifact.description = artifact.description;
+            if (artifact.name) existingArtifact.name = artifact.name;
+            if (artifact.metadata)
               existingArtifact.metadata = {
                 ...existingArtifact.metadata,
-                ...artifactEvent.artifact.metadata,
+                ...artifact.metadata,
               };
           } else {
-            this.currentTask.artifacts[existingArtifactIndex] = artifactEvent.artifact;
+            this.currentTask.artifacts[existingArtifactIndex] = artifact;
           }
         } else {
-          this.currentTask.artifacts.push(artifactEvent.artifact);
+          this.currentTask.artifacts.push(artifact);
         }
         await this.saveCurrentTask();
-      } else if (!this.currentTask && artifactEvent.taskId) {
+      } else if (!this.currentTask && artifactEvent.taskId && artifact) {
         // Similar to status update, try to load if task not in memory
         const loaded = await this.taskStore.load(artifactEvent.taskId, this.serverCallContext);
         if (loaded) {
@@ -129,18 +117,18 @@ export class ResultManager {
           if (!this.currentTask.artifacts) this.currentTask.artifacts = [];
           // Apply artifact update logic (as above)
           const existingArtifactIndex = this.currentTask.artifacts.findIndex(
-            (art) => art.artifactId === artifactEvent.artifact.artifactId
+            (art) => art.artifactId === artifact.artifactId
           );
           if (existingArtifactIndex !== -1) {
             if (artifactEvent.append) {
               this.currentTask.artifacts[existingArtifactIndex].parts.push(
-                ...artifactEvent.artifact.parts
+                ...(artifact.parts || [])
               );
             } else {
-              this.currentTask.artifacts[existingArtifactIndex] = artifactEvent.artifact;
+              this.currentTask.artifacts[existingArtifactIndex] = artifact;
             }
           } else {
-            this.currentTask.artifacts.push(artifactEvent.artifact);
+            this.currentTask.artifacts.push(artifact);
           }
           await this.saveCurrentTask();
         } else {

@@ -4,9 +4,12 @@ import request from 'supertest';
 
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
-import { AgentCard, Task, Message } from '../../../src/types.js';
-import { A2AError } from '../../../src/server/error.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
+import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
+import {
+  RequestMalformedError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+} from '../../../src/errors.js';
 import {
   ListTaskPushNotificationConfigResponse,
   Message as ProtoMessage,
@@ -41,26 +44,38 @@ describe('restHandler', () => {
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    securitySchemes: {},
+    security: [],
+    additionalInterfaces: [],
+    provider: undefined,
+    documentationUrl: '',
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
   };
 
   // camelCase format (internal type)
   const testMessage: Message = {
     messageId: 'msg-1',
-    role: 'user' as const,
-    parts: [{ kind: 'text' as const, text: 'Hello' }],
-    kind: 'message' as const,
+    role: 'user' as any,
+    content: [{ part: { $case: 'text', value: 'Hello' } }],
+    contextId: 'ctx-1',
+    taskId: 'task-1',
+    extensions: [],
+    metadata: {},
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   beforeEach(() => {
@@ -100,24 +115,27 @@ describe('restHandler', () => {
       assert.deepEqual(response.body.name, testAgentCard.name);
     });
 
-    it('should return 500 if getAuthenticatedExtendedAgentCard fails', async () => {
+    it('should return 400 if getAuthenticatedExtendedAgentCard fails', async () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
-        A2AError.internalError('Card fetch failed')
+        new RequestMalformedError('Card fetch failed')
       );
 
-      const response = await request(app).get('/v1/card').expect(500);
+      const response = await request(app).get('/v1/card').expect(400);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
 
   describe('POST /v1/message:send', () => {
     it('should accept camelCase message and return 201 with Task', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
+      const response = await request(app)
+        .post('/v1/message:send')
+        .send({ request: message })
+        .expect(201);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         {
@@ -147,23 +165,26 @@ describe('restHandler', () => {
 
     it('should return 400 when message is invalid', async () => {
       (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
-        A2AError.invalidParams('Message is required')
+        new RequestMalformedError('Message is required')
       );
 
-      await request(app).post('/v1/message:send').send({ message: null }).expect(400);
+      await request(app).post('/v1/message:send').send({ request: null }).expect(400);
     });
   });
 
   describe('POST /v1/message:stream', () => {
     it('should accept camelCase message and stream via SSE', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const message = ProtoMessage.toJSON(testMessage);
       async function* mockStream() {
         yield testMessage;
         yield testTask;
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const response = await request(app).post('/v1/message:stream').send({ message }).expect(200);
+      const response = await request(app)
+        .post('/v1/message:stream')
+        .send({ request: message })
+        .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
 
@@ -204,7 +225,7 @@ describe('restHandler', () => {
 
       await request(noStreamApp)
         .post('/v1/message:stream')
-        .send({ message: testMessage })
+        .send({ request: testMessage })
         .expect(400);
     });
   });
@@ -221,7 +242,7 @@ describe('restHandler', () => {
       // Status state is enum string
       assert.deepEqual(response.body.status.state, 'TASK_STATE_COMPLETED');
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { name: 'tasks/task-1', historyLength: 0 },
         expect.anything()
       );
     });
@@ -233,7 +254,7 @@ describe('restHandler', () => {
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         {
-          id: 'task-1',
+          name: 'tasks/task-1',
           historyLength: 10,
         },
         expect.anything()
@@ -245,18 +266,18 @@ describe('restHandler', () => {
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.getTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.getTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
       const response = await request(app).get('/v1/tasks/task-1').expect(404);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
 
   describe('POST /v1/tasks/:taskId:cancel', () => {
     it('should cancel task and return 202 Accepted', async () => {
-      const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
+      const cancelledTask = { ...testTask, status: { state: TaskState.TASK_STATE_CANCELLED } };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
@@ -271,22 +292,22 @@ describe('restHandler', () => {
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(404);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
 
     it('should return 409 if task is not cancelable', async () => {
       (mockRequestHandler.cancelTask as Mock).mockRejectedValue(
-        A2AError.taskNotCancelable('task-1')
+        new TaskNotCancelableError('task-1')
       );
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(409);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
@@ -328,17 +349,19 @@ describe('restHandler', () => {
 
       const response = await request(noStreamApp).post('/v1/tasks/task-1:subscribe').expect(400);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
     });
   });
 
   describe('Push Notification Config Endpoints', () => {
-    const mockConfig = {
+    const mockConfig: any = {
       taskId: 'task-1',
       pushNotificationConfig: {
         id: 'config-1',
         url: 'https://example.com/webhook',
+        token: '',
+        authentication: undefined,
       },
     };
 
@@ -417,7 +440,14 @@ describe('restHandler', () => {
 
         await request(noPNApp)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({ pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' } })
+          .send({
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+              token: '',
+              authentication: undefined,
+            },
+          })
           .expect(400);
       });
     });
@@ -431,9 +461,9 @@ describe('restHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs')
           .expect(200);
 
-        const convertedResult = FromProto.listTaskPushNotificationConfig(
-          ListTaskPushNotificationConfigResponse.fromJSON(response.body)
-        );
+        const convertedResult = ListTaskPushNotificationConfigResponse.fromJSON(
+          response.body
+        ).configs;
         assert.isArray(convertedResult);
         assert.lengthOf(convertedResult, configs.length);
 
@@ -466,14 +496,14 @@ describe('restHandler', () => {
 
       it('should return 404 if config not found', async () => {
         (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockRejectedValue(
-          A2AError.taskNotFound('task-1')
+          new TaskNotFoundError('task-1')
         );
 
         const response = await request(app)
           .get('/v1/tasks/task-1/pushNotificationConfigs/config-1')
           .expect(404);
 
-        assert.property(response.body, 'code');
+        assert.property(response.body, 'name');
         assert.property(response.body, 'message');
       });
     });
@@ -492,14 +522,14 @@ describe('restHandler', () => {
 
       it('should return 404 if config not found', async () => {
         (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockRejectedValue(
-          A2AError.taskNotFound('task-1')
+          new TaskNotFoundError('task-1')
         );
 
         const response = await request(app)
           .delete('/v1/tasks/task-1/pushNotificationConfigs/config-1')
           .expect(404);
 
-        assert.property(response.body, 'code');
+        assert.property(response.body, 'name');
         assert.property(response.body, 'message');
       });
     });
@@ -652,7 +682,7 @@ describe('restHandler', () => {
   describe('Error Handling', () => {
     it('should return 404 for unknown message action (route not matched)', async () => {
       // Unknown actions don't match the route pattern, so Express returns default 404
-      await request(app).post('/v1/message:unknown').send({ message: testMessage }).expect(404);
+      await request(app).post('/v1/message:unknown').send({ request: testMessage }).expect(404);
     });
 
     it('should return 404 for unknown task action (route not matched)', async () => {
@@ -665,15 +695,15 @@ describe('restHandler', () => {
         new Error('Unexpected internal error')
       );
 
-      const messageProto = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const messageProto = ProtoMessage.toJSON(testMessage);
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ message: messageProto })
+        .send({ request: messageProto })
         .expect(500);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'name');
       assert.property(response.body, 'message');
-      assert.deepEqual(response.body.code, -32603); // Internal error code
+      assert.deepEqual(response.body.name, 'Error'); // Generic Error instance
     });
   });
 });

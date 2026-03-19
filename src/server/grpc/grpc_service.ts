@@ -25,7 +25,17 @@ import { ServerCallContext } from '../context.js';
 import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
-import { A2AError } from '../error.js';
+import {
+  AuthenticatedExtendedCardNotConfiguredError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  RequestMalformedError,
+  GenericError,
+  PushNotificationNotSupportedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+} from '../../errors.js';
 
 /**
  * Options for configuring the gRPC handler.
@@ -108,7 +118,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.messageSendParams,
+        (req) => req,
         requestHandler.sendMessage.bind(requestHandler),
         ToProto.messageSendResult
       );
@@ -119,7 +129,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     ): Promise<void> {
       return wrapStreaming(
         call,
-        FromProto.messageSendParams,
+        (req) => req,
         requestHandler.sendMessageStream.bind(requestHandler),
         ToProto.messageStreamResult
       );
@@ -130,7 +140,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     ): Promise<void> {
       return wrapStreaming(
         call,
-        FromProto.taskIdParams,
+        (req) => req,
         requestHandler.resubscribe.bind(requestHandler),
         ToProto.messageStreamResult
       );
@@ -143,7 +153,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.deleteTaskPushNotificationConfigParams,
+        (req) => req,
         requestHandler.deleteTaskPushNotificationConfig.bind(requestHandler),
         () => ({})
       );
@@ -159,7 +169,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.listTaskPushNotificationConfigParams,
+        (req) => req,
         requestHandler.listTaskPushNotificationConfigs.bind(requestHandler),
         ToProto.listTaskPushNotificationConfig
       );
@@ -188,7 +198,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.getTaskPushNotificationConfigParams,
+        (req) => req,
         requestHandler.getTaskPushNotificationConfig.bind(requestHandler),
         ToProto.taskPushNotificationConfig
       );
@@ -201,9 +211,9 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.taskQueryParams,
+        (req) => req,
         requestHandler.getTask.bind(requestHandler),
-        ToProto.task
+        (res) => res
       );
     },
 
@@ -214,9 +224,9 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        FromProto.taskIdParams,
+        (req) => req,
         requestHandler.cancelTask.bind(requestHandler),
-        ToProto.task
+        (res) => res
       );
     },
 
@@ -229,7 +239,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         () => ({}),
         (_params, context) => requestHandler.getAuthenticatedExtendedAgentCard(context),
-        ToProto.agentCard
+        (res) => res
       );
     },
   };
@@ -240,28 +250,24 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
 /**
  * Maps A2AError or standard Error to gRPC Status codes
  */
-const mapping: Record<number, grpc.status> = {
-  [-32001]: grpc.status.NOT_FOUND,
-  [-32002]: grpc.status.FAILED_PRECONDITION,
-  [-32003]: grpc.status.UNIMPLEMENTED,
-  [-32004]: grpc.status.UNIMPLEMENTED,
-  [-32005]: grpc.status.INVALID_ARGUMENT,
-  [-32006]: grpc.status.INTERNAL,
-  [-32007]: grpc.status.FAILED_PRECONDITION,
-  [-32600]: grpc.status.INVALID_ARGUMENT,
-  [-32602]: grpc.status.INVALID_ARGUMENT,
-  [-32603]: grpc.status.INTERNAL,
-};
-
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
-  const a2aError =
-    error instanceof A2AError
-      ? error
-      : A2AError.internalError(error instanceof Error ? error.message : 'Internal server error');
+  let code = grpc.status.UNKNOWN;
+  if (error instanceof TaskNotFoundError) code = grpc.status.NOT_FOUND;
+  else if (error instanceof TaskNotCancelableError) code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof PushNotificationNotSupportedError) code = grpc.status.UNIMPLEMENTED;
+  else if (error instanceof UnsupportedOperationError) code = grpc.status.UNIMPLEMENTED;
+  else if (error instanceof ContentTypeNotSupportedError) code = grpc.status.INVALID_ARGUMENT;
+  else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
+  else if (error instanceof AuthenticatedExtendedCardNotConfiguredError)
+    code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
+  else if (error instanceof GenericError) code = grpc.status.INTERNAL;
+
+  const message = error instanceof Error ? error.message : 'Internal server error';
 
   return {
-    code: mapping[a2aError.code] ?? grpc.status.UNKNOWN,
-    details: a2aError.message,
+    code,
+    details: message,
   };
 };
 
