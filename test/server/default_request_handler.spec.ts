@@ -2,7 +2,14 @@ import { describe, it, beforeEach, afterEach, assert, expect, vi, type Mock } fr
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import {
-  A2AError,
+  TaskNotFoundError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+  RequestMalformedError,
+  TaskNotCancelableError,
+  AuthenticatedExtendedCardNotConfiguredError,
+} from '../../src/errors.js';
+import {
   TaskStore,
   InMemoryTaskStore,
   DefaultRequestHandler,
@@ -955,7 +962,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await handler.sendMessage(params, serverCallContext);
         assert.fail(`Should have thrown for state: ${state}`);
       } catch (error: any) {
-        expect(error.code).to.equal(-32600); // Invalid Request
+        expect(error).to.be.instanceOf(RequestMalformedError);
         expect(error.message).to.contain(
           `Task ${taskId} is in a terminal state (${state}) and cannot be modified.`
         );
@@ -985,7 +992,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       await generator.next();
       assert.fail('sendMessageStream should have thrown an error');
     } catch (error: any) {
-      expect(error.code).to.equal(-32600);
+      expect(error).to.be.instanceOf(RequestMalformedError);
       expect(error.message).toContain(`Task ${taskId} is in a terminal state`);
     }
   });
@@ -1646,8 +1653,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await (handler as any)[method.name](method.params, serverCallContext);
         assert.fail(`Method ${method.name} should have thrown for non-existent task.`);
       } catch (error: any) {
-        expect(error).to.be.instanceOf(A2AError);
-        expect(error.code).to.equal(-32001); // Task Not Found
+        expect(error).to.be.instanceOf(TaskNotFoundError);
       }
     }
   });
@@ -1711,8 +1717,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await (handler as any)[method.name](method.params);
         assert.fail(`Method ${method.name} should have thrown for unsupported push notifications.`);
       } catch (error: any) {
-        expect(error).to.be.instanceOf(A2AError);
-        expect(error.code).to.equal(-32003); // Push Notification Not Supported
+        expect(error).to.be.instanceOf(PushNotificationNotSupportedError);
       }
     }
   });
@@ -1814,7 +1819,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     } finally {
       assert.isDefined(thrownError);
       assert.isUndefined(cancelResponse);
-      assert.equal(thrownError.code, -32002);
+      assert.instanceOf(thrownError, TaskNotCancelableError);
       expect(thrownError.message).to.contain('Task not cancelable');
       expect(failingCancellableExecutor.cancelTaskSpy).toHaveBeenCalledWith(
         taskId,
@@ -1839,7 +1844,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       await handler.cancelTask({ name: `tasks/${taskId}` }, serverCallContext);
       assert.fail('Should have thrown a TaskNotCancelableError');
     } catch (error: any) {
-      assert.equal(error.code, -32002);
+      assert.instanceOf(error, TaskNotCancelableError);
       expect(error.message).to.contain('Task not cancelable');
     }
     expect((mockAgentExecutor as MockAgentExecutor).cancelTask).not.toHaveBeenCalled();
@@ -2157,9 +2162,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } catch (error: any) {
         caughtError = error;
       } finally {
-        expect(caughtError).to.be.instanceOf(A2AError);
-        expect(caughtError.code).to.equal(-32004);
-        expect(caughtError.message).to.contain('Unsupported operation');
+        expect(caughtError).to.be.instanceOf(UnsupportedOperationError);
+        expect(caughtError.message).to.contain(
+          'Agent does not support authenticated extended card'
+        );
       }
     });
 
@@ -2176,9 +2182,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } catch (error: any) {
         caughtError = error;
       } finally {
-        expect(caughtError).to.be.instanceOf(A2AError);
-        expect(caughtError.code).to.equal(-32007);
-        expect(caughtError.message).to.contain('Extended card not configured');
+        expect(caughtError).to.be.instanceOf(AuthenticatedExtendedCardNotConfiguredError);
+        expect(caughtError.message).to.contain('Authenticated Extended Card not configured');
       }
     });
 

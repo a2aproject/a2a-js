@@ -1,4 +1,4 @@
-import { A2AError } from '../../server/error.js';
+import { GenericError } from '../../errors.js';
 import {
   Message,
   PushNotificationConfig,
@@ -79,7 +79,7 @@ export class ToProto {
         },
       };
     }
-    throw A2AError.internalError('Invalid event type');
+    throw new GenericError('Invalid event type');
   }
 
   static messageSendResult(params: Message | Task): SendMessageResponse {

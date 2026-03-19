@@ -7,8 +7,13 @@ import {
   HTTP_STATUS,
 } from '../../src/server/transports/rest/rest_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { A2AError } from '../../src/server/error.js';
-import { A2A_ERROR_CODE } from '../../src/errors.js';
+import {
+  RequestMalformedError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+} from '../../src/errors.js';
 import { AgentCard, Task, Message, Role, TaskState, TaskStatus } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 
@@ -88,36 +93,24 @@ describe('RestTransportHandler', () => {
 
   describe('mapErrorToStatus', () => {
     it.each([
-      [A2A_ERROR_CODE.PARSE_ERROR, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.INVALID_REQUEST, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.INVALID_PARAMS, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.METHOD_NOT_FOUND, HTTP_STATUS.NOT_FOUND],
-      [A2A_ERROR_CODE.TASK_NOT_FOUND, HTTP_STATUS.NOT_FOUND],
-      [A2A_ERROR_CODE.TASK_NOT_CANCELABLE, HTTP_STATUS.CONFLICT],
-      [A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.UNSUPPORTED_OPERATION, HTTP_STATUS.BAD_REQUEST],
-      [-99999, HTTP_STATUS.INTERNAL_SERVER_ERROR],
-    ])('should map error code %s to HTTP status %s', (errorCode, httpStatus) => {
-      expect(mapErrorToStatus(errorCode)).to.equal(httpStatus);
+      [new RequestMalformedError(''), HTTP_STATUS.BAD_REQUEST],
+      [new TaskNotFoundError(''), HTTP_STATUS.NOT_FOUND],
+      [new TaskNotCancelableError(''), HTTP_STATUS.CONFLICT],
+      [new PushNotificationNotSupportedError(''), HTTP_STATUS.BAD_REQUEST],
+      [new UnsupportedOperationError(''), HTTP_STATUS.BAD_REQUEST],
+      [new Error(''), HTTP_STATUS.INTERNAL_SERVER_ERROR],
+    ])('should map error %s to HTTP status %s', (error, httpStatus) => {
+      expect(mapErrorToStatus(error)).to.equal(httpStatus);
     });
   });
 
   describe('toHTTPError', () => {
     it('should convert A2AError to HTTP error format', () => {
-      const error = A2AError.invalidParams('Invalid input');
+      const error = new RequestMalformedError('Invalid input');
       const httpError = toHTTPError(error);
 
-      expect(httpError.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
+      expect(httpError.name).to.equal('RequestMalformedError');
       expect(httpError.message).to.equal('Invalid input');
-      expect(httpError.data).to.be.undefined;
-    });
-
-    it('should include data if present in A2AError', () => {
-      const error = A2AError.invalidParams('Invalid input');
-      error.data = { field: 'email' };
-      const httpError = toHTTPError(error);
-
-      expect(httpError.data).to.deep.equal({ field: 'email' });
     });
   });
 

@@ -25,6 +25,7 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   UnsupportedOperationError,
+  RequestMalformedError,
 } from '../../../errors.js';
 
 type GrpcUnaryCall<TReq, TRes> = (
@@ -59,12 +60,12 @@ export class GrpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequest<GetAgentCardRequest, AgentCard, AgentCard>(
       'getAgentCard',
-      {} as GetAgentCardRequest,
+      {},
       options,
       this.grpcClient.getAgentCard.bind(this.grpcClient),
-      (req) => req as AgentCard
+      (req) => req
     );
     return rpcResponse;
   }
@@ -99,12 +100,16 @@ export class GrpcTransport implements Transport {
     params: CreateTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequest<
+      CreateTaskPushNotificationConfigRequest,
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
+    >(
       'createTaskPushNotificationConfig',
       params,
       options,
       this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
-      (req) => req as TaskPushNotificationConfig
+      (req) => req
     );
     return rpcResponse;
   }
@@ -113,12 +118,16 @@ export class GrpcTransport implements Transport {
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequest<
+      GetTaskPushNotificationConfigRequest,
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
+    >(
       'getTaskPushNotificationConfig',
       params,
       options,
       this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient),
-      (req) => req as TaskPushNotificationConfig
+      (req) => req
     );
     return rpcResponse;
   }
@@ -151,23 +160,23 @@ export class GrpcTransport implements Transport {
   }
 
   async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequest<GetTaskRequest, Task, Task>(
       'getTask',
       params,
       options,
       this.grpcClient.getTask.bind(this.grpcClient),
-      (req) => req as Task
+      (req) => req
     );
     return rpcResponse;
   }
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequest<CancelTaskRequest, Task, Task>(
       'cancelTask',
       params,
       options,
       this.grpcClient.cancelTask.bind(this.grpcClient),
-      (req) => req as Task
+      (req) => req
     );
     return rpcResponse;
   }
@@ -300,7 +309,9 @@ export class GrpcTransport implements Transport {
           return new UnsupportedOperationError(error.details);
         }
         break;
-      //TODO: add case for grpc.status.INVALID_ARGUMENT and grpc.status.INTERNAL (the respective a2a errors are not implemented yet)
+      case grpc.status.INVALID_ARGUMENT:
+      case grpc.status.INTERNAL:
+        return new RequestMalformedError(error.details);
       default:
         break;
     }

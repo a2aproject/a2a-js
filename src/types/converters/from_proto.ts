@@ -1,4 +1,4 @@
-import { A2AError } from '../../server/error.js';
+import { RequestMalformedError, GenericError } from '../../errors.js';
 import {
   CreateTaskPushNotificationConfigRequest,
   Message,
@@ -22,7 +22,9 @@ export class FromProto {
     request: CreateTaskPushNotificationConfigRequest
   ): TaskPushNotificationConfig {
     if (!request.config || !request.config.pushNotificationConfig) {
-      throw A2AError.invalidParams('Request must include a `config` with `pushNotificationConfig`');
+      throw new RequestMalformedError(
+        'Request must include a `config` with `pushNotificationConfig`'
+      );
     }
     return {
       name: `tasks/${extractTaskId(request.parent)}/pushNotificationConfigs/${request.config.pushNotificationConfig.id}`,
@@ -36,7 +38,7 @@ export class FromProto {
     } else if (response.payload?.$case === 'msg') {
       return response.payload.value;
     }
-    throw A2AError.invalidParams('Invalid SendMessageResponse: missing result');
+    throw new GenericError('Invalid SendMessageResponse: missing result');
   }
 
   static listTaskPushNotificationConfig(
@@ -51,6 +53,6 @@ export class FromProto {
     if (event.payload) {
       return event.payload.value;
     }
-    throw A2AError.internalError('Invalid event type in StreamResponse');
+    throw new GenericError('Invalid event type in StreamResponse');
   }
 }

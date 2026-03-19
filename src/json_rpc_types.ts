@@ -7,45 +7,9 @@ import {
 } from './types/pb/a2a_types.js';
 
 /**
- * A discriminated union representing all possible A2A errors.
- */
-export type A2AError =
-  | JSONParseError
-  | InvalidRequestError
-  | MethodNotFoundError
-  | InvalidParamsError
-  | InternalError
-  | TaskNotFoundError
-  | TaskNotCancelableError
-  | PushNotificationNotSupportedError
-  | UnsupportedOperationError
-  | ContentTypeNotSupportedError
-  | InvalidAgentResponseError
-  | AuthenticatedExtendedCardNotConfiguredError;
-
-interface BaseError<T extends number> {
-  code: T;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export type JSONParseError = BaseError<-32700>;
-export type InvalidRequestError = BaseError<-32600>;
-export type MethodNotFoundError = BaseError<-32601>;
-export type InvalidParamsError = BaseError<-32602>;
-export type InternalError = BaseError<-32603>;
-export type TaskNotFoundError = BaseError<-32001>;
-export type TaskNotCancelableError = BaseError<-32002>;
-export type PushNotificationNotSupportedError = BaseError<-32003>;
-export type UnsupportedOperationError = BaseError<-32004>;
-export type ContentTypeNotSupportedError = BaseError<-32005>;
-export type InvalidAgentResponseError = BaseError<-32006>;
-export type AuthenticatedExtendedCardNotConfiguredError = BaseError<-32007>;
-
-/**
  * JSON-RPC Error object.
  */
-export interface JSONRPCError {
+interface JSONRPCError {
   code: number;
   data?: { [k: string]: unknown };
   message: string;
@@ -55,7 +19,7 @@ export interface JSONRPCError {
  * JSON-RPC Error response.
  */
 export interface JSONRPCErrorResponse {
-  error: JSONRPCError | A2AError;
+  error: JSONRPCError;
   id: string | number | null;
   jsonrpc: '2.0';
 }
