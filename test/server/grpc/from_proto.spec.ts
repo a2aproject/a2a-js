@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import * as proto from '../../../src/types/pb/a2a_types.js';
-import { RequestMalformedError } from '../../../src/errors.js';
+import { RequestMalformedError, GenericError } from '../../../src/errors.js';
 
 vi.mock('../../../src/types/converters/id_decoding.js', () => ({
   extractTaskId: vi.fn((name) => name.replace('tasks/', '')),
@@ -102,29 +102,29 @@ describe('FromProto', () => {
       expect(FromProto.sendMessageResult(response)).toEqual(msg);
     });
 
-    it('should throw RequestMalformedError if payload is missing', () => {
+    it('should throw GenericError if payload is missing', () => {
       const response: proto.SendMessageResponse = {};
-      let err: RequestMalformedError | undefined;
+      let err: GenericError | undefined;
       try {
         FromProto.sendMessageResult(response);
       } catch (error) {
-        err = error as RequestMalformedError;
+        err = error as GenericError;
       }
-      expect(err).toBeInstanceOf(RequestMalformedError);
+      expect(err).toBeInstanceOf(GenericError);
       expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
     });
 
-    it('should throw RequestMalformedError if payload case is invalid', () => {
+    it('should throw GenericError if payload case is invalid', () => {
       const response = {
         payload: { $case: 'streamError', value: undefined as any },
       } as unknown as proto.SendMessageResponse;
-      let err: RequestMalformedError | undefined;
+      let err: GenericError | undefined;
       try {
         FromProto.sendMessageResult(response);
       } catch (error) {
-        err = error as RequestMalformedError;
+        err = error as GenericError;
       }
-      expect(err).toBeInstanceOf(RequestMalformedError);
+      expect(err).toBeInstanceOf(GenericError);
       expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
     });
   });
@@ -162,15 +162,13 @@ describe('FromProto', () => {
       expect(FromProto.messageStreamResult(event)).toEqual(task);
     });
 
-    it('should throw RequestMalformedError if payload is missing', () => {
+    it('should throw GenericError if payload is missing', () => {
       const event: proto.StreamResponse = {};
       try {
         FromProto.messageStreamResult(event);
       } catch (error) {
-        expect(error).toBeInstanceOf(RequestMalformedError);
-        expect((error as RequestMalformedError).message).toContain(
-          'Invalid event type in StreamResponse'
-        );
+        expect(error).toBeInstanceOf(GenericError);
+        expect((error as GenericError).message).toContain('Invalid event type in StreamResponse');
       }
     });
   });

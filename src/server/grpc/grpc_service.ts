@@ -30,6 +30,7 @@ import {
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   RequestMalformedError,
+  GenericError,
   PushNotificationNotSupportedError,
   TaskNotCancelableError,
   TaskNotFoundError,
@@ -259,7 +260,8 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
   else if (error instanceof AuthenticatedExtendedCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
-  else if (error instanceof RequestMalformedError) code = grpc.status.INTERNAL;
+  else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
+  else if (error instanceof GenericError) code = grpc.status.INTERNAL;
 
   const message = error instanceof Error ? error.message : 'Internal server error';
 

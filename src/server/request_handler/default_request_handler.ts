@@ -7,6 +7,7 @@ import {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
+  GenericError,
 } from '../../errors.js';
 
 import {
@@ -308,7 +309,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this._processEvents(taskId, resultManager, eventQueue, context);
       const finalResult = resultManager.getFinalResult();
       if (!finalResult) {
-        throw new RequestMalformedError(
+        throw new GenericError(
           'Agent execution finished without a result, and no task context found.'
         );
       }
@@ -464,7 +465,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const latestTask = await this.taskStore.load(taskId, context);
     if (!latestTask) {
-      throw new RequestMalformedError(`Task ${params.name} not found after cancellation.`);
+      throw new GenericError(`Task ${params.name} not found after cancellation.`);
     }
     if (latestTask.status!.state != TaskState.TASK_STATE_CANCELLED) {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.name}`);
@@ -518,7 +519,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const configs = (await this.pushNotificationStore?.load(taskId)) || [];
     if (configs.length === 0) {
-      throw new RequestMalformedError(`Push notification config not found for task ${taskId}.`);
+      throw new GenericError(`Push notification config not found for task ${taskId}.`);
     }
 
     let configId: string;
@@ -532,7 +533,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const config = configs.find((c) => c.id === configId);
 
     if (!config) {
-      throw new RequestMalformedError(
+      throw new GenericError(
         `Push notification config with id '${configId}' not found for task ${taskId}.`
       );
     }

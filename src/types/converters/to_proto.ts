@@ -1,4 +1,4 @@
-import { RequestMalformedError } from '../../errors.js';
+import { GenericError } from '../../errors.js';
 import {
   Message,
   PushNotificationConfig,
@@ -79,7 +79,7 @@ export class ToProto {
         },
       };
     }
-    throw new RequestMalformedError('Invalid event type');
+    throw new GenericError('Invalid event type');
   }
 
   static messageSendResult(params: Message | Task): SendMessageResponse {

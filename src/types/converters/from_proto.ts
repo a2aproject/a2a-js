@@ -1,4 +1,4 @@
-import { RequestMalformedError } from '../../errors.js';
+import { RequestMalformedError, GenericError } from '../../errors.js';
 import {
   CreateTaskPushNotificationConfigRequest,
   Message,
@@ -38,7 +38,7 @@ export class FromProto {
     } else if (response.payload?.$case === 'msg') {
       return response.payload.value;
     }
-    throw new RequestMalformedError('Invalid SendMessageResponse: missing result');
+    throw new GenericError('Invalid SendMessageResponse: missing result');
   }
 
   static listTaskPushNotificationConfig(
@@ -53,6 +53,6 @@ export class FromProto {
     if (event.payload) {
       return event.payload.value;
     }
-    throw new RequestMalformedError('Invalid event type in StreamResponse');
+    throw new GenericError('Invalid event type in StreamResponse');
   }
 }
