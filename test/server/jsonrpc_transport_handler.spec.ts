@@ -13,6 +13,7 @@ import {
   InvalidAgentResponseError,
   AuthenticatedExtendedCardNotConfiguredError,
   A2A_ERROR_CODE,
+  GenericError,
 } from '../../src/errors.js';
 
 describe('JsonRpcTransportHandler', () => {
@@ -41,62 +42,62 @@ describe('JsonRpcTransportHandler', () => {
   });
 
   describe('Check JSON-RPC request format', () => {
-    it('should return an internal error for an invalid JSON string', async () => {
+    it('should return an invalid params error for an invalid JSON string', async () => {
       const invalidJson = '{ "jsonrpc": "2.0", "method": "foo", "id": 1, }'; // trailing comma
       const response = (await transportHandler.handle(invalidJson)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
     });
 
-    it('should return an internal error for a non-string/non-object request body', async () => {
+    it('should return an invalid params error for a non-string/non-object request body', async () => {
       const response = (await transportHandler.handle(123)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid request body type.');
     });
 
-    it('should return an internal error for missing jsonrpc property', async () => {
+    it('should return an invalid params error for missing jsonrpc property', async () => {
       const request = { method: 'foo', id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an internal error for incorrect jsonrpc version', async () => {
+    it('should return an invalid params error for incorrect jsonrpc version', async () => {
       const request = { jsonrpc: '1.0', method: 'foo', id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an internal error for missing method property', async () => {
+    it('should return an invalid params error for missing method property', async () => {
       const request = { jsonrpc: '2.0', id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an internal error for non-string method property', async () => {
+    it('should return an invalid params error for non-string method property', async () => {
       const request = { jsonrpc: '2.0', method: 123, id: 1 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
     });
 
-    it('should return an internal error for invalid id type (object)', async () => {
+    it('should return an invalid params error for invalid id type (object)', async () => {
       const request = { jsonrpc: '2.0', method: 'foo', id: {} };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.deep.equal({});
     });
 
-    it('should return an internal error for invalid id type (float)', async () => {
+    it('should return an invalid params error for invalid id type (float)', async () => {
       const request = { jsonrpc: '2.0', method: 'foo', id: 1.23 };
       const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-      expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1.23);
     });
@@ -154,7 +155,7 @@ describe('JsonRpcTransportHandler', () => {
           params,
         };
         const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
-        expect(response.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+        expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
         expect(response.error.message).to.equal('Invalid method parameters.');
         expect(response.id).to.equal(1);
       });
@@ -177,7 +178,7 @@ describe('JsonRpcTransportHandler', () => {
       const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
         new RequestMalformedError('Error message')
       );
-      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(mappedError.message).to.equal('Error message');
     });
 
@@ -237,6 +238,22 @@ describe('JsonRpcTransportHandler', () => {
       );
       expect(mappedError.code).to.equal(A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED);
       expect(mappedError.message).to.equal('Authenticated Extended Card Not Configured');
+    });
+
+    it('should map RequestMalformedError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new RequestMalformedError('Request Malformed')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
+      expect(mappedError.message).to.equal('Request Malformed');
+    });
+
+    it('should map GenericError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
+        new GenericError('Generic Error')
+      );
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(mappedError.message).to.equal('Generic Error');
     });
   });
 });

@@ -18,7 +18,7 @@ import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/
 import { AgentCard } from '../../../src/index.js';
 import { JSONRPCErrorResponse } from '../../../src/json_rpc_types.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
-import { A2A_ERROR_CODE, RequestMalformedError } from '../../../src/errors.js';
+import { A2A_ERROR_CODE, GenericError, RequestMalformedError } from '../../../src/errors.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { User, UnauthenticatedUser } from '../../../src/server/authentication/user.js';
 
@@ -223,7 +223,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should handle general processing error', async () => {
-      const error = new RequestMalformedError('Processing error');
+      const error = new GenericError('Processing error');
       handleStub.mockRejectedValue(error);
 
       const requestBody = createRpcRequest('error-test');
@@ -544,7 +544,7 @@ describe('A2AExpressApp', () => {
         jsonrpc: '2.0',
         id: null,
         error: {
-          code: A2A_ERROR_CODE.INTERNAL_ERROR,
+          code: A2A_ERROR_CODE.INVALID_PARAMS,
           message: 'Invalid JSON payload.',
         },
       };

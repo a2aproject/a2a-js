@@ -24,6 +24,7 @@ import {
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   AuthenticatedExtendedCardNotConfiguredError,
+  GenericError,
 } from '../../../errors.js';
 
 export type A2ARequest = {
@@ -302,6 +303,12 @@ export class JsonRpcTransportHandler {
         code: A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED,
         message: error.message,
       };
+    }
+    if (error instanceof RequestMalformedError) {
+      return { code: A2A_ERROR_CODE.INVALID_PARAMS, message: error.message };
+    }
+    if (error instanceof GenericError) {
+      return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message: error.message };
     }
 
     const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
