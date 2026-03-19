@@ -185,7 +185,39 @@ describe('RestTransportHandler', () => {
 
       await expect(
         transportHandler.sendMessage(invalidMessage as any, mockContext)
-      ).rejects.toThrow('request.messageId is required');
+      ).rejects.toThrow('message.messageId is required');
+    });
+
+    it('should normalize configuration with snake_case fields', async () => {
+      const inputWithConfig = {
+        message: testMessage,
+        configuration: {
+          blocking: true,
+          acceptedOutputModes: ['text/plain'],
+          historyLength: 5,
+          pushNotificationConfig: {
+            id: 'push-1',
+            url: 'https://example.com',
+          },
+        },
+      };
+
+      await transportHandler.sendMessage(inputWithConfig as any, mockContext);
+
+      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          configuration: expect.objectContaining({
+            blocking: true,
+            acceptedOutputModes: ['text/plain'],
+            historyLength: 5,
+            pushNotificationConfig: {
+              id: 'push-1',
+              url: 'https://example.com',
+            },
+          }),
+        }),
+        mockContext
+      );
     });
   });
 
@@ -339,7 +371,7 @@ describe('RestTransportHandler', () => {
           mockContext
         );
 
-        expect(result).to.deep.equal(expectedRestConfig);
+        expect(result).to.deep.equal(mockConfig);
       });
 
       it('should throw InvalidParams if taskId is missing', async () => {
@@ -433,55 +465,32 @@ describe('RestTransportHandler', () => {
         name: 'camelCase',
         request: {
           messageId: 'msg-file',
-          role: Role.ROLE_USER,
-          content: [
+          role: 'user' as const,
+          parts: [
             {
-              part: {
-                $case: 'file',
-                value: {
-                  file: {
-                    $case: 'fileWithUri',
-                    value: 'https://example.com/file.pdf',
-                  },
-                  mimeType: 'application/pdf',
-                },
+              kind: 'file' as const,
+              file: {
+                uri: 'https://example.com/file.pdf',
+                mimeType: 'application/pdf',
+                name: 'document.pdf',
               },
             },
           ],
-          contextId: '',
-          taskId: '',
-          extensions: [],
-          metadata: {},
+          kind: 'message' as const,
         },
-        metadata: {},
-        configuration: undefined,
       },
-    ])(
-      'should normalize $name file parts to camelCase',
-      async ({ request, metadata, configuration }) => {
-        await transportHandler.sendMessage(
-          { request, metadata, configuration } as any,
-          mockContext
-        );
+    ])('should normalize $name file parts to camelCase', async ({ message }) => {
+      await transportHandler.sendMessage({ message } as any, mockContext);
 
-        expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-          expect.objectContaining({
-            request: expect.objectContaining({
-              content: [
-                expect.objectContaining({
-                  part: {
-                    $case: 'file',
-                    value: expect.objectContaining({
-                      file: {
-                        $case: 'fileWithUri',
-                        value: 'https://example.com/file.pdf',
-                      },
-                      mimeType: 'application/pdf',
-                    }),
-                  },
-                }),
-              ],
-            }),
+      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.objectContaining({
+            parts: [
+              expect.objectContaining({
+                kind: 'file',
+                file: expect.objectContaining({ mimeType: 'application/pdf' }),
+              }),
+            ],
           }),
           mockContext
         );

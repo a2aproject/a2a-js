@@ -13,19 +13,11 @@ import {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
+  TaskQueryParams,
+  TaskIdParams,
   AgentCard,
-  SendMessageRequest,
-  GetTaskRequest,
-  CancelTaskRequest,
-} from '../../../index.js';
-import {
-  AuthenticatedExtendedCardNotConfiguredError,
-  PushNotificationNotSupportedError,
-  RequestMalformedError,
-  TaskNotCancelableError,
-  TaskNotFoundError,
-  UnsupportedOperationError,
-} from '../../../errors.js';
+} from '../../../types.js';
+import { A2A_ERROR_CODE } from '../../../errors.js';
 
 // ============================================================================
 // HTTP Status Codes and Error Mapping
@@ -121,14 +113,14 @@ export class RestTransportHandler {
   }
 
   /**
-   * Validates the message send parameters.
+   * Validate MessageSendParams.
    */
-  private validateSendMessageRequest(params: SendMessageRequest): void {
-    if (!params.request) {
-      throw new RequestMalformedError('request is required');
+  private validateMessageSendParams(params: MessageSendParams): void {
+    if (!params.message) {
+      throw A2AError.invalidParams('message is required');
     }
-    if (!params.request.messageId) {
-      throw new RequestMalformedError('request.messageId is required');
+    if (!params.message.messageId) {
+      throw A2AError.invalidParams('message.messageId is required');
     }
   }
 
@@ -136,10 +128,10 @@ export class RestTransportHandler {
    * Sends a message to the agent.
    */
   async sendMessage(
-    params: SendMessageRequest,
+    params: MessageSendParams,
     context: ServerCallContext
   ): Promise<Message | Task> {
-    this.validateSendMessageRequest(params);
+    this.validateMessageSendParams(params);
     return this.requestHandler.sendMessage(params, context);
   }
 
@@ -148,7 +140,7 @@ export class RestTransportHandler {
    * @throws {A2AError} UnsupportedOperation if streaming not supported
    */
   async sendMessageStream(
-    params: SendMessageRequest,
+    params: MessageSendParams,
     context: ServerCallContext
   ): Promise<
     AsyncGenerator<
@@ -158,7 +150,7 @@ export class RestTransportHandler {
     >
   > {
     await this.requireCapability('streaming');
-    this.validateSendMessageRequest(params);
+    this.validateMessageSendParams(params);
     return this.requestHandler.sendMessageStream(params, context);
   }
 
@@ -210,11 +202,11 @@ export class RestTransportHandler {
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
-    if (!config.pushNotificationConfig) {
-      throw new RequestMalformedError('pushNotificationConfig is required');
+    if (!config.taskId) {
+      throw A2AError.invalidParams('taskId is required');
     }
-    if (!config.pushNotificationConfig.id) {
-      throw new RequestMalformedError('pushNotificationConfig.id is required');
+    if (!config.pushNotificationConfig) {
+      throw A2AError.invalidParams('pushNotificationConfig is required');
     }
     return this.requestHandler.setTaskPushNotificationConfig(config, context);
   }
