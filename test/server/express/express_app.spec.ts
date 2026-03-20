@@ -22,7 +22,6 @@ import request from 'supertest';
 import { jsonErrorHandler, jsonRpcHandler } from '../../../src/server/express/json_rpc_handler.js';
 import { agentCardHandler } from '../../../src/server/express/agent_card_handler.js';
 import { UserBuilder } from '../../../src/server/express/common.js';
-
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { AgentCard } from '../../../src/index.js';
