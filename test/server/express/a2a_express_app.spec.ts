@@ -9,10 +9,20 @@ import {
   Mock,
   MockInstance,
 } from 'vitest';
-import express, { Express, NextFunction, Request, Response } from 'express';
+import express, {
+  Express,
+  NextFunction,
+  Request,
+  Response,
+  RequestHandler,
+  ErrorRequestHandler,
+} from 'express';
 import request from 'supertest';
 
-import { A2AExpressApp } from '../../../src/server/express/a2a_express_app.js';
+import { jsonErrorHandler, jsonRpcHandler } from '../../../src/server/express/json_rpc_handler.js';
+import { agentCardHandler } from '../../../src/server/express/agent_card_handler.js';
+import { UserBuilder } from '../../../src/server/express/common.js';
+
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { AgentCard } from '../../../src/index.js';
@@ -24,9 +34,27 @@ import { User, UnauthenticatedUser } from '../../../src/server/authentication/us
 
 describe('A2AExpressApp', () => {
   let mockRequestHandler: A2ARequestHandler;
-  let app: A2AExpressApp;
   let expressApp: Express;
   let handleStub: MockInstance;
+
+  const setupA2ARoutes = (
+    expressApp: Express,
+    requestHandler: A2ARequestHandler,
+    userBuilder: UserBuilder = UserBuilder.noAuthentication,
+    baseUrl: string = '',
+    middlewares: Array<RequestHandler | ErrorRequestHandler> = [],
+    agentCardPath: string = AGENT_CARD_PATH
+  ): Express => {
+    const router = express.Router();
+    router.use(express.json(), jsonErrorHandler);
+    if (middlewares.length > 0) {
+      router.use(middlewares);
+    }
+    router.use(jsonRpcHandler({ requestHandler, userBuilder }));
+    router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: requestHandler }));
+    expressApp.use(baseUrl, router);
+    return expressApp;
+  };
 
   // Helper function to create JSON-RPC request bodies
   const createRpcRequest = (id: string | null, method = 'message/send', params: object = {}) => ({
@@ -75,7 +103,6 @@ describe('A2AExpressApp', () => {
       resubscribe: vi.fn(),
     };
 
-    app = new A2AExpressApp(mockRequestHandler);
     expressApp = express();
 
     handleStub = vi.spyOn(JsonRpcTransportHandler.prototype, 'handle');
@@ -85,24 +112,9 @@ describe('A2AExpressApp', () => {
     vi.restoreAllMocks();
   });
 
-  describe('constructor', () => {
-    it('should create an instance with requestHandler and jsonRpcTransportHandler', () => {
-      const newApp = new A2AExpressApp(mockRequestHandler);
-      assert.instanceOf(newApp, A2AExpressApp);
-      assert.equal((newApp as any).requestHandler, mockRequestHandler);
-    });
-  });
-
-  describe('setupRoutes', () => {
-    it('should setup routes with default parameters', () => {
-      const setupApp = app.setupRoutes(expressApp);
-      assert.equal(setupApp, expressApp);
-    });
-  });
-
   describe('agent card endpoint', () => {
     beforeEach(() => {
-      app.setupRoutes(expressApp);
+      setupA2ARoutes(expressApp, mockRequestHandler);
     });
 
     it('should return agent card on GET /.well-known/agent-card.json', async () => {
@@ -115,7 +127,7 @@ describe('A2AExpressApp', () => {
     it('should return agent card on custom path when agentCardPath is provided', async () => {
       const customPath = 'custom/agent-card.json';
       const customExpressApp = express();
-      app.setupRoutes(customExpressApp, '', undefined, customPath);
+      setupA2ARoutes(customExpressApp, mockRequestHandler, undefined, '', undefined, customPath);
 
       const response = await request(customExpressApp).get(`/${customPath}`).expect(200);
 
@@ -136,7 +148,7 @@ describe('A2AExpressApp', () => {
 
   describe('JSON-RPC endpoint', () => {
     beforeEach(() => {
-      app.setupRoutes(expressApp);
+      setupA2ARoutes(expressApp, mockRequestHandler);
     });
 
     it('should handle single JSON-RPC response', async () => {
@@ -332,7 +344,7 @@ describe('A2AExpressApp', () => {
       };
 
       const middlewareApp = express();
-      app.setupRoutes(middlewareApp, '', [testMiddleware]);
+      setupA2ARoutes(middlewareApp, mockRequestHandler, undefined, '', [testMiddleware]);
 
       await request(middlewareApp).get(`/${AGENT_CARD_PATH}`).expect(200);
 
@@ -345,15 +357,14 @@ describe('A2AExpressApp', () => {
       };
 
       const middlewareApp = express();
-      app.setupRoutes(middlewareApp, '', [errorMiddleware]);
+      setupA2ARoutes(middlewareApp, mockRequestHandler, undefined, '', [errorMiddleware]);
 
       await request(middlewareApp).get(`/${AGENT_CARD_PATH}`).expect(500);
     });
 
     it('should handle no authentication middlewares', async () => {
-      app = new A2AExpressApp(mockRequestHandler);
       const middlewareApp = express();
-      app.setupRoutes(middlewareApp);
+      setupA2ARoutes(middlewareApp, mockRequestHandler);
 
       const mockResponse = {
         jsonrpc: '2.0',
@@ -392,9 +403,10 @@ describe('A2AExpressApp', () => {
         return Promise.resolve(user as User);
       };
 
-      app = new A2AExpressApp(mockRequestHandler, userExtractor);
       const middlewareApp = express();
-      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+      setupA2ARoutes(middlewareApp, mockRequestHandler, userExtractor, '', [
+        authenticationMiddleware,
+      ]);
 
       const mockResponse = {
         jsonrpc: '2.0',
@@ -441,9 +453,10 @@ describe('A2AExpressApp', () => {
         return Promise.resolve(convertedUser as User);
       };
 
-      app = new A2AExpressApp(mockRequestHandler, userExtractor);
       const middlewareApp = express();
-      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+      setupA2ARoutes(middlewareApp, mockRequestHandler, userExtractor, '', [
+        authenticationMiddleware,
+      ]);
 
       const mockResponse = {
         jsonrpc: '2.0',
@@ -478,9 +491,8 @@ describe('A2AExpressApp', () => {
         next();
       };
 
-      app = new A2AExpressApp(mockRequestHandler);
       const middlewareApp = express();
-      app.setupRoutes(middlewareApp, '', [authenticationMiddleware]);
+      setupA2ARoutes(middlewareApp, mockRequestHandler, undefined, '', [authenticationMiddleware]);
 
       const mockResponse = {
         jsonrpc: '2.0',
@@ -504,21 +516,21 @@ describe('A2AExpressApp', () => {
     it('should mount routes at baseUrl', async () => {
       const baseUrl = '/api/v1';
       const basedApp = express();
-      app.setupRoutes(basedApp, baseUrl);
+      setupA2ARoutes(basedApp, mockRequestHandler, undefined, baseUrl);
 
       await request(basedApp).get(`${baseUrl}/${AGENT_CARD_PATH}`).expect(200);
     });
 
     it('should handle empty baseUrl', async () => {
       const emptyBaseApp = express();
-      app.setupRoutes(emptyBaseApp, '');
+      setupA2ARoutes(emptyBaseApp, mockRequestHandler);
 
       await request(emptyBaseApp).get(`/${AGENT_CARD_PATH}`).expect(200);
     });
 
     it('should include express.json() middleware by default', async () => {
       const jsonApp = express();
-      app.setupRoutes(jsonApp);
+      setupA2ARoutes(jsonApp, mockRequestHandler);
 
       const requestBody = createRpcRequest('test-id', 'message/send', {
         test: 'data',
@@ -531,7 +543,7 @@ describe('A2AExpressApp', () => {
 
     it('should handle malformed json request', async () => {
       const jsonApp = express();
-      app.setupRoutes(jsonApp);
+      setupA2ARoutes(jsonApp, mockRequestHandler);
 
       const requestBody = '{"jsonrpc": "2.0", "method": "message/send", "id": "1"'; // Missing closing brace
       const response = await request(jsonApp)
