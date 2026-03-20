@@ -54,25 +54,24 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Base Branch
+    - name: Checkout Main
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.pull_request.base.ref || 'main' }}
-        clean: true
+        ref: main
 
     - uses: actions/setup-node@v4
       with:
         node-version: 24
         cache: 'npm'
 
-    - name: Install & Test (Base Branch)
+    - name: Install & Test (Main)
       timeout-minutes: 10
       run: |
         npm ci
         npm run coverage
-        mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-base-summary.json
+        mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-main-summary.json
     
-    - name: Upload Artifact (base)
+    - name: Upload Artifact (main)
       uses: actions/upload-artifact@v4
       if: github.event_name != 'pull_request'
       with:
@@ -93,7 +92,7 @@ jobs:
         npm ci
         npm run coverage
         mv coverage/coverage-summary.json coverage-pr-summary.json
-        mv ${{ runner.temp }}/coverage-base-summary.json coverage-base-summary.json
+        mv ${{ runner.temp }}/coverage-main-summary.json coverage-main-summary.json
     
     - name: Save PR number
       run: |
@@ -105,7 +104,7 @@ jobs:
       with:
         name: coverage-data
         path: |
-          coverage-base-summary.json
+          coverage-main-summary.json
           coverage-pr-summary.json
           coverage/
           PR_NUMBER

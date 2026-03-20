@@ -52,10 +52,10 @@ jobs:
               }
             };
 
-            const baseSummary = loadSummary('./coverage-base-summary.json');
+            const mainSummary = loadSummary('./coverage-main-summary.json');
             const prSummary = loadSummary('./coverage-pr-summary.json');
 
-            if (!baseSummary || !prSummary) {
+            if (!mainSummary || !prSummary) {
               console.log("Missing coverage data, skipping comment.");
               return;
             }
@@ -81,7 +81,7 @@ jobs:
 
             const fileUrl = (path) => `https://github.com/${owner}/${repo}/blob/${headSha}/${path}`;
 
-            const allFiles = new Set([...Object.keys(baseSummary), ...Object.keys(prSummary)]);
+            const allFiles = new Set([...Object.keys(mainSummary), ...Object.keys(prSummary)]);
             allFiles.delete('total');
             const workspacePath = process.env.GITHUB_WORKSPACE ? process.env.GITHUB_WORKSPACE + '/' : ''; 
 
@@ -89,18 +89,18 @@ jobs:
             let newRows = [];
             
             for (const file of allFiles) {
-              const baseFile = baseSummary[file];
+              const mainFile = mainSummary[file];
               const prFile = prSummary[file];
 
               if (!prFile) continue;
 
-              const oldPct = getPct(baseFile, metric);
+              const oldPct = getPct(mainFile, metric);
               const newPct = getPct(prFile, metric);
 
               const relativeFilePath = file.replace(workspacePath, '');
               const linkedPath = `[${relativeFilePath}](${fileUrl(relativeFilePath)})`;
 
-              if (!baseFile && prFile) {
+              if (!mainFile && prFile) {
                 newRows.push(`| ${linkedPath} (**new**) | — | ${newPct}% | — |\n`);
               } else if (oldPct !== newPct) {
                 changedRows.push(`| ${linkedPath} | ${oldPct}% | ${newPct}% | ${formatDiff(oldPct, newPct)} |\n`);
@@ -110,7 +110,7 @@ jobs:
             if (changedRows.length === 0 && newRows.length === 0) {
               markdown += `\n_No coverage changes._\n`;
             } else {
-              markdown += `| | Base | PR | Delta |\n`;
+              markdown += `| | Main | PR | Delta |\n`;
               markdown += `| :--- | :---: | :---: | :---: |\n`;
               
               if (changedRows.length > 0) {
@@ -120,7 +120,7 @@ jobs:
                 markdown += newRows.sort().join('');
               }
 
-              const oldTotalPct = getPct(baseSummary.total, metric);
+              const oldTotalPct = getPct(mainSummary.total, metric);
               const newTotalPct = getPct(prSummary.total, metric);
               if (oldTotalPct !== newTotalPct) {
                 markdown += `| **Total** | ${oldTotalPct}% | ${newTotalPct}% | ${formatDiff(oldTotalPct, newTotalPct)} |\n`;
