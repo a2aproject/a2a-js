@@ -22,7 +22,7 @@ exports[`TypeScript Strict Mode`] = {
     "src/server/express/rest_handler.ts:2359807554": [
       [208, 50, 17, "tsc: Argument of type \'unknown\' is not assignable to parameter of type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.", "3749434707"]
     ],
-    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:1677722116": [
+    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:293221337": [
       [88, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
     ],
     "src/types/converters/to_proto.ts:4184730512": [
