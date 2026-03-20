@@ -24,6 +24,9 @@
       "server/grpc": [
         "./dist/server/grpc/index.d.ts"
       ],
+      "server/distributed": [
+        "./dist/server/distributed/index.d.ts"
+      ],
       "client": [
         "./dist/client/index.d.ts"
       ],
@@ -53,6 +56,11 @@
       "import": "./dist/server/grpc/index.js",
       "require": "./dist/server/grpc/index.cjs"
     },
+    "./server/distributed": {
+      "types": "./dist/server/distributed/index.d.ts",
+      "import": "./dist/server/distributed/index.js",
+      "require": "./dist/server/distributed/index.cjs"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
@@ -70,6 +78,10 @@
     "README.md"
   ],
   "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.596.0",
+    "@aws-sdk/client-sns": "^3.596.0",
+    "@aws-sdk/client-sqs": "^3.596.0",
+    "@aws-sdk/lib-dynamodb": "^3.596.0",
     "@betterer/cli": "^6.0.0-alpha.1",
     "@betterer/typescript": "^6.0.0-alpha.1",
     "@bufbuild/buf": "^1.61.0",
@@ -81,6 +93,8 @@
     "@types/node": "^22.13.14",
     "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^3.2.4",
+    "aws-sdk-client-mock": "^4.1.0",
+    "aws-sdk-client-mock-vitest": "^7.0.1",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
@@ -110,11 +124,27 @@
     "uuid": "^11.1.0"
   },
   "peerDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.596.0",
+    "@aws-sdk/client-sns": "^3.596.0",
+    "@aws-sdk/client-sqs": "^3.596.0",
+    "@aws-sdk/lib-dynamodb": "^3.596.0",
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.11.0",
     "express": "^4.21.2 || ^5.1.0"
   },
   "peerDependenciesMeta": {
+    "@aws-sdk/client-dynamodb": {
+      "optional": true
+    },
+    "@aws-sdk/client-sns": {
+      "optional": true
+    },
+    "@aws-sdk/client-sqs": {
+      "optional": true
+    },
+    "@aws-sdk/lib-dynamodb": {
+      "optional": true
+    },
     "express": {
       "optional": true
     },
