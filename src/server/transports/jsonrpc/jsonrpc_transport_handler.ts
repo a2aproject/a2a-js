@@ -148,7 +148,7 @@ export class JsonRpcTransportHandler {
             );
             // Ideally, the Express layer should catch this and send a final error to the client if the stream breaks.
             // Or, the agentEventStream itself should yield a final error event that gets wrapped.
-            // For now, we re-throw so it can be caught by A2AExpressApp's stream handling.
+            // For now, we re-throw so it can be caught by the Express layer streaming support.
             throw streamError;
           }
         })();
