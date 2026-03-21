@@ -9,7 +9,11 @@ import { JSONRPCErrorResponse, JSONRPCSuccessResponse, JSONRPCResponse } from '.
 import { A2AError } from '../error.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
-import { ServerCallContext } from '../context.js';
+import {
+  ServerCallContext,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../context.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
@@ -18,6 +22,7 @@ import { Extensions } from '../../extensions.js';
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /**
@@ -34,17 +39,22 @@ export interface JsonRpcHandlerOptions {
 export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   const jsonRpcTransportHandler = new JsonRpcTransportHandler(options.requestHandler);
 
+  const buildContext = async (req: Request): Promise<ServerCallContext> => {
+    const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
+    return ctxBuilder(
+      Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+      await options.userBuilder(req),
+      req.headers
+    );
+  };
+
   const router = express.Router();
 
   router.use(express.json(), jsonErrorHandler);
 
   router.post('/', async (req: Request, res: Response) => {
     try {
-      const user = await options.userBuilder(req);
-      const context = new ServerCallContext(
-        Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
-        user
-      );
+      const context = await buildContext(req);
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
       if (context.activatedExtensions) {
