@@ -20,6 +20,7 @@ import { Extensions } from '../../extensions.js';
 
 import {
   AgentCard,
+  CreateTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigResponse,
   MessageFns,
   SendMessageRequest,
@@ -29,6 +30,7 @@ import {
   TaskPushNotificationConfig,
 } from '../../types/pb/a2a_types.js';
 import { ToProto } from '../../types/converters/to_proto.js';
+import { FromProto } from '../../types/converters/from_proto.js';
 import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
 import { RequestMalformedError } from '../../errors.js';
 
@@ -412,12 +414,9 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const config = {
-        ...req.body,
-        taskId: req.params.taskId,
-        task_id: req.params.taskId,
-      };
-      const result = await restTransportHandler.setTaskPushNotificationConfig(config, context);
+      const protoReq = CreateTaskPushNotificationConfigRequest.fromJSON(req.body);
+      const params = FromProto.createTaskPushNotificationConfig(protoReq);
+      const result = await restTransportHandler.setTaskPushNotificationConfig(params, context);
       const protoResult = ToProto.taskPushNotificationConfig(result);
       sendResponse<TaskPushNotificationConfig>(
         res,
