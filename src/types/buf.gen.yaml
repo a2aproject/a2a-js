@@ -3,7 +3,9 @@
 # Uses remote plugins, no separate install required.
 version: v2
 inputs:
-  - directory: ./pb
+  - git_repo: https://github.com/a2aproject/A2A.git
+    ref: v1.0.0
+    subdir: specification
 plugins:
   - remote: buf.build/community/stephenh-ts-proto:v2.11.0
     out: ./pb
