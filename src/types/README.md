@@ -10,9 +10,6 @@ Ensure you have the project dependencies installed:
 npm install
 ```
 
-This project uses `@bufbuild/buf` which is listed in the `devDependencies`.
-Add the `a2a_types.proto` files to the `pb` directory.
-
 ## Generating Code
 
 To generate the gRPC types definitions, run the following command from this directory (`src/types`):
