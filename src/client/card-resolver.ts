@@ -1,6 +1,5 @@
 import { AGENT_CARD_PATH } from '../constants.js';
 import { AgentCard } from '../index.js';
-import { AgentCard as PBAgentCard } from '../types/pb/a2a_types.js';
 
 export interface AgentCardResolverOptions {
   path?: string;
@@ -55,7 +54,7 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
    */
   private normalizeAgentCard(card: unknown): AgentCard {
     if (this.isProtoAgentCard(card)) {
-      const parsedProto = PBAgentCard.fromJSON(card);
+      const parsedProto = AgentCard.fromJSON(card);
       return parsedProto;
     }
     return card as AgentCard;
