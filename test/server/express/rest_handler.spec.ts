@@ -137,6 +137,15 @@ describe('restHandler', () => {
         .send({ request: message })
         .expect(201);
 
+      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          request: expect.objectContaining({
+            messageId: 'msg-1',
+          }),
+        }),
+        expect.anything()
+      );
+
       const converted_result = FromProto.sendMessageResult(
         SendMessageResponse.fromJSON(response.body)
       );
@@ -169,6 +178,15 @@ describe('restHandler', () => {
         .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
+
+      expect(mockRequestHandler.sendMessageStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          request: expect.objectContaining({
+            messageId: 'msg-1',
+          }),
+        }),
+        expect.anything()
+      );
     });
 
     it('should return 400 if streaming is not supported', async () => {
@@ -332,11 +350,28 @@ describe('restHandler', () => {
         {
           name: 'camelCase',
           payload: {
-            pushNotificationConfig: {
-              id: 'config-1',
-              url: 'https://example.com/webhook',
-              token: '',
-              authentication: undefined,
+            parent: 'tasks/task-1',
+            configId: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            config: {
+              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
+              pushNotificationConfig: {
+                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+                url: 'http://127.0.0.1:9999/webhook',
+              },
+            },
+          },
+        },
+        {
+          name: 'snake_case',
+          payload: {
+            parent: 'tasks/task-1',
+            config_id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            config: {
+              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
+              push_notification_config: {
+                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+                url: 'http://127.0.0.1:9999/webhook',
+              },
             },
           },
         },
@@ -469,26 +504,59 @@ describe('restHandler', () => {
     it.each([
       {
         name: 'camelCase',
-        message: {
-          messageId: 'msg-file',
-          role: 'user',
-          kind: 'message',
-          parts: [
-            {
-              kind: 'file',
-              file: {
-                uri: 'https://example.com/file.pdf',
-                mimeType: 'application/pdf',
-                name: 'document.pdf',
+        payload: {
+          message: {
+            messageId: 'msg-parts',
+            role: 'ROLE_USER',
+            kind: 'message',
+            content: [
+              {
+                file: {
+                  fileWithUri: 'https://example.com/file.pdf',
+                  mimeType: 'application/pdf',
+                },
               },
-            },
-          ],
+              {
+                text: 'Hello world',
+              },
+              {
+                data: {
+                  data: { foo: 'bar' },
+                },
+              },
+            ],
+          },
         },
       },
-    ])('should accept $name file parts', async ({ message }) => {
+      {
+        name: 'snake_case',
+        payload: {
+          message: {
+            message_id: 'msg-parts',
+            role: 'ROLE_USER',
+            kind: 'message',
+            content: [
+              {
+                file: {
+                  file_with_uri: 'https://example.com/file.pdf',
+                  mime_type: 'application/pdf',
+                },
+              },
+              {
+                text: 'Hello world',
+              },
+              {
+                data: {
+                  data: { foo: 'bar' },
+                },
+              },
+            ],
+          },
+        },
+      },
+    ])('should accept $name message parts', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-
-      await request(app).post('/v1/message:send').send({ request: message }).expect(201);
+      await request(app).post('/v1/message:send').send(payload).expect(201);
     });
   });
 
@@ -504,10 +572,18 @@ describe('restHandler', () => {
           configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
         },
       },
+      {
+        name: 'snake_case',
+        payload: {
+          message: { message_id: 'msg-1', role: 'ROLE_USER', kind: 'message' },
+          configuration: { accepted_output_modes: ['text/plain'], history_length: 5 },
+        },
+      },
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
+      await request(app).post('/v1/message:send').send(payload).expect(201);
 
-      const protoMessage = ProtoMessage.toJSON(payload.request as Message);
+      const protoMessage = ProtoMessage.toJSON(testMessage);
       await request(app)
         .post('/v1/message:send')
         .send({ request: protoMessage, configuration: payload.configuration })

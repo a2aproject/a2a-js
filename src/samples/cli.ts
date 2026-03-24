@@ -77,7 +77,13 @@ export class ADCHandler implements AuthenticationHandler {
 // --- State ---
 let currentTaskId: string | undefined = undefined; // Initialize as undefined
 let currentContextId: string | undefined = undefined; // Initialize as undefined
-const serverUrl = process.argv[2] || 'http://localhost:41241'; // Agent's base URL
+
+const preferredTransport = process.argv
+  .find((arg) => arg.startsWith('--transport='))
+  ?.split('=')[1];
+const serverUrlArg = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
+const serverUrl = serverUrlArg || 'http://localhost:41241'; // Agent's base URL
+
 let fetchImpl: typeof fetch = fetch;
 let agentCardPath = AGENT_CARD_PATH;
 if (process.argv.includes('--agent-engine')) {
@@ -92,6 +98,7 @@ const factory = new ClientFactory(
       new RestTransportFactory({ fetchImpl }),
       new GrpcTransportFactory(),
     ],
+    preferredTransports: preferredTransport ? [preferredTransport] : undefined,
   })
 );
 const client = await factory.createFromUrl(serverUrl, agentCardPath);
