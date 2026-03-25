@@ -1,4 +1,11 @@
-import { TaskStatusUpdateEvent } from '../../index.js';
+import { TaskStatusUpdateEvent, TaskState } from '../../index.js';
+
+const terminalStates: TaskState[] = [
+  TaskState.TASK_STATE_COMPLETED,
+  TaskState.TASK_STATE_FAILED,
+  TaskState.TASK_STATE_CANCELED,
+  TaskState.TASK_STATE_REJECTED,
+];
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
 
 /**
@@ -41,7 +48,9 @@ export class ExecutionEventQueue {
         yield event;
         if (
           'messageId' in event ||
-          ('status' in event && 'taskId' in event && (event as TaskStatusUpdateEvent).final)
+          ('status' in event &&
+            'taskId' in event &&
+            terminalStates.includes((event as TaskStatusUpdateEvent).status!.state))
         ) {
           this.handleFinished();
           break;

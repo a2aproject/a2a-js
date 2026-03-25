@@ -13,7 +13,7 @@ import {
   Part, // Added for explicit Part typing
   AGENT_CARD_PATH,
 } from '../index.js';
-import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/pb/a2a_types.js';
+import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/pb/a2a.js';
 
 import {
   AuthenticationHandler,
@@ -137,7 +137,7 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
         stateEmoji = '✅';
         stateColor = 'green';
         break;
-      case TaskState.TASK_STATE_CANCELLED:
+      case TaskState.TASK_STATE_CANCELED:
         stateEmoji = '⏹️';
         stateColor = 'gray';
         break;
@@ -152,11 +152,11 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     }
 
     console.log(
-      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId}) ${update.final ? colorize('bright', '[FINAL]') : ''}`
+      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId})`
     );
 
-    if (update.status?.update) {
-      printMessageContent(update.status.update);
+    if (update.status?.message) {
+      printMessageContent(update.status.message);
     }
   }
   // Check if it's a TaskArtifactUpdateEvent
@@ -169,13 +169,14 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     );
     // Create a temporary message-like structure to reuse printMessageContent
     printMessageContent({
-      messageId: generateId(), // Dummy messageId
-      role: Role.ROLE_AGENT, // Assuming artifact parts are from agent
-      content: update.artifact?.parts || [],
+      messageId: generateId(),
+      role: Role.ROLE_AGENT,
+      parts: update.artifact?.parts || [],
       taskId: update.taskId,
       contextId: update.contextId,
       extensions: [],
       metadata: {},
+      referenceTaskIds: [],
     });
   } else {
     // This case should ideally not be reached if called correctly
@@ -188,9 +189,9 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
 }
 
 function printMessageContent(message: Message) {
-  message.content.forEach((part: Part, index: number) => {
+  message.parts.forEach((part: Part, index: number) => {
     const partPrefix = colorize('red', `  Part ${index + 1}:`);
-    const p = part.part;
+    const p = part.content;
 
     if (!p) {
       return;
@@ -200,23 +201,20 @@ function printMessageContent(message: Message) {
       case 'text':
         console.log(`${partPrefix} ${colorize('green', '📝 Text:')}`, p.value);
         break;
-      case 'file': {
-        const filePart = p.value;
-        let source = 'unknown';
-        if (filePart.file?.$case === 'fileWithUri') {
-          source = filePart.file.value;
-        } else if (filePart.file?.$case === 'fileWithBytes') {
-          source = 'Inline (bytes)';
-        }
+      case 'url':
         console.log(
-          `${partPrefix} ${colorize('blue', '📄 File:')} Type: ${filePart.mimeType || 'N/A'}, Source: ${source}`
+          `${partPrefix} ${colorize('blue', '📄 URL:')} ${p.value} (Type: ${part.mediaType || 'N/A'})`
         );
         break;
-      }
+      case 'raw':
+        console.log(
+          `${partPrefix} ${colorize('blue', '📄 Raw Bytes:')} (size: ${p.value.length}, Type: ${part.mediaType || 'N/A'})`
+        );
+        break;
       case 'data':
         console.log(
           `${partPrefix} ${colorize('yellow', '📊 Data:')}`,
-          JSON.stringify(p.value.data, null, 2)
+          JSON.stringify(p.value, null, 2)
         );
         break;
       default:
@@ -251,10 +249,9 @@ async function fetchAndDisplayAgentCard() {
     }
 
     const supportedTransports = new Set<string>();
-    supportedTransports.add(card.preferredTransport || 'JSONRPC');
-    if (card.additionalInterfaces) {
-      for (const iface of card.additionalInterfaces) {
-        supportedTransports.add(iface.transport);
+    if (card.supportedInterfaces) {
+      for (const iface of card.supportedInterfaces) {
+        supportedTransports.add(iface.protocolBinding);
       }
     }
     console.log(`  Supported Transports: ${Array.from(supportedTransports).join(', ')}`);
@@ -323,18 +320,22 @@ async function main() {
     const messagePayload: Message = {
       messageId: messageId,
       role: Role.ROLE_USER,
-      content: [
+      parts: [
         {
-          part: {
+          content: {
             $case: 'text',
             value: input,
           },
+          metadata: undefined,
+          filename: '',
+          mediaType: 'text/plain',
         },
       ],
       taskId: '',
       contextId: '',
       extensions: [],
       metadata: {},
+      referenceTaskIds: [],
     };
 
     // Conditionally add taskId to the message payload
@@ -347,7 +348,8 @@ async function main() {
     }
 
     const params: SendMessageRequest = {
-      request: messagePayload,
+      tenant: '',
+      message: messagePayload,
       configuration: undefined,
       metadata: {},
       // Optional: configuration for streaming, blocking, etc.
@@ -378,8 +380,10 @@ async function main() {
             printAgentEvent(typedEvent);
 
             if (
-              typedEvent.final &&
-              typedEvent.status?.state !== TaskState.TASK_STATE_INPUT_REQUIRED
+              typedEvent.status?.state === TaskState.TASK_STATE_COMPLETED ||
+              typedEvent.status?.state === TaskState.TASK_STATE_FAILED ||
+              typedEvent.status?.state === TaskState.TASK_STATE_CANCELED ||
+              typedEvent.status?.state === TaskState.TASK_STATE_REJECTED
             ) {
               console.log(
                 colorize(
@@ -437,9 +441,9 @@ async function main() {
               );
               currentContextId = task.contextId;
             }
-            if (task.status?.update) {
+            if (task.status?.message) {
               console.log(colorize('gray', '   Task includes message:'));
-              printMessageContent(task.status.update);
+              printMessageContent(task.status.message);
             }
             if (task.artifacts && task.artifacts.length > 0) {
               console.log(

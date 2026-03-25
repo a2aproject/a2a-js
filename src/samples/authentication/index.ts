@@ -16,17 +16,24 @@ import { authenticationHandler } from './authentication_middleware.js';
 const authenticationAgentCard: AgentCard = {
   name: 'Sample Authentication Agent',
   description: 'A sample agent to test the authentication functionality',
-  url: 'http://localhost:41241/',
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: '0.3.0',
+    },
+  ],
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples',
   },
   version: '1.0.0',
-  protocolVersion: '0.3.0',
   capabilities: {
     streaming: false,
     pushNotifications: false,
     extensions: [],
+    extendedAgentCard: false,
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'],
@@ -39,11 +46,10 @@ const authenticationAgentCard: AgentCard = {
       examples: ['hello, who am i?'],
       inputModes: ['text'],
       outputModes: ['text', 'task-status'],
-      security: [],
+      securityRequirements: [],
     },
   ],
-  supportsAuthenticatedExtendedCard: false,
-  security: [{ schemes: { Bearer: { list: [] } } }],
+  securityRequirements: [{ schemes: { Bearer: { list: [] } } }],
   securitySchemes: {
     Bearer: {
       scheme: {
@@ -58,8 +64,6 @@ const authenticationAgentCard: AgentCard = {
   },
   documentationUrl: 'https://example.com/docs',
   signatures: [],
-  preferredTransport: 'json-rpc',
-  additionalInterfaces: [],
 };
 
 async function main() {

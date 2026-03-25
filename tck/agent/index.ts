@@ -38,11 +38,10 @@ class SUTAgentExecutor implements AgentExecutor {
     const cancelledUpdate: TaskStatusUpdateEvent = {
       taskId: taskId,
       contextId: this.lastContextId ?? uuidv4(),
-      final: true,
       status: {
-        state: TaskState.TASK_STATE_CANCELLED,
+        state: TaskState.TASK_STATE_CANCELED,
         timestamp: new Date().toISOString(),
-        update: undefined,
+        message: undefined,
       },
       metadata: {},
     };
@@ -72,7 +71,7 @@ class SUTAgentExecutor implements AgentExecutor {
         status: {
           state: TaskState.TASK_STATE_SUBMITTED,
           timestamp: new Date().toISOString(),
-          update: undefined,
+          message: undefined,
         },
         artifacts: [],
         history: [userMessage], // Start history with the current user message
@@ -85,17 +84,24 @@ class SUTAgentExecutor implements AgentExecutor {
     const workingStatusUpdate: TaskStatusUpdateEvent = {
       taskId: taskId,
       contextId: contextId,
-      final: false,
       status: {
         state: TaskState.TASK_STATE_WORKING,
-        update: {
+        message: {
           role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          content: [{ part: { $case: 'text', value: 'Processing your question' } }],
+          parts: [
+            {
+              content: { $case: 'text', value: 'Processing your question' },
+              metadata: undefined,
+              filename: '',
+              mediaType: 'text/plain',
+            },
+          ],
           taskId: taskId,
           contextId: contextId,
           extensions: [],
           metadata: {},
+          referenceTaskIds: [],
         },
         timestamp: new Date().toISOString(),
       },
@@ -117,20 +123,27 @@ class SUTAgentExecutor implements AgentExecutor {
     const agentMessage: Message = {
       role: Role.ROLE_AGENT,
       messageId: uuidv4(),
-      content: [{ part: { $case: 'text', value: agentReplyText } }],
+      parts: [
+        {
+          content: { $case: 'text', value: agentReplyText },
+          metadata: undefined,
+          filename: '',
+          mediaType: 'text/plain',
+        },
+      ],
       taskId: taskId,
       contextId: contextId,
       extensions: [],
       metadata: {},
+      referenceTaskIds: [],
     };
 
     const finalUpdate: TaskStatusUpdateEvent = {
       taskId: taskId,
       contextId: contextId,
-      final: true,
       status: {
         state: TaskState.TASK_STATE_INPUT_REQUIRED,
-        update: agentMessage,
+        message: agentMessage,
         timestamp: new Date().toISOString(),
       },
       metadata: {},
@@ -140,8 +153,8 @@ class SUTAgentExecutor implements AgentExecutor {
 
   parseInputMessage(message: Message): string {
     /** Process the user query and return a response. */
-    const textPart = message.content.find((part) => part.part?.$case === 'text');
-    const query = textPart?.part?.$case === 'text' ? textPart.part.value.trim() : '';
+    const textPart = message.parts.find((part) => part.content?.$case === 'text');
+    const query = textPart?.content?.$case === 'text' ? textPart.content.value.trim() : '';
 
     if (!query) {
       return 'Hello! Please provide a message for me to respond to.';
@@ -164,22 +177,40 @@ class SUTAgentExecutor implements AgentExecutor {
 const SUTAgentCard: AgentCard = {
   name: 'SUT Agent',
   description: 'A sample agent to be used as SUT against tck tests.',
-  // Main URL points to JSON-RPC endpoint (preferred transport)
-  url: 'http://localhost:41241/a2a/jsonrpc',
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/a2a/jsonrpc',
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: '0.3.0',
+    },
+    {
+      url: 'http://localhost:41241/a2a/rest',
+      protocolBinding: 'REST',
+      tenant: '',
+      protocolVersion: '0.3.0',
+    },
+    {
+      url: 'http://localhost:41242',
+      protocolBinding: 'GRPC',
+      tenant: '',
+      protocolVersion: '0.3.0',
+    },
+  ],
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples', // Added provider URL
+    url: 'https://example.com/a2a-samples',
   },
   documentationUrl: 'https://example.com/docs',
   securitySchemes: {},
   signatures: [],
-  security: [],
-  version: '1.0.0', // Incremented version
-  protocolVersion: '0.3.0',
+  securityRequirements: [],
+  version: '1.0.0',
   capabilities: {
-    streaming: true, // The new framework supports streaming
-    pushNotifications: false, // Assuming not implemented for this agent yet
+    streaming: true,
+    pushNotifications: false,
     extensions: [],
+    extendedAgentCard: false,
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
@@ -192,16 +223,8 @@ const SUTAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
-      security: [],
+      securityRequirements: [],
     },
-  ],
-  supportsAuthenticatedExtendedCard: false,
-  preferredTransport: 'JSONRPC',
-  // All supported transports (including preferred)
-  additionalInterfaces: [
-    { url: 'http://localhost:41241/a2a/jsonrpc', transport: 'JSONRPC' },
-    { url: 'http://localhost:41241/a2a/rest', transport: 'HTTP+JSON' },
-    { url: 'http://localhost:41242', transport: 'GRPC' },
   ],
 };
 

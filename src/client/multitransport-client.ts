@@ -2,22 +2,20 @@ import { PushNotificationNotSupportedError } from '../errors.js';
 import {
   TaskPushNotificationConfig,
   Task,
-  PushNotificationConfig,
   AgentCard,
   A2AStreamEventData,
   SendMessageResult,
 } from '../index.js';
 import {
   CancelTaskRequest,
-  CreateTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
-  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
   SendMessageConfiguration,
   SendMessageRequest,
-  TaskSubscriptionRequest,
-} from '../types/pb/a2a_types.js';
+  SubscribeToTaskRequest,
+} from '../types/pb/a2a.js';
 import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
@@ -45,7 +43,7 @@ export interface ClientConfig {
   /**
    * Specifies the default push notification configuration to apply for every Task.
    */
-  pushNotificationConfig?: PushNotificationConfig;
+  pushNotificationConfig?: TaskPushNotificationConfig;
 
   /**
    * Interceptors invoked for each request.
@@ -83,7 +81,7 @@ export class Client {
    * Otherwise it will return the current agent card value.
    */
   async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    if (this.agentCard.supportsAuthenticatedExtendedCard) {
+    if (this.agentCard.capabilities?.extendedAgentCard) {
       this.agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
@@ -169,25 +167,6 @@ export class Client {
   }
 
   /**
-   * Sets or updates the push notification configuration for a specified task.
-   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
-   */
-  setTaskPushNotificationConfig(
-    params: CreateTaskPushNotificationConfigRequest,
-    options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities?.pushNotifications) {
-      throw new PushNotificationNotSupportedError();
-    }
-
-    return this.executeWithInterceptors(
-      { method: 'setTaskPushNotificationConfig', value: params },
-      options,
-      this.transport.setTaskPushNotificationConfig.bind(this.transport)
-    );
-  }
-
-  /**
    * Retrieves the current push notification configuration for a specified task.
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
@@ -211,7 +190,7 @@ export class Client {
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
   listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigRequest,
+    params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
     if (!this.agentCard.capabilities?.pushNotifications) {
@@ -266,7 +245,7 @@ export class Client {
    * Allows a client to reconnect to an updates stream for an ongoing task after a previous connection was interrupted.
    */
   async *resubscribeTask(
-    params: TaskSubscriptionRequest,
+    params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const method = 'resubscribeTask';
@@ -325,12 +304,12 @@ export class Client {
       ([] as string[]);
     result.configuration.historyLength ??= 0;
 
-    if (!result.configuration.pushNotification && this.config?.pushNotificationConfig) {
-      if (params.request?.taskId !== undefined) {
-        result.configuration.pushNotification = this.config.pushNotificationConfig;
+    if (!result.configuration.taskPushNotificationConfig && this.config?.pushNotificationConfig) {
+      if (params.message?.taskId !== undefined) {
+        result.configuration.taskPushNotificationConfig = this.config.pushNotificationConfig;
       }
     }
-    result.configuration.blocking ??= blocking;
+    result.configuration.returnImmediately ??= !blocking;
     return result;
   }
 

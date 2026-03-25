@@ -97,16 +97,13 @@ export class ClientFactory {
    * Creates a new client from the provided agent card.
    */
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
-    const agentCardPreferred = agentCard.preferredTransport ?? JsonRpcTransportFactory.name;
-    const additionalInterfaces = agentCard.additionalInterfaces ?? [];
-    const urlsPerAgentTransports = new CaseInsensitiveMap<string>([
-      [agentCardPreferred, agentCard.url],
-      ...additionalInterfaces.map<[string, string]>((i) => [i.transport, i.url]),
-    ]);
+    const interfaces = agentCard.supportedInterfaces ?? [];
+    const urlsPerAgentTransports = new CaseInsensitiveMap<string>(
+      interfaces.map((i) => [i.protocolBinding, i.url])
+    );
     const transportsByPreference = [
       ...(this.options.preferredTransports ?? []),
-      agentCardPreferred,
-      ...additionalInterfaces.map((i) => i.transport),
+      ...interfaces.map((i) => i.protocolBinding),
     ];
     for (const transport of transportsByPreference) {
       const url = urlsPerAgentTransports.get(transport);

@@ -1,7 +1,6 @@
 import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { ClientFactory, ClientFactoryOptions } from '../../src/client/factory.js';
 import { Transport } from '../../src/client/transports/transport.js';
-import { JsonRpcTransportFactory } from '../../src/client/transports/json_rpc_transport.js';
 import { AgentCard } from '../../src/index.js';
 import { Client } from '../../src/client/multitransport-client.js';
 import { CallInterceptor } from '../../src/client/interceptors.js';
@@ -16,7 +15,6 @@ describe('ClientFactory', () => {
       getExtendedAgentCard: vi.fn(),
       sendMessage: vi.fn(),
       sendMessageStream: vi.fn(),
-      setTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfig: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
@@ -102,12 +100,17 @@ describe('ClientFactory', () => {
 
     beforeEach(() => {
       agentCard = {
-        protocolVersion: '0.3.0',
         name: 'Test Agent',
         description: 'Test',
-        url: 'http://transport1.com',
-        preferredTransport: 'Transport1',
         version: '1.0.0',
+        supportedInterfaces: [
+          {
+            url: 'http://transport1.com',
+            protocolBinding: 'Transport1',
+            tenant: '',
+            protocolVersion: '1.0.0',
+          },
+        ],
         capabilities: {
           extensions: [],
           streaming: true,
@@ -117,12 +120,10 @@ describe('ClientFactory', () => {
         defaultOutputModes: [],
         skills: [],
         documentationUrl: 'http://test-agent.com/docs',
-        security: [],
+        securityRequirements: [],
         securitySchemes: {},
         signatures: [],
         provider: { url: '', organization: '' },
-        additionalInterfaces: [],
-        supportsAuthenticatedExtendedCard: false,
       };
     });
 
@@ -139,7 +140,12 @@ describe('ClientFactory', () => {
     });
 
     it('should use factory preferred transport if available', async () => {
-      agentCard.additionalInterfaces = [{ transport: 'Transport2', url: 'http://transport2.com' }];
+      agentCard.supportedInterfaces.push({
+        url: 'http://transport2.com',
+        protocolBinding: 'Transport2',
+        tenant: '',
+        protocolVersion: '1.0.0',
+      });
       const factory = new ClientFactory({
         transports: [mockTransportFactory1, mockTransportFactory2],
         preferredTransports: ['Transport2'],
@@ -152,7 +158,14 @@ describe('ClientFactory', () => {
 
     it('should throw error if no compatible transport found', async () => {
       const factory = new ClientFactory({ transports: [mockTransportFactory1] });
-      agentCard.preferredTransport = 'Transport2'; // Not supported
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport2.com',
+          protocolBinding: 'Transport2',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
 
       try {
         await factory.createFromAgentCard(agentCard);
@@ -173,19 +186,6 @@ describe('ClientFactory', () => {
       expect(mockTransportFactory1.create).toHaveBeenCalledTimes(1);
     });
 
-    it('should default to JSONRPC transport if agentCard.preferredTransport is undefined', async () => {
-      agentCard.preferredTransport = undefined;
-      const jsonRpcFactory = {
-        protocolName: JsonRpcTransportFactory.name,
-        create: vi.fn().mockResolvedValue(mockTransport),
-      };
-      const factory = new ClientFactory({ transports: [jsonRpcFactory] });
-
-      await factory.createFromAgentCard(agentCard);
-
-      expect(jsonRpcFactory.create).toHaveBeenCalledTimes(1);
-    });
-
     it('should pass clientConfig to the created Client', async () => {
       const clientConfig = { polling: true };
       const factory = new ClientFactory({
@@ -200,7 +200,14 @@ describe('ClientFactory', () => {
 
     it('should match transport with case-insensitive protocol name', async () => {
       // Transport factory uses "Transport1" but agent card uses "transport1" (lowercase)
-      agentCard.preferredTransport = 'transport1';
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'transport1',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
       const factory = new ClientFactory({ transports: [mockTransportFactory1] });
 
       const client = await factory.createFromAgentCard(agentCard);
@@ -217,7 +224,14 @@ describe('ClientFactory', () => {
         protocolName: 'HTTP+JSON',
         create: vi.fn().mockResolvedValue(mockTransport),
       };
-      agentCard.preferredTransport = 'http+json'; // lowercase
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'http+json',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
       const factory = new ClientFactory({ transports: [httpJsonFactory] });
 
       await factory.createFromAgentCard(agentCard);
@@ -230,7 +244,14 @@ describe('ClientFactory', () => {
         protocolName: 'JSONRPC',
         create: vi.fn().mockResolvedValue(mockTransport),
       };
-      agentCard.preferredTransport = 'JsonRpc'; // mixed case
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'JsonRpc',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
       const factory = new ClientFactory({ transports: [jsonRpcFactory] });
 
       await factory.createFromAgentCard(agentCard);

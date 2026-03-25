@@ -17,13 +17,19 @@ const extensionAgentCard: AgentCard = {
   name: 'Sample Agent with timestamp extensions',
   description:
     'A sample agent to test the stream functionality and simulate the flow of tasks statuses, with extensions integration.',
-  url: 'http://localhost:41241/',
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: '0.3.0',
+    },
+  ],
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples', // Added provider URL
+    url: 'https://example.com/a2a-samples',
   },
-  version: '1.0.0', // Incremented version
-  protocolVersion: '0.3.0',
+  version: '1.0.0',
   capabilities: {
     extensions: [
       {
@@ -33,8 +39,9 @@ const extensionAgentCard: AgentCard = {
         params: {},
       },
     ],
-    streaming: true, // The new framework supports streaming
-    pushNotifications: false, // Assuming not implemented for this agent yet
+    streaming: true,
+    pushNotifications: false,
+    extendedAgentCard: false,
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
@@ -47,16 +54,13 @@ const extensionAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
-      security: [],
+      securityRequirements: [],
     },
   ],
-  supportsAuthenticatedExtendedCard: false,
   documentationUrl: 'https://example.com/docs',
-  security: [],
+  securityRequirements: [],
   securitySchemes: {},
   signatures: [],
-  preferredTransport: 'json-rpc',
-  additionalInterfaces: [],
 };
 
 async function main() {

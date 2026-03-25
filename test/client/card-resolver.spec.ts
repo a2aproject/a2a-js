@@ -6,12 +6,17 @@ describe('DefaultAgentCardResolver', () => {
   let mockFetch: Mock;
 
   const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'JSONRPC',
     version: '1.0.0',
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080',
+        protocolBinding: 'JSONRPC',
+        tenant: '',
+        protocolVersion: '1.0.0',
+      },
+    ],
     capabilities: {
       streaming: true,
       pushNotifications: true,
@@ -21,12 +26,10 @@ describe('DefaultAgentCardResolver', () => {
     defaultOutputModes: ['text/plain'],
     skills: [],
     documentationUrl: 'http://test-agent.com/docs',
-    security: [],
+    securityRequirements: [],
     securitySchemes: {},
     signatures: [],
     provider: { url: '', organization: '' },
-    additionalInterfaces: [],
-    supportsAuthenticatedExtendedCard: false,
   };
 
   beforeEach(() => {

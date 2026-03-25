@@ -4,7 +4,7 @@
 
 import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
-import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a_types.js';
+import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/index.js';
 
 /**
@@ -115,8 +115,6 @@ export function createMockAgentCard(
   options: {
     name?: string;
     description?: string;
-    url?: string;
-    protocolVersion?: string;
     version?: string;
     defaultInputModes?: string[];
     defaultOutputModes?: string[];
@@ -125,16 +123,26 @@ export function createMockAgentCard(
       pushNotifications?: boolean;
     };
     skills?: any[];
+    supportedInterfaces?: {
+      url: string;
+      protocolBinding: string;
+      tenant: string;
+      protocolVersion: string;
+    }[];
   } = {}
 ): any {
   return {
     name: options.name ?? 'Test Agent',
     description: options.description ?? 'A test agent for testing',
-    protocolVersion: options.protocolVersion ?? '1.0.0',
     version: options.version ?? '1.0.0',
-    url: options.url ?? 'https://test-agent.example.com/api',
-    defaultInputModes: options.defaultInputModes ?? ['text'],
-    defaultOutputModes: options.defaultOutputModes ?? ['text'],
+    supportedInterfaces: options.supportedInterfaces ?? [
+      {
+        url: 'https://test-agent.example.com/api',
+        protocolBinding: 'JSONRPC',
+        tenant: '',
+        protocolVersion: '1.0.0',
+      },
+    ],
     capabilities: {
       streaming: options.capabilities?.streaming ?? true,
       pushNotifications: options.capabilities?.pushNotifications ?? true,
@@ -142,6 +150,10 @@ export function createMockAgentCard(
       ...options.capabilities,
     },
     skills: options.skills ?? [],
+    securityRequirements: [],
+    signatures: [],
+    provider: { url: '', organization: '' },
+    securitySchemes: {},
   };
 }
 
@@ -171,12 +183,15 @@ export function createMessageParams(
     request: {
       messageId: messageId,
       role: role === 'user' ? Role.ROLE_USER : Role.ROLE_AGENT,
-      content: [
+      parts: [
         {
-          part: {
+          content: {
             $case: 'text',
             value: text,
           },
+          filename: '',
+          mediaType: 'text/plain',
+          metadata: {},
         },
       ],
       contextId: 'context-123',
@@ -202,22 +217,26 @@ export function createMockProtoMessage(
 
   const obj: SendMessageResponse = {
     payload: {
-      $case: 'msg',
+      $case: 'message',
       value: {
         messageId: messageId,
         contextId: 'context-123',
         taskId: 'task-123',
         role: role,
-        content: [
+        parts: [
           {
-            part: {
+            content: {
               $case: 'text',
               value: text,
             },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: {},
           },
         ],
         metadata: {},
         extensions: [],
+        referenceTaskIds: [],
       },
     },
   };
@@ -252,16 +271,20 @@ export function createMockMessage(
     contextId: 'context-123',
     taskId: 'task-123',
     role: role,
-    content: [
+    parts: [
       {
-        part: {
+        content: {
           $case: 'text',
           value: text,
         },
+        filename: '',
+        mediaType: 'text/plain',
+        metadata: {},
       },
     ],
     metadata: {},
     extensions: [],
+    referenceTaskIds: [],
   };
 }
 
@@ -479,7 +502,7 @@ export function createMockTask(
     status: {
       state: status,
       timestamp: '2023-01-01T00:00:00.000Z',
-      update: undefined,
+      message: undefined,
     },
     artifacts: [],
     history: [],
@@ -504,7 +527,7 @@ export function createMockProtoTask(
     status: {
       state: status,
       timestamp: '2023-01-01T00:00:00.000Z',
-      update: undefined,
+      message: undefined,
     },
     artifacts: [],
     history: [],
