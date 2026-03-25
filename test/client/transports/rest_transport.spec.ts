@@ -240,13 +240,10 @@ describe('RestTransport', () => {
       authentication: undefined,
       token: 'secret-token',
     };
-    const mockProtoConfig = ToProto.taskPushNotificationConfig(mockConfig);
 
     describe('getTaskPushNotificationConfig', () => {
       it('should get push notification config successfully', async () => {
-        mockFetch.mockResolvedValue(
-          createRestResponse(ToProto.taskPushNotificationConfig(mockProtoConfig))
-        );
+        mockFetch.mockResolvedValue(createRestResponse(mockConfig));
 
         const result = await transport.getTaskPushNotificationConfig({
           id: configId,

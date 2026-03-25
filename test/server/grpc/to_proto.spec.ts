@@ -72,17 +72,4 @@ describe('ToProto', () => {
       expect(result.payload?.$case).toBe('artifactUpdate');
     });
   });
-
-  it('should convert TaskPushNotificationConfig', () => {
-    const config: proto.TaskPushNotificationConfig = {
-      tenant: '',
-      taskId: 'task-123',
-      id: 'pnc-456',
-      url: 'https://example.com/notify',
-      token: '',
-      authentication: undefined,
-    };
-    const result = ToProto.taskPushNotificationConfig(config);
-    expect(result).toEqual(config);
-  });
 });

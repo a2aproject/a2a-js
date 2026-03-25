@@ -415,12 +415,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const params = TaskPushNotificationConfig.fromJSON(req.body);
       const result = await restTransportHandler.setTaskPushNotificationConfig(params, context);
-      const protoResult = ToProto.taskPushNotificationConfig(result);
       sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.CREATED,
         context,
-        protoResult,
+        result,
         TaskPushNotificationConfig
       );
     })
@@ -473,12 +472,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.params.configId,
         context
       );
-      const protoResult = ToProto.taskPushNotificationConfig(result);
       sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.OK,
         context,
-        protoResult,
+        result,
         TaskPushNotificationConfig
       );
     })

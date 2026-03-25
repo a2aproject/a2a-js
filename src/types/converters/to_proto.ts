@@ -20,12 +20,6 @@ export class ToProto {
     };
   }
 
-  static taskPushNotificationConfig(
-    config: TaskPushNotificationConfig
-  ): TaskPushNotificationConfig {
-    return config;
-  }
-
   static messageStreamResult(
     event: Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
   ): StreamResponse {
