@@ -11,7 +11,7 @@ The SDK implements the **A2A Protocol Specification v0.3.0**.
 
 ## Tech Stack
 
-*   **Language**: TypeScript (Node.js >= 18)
+*   **Language**: TypeScript (Node.js >= 20)
 *   **Build System**: `tsup` (Outputs ESM and CJS)
 *   **Testing Framework**: `vitest`
 *   **Linting/Formatting**: `eslint`, `prettier`
