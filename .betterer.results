@@ -5,7 +5,7 @@
 //
 exports[`TypeScript Strict Mode`] = {
   value: `{
-    "src/client/multitransport-client.ts:3063025612": [
+    "src/client/multitransport-client.ts:3984472353": [
       [87, 24, 44, "tsc: Type \'Promise<AgentCard>\' is not assignable to type \'Promise<never>\'.\\n  Type \'AgentCard\' is not assignable to type \'never\'.", "1356744557"],
       [106, 6, 47, "tsc: Argument of type \'(params: SendMessageRequest, options?: RequestOptions | undefined) => Promise<SendMessageResult>\' is not assignable to parameter of type \'(params: SendMessageRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<SendMessageResult>\' is not assignable to type \'Promise<never>\'.\\n    Type \'SendMessageResult\' is not assignable to type \'never\'.\\n      Type \'Task\' is not assignable to type \'never\'.", "2571452626"],
       [183, 6, 65, "tsc: Argument of type \'(params: GetTaskPushNotificationConfigRequest, options?: RequestOptions | undefined) => Promise<TaskPushNotificationConfig>\' is not assignable to parameter of type \'(params: GetTaskPushNotificationConfigRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<TaskPushNotificationConfig>\' is not assignable to type \'Promise<never>\'.\\n    Type \'TaskPushNotificationConfig\' is not assignable to type \'never\'.", "1581152103"],

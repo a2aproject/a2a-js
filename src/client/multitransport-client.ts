@@ -98,7 +98,7 @@ export class Client {
   sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
-      blocking: !(this.config?.polling ?? false),
+      returnImmediately: this.config?.polling ?? false,
     });
 
     return this.executeWithInterceptors(
@@ -118,7 +118,7 @@ export class Client {
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const method = 'sendMessageStream';
 
-    params = this.applyClientConfig({ params, blocking: true });
+    params = this.applyClientConfig({ params, returnImmediately: false });
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
@@ -288,10 +288,10 @@ export class Client {
 
   private applyClientConfig({
     params,
-    blocking,
+    returnImmediately,
   }: {
     params: SendMessageRequest;
-    blocking: boolean;
+    returnImmediately: boolean;
   }): SendMessageRequest {
     const result = {
       ...params,
@@ -309,7 +309,7 @@ export class Client {
         result.configuration.taskPushNotificationConfig = this.config.pushNotificationConfig;
       }
     }
-    result.configuration.returnImmediately ??= !blocking;
+    result.configuration.returnImmediately ??= returnImmediately;
     return result;
   }
 

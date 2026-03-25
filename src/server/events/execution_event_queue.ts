@@ -1,4 +1,5 @@
 import { TaskStatusUpdateEvent, TaskState } from '../../index.js';
+import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
 
 const terminalStates: TaskState[] = [
   TaskState.TASK_STATE_COMPLETED,
@@ -6,7 +7,6 @@ const terminalStates: TaskState[] = [
   TaskState.TASK_STATE_CANCELED,
   TaskState.TASK_STATE_REJECTED,
 ];
-import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
 
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
