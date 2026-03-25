@@ -1,20 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
 import * as proto from '../../../src/types/pb/a2a.js';
-import * as idDecoding from '../../../src/types/converters/id_decoding.js';
-
-vi.mock('../../../src/types/converters/id_decoding.js', () => ({
-  generatePushNotificationConfigName: vi.fn(),
-  generateTaskName: vi.fn((id) => `tasks/${id}`),
-}));
 
 describe('ToProto', () => {
-  beforeEach(() => {
-    vi.mocked(idDecoding.generatePushNotificationConfigName).mockReturnValue(
-      'tasks/task-123/pushNotificationConfigs/pnc-456'
-    );
-  });
-
   describe('messageSendResult', () => {
     it('should wrap Message in SendMessageResponse', () => {
       const message: proto.Message = {

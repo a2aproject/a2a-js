@@ -1,12 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import * as proto from '../../../src/types/pb/a2a.js';
 import { GenericError } from '../../../src/errors.js';
-
-vi.mock('../../../src/types/converters/id_decoding.js', () => ({
-  extractTaskId: vi.fn((name) => name.replace('tasks/', '')),
-  extractTaskAndPushNotificationConfigId: vi.fn(),
-}));
 
 describe('FromProto', () => {
   describe('sendMessageResult', () => {
