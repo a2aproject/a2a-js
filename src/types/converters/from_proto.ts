@@ -1,16 +1,14 @@
-import { RequestMalformedError, GenericError } from '../../errors.js';
+import { GenericError } from '../../errors.js';
 import {
-  CreateTaskPushNotificationConfigRequest,
   Message,
   SendMessageResponse,
   Task,
   TaskPushNotificationConfig,
-  ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigsResponse,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   StreamResponse,
-} from '../pb/a2a_types.js';
-import { extractTaskId } from './id_decoding.js';
+} from '../pb/a2a.js';
 
 /**
  * Converts proto types to internal types.
@@ -19,30 +17,22 @@ import { extractTaskId } from './id_decoding.js';
  */
 export class FromProto {
   static createTaskPushNotificationConfig(
-    request: CreateTaskPushNotificationConfigRequest
+    request: TaskPushNotificationConfig
   ): TaskPushNotificationConfig {
-    if (!request.config || !request.config.pushNotificationConfig) {
-      throw new RequestMalformedError(
-        'Request must include a `config` with `pushNotificationConfig`'
-      );
-    }
-    return {
-      name: `tasks/${extractTaskId(request.parent)}/pushNotificationConfigs/${request.config.pushNotificationConfig.id}`,
-      pushNotificationConfig: request.config.pushNotificationConfig,
-    };
+    return request;
   }
 
   static sendMessageResult(response: SendMessageResponse): Task | Message {
     if (response.payload?.$case === 'task') {
       return response.payload.value;
-    } else if (response.payload?.$case === 'msg') {
+    } else if (response.payload?.$case === 'message') {
       return response.payload.value;
     }
     throw new GenericError('Invalid SendMessageResponse: missing result');
   }
 
   static listTaskPushNotificationConfig(
-    request: ListTaskPushNotificationConfigResponse
+    request: ListTaskPushNotificationConfigsResponse
   ): TaskPushNotificationConfig[] {
     return request.configs;
   }

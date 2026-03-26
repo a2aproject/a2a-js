@@ -4,7 +4,7 @@
 
 import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
-import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a_types.js';
+import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/index.js';
 
 /**
@@ -202,7 +202,7 @@ export function createMockProtoMessage(
 
   const obj: SendMessageResponse = {
     payload: {
-      $case: 'msg',
+      $case: 'message',
       value: {
         messageId: messageId,
         contextId: 'context-123',
@@ -402,7 +402,7 @@ export function createMockFetch(
         requestBody.method === 'message/send'
           ? {
               payload: {
-                $case: 'msg',
+                $case: 'message',
                 value: mockMessage,
               },
             }

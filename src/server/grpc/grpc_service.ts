@@ -3,20 +3,19 @@ import {
   A2AServiceServer,
   AgentCard,
   CancelTaskRequest,
-  CreateTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
-  GetAgentCardRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
-  ListTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse,
   SendMessageRequest,
   SendMessageResponse,
   StreamResponse,
   Task,
   TaskPushNotificationConfig,
-  TaskSubscriptionRequest,
-} from '../../grpc/pb/a2a_services.js';
+  SubscribeToTaskRequest,
+} from '../../grpc/pb/a2a.js';
 import { Empty } from '../../grpc/pb/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { FromProto } from '../../types/converters/from_proto.js';
@@ -135,8 +134,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
 
-    taskSubscription(
-      call: grpc.ServerWritableStream<TaskSubscriptionRequest, StreamResponse>
+    subscribeToTask(
+      call: grpc.ServerWritableStream<SubscribeToTaskRequest, StreamResponse>
     ): Promise<void> {
       return wrapStreaming(
         call,
@@ -159,12 +158,12 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
 
-    listTaskPushNotificationConfig(
+    listTaskPushNotificationConfigs(
       call: grpc.ServerUnaryCall<
-        ListTaskPushNotificationConfigRequest,
-        ListTaskPushNotificationConfigResponse
+        ListTaskPushNotificationConfigsRequest,
+        ListTaskPushNotificationConfigsResponse
       >,
-      callback: grpc.sendUnaryData<ListTaskPushNotificationConfigResponse>
+      callback: grpc.sendUnaryData<ListTaskPushNotificationConfigsResponse>
     ): Promise<void> {
       return wrapUnary(
         call,
@@ -177,7 +176,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
 
     createTaskPushNotificationConfig(
       call: grpc.ServerUnaryCall<
-        CreateTaskPushNotificationConfigRequest,
+        TaskPushNotificationConfig,
         TaskPushNotificationConfig
       >,
       callback: grpc.sendUnaryData<TaskPushNotificationConfig>
@@ -217,6 +216,15 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
 
+    listTasks(
+      call: grpc.ServerUnaryCall<unknown, unknown>,
+      callback: grpc.sendUnaryData<unknown>
+    ): Promise<void> {
+      // Not implemented in the previous version, skipping or implementing as unimplemented
+      callback({ code: grpc.status.UNIMPLEMENTED, details: 'Not implemented' }, null);
+      return Promise.resolve();
+    },
+
     cancelTask(
       call: grpc.ServerUnaryCall<CancelTaskRequest, Task>,
       callback: grpc.sendUnaryData<Task>
@@ -230,8 +238,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
 
-    getAgentCard(
-      call: grpc.ServerUnaryCall<GetAgentCardRequest, AgentCard>,
+    getExtendedAgentCard(
+      call: grpc.ServerUnaryCall<GetExtendedAgentCardRequest, AgentCard>,
       callback: grpc.sendUnaryData<AgentCard>
     ): Promise<void> {
       return wrapUnary(

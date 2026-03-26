@@ -74,7 +74,7 @@ export class SampleAgentExecutor implements AgentExecutor {
 
     const artifactId = uuidv4();
     const resultArtifact: Artifact = {
-      artifactId: artifactId,
+      id: artifactId,
       name: 'Result',
       description: 'The final result from the agent.',
       parts: [{ part: { $case: 'text', value: agentReplyText } }],

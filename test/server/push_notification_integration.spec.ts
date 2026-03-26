@@ -11,13 +11,14 @@ import { DefaultExecutionEventBusManager } from '../../src/server/events/executi
 import {
   AgentCard,
   Message,
-  PushNotificationConfig,
+  TaskPushNotificationConfig,
   Task,
   Role,
   TaskState,
   TaskStatus,
-} from '../../src/types/pb/a2a_types.js';
-import { SendMessageRequest } from '../../src/index.js';
+  SendMessageRequest,
+  SendMessageConfiguration,
+} from '../../src/types/pb/a2a.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
@@ -168,16 +169,19 @@ describe('Push Notification Integration Tests', () => {
 
   describe('End-to-End Push Notification Flow', () => {
     it('should send push notifications for task status updates', async () => {
-      const pushConfig: PushNotificationConfig = {
+      const pushConfig: TaskPushNotificationConfig = {
+        taskId: '', // Placeholder, will be updated by handler logic if needed or needs to match
         id: 'test-push-config',
         url: `${testServerUrl}/notify/delay_on_submitted`,
         token: 'test-auth-token',
         authentication: undefined,
+        tenant: '',
       };
 
       const contextId = 'test-push-context';
       const params: SendMessageRequest = {
-        request: {
+        tenant: '',
+        message: {
           ...createTestMessage('Test task with push notifications'),
           contextId: contextId,
           extensions: [],
@@ -185,9 +189,9 @@ describe('Push Notification Integration Tests', () => {
         },
         metadata: {},
         configuration: {
-          pushNotification: pushConfig,
+          taskPushNotificationConfig: pushConfig,
           historyLength: 0,
-          blocking: true,
+          returnImmediately: false, // blocking: true
           acceptedOutputModes: [],
         },
       };
@@ -209,7 +213,7 @@ describe('Push Notification Integration Tests', () => {
       const expectedTaskResult: Task = {
         id: taskId,
         contextId,
-        history: [params.request as Message],
+        history: [params.message as Message],
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           update: undefined,
@@ -257,22 +261,27 @@ describe('Push Notification Integration Tests', () => {
     });
 
     it('should handle multiple push notification endpoints for the same task', async () => {
-      const pushConfig1: PushNotificationConfig = {
+      const pushConfig1: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'config-1',
         url: `${testServerUrl}/notify`,
         token: 'token-1',
         authentication: undefined,
+        tenant: '',
       };
 
-      const pushConfig2: PushNotificationConfig = {
+      const pushConfig2: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'config-2',
         url: `${testServerUrl}/notify/second`,
         token: 'token-2',
         authentication: undefined,
+        tenant: '',
       };
 
       const params: SendMessageRequest = {
-        request: {
+        tenant: '',
+        message: {
           ...createTestMessage('Test task with multiple push endpoints', 'test-multi-endpoints'),
           contextId: 'test-context',
           extensions: [],
@@ -300,16 +309,24 @@ describe('Push Notification Integration Tests', () => {
       // Set multiple push notification configs for this message
       await handler.setTaskPushNotificationConfig(
         {
-          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig1.id}`,
-          pushNotificationConfig: pushConfig1,
+          taskId: task.id,
+          id: pushConfig1.id,
+          url: pushConfig1.url,
+          token: pushConfig1.token,
+          authentication: pushConfig1.authentication,
+          tenant: '',
         },
         new ServerCallContext()
       );
 
       await handler.setTaskPushNotificationConfig(
         {
-          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig2.id}`,
-          pushNotificationConfig: pushConfig2,
+          taskId: task.id,
+          id: pushConfig2.id,
+          url: pushConfig2.url,
+          token: pushConfig2.token,
+          authentication: pushConfig2.authentication,
+          tenant: '',
         },
         new ServerCallContext()
       );
@@ -379,16 +396,19 @@ describe('Push Notification Integration Tests', () => {
     });
 
     it('should complete task successfully even when push notification endpoint returns an error', async () => {
-      const pushConfig: PushNotificationConfig = {
+      const pushConfig: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'error-endpoint-config',
         url: `${testServerUrl}/notify/error`,
         token: 'test-auth-token',
         authentication: undefined,
+        tenant: '',
       };
 
       const contextId = 'test-error-context';
       const params: SendMessageRequest = {
-        request: {
+        tenant: '',
+        message: {
           ...createTestMessage('Test task with error endpoint'),
           contextId: contextId,
           extensions: [],
@@ -396,9 +416,9 @@ describe('Push Notification Integration Tests', () => {
         },
         metadata: {},
         configuration: {
-          pushNotification: pushConfig,
+          taskPushNotificationConfig: pushConfig,
           historyLength: 0,
-          blocking: true,
+          returnImmediately: false,
           acceptedOutputModes: [],
         },
       };
@@ -421,7 +441,7 @@ describe('Push Notification Integration Tests', () => {
       const expectedTaskResult: Task = {
         id: taskId,
         contextId,
-        history: [params.request as Message],
+        history: [params.message as Message],
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           update: undefined,
@@ -447,20 +467,23 @@ describe('Push Notification Integration Tests', () => {
 
   describe('Push Notification Header Configuration Tests', () => {
     it('should use default header name when tokenHeaderName is not specified', async () => {
-      const pushConfig: PushNotificationConfig = {
+      const pushConfig: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'default-header-test',
         url: `${testServerUrl}/notify`,
         token: 'default-token',
         authentication: undefined,
+        tenant: '',
       };
 
       const params: SendMessageRequest = {
-        request: createTestMessage('Test with default header name'),
+        tenant: '',
+        message: createTestMessage('Test with default header name'),
         metadata: {},
         configuration: {
-          pushNotification: pushConfig,
+          taskPushNotificationConfig: pushConfig,
           historyLength: 0,
-          blocking: true,
+          returnImmediately: false,
           acceptedOutputModes: [],
         },
       };
@@ -543,20 +566,23 @@ describe('Push Notification Integration Tests', () => {
         customPushNotificationSender
       );
 
-      const pushConfig: PushNotificationConfig = {
+      const pushConfig: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'custom-header-test',
         url: `${testServerUrl}/notify`,
         token: 'custom-token',
         authentication: undefined,
+        tenant: '',
       };
 
       const params: SendMessageRequest = {
-        request: createTestMessage('Test with custom header name'),
+        tenant: '',
+        message: createTestMessage('Test with custom header name'),
         metadata: {},
         configuration: {
-          pushNotification: pushConfig,
+          taskPushNotificationConfig: pushConfig,
           historyLength: 0,
-          blocking: true,
+          returnImmediately: false,
           acceptedOutputModes: [],
         },
       };
@@ -625,20 +651,23 @@ describe('Push Notification Integration Tests', () => {
     });
 
     it('should not send token header when token is not provided', async () => {
-      const pushConfig: PushNotificationConfig = {
+      const pushConfig: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'no-token-test',
         url: `${testServerUrl}/notify`,
         token: '', // Empty token
         authentication: undefined,
+        tenant: '',
       };
 
       const params: SendMessageRequest = {
-        request: createTestMessage('Test without token'),
+        tenant: '',
+        message: createTestMessage('Test without token'),
         metadata: {},
         configuration: {
-          pushNotification: pushConfig,
+          taskPushNotificationConfig: pushConfig,
           historyLength: 0,
-          blocking: true,
+          returnImmediately: false,
           acceptedOutputModes: [],
         },
       };
@@ -720,22 +749,27 @@ describe('Push Notification Integration Tests', () => {
         customPushNotificationSender
       );
 
-      const pushConfig1: PushNotificationConfig = {
+      const pushConfig1: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'config-with-token',
         url: `${testServerUrl}/notify`,
         token: 'token-1',
         authentication: undefined,
+        tenant: '',
       };
 
-      const pushConfig2: PushNotificationConfig = {
+      const pushConfig2: TaskPushNotificationConfig = {
+        taskId: '',
         id: 'config-without-token',
         url: `${testServerUrl}/notify/second`,
         token: '',
         authentication: undefined,
+        tenant: '',
       };
 
       const params: SendMessageRequest = {
-        request: {
+        tenant: '',
+        message: {
           ...createTestMessage('Test with multiple configs', 'multi-config-test'),
           contextId: 'test-context',
           extensions: [],
@@ -762,16 +796,24 @@ describe('Push Notification Integration Tests', () => {
 
       await customHandler.setTaskPushNotificationConfig(
         {
-          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig1.id}`,
-          pushNotificationConfig: pushConfig1,
+          taskId: task.id,
+          id: pushConfig1.id,
+          url: pushConfig1.url,
+          token: pushConfig1.token,
+          authentication: pushConfig1.authentication,
+          tenant: '',
         },
         new ServerCallContext()
       );
 
       await customHandler.setTaskPushNotificationConfig(
         {
-          name: `tasks/${task.id}/pushNotificationConfigs/${pushConfig2.id}`,
-          pushNotificationConfig: pushConfig2,
+          taskId: task.id,
+          id: pushConfig2.id,
+          url: pushConfig2.url,
+          token: pushConfig2.token,
+          authentication: pushConfig2.authentication,
+          tenant: '',
         },
         new ServerCallContext()
       );

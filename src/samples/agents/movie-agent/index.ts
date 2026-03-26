@@ -169,7 +169,7 @@ class MovieAgentExecutor implements AgentExecutor {
           taskId: taskId,
           contextId: contextId,
           status: {
-            state: TaskState.TASK_STATE_CANCELLED,
+            state: TaskState.TASK_STATE_CANCELED,
             timestamp: new Date().toISOString(),
             update: undefined,
           },
@@ -206,7 +206,7 @@ class MovieAgentExecutor implements AgentExecutor {
       const parts: Part[] = [{ part: { $case: 'text', value: agentReplyText || 'Completed.' } }];
       const artifactId = uuidv4();
       const resultArtifact: Artifact = {
-        artifactId: artifactId,
+        id: artifactId,
         name: 'Result',
         description: 'The result of the movie agent.',
         parts: parts,

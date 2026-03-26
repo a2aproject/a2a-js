@@ -35,15 +35,14 @@ import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
 import {
   CancelTaskRequest,
-  CreateTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
   MessageFns,
   SendMessageRequest,
-  TaskSubscriptionRequest,
+  SubscribeToTaskRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
-  ListTaskPushNotificationConfigRequest,
-} from '../../types/pb/a2a_types.js';
+  ListTaskPushNotificationConfigsRequest,
+} from '../../types/pb/a2a.js';
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
@@ -64,7 +63,7 @@ export class JsonRpcTransport implements Transport {
     const rpcResponse = await this._sendRpcRequest<
       undefined,
       GetAuthenticatedExtendedCardSuccessResponse
-    >('agent/getAuthenticatedExtendedCard', undefined, options, undefined);
+    >('agent/getExtendedCard', undefined, options, undefined);
     return rpcResponse.result;
   }
 
@@ -99,13 +98,13 @@ export class JsonRpcTransport implements Transport {
   }
 
   async setTaskPushNotificationConfig(
-    params: CreateTaskPushNotificationConfigRequest,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
-      CreateTaskPushNotificationConfigRequest,
+      TaskPushNotificationConfig,
       SetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/set', params, options, CreateTaskPushNotificationConfigRequest);
+    >('tasks/pushNotificationConfigs/create', params, options, TaskPushNotificationConfig);
     return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
 
@@ -116,18 +115,23 @@ export class JsonRpcTransport implements Transport {
     const rpcResponse = await this._sendRpcRequest<
       GetTaskPushNotificationConfigRequest,
       GetTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/get', params, options, GetTaskPushNotificationConfigRequest);
+    >('tasks/pushNotificationConfigs/get', params, options, GetTaskPushNotificationConfigRequest);
     return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
 
-  async listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigRequest,
+  async listTaskPushNotificationConfigs(
+    params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendRpcRequest<
-      ListTaskPushNotificationConfigRequest,
+      ListTaskPushNotificationConfigsRequest,
       ListTaskPushNotificationConfigSuccessResponse
-    >('tasks/pushNotificationConfig/list', params, options, ListTaskPushNotificationConfigRequest);
+    >(
+      'tasks/pushNotificationConfigs/list',
+      params,
+      options,
+      ListTaskPushNotificationConfigsRequest
+    );
     const configs = rpcResponse.result.configs || [];
     return configs.map((c: unknown) => TaskPushNotificationConfig.fromJSON(c));
   }
@@ -140,7 +144,7 @@ export class JsonRpcTransport implements Transport {
       DeleteTaskPushNotificationConfigRequest,
       DeleteTaskPushNotificationConfigResponse
     >(
-      'tasks/pushNotificationConfig/delete',
+      'tasks/pushNotificationConfigs/delete',
       params,
       options,
       DeleteTaskPushNotificationConfigRequest
@@ -167,15 +171,15 @@ export class JsonRpcTransport implements Transport {
     return Task.fromJSON(rpcResponse.result);
   }
 
-  async *resubscribeTask(
-    params: TaskSubscriptionRequest,
+  async *subscribeToTask(
+    params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest<TaskSubscriptionRequest>(
-      'tasks/resubscribe',
+    yield* this._sendStreamingRequest<SubscribeToTaskRequest>(
+      'tasks/subscribe',
       params,
       options,
-      TaskSubscriptionRequest
+      SubscribeToTaskRequest
     );
   }
 

@@ -4,7 +4,7 @@ import {
   GrpcTransport,
   GrpcTransportFactory,
 } from '../../../src/client/transports/grpc/grpc_transport.js';
-import { A2AServiceClient } from '../../../src/grpc/pb/a2a_services.js';
+import { A2AServiceClient } from '../../../src/grpc/pb/a2a.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import {
   TaskNotFoundError,
@@ -23,18 +23,18 @@ import { TaskState } from '../../../src/index.js';
 // --- Mocks ---
 
 // Mock the gRPC client class
-vi.mock('../../../src/grpc/pb/a2a_services.js', () => {
+vi.mock('../../../src/grpc/pb/a2a.js', () => {
   const A2AServiceClient = vi.fn();
-  A2AServiceClient.prototype.getAgentCard = vi.fn();
+  A2AServiceClient.prototype.getExtendedAgentCard = vi.fn();
   A2AServiceClient.prototype.sendMessage = vi.fn();
   A2AServiceClient.prototype.sendStreamingMessage = vi.fn();
   A2AServiceClient.prototype.createTaskPushNotificationConfig = vi.fn();
   A2AServiceClient.prototype.getTaskPushNotificationConfig = vi.fn();
-  A2AServiceClient.prototype.listTaskPushNotificationConfig = vi.fn();
+  A2AServiceClient.prototype.listTaskPushNotificationConfigs = vi.fn();
   A2AServiceClient.prototype.deleteTaskPushNotificationConfig = vi.fn();
   A2AServiceClient.prototype.getTask = vi.fn();
   A2AServiceClient.prototype.cancelTask = vi.fn();
-  A2AServiceClient.prototype.taskSubscription = vi.fn();
+  A2AServiceClient.prototype.subscribeToTask = vi.fn();
   return { A2AServiceClient };
 });
 
@@ -42,6 +42,9 @@ vi.mock('../../../src/grpc/pb/a2a_services.js', () => {
 vi.mock('../../../src/types/converters/to_proto.js', () => ({
   ToProto: {
     taskPushNotificationConfig: vi.fn((x) => x),
+    listTaskPushNotificationConfig: vi.fn((x) => ({ configs: x })),
+    messageSendResult: vi.fn((x) => x),
+    messageStreamResult: vi.fn((x) => x),
   },
 }));
 
@@ -50,9 +53,9 @@ vi.mock('../../../src/types/converters/from_proto.js', () => ({
     agentCard: vi.fn((x) => x),
     sendMessageResult: vi.fn((x) => x),
     message: vi.fn((x) => x),
-    setTaskPushNotificationConfigParams: vi.fn((x) => x),
+    createTaskPushNotificationConfig: vi.fn((x) => x),
     getTaskPushNotificationConfig: vi.fn((x) => x),
-    listTaskPushNotificationConfig: vi.fn((x) => x),
+    listTaskPushNotificationConfig: vi.fn((x) => x.configs),
     task: vi.fn((x) => x),
     taskStatusUpdate: vi.fn((x) => x),
     taskArtifactUpdate: vi.fn((x) => x),
@@ -98,12 +101,12 @@ describe('GrpcTransport', () => {
   describe('getExtendedAgentCard', () => {
     it('should get agent card successfully', async () => {
       const mockCard = createMockAgentCard();
-      mockUnarySuccess(mockGrpcClient.getAgentCard as Mock, mockCard);
+      mockUnarySuccess(mockGrpcClient.getExtendedAgentCard as Mock, mockCard);
 
       const result = await transport.getExtendedAgentCard();
 
       expect(result).toEqual(mockCard);
-      expect(mockGrpcClient.getAgentCard).toHaveBeenCalled();
+      expect(mockGrpcClient.getExtendedAgentCard).toHaveBeenCalled();
     });
   });
 
@@ -231,7 +234,7 @@ describe('GrpcTransport', () => {
       const mockTask = createMockTask(taskId);
       mockUnarySuccess(mockGrpcClient.getTask as Mock, mockTask);
 
-      const result = await transport.getTask({ name: `tasks/${taskId}`, historyLength: 0 });
+      const result = await transport.getTask({ id: taskId, tenant: '', historyLength: 0 });
 
       expect(result).toEqual(mockTask);
       expect(mockGrpcClient.getTask).toHaveBeenCalled();
@@ -239,19 +242,19 @@ describe('GrpcTransport', () => {
 
     it('should throw TaskNotFoundError', async () => {
       mockUnaryError(mockGrpcClient.getTask as Mock, status.NOT_FOUND, 'Not Found');
-      await expect(transport.getTask({ name: 'tasks/bad-id', historyLength: 0 })).rejects.toThrow(
-        TaskNotFoundError
-      );
+      await expect(
+        transport.getTask({ id: 'bad-id', tenant: '', historyLength: 0 })
+      ).rejects.toThrow(TaskNotFoundError);
     });
   });
 
   describe('cancelTask', () => {
     it('should cancel task successfully', async () => {
       const taskId = 'task-123';
-      const mockTask = createMockTask(taskId, TaskState.TASK_STATE_CANCELLED);
+      const mockTask = createMockTask(taskId, TaskState.TASK_STATE_CANCELED);
       mockUnarySuccess(mockGrpcClient.cancelTask as Mock, mockTask);
 
-      const result = await transport.cancelTask({ name: `tasks/${taskId}` });
+      const result = await transport.cancelTask({ id: taskId, tenant: '' });
 
       expect(result).toEqual(mockTask);
       expect(mockGrpcClient.cancelTask).toHaveBeenCalled();
@@ -263,7 +266,7 @@ describe('GrpcTransport', () => {
         status.FAILED_PRECONDITION,
         'Cannot cancel'
       );
-      await expect(transport.cancelTask({ name: 'tasks/task-123' })).rejects.toThrow(
+      await expect(transport.cancelTask({ id: 'task-123', tenant: '' })).rejects.toThrow(
         TaskNotCancelableError
       );
     });
@@ -273,24 +276,19 @@ describe('GrpcTransport', () => {
     const taskId = 'task-123';
     const configId = 'config-456';
     const mockConfig = {
-      name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
-      pushNotificationConfig: {
-        id: configId,
-        url: 'http://test',
-        token: 'test-token',
-        authentication: { schemes: [] as string[], credentials: '' },
-      },
+      taskId: taskId,
+      id: configId,
+      url: 'http://test',
+      token: 'test-token',
+      authentication: { schemes: [] as string[], credentials: '' },
+      tenant: '',
     };
 
     describe('setTaskPushNotificationConfig', () => {
       it('should set config successfully', async () => {
         mockUnarySuccess(mockGrpcClient.createTaskPushNotificationConfig as Mock, mockConfig);
 
-        const result = await transport.setTaskPushNotificationConfig({
-          parent: `tasks/${taskId}`,
-          configId,
-          config: mockConfig,
-        });
+        const result = await transport.setTaskPushNotificationConfig(mockConfig);
 
         expect(result).toEqual(mockConfig);
         expect(mockGrpcClient.createTaskPushNotificationConfig).toHaveBeenCalled();
@@ -302,13 +300,9 @@ describe('GrpcTransport', () => {
           status.UNIMPLEMENTED,
           'Not supported'
         );
-        await expect(
-          transport.setTaskPushNotificationConfig({
-            parent: `tasks/${taskId}`,
-            configId,
-            config: mockConfig,
-          })
-        ).rejects.toThrow(PushNotificationNotSupportedError);
+        await expect(transport.setTaskPushNotificationConfig(mockConfig)).rejects.toThrow(
+          PushNotificationNotSupportedError
+        );
       });
     });
 
@@ -317,25 +311,27 @@ describe('GrpcTransport', () => {
         mockUnarySuccess(mockGrpcClient.getTaskPushNotificationConfig as Mock, mockConfig);
 
         const result = await transport.getTaskPushNotificationConfig({
-          name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
+          taskId: taskId,
+          id: configId,
+          tenant: '',
         });
 
         expect(result).toEqual(mockConfig);
       });
     });
 
-    describe('listTaskPushNotificationConfig', () => {
+    describe('listTaskPushNotificationConfigs', () => {
       it('should list configs successfully', async () => {
-        const mockList = [mockConfig];
-        mockUnarySuccess(mockGrpcClient.listTaskPushNotificationConfig as Mock, mockList);
+        const mockList = { configs: [mockConfig] };
+        mockUnarySuccess(mockGrpcClient.listTaskPushNotificationConfigs as Mock, mockList);
 
-        const result = await transport.listTaskPushNotificationConfig({
-          parent: `tasks/${taskId}`,
+        const result = await transport.listTaskPushNotificationConfigs({
+          taskId: taskId,
           pageSize: 0,
           pageToken: '',
         });
 
-        expect(result).toEqual(mockList);
+        expect(result).toEqual(mockList.configs);
       });
     });
 
@@ -344,7 +340,9 @@ describe('GrpcTransport', () => {
         mockUnarySuccess(mockGrpcClient.deleteTaskPushNotificationConfig as Mock, {});
 
         await transport.deleteTaskPushNotificationConfig({
-          name: `tasks/${taskId}/pushNotificationConfigs/${configId}`,
+          taskId: taskId,
+          id: configId,
+          tenant: '',
         });
 
         expect(mockGrpcClient.deleteTaskPushNotificationConfig).toHaveBeenCalled();
@@ -352,9 +350,9 @@ describe('GrpcTransport', () => {
     });
   });
 
-  describe('resubscribeTask', () => {
+  describe('subscribeToTask', () => {
     it('should yield task updates from stream', async () => {
-      const params = { name: 'tasks/task-123' };
+      const params = { taskId: 'task-123', tenant: '' };
       const mockUpdate = createMockTask('task-123');
       const mockResponse = { payload: { $case: 'task', value: mockUpdate } };
 
@@ -364,9 +362,9 @@ describe('GrpcTransport', () => {
         },
         cancel: vi.fn(),
       };
-      (mockGrpcClient.taskSubscription as Mock).mockReturnValue(mockStream);
+      (mockGrpcClient.subscribeToTask as Mock).mockReturnValue(mockStream);
 
-      const iterator = transport.resubscribeTask(params);
+      const iterator = transport.subscribeToTask(params);
       const result = await iterator.next();
 
       expect(result.value).toEqual(mockResponse);

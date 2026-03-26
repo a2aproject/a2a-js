@@ -11,25 +11,14 @@ import {
   TaskNotCancelableError,
 } from '../../../src/errors.js';
 import {
-  ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigsResponse,
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
-} from '../../../src/types/pb/a2a_types.js';
+  SendMessageRequest,
+} from '../../../src/types/pb/a2a.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
-/**
- * Test suite for restHandler - HTTP+JSON/REST transport implementation
- *
- * This suite tests the REST API endpoints following the A2A specification:
- * - GET /v1/card - Agent card retrieval
- * - POST /v1/message:send - Send message (non-streaming)
- * - POST /v1/message:stream - Send message with SSE streaming
- * - GET /v1/tasks/:taskId - Get task status
- * - POST /v1/tasks/:taskId:cancel - Cancel task
- * - POST /v1/tasks/:taskId:subscribe - Resubscribe to task updates
- * - Push notification config CRUD operations
- */
 describe('restHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let app: Express;
@@ -58,7 +47,6 @@ describe('restHandler', () => {
     signatures: [],
   };
 
-  // camelCase format (internal type)
   const testMessage: Message = {
     messageId: 'msg-1',
     role: 'user' as any,
@@ -90,7 +78,7 @@ describe('restHandler', () => {
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
-      resubscribe: vi.fn(),
+      resubscribe: vi.fn(), // Keeping resubscribe method on handler as per previous step
     };
 
     app = express();
@@ -110,7 +98,6 @@ describe('restHandler', () => {
     it('should return the agent card with 200 OK', async () => {
       const response = await request(app).get('/v1/card').expect(200);
 
-      // REST API returns data (format checked by handler)
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
       assert.deepEqual(response.body.name, testAgentCard.name);
     });
@@ -134,12 +121,12 @@ describe('restHandler', () => {
 
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ request: message })
+        .send({ message: message }) // Changed from request: message
         .expect(201);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          request: expect.objectContaining({
+          message: expect.objectContaining({
             messageId: 'msg-1',
           }),
         }),
@@ -150,7 +137,6 @@ describe('restHandler', () => {
         SendMessageResponse.fromJSON(response.body)
       );
       assert.deepEqual((converted_result as Task).id, testTask.id);
-      // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
     });
 
@@ -159,7 +145,7 @@ describe('restHandler', () => {
         new RequestMalformedError('Message is required')
       );
 
-      await request(app).post('/v1/message:send').send({ request: null }).expect(400);
+      await request(app).post('/v1/message:send').send({ message: null }).expect(400);
     });
   });
 
@@ -174,14 +160,14 @@ describe('restHandler', () => {
 
       const response = await request(app)
         .post('/v1/message:stream')
-        .send({ request: message })
+        .send({ message: message }) // Changed from request: message
         .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
 
       expect(mockRequestHandler.sendMessageStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          request: expect.objectContaining({
+          message: expect.objectContaining({
             messageId: 'msg-1',
           }),
         }),
@@ -207,7 +193,7 @@ describe('restHandler', () => {
 
       await request(noStreamApp)
         .post('/v1/message:stream')
-        .send({ request: testMessage })
+        .send({ message: testMessage })
         .expect(400);
     });
   });
@@ -219,12 +205,10 @@ describe('restHandler', () => {
       const response = await request(app).get('/v1/tasks/task-1').expect(200);
 
       assert.deepEqual(response.body.id, testTask.id);
-      // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
-      // Status state is enum string
       assert.deepEqual(response.body.status.state, 'TASK_STATE_COMPLETED');
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { name: 'tasks/task-1', historyLength: 0 },
+        { id: 'task-1', tenant: '', historyLength: 0 },
         expect.anything()
       );
     });
@@ -236,7 +220,8 @@ describe('restHandler', () => {
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         {
-          name: 'tasks/task-1',
+          id: 'task-1',
+          tenant: '',
           historyLength: 10,
         },
         expect.anything()
@@ -259,15 +244,15 @@ describe('restHandler', () => {
 
   describe('POST /v1/tasks/:taskId:cancel', () => {
     it('should cancel task and return 202 Accepted', async () => {
-      const cancelledTask = { ...testTask, status: { state: TaskState.TASK_STATE_CANCELLED } };
+      const cancelledTask = { ...testTask, status: { state: TaskState.TASK_STATE_CANCELED } };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
-      assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELLED');
+      assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELED');
       expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
-        { name: 'tasks/task-1' },
+        { id: 'task-1', tenant: '' },
         expect.anything()
       );
     });
@@ -305,13 +290,12 @@ describe('restHandler', () => {
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
       expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
-        { name: 'tasks/task-1' },
+        { taskId: 'task-1', tenant: '' },
         expect.anything()
       );
     });
 
     it('should return 400 if streaming is not supported', async () => {
-      // Create new app with handler that has capabilities without streaming
       const noStreamRequestHandler = {
         ...mockRequestHandler,
         getAgentCard: vi.fn().mockResolvedValue({
@@ -337,12 +321,11 @@ describe('restHandler', () => {
   describe('Push Notification Config Endpoints', () => {
     const mockConfig: any = {
       taskId: 'task-1',
-      pushNotificationConfig: {
-        id: 'config-1',
-        url: 'https://example.com/webhook',
-        token: '',
-        authentication: undefined,
-      },
+      id: 'config-1',
+      url: 'https://example.com/webhook',
+      token: '',
+      authentication: undefined,
+      tenant: '',
     };
 
     describe('POST /v1/tasks/:taskId/pushNotificationConfigs', () => {
@@ -350,29 +333,17 @@ describe('restHandler', () => {
         {
           name: 'camelCase',
           payload: {
-            parent: 'tasks/task-1',
-            configId: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              pushNotificationConfig: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
-            },
+            taskId: 'task-1',
+            id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            url: 'http://127.0.0.1:9999/webhook',
           },
         },
         {
           name: 'snake_case',
           payload: {
-            parent: 'tasks/task-1',
-            config_id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              push_notification_config: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
-            },
+            task_id: 'task-1',
+            id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            url: 'http://127.0.0.1:9999/webhook',
           },
         },
       ])('should accept $name config and return 201', async ({ payload }) => {
@@ -384,8 +355,7 @@ describe('restHandler', () => {
           .expect(201);
 
         const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
-        assert.include(protoResponse.name, 'task-1');
-        assert.include(protoResponse.name, 'config-1');
+        assert.equal(protoResponse.taskId, 'task-1');
       });
 
       it('should return 400 if push notifications not supported', async () => {
@@ -407,12 +377,9 @@ describe('restHandler', () => {
         await request(noPNApp)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
           .send({
-            pushNotificationConfig: {
-              id: 'config-1',
-              url: 'https://example.com/webhook',
-              token: '',
-              authentication: undefined,
-            },
+            id: 'config-1',
+            url: 'https://example.com/webhook',
+            taskId: 'task-1',
           })
           .expect(400);
       });
@@ -427,7 +394,7 @@ describe('restHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs')
           .expect(200);
 
-        const convertedResult = ListTaskPushNotificationConfigResponse.fromJSON(
+        const convertedResult = ListTaskPushNotificationConfigsResponse.fromJSON(
           response.body
         ).configs;
         assert.isArray(convertedResult);
@@ -443,12 +410,13 @@ describe('restHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs/config-1')
           .expect(200);
 
-        // REST API returns camelCase
         const convertedResult = TaskPushNotificationConfig.fromJSON(response.body);
-        assert.include(convertedResult.name, 'task-1');
+        assert.equal(convertedResult.taskId, 'task-1');
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
-            name: 'tasks/task-1/pushNotificationConfigs/config-1',
+            taskId: 'task-1',
+            id: 'config-1',
+            tenant: '',
           },
           expect.anything()
         );
@@ -476,7 +444,9 @@ describe('restHandler', () => {
 
         expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
-            name: 'tasks/task-1/pushNotificationConfigs/config-1',
+            taskId: 'task-1',
+            id: 'config-1',
+            tenant: '',
           },
           expect.anything()
         );
@@ -568,7 +538,7 @@ describe('restHandler', () => {
       {
         name: 'camelCase',
         payload: {
-          request: testMessage,
+          message: testMessage,
           configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
         },
       },
@@ -584,17 +554,20 @@ describe('restHandler', () => {
       await request(app).post('/v1/message:send').send(payload).expect(201);
 
       const protoMessage = ProtoMessage.toJSON(testMessage);
-      await request(app)
-        .post('/v1/message:send')
-        .send({ request: protoMessage, configuration: payload.configuration })
-        .expect(201);
+      const params: SendMessageRequest = {
+        message: protoMessage as Message,
+        configuration: payload.configuration,
+        tenant: '',
+        metadata: {},
+      };
+      await request(app).post('/v1/message:send').send(params).expect(201);
     });
   });
 
   describe('Error Handling', () => {
     it('should return 404 for unknown message action (route not matched)', async () => {
       // Unknown actions don't match the route pattern, so Express returns default 404
-      await request(app).post('/v1/message:unknown').send({ request: testMessage }).expect(404);
+      await request(app).post('/v1/message:unknown').send({ message: testMessage }).expect(404);
     });
 
     it('should return 404 for unknown task action (route not matched)', async () => {
@@ -610,7 +583,7 @@ describe('restHandler', () => {
       const messageProto = ProtoMessage.toJSON(testMessage);
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ request: messageProto })
+        .send({ message: messageProto })
         .expect(500);
 
       assert.property(response.body, 'name');

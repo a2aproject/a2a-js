@@ -1,17 +1,16 @@
 import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../core.js';
-import { A2AServiceClient, TaskPushNotificationConfig } from '../../../grpc/pb/a2a_services.js';
-import { Task, AgentCard } from '../../../types/pb/a2a_types.js';
+import { A2AServiceClient, TaskPushNotificationConfig } from '../../../grpc/pb/a2a.js';
+import { Task, AgentCard } from '../../../types/pb/a2a.js';
 import {
   CancelTaskRequest,
-  CreateTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
-  GetAgentCardRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
-  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
   SendMessageRequest,
-  TaskSubscriptionRequest,
+  SubscribeToTaskRequest,
   A2AStreamEventData,
   SendMessageResult,
 } from '../../../index.js';
@@ -60,11 +59,15 @@ export class GrpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendGrpcRequest<GetAgentCardRequest, AgentCard, AgentCard>(
-      'getAgentCard',
+    const rpcResponse = await this._sendGrpcRequest<
+      GetExtendedAgentCardRequest,
+      AgentCard,
+      AgentCard
+    >(
+      'getExtendedAgentCard',
       {},
       options,
-      this.grpcClient.getAgentCard.bind(this.grpcClient),
+      this.grpcClient.getExtendedAgentCard.bind(this.grpcClient),
       (req) => req
     );
     return rpcResponse;
@@ -97,11 +100,11 @@ export class GrpcTransport implements Transport {
   }
 
   async setTaskPushNotificationConfig(
-    params: CreateTaskPushNotificationConfigRequest,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendGrpcRequest<
-      CreateTaskPushNotificationConfigRequest,
+      TaskPushNotificationConfig,
       TaskPushNotificationConfig,
       TaskPushNotificationConfig
     >(
@@ -132,15 +135,15 @@ export class GrpcTransport implements Transport {
     return rpcResponse;
   }
 
-  async listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigRequest,
+  async listTaskPushNotificationConfigs(
+    params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendGrpcRequest(
-      'listTaskPushNotificationConfig',
+      'listTaskPushNotificationConfigs',
       params,
       options,
-      this.grpcClient.listTaskPushNotificationConfig.bind(this.grpcClient),
+      this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient),
       FromProto.listTaskPushNotificationConfig
     );
     return rpcResponse;
@@ -181,15 +184,15 @@ export class GrpcTransport implements Transport {
     return rpcResponse;
   }
 
-  async *resubscribeTask(
-    params: TaskSubscriptionRequest,
+  async *subscribeToTask(
+    params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     yield* this._sendGrpcStreamingRequest(
-      'taskSubscription',
+      'subscribeToTask',
       params,
       options,
-      this.grpcClient.taskSubscription.bind(this.grpcClient)
+      this.grpcClient.subscribeToTask.bind(this.grpcClient)
     );
   }
 
@@ -230,7 +233,7 @@ export class GrpcTransport implements Transport {
   }
 
   private async *_sendGrpcStreamingRequest<TReq, TRes>(
-    method: 'sendStreamingMessage' | 'taskSubscription',
+    method: 'sendStreamingMessage' | 'subscribeToTask',
     params: TReq,
     options: RequestOptions | undefined,
     call: GrpcStreamCall<TReq, TRes>
@@ -290,7 +293,7 @@ export class GrpcTransport implements Transport {
         if (method === 'cancelTask') {
           return new TaskNotCancelableError(error.details);
         }
-        if (method === 'getAgentCard') {
+        if (method === 'getExtendedAgentCard') {
           return new AuthenticatedExtendedCardNotConfiguredError(error.details);
         }
         break;
@@ -300,12 +303,12 @@ export class GrpcTransport implements Transport {
             'getTaskPushNotificationConfig',
             'createTaskPushNotificationConfig',
             'deleteTaskPushNotificationConfig',
-            'listTaskPushNotificationConfig',
+            'listTaskPushNotificationConfigs',
           ].includes(method)
         ) {
           return new PushNotificationNotSupportedError(error.details);
         }
-        if (['getAgentCard', 'taskSubscription'].includes(method)) {
+        if (['getExtendedAgentCard', 'subscribeToTask'].includes(method)) {
           return new UnsupportedOperationError(error.details);
         }
         break;

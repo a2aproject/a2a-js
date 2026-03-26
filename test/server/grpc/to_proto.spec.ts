@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ToProto } from '../../../src/types/converters/to_proto.js';
-import * as proto from '../../../src/types/pb/a2a_types.js';
+import * as proto from '../../../src/types/pb/a2a.js';
 import * as idDecoding from '../../../src/types/converters/id_decoding.js';
 
 vi.mock('../../../src/types/converters/id_decoding.js', () => ({
@@ -27,7 +27,7 @@ describe('ToProto', () => {
         metadata: {},
       };
       const result = ToProto.messageSendResult(message);
-      expect(result.payload?.$case).toBe('msg');
+      expect(result.payload?.$case).toBe('message');
       expect((result.payload as any).value).toBe(message);
     });
 
@@ -50,7 +50,7 @@ describe('ToProto', () => {
     it('should wrap Message in StreamResponse', () => {
       const message: proto.Message = { messageId: 'm1' } as any;
       const result = ToProto.messageStreamResult(message);
-      expect(result.payload?.$case).toBe('msg');
+      expect(result.payload?.$case).toBe('message');
     });
 
     it('should wrap Task in StreamResponse', () => {
@@ -74,13 +74,12 @@ describe('ToProto', () => {
 
   it('should convert TaskPushNotificationConfig', () => {
     const config: proto.TaskPushNotificationConfig = {
-      name: 'tasks/task-123/pushNotificationConfigs/pnc-456',
-      pushNotificationConfig: {
-        id: 'pnc-456',
-        url: 'https://example.com/notify',
-        token: '',
-        authentication: undefined,
-      },
+      taskId: 'task-123',
+      id: 'pnc-456',
+      url: 'https://example.com/notify',
+      token: '',
+      authentication: undefined,
+      tenant: '',
     };
     const result = ToProto.taskPushNotificationConfig(config);
     expect(result).toEqual(config);

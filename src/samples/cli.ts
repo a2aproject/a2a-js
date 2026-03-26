@@ -13,7 +13,12 @@ import {
   Part, // Added for explicit Part typing
   AGENT_CARD_PATH,
 } from '../index.js';
-import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/pb/a2a_types.js';
+import {
+  TaskState,
+  Role,
+  taskStateToJSON,
+  SendMessageRequest,
+} from '../types/pb/a2a.js';
 
 import {
   AuthenticationHandler,
@@ -137,7 +142,7 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
         stateEmoji = '✅';
         stateColor = 'green';
         break;
-      case TaskState.TASK_STATE_CANCELLED:
+      case TaskState.TASK_STATE_CANCELED:
         stateEmoji = '⏹️';
         stateColor = 'gray';
         break;
@@ -165,7 +170,7 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     console.log(
       `${prefix} 📄 Artifact Received: ${
         update.artifact?.name || '(unnamed)'
-      } (ID: ${update.artifact?.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
+      } (ID: ${update.artifact?.id}, Task: ${update.taskId}, Context: ${update.contextId})`
     );
     // Create a temporary message-like structure to reuse printMessageContent
     printMessageContent({
@@ -347,13 +352,14 @@ async function main() {
     }
 
     const params: SendMessageRequest = {
-      request: messagePayload,
+      tenant: '', // Optional
+      message: messagePayload,
       configuration: undefined,
       metadata: {},
       // Optional: configuration for streaming, blocking, etc.
       // configuration: {
       //   acceptedOutputModes: ['text/plain', 'application/json'], // Example
-      //   blocking: false // Default for streaming is usually non-blocking
+      //   returnImmediately: false // Default for streaming is usually non-blocking (which means returnImmediately=true? No, spec says: if false, it blocks. for streaming we usually want block/stream. )
       // }
     };
 
@@ -367,94 +373,84 @@ async function main() {
         const timestamp = new Date().toLocaleTimeString(); // Get fresh timestamp for each event
         const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
-        const payload = (event as any).payload;
-        if (!payload || !payload.$case) {
-          continue;
-        }
+        // Handle different event types using type guards
+        if ('status' in event && 'taskId' in event && !('id' in event)) {
+          // TaskStatusUpdateEvent
+          const typedEvent = event as TaskStatusUpdateEvent;
+          printAgentEvent(typedEvent);
 
-        switch (payload.$case) {
-          case 'statusUpdate': {
-            const typedEvent = payload.value as TaskStatusUpdateEvent;
-            printAgentEvent(typedEvent);
-
-            if (
-              typedEvent.final &&
-              typedEvent.status?.state !== TaskState.TASK_STATE_INPUT_REQUIRED
-            ) {
-              console.log(
-                colorize(
-                  'yellow',
-                  `   Task ${typedEvent.taskId} is final. Clearing current task ID.`
-                )
-              );
-              currentTaskId = undefined;
-            }
-            break;
-          }
-          case 'artifactUpdate': {
-            const typedEvent = payload.value as TaskArtifactUpdateEvent;
-            printAgentEvent(typedEvent);
-            break;
-          }
-          case 'msg': {
-            const msg = payload.value as Message;
-            console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
-            printMessageContent(msg);
-            if (msg.taskId && msg.taskId !== currentTaskId) {
-              console.log(
-                colorize(
-                  'dim',
-                  `   Task ID context updated to ${msg.taskId} based on message event.`
-                )
-              );
-              currentTaskId = msg.taskId;
-            }
-            if (msg.contextId && msg.contextId !== currentContextId) {
-              console.log(
-                colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
-              );
-              currentContextId = msg.contextId;
-            }
-            break;
-          }
-          case 'task': {
-            const task = payload.value as Task;
+          if (
+            typedEvent.final &&
+            typedEvent.status?.state !== TaskState.TASK_STATE_INPUT_REQUIRED
+          ) {
             console.log(
-              `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${taskStateToJSON(task.status!.state)}`
+              colorize(
+                'yellow',
+                `   Task ${typedEvent.taskId} is final. Clearing current task ID.`
+              )
             );
-            if (task.id !== currentTaskId) {
-              console.log(
-                colorize('dim', `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`)
-              );
-              currentTaskId = task.id;
-            }
-            if (task.contextId && task.contextId !== currentContextId) {
-              console.log(
-                colorize(
-                  'dim',
-                  `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`
-                )
-              );
-              currentContextId = task.contextId;
-            }
-            if (task.status?.update) {
-              console.log(colorize('gray', '   Task includes message:'));
-              printMessageContent(task.status.update);
-            }
-            if (task.artifacts && task.artifacts.length > 0) {
-              console.log(
-                colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`)
-              );
-            }
-            break;
+            currentTaskId = undefined;
           }
-          default:
+        } else if ('artifact' in event) {
+          // TaskArtifactUpdateEvent
+          const typedEvent = event as TaskArtifactUpdateEvent;
+          printAgentEvent(typedEvent);
+        } else if ('messageId' in event && 'content' in event && !('status' in event)) {
+          // Message
+          const msg = event as Message;
+          console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
+          printMessageContent(msg);
+          if (msg.taskId && msg.taskId !== currentTaskId) {
             console.log(
-              prefix,
-              colorize('yellow', 'Received unknown event structure from stream:'),
-              event
+              colorize(
+                'dim',
+                `   Task ID context updated to ${msg.taskId} based on message event.`
+              )
             );
-            break;
+            currentTaskId = msg.taskId;
+          }
+          if (msg.contextId && msg.contextId !== currentContextId) {
+            console.log(
+              colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
+            );
+            currentContextId = msg.contextId;
+          }
+        } else if ('id' in event && 'status' in event) {
+          // Task
+          const task = event as Task;
+          console.log(
+            `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${taskStateToJSON(task.status!.state)}`
+          );
+          if (task.id !== currentTaskId) {
+            console.log(
+              colorize('dim', `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`)
+            );
+            currentTaskId = task.id;
+          }
+          if (task.contextId && task.contextId !== currentContextId) {
+            console.log(
+              colorize(
+                'dim',
+                `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`
+              )
+            );
+            currentContextId = task.contextId;
+          }
+          if (task.status?.update) {
+            console.log(colorize('gray', '   Task includes message:'));
+            printMessageContent(task.status.update);
+          }
+          if (task.artifacts && task.artifacts.length > 0) {
+            console.log(
+              colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`)
+            );
+          }
+        } else {
+          console.log(
+            prefix,
+            colorize('yellow', 'Received unknown event structure from stream:'),
+            event
+          );
         }
       }
       console.log(colorize('dim', `--- End of response stream for this input ---`));

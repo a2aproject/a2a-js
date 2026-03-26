@@ -1,12 +1,34 @@
 import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import * as grpc from '@grpc/grpc-js';
-import * as proto from '../../../src/grpc/pb/a2a_services.js';
+import * as proto from '../../../src/grpc/pb/a2a.js';
 import { A2ARequestHandler } from '../../../src/server/index.js';
 import { TaskNotFoundError } from '../../../src/errors.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import { AgentCard, HTTP_EXTENSION_HEADER, Task, Role, TaskState } from '../../../src/index.js';
 
-vi.mock('../../../src/types/converters/from_proto.js');
+vi.mock('../../../src/types/converters/from_proto.js', () => ({
+  FromProto: {
+    messageStreamResult: vi.fn((x) => x),
+    createTaskPushNotificationConfig: vi.fn((x) => x),
+  },
+}));
+
+// Mock ToProto which is used in grpc_service.ts
+vi.mock('../../../src/types/converters/to_proto.js', () => ({
+  ToProto: {
+    messageSendResult: vi.fn((result) => {
+      // Mock implementation that wraps result like ToProto would
+      if ('id' in result) {
+        return { payload: { $case: 'task', value: result } };
+      }
+      return { payload: { $case: 'message', value: result } };
+    }),
+    messageStreamResult: vi.fn((result) => result), // Pass through for stream
+    listTaskPushNotificationConfig: vi.fn((configs) => ({ configs })),
+    taskPushNotificationConfig: vi.fn((config) => config),
+  },
+}));
+
 describe('grpcHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let handler: ReturnType<typeof grpcService>;
@@ -91,11 +113,11 @@ describe('grpcHandler', () => {
     vi.restoreAllMocks();
   });
 
-  describe('getAgentCard', () => {
+  describe('getExtendedAgentCard', () => {
     it('should return agent card via gRPC callback', async () => {
       const call = createMockUnaryCall({});
       const callback = vi.fn();
-      await handler.getAgentCard(call, callback);
+      await handler.getExtendedAgentCard(call, callback);
 
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalled();
       const [err, response] = callback.mock.calls[0];
@@ -111,7 +133,7 @@ describe('grpcHandler', () => {
       const call = createMockUnaryCall({});
       const callback = vi.fn();
 
-      await handler.getAgentCard(call, callback);
+      await handler.getExtendedAgentCard(call, callback);
 
       const [err] = callback.mock.calls[0];
       assert.equal(err.code, grpc.status.NOT_FOUND);
@@ -121,6 +143,7 @@ describe('grpcHandler', () => {
 
   describe('sendMessage', () => {
     it('should successfully send a message and return a task', async () => {
+      // SendMessageRequest has 'message' field
       const call = createMockUnaryCall({ message: { role: Role.ROLE_USER, content: [] as any } });
       const callback = vi.fn();
 
@@ -128,6 +151,7 @@ describe('grpcHandler', () => {
 
       const [err, response] = callback.mock.calls[0];
       assert.isNull(err);
+      // Our mocked ToProto wraps it in { payload: { $case: 'task', value: ... } }
       assert.equal(response.payload.$case, 'task');
       assert.equal(response.payload.value.id, testTask.id);
     });

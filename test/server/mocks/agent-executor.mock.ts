@@ -1,6 +1,6 @@
 import { vi, type Mock, type MockInstance } from 'vitest';
 import { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
-import { TaskState } from '../../../src/types/pb/a2a_types.js';
+import { TaskState } from '../../../src/types/pb/a2a.js';
 import { RequestContext } from '../../../src/server/agent_execution/request_context.js';
 import { ExecutionEventBus } from '../../../src/server/events/execution_event_bus.js';
 
@@ -88,6 +88,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
       append: false,
       lastChunk: false,
       artifact: undefined,
+      91: undefined,
     });
     eventBus.publish({
       taskId,
@@ -111,7 +112,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
           taskId,
           contextId,
           status: {
-            state: TaskState.TASK_STATE_CANCELLED,
+            state: TaskState.TASK_STATE_CANCELED,
             update: undefined,
             timestamp: undefined,
           },
@@ -199,7 +200,7 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
           taskId,
           contextId,
           status: {
-            state: TaskState.TASK_STATE_CANCELLED,
+            state: TaskState.TASK_STATE_CANCELED,
             update: undefined,
             timestamp: undefined,
           },

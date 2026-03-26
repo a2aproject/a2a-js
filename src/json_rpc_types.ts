@@ -3,8 +3,8 @@ import {
   SendMessageResponse as ProtoSendMessageResponse,
   StreamResponse as ProtoStreamResponse,
   Task,
-  PushNotificationConfig as ProtoPushNotificationConfig,
-} from './types/pb/a2a_types.js';
+  TaskPushNotificationConfig as ProtoTaskPushNotificationConfig,
+} from './types/pb/a2a.js';
 
 /**
  * JSON-RPC Error object.
@@ -39,11 +39,11 @@ export type SendStreamingMessageSuccessResponse = BaseSuccessResponse<ProtoStrea
 export type GetTaskSuccessResponse = BaseSuccessResponse<Task>;
 export type CancelTaskSuccessResponse = BaseSuccessResponse<Task>;
 export type SetTaskPushNotificationConfigSuccessResponse =
-  BaseSuccessResponse<ProtoPushNotificationConfig>;
+  BaseSuccessResponse<ProtoTaskPushNotificationConfig>;
 export type GetTaskPushNotificationConfigSuccessResponse =
-  BaseSuccessResponse<ProtoPushNotificationConfig>;
+  BaseSuccessResponse<ProtoTaskPushNotificationConfig>;
 export type ListTaskPushNotificationConfigSuccessResponse = BaseSuccessResponse<{
-  configs: ProtoPushNotificationConfig[];
+  configs: ProtoTaskPushNotificationConfig[];
 }>;
 export type DeleteTaskPushNotificationConfigSuccessResponse = BaseSuccessResponse<null>;
 export type GetAuthenticatedExtendedCardSuccessResponse = BaseSuccessResponse<AgentCard>;

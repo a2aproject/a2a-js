@@ -10,9 +10,9 @@ import {
   Task,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
-} from './types/pb/a2a_types.js';
+} from './types/pb/a2a.js';
 
-export * from './types/pb/a2a_types.js';
+export * from './types/pb/a2a.js';
 export type { A2AResponse } from './a2a_response.js';
 export { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from './constants.js';
 export { Extensions, type ExtensionURI } from './extensions.js';
