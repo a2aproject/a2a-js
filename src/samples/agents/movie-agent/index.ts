@@ -68,7 +68,7 @@ class MovieAgentExecutor implements AgentExecutor {
         status: {
           state: TaskState.TASK_STATE_SUBMITTED,
           timestamp: new Date().toISOString(),
-          update: undefined,
+          message: undefined,
         },
         artifacts: [],
         history: [userMessage], // Start history with the current user message
@@ -83,18 +83,25 @@ class MovieAgentExecutor implements AgentExecutor {
       contextId: contextId,
       status: {
         state: TaskState.TASK_STATE_WORKING,
-        update: {
+        message: {
           role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          content: [{ part: { $case: 'text', value: 'Processing your question, hang tight!' } }],
+          parts: [
+            {
+              content: { $case: 'text', value: 'Processing your question, hang tight!' },
+              metadata: undefined,
+              filename: '',
+              mediaType: 'text/plain',
+            },
+          ],
           taskId: taskId,
           contextId: contextId,
           extensions: [],
           metadata: {},
+          referenceTaskIds: [],
         },
         timestamp: new Date().toISOString(),
       },
-      final: false,
       metadata: {},
     };
     eventBus.publish(workingStatusUpdate);
@@ -108,8 +115,8 @@ class MovieAgentExecutor implements AgentExecutor {
 
     const messages: MessageData[] = historyForGenkit
       .map((m) => {
-        const textContent = m.content
-          .map((p) => (p.part?.$case === 'text' ? p.part.value : ''))
+        const textContent = m.parts
+          .map((p) => (p.content?.$case === 'text' ? p.content.value : ''))
           .filter((t) => !!t)
           .join('\n');
 
@@ -129,18 +136,25 @@ class MovieAgentExecutor implements AgentExecutor {
         contextId: contextId,
         status: {
           state: TaskState.TASK_STATE_FAILED,
-          update: {
+          message: {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            content: [{ part: { $case: 'text', value: 'No message found to process.' } }],
+            parts: [
+              {
+                content: { $case: 'text', value: 'No message found to process.' },
+                metadata: undefined,
+                filename: '',
+                mediaType: 'text/plain',
+              },
+            ],
             taskId: taskId,
             contextId: contextId,
             extensions: [],
             metadata: {},
+            referenceTaskIds: [],
           },
           timestamp: new Date().toISOString(),
         },
-        final: true,
         metadata: {},
       };
       eventBus.publish(failureUpdate);
@@ -169,11 +183,10 @@ class MovieAgentExecutor implements AgentExecutor {
           taskId: taskId,
           contextId: contextId,
           status: {
-            state: TaskState.TASK_STATE_CANCELLED,
+            state: TaskState.TASK_STATE_CANCELED,
             timestamp: new Date().toISOString(),
-            update: undefined,
+            message: undefined,
           },
-          final: true, // Cancellation is a final state
           metadata: {},
         };
         eventBus.publish(cancelledUpdate);
@@ -203,7 +216,14 @@ class MovieAgentExecutor implements AgentExecutor {
       }
 
       // 5. Publish artifact with the result
-      const parts: Part[] = [{ part: { $case: 'text', value: agentReplyText || 'Completed.' } }];
+      const parts: Part[] = [
+        {
+          content: { $case: 'text', value: agentReplyText || 'Completed.' },
+          metadata: undefined,
+          filename: '',
+          mediaType: 'text/plain',
+        },
+      ];
       const artifactId = uuidv4();
       const resultArtifact: Artifact = {
         artifactId: artifactId,
@@ -228,11 +248,12 @@ class MovieAgentExecutor implements AgentExecutor {
       const agentMessage: Message = {
         role: Role.ROLE_AGENT,
         messageId: uuidv4(),
-        content: parts,
+        parts: parts,
         taskId: taskId,
         contextId: contextId,
         extensions: [],
         metadata: {},
+        referenceTaskIds: [],
       };
       historyForGenkit.push(agentMessage);
       contexts.set(contextId, historyForGenkit);
@@ -244,9 +265,8 @@ class MovieAgentExecutor implements AgentExecutor {
         status: {
           state: finalA2AState,
           timestamp: new Date().toISOString(),
-          update: undefined,
+          message: undefined,
         },
-        final: true,
         metadata: {},
       };
       eventBus.publish(finalUpdate);
@@ -259,18 +279,25 @@ class MovieAgentExecutor implements AgentExecutor {
         contextId: contextId,
         status: {
           state: TaskState.TASK_STATE_FAILED,
-          update: {
+          message: {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            content: [{ part: { $case: 'text', value: `Agent error: ${error.message}` } }],
+            parts: [
+              {
+                content: { $case: 'text', value: `Agent error: ${error.message}` },
+                metadata: undefined,
+                filename: '',
+                mediaType: 'text/plain',
+              },
+            ],
             taskId: taskId,
             contextId: contextId,
             extensions: [],
             metadata: undefined,
+            referenceTaskIds: [],
           },
           timestamp: new Date().toISOString(),
         },
-        final: true,
         metadata: undefined,
       };
       eventBus.publish(errorUpdate);
@@ -283,20 +310,27 @@ class MovieAgentExecutor implements AgentExecutor {
 const movieAgentCard: AgentCard = {
   name: 'Movie Agent',
   description: 'An agent that can answer questions about movies and actors using TMDB.',
-  url: 'http://localhost:41241/',
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: '0.3.0',
+    },
+  ],
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples', // Added provider URL
+    url: 'https://example.com/a2a-samples',
   },
-  version: '0.0.2', // Incremented version
-  protocolVersion: '0.3.0',
+  version: '0.0.2',
   capabilities: {
-    streaming: true, // The new framework supports streaming
-    pushNotifications: false, // Assuming not implemented for this agent yet
+    streaming: true,
+    pushNotifications: false,
     extensions: [],
+    extendedAgentCard: false,
   },
   securitySchemes: {}, // Or define actual security schemes if any
-  security: [],
+  securityRequirements: [],
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [
@@ -315,12 +349,9 @@ const movieAgentCard: AgentCard = {
       ],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
-      security: [],
+      securityRequirements: [],
     },
   ],
-  supportsAuthenticatedExtendedCard: false,
-  preferredTransport: 'jsonrpc',
-  additionalInterfaces: [],
   documentationUrl: '',
   signatures: [],
 };

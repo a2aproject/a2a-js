@@ -64,11 +64,8 @@ describe('A2AExpressApp', () => {
   });
 
   const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'JSONRPC',
     version: '1.0.0',
     capabilities: {
       streaming: true,
@@ -78,13 +75,19 @@ describe('A2AExpressApp', () => {
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
-    documentationUrl: 'http://test-agent.com/docs',
-    security: [],
+    securityRequirements: [],
     securitySchemes: {},
-    signatures: [],
     provider: { url: '', organization: '' },
-    additionalInterfaces: [],
-    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080/jsonrpc',
+        protocolBinding: 'JSONRPC',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
+    documentationUrl: 'http://test-agent.com/docs',
   };
 
   beforeEach(() => {

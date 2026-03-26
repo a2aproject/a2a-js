@@ -20,17 +20,16 @@ import { Extensions } from '../../extensions.js';
 
 import {
   AgentCard,
-  CreateTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigsResponse,
   MessageFns,
   SendMessageRequest,
   SendMessageResponse,
   StreamResponse,
   Task,
   TaskPushNotificationConfig,
-} from '../../types/pb/a2a_types.js';
+} from '../../types/pb/a2a.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { FromProto } from '../../types/converters/from_proto.js';
+
 import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
 import { RequestMalformedError } from '../../errors.js';
 
@@ -414,15 +413,13 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const protoReq = CreateTaskPushNotificationConfigRequest.fromJSON(req.body);
-      const params = FromProto.createTaskPushNotificationConfig(protoReq);
+      const params = TaskPushNotificationConfig.fromJSON(req.body);
       const result = await restTransportHandler.setTaskPushNotificationConfig(params, context);
-      const protoResult = ToProto.taskPushNotificationConfig(result);
       sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.CREATED,
         context,
-        protoResult,
+        result,
         TaskPushNotificationConfig
       );
     })
@@ -446,12 +443,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         context
       );
       const protoResult = ToProto.listTaskPushNotificationConfig(result);
-      sendResponse<ListTaskPushNotificationConfigResponse>(
+      sendResponse<ListTaskPushNotificationConfigsResponse>(
         res,
         HTTP_STATUS.OK,
         context,
         protoResult,
-        ListTaskPushNotificationConfigResponse
+        ListTaskPushNotificationConfigsResponse
       );
     })
   );
@@ -475,12 +472,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.params.configId,
         context
       );
-      const protoResult = ToProto.taskPushNotificationConfig(result);
       sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.OK,
         context,
-        protoResult,
+        result,
         TaskPushNotificationConfig
       );
     })

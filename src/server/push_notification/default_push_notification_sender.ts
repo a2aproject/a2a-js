@@ -1,4 +1,4 @@
-import { Task, PushNotificationConfig } from '../../index.js';
+import { Task, TaskPushNotificationConfig } from '../../index.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore } from './push_notification_store.js';
 
@@ -66,7 +66,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
   private async _dispatchNotification(
     task: Task,
-    pushConfig: PushNotificationConfig
+    pushConfig: TaskPushNotificationConfig
   ): Promise<void> {
     const url = pushConfig.url;
     const controller = new AbortController();

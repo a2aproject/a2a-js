@@ -21,11 +21,11 @@ class TimeStampExtension {
   timestampEvent(event: AgentExecutionEvent): void {
     if ('status' in event && 'taskId' in event) {
       const statusUpdateEvent = event as TaskStatusUpdateEvent;
-      if (statusUpdateEvent.status?.update) {
-        if (!statusUpdateEvent.status.update.metadata) {
-          statusUpdateEvent.status.update.metadata = {};
+      if (statusUpdateEvent.status?.message) {
+        if (!statusUpdateEvent.status.message.metadata) {
+          statusUpdateEvent.status.message.metadata = {};
         }
-        statusUpdateEvent.status.update.metadata['timestamp'] = new Date().toISOString();
+        statusUpdateEvent.status.message.metadata['timestamp'] = new Date().toISOString();
       }
     }
   }

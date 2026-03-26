@@ -3,23 +3,23 @@ import {
   A2AServiceServer,
   AgentCard,
   CancelTaskRequest,
-  CreateTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
-  GetAgentCardRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
-  ListTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse,
+  ListTasksRequest,
+  ListTasksResponse,
   SendMessageRequest,
   SendMessageResponse,
   StreamResponse,
+  SubscribeToTaskRequest,
   Task,
   TaskPushNotificationConfig,
-  TaskSubscriptionRequest,
-} from '../../grpc/pb/a2a_services.js';
+} from '../../grpc/pb/a2a.js';
 import { Empty } from '../../grpc/pb/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { ServerCallContext } from '../context.js';
 import { Extensions } from '../../extensions.js';
@@ -135,8 +135,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
 
-    taskSubscription(
-      call: grpc.ServerWritableStream<TaskSubscriptionRequest, StreamResponse>
+    subscribeToTask(
+      call: grpc.ServerWritableStream<SubscribeToTaskRequest, StreamResponse>
     ): Promise<void> {
       return wrapStreaming(
         call,
@@ -159,12 +159,12 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
 
-    listTaskPushNotificationConfig(
+    listTaskPushNotificationConfigs(
       call: grpc.ServerUnaryCall<
-        ListTaskPushNotificationConfigRequest,
-        ListTaskPushNotificationConfigResponse
+        ListTaskPushNotificationConfigsRequest,
+        ListTaskPushNotificationConfigsResponse
       >,
-      callback: grpc.sendUnaryData<ListTaskPushNotificationConfigResponse>
+      callback: grpc.sendUnaryData<ListTaskPushNotificationConfigsResponse>
     ): Promise<void> {
       return wrapUnary(
         call,
@@ -176,18 +176,15 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     },
 
     createTaskPushNotificationConfig(
-      call: grpc.ServerUnaryCall<
-        CreateTaskPushNotificationConfigRequest,
-        TaskPushNotificationConfig
-      >,
+      call: grpc.ServerUnaryCall<TaskPushNotificationConfig, TaskPushNotificationConfig>,
       callback: grpc.sendUnaryData<TaskPushNotificationConfig>
     ): Promise<void> {
       return wrapUnary(
         call,
         callback,
-        FromProto.createTaskPushNotificationConfig,
+        (req) => req,
         requestHandler.setTaskPushNotificationConfig.bind(requestHandler),
-        ToProto.taskPushNotificationConfig
+        (res) => res
       );
     },
 
@@ -200,7 +197,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         (req) => req,
         requestHandler.getTaskPushNotificationConfig.bind(requestHandler),
-        ToProto.taskPushNotificationConfig
+        (res) => res
       );
     },
 
@@ -230,8 +227,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
 
-    getAgentCard(
-      call: grpc.ServerUnaryCall<GetAgentCardRequest, AgentCard>,
+    getExtendedAgentCard(
+      call: grpc.ServerUnaryCall<GetExtendedAgentCardRequest, AgentCard>,
       callback: grpc.sendUnaryData<AgentCard>
     ): Promise<void> {
       return wrapUnary(
@@ -241,6 +238,12 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         (_params, context) => requestHandler.getAuthenticatedExtendedAgentCard(context),
         (res) => res
       );
+    },
+    listTasks(
+      _call: grpc.ServerUnaryCall<ListTasksRequest, ListTasksResponse>,
+      _callback: grpc.sendUnaryData<ListTasksResponse>
+    ): Promise<void> {
+      throw new Error('Not implemented'); // TODO: Method `listTasks` not implemented yet.
     },
   };
 }

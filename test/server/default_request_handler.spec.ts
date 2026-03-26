@@ -23,11 +23,10 @@ import {
 } from '../../src/server/index.js';
 import {
   AgentCard,
-  PushNotificationConfig,
   Task,
   TaskState,
   GetTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
   SendMessageRequest,
   Role,
   TaskStatusUpdateEvent,
@@ -36,8 +35,7 @@ import {
   Message,
   Artifact,
   SendMessageConfiguration,
-} from '../../src/types/pb/a2a_types.js';
-type TextPart = { $case: 'text'; value: string };
+} from '../../src/types/pb/a2a.js';
 import {
   DefaultExecutionEventBusManager,
   ExecutionEventBusManager,
@@ -62,13 +60,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   const testAgentCard: AgentCard = {
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'json-rpc',
-    additionalInterfaces: [],
-    provider: undefined,
     version: '1.0.0',
+    provider: undefined,
     documentationUrl: '',
-    protocolVersion: '0.3.0',
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080/a2a/v1',
+        protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
     capabilities: {
       extensions: [
         {
@@ -82,7 +84,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       pushNotifications: true,
     },
     securitySchemes: {},
-    security: [],
+    securityRequirements: [],
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [
@@ -94,10 +96,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         examples: [],
         inputModes: ['text/plain'],
         outputModes: ['text/plain'],
-        security: [],
+        securityRequirements: [],
       },
     ],
-    supportsAuthenticatedExtendedCard: false,
     signatures: [],
   };
 
@@ -143,26 +144,45 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   const createTestMessage = (id: string, text: string): Message => ({
     messageId: id,
     role: Role.ROLE_USER,
-    content: [{ part: { $case: 'text', value: text } }],
+    parts: [
+      {
+        content: { $case: 'text', value: text },
+        mediaType: 'text/plain',
+        filename: '',
+        metadata: undefined,
+      },
+    ],
     taskId: '',
     contextId: '',
     extensions: [],
     metadata: {},
+    referenceTaskIds: [],
   });
 
   it('sendMessage: should return a simple message response', async () => {
     const params: SendMessageRequest = {
-      request: createTestMessage('msg-1', 'Hello'),
-    } as SendMessageRequest;
+      message: createTestMessage('msg-1', 'Hello'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
 
     const agentResponse: Message = {
       messageId: 'agent-msg-1',
       role: Role.ROLE_AGENT,
-      content: [{ part: { $case: 'text', value: 'Hi there!' } }],
+      parts: [
+        {
+          content: { $case: 'text', value: 'Hi there!' },
+          mediaType: 'text/plain',
+          filename: '',
+          metadata: undefined,
+        },
+      ],
       taskId: 'task-msg-1',
       contextId: '',
       extensions: [],
       metadata: {},
+      referenceTaskIds: [],
     };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
@@ -170,7 +190,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: ctx.taskId,
         contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -189,8 +209,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('sendMessage: (blocking) should return a task in a completed state with an artifact', async () => {
     const params: SendMessageRequest = {
-      request: createTestMessage('msg-2', 'Do a task'),
-    } as SendMessageRequest;
+      message: createTestMessage('msg-2', 'Do a task'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: false,
+      },
+      metadata: {},
+    };
 
     const taskId = 'task-123';
     const contextId = 'ctx-abc';
@@ -198,7 +225,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       artifactId: 'artifact-1',
       name: 'Test Document',
       description: 'A test artifact.',
-      parts: [{ part: { $case: 'text', value: 'This is the content of the artifact.' } }],
+      parts: [
+        {
+          content: { $case: 'text', value: 'This is the content of the artifact.' },
+          mediaType: 'text/plain',
+          filename: '',
+          metadata: undefined,
+        },
+      ],
       metadata: {},
       extensions: [],
     };
@@ -207,7 +241,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -215,15 +249,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-        final: false,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
       });
       bus.publish({
         taskId,
         contextId,
-
         artifact: testArtifact,
         append: false,
         lastChunk: true,
@@ -232,21 +263,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
-          update: {
+          message: {
             role: Role.ROLE_AGENT,
-            content: [{ part: { $case: 'text', value: 'Done!' } }],
+            parts: [
+              {
+                content: { $case: 'text', value: 'Done!' },
+                mediaType: 'text/plain',
+                filename: '',
+                metadata: undefined,
+              },
+            ],
             messageId: 'agent-msg-2',
             taskId,
             contextId,
             extensions: [],
             metadata: {},
+            referenceTaskIds: [],
           },
         },
-        final: true,
         metadata: {},
       });
       bus.finished();
@@ -269,8 +306,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     // Test blocking case
     const blockingParams: SendMessageRequest = {
-      request: createTestMessage('msg-fail-block', 'Test failure blocking'),
-    } as SendMessageRequest;
+      message: createTestMessage('msg-fail-block', 'Test failure blocking'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: false,
+      },
+      metadata: {},
+    };
 
     const blockingResult = await handler.sendMessage(blockingParams, serverCallContext);
     const blockingTask = blockingResult as Task;
@@ -281,7 +325,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Task status should be failed'
     );
     assert.include(
-      (blockingTask.status.update?.content[0].part as any).value,
+      (blockingTask.status.message?.parts[0].content as any).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -292,9 +336,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const saveSpy = vi.spyOn(mockTaskStore, 'save');
 
     const params: SendMessageRequest = {
-      request: createTestMessage('msg-nonblock', 'Do a long task'),
-      configuration: { blocking: false, acceptedOutputModes: [] } as SendMessageConfiguration,
-    } as SendMessageRequest;
+      message: createTestMessage('msg-nonblock', 'Do a long task'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
+      metadata: {},
+    };
 
     const taskId = 'task-nonblock-123';
     const contextId = 'ctx-nonblock-abc';
@@ -304,7 +354,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -316,8 +366,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
-        final: true,
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
         metadata: {},
       });
       bus.finished();
@@ -367,12 +416,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     const params: SendMessageRequest = {
-      request: createTestMessage('msg-nonblock', 'Do a long task'),
+      message: createTestMessage('msg-nonblock', 'Do a long task'),
+      tenant: '',
       configuration: {
-        blocking: false,
         acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
       },
-    } as SendMessageRequest;
+      metadata: {},
+    };
 
     const taskId = 'task-nonblock-123';
     const contextId = 'ctx-nonblock-abc';
@@ -381,7 +433,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -393,8 +445,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
-        final: true,
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
         metadata: {},
       });
       bus.finished();
@@ -431,9 +482,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(finalTaskSaved!.status.state, TaskState.TASK_STATE_FAILED);
     assert.equal(finalTaskSaved!.id, taskId);
     assert.equal(finalTaskSaved!.contextId, contextId);
-    assert.equal(finalTaskSaved!.status.update!.role, Role.ROLE_AGENT);
+    assert.equal(finalTaskSaved!.status.message!.role, Role.ROLE_AGENT);
     assert.equal(
-      (finalTaskSaved!.status.update!.content[0].part as TextPart).value,
+      (finalTaskSaved!.status.message!.parts[0].content as { $case: 'text'; value: string }).value,
       `Event processing loop failed: ${errorMessage}`
     );
   });
@@ -444,9 +495,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     // Test non-blocking case
     const nonBlockingParams: SendMessageRequest = {
-      request: createTestMessage('msg-fail-nonblock', 'Test failure non-blocking'),
-      configuration: { blocking: false, acceptedOutputModes: [] } as SendMessageConfiguration,
-    } as SendMessageRequest;
+      message: createTestMessage('msg-fail-nonblock', 'Test failure non-blocking'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
+      metadata: {},
+    };
 
     const nonBlockingResult = await handler.sendMessage(nonBlockingParams, serverCallContext);
     const nonBlockingTask = nonBlockingResult as Task;
@@ -457,7 +514,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Task status should be failed'
     );
     assert.include(
-      (nonBlockingTask.status.update?.content[0].part as any).value,
+      (nonBlockingTask.status.message?.parts[0].content as any).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -470,8 +527,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const firstMessage = createTestMessage('msg-1', 'Message 1');
     firstMessage.contextId = contextId;
     const firstParams: SendMessageRequest = {
-      request: firstMessage,
-    } as SendMessageRequest;
+      message: firstMessage,
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
 
     let taskId: string;
 
@@ -482,7 +542,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -492,8 +552,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-        final: false,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
       });
 
@@ -504,17 +563,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         status: {
           state: TaskState.TASK_STATE_INPUT_REQUIRED,
           timestamp: undefined,
-          update: {
+          message: {
             messageId: 'agent-msg-1',
             role: Role.ROLE_AGENT,
-            content: [{ part: { $case: 'text', value: 'Response to message 1' } }],
+            parts: [
+              {
+                content: { $case: 'text', value: 'Response to message 1' },
+                mediaType: 'text/plain',
+                filename: '',
+                metadata: undefined,
+              },
+            ],
             taskId,
             contextId,
             extensions: [],
             metadata: {},
+            referenceTaskIds: [],
           },
         },
-        final: true,
         metadata: {},
       });
       bus.finished();
@@ -548,16 +614,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     secondMessage.taskId = firstTask.id;
 
     const secondParams: SendMessageRequest = {
-      request: secondMessage,
-    } as SendMessageRequest;
+      message: secondMessage,
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // Publish a status update with working state
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-        final: false,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
       });
 
@@ -568,17 +636,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         status: {
           state: TaskState.TASK_STATE_WORKING,
           timestamp: undefined,
-          update: {
+          message: {
             messageId: 'agent-msg-2',
             role: Role.ROLE_AGENT,
-            content: [{ part: { $case: 'text', value: 'Response to message 2' } }],
+            parts: [
+              {
+                content: { $case: 'text', value: 'Response to message 2' },
+                mediaType: 'text/plain',
+                filename: '',
+                metadata: undefined,
+              },
+            ],
             taskId,
             contextId,
             extensions: [],
             metadata: {},
+            referenceTaskIds: [],
           },
         },
-        final: false,
         metadata: {},
       });
 
@@ -590,7 +665,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           artifactId: 'artifact-1',
           name: 'Test Document',
           description: 'A test artifact.',
-          parts: [{ part: { $case: 'text', value: 'This is the content of the artifact.' } }],
+          parts: [
+            {
+              content: { $case: 'text', value: 'This is the content of the artifact.' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: undefined,
+            },
+          ],
           metadata: {},
           extensions: [],
         },
@@ -606,9 +688,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
-          update: undefined,
+          message: undefined,
         },
-        final: true,
         metadata: {},
       });
 
@@ -632,25 +713,25 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((secondTask.history![0].content[0].part as any).value, 'Message 1');
+    assert.equal((secondTask.history![0].parts[0].content as any).value, 'Message 1');
     assert.equal(
       secondTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((secondTask.history![1].content[0].part as any).value, 'Response to message 1');
+    assert.equal((secondTask.history![1].parts[0].content as any).value, 'Response to message 1');
     assert.equal(
       secondTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((secondTask.history![2].content[0].part as any).value, 'Message 2');
+    assert.equal((secondTask.history![2].parts[0].content as any).value, 'Message 2');
     assert.equal(
       secondTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((secondTask.history![3].content[0].part as any).value, 'Response to message 2');
+    assert.equal((secondTask.history![3].parts[0].content as any).value, 'Response to message 2');
     assert.equal(secondTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(
       secondTask.artifacts![0].name,
@@ -663,7 +744,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (secondTask.artifacts![0].parts[0].part as any).value,
+      (secondTask.artifacts![0].parts[0].content as any).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
@@ -677,8 +758,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const firstMessage = createTestMessage('msg-1', 'Message 1');
     firstMessage.contextId = contextId;
     const firstParams: SendMessageRequest = {
-      request: firstMessage,
-    } as SendMessageRequest;
+      message: firstMessage,
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
 
     let taskId: string;
 
@@ -689,7 +773,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -699,8 +783,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-        final: false,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
       });
 
@@ -711,17 +794,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         status: {
           state: TaskState.TASK_STATE_INPUT_REQUIRED,
           timestamp: undefined,
-          update: {
+          message: {
             messageId: 'agent-msg-1',
             role: Role.ROLE_AGENT,
-            content: [{ part: { $case: 'text', value: 'Response to message 1' } }],
+            parts: [
+              {
+                content: { $case: 'text', value: 'Response to message 1' },
+                mediaType: 'text/plain',
+                filename: '',
+                metadata: undefined,
+              },
+            ],
             taskId,
             contextId,
             extensions: [],
             metadata: {},
+            referenceTaskIds: [],
           },
         },
-        final: true,
         metadata: {},
       });
       bus.finished();
@@ -757,9 +847,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     secondMessage.taskId = firstTask.id;
 
     const secondParams: SendMessageRequest = {
+      message: secondMessage,
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
       metadata: {},
-      request: secondMessage,
-      configuration: { blocking: false } as SendMessageConfiguration,
     };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
@@ -767,8 +862,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-        final: false,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
       });
 
@@ -781,17 +875,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         status: {
           state: TaskState.TASK_STATE_WORKING,
           timestamp: undefined,
-          update: {
+          message: {
             messageId: 'agent-msg-2',
             role: Role.ROLE_AGENT,
-            content: [{ part: { $case: 'text', value: 'Response to message 2' } }],
+            parts: [
+              {
+                content: { $case: 'text', value: 'Response to message 2' },
+                mediaType: 'text/plain',
+                filename: '',
+                metadata: undefined,
+              },
+            ],
             taskId,
             contextId,
             extensions: [],
             metadata: {},
+            referenceTaskIds: [],
           },
         },
-        final: false,
         metadata: {},
       });
 
@@ -803,7 +904,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           artifactId: 'artifact-1',
           name: 'Test Document',
           description: 'A test artifact.',
-          parts: [{ part: { $case: 'text', value: 'This is the content of the artifact.' } }],
+          parts: [
+            {
+              content: { $case: 'text', value: 'This is the content of the artifact.' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: undefined,
+            },
+          ],
           metadata: {},
           extensions: [],
         },
@@ -819,9 +927,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         status: {
           state: TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
-          update: undefined,
+          message: undefined,
         },
-        final: true,
         metadata: {},
       });
 
@@ -853,25 +960,25 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((finalTask.history![0].content[0].part as any).value, 'Message 1');
+    assert.equal((finalTask.history![0].parts[0].content as any).value, 'Message 1');
     assert.equal(
       finalTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((finalTask.history![1].content[0].part as any).value, 'Response to message 1');
+    assert.equal((finalTask.history![1].parts[0].content as any).value, 'Response to message 1');
     assert.equal(
       finalTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((finalTask.history![2].content[0].part as any).value, 'Message 2');
+    assert.equal((finalTask.history![2].parts[0].content as any).value, 'Message 2');
     assert.equal(
       finalTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((finalTask.history![3].content[0].part as any).value, 'Response to message 2');
+    assert.equal((finalTask.history![3].parts[0].content as any).value, 'Response to message 2');
     assert.equal(finalTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(finalTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
     assert.equal(
@@ -880,7 +987,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (finalTask.artifacts![0].parts[0].part as any).value,
+      (finalTask.artifacts![0].parts[0].content as any).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
@@ -888,7 +995,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('sendMessageStream: should stream submitted, working, and completed events', async () => {
     const params: SendMessageRequest = {
-      request: createTestMessage('msg-3', 'Stream a task'),
+      message: createTestMessage('msg-3', 'Stream a task'),
     } as SendMessageRequest;
     const taskId = 'task-stream-1';
     const contextId = 'ctx-stream-1';
@@ -897,7 +1004,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -906,16 +1013,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-        final: false,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
       });
       await new Promise((res) => setTimeout(res, 10));
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
-        final: true,
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
         metadata: {},
       });
       bus.finished();
@@ -931,7 +1036,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal((events[0] as Task).status.state, TaskState.TASK_STATE_SUBMITTED);
     assert.equal((events[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
     assert.equal((events[2] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
-    assert.isTrue((events[2] as TaskStatusUpdateEvent).final);
   });
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
@@ -939,7 +1043,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const terminalStates: TaskState[] = [
       TaskState.TASK_STATE_COMPLETED,
       TaskState.TASK_STATE_FAILED,
-      TaskState.TASK_STATE_CANCELLED,
+      TaskState.TASK_STATE_CANCELED,
       TaskState.TASK_STATE_REJECTED,
     ];
 
@@ -947,7 +1051,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       const fakeTask: Task = {
         id: taskId,
         contextId: 'ctx-terminal',
-        status: { state: state as TaskState, update: undefined, timestamp: undefined },
+        status: { state: state as TaskState, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -955,7 +1059,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       await mockTaskStore.save(fakeTask, serverCallContext);
 
       const params: SendMessageRequest = {
-        request: { ...createTestMessage('msg-1', 'test'), taskId: taskId },
+        message: { ...createTestMessage('msg-1', 'test'), taskId: taskId },
       } as SendMessageRequest;
 
       try {
@@ -975,7 +1079,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const fakeTask: Task = {
       id: taskId,
       contextId: 'ctx-terminal-stream',
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
       artifacts: [],
       metadata: {},
       history: [],
@@ -983,7 +1087,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const params: SendMessageRequest = {
-      request: { ...createTestMessage('msg-1', 'test'), taskId: taskId },
+      message: { ...createTestMessage('msg-1', 'test'), taskId: taskId },
     } as SendMessageRequest;
 
     const generator = handler.sendMessageStream(params, serverCallContext);
@@ -999,7 +1103,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('sendMessageStream: should stop at input-required state', async () => {
     const params: SendMessageRequest = {
-      request: createTestMessage('msg-4', 'I need input'),
+      message: createTestMessage('msg-4', 'I need input'),
     } as SendMessageRequest;
     const taskId = 'task-input';
     const contextId = 'ctx-input';
@@ -1008,7 +1112,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -1018,10 +1122,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         contextId,
         status: {
           state: TaskState.TASK_STATE_INPUT_REQUIRED,
-          update: undefined,
+          message: undefined,
           timestamp: undefined,
         },
-        final: true,
         metadata: {},
       });
       bus.finished();
@@ -1036,14 +1139,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(events, 2);
     const lastEvent = events[1] as TaskStatusUpdateEvent;
     assert.equal(lastEvent.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
-    assert.isTrue(lastEvent.final);
   });
 
   it('resubscribe: should allow multiple clients to receive events for the same task', async () => {
     const saveSpy = vi.spyOn(mockTaskStore, 'save');
     vi.useFakeTimers();
     const params: SendMessageRequest = {
-      request: createTestMessage('msg-5', 'Long running task'),
+      message: createTestMessage('msg-5', 'Long running task'),
     } as SendMessageRequest;
 
     let taskId;
@@ -1056,7 +1158,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -1064,16 +1166,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-        final: false,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
       });
       await vi.advanceTimersByTimeAsync(100);
       bus.publish({
         taskId,
         contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
-        final: true,
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
         metadata: {},
       });
       bus.finished();
@@ -1090,7 +1190,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const secondEvent = secondEventResult.value as TaskStatusUpdateEvent;
     assert.equal(secondEvent.taskId, taskId, 'Should get the task status update event second');
 
-    const stream2_generator = handler.resubscribe({ name: `tasks/${taskId}` }, serverCallContext);
+    const stream2_generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
     const results1: any[] = [firstEvent, secondEvent];
     const results2: any[] = [];
@@ -1134,7 +1234,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const fakeTask: Task = {
       id: 'task-exist',
       contextId: 'ctx-exist',
-      status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
       artifacts: [],
       metadata: {},
       history: [],
@@ -1142,7 +1242,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const result = await handler.getTask(
-      { name: `tasks/${fakeTask.id}`, historyLength: 0 },
+      { id: fakeTask.id, tenant: '', historyLength: 0 },
       serverCallContext
     );
     assert.deepEqual(result, fakeTask);
@@ -1153,14 +1253,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const fakeTask: Task = {
       id: taskId,
       contextId: 'ctx-push',
-      status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
       artifacts: [],
       metadata: {},
       history: [],
     };
     await mockTaskStore.save(fakeTask, serverCallContext);
 
-    const pushConfig: PushNotificationConfig = {
+    const pushConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'config-1',
       url: 'https://example.com/notify',
       token: 'secret-token',
@@ -1168,25 +1270,23 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
 
     const setParams: TaskPushNotificationConfig = {
-      name: `tasks/${taskId}/pushNotificationConfigs/${pushConfig.id}`,
-      pushNotificationConfig: pushConfig,
+      tenant: '',
+      id: pushConfig.id,
+      taskId: taskId,
+      url: pushConfig.url,
+      token: pushConfig.token,
+      authentication: pushConfig.authentication,
     };
     const setResponse = await handler.setTaskPushNotificationConfig(setParams, serverCallContext);
-    assert.deepEqual(
-      setResponse.pushNotificationConfig,
-      pushConfig,
-      'Set response should return the config'
-    );
+    assert.deepEqual(setResponse, setParams, 'Set response should return the config');
 
     const getParams: GetTaskPushNotificationConfigRequest = {
-      name: `tasks/${taskId}/pushNotificationConfigs/config-1`,
+      tenant: '',
+      taskId: taskId,
+      id: 'config-1',
     };
     const getResponse = await handler.getTaskPushNotificationConfig(getParams, serverCallContext);
-    assert.deepEqual(
-      getResponse.pushNotificationConfig,
-      pushConfig,
-      'Get response should return the saved config'
-    );
+    assert.deepEqual(getResponse, setParams, 'Get response should return the saved config');
   });
 
   it('set/getTaskPushNotificationConfig: should save and retrieve config by task ID for backward compatibility', async () => {
@@ -1195,7 +1295,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-compat',
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
         artifacts: [],
         history: [],
@@ -1204,7 +1304,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     // Config ID defaults to task ID
-    const pushConfig: PushNotificationConfig = {
+    const pushConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       url: 'https://example.com/notify-compat',
       id: taskId,
       token: 'compat-token',
@@ -1212,20 +1314,26 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${pushConfig.id}`,
-        pushNotificationConfig: pushConfig,
+        tenant: '',
+        id: pushConfig.id || taskId, // if id is missing or equals taskId in test
+        taskId: taskId,
+        url: pushConfig.url,
+        token: pushConfig.token,
+        authentication: pushConfig.authentication,
       },
       serverCallContext
     );
 
     const getResponse = await handler.getTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${taskId}`,
+        tenant: '',
+        taskId: taskId,
+        id: taskId,
       },
       serverCallContext
     );
-    expect(getResponse.pushNotificationConfig.id).to.equal(taskId);
-    expect(getResponse.pushNotificationConfig.url).to.equal(pushConfig.url);
+    expect(getResponse.id).to.equal(taskId);
+    expect(getResponse.url).to.equal(pushConfig.url);
   });
 
   it('setTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
@@ -1234,14 +1342,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-overwrite',
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
         artifacts: [],
         history: [],
       },
       serverCallContext
     );
-    const initialConfig: PushNotificationConfig = {
+    const initialConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'config-same',
       url: 'https://initial.url',
       token: 'token-same',
@@ -1249,13 +1359,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${initialConfig.id}`,
-        pushNotificationConfig: initialConfig,
+        tenant: '',
+        taskId: taskId,
+        id: initialConfig.id,
+        url: initialConfig.url,
+        token: initialConfig.token,
+        authentication: initialConfig.authentication,
       },
       serverCallContext
     );
 
-    const newConfig: PushNotificationConfig = {
+    const newConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'config-same',
       url: 'https://new.url',
       token: 'token-new',
@@ -1263,22 +1379,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${newConfig.id}`,
-        pushNotificationConfig: newConfig,
+        tenant: '',
+        taskId: taskId,
+        id: newConfig.id,
+        url: newConfig.url,
+        token: newConfig.token,
+        authentication: newConfig.authentication,
       },
       serverCallContext
     );
 
     const configs = await handler.listTaskPushNotificationConfigs(
       {
-        parent: `tasks/${taskId}`,
+        tenant: '',
+        taskId: taskId,
         pageSize: 0,
         pageToken: '',
       },
       serverCallContext
     );
     expect(configs).to.have.lengthOf(1);
-    expect(configs[0].pushNotificationConfig.url).to.equal('https://new.url');
+    expect(configs[0].url).to.equal('https://new.url');
   });
 
   it('listTaskPushNotificationConfigs: should return all configs for a task', async () => {
@@ -1287,20 +1408,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-list',
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
         artifacts: [],
         history: [],
       },
       serverCallContext
     );
-    const config1: PushNotificationConfig = {
+    const config1: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg1',
       url: 'https://url1.com',
       token: 'token-1',
       authentication: undefined,
     };
-    const config2: PushNotificationConfig = {
+    const config2: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg2',
       url: 'https://url2.com',
       token: 'token-2',
@@ -1308,21 +1433,30 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${config1.id}`,
-        pushNotificationConfig: config1,
+        tenant: '',
+        taskId: taskId,
+        id: config1.id,
+        url: config1.url,
+        token: config1.token,
+        authentication: config1.authentication,
       },
       serverCallContext
     );
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${config2.id}`,
-        pushNotificationConfig: config2,
+        tenant: '',
+        taskId: taskId,
+        id: config2.id,
+        url: config2.url,
+        token: config2.token,
+        authentication: config2.authentication,
       },
       serverCallContext
     );
 
-    const listParams: ListTaskPushNotificationConfigRequest = {
-      parent: `tasks/${taskId}`,
+    const listParams: ListTaskPushNotificationConfigsRequest = {
+      tenant: '',
+      taskId: taskId,
       pageSize: 0,
       pageToken: '',
     };
@@ -1333,12 +1467,20 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     expect(listResponse).to.be.an('array').with.lengthOf(2);
     assert.deepInclude(listResponse, {
-      name: `tasks/${taskId}/pushNotificationConfigs/${config1.id}`,
-      pushNotificationConfig: config1,
+      tenant: '',
+      taskId: taskId,
+      id: config1.id,
+      url: config1.url,
+      token: config1.token,
+      authentication: config1.authentication,
     });
     assert.deepInclude(listResponse, {
-      name: `tasks/${taskId}/pushNotificationConfigs/${config2.id}`,
-      pushNotificationConfig: config2,
+      tenant: '',
+      taskId: taskId,
+      id: config2.id,
+      url: config2.url,
+      token: config2.token,
+      authentication: config2.authentication,
     });
   });
 
@@ -1348,20 +1490,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-delete',
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
         artifacts: [],
         history: [],
       },
       serverCallContext
     );
-    const config1: PushNotificationConfig = {
+    const config1: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-del-1',
       url: 'https://url1.com',
       token: 'token-1',
       authentication: undefined,
     };
-    const config2: PushNotificationConfig = {
+    const config2: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-del-2',
       url: 'https://url2.com',
       token: 'token-2',
@@ -1369,34 +1515,45 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${config1.id}`,
-        pushNotificationConfig: config1,
+        tenant: '',
+        id: config1.id,
+        taskId: taskId,
+        url: config1.url,
+        token: config1.token,
+        authentication: config1.authentication,
       },
       serverCallContext
     );
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${config2.id}`,
-        pushNotificationConfig: config2,
+        tenant: '',
+        id: config2.id,
+        taskId: taskId,
+        url: config2.url,
+        token: config2.token,
+        authentication: config2.authentication,
       },
       serverCallContext
     );
 
     const deleteParams: DeleteTaskPushNotificationConfigRequest = {
-      name: `tasks/${taskId}/pushNotificationConfigs/cfg-del-1`,
+      id: 'cfg-del-1',
+      taskId: taskId,
+      tenant: '',
     };
     await handler.deleteTaskPushNotificationConfig(deleteParams, serverCallContext);
 
     const remainingConfigs = await handler.listTaskPushNotificationConfigs(
       {
-        parent: `tasks/${taskId}`,
+        taskId: taskId,
+        tenant: '',
         pageSize: 0,
         pageToken: '',
       },
       serverCallContext
     );
     expect(remainingConfigs).to.have.lengthOf(1);
-    expect(remainingConfigs[0].pushNotificationConfig.id).to.equal('cfg-del-2');
+    expect(remainingConfigs[0].id).to.equal('cfg-del-2');
   });
 
   it('deleteTaskPushNotificationConfig: should remove the whole entry if last config is deleted', async () => {
@@ -1405,14 +1562,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-delete-last',
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
         artifacts: [],
         history: [],
       },
       serverCallContext
     );
-    const config: PushNotificationConfig = {
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-last',
       url: 'https://last.com',
       token: 'token-last',
@@ -1420,22 +1579,29 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.setTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/${config.id}`,
-        pushNotificationConfig: config,
+        tenant: '',
+        id: config.id,
+        taskId: taskId,
+        url: config.url,
+        token: config.token,
+        authentication: config.authentication,
       },
       serverCallContext
     );
 
     await handler.deleteTaskPushNotificationConfig(
       {
-        name: `tasks/${taskId}/pushNotificationConfigs/cfg-last`,
+        id: 'cfg-last',
+        taskId: taskId,
+        tenant: '',
       },
       serverCallContext
     );
 
     const configs = await handler.listTaskPushNotificationConfigs(
       {
-        parent: `tasks/${taskId}`,
+        taskId: taskId,
+        tenant: '',
         pageSize: 0,
         pageToken: '',
       },
@@ -1456,7 +1622,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockPushNotificationStore,
       mockPushNotificationSender
     );
-    const pushNotification: PushNotificationConfig = {
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       url: 'https://push-1.com',
       id: 'push-1',
       token: 'token-1',
@@ -1465,13 +1633,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const contextId = 'ctx-push-1';
 
     const params: SendMessageRequest = {
+      tenant: '',
       metadata: {},
-      request: {
+      message: {
         ...createTestMessage('msg-push-1', 'Work on task with push notification'),
         contextId: contextId,
       },
       configuration: {
-        pushNotification,
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
       } as SendMessageConfiguration,
     };
 
@@ -1486,10 +1655,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const expectedTask: Task = {
       id: taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
       artifacts: [],
       metadata: {},
-      history: [params.request as Message],
+      history: [params.message as Message],
     };
 
     // Verify push notifications were sent with complete task objects
@@ -1502,7 +1671,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       .calls[0][0] as Task;
     const expectedFirstTask: Task = {
       ...expectedTask,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
     };
     assert.deepEqual(firstCallTask, expectedFirstTask);
 
@@ -1511,7 +1680,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       .calls[1][0] as Task;
     const expectedSecondTask: Task = {
       ...expectedTask,
-      status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
     };
     assert.deepEqual(secondCallTask, expectedSecondTask);
 
@@ -1520,7 +1689,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       .calls[2][0] as Task;
     const expectedThirdTask: Task = {
       ...expectedTask,
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
     };
     assert.deepEqual(thirdCallTask, expectedThirdTask);
   });
@@ -1537,7 +1706,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockPushNotificationStore,
       mockPushNotificationSender
     );
-    const pushNotification: PushNotificationConfig = {
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       url: 'https://push-stream-1.com',
       id: 'push-stream-1',
       token: 'token-stream-1',
@@ -1547,13 +1718,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const contextId = 'ctx-push-stream-1';
 
     const params: SendMessageRequest = {
+      tenant: '',
       metadata: {},
-      request: {
+      message: {
         ...createTestMessage('msg-push-stream-1', 'Work on task with push notification via stream'),
         contextId: contextId,
       },
       configuration: {
-        pushNotification,
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
       } as SendMessageConfiguration,
     };
 
@@ -1574,7 +1746,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal((events[0] as Task).status.state, TaskState.TASK_STATE_SUBMITTED);
     assert.equal((events[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
     assert.equal((events[2] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
-    assert.isTrue((events[2] as TaskStatusUpdateEvent).final);
 
     // Verify push notifications were sent with complete task objects
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
@@ -1584,17 +1755,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const expectedTask: Task = {
       id: taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
       artifacts: [],
       metadata: {},
-      history: [params.request as Message],
+      history: [params.message as Message],
     };
     // Verify first call (submitted state)
     const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[0][0] as Task;
     const expectedFirstTask: Task = {
       ...expectedTask,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
     };
     assert.deepEqual(firstCallTask, expectedFirstTask);
 
@@ -1603,7 +1774,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       .calls[1][0] as Task;
     const expectedSecondTask: Task = {
       ...expectedTask,
-      status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
     };
     assert.deepEqual(secondCallTask, expectedSecondTask);
 
@@ -1612,14 +1783,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       .calls[2][0] as Task;
     const expectedThirdTask: Task = {
       ...expectedTask,
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
     };
     assert.deepEqual(thirdCallTask, expectedThirdTask);
   });
 
   it('Push Notification methods should throw error if task does not exist', async () => {
     const nonExistentTaskId = 'task-non-existent';
-    const config: PushNotificationConfig = {
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-x',
       url: 'https://x.com',
       token: 'token-x',
@@ -1675,14 +1848,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-unsupported',
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
         artifacts: [],
         history: [],
       },
       serverCallContext
     );
-    const config: PushNotificationConfig = {
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-u',
       url: 'https://u.com',
       token: 'token-u',
@@ -1734,7 +1909,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     const streamParams: SendMessageRequest = {
-      request: createTestMessage('msg-9', 'Start and cancel'),
+      message: createTestMessage('msg-9', 'Start and cancel'),
     } as SendMessageRequest;
     const streamGenerator = handler.sendMessageStream(streamParams, serverCallContext);
 
@@ -1753,7 +1928,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const taskId = createdTask.id;
 
     // Now, issue the cancel request
-    const cancelPromise = handler.cancelTask({ name: `tasks/${taskId}` }, serverCallContext);
+    const cancelPromise = handler.cancelTask(
+      { id: taskId, tenant: '', metadata: {} },
+      serverCallContext
+    );
 
     // Let the executor's loop run to completion to detect the cancellation
     await vi.runAllTimersAsync();
@@ -1766,12 +1944,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     const finalTask = await handler.getTask(
-      { name: `tasks/${taskId}`, historyLength: 0 },
+      { id: taskId, tenant: '', historyLength: 0 },
       serverCallContext
     );
-    assert.equal(finalTask.status.state, TaskState.TASK_STATE_CANCELLED);
+    assert.equal(finalTask.status.state, TaskState.TASK_STATE_CANCELED);
 
-    assert.equal(cancelResponse.status.state, TaskState.TASK_STATE_CANCELLED);
+    assert.equal(cancelResponse.status.state, TaskState.TASK_STATE_CANCELED);
   });
 
   it('cancelTask: should fail when it fails to cancel a task', async () => {
@@ -1787,7 +1965,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     const streamParams: SendMessageRequest = {
-      request: createTestMessage('msg-9', 'Start and cancel'),
+      message: createTestMessage('msg-9', 'Start and cancel'),
     } as SendMessageRequest;
     const streamGenerator = handler.sendMessageStream(streamParams, serverCallContext);
 
@@ -1808,7 +1986,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let cancelResponse: Task | undefined;
     let thrownError: any;
     try {
-      const cancelPromise = handler.cancelTask({ name: `tasks/${taskId}` }, serverCallContext);
+      const cancelPromise = handler.cancelTask(
+        { id: taskId, tenant: '', metadata: {} },
+        serverCallContext
+      );
       cancelPromise.catch(() => {});
       await vi.runAllTimersAsync();
       try {
@@ -1833,7 +2014,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const fakeTask: Task = {
       id: taskId,
       contextId: 'ctx-terminal',
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
       artifacts: [],
       metadata: {},
       history: [],
@@ -1841,7 +2022,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     try {
-      await handler.cancelTask({ name: `tasks/${taskId}` }, serverCallContext);
+      await handler.cancelTask({ id: taskId, tenant: '', metadata: {} }, serverCallContext);
       assert.fail('Should have thrown a TaskNotCancelableError');
     } catch (error: any) {
       assert.instanceOf(error, TaskNotCancelableError);
@@ -1852,10 +2033,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('should use contextId from incomingMessage if present (contextId assignment logic)', async () => {
     const params: SendMessageRequest = {
-      request: {
+      message: {
         messageId: 'msg-ctx',
         role: Role.ROLE_USER,
-        content: [{ part: { $case: 'text', value: 'Hello' } }],
+        parts: [
+          {
+            content: { $case: 'text', value: 'Hello' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
         contextId: 'incoming-ctx-id',
         taskId: '',
         extensions: [],
@@ -1868,7 +2056,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: ctx.taskId,
         contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -1886,7 +2074,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: taskContextId,
-        status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
         metadata: {},
         artifacts: [],
         history: [],
@@ -1894,10 +2082,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       serverCallContext
     );
     const params: SendMessageRequest = {
-      request: {
+      tenant: '',
+      metadata: {},
+      message: {
         messageId: 'msg-ctx2',
         role: Role.ROLE_USER,
-        content: [{ part: { $case: 'text', value: 'Hi' } }],
+        parts: [
+          {
+            content: { $case: 'text', value: 'Hi' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
         taskId,
         contextId: '',
         extensions: [],
@@ -1910,7 +2107,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: ctx.taskId,
         contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -1923,10 +2120,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('should generate a new contextId if not present in message or task (contextId assignment logic)', async () => {
     const params: SendMessageRequest = {
-      request: {
+      tenant: '',
+      metadata: {},
+      message: {
         messageId: 'msg-ctx3',
         role: Role.ROLE_USER,
-        content: [{ part: { $case: 'text', value: 'Hey' } }],
+        parts: [
+          {
+            content: { $case: 'text', value: 'Hey' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
         taskId: '',
         contextId: '',
         extensions: [],
@@ -1939,7 +2145,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.publish({
         id: ctx.taskId,
         contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
         artifacts: [],
         history: [],
         metadata: {},
@@ -1967,10 +2173,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const expectedExtension = 'requested-extension-uri';
 
     const params: SendMessageRequest = {
-      request: {
+      tenant: '',
+      metadata: {},
+      message: {
         messageId: messageId,
         role: Role.ROLE_USER,
-        content: [{ part: { $case: 'text', value: userMessageText } }],
+        parts: [
+          {
+            content: { $case: 'text', value: userMessageText },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
         contextId: incomingContextId,
         taskId: incomingTaskId,
         extensions: [],
@@ -1987,7 +2202,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           contextId: ctx.contextId,
           status: {
             state: TaskState.TASK_STATE_SUBMITTED,
-            update: undefined,
+            message: undefined,
             timestamp: undefined,
           },
           artifacts: [],
@@ -1999,11 +2214,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     const fakeTask: Task = {
-      id: params.request!.taskId!,
-      contextId: params.request!.contextId!,
+      id: params.message!.taskId!,
+      contextId: params.message!.contextId!,
       status: {
         state: TaskState.TASK_STATE_SUBMITTED as TaskState,
-        update: undefined,
+        message: undefined,
         timestamp: undefined,
       },
       artifacts: [],
@@ -2068,9 +2283,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const agentCardWithExtendedSupport: AgentCard = {
       name: 'Test Agent',
       description: 'An agent for testing purposes',
-      url: 'http://localhost:8080',
       version: '1.0.0',
-      protocolVersion: '0.3.0',
       capabilities: {
         extensions: [
           {
@@ -2082,6 +2295,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         ],
         streaming: true,
         pushNotifications: true,
+        extendedAgentCard: true,
       },
       defaultInputModes: ['text/plain'],
       defaultOutputModes: ['text/plain'],
@@ -2094,25 +2308,21 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           examples: [],
           inputModes: ['text/plain'],
           outputModes: ['text/plain'],
-          security: [],
+          securityRequirements: [],
         },
       ],
-      preferredTransport: 'jsonrpc',
-      additionalInterfaces: [],
+      supportedInterfaces: [],
       provider: undefined,
       documentationUrl: '',
       securitySchemes: {},
-      security: [],
-      supportsAuthenticatedExtendedCard: true,
+      securityRequirements: [],
       signatures: [],
     };
 
     const extendedAgentCard: AgentCard = {
       name: 'Test ExtendedAgentCard Agent',
       description: 'An agent for testing the extended agent card functionality',
-      url: 'http://localhost:8080',
       version: '1.0.0',
-      protocolVersion: '0.3.0',
       capabilities: {
         extensions: [
           {
@@ -2142,16 +2352,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           examples: [],
           inputModes: ['text/plain'],
           outputModes: ['text/plain'],
-          security: [],
+          securityRequirements: [],
         },
       ],
-      preferredTransport: 'jsonrpc',
-      additionalInterfaces: [],
+      supportedInterfaces: [],
       provider: undefined,
       documentationUrl: '',
       securitySchemes: {},
-      security: [],
-      supportsAuthenticatedExtendedCard: true,
+      securityRequirements: [],
       signatures: [],
     };
 

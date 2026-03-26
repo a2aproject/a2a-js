@@ -20,11 +20,19 @@ export class AuthenticationAgentExecutor implements AgentExecutor {
     const finalMessage: Message = {
       messageId: uuidv4(),
       role: Role.ROLE_AGENT,
-      content: [{ part: { $case: 'text', value: finalText } }],
+      parts: [
+        {
+          content: { $case: 'text', value: finalText },
+          metadata: undefined,
+          filename: '',
+          mediaType: 'text/plain',
+        },
+      ],
       taskId: requestContext.taskId,
       contextId: requestContext.contextId,
       extensions: [],
       metadata: {},
+      referenceTaskIds: [],
     };
     eventBus.publish(finalMessage);
   }
