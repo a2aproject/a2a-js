@@ -82,7 +82,7 @@ describe('restHandler', () => {
 
   const testTask: Task = {
     id: 'task-1',
-    status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined } as any,
+    status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
     contextId: 'ctx-1',
     history: [],
     artifacts: [],

@@ -572,11 +572,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
-    const task = await this.taskStore.load(params.taskId, context);
+    const taskId = params.taskId;
+    const task = await this.taskStore.load(taskId, context);
     if (!task) {
-      throw new TaskNotFoundError(`Task not found: ${params.taskId}`);
+      throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
-    await this.pushNotificationStore?.delete(params.taskId, params.id);
+    await this.pushNotificationStore?.delete(taskId, params.id);
   }
 
   async *resubscribe(

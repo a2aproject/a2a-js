@@ -407,7 +407,7 @@ describe('Client', () => {
           returnImmediately: true,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
-          taskPushNotificationConfig: undefined as TaskPushNotificationConfig | undefined,
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
         metadata: {},
       };
@@ -420,7 +420,7 @@ describe('Client', () => {
           returnImmediately: true,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
-          taskPushNotificationConfig: undefined as TaskPushNotificationConfig | undefined,
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -453,7 +453,7 @@ describe('Client', () => {
           returnImmediately: false,
           historyLength: 0,
           acceptedOutputModes: ['application/json'],
-          taskPushNotificationConfig: undefined as TaskPushNotificationConfig | undefined,
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -478,7 +478,7 @@ describe('Client', () => {
           acceptedOutputModes: ['text/plain'],
           returnImmediately: true,
           historyLength: 0,
-          taskPushNotificationConfig: undefined as TaskPushNotificationConfig | undefined,
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
         metadata: {},
       };
@@ -491,7 +491,7 @@ describe('Client', () => {
           acceptedOutputModes: ['text/plain'],
           returnImmediately: true,
           historyLength: 0,
-          taskPushNotificationConfig: undefined as TaskPushNotificationConfig | undefined,
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
