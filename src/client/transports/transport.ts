@@ -1,13 +1,12 @@
-import { TaskPushNotificationConfig, Task, AgentCard } from '../../index.js';
+import { TaskPushNotificationConfig, Task, type AgentCard } from '../../index.js';
 import {
   SendMessageRequest,
   CancelTaskRequest,
-  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskRequest,
   GetTaskPushNotificationConfigRequest,
-  CreateTaskPushNotificationConfigRequest,
-  TaskSubscriptionRequest,
+  SubscribeToTaskRequest,
   A2AStreamEventData,
   SendMessageResult,
 } from '../../index.js';
@@ -24,7 +23,7 @@ export interface Transport {
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 
   setTaskPushNotificationConfig(
-    params: CreateTaskPushNotificationConfigRequest,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig>;
 
@@ -33,8 +32,8 @@ export interface Transport {
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig>;
 
-  listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigRequest,
+  listTaskPushNotificationConfigs(
+    params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]>;
 
@@ -47,8 +46,8 @@ export interface Transport {
 
   cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task>;
 
-  resubscribeTask(
-    params: TaskSubscriptionRequest,
+  subscribeToTask(
+    params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 }

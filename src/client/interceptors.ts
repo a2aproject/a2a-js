@@ -1,4 +1,4 @@
-import { AgentCard, A2AStreamEventData } from '../index.js';
+import { type AgentCard, A2AStreamEventData } from '../index.js';
 import { Client } from './multitransport-client.js';
 import { RequestOptions } from './multitransport-client.js';
 
@@ -126,8 +126,8 @@ type MethodResult<T, TMembers extends keyof T = keyof T, TOverrides = object> = 
 }[TMembers];
 
 interface ResultsOverrides {
-  // sendMessageStream and resubscribeTask return async iterators and are intercepted on each item,
+  // sendMessageStream and subscribeToTask return async iterators and are intercepted on each item,
   // which requires custom handling.
   sendMessageStream: A2AStreamEventData;
-  resubscribeTask: A2AStreamEventData;
+  subscribeToTask: A2AStreamEventData;
 }

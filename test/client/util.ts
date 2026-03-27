@@ -4,7 +4,7 @@
 
 import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH } from '../../src/constants.js';
-import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a_types.js';
+import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/index.js';
 
 /**
@@ -123,6 +123,7 @@ export function createMockAgentCard(
     capabilities?: {
       streaming?: boolean;
       pushNotifications?: boolean;
+      extendedAgentCard?: boolean;
     };
     skills?: any[];
   } = {}
@@ -130,18 +131,29 @@ export function createMockAgentCard(
   return {
     name: options.name ?? 'Test Agent',
     description: options.description ?? 'A test agent for testing',
-    protocolVersion: options.protocolVersion ?? '1.0.0',
     version: options.version ?? '1.0.0',
-    url: options.url ?? 'https://test-agent.example.com/api',
     defaultInputModes: options.defaultInputModes ?? ['text'],
     defaultOutputModes: options.defaultOutputModes ?? ['text'],
     capabilities: {
       streaming: options.capabilities?.streaming ?? true,
       pushNotifications: options.capabilities?.pushNotifications ?? true,
+      extendedAgentCard: options.capabilities?.extendedAgentCard ?? true,
       extensions: [],
-      ...options.capabilities,
     },
+    supportedInterfaces: [
+        {
+            url: options.url ?? 'https://test-agent.example.com/api',            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+        }
+    ],
     skills: options.skills ?? [],
+    provider: {
+      url: '',
+      organization: '',
+    },
+    securitySchemes: {},
+    securityRequirements: [],
+    signatures: [],
   };
 }
 
@@ -168,21 +180,25 @@ export function createMessageParams(
   const role = options.role ?? 'user';
 
   return {
-    request: {
+    message: {
       messageId: messageId,
       role: role === 'user' ? Role.ROLE_USER : Role.ROLE_AGENT,
-      content: [
+      parts: [
         {
-          part: {
+          content: {
             $case: 'text',
             value: text,
           },
+          metadata: {},
+          filename: '',
+          mediaType: '',
         },
       ],
       contextId: 'context-123',
       taskId: 'task-123',
-      metadata: {},
+      metadata: {}, referenceTaskIds: [],
       extensions: [],
+      referenceTaskIds: [],
     },
     configuration: undefined,
     metadata: undefined,
@@ -202,21 +218,24 @@ export function createMockProtoMessage(
 
   const obj: SendMessageResponse = {
     payload: {
-      $case: 'msg',
+      $case: 'message',
       value: {
         messageId: messageId,
         contextId: 'context-123',
         taskId: 'task-123',
         role: role,
-        content: [
+        parts: [
           {
-            part: {
+            content: {
               $case: 'text',
               value: text,
             },
+            metadata: {},
+            filename: '',
+            mediaType: '',
           },
         ],
-        metadata: {},
+        metadata: {}, referenceTaskIds: [],
         extensions: [],
       },
     },
@@ -242,7 +261,7 @@ export function createMockMessage(
     text?: string;
     role?: Role;
   } = {}
-): SendMessageResult {
+): any {
   const messageId = options.messageId ?? 'msg-123';
   const text = options.text ?? 'Hello, agent!';
   const role = options.role ?? Role.ROLE_USER;
@@ -252,15 +271,18 @@ export function createMockMessage(
     contextId: 'context-123',
     taskId: 'task-123',
     role: role,
-    content: [
+    parts: [
       {
-        part: {
+        content: {
           $case: 'text',
           value: text,
         },
+        metadata: {},
+        filename: '',
+        mediaType: '',
       },
     ],
-    metadata: {},
+    metadata: {}, referenceTaskIds: [],
     extensions: [],
   };
 }
@@ -402,7 +424,7 @@ export function createMockFetch(
         requestBody.method === 'message/send'
           ? {
               payload: {
-                $case: 'msg',
+                $case: 'message',
                 value: mockMessage,
               },
             }
@@ -479,7 +501,7 @@ export function createMockTask(
     status: {
       state: status,
       timestamp: '2023-01-01T00:00:00.000Z',
-      update: undefined,
+      message: undefined,
     },
     artifacts: [],
     history: [],
@@ -504,7 +526,7 @@ export function createMockProtoTask(
     status: {
       state: status,
       timestamp: '2023-01-01T00:00:00.000Z',
-      update: undefined,
+      message: undefined,
     },
     artifacts: [],
     history: [],

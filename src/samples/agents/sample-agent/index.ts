@@ -15,20 +15,27 @@ const sampleAgentCard: AgentCard = {
   name: 'Sample Agent',
   description:
     'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
-  url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples', // Added provider URL
   },
-  version: '1.0.0', // Incremented version
-  protocolVersion: '0.3.0',
+  iconUrl: undefined,
+  version: '1.0.0',
   capabilities: {
     streaming: true, // The new framework supports streaming
     pushNotifications: false, // Assuming not implemented for this agent yet
-    extensions: [],
+    extensions: [] as any[],
   },
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'HTTP+JSON',
+      protocolVersion: '0.3.0',
+      tenant: '',
+    },
+  ],
   securitySchemes: {},
-  security: [],
+  securityRequirements: [] as any[],
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [
@@ -40,14 +47,10 @@ const sampleAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
-      security: [],
+      securityRequirements: [] as any[],
     },
-  ],
-  supportsAuthenticatedExtendedCard: false,
-  preferredTransport: 'jsonrpc',
-  additionalInterfaces: [],
-  documentationUrl: '',
-  signatures: [],
+  ],  documentationUrl: '',
+  signatures: [] as any[],
 };
 
 async function main() {

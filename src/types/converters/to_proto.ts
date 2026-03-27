@@ -1,49 +1,28 @@
 import { GenericError } from '../../errors.js';
 import {
   Message,
-  PushNotificationConfig,
   SendMessageResponse,
   StreamResponse,
   Task,
   TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
   TaskStatusUpdateEvent,
-  ListTaskPushNotificationConfigResponse,
-} from '../pb/a2a_types.js';
-import { generatePushNotificationConfigName } from './id_decoding.js';
+  ListTaskPushNotificationConfigsResponse,
+} from '../pb/a2a.js';
 
 export class ToProto {
   static listTaskPushNotificationConfig(
-    configs: (
-      | { taskId: string; pushNotificationConfig: PushNotificationConfig }
-      | TaskPushNotificationConfig
-    )[]
-  ): ListTaskPushNotificationConfigResponse {
+    configs: TaskPushNotificationConfig[]
+  ): ListTaskPushNotificationConfigsResponse {
     return {
-      configs: configs.map((c) => {
-        if ('taskId' in c) {
-          return {
-            name: generatePushNotificationConfigName(c.taskId, c.pushNotificationConfig.id),
-            pushNotificationConfig: c.pushNotificationConfig,
-          };
-        }
-        return c;
-      }),
+      configs,
       nextPageToken: '',
     };
   }
 
-  static taskPushNotificationConfig(
-    config:
-      | { taskId: string; pushNotificationConfig: PushNotificationConfig }
-      | TaskPushNotificationConfig
+  static taskTaskPushNotificationConfig(
+    config: TaskPushNotificationConfig
   ): TaskPushNotificationConfig {
-    if ('taskId' in config) {
-      return {
-        name: generatePushNotificationConfigName(config.taskId, config.pushNotificationConfig.id),
-        pushNotificationConfig: config.pushNotificationConfig,
-      };
-    }
     return config;
   }
 
@@ -53,7 +32,7 @@ export class ToProto {
     if ('messageId' in event) {
       return {
         payload: {
-          $case: 'msg',
+          $case: 'message',
           value: event,
         },
       };
@@ -86,7 +65,7 @@ export class ToProto {
     if ('messageId' in params) {
       return {
         payload: {
-          $case: 'msg',
+          $case: 'message',
           value: params,
         },
       };
@@ -98,5 +77,6 @@ export class ToProto {
         },
       };
     }
+    throw new GenericError('Invalid message type');
   }
 }

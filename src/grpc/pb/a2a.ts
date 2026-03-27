@@ -25,6 +25,7 @@ import { Struct, Value } from "./google/protobuf/struct.js";
 import { Timestamp } from "./google/protobuf/timestamp.js";
 
 import * as pb from "../../types/pb/a2a.js";
+import type { AgentInterface as AgentInterfaceType, AgentCard as AgentCardType } from "../../types/pb/a2a.js";
 
 export const protobufPackage = "lf.a2a.v1";
 
@@ -41,8 +42,8 @@ export type Artifact = pb.Artifact;
 export type TaskStatusUpdateEvent = pb.TaskStatusUpdateEvent;
 export type TaskArtifactUpdateEvent = pb.TaskArtifactUpdateEvent;
 export type AuthenticationInfo = pb.AuthenticationInfo;
-export type AgentInterface = pb.AgentInterface;
-export type AgentCard = pb.AgentCard;
+export type AgentInterface = AgentInterfaceType;
+export type AgentCard = AgentCardType;
 export type AgentCard_SecuritySchemesEntry = pb.AgentCard_SecuritySchemesEntry;
 export type AgentProvider = pb.AgentProvider;
 export type AgentCapabilities = pb.AgentCapabilities;
@@ -87,7 +88,7 @@ export type ListTaskPushNotificationConfigsResponse = pb.ListTaskPushNotificatio
 function createBaseSendMessageConfiguration(): SendMessageConfiguration {
   return {
     acceptedOutputModes: [],
-    taskPushNotificationConfig: undefined,
+    taskTaskPushNotificationConfig: undefined,
     historyLength: undefined,
     returnImmediately: false,
   };
@@ -98,8 +99,8 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
     for (const v of message.acceptedOutputModes) {
       writer.uint32(10).string(v!);
     }
-    if (message.taskPushNotificationConfig !== undefined) {
-      TaskPushNotificationConfig.encode(message.taskPushNotificationConfig, writer.uint32(18).fork()).join();
+    if (message.taskTaskPushNotificationConfig !== undefined) {
+      TaskPushNotificationConfig.encode(message.taskTaskPushNotificationConfig, writer.uint32(18).fork()).join();
     }
     if (message.historyLength !== undefined) {
       writer.uint32(24).int32(message.historyLength);
@@ -130,7 +131,7 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
             break;
           }
 
-          message.taskPushNotificationConfig = TaskPushNotificationConfig.decode(reader, reader.uint32());
+          message.taskTaskPushNotificationConfig = TaskPushNotificationConfig.decode(reader, reader.uint32());
           continue;
         }
         case 3: {

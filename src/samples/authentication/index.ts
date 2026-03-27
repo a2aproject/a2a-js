@@ -16,17 +16,24 @@ import { authenticationHandler } from './authentication_middleware.js';
 const authenticationAgentCard: AgentCard = {
   name: 'Sample Authentication Agent',
   description: 'A sample agent to test the authentication functionality',
-  url: 'http://localhost:41241/',
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples',
   },
   version: '1.0.0',
-  protocolVersion: '0.3.0',
+  iconUrl: undefined,
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'HTTP+JSON',
+      protocolVersion: '0.3.0',
+      tenant: '',
+    },
+  ],
   capabilities: {
     streaming: false,
     pushNotifications: false,
-    extensions: [],
+    extensions: [] as any[],
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'],
@@ -39,11 +46,9 @@ const authenticationAgentCard: AgentCard = {
       examples: ['hello, who am i?'],
       inputModes: ['text'],
       outputModes: ['text', 'task-status'],
-      security: [],
+      securityRequirements: [],
     },
-  ],
-  supportsAuthenticatedExtendedCard: false,
-  security: [{ schemes: { Bearer: { list: [] } } }],
+  ],  securityRequirements: [{ schemes: { Bearer: { list: [] as any[] } } }],
   securitySchemes: {
     Bearer: {
       scheme: {
@@ -57,10 +62,7 @@ const authenticationAgentCard: AgentCard = {
     },
   },
   documentationUrl: 'https://example.com/docs',
-  signatures: [],
-  preferredTransport: 'json-rpc',
-  additionalInterfaces: [],
-};
+  signatures: [] as any[],};
 
 async function main() {
   // 1. Create TaskStore

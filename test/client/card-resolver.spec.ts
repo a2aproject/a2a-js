@@ -5,29 +5,26 @@ import { AgentCard } from '../../src/index.js';
 describe('DefaultAgentCardResolver', () => {
   let mockFetch: Mock;
 
-  const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
-    name: 'Test Agent',
+  const testAgentCard = {    name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'JSONRPC',
+    supportedInterfaces: [{ url: 'http://localhost:8080', protocolBinding: 'HTTP+JSON', protocolVersion: '1.0.0', tenant: '' }],
     version: '1.0.0',
+    iconUrl: undefined,
+    iconUrl: undefined,
     capabilities: {
       streaming: true,
       pushNotifications: true,
-      extensions: [],
+      extensions: [] as any[],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
-    skills: [],
+    skills: [] as any[],
     documentationUrl: 'http://test-agent.com/docs',
-    security: [],
+    securityRequirements: [] as any[],
     securitySchemes: {},
-    signatures: [],
+    signatures: [] as any[],
     provider: { url: '', organization: '' },
-    additionalInterfaces: [],
-    supportsAuthenticatedExtendedCard: false,
-  };
+    };
 
   beforeEach(() => {
     mockFetch = vi.fn();

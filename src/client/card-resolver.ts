@@ -1,5 +1,5 @@
 import { AGENT_CARD_PATH } from '../constants.js';
-import { AgentCard } from '../index.js';
+import { AgentCard as AgentCardValue, type AgentCard } from '../index.js';
 
 export interface AgentCardResolverOptions {
   path?: string;
@@ -54,7 +54,7 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
    */
   private normalizeAgentCard(card: unknown): AgentCard {
     if (this.isProtoAgentCard(card)) {
-      const parsedProto = AgentCard.fromJSON(card);
+      const parsedProto = AgentCardValue.fromJSON(card);
       return parsedProto;
     }
     return card as AgentCard;

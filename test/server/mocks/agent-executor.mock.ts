@@ -1,6 +1,6 @@
 import { vi, type Mock, type MockInstance } from 'vitest';
 import { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
-import { TaskState } from '../../../src/types/pb/a2a_types.js';
+import { TaskState } from '../../../src/types/pb/a2a.js';
 import { RequestContext } from '../../../src/server/agent_execution/request_context.js';
 import { ExecutionEventBus } from '../../../src/server/events/execution_event_bus.js';
 
@@ -27,7 +27,7 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
   bus.publish({
     id: taskId,
     contextId,
-    status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+    status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
     artifacts: [],
     history: [],
     metadata: {},
@@ -37,10 +37,8 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
   bus.publish({
     taskId,
     contextId,
-    status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-    metadata: {},
-    final: false,
-    append: false,
+    status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    metadata: {},    append: false,
     lastChunk: false,
     artifact: undefined,
     history: [],
@@ -50,9 +48,8 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
   bus.publish({
     taskId,
     contextId,
-    status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+    status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
     metadata: {},
-    final: true, // Mark as final
     append: false,
     lastChunk: false,
     artifact: undefined,
@@ -80,22 +77,19 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
     eventBus.publish({
       id: taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
       artifacts: [],
       history: [],
-      metadata: {},
-      final: false,
-      append: false,
+      metadata: {},      append: false,
       lastChunk: false,
       artifact: undefined,
+      91: undefined,
     });
     eventBus.publish({
       taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-      metadata: {},
-      final: false,
-      append: false,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      metadata: {},      append: false,
       lastChunk: false,
       artifact: undefined,
       history: [],
@@ -111,13 +105,11 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
           taskId,
           contextId,
           status: {
-            state: TaskState.TASK_STATE_CANCELLED,
-            update: undefined,
+            state: TaskState.TASK_STATE_CANCELED,
+            message: undefined,
             timestamp: undefined,
           },
-          metadata: {},
-          final: true,
-          append: false,
+          metadata: {},          append: false,
           lastChunk: false,
           artifact: undefined,
           history: [],
@@ -134,10 +126,8 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
     eventBus.publish({
       taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
-      metadata: {},
-      final: true,
-      append: false,
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      metadata: {},      append: false,
       lastChunk: false,
       artifact: undefined,
       history: [],
@@ -170,22 +160,18 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
     eventBus.publish({
       id: taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, update: undefined, timestamp: undefined },
+      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
       artifacts: [],
       history: [],
-      metadata: {},
-      final: false,
-      append: false,
+      metadata: {},      append: false,
       lastChunk: false,
       artifact: undefined,
     });
     eventBus.publish({
       taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_WORKING, update: undefined, timestamp: undefined },
-      metadata: {},
-      final: false,
-      append: false,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      metadata: {},      append: false,
       lastChunk: false,
       artifact: undefined,
       history: [],
@@ -199,13 +185,11 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
           taskId,
           contextId,
           status: {
-            state: TaskState.TASK_STATE_CANCELLED,
-            update: undefined,
+            state: TaskState.TASK_STATE_CANCELED,
+            message: undefined,
             timestamp: undefined,
           },
-          metadata: {},
-          final: true,
-          append: false,
+          metadata: {},          append: false,
           lastChunk: false,
           artifact: undefined,
           history: [],
@@ -220,10 +204,8 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
     eventBus.publish({
       taskId,
       contextId,
-      status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
-      metadata: {},
-      final: true,
-      append: false,
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      metadata: {},      append: false,
       lastChunk: false,
       artifact: undefined,
       history: [],

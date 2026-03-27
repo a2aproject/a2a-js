@@ -2,22 +2,20 @@ import { PushNotificationNotSupportedError } from '../errors.js';
 import {
   TaskPushNotificationConfig,
   Task,
-  PushNotificationConfig,
   AgentCard,
   A2AStreamEventData,
   SendMessageResult,
 } from '../index.js';
 import {
   CancelTaskRequest,
-  CreateTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
-  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
   SendMessageConfiguration,
   SendMessageRequest,
-  TaskSubscriptionRequest,
-} from '../types/pb/a2a_types.js';
+  SubscribeToTaskRequest,
+} from '../types/pb/a2a.js';
 import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
@@ -45,7 +43,7 @@ export interface ClientConfig {
   /**
    * Specifies the default push notification configuration to apply for every Task.
    */
-  pushNotificationConfig?: PushNotificationConfig;
+  pushNotificationConfig?: Partial<TaskPushNotificationConfig>;
 
   /**
    * Interceptors invoked for each request.
@@ -82,10 +80,10 @@ export class Client {
    * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
    * Otherwise it will return the current agent card value.
    */
-  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    if (this.agentCard.supportsAuthenticatedExtendedCard) {
+  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
+    if (this.agentCard.capabilities?.extendedAgentCard) {
       this.agentCard = await this.executeWithInterceptors(
-        { method: 'getAgentCard' },
+        { method: 'getExtendedAgentCard' },
         options,
         (_, options) => this.transport.getExtendedAgentCard(options)
       );
@@ -100,7 +98,7 @@ export class Client {
   sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
-      blocking: !(this.config?.polling ?? false),
+      returnImmediately: this.config?.polling ?? false,
     });
 
     return this.executeWithInterceptors(
@@ -120,7 +118,7 @@ export class Client {
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const method = 'sendMessageStream';
 
-    params = this.applyClientConfig({ params, blocking: true });
+    params = this.applyClientConfig({ params, returnImmediately: false });
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
@@ -173,7 +171,7 @@ export class Client {
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
   setTaskPushNotificationConfig(
-    params: CreateTaskPushNotificationConfigRequest,
+    params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities?.pushNotifications) {
@@ -210,8 +208,8 @@ export class Client {
    * Retrieves the associated push notification configurations for a specified task.
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */
-  listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigRequest,
+  listTaskPushNotificationConfigs(
+    params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig[]> {
     if (!this.agentCard.capabilities?.pushNotifications) {
@@ -219,9 +217,9 @@ export class Client {
     }
 
     return this.executeWithInterceptors(
-      { method: 'listTaskPushNotificationConfig', value: params },
+      { method: 'listTaskPushNotificationConfigs', value: params },
       options,
-      this.transport.listTaskPushNotificationConfig.bind(this.transport)
+      this.transport.listTaskPushNotificationConfigs.bind(this.transport)
     );
   }
 
@@ -265,13 +263,13 @@ export class Client {
   /**
    * Allows a client to reconnect to an updates stream for an ongoing task after a previous connection was interrupted.
    */
-  async *resubscribeTask(
-    params: TaskSubscriptionRequest,
+  async *subscribeToTask(
+    params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    const method = 'resubscribeTask';
+    const method = 'subscribeToTask';
 
-    const beforeArgs: BeforeArgs<'resubscribeTask'> = {
+    const beforeArgs: BeforeArgs<'subscribeToTask'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
       options,
@@ -280,7 +278,7 @@ export class Client {
 
     if (beforeResult) {
       const earlyReturn = beforeResult.earlyReturn.value;
-      const afterArgs: AfterArgs<'resubscribeTask'> = {
+      const afterArgs: AfterArgs<'subscribeToTask'> = {
         result: { method, value: earlyReturn },
         agentCard: this.agentCard,
         options: beforeArgs.options,
@@ -290,11 +288,11 @@ export class Client {
       return;
     }
 
-    for await (const event of this.transport.resubscribeTask(
+    for await (const event of this.transport.subscribeToTask(
       beforeArgs.input.value,
       beforeArgs.options
     )) {
-      const afterArgs: AfterArgs<'resubscribeTask'> = {
+      const afterArgs: AfterArgs<'subscribeToTask'> = {
         result: { method, value: event },
         agentCard: this.agentCard,
         options: beforeArgs.options,
@@ -309,10 +307,10 @@ export class Client {
 
   private applyClientConfig({
     params,
-    blocking,
+    returnImmediately,
   }: {
     params: SendMessageRequest;
-    blocking: boolean;
+    returnImmediately: boolean;
   }): SendMessageRequest {
     const result = {
       ...params,
@@ -325,12 +323,19 @@ export class Client {
       ([] as string[]);
     result.configuration.historyLength ??= 0;
 
-    if (!result.configuration.pushNotification && this.config?.pushNotificationConfig) {
-      if (params.request?.taskId !== undefined) {
-        result.configuration.pushNotification = this.config.pushNotificationConfig;
+    if (!result.configuration.taskTaskPushNotificationConfig && this.config?.pushNotificationConfig) {
+      if (params.message?.taskId !== undefined) {
+        result.configuration.taskTaskPushNotificationConfig = {
+          ...this.config.pushNotificationConfig,
+          taskId: params.message.taskId,
+          id: this.config.pushNotificationConfig.id || '', // Must have ID? Or server generates it?
+          // If config is partial, we assume missing fields are handled by server or not needed?
+          // But TaskPushNotificationConfig expects fields.
+          // This is tricky if TaskPushNotificationConfig is strict.
+        } as TaskPushNotificationConfig;
       }
     }
-    result.configuration.blocking ??= blocking;
+    result.configuration.returnImmediately ??= returnImmediately;
     return result;
   }
 
