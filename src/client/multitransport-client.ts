@@ -81,7 +81,7 @@ export class Client {
    * Otherwise it will return the current agent card value.
    */
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    if (this.agentCard.supportsAuthenticatedExtendedCard) {
+    if (this.agentCard.capabilities?.extendedAgentCard) {
       this.agentCard = await this.executeWithInterceptors(
         { method: 'getExtendedAgentCard' },
         options,
@@ -323,9 +323,9 @@ export class Client {
       ([] as string[]);
     result.configuration.historyLength ??= 0;
 
-    if (!result.configuration.taskPushNotificationConfig && this.config?.pushNotificationConfig) {
+    if (!result.configuration.taskTaskPushNotificationConfig && this.config?.pushNotificationConfig) {
       if (params.message?.taskId !== undefined) {
-        result.configuration.taskPushNotificationConfig = {
+        result.configuration.taskTaskPushNotificationConfig = {
           ...this.config.pushNotificationConfig,
           taskId: params.message.taskId,
           id: this.config.pushNotificationConfig.id || '', // Must have ID? Or server generates it?

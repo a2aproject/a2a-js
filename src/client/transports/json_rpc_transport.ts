@@ -12,7 +12,7 @@ import {
 } from '../../errors.js';
 import {
   Task,
-  AgentCard,
+  type AgentCard,
   StreamResponse as ProtoStreamResponse,
   TaskPushNotificationConfig,
   A2AStreamEventData,

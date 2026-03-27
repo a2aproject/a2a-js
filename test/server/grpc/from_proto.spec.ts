@@ -5,7 +5,7 @@ import { RequestMalformedError, GenericError } from '../../../src/errors.js';
 
 vi.mock('../../../src/types/converters/id_decoding.js', () => ({
   extractTaskId: vi.fn((name) => name.replace('tasks/', '')),
-  extractTaskAndPushNotificationConfigId: vi.fn(),
+  extractTaskAndTaskPushNotificationConfigId: vi.fn(),
 }));
 
 describe('FromProto', () => {
@@ -36,7 +36,7 @@ describe('FromProto', () => {
         status: {
           state: proto.TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
-          update: undefined,
+          message: undefined,
         },
         contextId: '',
       };
@@ -50,9 +50,9 @@ describe('FromProto', () => {
       const msg: proto.Message = {
         messageId: 'msg-1',
         role: proto.Role.ROLE_USER,
-        content: [],
+        parts: [],
         extensions: [],
-        metadata: {},
+        metadata: {}, referenceTaskIds: [],
         taskId: '',
         contextId: '',
       };
@@ -119,7 +119,7 @@ describe('FromProto', () => {
         status: {
           state: proto.TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
-          update: undefined,
+          message: undefined,
         },
         contextId: '',
       };

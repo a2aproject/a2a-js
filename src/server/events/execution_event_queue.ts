@@ -1,4 +1,4 @@
-import { TaskStatusUpdateEvent } from '../../index.js';
+import { TaskStatusUpdateEvent, TaskState } from '../../index.js';
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
 
 /**
@@ -32,17 +32,23 @@ export class ExecutionEventQueue {
 
   /**
    * Provides an async generator that yields events from the event bus.
-   * Stops when a Message event is received or a TaskStatusUpdateEvent with final=true is received.
+   * Stops when a Message event is received or a TaskStatusUpdateEvent with terminal state is received.
    */
   public async *events(): AsyncGenerator<AgentExecutionEvent, void, undefined> {
     while (!this.stopped || this.eventQueue.length > 0) {
       if (this.eventQueue.length > 0) {
         const event = this.eventQueue.shift()!;
         yield event;
-        if (
-          'messageId' in event ||
-          ('status' in event && 'taskId' in event && (event as TaskStatusUpdateEvent).final)
-        ) {
+        
+        const isStatusUpdate = 'status' in event && 'taskId' in event;
+        const isTerminal = isStatusUpdate && [
+            TaskState.TASK_STATE_COMPLETED,
+            TaskState.TASK_STATE_FAILED,
+            TaskState.TASK_STATE_CANCELED,
+            TaskState.TASK_STATE_REJECTED
+        ].includes((event as TaskStatusUpdateEvent).status!.state);
+
+        if ('messageId' in event || isTerminal) {
           this.handleFinished();
           break;
         }

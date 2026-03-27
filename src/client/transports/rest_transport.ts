@@ -71,15 +71,9 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): Promise<SendMessageResult> {
     const requestBody = params;
-    // Assuming the URL pattern /v1/tasks/{taskId}:sendMessage
-    // We need to extract taskId from params.message.taskId
-    const taskId = params.message?.taskId;
-    if (!taskId) {
-      throw new RequestMalformedError('Message must have a taskId');
-    }
     const response = await this._sendRequest<SendMessageRequest, SendMessageResponse>(
       'POST',
-      `/v1/tasks/${encodeURIComponent(taskId)}:sendMessage`,
+      '/v1/message:send',
       requestBody,
       options,
       SendMessageRequest,
@@ -93,12 +87,8 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const requestBody = SendMessageRequest.toJSON(params);
-    const taskId = params.message?.taskId;
-    if (!taskId) {
-      throw new RequestMalformedError('Message must have a taskId');
-    }
     yield* this._sendStreamingRequest(
-      `/v1/tasks/${encodeURIComponent(taskId)}:streamMessage`,
+      '/v1/message:stream',
       requestBody,
       options
     );
@@ -203,7 +193,7 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     yield* this._sendStreamingRequest(
-      `/v1/tasks/${encodeURIComponent(params.taskId)}:subscribe`,
+      `/v1/tasks/${encodeURIComponent(params.id)}:subscribe`,
       undefined,
       options
     );

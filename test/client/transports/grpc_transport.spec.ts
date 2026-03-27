@@ -41,7 +41,7 @@ vi.mock('../../../src/grpc/pb/a2a.js', () => {
 // Mock ToProto and FromProto to act as pass-throughs or return simple objects for testing flow
 vi.mock('../../../src/types/converters/to_proto.js', () => ({
   ToProto: {
-    taskPushNotificationConfig: vi.fn((x) => x),
+    taskTaskPushNotificationConfig: vi.fn((x) => x),
     listTaskPushNotificationConfig: vi.fn((x) => ({ configs: x })),
     messageSendResult: vi.fn((x) => x),
     messageStreamResult: vi.fn((x) => x),
@@ -59,7 +59,7 @@ vi.mock('../../../src/types/converters/from_proto.js', () => ({
     task: vi.fn((x) => x),
     taskStatusUpdate: vi.fn((x) => x),
     taskArtifactUpdate: vi.fn((x) => x),
-    taskPushNotificationConfig: vi.fn((x) => x),
+    taskTaskPushNotificationConfig: vi.fn((x) => x),
     messageStreamResult: vi.fn((x) => x),
   },
 }));
@@ -254,7 +254,7 @@ describe('GrpcTransport', () => {
       const mockTask = createMockTask(taskId, TaskState.TASK_STATE_CANCELED);
       mockUnarySuccess(mockGrpcClient.cancelTask as Mock, mockTask);
 
-      const result = await transport.cancelTask({ id: taskId, tenant: '' });
+      const result = await transport.cancelTask({ metadata: {}, id: taskId, tenant: '' });
 
       expect(result).toEqual(mockTask);
       expect(mockGrpcClient.cancelTask).toHaveBeenCalled();
@@ -266,7 +266,7 @@ describe('GrpcTransport', () => {
         status.FAILED_PRECONDITION,
         'Cannot cancel'
       );
-      await expect(transport.cancelTask({ id: 'task-123', tenant: '' })).rejects.toThrow(
+      await expect(transport.cancelTask({ metadata: {}, id: 'task-123', tenant: '' })).rejects.toThrow(
         TaskNotCancelableError
       );
     });
@@ -327,7 +327,7 @@ describe('GrpcTransport', () => {
 
         const result = await transport.listTaskPushNotificationConfigs({
           taskId: taskId,
-          pageSize: 0,
+          tenant: '', pageSize: 0,
           pageToken: '',
         });
 

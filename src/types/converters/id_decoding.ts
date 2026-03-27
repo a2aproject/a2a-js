@@ -15,7 +15,7 @@ export const generateTaskName = (taskId: string): string => {
   return `tasks/${taskId}`;
 };
 
-export const extractTaskAndPushNotificationConfigId = (
+export const extractTaskAndTaskPushNotificationConfigId = (
   name: string
 ): { taskId: string; configId: string } => {
   const match = name.match(CONFIG_REGEX);
@@ -25,6 +25,6 @@ export const extractTaskAndPushNotificationConfigId = (
   return { taskId: match[1], configId: match[2] };
 };
 
-export const generatePushNotificationConfigName = (taskId: string, configId: string): string => {
+export const generateTaskPushNotificationConfigName = (taskId: string, configId: string): string => {
   return `tasks/${taskId}/pushNotificationConfigs/${configId}`;
 };

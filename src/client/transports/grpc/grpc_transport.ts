@@ -1,7 +1,7 @@
 import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../core.js';
 import { A2AServiceClient, TaskPushNotificationConfig } from '../../../grpc/pb/a2a.js';
-import { Task, AgentCard } from '../../../types/pb/a2a.js';
+import { type Task, type AgentCard } from '../../../types/pb/a2a.js';
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
@@ -65,7 +65,7 @@ export class GrpcTransport implements Transport {
       AgentCard
     >(
       'getExtendedAgentCard',
-      {},
+      { tenant: '' },
       options,
       this.grpcClient.getExtendedAgentCard.bind(this.grpcClient),
       (req) => req

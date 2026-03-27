@@ -23,13 +23,9 @@ describe('restHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let app: Express;
 
-  const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
-    name: 'Test Agent',
+  const testAgentCard = {    name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'HTTP+JSON',
-    version: '1.0.0',
+    url: 'http://localhost:8080',    version: '1.0.0',
     capabilities: {
       streaming: true,
       pushNotifications: true,
@@ -39,31 +35,27 @@ describe('restHandler', () => {
     defaultOutputModes: ['text/plain'],
     skills: [],
     securitySchemes: {},
-    security: [],
-    additionalInterfaces: [],
-    provider: undefined,
-    documentationUrl: '',
-    supportsAuthenticatedExtendedCard: false,
-    signatures: [],
+    securityRequirements: [],    provider: undefined,
+    documentationUrl: '',    signatures: [],
   };
 
   const testMessage: Message = {
     messageId: 'msg-1',
     role: 'user' as any,
-    content: [{ part: { $case: 'text', value: 'Hello' } }],
+    parts: [{ content: { $case: 'text', value: 'Hello' } }],
     contextId: 'ctx-1',
     taskId: 'task-1',
     extensions: [],
-    metadata: {},
+    metadata: {}, referenceTaskIds: [],
   };
 
   const testTask: Task = {
     id: 'task-1',
-    status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+    status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
     contextId: 'ctx-1',
     history: [],
     artifacts: [],
-    metadata: {},
+    metadata: {}, referenceTaskIds: [],
   };
 
   beforeEach(() => {
@@ -290,7 +282,7 @@ describe('restHandler', () => {
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
       expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
-        { taskId: 'task-1', tenant: '' },
+        { id: 'task-1', tenant: '' },
         expect.anything()
       );
     });
@@ -479,7 +471,7 @@ describe('restHandler', () => {
             messageId: 'msg-parts',
             role: 'ROLE_USER',
             kind: 'message',
-            content: [
+            parts: [
               {
                 file: {
                   fileWithUri: 'https://example.com/file.pdf',
@@ -505,7 +497,7 @@ describe('restHandler', () => {
             message_id: 'msg-parts',
             role: 'ROLE_USER',
             kind: 'message',
-            content: [
+            parts: [
               {
                 file: {
                   file_with_uri: 'https://example.com/file.pdf',
@@ -558,7 +550,7 @@ describe('restHandler', () => {
         message: protoMessage as Message,
         configuration: payload.configuration,
         tenant: '',
-        metadata: {},
+        metadata: {}, referenceTaskIds: [],
       };
       await request(app).post('/v1/message:send').send(params).expect(201);
     });

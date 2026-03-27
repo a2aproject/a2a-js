@@ -1,12 +1,14 @@
 import * as grpc from '@grpc/grpc-js';
+import { A2AServiceServer } from '../../grpc/pb/a2a.js';
 import {
-  A2AServiceServer,
   AgentCard,
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
   GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
   ListTaskPushNotificationConfigsRequest,
   ListTaskPushNotificationConfigsResponse,
   SendMessageRequest,
@@ -15,7 +17,7 @@ import {
   Task,
   TaskPushNotificationConfig,
   SubscribeToTaskRequest,
-} from '../../grpc/pb/a2a.js';
+} from '../../types/pb/a2a.js';
 import { Empty } from '../../grpc/pb/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { FromProto } from '../../types/converters/from_proto.js';
@@ -186,7 +188,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         FromProto.createTaskPushNotificationConfig,
         requestHandler.setTaskPushNotificationConfig.bind(requestHandler),
-        ToProto.taskPushNotificationConfig
+        ToProto.taskTaskPushNotificationConfig
       );
     },
 
@@ -199,7 +201,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         (req) => req,
         requestHandler.getTaskPushNotificationConfig.bind(requestHandler),
-        ToProto.taskPushNotificationConfig
+        ToProto.taskTaskPushNotificationConfig
       );
     },
 
@@ -217,8 +219,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     },
 
     listTasks(
-      call: grpc.ServerUnaryCall<unknown, unknown>,
-      callback: grpc.sendUnaryData<unknown>
+      call: grpc.ServerUnaryCall<ListTasksRequest, ListTasksResponse>,
+      callback: grpc.sendUnaryData<ListTasksResponse>
     ): Promise<void> {
       // Not implemented in the previous version, skipping or implementing as unimplemented
       callback({ code: grpc.status.UNIMPLEMENTED, details: 'Not implemented' }, null);

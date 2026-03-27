@@ -20,7 +20,7 @@ export class ToProto {
     };
   }
 
-  static taskPushNotificationConfig(
+  static taskTaskPushNotificationConfig(
     config: TaskPushNotificationConfig
   ): TaskPushNotificationConfig {
     return config;

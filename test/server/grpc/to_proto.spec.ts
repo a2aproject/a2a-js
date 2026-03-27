@@ -4,13 +4,13 @@ import * as proto from '../../../src/types/pb/a2a.js';
 import * as idDecoding from '../../../src/types/converters/id_decoding.js';
 
 vi.mock('../../../src/types/converters/id_decoding.js', () => ({
-  generatePushNotificationConfigName: vi.fn(),
+  generateTaskPushNotificationConfigName: vi.fn(),
   generateTaskName: vi.fn((id) => `tasks/${id}`),
 }));
 
 describe('ToProto', () => {
   beforeEach(() => {
-    vi.mocked(idDecoding.generatePushNotificationConfigName).mockReturnValue(
+    vi.mocked(idDecoding.generateTaskPushNotificationConfigName).mockReturnValue(
       'tasks/task-123/pushNotificationConfigs/pnc-456'
     );
   });
@@ -19,12 +19,12 @@ describe('ToProto', () => {
     it('should wrap Message in SendMessageResponse', () => {
       const message: proto.Message = {
         messageId: 'msg-1',
-        content: [],
+        parts: [] as any[],
         contextId: '',
         taskId: '',
         role: 0,
-        extensions: [],
-        metadata: {},
+        extensions: [] as any[],
+        metadata: {}, 
       };
       const result = ToProto.messageSendResult(message);
       expect(result.payload?.$case).toBe('message');
@@ -36,8 +36,8 @@ describe('ToProto', () => {
         id: 'task-123',
         contextId: '',
         status: undefined,
-        history: [],
-        artifacts: [],
+        history: [] as any[],
+        artifacts: [] as any[],
         metadata: undefined,
       };
       const result = ToProto.messageSendResult(task);
@@ -81,7 +81,7 @@ describe('ToProto', () => {
       authentication: undefined,
       tenant: '',
     };
-    const result = ToProto.taskPushNotificationConfig(config);
+    const result = ToProto.taskTaskPushNotificationConfig(config);
     expect(result).toEqual(config);
   });
 });

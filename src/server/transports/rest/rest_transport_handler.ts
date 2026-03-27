@@ -186,7 +186,7 @@ export class RestTransportHandler {
    * Cancels a task.
    */
   async cancelTask(taskId: string, context: ServerCallContext): Promise<Task> {
-    const params: CancelTaskRequest = { id: taskId, tenant: '' };
+    const params: CancelTaskRequest = { id: taskId, tenant: '', metadata: {} };
     return this.requestHandler.cancelTask(params, context);
   }
 
@@ -202,7 +202,7 @@ export class RestTransportHandler {
     AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>
   > {
     await this.requireCapability('streaming');
-    return this.requestHandler.resubscribe({ taskId, tenant: '' }, context);
+    return this.requestHandler.resubscribe({ taskId: taskId, tenant: '' }, context);
   }
 
   /**
@@ -226,7 +226,7 @@ export class RestTransportHandler {
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
     const configs = await this.requestHandler.listTaskPushNotificationConfigs(
-      { taskId, pageSize: 0, pageToken: '' },
+      { taskId, tenant: '', pageSize: 0, pageToken: '' },
       context
     );
     return configs;

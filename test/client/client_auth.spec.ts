@@ -112,7 +112,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
       });
 
       // This should trigger the authentication flow
-      const result = await client.sendMessage(messageParams.request);
+      const result = await client.sendMessage(messageParams);
 
       // Verify fetch was called multiple times
       expect(mockFetch.mock.calls.length).to.equal(2);
@@ -156,7 +156,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
       });
 
       // First request - should trigger auth flow
-      await client.sendMessage(messageParams.request);
+      await client.sendMessage(messageParams);
 
       // Capture the token from the first request
       const firstRequestAuthCall = mockFetch.mock.calls.find(
@@ -165,7 +165,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
       const firstRequestToken = firstRequestAuthCall?.[1]?.headers?.['Authorization'];
 
       // Second request - should use existing token
-      const result2 = await client.sendMessage(messageParams.request);
+      const result2 = await client.sendMessage(messageParams);
 
       // Total calls should be 3: 2 for first request + 1 for second request (auth token cached)
       expect(mockFetch.mock.calls.length).to.equal(3);
@@ -197,7 +197,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
         text: 'Test auth handler',
       });
 
-      await client.sendMessage(messageParams.request);
+      await client.sendMessage(messageParams);
 
       // Verify auth handler methods were called
       expect(authHandlerSpy.headers).toHaveBeenCalled();
@@ -223,7 +223,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
 
       // This should fail because we're not retrying with auth
       try {
-        await clientNoRetry.sendMessage(messageParams.request);
+        await clientNoRetry.sendMessage(messageParams);
         expect.fail('Expected error to be thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(Error);
@@ -255,7 +255,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
       });
 
       // This should trigger the auth flow and succeed
-      const result = await clientAuthTest.sendMessage(messageParams.request);
+      const result = await clientAuthTest.sendMessage(messageParams);
 
       // Verify the Authorization headers were sent correctly
       // With AuthHandlingFetch, the auth handler makes the retry internally, so we see both calls
@@ -291,7 +291,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
       });
 
       // This should succeed without any authentication flow
-      const result = await clientNoAuth.sendMessage(messageParams.request);
+      const result = await clientNoAuth.sendMessage(messageParams);
 
       // Verify that no Authorization headers were sent
       expect(capturedAuthHeaders).to.have.length(1);
@@ -325,7 +325,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
 
       // The client should return a TaskNotFoundError (since the error code is -32001) rather than throwing an error directly, but JsonRpcTransport maps it back out to be thrown
       try {
-        await clientNoAuthHandler.sendMessage(messageParams.request);
+        await clientNoAuthHandler.sendMessage(messageParams);
         expect.fail('Expected error to be thrown');
       } catch (error) {
         // Verify that the result is a JSON-RPC mapped error

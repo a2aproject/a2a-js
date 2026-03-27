@@ -40,35 +40,27 @@ describe('Client', () => {
       cancelTask: vi.fn(),
       subscribeToTask: vi.fn(),
     };
-    agentCard = {
-      protocolVersion: '0.3.0',
-      name: 'Test Agent',
+    agentCard = {      name: 'Test Agent',
       description: 'Test Description',
-      url: 'http://test-agent.com',
       version: '1.0.0',
       capabilities: {
-        extensions: [],
+        extensions: [] as any[],
         streaming: true,
         pushNotifications: true,
       },
-      defaultInputModes: [],
-      defaultOutputModes: [],
-      skills: [],
+      defaultInputModes: [] as any[],
+      defaultOutputModes: [] as any[],
+      skills: [] as any[],
       documentationUrl: 'http://test-agent.com/docs',
-      security: [],
+      securityRequirements: [] as any[],
       securitySchemes: {},
-      signatures: [],
-      preferredTransport: 'json-rpc',
-      additionalInterfaces: [],
-      provider: { url: '', organization: '' },
-      supportsAuthenticatedExtendedCard: false,
-    };
+      signatures: [] as any[],      provider: { url: '', organization: '' }, supportedInterfaces: [] as any[], iconUrl: undefined,    };
     client = new Client(transport, agentCard);
   });
 
   it('should call transport.getAuthenticatedExtendedAgentCard', async () => {
     const agentCardWithExtendedSupport = { ...agentCard, supportsAuthenticatedExtendedCard: true };
-    const extendedAgentCard: AgentCard = {
+    const extendedAgentCard = {
       ...agentCard,
       capabilities: { ...agentCard.capabilities, extensions: [] },
     };
@@ -104,22 +96,22 @@ describe('Client', () => {
         contextId: '123',
         messageId: 'msg1',
         role: Role.ROLE_USER,
-        content: [{ part: { $case: 'text', value: 'hello' } }],
+        parts: [{ content: { $case: 'text', value: 'hello' }, metadata: {}, filename: '', mediaType: 'text/plain' }],
         taskId: '',
-        extensions: [],
-        metadata: {},
+        extensions: [] as any[],
+        metadata: {}, referenceTaskIds: []
       },
       configuration: undefined,
-      metadata: {},
+      metadata: {}
     };
     const response: Message = {
       messageId: 'abc',
       role: Role.ROLE_AGENT,
-      content: [{ part: { $case: 'text', value: 'response' } }],
+      parts: [{ content: { $case: 'text', value: 'response' }, metadata: {}, filename: '', mediaType: 'text/plain' }],
       taskId: '',
       contextId: '123',
-      extensions: [],
-      metadata: {},
+      extensions: [] as any[],
+      metadata: {}, referenceTaskIds: []
     };
     transport.sendMessage.mockResolvedValue(response);
 
@@ -145,29 +137,25 @@ describe('Client', () => {
       message: {
         messageId: '1',
         role: Role.ROLE_USER,
-        content: [],
+        parts: [] as any[],
         contextId: '',
         taskId: '',
-        extensions: [],
-        metadata: {},
+        extensions: [] as any[],
+        metadata: {}, referenceTaskIds: []
       },
       configuration: undefined,
-      metadata: {},
+      metadata: {}
     };
     const events: A2AStreamEventData[] = [
       {
         taskId: '123',
-        contextId: 'ctx1',
-        final: false,
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
-        metadata: {},
+        contextId: 'ctx1',        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        metadata: {}
       },
       {
         taskId: '123',
-        contextId: 'ctx1',
-        final: false,
-        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, update: undefined },
-        metadata: {},
+        contextId: 'ctx1',        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, message: undefined },
+        metadata: {}
       },
     ];
     async function* stream() {
@@ -245,7 +233,7 @@ describe('Client', () => {
   it('should call transport.listTaskPushNotificationConfigs', async () => {
     const params: ListTaskPushNotificationConfigsRequest = {
       taskId: '123',
-      pageSize: 0,
+      tenant: '', pageSize: 0,
       pageToken: '',
     };
     const configs: TaskPushNotificationConfig[] = [
@@ -291,10 +279,10 @@ describe('Client', () => {
     const task: Task = {
       id: '123',
       contextId: 'ctx1',
-      status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+      status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
       artifacts: [],
       history: [],
-      metadata: {},
+      metadata: {}
     };
     transport.getTask.mockResolvedValue(task);
 
@@ -309,10 +297,10 @@ describe('Client', () => {
     const task: Task = {
       id: '123',
       contextId: 'ctx1',
-      status: { state: TaskState.TASK_STATE_CANCELED, timestamp: undefined, update: undefined },
+      status: { state: TaskState.TASK_STATE_CANCELED, timestamp: undefined, message: undefined },
       artifacts: [],
       history: [],
-      metadata: {},
+      metadata: {}
     };
     transport.cancelTask.mockResolvedValue(task);
 
@@ -328,17 +316,13 @@ describe('Client', () => {
     const events: TaskStatusUpdateEvent[] = [
       {
         taskId: '123',
-        contextId: 'ctx1',
-        final: false,
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
-        metadata: {},
+        contextId: 'ctx1',        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        metadata: {}
       },
       {
         taskId: '123',
-        contextId: 'ctx1',
-        final: true,
-        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, update: undefined },
-        metadata: {},
+        contextId: 'ctx1',        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, message: undefined },
+        metadata: {}
       },
     ];
     async function* stream() {
@@ -366,14 +350,14 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: undefined,
-        metadata: {},
+        metadata: {}
       };
 
       await client.sendMessage(params);
@@ -392,19 +376,19 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: {
           returnImmediately: true,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
-          taskPushNotificationConfig: undefined,
+          taskTaskPushNotificationConfig: undefined,
         },
-        metadata: {},
+        metadata: {}
       };
 
       await client.sendMessage(params);
@@ -415,7 +399,7 @@ describe('Client', () => {
           returnImmediately: true,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
-          taskPushNotificationConfig: undefined,
+          taskTaskPushNotificationConfig: undefined,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -429,14 +413,14 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: undefined,
-        metadata: {},
+        metadata: {}
       };
 
       await client.sendMessage(params);
@@ -447,7 +431,7 @@ describe('Client', () => {
           returnImmediately: false,
           historyLength: 0,
           acceptedOutputModes: ['application/json'],
-          taskPushNotificationConfig: undefined,
+          taskTaskPushNotificationConfig: undefined,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -461,19 +445,19 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: {
           acceptedOutputModes: ['text/plain'],
           returnImmediately: true,
           historyLength: 0,
-          taskPushNotificationConfig: undefined,
+          taskTaskPushNotificationConfig: undefined,
         },
-        metadata: {},
+        metadata: {}
       };
 
       await client.sendMessage(params);
@@ -484,7 +468,7 @@ describe('Client', () => {
           returnImmediately: true,
           historyLength: 0,
           acceptedOutputModes: ['text/plain'],
-          taskPushNotificationConfig: undefined,
+          taskTaskPushNotificationConfig: undefined,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -504,14 +488,14 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '123', // required for push config mapping
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: undefined,
-        metadata: {},
+        metadata: {}
       };
 
       await client.sendMessage(params);
@@ -522,7 +506,7 @@ describe('Client', () => {
           returnImmediately: false,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
-          taskPushNotificationConfig: { ...pushConfig, taskId: '123' },
+          taskTaskPushNotificationConfig: { ...pushConfig, taskId: '123' },
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -552,19 +536,19 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: {
-          taskPushNotificationConfig: pushConfig,
+          taskTaskPushNotificationConfig: pushConfig,
           returnImmediately: true,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
         },
-        metadata: {},
+        metadata: {}
       };
 
       await client.sendMessage(params);
@@ -575,7 +559,7 @@ describe('Client', () => {
           returnImmediately: true,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
-          taskPushNotificationConfig: pushConfig,
+          taskTaskPushNotificationConfig: pushConfig,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -591,23 +575,23 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: undefined,
-        metadata: {},
+        metadata: {}
       };
       const response: Message = {
         messageId: '2',
         role: Role.ROLE_AGENT,
-        content: [],
+        parts: [] as any[],
         contextId: '',
         taskId: '',
-        extensions: [],
-        metadata: {},
+        extensions: [] as any[],
+        metadata: {}, referenceTaskIds: []
       };
       transport.sendMessage.mockResolvedValue(response);
 
@@ -620,7 +604,7 @@ describe('Client', () => {
           returnImmediately: false,
           historyLength: 0,
           acceptedOutputModes: [] as string[],
-          taskPushNotificationConfig: undefined as any,
+          taskTaskPushNotificationConfig: undefined as any,
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
@@ -647,10 +631,10 @@ describe('Client', () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
         artifacts: [],
         history: [],
-        metadata: {},
+        metadata: {}
       };
       transport.getTask.mockResolvedValue(task);
 
@@ -681,10 +665,10 @@ describe('Client', () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
         artifacts: [],
         history: [],
-        metadata: {},
+        metadata: {}
       };
       transport.getTask.mockResolvedValue(task);
 
@@ -710,10 +694,10 @@ describe('Client', () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
         artifacts: [],
         history: [],
-        metadata: {},
+        metadata: {}
       };
       transport.getTask.mockResolvedValue(task);
 
@@ -742,10 +726,10 @@ describe('Client', () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
         artifacts: [],
         history: [],
-        metadata: {},
+        metadata: {}
       };
       transport.getTask.mockResolvedValue(task);
 
@@ -757,10 +741,10 @@ describe('Client', () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
         artifacts: [],
         history: [],
-        metadata: {},
+        metadata: {}
       };
       const config: ClientConfig = {
         interceptors: [
@@ -797,10 +781,10 @@ describe('Client', () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
         artifacts: [],
         history: [],
-        metadata: {},
+        metadata: {}
       };
       const config: ClientConfig = {
         interceptors: [
@@ -834,10 +818,10 @@ describe('Client', () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
         artifacts: [],
         history: [],
-        metadata: {},
+        metadata: {}
       };
       let firstAfterCalled = false;
       let secondAfterCalled = false;
@@ -890,33 +874,29 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: undefined,
-        metadata: {},
+        metadata: {}
       };
       const events: A2AStreamEventData[] = [
         {
           taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, update: undefined },
-          metadata: {},
+          contextId: 'ctx1',          status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+          metadata: {}
         },
         {
           taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: {
+          contextId: 'ctx1',          status: {
             state: TaskState.TASK_STATE_COMPLETED,
             timestamp: undefined,
-            update: undefined,
+            message: undefined,
           },
-          metadata: {},
+          metadata: {}
         },
       ];
       async function* stream() {
@@ -968,23 +948,23 @@ describe('Client', () => {
         message: {
           messageId: '1',
           role: Role.ROLE_USER,
-          content: [],
+          parts: [] as any[],
           contextId: '',
           taskId: '',
-          extensions: [],
-          metadata: {},
+          extensions: [] as any[],
+          metadata: {}, referenceTaskIds: []
         },
         configuration: undefined,
-        metadata: {},
+        metadata: {}
       };
       const responseMock: Message = {
         messageId: '2',
         role: Role.ROLE_AGENT,
-        content: [],
+        parts: [] as any[],
         contextId: '',
         taskId: '',
-        extensions: [],
-        metadata: {},
+        extensions: [] as any[],
+        metadata: {}, referenceTaskIds: []
       };
       transport.sendMessage.mockResolvedValue(responseMock);
       const config: ClientConfig = {
@@ -1024,14 +1004,14 @@ describe('Client', () => {
             message: {
               messageId: '1',
               role: Role.ROLE_USER,
-              content: [],
+              parts: [] as any[],
               contextId: '',
               taskId: '',
-              extensions: [],
-              metadata: {},
+              extensions: [] as any[],
+              metadata: {}, referenceTaskIds: []
             },
             configuration: undefined,
-            metadata: {},
+            metadata: {}
           }),
       },
       {
@@ -1048,25 +1028,21 @@ describe('Client', () => {
           const events: A2AStreamEventData[] = [
             {
               taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: {
+              contextId: 'ctx1',              status: {
                 state: TaskState.TASK_STATE_WORKING,
                 timestamp: undefined,
-                update: undefined,
+                message: undefined,
               },
-              metadata: {},
+              metadata: {}
             },
             {
               taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: {
+              contextId: 'ctx1',              status: {
                 state: TaskState.TASK_STATE_COMPLETED,
                 timestamp: undefined,
-                update: undefined,
+                message: undefined,
               },
-              metadata: {},
+              metadata: {}
             },
           ];
           async function* stream() {
@@ -1125,25 +1101,21 @@ describe('Client', () => {
           const events: A2AStreamEventData[] = [
             {
               taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: {
+              contextId: 'ctx1',              status: {
                 state: TaskState.TASK_STATE_WORKING,
                 timestamp: undefined,
-                update: undefined,
+                message: undefined,
               },
-              metadata: {},
+              metadata: {}
             },
             {
               taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: {
+              contextId: 'ctx1',              status: {
                 state: TaskState.TASK_STATE_COMPLETED,
                 timestamp: undefined,
-                update: undefined,
+                message: undefined,
               },
-              metadata: {},
+              metadata: {}
             },
           ];
           async function* stream() {

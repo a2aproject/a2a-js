@@ -153,7 +153,7 @@ export interface SendMessageConfiguration {
    * Configuration for the agent to send push notifications for task updates.
    * Task id should be empty when sending this configuration in a `SendMessage` request.
    */
-  taskPushNotificationConfig:
+  taskTaskPushNotificationConfig:
     | TaskPushNotificationConfig
     | undefined;
   /**
@@ -378,65 +378,39 @@ export interface AgentInterface {
   protocolVersion: string;
 }
 
+
 /**
- * A self-describing manifest for an agent. It provides essential
- * metadata including the agent's identity, capabilities, skills, supported
- * communication methods, and security requirements.
- * Next ID: 20
+ * AgentCard is the metadata that describes an agent.
  */
 export interface AgentCard {
-  /**
-   * A human readable name for the agent.
-   * Example: "Recipe Agent"
-   */
+  /** The name of the agent. */
   name: string;
-  /**
-   * A human-readable description of the agent, assisting users and other agents
-   * in understanding its purpose.
-   * Example: "Agent that helps users with recipes and cooking."
-   */
+  /** A human-readable description of the agent. */
   description: string;
-  /** Ordered list of supported interfaces. The first entry is preferred. */
+  /** The interfaces supported by the agent. */
   supportedInterfaces: AgentInterface[];
-  /** The service provider of the agent. */
-  provider:
-    | AgentProvider
-    | undefined;
-  /**
-   * The version of the agent.
-   * Example: "1.0.0"
-   */
+  /** The provider of the agent. */
+  provider: AgentProvider | undefined;
+  /** The version of the agent. */
   version: string;
-  /** A URL providing additional documentation about the agent. */
-  documentationUrl?:
-    | string
-    | undefined;
-  /** A2A Capability set supported by the agent. */
-  capabilities:
-    | AgentCapabilities
-    | undefined;
-  /** The security scheme details used for authenticating with this agent. */
+  /** A URL for the agent's documentation. */
+  documentationUrl: string | undefined;
+  /** The capabilities of the agent. */
+  capabilities: AgentCapabilities | undefined;
+  /** Security schemes defined by the agent. */
   securitySchemes: { [key: string]: SecurityScheme };
-  /** Security requirements for contacting the agent. */
+  /** Security requirements that apply globally to the agent. */
   securityRequirements: SecurityRequirement[];
-  /**
-   * protolint:enable REPEATED_FIELD_NAMES_PLURALIZED
-   * The set of interaction modes that the agent supports across all skills.
-   * This can be overridden per skill. Defined as media types.
-   */
+  /** Default input modes supported by the agent. */
   defaultInputModes: string[];
-  /** The media types supported as outputs from this agent. */
+  /** Default output modes supported by the agent. */
   defaultOutputModes: string[];
-  /**
-   * Skills represent the abilities of an agent.
-   * It is largely a descriptive concept but represents a more focused set of behaviors that the
-   * agent is likely to succeed at.
-   */
+  /** The skills provided by the agent. */
   skills: AgentSkill[];
-  /** JSON Web Signatures computed for this `AgentCard`. */
+  /** Signatures for the agent card. */
   signatures: AgentCardSignature[];
-  /** Optional. A URL to an icon for the agent. */
-  iconUrl?: string | undefined;
+  /** A URL for the agent's icon. */
+  iconUrl: string | undefined;
 }
 
 export interface AgentCard_SecuritySchemesEntry {
@@ -964,8 +938,8 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
           globalThis.String(e)
         )
         : [],
-      taskPushNotificationConfig: isSet(object.taskPushNotificationConfig)
-        ? TaskPushNotificationConfig.fromJSON(object.taskPushNotificationConfig)
+      taskTaskPushNotificationConfig: isSet(object.taskTaskPushNotificationConfig)
+        ? TaskPushNotificationConfig.fromJSON(object.taskTaskPushNotificationConfig)
         : isSet(object.task_push_notification_config)
         ? TaskPushNotificationConfig.fromJSON(object.task_push_notification_config)
         : undefined,
@@ -987,8 +961,8 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
     if (message.acceptedOutputModes?.length) {
       obj.acceptedOutputModes = message.acceptedOutputModes;
     }
-    if (message.taskPushNotificationConfig !== undefined) {
-      obj.taskPushNotificationConfig = TaskPushNotificationConfig.toJSON(message.taskPushNotificationConfig);
+    if (message.taskTaskPushNotificationConfig !== undefined) {
+      obj.taskTaskPushNotificationConfig = TaskPushNotificationConfig.toJSON(message.taskTaskPushNotificationConfig);
     }
     if (message.historyLength !== undefined) {
       obj.historyLength = Math.round(message.historyLength);

@@ -1,4 +1,4 @@
-import { TaskPushNotificationConfig, Task, AgentCard } from '../../index.js';
+import { TaskPushNotificationConfig, Task, type AgentCard } from '../../index.js';
 import {
   SendMessageRequest,
   CancelTaskRequest,

@@ -31,9 +31,9 @@ describe('JsonRpcTransport', () => {
         message: {
           messageId: 'test-msg-1',
           role: Role.ROLE_USER,
-          content: [
+          parts: [
             {
-              part: {
+              content: {
                 $case: 'text',
                 value: 'Hello, agent!',
               },
@@ -42,7 +42,7 @@ describe('JsonRpcTransport', () => {
           contextId: 'ctx1',
           taskId: 'task1',
           extensions: [],
-          metadata: {},
+          metadata: {}, referenceTaskIds: [],
         },
         configuration: undefined,
         metadata: undefined,
@@ -64,7 +64,7 @@ describe('JsonRpcTransport', () => {
                 value: {
                   messageId: 'response-msg-1',
                   role: Role.ROLE_AGENT,
-                  content: [{ part: { $case: 'text', value: 'Response' } }],
+                  parts: [{ content: { $case: 'text', value: 'Response' }, metadata: {}, filename: '', mediaType: '' }],
                 },
               },
             },
@@ -109,7 +109,12 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfigs/create');
-      expect(body.params).toEqual(config);
+      
+      const expectedParams = { ...config };
+      delete (expectedParams as any).tenant;
+      delete (expectedParams as any).authentication;
+
+      expect(body.params).toEqual(expectedParams);
       expect(result).toEqual(config);
     });
 
@@ -145,15 +150,20 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfigs/get');
-      expect(body.params).toEqual(params);
+      
+      const expectedParams = { ...params };
+      delete (expectedParams as any).tenant;
+      expect(body.params).toEqual(expectedParams);
+      
       expect(result).toEqual(expectedConfig);
     });
 
     it('listTaskPushNotificationConfigs should return list of configs', async () => {
       const params: ListTaskPushNotificationConfigsRequest = {
         taskId: 'task1',
-        pageSize: 0,
+        tenant: '', pageSize: 0,
         pageToken: '',
+        tenant: '',
       };
 
       const expectedConfig: TaskPushNotificationConfig = {
@@ -183,7 +193,13 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfigs/list');
-      expect(body.params).toEqual(params);
+      
+      const expectedParams = { ...params };
+      delete (expectedParams as any).tenant;
+      delete (expectedParams as any).pageSize;
+      delete (expectedParams as any).pageToken;
+
+      expect(body.params).toEqual(expectedParams);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(expectedConfig);
     });

@@ -157,11 +157,11 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     }
 
     console.log(
-      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId}) ${update.final ? colorize('bright', '[FINAL]') : ''}`
+      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId})`
     );
 
-    if (update.status?.update) {
-      printMessageContent(update.status.update);
+    if (update.status?.message) {
+      printMessageContent(update.status.message);
     }
   }
   // Check if it's a TaskArtifactUpdateEvent
@@ -170,17 +170,16 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     console.log(
       `${prefix} 📄 Artifact Received: ${
         update.artifact?.name || '(unnamed)'
-      } (ID: ${update.artifact?.id}, Task: ${update.taskId}, Context: ${update.contextId})`
+      } (ID: ${update.artifact?.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
     );
     // Create a temporary message-like structure to reuse printMessageContent
     printMessageContent({
       messageId: generateId(), // Dummy messageId
       role: Role.ROLE_AGENT, // Assuming artifact parts are from agent
-      content: update.artifact?.parts || [],
+      parts: update.artifact?.parts || [],
       taskId: update.taskId,
       contextId: update.contextId,
       extensions: [],
-      metadata: {},
     });
   } else {
     // This case should ideally not be reached if called correctly
@@ -193,9 +192,9 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
 }
 
 function printMessageContent(message: Message) {
-  message.content.forEach((part: Part, index: number) => {
+  message.parts.forEach((part: Part, index: number) => {
     const partPrefix = colorize('red', `  Part ${index + 1}:`);
-    const p = part.part;
+    const p = part.content;
 
     if (!p) {
       return;
@@ -205,16 +204,15 @@ function printMessageContent(message: Message) {
       case 'text':
         console.log(`${partPrefix} ${colorize('green', '📝 Text:')}`, p.value);
         break;
-      case 'file': {
-        const filePart = p.value;
-        let source = 'unknown';
-        if (filePart.file?.$case === 'fileWithUri') {
-          source = filePart.file.value;
-        } else if (filePart.file?.$case === 'fileWithBytes') {
-          source = 'Inline (bytes)';
-        }
+      case 'url': {
         console.log(
-          `${partPrefix} ${colorize('blue', '📄 File:')} Type: ${filePart.mimeType || 'N/A'}, Source: ${source}`
+          `${partPrefix} ${colorize('blue', '📄 File URL:')} ${p.value}`
+        );
+        break;
+      }
+      case 'raw': {
+        console.log(
+          `${partPrefix} ${colorize('blue', '📄 File Raw:')} (${p.value.length} bytes)`
         );
         break;
       }
@@ -240,8 +238,8 @@ async function fetchAndDisplayAgentCard() {
   // The client was initialized with serverUrl, which is the agent's base URL.
   console.log(colorize('dim', `Attempting to fetch agent card from agent at: ${serverUrl}`));
   try {
-    // client.getAgentCard() uses the agentBaseUrl provided during client construction
-    const card: AgentCard = await client.getAgentCard();
+    // client.getExtendedAgentCard() uses the agentBaseUrl provided during client construction
+    const card = await client.getExtendedAgentCard();
     agentName = card.name || 'Agent'; // Update global agent name
     console.log(colorize('green', `✓ Agent Card Found:`));
     console.log(`  Name:        ${colorize('bright', agentName)}`);
@@ -256,10 +254,9 @@ async function fetchAndDisplayAgentCard() {
     }
 
     const supportedTransports = new Set<string>();
-    supportedTransports.add(card.preferredTransport || 'JSONRPC');
-    if (card.additionalInterfaces) {
-      for (const iface of card.additionalInterfaces) {
-        supportedTransports.add(iface.transport);
+    if (card.supportedInterfaces) {
+      for (const iface of card.supportedInterfaces) {
+        supportedTransports.add(iface.protocolBinding);
       }
     }
     console.log(`  Supported Transports: ${Array.from(supportedTransports).join(', ')}`);
@@ -328,18 +325,18 @@ async function main() {
     const messagePayload: Message = {
       messageId: messageId,
       role: Role.ROLE_USER,
-      content: [
+      parts: [
         {
-          part: {
+          content: {
             $case: 'text',
             value: input,
           },
+          filename: '', metadata: {}, mediaType: 'text/plain',
         },
       ],
       taskId: '',
       contextId: '',
       extensions: [],
-      metadata: {},
     };
 
     // Conditionally add taskId to the message payload
@@ -355,11 +352,9 @@ async function main() {
       tenant: '', // Optional
       message: messagePayload,
       configuration: undefined,
-      metadata: {},
       // Optional: configuration for streaming, blocking, etc.
       // configuration: {
       //   acceptedOutputModes: ['text/plain', 'application/json'], // Example
-      //   returnImmediately: false // Default for streaming is usually non-blocking (which means returnImmediately=true? No, spec says: if false, it blocks. for streaming we usually want block/stream. )
       // }
     };
 
@@ -379,10 +374,7 @@ async function main() {
           const typedEvent = event as TaskStatusUpdateEvent;
           printAgentEvent(typedEvent);
 
-          if (
-            typedEvent.final &&
-            typedEvent.status?.state !== TaskState.TASK_STATE_INPUT_REQUIRED
-          ) {
+          if ([TaskState.TASK_STATE_COMPLETED, TaskState.TASK_STATE_CANCELED, TaskState.TASK_STATE_FAILED].includes(typedEvent.status?.state!)) {
             console.log(
               colorize(
                 'yellow',
@@ -395,7 +387,7 @@ async function main() {
           // TaskArtifactUpdateEvent
           const typedEvent = event as TaskArtifactUpdateEvent;
           printAgentEvent(typedEvent);
-        } else if ('messageId' in event && 'content' in event && !('status' in event)) {
+        } else if ('messageId' in event && 'parts' in event && !('status' in event)) {
           // Message
           const msg = event as Message;
           console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
@@ -411,7 +403,9 @@ async function main() {
           }
           if (msg.contextId && msg.contextId !== currentContextId) {
             console.log(
-              colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
+              colorize(
+                'dim',
+                `   Context ID updated to ${msg.contextId} based on message event.`)
             );
             currentContextId = msg.contextId;
           }
@@ -436,9 +430,9 @@ async function main() {
             );
             currentContextId = task.contextId;
           }
-          if (task.status?.update) {
+          if (task.status?.message) {
             console.log(colorize('gray', '   Task includes message:'));
-            printMessageContent(task.status.update);
+            printMessageContent(task.status.message);
           }
           if (task.artifacts && task.artifacts.length > 0) {
             console.log(

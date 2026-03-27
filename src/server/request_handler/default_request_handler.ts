@@ -91,7 +91,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   async getAuthenticatedExtendedAgentCard(context?: ServerCallContext): Promise<AgentCard> {
-    if (!this.agentCard.supportsAuthenticatedExtendedCard) {
+    if (!this.agentCard.capabilities?.extendedAgentCard) {
       throw new UnsupportedOperationError('Agent does not support authenticated extended card.');
     }
     if (!this.extendedAgentCardProvider) {
@@ -254,12 +254,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // If push notification config is provided, save it to the store.
     if (
-      params.configuration?.taskPushNotificationConfig &&
+      params.configuration?.taskTaskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
       await this.pushNotificationStore?.save(
         taskId,
-        params.configuration.taskPushNotificationConfig
+        params.configuration.taskTaskPushNotificationConfig
       );
     }
 
@@ -278,13 +278,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         contextId: finalMessageForAgent.contextId!,
         status: {
           state: TaskState.TASK_STATE_FAILED,
-          update: {
+          message: {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            content: [{ part: { $case: 'text', value: `Agent execution error: ${err.message}` } }],
+            parts: [{ content: { $case: 'text', value: `Agent execution error: ${err.message}` }, metadata: {}, filename: "", mediaType: "" }],
             taskId: requestContext.taskId,
             contextId: finalMessageForAgent.contextId!,
-            extensions: [],
+            extensions: [], referenceTaskIds: [],
             metadata: {},
           },
           timestamp: new Date().toISOString(),
@@ -303,9 +303,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       eventBus.publish({
         taskId: errorTask.id,
         contextId: errorTask.contextId,
-        status: errorTask.status,
-        final: true,
-        metadata: {},
+        status: errorTask.status,        metadata: {},
       } as TaskStatusUpdateEvent);
       eventBus.finished();
     });
@@ -360,12 +358,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // If push notification config is provided, save it to the store.
     if (
-      params.configuration?.taskPushNotificationConfig &&
+      params.configuration?.taskTaskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
       await this.pushNotificationStore?.save(
         taskId,
-        params.configuration.taskPushNotificationConfig
+        params.configuration.taskTaskPushNotificationConfig
       );
     }
 
@@ -381,18 +379,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         contextId: finalMessageForAgent.contextId!,
         status: {
           state: TaskState.TASK_STATE_FAILED,
-          update: {
+          message: {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            content: [{ part: { $case: 'text', value: `Agent execution error: ${err.message}` } }],
+            parts: [{ content: { $case: 'text', value: `Agent execution error: ${err.message}` }, metadata: {}, filename: "", mediaType: "" }],
             taskId: requestContext.taskId,
             contextId: finalMessageForAgent.contextId!,
-            extensions: [],
+            extensions: [], referenceTaskIds: [],
             metadata: {},
           },
           timestamp: new Date().toISOString(),
         },
-        final: true, // This will terminate the stream for the client
         metadata: {},
       };
       eventBus.publish(errorTaskStatus);
@@ -455,21 +452,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // Here we are marking task as cancelled. We are not waiting for the executor to actually cancel processing.
       task.status = {
         state: TaskState.TASK_STATE_CANCELED,
-        update: {
+        message: {
           // Optional: Add a system message indicating cancellation
           role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          content: [{ part: { $case: 'text', value: 'Task cancellation requested by user.' } }],
+          parts: [{ content: { $case: 'text', value: 'Task cancellation requested by user.' }, metadata: {}, filename: "", mediaType: "" }],
           taskId: task.id,
           contextId: task.contextId,
-          extensions: [],
+          extensions: [], referenceTaskIds: [],
           metadata: {},
         },
         timestamp: new Date().toISOString(),
       };
       // Add cancellation message to history
-      if (task.status?.update) {
-        task.history = [...(task.history || []), task.status.update];
+      if (task.status?.message) {
+        task.history = [...(task.history || []), task.status.message];
       }
 
       await this.taskStore.save(task, context);
@@ -587,7 +584,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new UnsupportedOperationError('Streaming (and thus resubscription) is not supported.');
     }
 
-    const taskId = params.taskId;
+    const taskId = params.id;
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -693,21 +690,19 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         contextId: currentTask.contextId,
         status: {
           state: TaskState.TASK_STATE_FAILED,
-          update: {
+          message: {
             role: Role.ROLE_AGENT,
             messageId: uuidv4(),
-            content: [
-              { part: { $case: 'text', value: `Event processing loop failed: ${errorMessage}` } },
+            parts: [
+              { content: { $case: 'text', value: `Event processing loop failed: ${errorMessage}` }, metadata: {}, filename: "", mediaType: "" },
             ],
             taskId: currentTask.id,
             contextId: currentTask.contextId,
-            extensions: [],
+            extensions: [], referenceTaskIds: [],
             metadata: {},
           },
           timestamp: new Date().toISOString(),
-        },
-        final: true,
-        metadata: {},
+        },        metadata: {},
       };
 
       try {
