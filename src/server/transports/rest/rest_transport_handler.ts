@@ -205,7 +205,7 @@ export class RestTransportHandler {
    * Sets a push notification configuration.
    * @throws {A2AError} PushNotificationNotSupported if push notifications not supported
    */
-  async setTaskPushNotificationConfig(
+  async createTaskPushNotificationConfig(
     config: TaskPushNotificationConfig,
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
@@ -213,7 +213,7 @@ export class RestTransportHandler {
     if (!config.id) {
       throw new RequestMalformedError('id is required');
     }
-    return this.requestHandler.setTaskPushNotificationConfig(config, context);
+    return this.requestHandler.createTaskPushNotificationConfig(config, context);
   }
 
   /**

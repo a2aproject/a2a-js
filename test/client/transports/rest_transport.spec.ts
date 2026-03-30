@@ -6,7 +6,11 @@ import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vite
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
-import { TaskNotFoundError, TaskNotCancelableError } from '../../../src/errors.js';
+import {
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+} from '../../../src/errors.js';
 import {
   createMessageParams,
   createMockAgentCard,
@@ -240,6 +244,31 @@ describe('RestTransport', () => {
       authentication: undefined,
       token: 'secret-token',
     };
+
+    describe('createTaskPushNotificationConfig', () => {
+      it('should create a push notification config successfully', async () => {
+        mockFetch.mockResolvedValue(createRestResponse(mockConfig));
+
+        const result = await transport.createTaskPushNotificationConfig(mockConfig);
+
+        expect(result).to.deep.equal(mockConfig);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        const [url, options] = mockFetch.mock.calls[0];
+        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs`);
+        expect(options?.method).to.equal('POST');
+      });
+
+      it('should throw PushNotificationNotSupportedError on -32003', async () => {
+        mockFetch.mockResolvedValue(
+          createRestErrorResponse(-32003, 'Push notifications not supported', 400)
+        );
+
+        await expect(transport.createTaskPushNotificationConfig(mockConfig)).rejects.toThrow(
+          PushNotificationNotSupportedError
+        );
+      });
+    });
 
     describe('getTaskPushNotificationConfig', () => {
       it('should get push notification config successfully', async () => {

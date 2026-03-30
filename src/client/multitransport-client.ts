@@ -167,6 +167,25 @@ export class Client {
   }
 
   /**
+   * Creates a push notification configuration for a specified task.
+   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
+   */
+  createTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig,
+    options?: RequestOptions
+  ): Promise<TaskPushNotificationConfig> {
+    if (!this.agentCard.capabilities?.pushNotifications) {
+      throw new PushNotificationNotSupportedError();
+    }
+
+    return this.executeWithInterceptors(
+      { method: 'createTaskPushNotificationConfig', value: params },
+      options,
+      this.transport.createTaskPushNotificationConfig.bind(this.transport)
+    );
+  }
+
+  /**
    * Retrieves the current push notification configuration for a specified task.
    * Requires the server to have AgentCard.capabilities.pushNotifications: true.
    */

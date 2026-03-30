@@ -102,6 +102,24 @@ export class GrpcTransport implements Transport {
     );
   }
 
+  async createTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig,
+    options?: RequestOptions
+  ): Promise<TaskPushNotificationConfig> {
+    const rpcResponse = await this._sendGrpcRequest<
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
+    >(
+      'createTaskPushNotificationConfig',
+      params,
+      options,
+      this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
+      (req) => req
+    );
+    return rpcResponse;
+  }
+
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions

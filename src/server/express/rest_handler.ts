@@ -414,7 +414,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = TaskPushNotificationConfig.fromJSON(req.body);
-      const result = await restTransportHandler.setTaskPushNotificationConfig(params, context);
+      const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
       sendResponse<TaskPushNotificationConfig>(
         res,
         HTTP_STATUS.CREATED,

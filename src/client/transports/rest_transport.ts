@@ -90,6 +90,24 @@ export class RestTransport implements Transport {
     yield* this._sendStreamingRequest('/v1/message:stream', requestBody, options);
   }
 
+  async createTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig,
+    options?: RequestOptions
+  ): Promise<TaskPushNotificationConfig> {
+    const response = await this._sendRequest<
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
+    >(
+      'POST',
+      `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      params,
+      options,
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
+    );
+    return response;
+  }
+
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions

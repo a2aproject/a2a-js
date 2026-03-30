@@ -38,7 +38,7 @@ export type SendMessageSuccessResponse = BaseSuccessResponse<ProtoSendMessageRes
 export type SendStreamingMessageSuccessResponse = BaseSuccessResponse<ProtoStreamResponse>;
 export type GetTaskSuccessResponse = BaseSuccessResponse<Task>;
 export type CancelTaskSuccessResponse = BaseSuccessResponse<Task>;
-export type SetTaskPushNotificationConfigSuccessResponse =
+export type CreateTaskPushNotificationConfigSuccessResponse =
   BaseSuccessResponse<TaskPushNotificationConfig>;
 export type GetTaskPushNotificationConfigSuccessResponse =
   BaseSuccessResponse<TaskPushNotificationConfig>;
@@ -54,8 +54,8 @@ export type SendStreamingMessageResponse =
   | JSONRPCErrorResponse;
 export type GetTaskResponse = GetTaskSuccessResponse | JSONRPCErrorResponse;
 export type CancelTaskResponse = CancelTaskSuccessResponse | JSONRPCErrorResponse;
-export type SetTaskPushNotificationConfigResponse =
-  | SetTaskPushNotificationConfigSuccessResponse
+export type CreateTaskPushNotificationConfigResponse =
+  | CreateTaskPushNotificationConfigSuccessResponse
   | JSONRPCErrorResponse;
 export type GetTaskPushNotificationConfigResponse =
   | GetTaskPushNotificationConfigSuccessResponse
@@ -76,7 +76,7 @@ export type JSONRPCResponse =
   | SendStreamingMessageSuccessResponse
   | GetTaskSuccessResponse
   | CancelTaskSuccessResponse
-  | SetTaskPushNotificationConfigSuccessResponse
+  | CreateTaskPushNotificationConfigSuccessResponse
   | GetTaskPushNotificationConfigSuccessResponse
   | ListTaskPushNotificationConfigSuccessResponse
   | DeleteTaskPushNotificationConfigSuccessResponse

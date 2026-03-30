@@ -3,7 +3,7 @@ import {
   SendStreamingMessageResponse,
   GetTaskResponse,
   CancelTaskResponse,
-  SetTaskPushNotificationConfigResponse,
+  CreateTaskPushNotificationConfigResponse,
   GetTaskPushNotificationConfigResponse,
   ListTaskPushNotificationConfigSuccessResponse,
   DeleteTaskPushNotificationConfigSuccessResponse,
@@ -19,7 +19,7 @@ export type A2AResponse =
   | SendStreamingMessageResponse
   | GetTaskResponse
   | CancelTaskResponse
-  | SetTaskPushNotificationConfigResponse
+  | CreateTaskPushNotificationConfigResponse
   | GetTaskPushNotificationConfigResponse
   | ListTaskPushNotificationConfigSuccessResponse
   | DeleteTaskPushNotificationConfigSuccessResponse

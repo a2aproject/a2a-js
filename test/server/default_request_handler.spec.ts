@@ -1277,7 +1277,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: pushConfig.token,
       authentication: pushConfig.authentication,
     };
-    const setResponse = await handler.setTaskPushNotificationConfig(setParams, serverCallContext);
+    const setResponse = await handler.createTaskPushNotificationConfig(
+      setParams,
+      serverCallContext
+    );
     assert.deepEqual(setResponse, setParams, 'Set response should return the config');
 
     const getParams: GetTaskPushNotificationConfigRequest = {
@@ -1312,7 +1315,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: 'compat-token',
       authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         id: pushConfig.id || taskId, // if id is missing or equals taskId in test
@@ -1336,7 +1339,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(getResponse.url).to.equal(pushConfig.url);
   });
 
-  it('setTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
+  it('createTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
     const taskId = 'task-overwrite';
     await mockTaskStore.save(
       {
@@ -1357,7 +1360,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: 'token-same',
       authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         taskId: taskId,
@@ -1377,7 +1380,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: 'token-new',
       authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         taskId: taskId,
@@ -1431,7 +1434,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: 'token-2',
       authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         taskId: taskId,
@@ -1442,7 +1445,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       },
       serverCallContext
     );
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         taskId: taskId,
@@ -1513,7 +1516,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: 'token-2',
       authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         id: config1.id,
@@ -1524,7 +1527,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       },
       serverCallContext
     );
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         id: config2.id,
@@ -1577,7 +1580,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: 'token-last',
       authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
         tenant: '',
         id: config.id,
@@ -1801,7 +1804,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const methodsToTest = [
       {
-        name: 'setTaskPushNotificationConfig',
+        name: 'createTaskPushNotificationConfig',
         params: {
           name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/${config.id}`,
           pushNotificationConfig: config,
@@ -1866,7 +1869,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     const methodsToTest = [
       {
-        name: 'setTaskPushNotificationConfig',
+        name: 'createTaskPushNotificationConfig',
         params: {
           parent: `tasks/${taskId}`,
           pushNotification: config,

@@ -503,7 +503,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return latestTask;
   }
 
-  async setTaskPushNotificationConfig(
+  async createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {

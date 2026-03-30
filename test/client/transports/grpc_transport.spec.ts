@@ -10,6 +10,7 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   RequestMalformedError,
+  PushNotificationNotSupportedError,
 } from '../../../src/errors.js';
 import {
   createMessageParams,
@@ -27,6 +28,7 @@ vi.mock('../../../src/grpc/pb/a2a.js', () => {
   A2AServiceClient.prototype.getExtendedAgentCard = vi.fn();
   A2AServiceClient.prototype.sendMessage = vi.fn();
   A2AServiceClient.prototype.sendStreamingMessage = vi.fn();
+  A2AServiceClient.prototype.createTaskPushNotificationConfig = vi.fn();
   A2AServiceClient.prototype.getTaskPushNotificationConfig = vi.fn();
   A2AServiceClient.prototype.listTaskPushNotificationConfigs = vi.fn();
   A2AServiceClient.prototype.deleteTaskPushNotificationConfig = vi.fn();
@@ -48,7 +50,6 @@ vi.mock('../../../src/types/converters/from_proto.js', () => ({
     agentCard: vi.fn((x) => x),
     sendMessageResult: vi.fn((x) => x),
     message: vi.fn((x) => x),
-    setTaskPushNotificationConfigParams: vi.fn((x) => x),
     getTaskPushNotificationConfig: vi.fn((x) => x),
     listTaskPushNotificationConfig: vi.fn((x) => x),
     task: vi.fn((x) => x),
@@ -279,6 +280,42 @@ describe('GrpcTransport', () => {
         authentication: { schemes: [] as string[], credentials: '' },
       },
     };
+
+    describe('createTaskPushNotificationConfig', () => {
+      it('should create config successfully', async () => {
+        mockUnarySuccess(mockGrpcClient.createTaskPushNotificationConfig as Mock, mockConfig);
+
+        const result = await transport.createTaskPushNotificationConfig({
+          tenant: '',
+          id: '',
+          taskId: taskId,
+          url: 'http://test',
+          token: 'test-token',
+          authentication: undefined,
+        });
+
+        expect(result).toEqual(mockConfig);
+        expect(mockGrpcClient.createTaskPushNotificationConfig).toHaveBeenCalled();
+      });
+
+      it('should throw PushNotificationNotSupportedError', async () => {
+        mockUnaryError(
+          mockGrpcClient.createTaskPushNotificationConfig as Mock,
+          status.UNIMPLEMENTED,
+          'Not supported'
+        );
+        await expect(
+          transport.createTaskPushNotificationConfig({
+            tenant: '',
+            id: '',
+            taskId: taskId,
+            url: 'http://test',
+            token: 'test-token',
+            authentication: undefined,
+          })
+        ).rejects.toThrow(PushNotificationNotSupportedError);
+      });
+    });
 
     describe('getTaskPushNotificationConfig', () => {
       it('should get config successfully', async () => {

@@ -96,6 +96,17 @@ export class JsonRpcTransport implements Transport {
     );
   }
 
+  async createTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig,
+    options?: RequestOptions
+  ): Promise<TaskPushNotificationConfig> {
+    const rpcResponse = await this._sendRpcRequest<
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
+    >('tasks/pushNotificationConfig/create', params, options, TaskPushNotificationConfig);
+    return rpcResponse;
+  }
+
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions

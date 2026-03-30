@@ -87,6 +87,52 @@ describe('JsonRpcTransport', () => {
   });
 
   describe('TaskPushNotificationConfig', () => {
+    it('createTaskPushNotificationConfig should send correct params and return config', async () => {
+      const config: TaskPushNotificationConfig = {
+        tenant: '',
+        id: 'config1',
+        taskId: 'task1',
+        url: 'https://webhook.site',
+        token: 'token123',
+        authentication: undefined,
+      };
+
+      mockFetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            result: {
+              name: 'tasks/task1/pushNotificationConfigs/config1',
+              pushNotificationConfig: config,
+            },
+            id: 1,
+          }),
+          { status: 200 }
+        )
+      );
+
+      const result = await transport.createTaskPushNotificationConfig(config);
+
+      const fetchArgs = mockFetch.mock.calls[0][1];
+      const body = JSON.parse(fetchArgs.body as string);
+      expect(body.method).toBe('tasks/pushNotificationConfig/create');
+      expect(body.params).toEqual({
+        id: 1,
+        jsonrpc: '2.0',
+        result: {
+          name: 'tasks/task1/pushNotificationConfigs/config1',
+          pushNotificationConfig: {
+            id: 'config1',
+            taskId: 'task1',
+            url: 'https://webhook.site',
+            token: 'token123',
+            authentication: undefined,
+          },
+        },
+      });
+      expect(result).toEqual(config);
+    });
+
     it('getTaskPushNotificationConfig should return config', async () => {
       const params: GetTaskPushNotificationConfigRequest = {
         id: 'config1',

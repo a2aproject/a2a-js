@@ -88,7 +88,7 @@ describe('RestTransportHandler', () => {
       sendMessageStream: vi.fn(),
       getTask: vi.fn().mockResolvedValue(testTask),
       cancelTask: vi.fn().mockResolvedValue(testTask),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
@@ -321,7 +321,7 @@ describe('RestTransportHandler', () => {
       url: 'https://example.com/webhook',
     };
 
-    describe('setTaskPushNotificationConfig', () => {
+    describe('createTaskPushNotificationConfig', () => {
       it('should throw PushNotificationNotSupported if not supported', async () => {
         (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
           ...testAgentCard,
@@ -329,14 +329,14 @@ describe('RestTransportHandler', () => {
         });
 
         await expect(
-          transportHandler.setTaskPushNotificationConfig(mockConfig as any, mockContext)
+          transportHandler.createTaskPushNotificationConfig(mockConfig as any, mockContext)
         ).rejects.toThrow('Push Notification is not supported');
       });
 
       it('should normalize and set config if supported', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
-        const result = await transportHandler.setTaskPushNotificationConfig(
+        const result = await transportHandler.createTaskPushNotificationConfig(
           mockConfig as any,
           mockContext
         );
@@ -351,7 +351,7 @@ describe('RestTransportHandler', () => {
         };
 
         await expect(
-          transportHandler.setTaskPushNotificationConfig(invalidConfig as any, mockContext)
+          transportHandler.createTaskPushNotificationConfig(invalidConfig as any, mockContext)
         ).rejects.toThrow('id is required');
       });
     });

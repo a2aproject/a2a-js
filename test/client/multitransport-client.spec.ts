@@ -31,6 +31,7 @@ describe('Client', () => {
       getExtendedAgentCard: vi.fn(),
       sendMessage: vi.fn(),
       sendMessageStream: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfig: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
@@ -210,6 +211,27 @@ describe('Client', () => {
     expect(transport.sendMessageStream).toHaveBeenCalledTimes(1);
     expect(transport.sendMessageStream).toHaveBeenCalledWith(expectedParams, undefined);
     expect(got).to.deep.equal(events);
+  });
+
+  it('should call transport.createTaskPushNotificationConfig', async () => {
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      id: 'abc',
+      url: 'http://example.com',
+      token: 'tok',
+      authentication: undefined,
+    };
+    transport.createTaskPushNotificationConfig.mockResolvedValue(config);
+
+    const result = await client.createTaskPushNotificationConfig(config);
+
+    expect(transport.createTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
+    expect(transport.createTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
+      config,
+      undefined
+    );
+    expect(result).to.equal(config);
   });
 
   it('should call transport.getTaskPushNotificationConfig', async () => {

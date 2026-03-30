@@ -8,6 +8,7 @@ import {
   SubscribeToTaskRequest,
   GetTaskRequest,
   CancelTaskRequest,
+  TaskPushNotificationConfig,
   GetTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
@@ -180,6 +181,24 @@ export class JsonRpcTransportHandler {
               context
             );
             break;
+          case 'tasks/pushNotificationConfig/create': {
+            const params = rpcRequest.params as {
+              name?: string;
+              taskId?: string;
+              pushNotificationConfig?: TaskPushNotificationConfig;
+            };
+            const config = params.name
+              ? TaskPushNotificationConfig.fromJSON({
+                  name: params.name,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                })
+              : TaskPushNotificationConfig.fromJSON({
+                  name: `tasks/${params.taskId}/pushNotificationConfigs/${params.pushNotificationConfig?.id}`,
+                  pushNotificationConfig: params.pushNotificationConfig,
+                });
+            result = await this.requestHandler.createTaskPushNotificationConfig(config, context);
+            break;
+          }
           case 'tasks/pushNotificationConfig/get':
             result = await this.requestHandler.getTaskPushNotificationConfig(
               GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),

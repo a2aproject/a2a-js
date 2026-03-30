@@ -22,6 +22,11 @@ export interface Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined>;
 
+  createTaskPushNotificationConfig(
+    params: TaskPushNotificationConfig,
+    options?: RequestOptions
+  ): Promise<TaskPushNotificationConfig>;
+
   getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions

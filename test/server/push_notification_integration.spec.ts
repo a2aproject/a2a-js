@@ -318,9 +318,9 @@ describe('Push Notification Integration Tests', () => {
       await taskStore.save(task);
 
       // Set multiple push notification configs for this message
-      await handler.setTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
+      await handler.createTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
 
-      await handler.setTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
+      await handler.createTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
 
       // Mock the agent executor to publish only completed state
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
@@ -780,9 +780,9 @@ describe('Push Notification Integration Tests', () => {
       };
       await taskStore.save(task);
 
-      await customHandler.setTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
+      await customHandler.createTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
 
-      await customHandler.setTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
+      await customHandler.createTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
 
       // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {

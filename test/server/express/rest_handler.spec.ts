@@ -97,7 +97,7 @@ describe('restHandler', () => {
       sendMessageStream: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
@@ -374,7 +374,7 @@ describe('restHandler', () => {
           },
         },
       ])('should accept $name config and return 201', async ({ payload }) => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
           .post('/v1/tasks/task-1/pushNotificationConfigs')

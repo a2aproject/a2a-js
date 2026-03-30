@@ -183,7 +183,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         callback,
         (req) => req,
-        requestHandler.setTaskPushNotificationConfig.bind(requestHandler),
+        requestHandler.createTaskPushNotificationConfig.bind(requestHandler),
         (res) => res
       );
     },
