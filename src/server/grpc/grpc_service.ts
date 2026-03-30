@@ -243,7 +243,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       _call: grpc.ServerUnaryCall<ListTasksRequest, ListTasksResponse>,
       _callback: grpc.sendUnaryData<ListTasksResponse>
     ): Promise<void> {
-      throw new Error('Not implemented'); // TODO: Method `listTasks` not implemented yet.
+      throw new UnsupportedOperationError('Method listTasks not implemented yet.');
     },
   };
 }
