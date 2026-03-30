@@ -1248,7 +1248,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(result, fakeTask);
   });
 
-  it('set/getTaskPushNotificationConfig: should save and retrieve config', async () => {
+  it('create/getTaskPushNotificationConfig: should save and retrieve config', async () => {
     const taskId = 'task-push-config';
     const fakeTask: Task = {
       id: taskId,
@@ -1269,7 +1269,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       authentication: undefined,
     };
 
-    const setParams: TaskPushNotificationConfig = {
+    const createParams: TaskPushNotificationConfig = {
       tenant: '',
       id: pushConfig.id,
       taskId: taskId,
@@ -1277,11 +1277,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       token: pushConfig.token,
       authentication: pushConfig.authentication,
     };
-    const setResponse = await handler.createTaskPushNotificationConfig(
-      setParams,
+    const createResponse = await handler.createTaskPushNotificationConfig(
+      createParams,
       serverCallContext
     );
-    assert.deepEqual(setResponse, setParams, 'Set response should return the config');
+    assert.deepEqual(createResponse, createParams, 'Create response should return the config');
 
     const getParams: GetTaskPushNotificationConfigRequest = {
       tenant: '',
@@ -1289,10 +1289,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       id: 'config-1',
     };
     const getResponse = await handler.getTaskPushNotificationConfig(getParams, serverCallContext);
-    assert.deepEqual(getResponse, setParams, 'Get response should return the saved config');
+    assert.deepEqual(getResponse, createParams, 'Get response should return the saved config');
   });
 
-  it('set/getTaskPushNotificationConfig: should save and retrieve config by task ID for backward compatibility', async () => {
+  it('create/getTaskPushNotificationConfig: should save and retrieve config by task ID for backward compatibility', async () => {
     const taskId = 'task-push-compat';
     await mockTaskStore.save(
       {
