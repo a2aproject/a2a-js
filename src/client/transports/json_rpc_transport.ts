@@ -26,6 +26,7 @@ import {
   CancelTaskSuccessResponse,
   ListTaskPushNotificationConfigSuccessResponse,
   GetTaskPushNotificationConfigSuccessResponse,
+  CreateTaskPushNotificationConfigSuccessResponse,
   SendMessageSuccessResponse,
   GetAuthenticatedExtendedCardSuccessResponse,
 } from '../../json_rpc_types.js';
@@ -102,9 +103,9 @@ export class JsonRpcTransport implements Transport {
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       TaskPushNotificationConfig,
-      TaskPushNotificationConfig
+      CreateTaskPushNotificationConfigSuccessResponse
     >('tasks/pushNotificationConfig/create', params, options, TaskPushNotificationConfig);
-    return rpcResponse;
+    return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
 
   async getTaskPushNotificationConfig(

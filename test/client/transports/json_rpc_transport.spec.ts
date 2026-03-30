@@ -101,10 +101,7 @@ describe('JsonRpcTransport', () => {
         new Response(
           JSON.stringify({
             jsonrpc: '2.0',
-            result: {
-              name: 'tasks/task1/pushNotificationConfigs/config1',
-              pushNotificationConfig: config,
-            },
+            result: config,
             id: 1,
           }),
           { status: 200 }
@@ -117,18 +114,10 @@ describe('JsonRpcTransport', () => {
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('tasks/pushNotificationConfig/create');
       expect(body.params).toEqual({
-        id: 1,
-        jsonrpc: '2.0',
-        result: {
-          name: 'tasks/task1/pushNotificationConfigs/config1',
-          pushNotificationConfig: {
-            id: 'config1',
-            taskId: 'task1',
-            url: 'https://webhook.site',
-            token: 'token123',
-            authentication: undefined,
-          },
-        },
+        id: 'config1',
+        taskId: 'task1',
+        url: 'https://webhook.site',
+        token: 'token123',
       });
       expect(result).toEqual(config);
     });

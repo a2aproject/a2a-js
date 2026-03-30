@@ -5,24 +5,15 @@
 //
 exports[`TypeScript Strict Mode`] = {
   value: `{
-    "src/client/multitransport-client.ts:3984472353": [
-      [87, 24, 44, "tsc: Type \'Promise<AgentCard>\' is not assignable to type \'Promise<never>\'.\\n  Type \'AgentCard\' is not assignable to type \'never\'.", "1356744557"],
-      [106, 6, 47, "tsc: Argument of type \'(params: SendMessageRequest, options?: RequestOptions | undefined) => Promise<SendMessageResult>\' is not assignable to parameter of type \'(params: SendMessageRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<SendMessageResult>\' is not assignable to type \'Promise<never>\'.\\n    Type \'SendMessageResult\' is not assignable to type \'never\'.\\n      Type \'Task\' is not assignable to type \'never\'.", "2571452626"],
-      [183, 6, 65, "tsc: Argument of type \'(params: GetTaskPushNotificationConfigRequest, options?: RequestOptions | undefined) => Promise<TaskPushNotificationConfig>\' is not assignable to parameter of type \'(params: GetTaskPushNotificationConfigRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<TaskPushNotificationConfig>\' is not assignable to type \'Promise<never>\'.\\n    Type \'TaskPushNotificationConfig\' is not assignable to type \'never\'.", "1581152103"],
-      [202, 6, 66, "tsc: Argument of type \'(params: ListTaskPushNotificationConfigsRequest, options?: RequestOptions | undefined) => Promise<TaskPushNotificationConfig[]>\' is not assignable to parameter of type \'(params: ListTaskPushNotificationConfigsRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<TaskPushNotificationConfig[]>\' is not assignable to type \'Promise<never>\'.\\n    Type \'TaskPushNotificationConfig[]\' is not assignable to type \'never\'.", "4161961235"],
-      [216, 6, 68, "tsc: Argument of type \'(params: DeleteTaskPushNotificationConfigRequest, options?: RequestOptions | undefined) => Promise<void>\' is not assignable to parameter of type \'(params: DeleteTaskPushNotificationConfigRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<void>\' is not assignable to type \'Promise<never>\'.\\n    Type \'void\' is not assignable to type \'never\'.", "1244975368"],
-      [227, 6, 43, "tsc: Argument of type \'(params: GetTaskRequest, options?: RequestOptions | undefined) => Promise<Task>\' is not assignable to parameter of type \'(params: GetTaskRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<Task>\' is not assignable to type \'Promise<never>\'.\\n    Type \'Task\' is not assignable to type \'never\'.", "2875666270"],
-      [239, 6, 46, "tsc: Argument of type \'(params: CancelTaskRequest, options?: RequestOptions | undefined) => Promise<Task>\' is not assignable to parameter of type \'(params: CancelTaskRequest, options?: RequestOptions | undefined) => Promise<never>\'.\\n  Type \'Promise<Task>\' is not assignable to type \'Promise<never>\'.\\n    Type \'Task\' is not assignable to type \'never\'.", "588661070"]
-    ],
     "src/server/events/execution_event_bus.ts:3165663610": [
       [248, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
       [271, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
     ],
-    "src/server/express/rest_handler.ts:1680965652": [
+    "src/server/express/rest_handler.ts:1073090866": [
       [207, 50, 17, "tsc: Argument of type \'unknown\' is not assignable to parameter of type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.", "3749434707"]
     ],
-    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:1199238710": [
-      [87, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
+    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:284091270": [
+      [88, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
     ],
     "src/types/converters/to_proto.ts:1276072555": [
       [57, 52, 19, "tsc: Function lacks ending return statement and return type does not include \'undefined\'.", "2245381585"]

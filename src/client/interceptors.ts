@@ -120,7 +120,7 @@ type MethodResult<T, TMembers extends keyof T = keyof T, TOverrides = object> = 
   [M in TMembers]: M extends keyof TOverrides // If there is an override, use it directly.
     ? { readonly method: M; value: TOverrides[M] }
     : // Infer result, unwrap it from Promise and pack with method name.
-      T[M] extends (payload: unknown) => infer R
+      T[M] extends (...args: never[]) => infer R
       ? { readonly method: M; value: Awaited<R> }
       : never;
 }[TMembers];
