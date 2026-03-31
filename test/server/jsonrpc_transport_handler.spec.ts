@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vite
 
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { JSONRPCErrorResponse } from '../../src/json_rpc_types.js';
+import { JSONRPCErrorResponse } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import {
   RequestMalformedError,
   TaskNotFoundError,

@@ -13,23 +13,10 @@ import {
 import {
   Task,
   AgentCard,
-  StreamResponse as ProtoStreamResponse,
   TaskPushNotificationConfig,
   A2AStreamEventData,
   SendMessageResult,
 } from '../../index.js';
-import {
-  JSONRPCResponse,
-  DeleteTaskPushNotificationConfigResponse,
-  JSONRPCErrorResponse,
-  GetTaskSuccessResponse,
-  CancelTaskSuccessResponse,
-  ListTaskPushNotificationConfigSuccessResponse,
-  GetTaskPushNotificationConfigSuccessResponse,
-  CreateTaskPushNotificationConfigSuccessResponse,
-  SendMessageSuccessResponse,
-  GetAuthenticatedExtendedCardSuccessResponse,
-} from '../../json_rpc_types.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -42,6 +29,9 @@ import {
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   ListTaskPushNotificationConfigsRequest,
+  SendMessageResponse,
+  ListTaskPushNotificationConfigsResponse,
+  StreamResponse,
 } from '../../types/pb/a2a.js';
 
 export interface JsonRpcTransportOptions {
@@ -60,10 +50,12 @@ export class JsonRpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendRpcRequest<
+    const rpcResponse = await this._sendRpcRequest<undefined, AgentCard>(
+      'agent/getAuthenticatedExtendedCard',
       undefined,
-      GetAuthenticatedExtendedCardSuccessResponse
-    >('agent/getAuthenticatedExtendedCard', undefined, options, undefined);
+      options,
+      undefined
+    );
     return rpcResponse.result;
   }
 
@@ -71,7 +63,7 @@ export class JsonRpcTransport implements Transport {
     params: SendMessageRequest,
     options?: RequestOptions
   ): Promise<SendMessageResult> {
-    const rpcResponse = await this._sendRpcRequest<SendMessageRequest, SendMessageSuccessResponse>(
+    const rpcResponse = await this._sendRpcRequest<SendMessageRequest, SendMessageResponse>(
       'message/send',
       params,
       options,
@@ -103,7 +95,7 @@ export class JsonRpcTransport implements Transport {
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       TaskPushNotificationConfig,
-      CreateTaskPushNotificationConfigSuccessResponse
+      TaskPushNotificationConfig
     >('tasks/pushNotificationConfig/create', params, options, TaskPushNotificationConfig);
     return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
@@ -114,7 +106,7 @@ export class JsonRpcTransport implements Transport {
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendRpcRequest<
       GetTaskPushNotificationConfigRequest,
-      GetTaskPushNotificationConfigSuccessResponse
+      TaskPushNotificationConfig
     >('tasks/pushNotificationConfig/get', params, options, GetTaskPushNotificationConfigRequest);
     return TaskPushNotificationConfig.fromJSON(rpcResponse.result);
   }
@@ -125,7 +117,7 @@ export class JsonRpcTransport implements Transport {
   ): Promise<TaskPushNotificationConfig[]> {
     const rpcResponse = await this._sendRpcRequest<
       ListTaskPushNotificationConfigsRequest,
-      ListTaskPushNotificationConfigSuccessResponse
+      ListTaskPushNotificationConfigsResponse
     >('tasks/pushNotificationConfig/list', params, options, ListTaskPushNotificationConfigsRequest);
     const configs = rpcResponse.result.configs || [];
     return configs.map((c: unknown) => TaskPushNotificationConfig.fromJSON(c));
@@ -135,10 +127,7 @@ export class JsonRpcTransport implements Transport {
     params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
-    await this._sendRpcRequest<
-      DeleteTaskPushNotificationConfigRequest,
-      DeleteTaskPushNotificationConfigResponse
-    >(
+    await this._sendRpcRequest<DeleteTaskPushNotificationConfigRequest, void>(
       'tasks/pushNotificationConfig/delete',
       params,
       options,
@@ -147,7 +136,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendRpcRequest<GetTaskRequest, GetTaskSuccessResponse>(
+    const rpcResponse = await this._sendRpcRequest<GetTaskRequest, Task>(
       'tasks/get',
       params,
       options,
@@ -157,7 +146,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendRpcRequest<CancelTaskRequest, CancelTaskSuccessResponse>(
+    const rpcResponse = await this._sendRpcRequest<CancelTaskRequest, Task>(
       'tasks/cancel',
       params,
       options,
@@ -204,12 +193,12 @@ export class JsonRpcTransport implements Transport {
     );
   }
 
-  private async _sendRpcRequest<TParams, TResponse>(
+  private async _sendRpcRequest<TParams, TResponsePayload>(
     method: string,
     params: TParams,
     options: RequestOptions | undefined,
     requestType: MessageFns<TParams> | undefined
-  ): Promise<TResponse> {
+  ): Promise<JSONRPCSuccessResponse<TResponsePayload>> {
     const requestId = this.requestIdCounter++;
 
     const rpcRequest: JSONRPCRequest = {
@@ -242,18 +231,19 @@ export class JsonRpcTransport implements Transport {
       }
     }
 
-    const rpcResponse: JSONRPCResponse = await httpResponse.json();
+    const json = await httpResponse.json();
+    if ('error' in json) {
+      throw JsonRpcTransport.mapToError(json as JSONRPCErrorResponse);
+    }
+
+    const rpcResponse = json as JSONRPCSuccessResponse<TResponsePayload>;
     if (rpcResponse.id !== requestId) {
       throw new Error(
         `JSON-RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}.`
       );
     }
 
-    if ('error' in rpcResponse) {
-      throw JsonRpcTransport.mapToError(rpcResponse as JSONRPCErrorResponse);
-    }
-
-    return rpcResponse as TResponse;
+    return rpcResponse;
   }
 
   private async _fetchRpc(
@@ -330,9 +320,9 @@ export class JsonRpcTransport implements Transport {
       throw new Error('Attempted to process empty SSE event data.');
     }
 
-    let a2aStreamResponse: JSONRPCResponse;
+    let a2aStreamResponse: JSONRPCResponse<StreamResponse>;
     try {
-      a2aStreamResponse = JSON.parse(jsonData) as JSONRPCResponse;
+      a2aStreamResponse = JSON.parse(jsonData) as JSONRPCResponse<StreamResponse>;
     } catch (e) {
       throw new Error(
         `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof Error && e.message) || 'Unknown error'}`,
@@ -358,7 +348,7 @@ export class JsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    const result = (a2aStreamResponse as JSONRPCSuccessResponse<ProtoStreamResponse>).result;
+    const result = a2aStreamResponse.result;
     if (result?.payload?.value) {
       return result.payload.value as TStreamItem;
     }
@@ -423,11 +413,25 @@ interface JSONRPCRequest {
   id: string | number | null;
 }
 
-interface JSONRPCSuccessResponse<T> {
+export interface JSONRPCSuccessResponse<T> {
   jsonrpc: '2.0';
   result: T;
   id: string | number | null;
 }
+
+export interface JSONRPCError {
+  code: number;
+  data?: { [k: string]: unknown };
+  message: string;
+}
+
+export interface JSONRPCErrorResponse {
+  error: JSONRPCError;
+  id: string | number | null;
+  jsonrpc: '2.0';
+}
+
+export type JSONRPCResponse<T> = JSONRPCSuccessResponse<T> | JSONRPCErrorResponse;
 
 export class JSONRPCTransportError extends Error {
   constructor(public errorResponse: JSONRPCErrorResponse) {

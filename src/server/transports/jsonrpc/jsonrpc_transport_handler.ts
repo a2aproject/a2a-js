@@ -13,7 +13,6 @@ import {
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
 } from '../../../index.js';
-import { JSONRPCErrorResponse } from '../../../json_rpc_types.js';
 import {
   A2A_ERROR_CODE,
   RequestMalformedError,
@@ -33,6 +32,18 @@ export type A2ARequest = {
   params?: unknown;
   id?: string | number | null;
 };
+
+export interface JSONRPCError {
+  code: number;
+  data?: { [k: string]: unknown };
+  message: string;
+}
+
+export interface JSONRPCErrorResponse {
+  error: JSONRPCError;
+  id: string | number | null;
+  jsonrpc: '2.0';
+}
 
 export type JSONRPCResponse = {
   jsonrpc: string;
