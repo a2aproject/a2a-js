@@ -17,6 +17,8 @@ import {
   SendMessageRequest,
   GetTaskRequest,
   CancelTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../../index.js';
 import {
   AuthenticatedExtendedCardNotConfiguredError,
@@ -184,6 +186,28 @@ export class RestTransportHandler {
   async cancelTask(taskId: string, context: ServerCallContext): Promise<Task> {
     const params: CancelTaskRequest = { id: taskId, tenant: '', metadata: {} };
     return this.requestHandler.cancelTask(params, context);
+  }
+
+  /**
+   * Lists tasks with filtering and pagination.
+   */
+  async listTasks(
+    queryParams: Record<string, unknown>,
+    context: ServerCallContext
+  ): Promise<ListTasksResponse> {
+    const params: ListTasksRequest = {
+      tenant: (queryParams.tenant as string) || '',
+      contextId: (queryParams.contextId as string) || '',
+      status: queryParams.status ? Number(queryParams.status) : 0,
+      pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : undefined,
+      pageToken: (queryParams.pageToken as string) || '',
+      historyLength: queryParams.historyLength ? Number(queryParams.historyLength) : undefined,
+      statusTimestampAfter: (queryParams.statusTimestampAfter as string) || undefined,
+      includeArtifacts:
+        queryParams.includeArtifacts === 'true' || queryParams.includeArtifacts === true,
+    };
+
+    return this.requestHandler.listTasks(params, context);
   }
 
   /**

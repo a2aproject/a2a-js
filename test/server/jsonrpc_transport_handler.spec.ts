@@ -33,6 +33,7 @@ describe('JsonRpcTransportHandler', () => {
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       resubscribe: vi.fn(),
+      listTasks: vi.fn(),
     };
     transportHandler = new JsonRpcTransportHandler(mockRequestHandler);
   });

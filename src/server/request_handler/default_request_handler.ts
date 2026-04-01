@@ -26,6 +26,8 @@ import {
   ListTaskPushNotificationConfigsRequest,
   DeleteTaskPushNotificationConfigRequest,
   SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../index.js';
 import { AgentExecutor } from '../agent_execution/agent_executor.js';
 import { RequestContext } from '../agent_execution/request_context.js';
@@ -436,6 +438,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       task.history = [];
     }
     return task;
+  }
+
+  async listTasks(
+    params: ListTasksRequest,
+    context?: ServerCallContext
+  ): Promise<ListTasksResponse> {
+    const pageSize = params.pageSize !== undefined ? params.pageSize : 20;
+
+    if (pageSize < 1 || pageSize > 100) {
+      throw new RequestMalformedError('pageSize must be between 1 and 100');
+    }
+
+    params.pageSize = pageSize;
+
+    return this.taskStore.list(params, context);
   }
 
   async cancelTask(params: CancelTaskRequest, context?: ServerCallContext): Promise<Task> {

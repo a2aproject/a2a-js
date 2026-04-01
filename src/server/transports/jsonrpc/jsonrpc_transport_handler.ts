@@ -12,6 +12,7 @@ import {
   GetTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
+  ListTasksRequest,
 } from '../../../index.js';
 import {
   A2A_ERROR_CODE,
@@ -183,6 +184,12 @@ export class JsonRpcTransportHandler {
           case 'tasks/get':
             result = await this.requestHandler.getTask(
               GetTaskRequest.fromJSON(rpcRequest.params),
+              context
+            );
+            break;
+          case 'tasks/list':
+            result = await this.requestHandler.listTasks(
+              ListTasksRequest.fromJSON(rpcRequest.params),
               context
             );
             break;

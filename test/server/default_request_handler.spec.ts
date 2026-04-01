@@ -35,6 +35,7 @@ import {
   Message,
   Artifact,
   SendMessageConfiguration,
+  ListTasksRequest,
 } from '../../src/types/pb/a2a.js';
 import {
   DefaultExecutionEventBusManager,
@@ -121,6 +122,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           throw new Error('Missing server call context');
         }
         return inMemoryStore.load(id);
+      },
+      list: async (params: ListTasksRequest, ctx?: ServerCallContext) => {
+        if (!ctx) {
+          throw new Error('Missing server call context');
+        }
+        return inMemoryStore.list(params);
       },
     };
     // Default mock for most tests
@@ -1246,6 +1253,75 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       serverCallContext
     );
     assert.deepEqual(result, fakeTask);
+  });
+
+  it('listTasks: should return tasks from the store', async () => {
+    const fakeTask: Task = {
+      id: 'task-list-1',
+      contextId: 'ctx-list',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history: [],
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.equal(result.tasks[0].id, fakeTask.id);
+  });
+
+  it('listTasks: should throw RequestMalformedError if pageSize is < 1', async () => {
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: '',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 0,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    try {
+      await handler.listTasks(params, serverCallContext);
+      assert.fail('Should have thrown an error for pageSize < 1');
+    } catch (error: any) {
+      expect(error).to.be.instanceOf(RequestMalformedError);
+      expect(error.message).to.contain('pageSize must be between 1 and 100');
+    }
+  });
+
+  it('listTasks: should throw RequestMalformedError if pageSize is > 100', async () => {
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: '',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 101,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    try {
+      await handler.listTasks(params, serverCallContext);
+      assert.fail('Should have thrown an error for pageSize > 100');
+    } catch (error: any) {
+      expect(error).to.be.instanceOf(RequestMalformedError);
+      expect(error.message).to.contain('pageSize must be between 1 and 100');
+    }
   });
 
   it('create/getTaskPushNotificationConfig: should save and retrieve config', async () => {

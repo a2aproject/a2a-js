@@ -240,10 +240,16 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
     },
     listTasks(
-      _call: grpc.ServerUnaryCall<ListTasksRequest, ListTasksResponse>,
-      _callback: grpc.sendUnaryData<ListTasksResponse>
+      call: grpc.ServerUnaryCall<ListTasksRequest, ListTasksResponse>,
+      callback: grpc.sendUnaryData<ListTasksResponse>
     ): Promise<void> {
-      throw new UnsupportedOperationError('Method listTasks not implemented yet.');
+      return wrapUnary(
+        call,
+        callback,
+        (req) => req,
+        requestHandler.listTasks.bind(requestHandler),
+        (res) => res
+      );
     },
   };
 }

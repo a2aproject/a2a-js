@@ -103,6 +103,7 @@ describe('A2AExpressApp', () => {
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       resubscribe: vi.fn(),
+      listTasks: vi.fn(),
     };
 
     expressApp = express();

@@ -12,6 +12,8 @@ import {
   GetTaskRequest,
   SubscribeToTaskRequest,
   SendMessageRequest,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
@@ -58,4 +60,6 @@ export interface A2ARequestHandler {
     params: SubscribeToTaskRequest,
     context?: ServerCallContext
   ): AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>;
+
+  listTasks(params: ListTasksRequest, context?: ServerCallContext): Promise<ListTasksResponse>;
 }
