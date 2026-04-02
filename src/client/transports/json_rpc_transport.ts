@@ -44,6 +44,8 @@ import {
   ListTaskPushNotificationConfigsRequest,
 } from '../../types/pb/a2a.js';
 
+const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
+
 export interface JsonRpcTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
@@ -60,7 +62,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   get protocolName(): string {
-    return protocolName;
+    return PROTOCOL_NAME;
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
@@ -403,13 +405,11 @@ export class JsonRpcTransportFactoryOptions {
   fetchImpl?: typeof fetch;
 }
 
-const protocolName: TransportProtocolName = 'JSONRPC';
-
 export class JsonRpcTransportFactory implements TransportFactory {
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return protocolName;
+    return PROTOCOL_NAME;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {
