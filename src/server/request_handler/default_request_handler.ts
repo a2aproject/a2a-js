@@ -445,15 +445,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: ListTasksRequest,
     context?: ServerCallContext
   ): Promise<ListTasksResponse> {
-    const pageSize = params.pageSize !== undefined ? params.pageSize : DEFAULT_PAGE_SIZE;
+    const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
 
     if (pageSize < 1 || pageSize > 100) {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
     }
 
-    params.pageSize = pageSize;
+    if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
+      throw new RequestMalformedError('statusTimestampAfter must be a valid ISO 8601 date string');
+    }
 
-    return this.taskStore.list(params, context);
+    return this.taskStore.list({ ...params, pageSize }, context);
   }
 
   async cancelTask(params: CancelTaskRequest, context?: ServerCallContext): Promise<Task> {

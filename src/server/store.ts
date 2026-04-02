@@ -1,6 +1,7 @@
 import { Task, ListTasksRequest, ListTasksResponse } from '../index.js';
 import { ServerCallContext } from './context.js';
 import { DEFAULT_PAGE_SIZE } from '../constants.js';
+import { RequestMalformedError } from '../errors.js';
 
 /**
  * Simplified interface for task storage providers.
@@ -100,9 +101,12 @@ export class InMemoryTaskStore implements TaskStore {
         const decoded = Buffer.from(pageToken, 'base64').toString('utf-8');
         const [cursorTimestamp, cursorId] = decoded.split(':');
         if (!cursorTimestamp || cursorId === undefined) {
-          throw new Error('Invalid page token format.');
+          throw new RequestMalformedError('Invalid page token format.');
         }
         const cursorTime = parseInt(cursorTimestamp, 10);
+        if (isNaN(cursorTime)) {
+          throw new RequestMalformedError('Invalid page token format.');
+        }
 
         const cursorIndex = tasks.findIndex(
           (task) =>
@@ -117,7 +121,8 @@ export class InMemoryTaskStore implements TaskStore {
           tasks = [];
         }
       } catch (e) {
-        throw new Error('Token is not a valid base64-encoded cursor.', { cause: e });
+        if (e instanceof RequestMalformedError) throw e;
+        throw new RequestMalformedError('Token is not a valid base64-encoded cursor.');
       }
     }
 
