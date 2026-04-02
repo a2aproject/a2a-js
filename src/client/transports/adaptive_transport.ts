@@ -114,9 +114,7 @@ export class TransportStats {
    * Only includes transports that have at least one recorded outcome.
    */
   preferredOrder(): string[] {
-    return [...this.records.keys()].sort(
-      (a, b) => this.getScore(b) - this.getScore(a)
-    );
+    return [...this.records.keys()].sort((a, b) => this.getScore(b) - this.getScore(a));
   }
 
   /** Clear all recorded data. */
@@ -170,9 +168,9 @@ export class AdaptiveTransportInterceptor implements CallInterceptor {
   }
 
   async after(args: AfterArgs): Promise<void> {
-    const key = (args.options as Record<string, unknown> | undefined)?.[
-      '_adaptiveTimerKey'
-    ] as string | undefined;
+    const key = (args.options as Record<string, unknown> | undefined)?.['_adaptiveTimerKey'] as
+      | string
+      | undefined;
     if (!key) return;
 
     const startTime = this.timers.get(key);
@@ -183,9 +181,8 @@ export class AdaptiveTransportInterceptor implements CallInterceptor {
 
     // Determine transport name from agent card's supported protocols.
     // The first matching protocol is the one being used.
-    const protocols = args.agentCard?.additionalInterfaces?.map(
-      (i: { transport?: string }) => i.transport
-    ) ?? [];
+    const protocols =
+      args.agentCard?.additionalInterfaces?.map((i: { transport?: string }) => i.transport) ?? [];
     const transport = protocols[0] ?? 'unknown';
 
     // Determine success based on whether result contains an error-like value.

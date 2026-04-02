@@ -53,9 +53,7 @@ describe('TransportStats', () => {
     // 100% success, 800ms
     for (let i = 0; i < 10; i++) stats.record('SLOW_RELIABLE', true, 800);
 
-    expect(stats.getScore('SLOW_RELIABLE')).toBeGreaterThan(
-      stats.getScore('FAST_FLAKY')
-    );
+    expect(stats.getScore('SLOW_RELIABLE')).toBeGreaterThan(stats.getScore('FAST_FLAKY'));
   });
 
   it('sliding window evicts old records', () => {
