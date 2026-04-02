@@ -61,6 +61,10 @@ export class GrpcTransport implements Transport {
     );
   }
 
+  get protocolName(): string {
+    return GrpcTransportFactory.name;
+  }
+
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const rpcResponse = await this._sendGrpcRequest<
       GetExtendedAgentCardRequest,

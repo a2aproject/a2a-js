@@ -24,6 +24,12 @@ describe('JsonRpcTransport', () => {
     });
   });
 
+  describe('protocolName', () => {
+    it('should return correct protocol name', () => {
+      expect(transport.protocolName).to.equal('JSONRPC');
+    });
+  });
+
   describe('sendMessage', () => {
     it('should correctly add the extension headers', async () => {
       const messageParams: SendMessageRequest = {

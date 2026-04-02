@@ -76,6 +76,12 @@ describe('RestTransport', () => {
     });
   });
 
+  describe('protocolName', () => {
+    it('should return correct protocol name', () => {
+      expect(transport.protocolName).to.equal('HTTP+JSON');
+    });
+  });
+
   describe('sendMessage', () => {
     it('should send message successfully', async () => {
       const messageParams = createMessageParams();

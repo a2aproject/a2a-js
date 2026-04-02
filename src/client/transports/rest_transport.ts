@@ -54,6 +54,10 @@ export class RestTransport implements Transport {
     this.customFetchImpl = options.fetchImpl;
   }
 
+  get protocolName(): string {
+    return RestTransportFactory.name;
+  }
+
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const response = await this._sendRequest<undefined, AgentCard>(
       'GET',

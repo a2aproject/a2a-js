@@ -94,6 +94,12 @@ describe('GrpcTransport', () => {
     vi.clearAllMocks();
   });
 
+  describe('protocolName', () => {
+    it('should return correct protocol name', () => {
+      expect(transport.protocolName).toBe('GRPC');
+    });
+  });
+
   describe('getExtendedAgentCard', () => {
     it('should get agent card successfully', async () => {
       const mockCard = createMockAgentCard();

@@ -59,6 +59,10 @@ export class JsonRpcTransport implements Transport {
     this.customFetchImpl = options.fetchImpl;
   }
 
+  get protocolName(): string {
+    return JsonRpcTransportFactory.name;
+  }
+
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const rpcResponse = await this._sendRpcRequest<
       undefined,
