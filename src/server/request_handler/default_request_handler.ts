@@ -47,6 +47,7 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
+import { DEFAULT_PAGE_SIZE } from '../../constants.js';
 
 const terminalStates: TaskState[] = [
   TaskState.TASK_STATE_COMPLETED,
@@ -444,7 +445,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: ListTasksRequest,
     context?: ServerCallContext
   ): Promise<ListTasksResponse> {
-    const pageSize = params.pageSize !== undefined ? params.pageSize : 20;
+    const pageSize = params.pageSize !== undefined ? params.pageSize : DEFAULT_PAGE_SIZE;
 
     if (pageSize < 1 || pageSize > 100) {
       throw new RequestMalformedError('pageSize must be between 1 and 100');

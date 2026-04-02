@@ -86,24 +86,40 @@ export class InMemoryTaskStore implements TaskStore {
     tasks.sort((taskA, taskB) => {
       const timeA = taskA.status?.timestamp ? new Date(taskA.status.timestamp).getTime() : 0;
       const timeB = taskB.status?.timestamp ? new Date(taskB.status.timestamp).getTime() : 0;
-      return timeB - timeA;
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      return taskB.id.localeCompare(taskA.id);
     });
 
+    const totalSize = tasks.length;
+
     // Pagination cursor
-    let cursorTime = Infinity;
     if (pageToken) {
       try {
-        cursorTime = parseInt(Buffer.from(pageToken, 'base64').toString('utf-8'), 10);
+        const decoded = Buffer.from(pageToken, 'base64').toString('utf-8');
+        const [cursorTimestamp, cursorId] = decoded.split(':');
+        if (!cursorTimestamp || cursorId === undefined) {
+          throw new Error('Invalid page token format.');
+        }
+        const cursorTime = parseInt(cursorTimestamp, 10);
+
+        const cursorIndex = tasks.findIndex(
+          (task) =>
+            (task.status?.timestamp ? new Date(task.status.timestamp).getTime() : 0) ===
+              cursorTime && task.id === cursorId
+        );
+
+        if (cursorIndex !== -1) {
+          tasks = tasks.slice(cursorIndex + 1);
+        } else {
+          // This case can happen if the cursor task was deleted.
+          tasks = [];
+        }
       } catch (e) {
         throw new Error('Token is not a valid base64-encoded cursor.', { cause: e });
       }
     }
-
-    // Apply cursor
-    tasks = tasks.filter((task) => {
-      const taskTime = task.status?.timestamp ? new Date(task.status.timestamp).getTime() : 0;
-      return taskTime < cursorTime;
-    });
 
     const paginatedTasks = tasks.slice(0, pageSize);
 
@@ -122,19 +138,19 @@ export class InMemoryTaskStore implements TaskStore {
     });
 
     let nextPageToken = '';
-    if (tasks.length > pageSize && resultTasks.length > 0) {
-      const lastTask = resultTasks[resultTasks.length - 1];
+    if (paginatedTasks.length > 0 && tasks.length > paginatedTasks.length) {
+      const lastTask = paginatedTasks[paginatedTasks.length - 1];
       const lastTime = lastTask.status?.timestamp
         ? new Date(lastTask.status.timestamp).getTime()
         : 0;
-      nextPageToken = Buffer.from(lastTime.toString()).toString('base64');
+      nextPageToken = Buffer.from(`${lastTime}:${lastTask.id}`).toString('base64');
     }
 
     return {
       tasks: resultTasks,
       nextPageToken,
       pageSize,
-      totalSize: tasks.length,
+      totalSize,
     };
   }
 }
