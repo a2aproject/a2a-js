@@ -1,5 +1,6 @@
 import { TaskStatusUpdateEvent, TaskState } from '../../index.js';
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
+import { TERMINAL_STATE_LIST } from '../utils.js';
 
 const terminalStates: TaskState[] = [
   TaskState.TASK_STATE_COMPLETED,
@@ -50,7 +51,7 @@ export class ExecutionEventQueue {
           'messageId' in event ||
           ('status' in event &&
             'taskId' in event &&
-            terminalStates.includes((event as TaskStatusUpdateEvent).status!.state))
+            TERMINAL_STATE_LIST.includes((event as TaskStatusUpdateEvent).status!.state))
         ) {
           this.handleFinished();
           break;
