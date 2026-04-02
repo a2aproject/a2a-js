@@ -1,4 +1,4 @@
-import { TransportProtocolName } from '../../core.js';
+import { JSONRPCErrorResponse, TransportProtocolName } from '../../core.js';
 import {
   A2A_ERROR_CODE,
   AuthenticatedExtendedCardNotConfiguredError,
@@ -417,18 +417,6 @@ export interface JSONRPCSuccessResponse<T> {
   jsonrpc: '2.0';
   result: T;
   id: string | number | null;
-}
-
-export interface JSONRPCError {
-  code: number;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface JSONRPCErrorResponse {
-  error: JSONRPCError;
-  id: string | number | null;
-  jsonrpc: '2.0';
 }
 
 export type JSONRPCResponse<T> = JSONRPCSuccessResponse<T> | JSONRPCErrorResponse;

@@ -25,6 +25,7 @@ import {
   AuthenticatedExtendedCardNotConfiguredError,
   GenericError,
 } from '../../../errors.js';
+import { JSONRPCErrorResponse } from '../../../core.js';
 
 export type A2ARequest = {
   jsonrpc: '2.0';
@@ -32,18 +33,6 @@ export type A2ARequest = {
   params?: unknown;
   id?: string | number | null;
 };
-
-export interface JSONRPCError {
-  code: number;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface JSONRPCErrorResponse {
-  error: JSONRPCError;
-  id: string | number | null;
-  jsonrpc: '2.0';
-}
 
 export type JSONRPCResponse = {
   jsonrpc: string;
