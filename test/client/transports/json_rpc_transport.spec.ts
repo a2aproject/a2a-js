@@ -26,7 +26,7 @@ describe('JsonRpcTransport', () => {
 
   describe('protocolName', () => {
     it('should return correct protocol name', () => {
-      expect(transport.protocolName).to.equal('JSONRPC');
+      expect(transport.protocolName).toBe('JSONRPC');
     });
   });
 

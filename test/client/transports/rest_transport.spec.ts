@@ -78,7 +78,7 @@ describe('RestTransport', () => {
 
   describe('protocolName', () => {
     it('should return correct protocol name', () => {
-      expect(transport.protocolName).to.equal('HTTP+JSON');
+      expect(transport.protocolName).toBe('HTTP+JSON');
     });
   });
 

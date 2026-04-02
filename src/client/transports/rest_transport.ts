@@ -55,7 +55,7 @@ export class RestTransport implements Transport {
   }
 
   get protocolName(): string {
-    return RestTransportFactory.name;
+    return protocolName;
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
@@ -392,13 +392,13 @@ export interface RestTransportFactoryOptions {
   fetchImpl?: typeof fetch;
 }
 
-export class RestTransportFactory implements TransportFactory {
-  public static readonly name: TransportProtocolName = 'HTTP+JSON';
+const protocolName: TransportProtocolName = 'HTTP+JSON';
 
+export class RestTransportFactory implements TransportFactory {
   constructor(private readonly options?: RestTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return RestTransportFactory.name;
+    return protocolName;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {

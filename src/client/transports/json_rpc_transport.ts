@@ -60,7 +60,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   get protocolName(): string {
-    return JsonRpcTransportFactory.name;
+    return protocolName;
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
@@ -403,13 +403,13 @@ export class JsonRpcTransportFactoryOptions {
   fetchImpl?: typeof fetch;
 }
 
-export class JsonRpcTransportFactory implements TransportFactory {
-  public static readonly name: TransportProtocolName = 'JSONRPC';
+const protocolName: TransportProtocolName = 'JSONRPC';
 
+export class JsonRpcTransportFactory implements TransportFactory {
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return JsonRpcTransportFactory.name;
+    return protocolName;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {
@@ -432,7 +432,6 @@ interface JSONRPCSuccessResponse<T> {
   result: T;
   id: string | number | null;
 }
-
 export class JSONRPCTransportError extends Error {
   constructor(public errorResponse: JSONRPCErrorResponse) {
     super(

@@ -62,7 +62,7 @@ export class GrpcTransport implements Transport {
   }
 
   get protocolName(): string {
-    return GrpcTransportFactory.name;
+    return protocolName;
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
@@ -336,13 +336,13 @@ export class GrpcTransportFactoryOptions {
   grpcCallOptions?: Partial<grpc.CallOptions>;
 }
 
-export class GrpcTransportFactory implements TransportFactory {
-  public static readonly name: TransportProtocolName = 'GRPC';
+const protocolName: TransportProtocolName = 'GRPC';
 
+export class GrpcTransportFactory implements TransportFactory {
   constructor(private readonly options?: GrpcTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return GrpcTransportFactory.name;
+    return protocolName;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {
