@@ -432,6 +432,7 @@ interface JSONRPCSuccessResponse<T> {
   result: T;
   id: string | number | null;
 }
+
 export class JSONRPCTransportError extends Error {
   constructor(public errorResponse: JSONRPCErrorResponse) {
     super(
