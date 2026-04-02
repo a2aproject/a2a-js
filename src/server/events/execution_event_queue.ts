@@ -1,12 +1,6 @@
-import { TaskStatusUpdateEvent, TaskState } from '../../index.js';
+import { TaskStatusUpdateEvent } from '../../index.js';
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
-
-const terminalStates: TaskState[] = [
-  TaskState.TASK_STATE_COMPLETED,
-  TaskState.TASK_STATE_FAILED,
-  TaskState.TASK_STATE_CANCELED,
-  TaskState.TASK_STATE_REJECTED,
-];
+import { TERMINAL_STATE_LIST } from '../utils.js';
 
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
@@ -50,7 +44,7 @@ export class ExecutionEventQueue {
           'messageId' in event ||
           ('status' in event &&
             'taskId' in event &&
-            terminalStates.includes((event as TaskStatusUpdateEvent).status!.state))
+            TERMINAL_STATE_LIST.includes((event as TaskStatusUpdateEvent).status!.state))
         ) {
           this.handleFinished();
           break;

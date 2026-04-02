@@ -1,4 +1,12 @@
-import { TaskStatus, Artifact } from '../index.js';
+import { TaskStatus, TaskState, Artifact } from '../index.js';
+
+const TERMINAL_STATE_LIST: TaskState[] = [
+  TaskState.TASK_STATE_COMPLETED,
+  TaskState.TASK_STATE_FAILED,
+  TaskState.TASK_STATE_CANCELED,
+  TaskState.TASK_STATE_REJECTED,
+];
+export { TERMINAL_STATE_LIST };
 
 /**
  * Generates a timestamp in ISO 8601 format.
