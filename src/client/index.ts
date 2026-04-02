@@ -30,10 +30,7 @@ export type {
   ClientCallInput,
   ClientCallResult,
 } from './interceptors.js';
-export {
-  TransportStats,
-  AdaptiveTransportInterceptor,
-} from './transports/adaptive_transport.js';
+export { TransportStats, AdaptiveTransportInterceptor } from './transports/adaptive_transport.js';
 export {
   ServiceParameters,
   type ServiceParametersUpdate,
