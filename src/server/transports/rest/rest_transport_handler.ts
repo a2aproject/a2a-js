@@ -19,6 +19,7 @@ import {
   CancelTaskRequest,
   ListTasksRequest,
   ListTasksResponse,
+  TaskState,
 } from '../../../index.js';
 import {
   AuthenticatedExtendedCardNotConfiguredError,
@@ -198,7 +199,7 @@ export class RestTransportHandler {
     const params: ListTasksRequest = {
       tenant: (queryParams.tenant as string) || '',
       contextId: (queryParams.contextId as string) || '',
-      status: queryParams.status ? Number(queryParams.status) : 0,
+      status: queryParams.status ? Number(queryParams.status) : TaskState.TASK_STATE_UNSPECIFIED,
       pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : undefined,
       pageToken: (queryParams.pageToken as string) || '',
       historyLength: queryParams.historyLength ? Number(queryParams.historyLength) : undefined,

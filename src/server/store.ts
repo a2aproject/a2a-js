@@ -71,7 +71,7 @@ export class InMemoryTaskStore implements TaskStore {
     }
 
     // Filter by status
-    if (status) {
+    if (status !== undefined) {
       tasks = tasks.filter((task) => task.status?.state === status);
     }
 
@@ -85,10 +85,10 @@ export class InMemoryTaskStore implements TaskStore {
 
     // Sort by timestamp descending
     tasks.sort((taskA, taskB) => {
-      const timeA = taskA.status?.timestamp ? new Date(taskA.status.timestamp).getTime() : 0;
-      const timeB = taskB.status?.timestamp ? new Date(taskB.status.timestamp).getTime() : 0;
+      const timeA = taskA.status?.timestamp || '';
+      const timeB = taskB.status?.timestamp || '';
       if (timeB !== timeA) {
-        return timeB - timeA;
+        return timeB.localeCompare(timeA);
       }
       return taskB.id.localeCompare(taskA.id);
     });
@@ -99,19 +99,14 @@ export class InMemoryTaskStore implements TaskStore {
     if (pageToken) {
       try {
         const decoded = Buffer.from(pageToken, 'base64').toString('utf-8');
-        const [cursorTimestamp, cursorId] = decoded.split(':');
-        if (!cursorTimestamp || cursorId === undefined) {
+        const [cursorTimestamp, ...idParts] = decoded.split('|');
+        if (idParts.length === 0) {
           throw new RequestMalformedError('Invalid page token format.');
         }
-        const cursorTime = parseInt(cursorTimestamp, 10);
-        if (isNaN(cursorTime)) {
-          throw new RequestMalformedError('Invalid page token format.');
-        }
+        const cursorId = idParts.join('|');
 
         const cursorIndex = tasks.findIndex(
-          (task) =>
-            (task.status?.timestamp ? new Date(task.status.timestamp).getTime() : 0) ===
-              cursorTime && task.id === cursorId
+          (task) => (task.status?.timestamp || '') === cursorTimestamp && task.id === cursorId
         );
 
         if (cursorIndex !== -1) {
@@ -130,7 +125,7 @@ export class InMemoryTaskStore implements TaskStore {
 
     // Map tasks to response format
     const resultTasks = paginatedTasks.map((task) => {
-      const taskCopy = { ...task };
+      const taskCopy = JSON.parse(JSON.stringify(task));
       if (!includeArtifacts) {
         taskCopy.artifacts = [];
       }
@@ -145,10 +140,8 @@ export class InMemoryTaskStore implements TaskStore {
     let nextPageToken = '';
     if (paginatedTasks.length > 0 && tasks.length > paginatedTasks.length) {
       const lastTask = paginatedTasks[paginatedTasks.length - 1];
-      const lastTime = lastTask.status?.timestamp
-        ? new Date(lastTask.status.timestamp).getTime()
-        : 0;
-      nextPageToken = Buffer.from(`${lastTime}:${lastTask.id}`).toString('base64');
+      const lastTime = lastTask.status?.timestamp || '';
+      nextPageToken = Buffer.from(`${lastTime}|${lastTask.id}`).toString('base64');
     }
 
     return {
