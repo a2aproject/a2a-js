@@ -13,6 +13,8 @@ import {
 import { RequestOptions } from '../multitransport-client.js';
 
 export interface Transport {
+  get protocolName(): string;
+
   getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard>;
 
   sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult>;
