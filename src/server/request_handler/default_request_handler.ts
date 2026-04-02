@@ -48,13 +48,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-
-const terminalStates: TaskState[] = [
-  TaskState.TASK_STATE_COMPLETED,
-  TaskState.TASK_STATE_FAILED,
-  TaskState.TASK_STATE_CANCELED,
-  TaskState.TASK_STATE_REJECTED,
-];
+import { TERMINAL_STATE_LIST } from '../utils.js';
 
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
@@ -122,7 +116,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       if (!task) {
         throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
       }
-      if (task.status?.state !== undefined && terminalStates.includes(task.status.state)) {
+      if (task.status?.state !== undefined && TERMINAL_STATE_LIST.includes(task.status.state)) {
         // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
         throw new RequestMalformedError(
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
@@ -466,7 +460,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     // Check if task is in a cancelable state
-    if (terminalStates.includes(task.status!.state)) {
+    if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
     }
 
@@ -624,7 +618,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     yield task;
 
     // If task is already in a final state, no more events will come.
-    if (terminalStates.includes(task.status!.state)) {
+    if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
       return;
     }
 

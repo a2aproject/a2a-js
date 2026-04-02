@@ -26,6 +26,7 @@ import {
   AuthenticatedExtendedCardNotConfiguredError,
   GenericError,
 } from '../../../errors.js';
+import { JSONRPCErrorResponse } from '../../../core.js';
 
 export type A2ARequest = {
   jsonrpc: '2.0';
@@ -33,18 +34,6 @@ export type A2ARequest = {
   params?: unknown;
   id?: string | number | null;
 };
-
-export interface JSONRPCError {
-  code: number;
-  data?: { [k: string]: unknown };
-  message: string;
-}
-
-export interface JSONRPCErrorResponse {
-  error: JSONRPCError;
-  id: string | number | null;
-  jsonrpc: '2.0';
-}
 
 export type JSONRPCResponse = {
   jsonrpc: string;
@@ -200,21 +189,10 @@ export class JsonRpcTransportHandler {
             );
             break;
           case 'tasks/pushNotificationConfig/create': {
-            const params = rpcRequest.params as {
-              name?: string;
-              taskId?: string;
-              pushNotificationConfig?: TaskPushNotificationConfig;
-            };
-            const config = params.name
-              ? TaskPushNotificationConfig.fromJSON({
-                  name: params.name,
-                  pushNotificationConfig: params.pushNotificationConfig,
-                })
-              : TaskPushNotificationConfig.fromJSON({
-                  name: `tasks/${params.taskId}/pushNotificationConfigs/${params.pushNotificationConfig?.id}`,
-                  pushNotificationConfig: params.pushNotificationConfig,
-                });
-            result = await this.requestHandler.createTaskPushNotificationConfig(config, context);
+            result = await this.requestHandler.createTaskPushNotificationConfig(
+              TaskPushNotificationConfig.fromJSON(rpcRequest.params),
+              context
+            );
             break;
           }
           case 'tasks/pushNotificationConfig/get':

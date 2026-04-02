@@ -5,10 +5,8 @@ import express, {
   NextFunction,
   RequestHandler,
 } from 'express';
-import {
-  JSONRPCErrorResponse,
-  JSONRPCResponse,
-} from '../transports/jsonrpc/jsonrpc_transport_handler.js';
+import { JSONRPCErrorResponse } from '../../core.js';
+import { JSONRPCResponse } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
