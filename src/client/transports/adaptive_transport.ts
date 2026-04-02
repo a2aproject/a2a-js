@@ -114,7 +114,7 @@ export class TransportStats {
    * Only includes transports that have at least one recorded outcome.
    */
   preferredOrder(): string[] {
-    return [...this.records.keys()].sort((a, b) => this.getScore(b) - this.getScore(a));
+    return Array.from(this.records.keys()).sort((a, b) => this.getScore(b) - this.getScore(a));
   }
 
   /** Clear all recorded data. */
@@ -155,6 +155,7 @@ export class AdaptiveTransportInterceptor implements CallInterceptor {
   }
 
   async before(args: BeforeArgs): Promise<void> {
+    if (!args.input) return;
     // Record start time keyed by a unique request identifier.
     // We use the method name + timestamp as a simple key since
     // interceptors are invoked synchronously per request.
@@ -168,6 +169,7 @@ export class AdaptiveTransportInterceptor implements CallInterceptor {
   }
 
   async after(args: AfterArgs): Promise<void> {
+    if (!args.result) return;
     const key = (args.options as Record<string, unknown> | undefined)?.['_adaptiveTimerKey'] as
       | string
       | undefined;
