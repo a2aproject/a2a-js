@@ -105,9 +105,6 @@ export class InMemoryTaskStore implements TaskStore {
       return taskTime < cursorTime;
     });
 
-    const totalSize = tasks.length;
-
-    const hasMore = tasks.length > pageSize;
     const paginatedTasks = tasks.slice(0, pageSize);
 
     // Map tasks to response format
@@ -125,7 +122,7 @@ export class InMemoryTaskStore implements TaskStore {
     });
 
     let nextPageToken = '';
-    if (hasMore && resultTasks.length > 0) {
+    if (tasks.length > pageSize && resultTasks.length > 0) {
       const lastTask = resultTasks[resultTasks.length - 1];
       const lastTime = lastTask.status?.timestamp
         ? new Date(lastTask.status.timestamp).getTime()
@@ -137,7 +134,7 @@ export class InMemoryTaskStore implements TaskStore {
       tasks: resultTasks,
       nextPageToken,
       pageSize,
-      totalSize,
+      totalSize: tasks.length,
     };
   }
 }
