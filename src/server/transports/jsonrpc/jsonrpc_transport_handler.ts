@@ -13,7 +13,6 @@ import {
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
 } from '../../../index.js';
-import { JSONRPCErrorResponse } from '../../../json_rpc_types.js';
 import {
   A2A_ERROR_CODE,
   RequestMalformedError,
@@ -26,6 +25,7 @@ import {
   AuthenticatedExtendedCardNotConfiguredError,
   GenericError,
 } from '../../../errors.js';
+import { JSONRPCErrorResponse } from '../../../core.js';
 
 export type A2ARequest = {
   jsonrpc: '2.0';
