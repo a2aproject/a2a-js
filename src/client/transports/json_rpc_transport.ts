@@ -413,7 +413,7 @@ interface JSONRPCRequest {
   id: string | number | null;
 }
 
-export interface JSONRPCSuccessResponse<T> {
+interface JSONRPCSuccessResponse<T> {
   jsonrpc: '2.0';
   result: T;
   id: string | number | null;

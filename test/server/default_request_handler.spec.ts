@@ -1256,7 +1256,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   });
 
   it('listTasks: should return tasks from the store', async () => {
-    const fakeTask: Task = {
+    const fakeTask1: Task = {
       id: 'task-list-1',
       contextId: 'ctx-list',
       status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
@@ -1264,7 +1264,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       metadata: {},
       history: [],
     };
-    await mockTaskStore.save(fakeTask, serverCallContext);
+    const fakeTask2: Task = { ...fakeTask1, id: 'task-list-2' };
+
+    await mockTaskStore.save(fakeTask1, serverCallContext);
+    await mockTaskStore.save(fakeTask2, serverCallContext);
 
     const params: ListTasksRequest = {
       tenant: '',
@@ -1278,8 +1281,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
 
     const result = await handler.listTasks(params, serverCallContext);
-    assert.lengthOf(result.tasks, 1);
-    assert.equal(result.tasks[0].id, fakeTask.id);
+    assert.lengthOf(result.tasks, 2);
+    // Tasks are listed in reverse order of creation
+    assert.equal(result.tasks[0].id, fakeTask2.id);
+    assert.equal(result.tasks[1].id, fakeTask1.id);
   });
 
   it('listTasks: should throw RequestMalformedError if pageSize is < 1', async () => {
