@@ -413,13 +413,13 @@ interface JSONRPCRequest {
   id: string | number | null;
 }
 
-export interface JSONRPCSuccessResponse<T> {
+interface JSONRPCSuccessResponse<T> {
   jsonrpc: '2.0';
   result: T;
   id: string | number | null;
 }
 
-export type JSONRPCResponse<T> = JSONRPCSuccessResponse<T> | JSONRPCErrorResponse;
+type JSONRPCResponse<T> = JSONRPCSuccessResponse<T> | JSONRPCErrorResponse;
 
 export class JSONRPCTransportError extends Error {
   constructor(public errorResponse: JSONRPCErrorResponse) {
