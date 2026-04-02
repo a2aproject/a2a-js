@@ -11,11 +11,11 @@ import {
   TaskNotCancelableError,
 } from '../../../src/errors.js';
 import {
-  ListTaskPushNotificationConfigResponse,
+  ListTaskPushNotificationConfigsResponse,
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
-} from '../../../src/types/pb/a2a_types.js';
+} from '../../../src/types/pb/a2a.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 
 /**
@@ -35,11 +35,8 @@ describe('restHandler', () => {
   let app: Express;
 
   const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'HTTP+JSON',
     version: '1.0.0',
     capabilities: {
       streaming: true,
@@ -49,29 +46,43 @@ describe('restHandler', () => {
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    securityRequirements: [],
     securitySchemes: {},
-    security: [],
-    additionalInterfaces: [],
-    provider: undefined,
-    documentationUrl: '',
-    supportsAuthenticatedExtendedCard: false,
+    provider: { url: '', organization: '' },
     signatures: [],
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080/v1',
+        protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
+    documentationUrl: '',
   };
 
   // camelCase format (internal type)
   const testMessage: Message = {
     messageId: 'msg-1',
     role: 'user' as any,
-    content: [{ part: { $case: 'text', value: 'Hello' } }],
+    parts: [
+      {
+        content: { $case: 'text', value: 'Hello' },
+        filename: '',
+        mediaType: 'text/plain',
+        metadata: {},
+      },
+    ],
     contextId: 'ctx-1',
     taskId: 'task-1',
     extensions: [],
     metadata: {},
+    referenceTaskIds: [],
   };
 
   const testTask: Task = {
     id: 'task-1',
-    status: { state: TaskState.TASK_STATE_COMPLETED, update: undefined, timestamp: undefined },
+    status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
     contextId: 'ctx-1',
     history: [],
     artifacts: [],
@@ -86,7 +97,7 @@ describe('restHandler', () => {
       sendMessageStream: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
@@ -132,14 +143,11 @@ describe('restHandler', () => {
       const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app)
-        .post('/v1/message:send')
-        .send({ request: message })
-        .expect(201);
+      const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          request: expect.objectContaining({
+          message: expect.objectContaining({
             messageId: 'msg-1',
           }),
         }),
@@ -172,16 +180,13 @@ describe('restHandler', () => {
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const response = await request(app)
-        .post('/v1/message:stream')
-        .send({ request: message })
-        .expect(200);
+      const response = await request(app).post('/v1/message:stream').send({ message }).expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
 
       expect(mockRequestHandler.sendMessageStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          request: expect.objectContaining({
+          message: expect.objectContaining({
             messageId: 'msg-1',
           }),
         }),
@@ -224,7 +229,7 @@ describe('restHandler', () => {
       // Status state is enum string
       assert.deepEqual(response.body.status.state, 'TASK_STATE_COMPLETED');
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { name: 'tasks/task-1', historyLength: 0 },
+        { id: 'task-1', tenant: '', historyLength: 0 },
         expect.anything()
       );
     });
@@ -236,7 +241,8 @@ describe('restHandler', () => {
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         {
-          name: 'tasks/task-1',
+          id: 'task-1',
+          tenant: '',
           historyLength: 10,
         },
         expect.anything()
@@ -259,15 +265,18 @@ describe('restHandler', () => {
 
   describe('POST /v1/tasks/:taskId:cancel', () => {
     it('should cancel task and return 202 Accepted', async () => {
-      const cancelledTask = { ...testTask, status: { state: TaskState.TASK_STATE_CANCELLED } };
+      const cancelledTask = {
+        ...testTask,
+        status: { state: TaskState.TASK_STATE_CANCELED },
+      };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
-      assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELLED');
+      assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELED');
       expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
-        { name: 'tasks/task-1' },
+        { id: 'task-1', tenant: '', metadata: {} },
         expect.anything()
       );
     });
@@ -305,7 +314,7 @@ describe('restHandler', () => {
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
       expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
-        { name: 'tasks/task-1' },
+        { id: 'task-1', tenant: '' },
         expect.anything()
       );
     });
@@ -335,14 +344,13 @@ describe('restHandler', () => {
   });
 
   describe('Push Notification Config Endpoints', () => {
-    const mockConfig: any = {
+    const mockConfig: TaskPushNotificationConfig = {
+      tenant: '',
       taskId: 'task-1',
-      pushNotificationConfig: {
-        id: 'config-1',
-        url: 'https://example.com/webhook',
-        token: '',
-        authentication: undefined,
-      },
+      id: 'config-1',
+      url: 'https://example.com/webhook',
+      token: '',
+      authentication: undefined,
     };
 
     describe('POST /v1/tasks/:taskId/pushNotificationConfigs', () => {
@@ -350,33 +358,23 @@ describe('restHandler', () => {
         {
           name: 'camelCase',
           payload: {
-            parent: 'tasks/task-1',
-            configId: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              pushNotificationConfig: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
-            },
+            id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            url: 'http://127.0.0.1:9999/webhook',
+            taskId: 'task-1',
+            tenant: '',
           },
         },
         {
           name: 'snake_case',
           payload: {
-            parent: 'tasks/task-1',
-            config_id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              push_notification_config: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
-            },
+            id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            url: 'http://127.0.0.1:9999/webhook',
+            taskId: 'task-1',
+            tenant: '',
           },
         },
       ])('should accept $name config and return 201', async ({ payload }) => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
           .post('/v1/tasks/task-1/pushNotificationConfigs')
@@ -384,8 +382,8 @@ describe('restHandler', () => {
           .expect(201);
 
         const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
-        assert.include(protoResponse.name, 'task-1');
-        assert.include(protoResponse.name, 'config-1');
+        assert.equal(protoResponse.taskId, 'task-1');
+        assert.equal(protoResponse.id, 'config-1');
       });
 
       it('should return 400 if push notifications not supported', async () => {
@@ -427,7 +425,7 @@ describe('restHandler', () => {
           .get('/v1/tasks/task-1/pushNotificationConfigs')
           .expect(200);
 
-        const convertedResult = ListTaskPushNotificationConfigResponse.fromJSON(
+        const convertedResult = ListTaskPushNotificationConfigsResponse.fromJSON(
           response.body
         ).configs;
         assert.isArray(convertedResult);
@@ -445,10 +443,12 @@ describe('restHandler', () => {
 
         // REST API returns camelCase
         const convertedResult = TaskPushNotificationConfig.fromJSON(response.body);
-        assert.include(convertedResult.name, 'task-1');
+        assert.equal(convertedResult.taskId, 'task-1');
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
-            name: 'tasks/task-1/pushNotificationConfigs/config-1',
+            id: 'config-1',
+            taskId: 'task-1',
+            tenant: '',
           },
           expect.anything()
         );
@@ -476,7 +476,9 @@ describe('restHandler', () => {
 
         expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
-            name: 'tasks/task-1/pushNotificationConfigs/config-1',
+            id: 'config-1',
+            taskId: 'task-1',
+            tenant: '',
           },
           expect.anything()
         );
@@ -568,14 +570,25 @@ describe('restHandler', () => {
       {
         name: 'camelCase',
         payload: {
-          request: testMessage,
+          message: testMessage,
           configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
         },
       },
       {
         name: 'snake_case',
         payload: {
-          message: { message_id: 'msg-1', role: 'ROLE_USER', kind: 'message' },
+          message: {
+            message_id: 'msg-1',
+            role: 'ROLE_USER',
+            parts: [
+              {
+                content: { $case: 'text', value: 'Hello' },
+                filename: '',
+                media_type: 'text/plain',
+                metadata: {},
+              },
+            ],
+          },
           configuration: { accepted_output_modes: ['text/plain'], history_length: 5 },
         },
       },
@@ -586,7 +599,7 @@ describe('restHandler', () => {
       const protoMessage = ProtoMessage.toJSON(testMessage);
       await request(app)
         .post('/v1/message:send')
-        .send({ request: protoMessage, configuration: payload.configuration })
+        .send({ message: protoMessage, configuration: payload.configuration })
         .expect(201);
     });
   });
@@ -610,7 +623,7 @@ describe('restHandler', () => {
       const messageProto = ProtoMessage.toJSON(testMessage);
       const response = await request(app)
         .post('/v1/message:send')
-        .send({ request: messageProto })
+        .send({ message: messageProto })
         .expect(500);
 
       assert.property(response.body, 'name');

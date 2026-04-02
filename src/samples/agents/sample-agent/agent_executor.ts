@@ -37,7 +37,7 @@ export class SampleAgentExecutor implements AgentExecutor {
         status: {
           state: TaskState.TASK_STATE_SUBMITTED,
           timestamp: new Date().toISOString(),
-          update: undefined,
+          message: undefined,
         },
         artifacts: [],
         history: [userMessage], // Start history with the current user message
@@ -52,18 +52,25 @@ export class SampleAgentExecutor implements AgentExecutor {
       contextId: contextId,
       status: {
         state: TaskState.TASK_STATE_WORKING,
-        update: {
+        message: {
           role: Role.ROLE_AGENT,
           messageId: uuidv4(),
-          content: [{ part: { $case: 'text', value: 'Processing your question' } }],
+          parts: [
+            {
+              content: { $case: 'text', value: 'Processing your question' },
+              metadata: undefined,
+              filename: '',
+              mediaType: 'text/plain',
+            },
+          ],
           taskId: taskId,
           contextId: contextId,
           extensions: [],
           metadata: {},
+          referenceTaskIds: [],
         },
         timestamp: new Date().toISOString(),
       },
-      final: false,
       metadata: {},
     };
     eventBus.publish(workingStatusUpdate);
@@ -77,7 +84,14 @@ export class SampleAgentExecutor implements AgentExecutor {
       artifactId: artifactId,
       name: 'Result',
       description: 'The final result from the agent.',
-      parts: [{ part: { $case: 'text', value: agentReplyText } }],
+      parts: [
+        {
+          content: { $case: 'text', value: agentReplyText },
+          metadata: undefined,
+          filename: '',
+          mediaType: 'text/plain',
+        },
+      ],
       metadata: undefined,
       extensions: [],
     };
@@ -100,9 +114,8 @@ export class SampleAgentExecutor implements AgentExecutor {
       status: {
         state: TaskState.TASK_STATE_COMPLETED,
         timestamp: new Date().toISOString(),
-        update: undefined,
+        message: undefined,
       },
-      final: true,
       metadata: undefined,
     };
     eventBus.publish(finalUpdate);
@@ -112,8 +125,8 @@ export class SampleAgentExecutor implements AgentExecutor {
 
   parseInputMessage(message: Message): string {
     /** Process the user query and return a response. */
-    const textPart = message.content.find((part) => part.part?.$case === 'text');
-    const query = textPart?.part?.$case === 'text' ? textPart.part.value.trim() : '';
+    const textPart = message.parts.find((part) => part.content?.$case === 'text');
+    const query = textPart?.content?.$case === 'text' ? textPart.content.value.trim() : '';
 
     if (!query) {
       return 'Hello! Please provide a message for me to respond to.';

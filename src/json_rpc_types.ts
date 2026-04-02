@@ -3,8 +3,8 @@ import {
   SendMessageResponse as ProtoSendMessageResponse,
   StreamResponse as ProtoStreamResponse,
   Task,
-  PushNotificationConfig as ProtoPushNotificationConfig,
-} from './types/pb/a2a_types.js';
+  TaskPushNotificationConfig,
+} from './types/pb/a2a.js';
 
 /**
  * JSON-RPC Error object.
@@ -38,12 +38,12 @@ export type SendMessageSuccessResponse = BaseSuccessResponse<ProtoSendMessageRes
 export type SendStreamingMessageSuccessResponse = BaseSuccessResponse<ProtoStreamResponse>;
 export type GetTaskSuccessResponse = BaseSuccessResponse<Task>;
 export type CancelTaskSuccessResponse = BaseSuccessResponse<Task>;
-export type SetTaskPushNotificationConfigSuccessResponse =
-  BaseSuccessResponse<ProtoPushNotificationConfig>;
+export type CreateTaskPushNotificationConfigSuccessResponse =
+  BaseSuccessResponse<TaskPushNotificationConfig>;
 export type GetTaskPushNotificationConfigSuccessResponse =
-  BaseSuccessResponse<ProtoPushNotificationConfig>;
+  BaseSuccessResponse<TaskPushNotificationConfig>;
 export type ListTaskPushNotificationConfigSuccessResponse = BaseSuccessResponse<{
-  configs: ProtoPushNotificationConfig[];
+  configs: TaskPushNotificationConfig[];
 }>;
 export type DeleteTaskPushNotificationConfigSuccessResponse = BaseSuccessResponse<null>;
 export type GetAuthenticatedExtendedCardSuccessResponse = BaseSuccessResponse<AgentCard>;
@@ -54,8 +54,8 @@ export type SendStreamingMessageResponse =
   | JSONRPCErrorResponse;
 export type GetTaskResponse = GetTaskSuccessResponse | JSONRPCErrorResponse;
 export type CancelTaskResponse = CancelTaskSuccessResponse | JSONRPCErrorResponse;
-export type SetTaskPushNotificationConfigResponse =
-  | SetTaskPushNotificationConfigSuccessResponse
+export type CreateTaskPushNotificationConfigResponse =
+  | CreateTaskPushNotificationConfigSuccessResponse
   | JSONRPCErrorResponse;
 export type GetTaskPushNotificationConfigResponse =
   | GetTaskPushNotificationConfigSuccessResponse
@@ -76,7 +76,7 @@ export type JSONRPCResponse =
   | SendStreamingMessageSuccessResponse
   | GetTaskSuccessResponse
   | CancelTaskSuccessResponse
-  | SetTaskPushNotificationConfigSuccessResponse
+  | CreateTaskPushNotificationConfigSuccessResponse
   | GetTaskPushNotificationConfigSuccessResponse
   | ListTaskPushNotificationConfigSuccessResponse
   | DeleteTaskPushNotificationConfigSuccessResponse

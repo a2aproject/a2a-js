@@ -18,11 +18,19 @@ describe('DefaultExecutionEventBus', () => {
     return (text: string): Message => ({
       messageId: `msg-${counter++}`,
       role: Role.ROLE_AGENT,
-      content: [{ part: { $case: 'text', value: text } }],
+      parts: [
+        {
+          content: { $case: 'text', value: text },
+          filename: '',
+          mediaType: 'text/plain',
+          metadata: {},
+        },
+      ],
       taskId: '',
       contextId: '',
       extensions: [],
       metadata: {},
+      referenceTaskIds: [],
     });
   })();
 

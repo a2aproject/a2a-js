@@ -1,71 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
-import * as proto from '../../../src/types/pb/a2a_types.js';
-import { RequestMalformedError, GenericError } from '../../../src/errors.js';
-
-vi.mock('../../../src/types/converters/id_decoding.js', () => ({
-  extractTaskId: vi.fn((name) => name.replace('tasks/', '')),
-  extractTaskAndPushNotificationConfigId: vi.fn(),
-}));
+import * as proto from '../../../src/types/pb/a2a.js';
+import { GenericError } from '../../../src/errors.js';
 
 describe('FromProto', () => {
-  describe('createTaskPushNotificationConfig', () => {
-    it('should convert valid request', () => {
-      const request: proto.CreateTaskPushNotificationConfigRequest = {
-        parent: 'tasks/task-123',
-        configId: 'push-1',
-        config: {
-          name: 'ignored',
-          pushNotificationConfig: {
-            id: 'push-1',
-            url: 'http://example.com',
-            token: 'test-token',
-            authentication: undefined,
-          },
-        },
-      };
-
-      const result = FromProto.createTaskPushNotificationConfig(request);
-
-      expect(result).toEqual({
-        name: 'tasks/task-123/pushNotificationConfigs/push-1',
-        pushNotificationConfig: request.config?.pushNotificationConfig,
-      });
-    });
-
-    it('should throw RequestMalformedError if config is missing', () => {
-      const request: proto.CreateTaskPushNotificationConfigRequest = {
-        parent: 'tasks/task-123',
-        configId: 'push-2',
-        config: undefined,
-      };
-      try {
-        FromProto.createTaskPushNotificationConfig(request);
-      } catch (error) {
-        expect(error).toBeInstanceOf(RequestMalformedError);
-        expect((error as RequestMalformedError).message).toContain(
-          'Request must include a `config` with `pushNotificationConfig`'
-        );
-      }
-    });
-
-    it('should throw RequestMalformedError if pushNotificationConfig is missing', () => {
-      const request: proto.CreateTaskPushNotificationConfigRequest = {
-        parent: 'tasks/task-123',
-        configId: 'config-name',
-        config: { name: 'config-name', pushNotificationConfig: undefined },
-      };
-      try {
-        FromProto.createTaskPushNotificationConfig(request);
-      } catch (error) {
-        expect(error).toBeInstanceOf(RequestMalformedError);
-        expect((error as RequestMalformedError).message).toContain(
-          'Request must include a `config` with `pushNotificationConfig`'
-        );
-      }
-    });
-  });
-
   describe('sendMessageResult', () => {
     it('should return task if payload is task', () => {
       const task: proto.Task = {
@@ -76,8 +14,8 @@ describe('FromProto', () => {
         status: {
           state: proto.TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
-          update: undefined,
-        },
+          message: undefined,
+        } as proto.TaskStatus,
         contextId: '',
       };
       const response: proto.SendMessageResponse = {
@@ -90,14 +28,15 @@ describe('FromProto', () => {
       const msg: proto.Message = {
         messageId: 'msg-1',
         role: proto.Role.ROLE_USER,
-        content: [],
+        parts: [],
         extensions: [],
         metadata: {},
         taskId: '',
         contextId: '',
+        referenceTaskIds: [],
       };
       const response: proto.SendMessageResponse = {
-        payload: { $case: 'msg', value: msg },
+        payload: { $case: 'message', value: msg },
       };
       expect(FromProto.sendMessageResult(response)).toEqual(msg);
     });
@@ -132,9 +71,9 @@ describe('FromProto', () => {
   describe('listTaskPushNotificationConfig', () => {
     it('should return configs array', () => {
       const configs: proto.TaskPushNotificationConfig[] = [
-        { name: 'config-1', pushNotificationConfig: undefined },
+        { tenant: '', taskId: '', id: 'config-1', url: '', token: '', authentication: undefined },
       ];
-      const response: proto.ListTaskPushNotificationConfigResponse = {
+      const response: proto.ListTaskPushNotificationConfigsResponse = {
         configs,
         nextPageToken: '',
       };
@@ -152,8 +91,8 @@ describe('FromProto', () => {
         status: {
           state: proto.TaskState.TASK_STATE_COMPLETED,
           timestamp: undefined,
-          update: undefined,
-        },
+          message: undefined,
+        } as proto.TaskStatus,
         contextId: '',
       };
       const event: proto.StreamResponse = {

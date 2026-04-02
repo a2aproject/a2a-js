@@ -73,12 +73,17 @@ describe('Client E2E tests', () => {
       beforeEach(async () => {
         agentExecutor = new TestAgentExecutor();
         agentCard = {
-          protocolVersion: '0.3.0',
           name: 'Test Agent',
           description: 'An agent for testing purposes',
-          preferredTransport: transportConfig.preferredTransport,
-          url: 'localhost',
           version: '1.0.0',
+          supportedInterfaces: [
+            {
+              url: 'localhost',
+              protocolBinding: transportConfig.preferredTransport,
+              tenant: '',
+              protocolVersion: '1.0.0',
+            },
+          ],
           capabilities: {
             streaming: true,
             pushNotifications: true,
@@ -87,12 +92,10 @@ describe('Client E2E tests', () => {
           defaultInputModes: ['text/plain'],
           defaultOutputModes: ['text/plain'],
           skills: [],
-          additionalInterfaces: [],
-          provider: undefined,
+          provider: { url: '', organization: '' },
           documentationUrl: '',
+          securityRequirements: [],
           securitySchemes: {},
-          security: [],
-          supportsAuthenticatedExtendedCard: false,
           signatures: [],
         };
         const requestHandler = new DefaultRequestHandler(
@@ -123,7 +126,7 @@ describe('Client E2E tests', () => {
 
         server = app.listen();
         const address = server.address() as AddressInfo;
-        agentCard.url = `http://localhost:${address.port}${transportConfig.serverPath}`;
+        agentCard.supportedInterfaces![0].url = `http://localhost:${address.port}${transportConfig.serverPath}`;
 
         grpcServer = new grpc.Server();
         grpcServer.addService(
@@ -143,7 +146,7 @@ describe('Client E2E tests', () => {
                 return;
               }
               if (transportConfig.name === 'GRPC') {
-                agentCard.url = `localhost:${port}`;
+                agentCard.supportedInterfaces![0].url = `localhost:${port}`;
               }
               resolve();
             }
@@ -163,7 +166,8 @@ describe('Client E2E tests', () => {
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual = await client.sendMessage({
-            request: createTestMessage('1', 'test'),
+            tenant: '',
+            message: createTestMessage('1', 'test'),
             configuration: undefined,
             metadata: {},
           });
@@ -181,8 +185,8 @@ describe('Client E2E tests', () => {
               contextId,
               status: {
                 state: TaskState.TASK_STATE_SUBMITTED,
-                update: undefined,
                 timestamp: undefined,
+                message: undefined,
               },
               artifacts: [],
               history: [],
@@ -193,10 +197,9 @@ describe('Client E2E tests', () => {
               contextId,
               status: {
                 state: TaskState.TASK_STATE_WORKING,
-                update: undefined,
                 timestamp: undefined,
+                message: undefined,
               },
-              final: false,
               metadata: {},
             },
             {
@@ -204,10 +207,9 @@ describe('Client E2E tests', () => {
               contextId,
               status: {
                 state: TaskState.TASK_STATE_COMPLETED,
-                update: undefined,
                 timestamp: undefined,
+                message: undefined,
               },
-              final: true,
               metadata: {},
             },
           ];
@@ -216,7 +218,8 @@ describe('Client E2E tests', () => {
 
           const actual: A2AStreamEventData[] = [];
           for await (const message of client.sendMessageStream({
-            request: createTestMessage('1', 'test'),
+            tenant: '',
+            message: createTestMessage('1', 'test'),
             configuration: undefined,
             metadata: {},
           })) {
@@ -235,7 +238,8 @@ describe('Client E2E tests', () => {
 
           const actual: A2AStreamEventData[] = [];
           for await (const message of client.sendMessageStream({
-            request: requestMessage,
+            tenant: '',
+            message: requestMessage,
             configuration: undefined,
             metadata: {},
           })) {
@@ -243,7 +247,9 @@ describe('Client E2E tests', () => {
           }
 
           expect(actual).to.have.lengthOf(1);
-          expect(removeUndefinedFields(actual[0])).to.deep.equal(responseMessage);
+          expect(removeUndefinedFields(actual[0])).to.deep.equal(
+            removeUndefinedFields(responseMessage)
+          );
         });
       });
     });
@@ -256,9 +262,20 @@ function createTestMessage(id: string, text: string): Message {
     messageId: id,
     extensions: [],
     role: Role.ROLE_USER,
-    content: [{ part: { $case: 'text', value: text } }],
+    parts: [
+      {
+        content: {
+          $case: 'text',
+          value: text,
+        },
+        filename: '',
+        mediaType: '',
+        metadata: undefined,
+      },
+    ],
     contextId: '',
     taskId: '',
-    metadata: {},
+    metadata: undefined,
+    referenceTaskIds: [],
   };
 }

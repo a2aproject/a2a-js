@@ -5,13 +5,13 @@ import {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   SendMessageRequest,
-  TaskSubscriptionRequest,
+  SubscribeToTaskRequest,
   GetTaskRequest,
   CancelTaskRequest,
   TaskPushNotificationConfig,
   GetTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
-  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
 } from '../../../index.js';
 import { JSONRPCErrorResponse } from '../../../json_rpc_types.js';
 import {
@@ -109,7 +109,7 @@ export class JsonRpcTransportHandler {
         const agentEventStream =
           method === 'message/stream'
             ? this.requestHandler.sendMessageStream(SendMessageRequest.fromJSON(params), context)
-            : this.requestHandler.resubscribe(TaskSubscriptionRequest.fromJSON(params), context);
+            : this.requestHandler.resubscribe(SubscribeToTaskRequest.fromJSON(params), context);
 
         // Wrap the agent event stream into a JSON-RPC result stream
         return (async function* jsonRpcEventStream(): AsyncGenerator<
@@ -122,7 +122,7 @@ export class JsonRpcTransportHandler {
               let payload: StreamResponse['payload'];
 
               if ('messageId' in event) {
-                payload = { $case: 'msg', value: event as Message };
+                payload = { $case: 'message', value: event as Message };
               } else if ('artifacts' in event) {
                 payload = { $case: 'task', value: event as Task };
               } else if ('status' in event) {
@@ -163,7 +163,7 @@ export class JsonRpcTransportHandler {
             );
             result = {
               payload: {
-                $case: 'messageId' in messageOrTask ? 'msg' : 'task',
+                $case: 'messageId' in messageOrTask ? 'message' : 'task',
                 value: messageOrTask,
               },
             };
@@ -181,22 +181,11 @@ export class JsonRpcTransportHandler {
               context
             );
             break;
-          case 'tasks/pushNotificationConfig/set': {
-            const params = rpcRequest.params as {
-              name?: string;
-              taskId?: string;
-              pushNotificationConfig?: TaskPushNotificationConfig['pushNotificationConfig'];
-            };
-            const config = params.name
-              ? TaskPushNotificationConfig.fromJSON({
-                  name: params.name,
-                  pushNotificationConfig: params.pushNotificationConfig,
-                })
-              : TaskPushNotificationConfig.fromJSON({
-                  name: `tasks/${params.taskId}/pushNotificationConfigs/${params.pushNotificationConfig?.id}`,
-                  pushNotificationConfig: params.pushNotificationConfig,
-                });
-            result = await this.requestHandler.setTaskPushNotificationConfig(config, context);
+          case 'tasks/pushNotificationConfig/create': {
+            result = await this.requestHandler.createTaskPushNotificationConfig(
+              TaskPushNotificationConfig.fromJSON(rpcRequest.params),
+              context
+            );
             break;
           }
           case 'tasks/pushNotificationConfig/get':
@@ -214,7 +203,7 @@ export class JsonRpcTransportHandler {
             break;
           case 'tasks/pushNotificationConfig/list':
             result = await this.requestHandler.listTaskPushNotificationConfigs(
-              ListTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
+              ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
               context
             );
             break;

@@ -1,5 +1,6 @@
 import { TaskStatusUpdateEvent } from '../../index.js';
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
+import { TERMINAL_STATE_LIST } from '../utils.js';
 
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
@@ -41,7 +42,9 @@ export class ExecutionEventQueue {
         yield event;
         if (
           'messageId' in event ||
-          ('status' in event && 'taskId' in event && (event as TaskStatusUpdateEvent).final)
+          ('status' in event &&
+            'taskId' in event &&
+            TERMINAL_STATE_LIST.includes((event as TaskStatusUpdateEvent).status!.state))
         ) {
           this.handleFinished();
           break;

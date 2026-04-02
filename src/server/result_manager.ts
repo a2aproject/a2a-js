@@ -49,7 +49,7 @@ export class ResultManager {
       const updateEvent = event as TaskStatusUpdateEvent;
       if (this.currentTask && this.currentTask.id === updateEvent.taskId) {
         this.currentTask.status = updateEvent.status;
-        const update = updateEvent.status?.update;
+        const update = updateEvent.status?.message;
         if (update) {
           // Add message to history if not already present
           if (!this.currentTask.history?.find((msg) => msg.messageId === update.messageId)) {
@@ -64,7 +64,7 @@ export class ResultManager {
         if (loaded) {
           this.currentTask = loaded;
           this.currentTask.status = updateEvent.status;
-          const update = updateEvent.status?.update;
+          const update = updateEvent.status?.message;
           if (update) {
             if (!this.currentTask.history?.find((msg) => msg.messageId === update.messageId)) {
               this.currentTask.history = [...(this.currentTask.history || []), update];

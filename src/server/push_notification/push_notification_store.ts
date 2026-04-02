@@ -1,15 +1,15 @@
-import { PushNotificationConfig } from '../../index.js';
+import { TaskPushNotificationConfig } from '../../index.js';
 
 export interface PushNotificationStore {
-  save(taskId: string, pushNotificationConfig: PushNotificationConfig): Promise<void>;
-  load(taskId: string): Promise<PushNotificationConfig[]>;
+  save(taskId: string, pushNotificationConfig: TaskPushNotificationConfig): Promise<void>;
+  load(taskId: string): Promise<TaskPushNotificationConfig[]>;
   delete(taskId: string, configId?: string): Promise<void>;
 }
 
 export class InMemoryPushNotificationStore implements PushNotificationStore {
-  private store: Map<string, PushNotificationConfig[]> = new Map();
+  private store: Map<string, TaskPushNotificationConfig[]> = new Map();
 
-  async save(taskId: string, pushNotificationConfig: PushNotificationConfig): Promise<void> {
+  async save(taskId: string, pushNotificationConfig: TaskPushNotificationConfig): Promise<void> {
     const configs = this.store.get(taskId) || [];
 
     // Set ID if it's not already set
@@ -28,7 +28,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     this.store.set(taskId, configs);
   }
 
-  async load(taskId: string): Promise<PushNotificationConfig[]> {
+  async load(taskId: string): Promise<TaskPushNotificationConfig[]> {
     const configs = this.store.get(taskId);
     return configs || [];
   }

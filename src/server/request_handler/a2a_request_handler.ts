@@ -5,12 +5,12 @@ import {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
-  ListTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
   GetTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
   CancelTaskRequest,
   GetTaskRequest,
-  TaskSubscriptionRequest,
+  SubscribeToTaskRequest,
   SendMessageRequest,
 } from '../../index.js';
 import { ServerCallContext } from '../context.js';
@@ -34,7 +34,7 @@ export interface A2ARequestHandler {
   getTask(params: GetTaskRequest, context?: ServerCallContext): Promise<Task>;
   cancelTask(params: CancelTaskRequest, context?: ServerCallContext): Promise<Task>;
 
-  setTaskPushNotificationConfig(
+  createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig>;
@@ -45,7 +45,7 @@ export interface A2ARequestHandler {
   ): Promise<TaskPushNotificationConfig>;
 
   listTaskPushNotificationConfigs(
-    params: ListTaskPushNotificationConfigRequest,
+    params: ListTaskPushNotificationConfigsRequest,
     context?: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]>;
 
@@ -55,7 +55,7 @@ export interface A2ARequestHandler {
   ): Promise<void>;
 
   resubscribe(
-    params: TaskSubscriptionRequest,
+    params: SubscribeToTaskRequest,
     context?: ServerCallContext
   ): AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>;
 }
