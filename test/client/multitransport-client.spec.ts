@@ -22,7 +22,7 @@ import {
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {
-  let transport: Record<keyof Transport, Mock>;
+  let transport: Record<Exclude<keyof Transport, 'protocolName'>, Mock> & { protocolName: string };
   let client: Client;
   let agentCard: AgentCard;
 
@@ -38,6 +38,7 @@ describe('Client', () => {
       getTask: vi.fn(),
       cancelTask: vi.fn(),
       resubscribeTask: vi.fn(),
+      protocolName: 'MockTransport',
     };
     agentCard = {
       name: 'Test Agent',
@@ -1055,7 +1056,7 @@ describe('Client', () => {
     const iteratorsTests = [
       {
         name: 'sendMessageStream',
-        transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.sendMessageStream,
+        transportStubGetter: (t: typeof transport): Mock => t.sendMessageStream,
         caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
           c.sendMessageStream({
             tenant: '',
@@ -1075,7 +1076,7 @@ describe('Client', () => {
       },
       {
         name: 'resubscribeTask',
-        transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.resubscribeTask,
+        transportStubGetter: (t: typeof transport): Mock => t.resubscribeTask,
         caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
           c.resubscribeTask({ tenant: '', id: '123' }),
       },
