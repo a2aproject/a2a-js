@@ -30,6 +30,8 @@ import {
   RequestMalformedError,
 } from '../../../errors.js';
 
+const PROTOCOL_NAME: TransportProtocolName = 'GRPC';
+
 type GrpcUnaryCall<TReq, TRes> = (
   request: TReq,
   metadata: grpc.Metadata,
@@ -59,6 +61,10 @@ export class GrpcTransport implements Transport {
       options.endpoint,
       options.grpcChannelCredentials ?? grpc.credentials.createInsecure()
     );
+  }
+
+  get protocolName(): string {
+    return PROTOCOL_NAME;
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
@@ -333,12 +339,10 @@ export class GrpcTransportFactoryOptions {
 }
 
 export class GrpcTransportFactory implements TransportFactory {
-  public static readonly name: TransportProtocolName = 'GRPC';
-
   constructor(private readonly options?: GrpcTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return GrpcTransportFactory.name;
+    return PROTOCOL_NAME;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {

@@ -33,6 +33,8 @@ import {
   SubscribeToTaskRequest,
 } from '../../types/pb/a2a.js';
 
+const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
+
 export interface RestTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
@@ -52,6 +54,10 @@ export class RestTransport implements Transport {
   constructor(options: RestTransportOptions) {
     this.endpoint = options.endpoint.replace(/\/+$/, '');
     this.customFetchImpl = options.fetchImpl;
+  }
+
+  get protocolName(): string {
+    return PROTOCOL_NAME;
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
@@ -389,12 +395,10 @@ export interface RestTransportFactoryOptions {
 }
 
 export class RestTransportFactory implements TransportFactory {
-  public static readonly name: TransportProtocolName = 'HTTP+JSON';
-
   constructor(private readonly options?: RestTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return RestTransportFactory.name;
+    return PROTOCOL_NAME;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {

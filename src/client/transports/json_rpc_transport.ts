@@ -34,6 +34,8 @@ import {
   StreamResponse,
 } from '../../types/pb/a2a.js';
 
+const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
+
 export interface JsonRpcTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
@@ -47,6 +49,10 @@ export class JsonRpcTransport implements Transport {
   constructor(options: JsonRpcTransportOptions) {
     this.endpoint = options.endpoint;
     this.customFetchImpl = options.fetchImpl;
+  }
+
+  get protocolName(): string {
+    return PROTOCOL_NAME;
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
@@ -390,12 +396,10 @@ export class JsonRpcTransportFactoryOptions {
 }
 
 export class JsonRpcTransportFactory implements TransportFactory {
-  public static readonly name: TransportProtocolName = 'JSONRPC';
-
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return JsonRpcTransportFactory.name;
+    return PROTOCOL_NAME;
   }
 
   async create(url: string, _agentCard: AgentCard): Promise<Transport> {

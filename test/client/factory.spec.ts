@@ -8,7 +8,9 @@ import { CallInterceptor } from '../../src/client/interceptors.js';
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
   let mockTransportFactory2: { protocolName: string; create: Mock };
-  let mockTransport: Record<keyof Transport, Mock>;
+  let mockTransport: Record<Exclude<keyof Transport, 'protocolName'>, Mock> & {
+    protocolName: string;
+  };
 
   beforeEach(() => {
     mockTransport = {
@@ -22,6 +24,7 @@ describe('ClientFactory', () => {
       getTask: vi.fn(),
       cancelTask: vi.fn(),
       resubscribeTask: vi.fn(),
+      protocolName: 'MockTransport',
     };
 
     mockTransportFactory1 = {
