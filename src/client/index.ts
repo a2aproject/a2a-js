@@ -31,6 +31,10 @@ export type {
   ClientCallResult,
 } from './interceptors.js';
 export {
+  TransportStats,
+  AdaptiveTransportInterceptor,
+} from './transports/adaptive_transport.js';
+export {
   ServiceParameters,
   type ServiceParametersUpdate,
   withA2AExtensions,
