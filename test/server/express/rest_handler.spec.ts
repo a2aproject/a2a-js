@@ -102,6 +102,7 @@ describe('restHandler', () => {
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       resubscribe: vi.fn(),
+      listTasks: vi.fn(),
     };
 
     app = express();
