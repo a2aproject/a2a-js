@@ -21,6 +21,7 @@ import { Extensions } from '../../extensions.js';
 import {
   AgentCard,
   ListTaskPushNotificationConfigsResponse,
+  ListTasksResponse,
   MessageFns,
   SendMessageRequest,
   SendMessageResponse,
@@ -375,6 +376,23 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
       sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, result, Task);
+    })
+  );
+
+  /**
+   * GET /v1/tasks
+   *
+   * Retrieves a list of tasks with optional filtering and pagination capabilities.
+   *
+   * @returns 200 OK with ListTasksResponse
+   * @returns 400 Bad Request if filter or pageSize is invalid
+   */
+  router.get(
+    '/v1/tasks',
+    asyncHandler(async (req, res) => {
+      const context = await buildContext(req);
+      const result = await restTransportHandler.listTasks(req.query, context);
+      sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
     })
   );
 

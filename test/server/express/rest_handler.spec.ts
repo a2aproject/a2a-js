@@ -303,6 +303,58 @@ describe('restHandler', () => {
     });
   });
 
+  describe('GET /v1/tasks', () => {
+    it('should list a single task', async () => {
+      const tasks = [testTask];
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks });
+
+      const response = await request(app).get('/v1/tasks').expect(200);
+
+      const expectedResponse = [
+        {
+          id: testTask.id,
+          contextId: testTask.contextId,
+          status: {
+            state: 'TASK_STATE_COMPLETED',
+          },
+          metadata: testTask.metadata,
+        },
+      ];
+
+      assert.deepEqual(response.body.tasks, expectedResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalled();
+    });
+
+    it('should list multiple tasks', async () => {
+      const tasks = [testTask, { ...testTask, id: 'task-2' }];
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks });
+
+      const response = await request(app).get('/v1/tasks').expect(200);
+
+      const expectedResponse = [
+        {
+          id: testTask.id,
+          contextId: testTask.contextId,
+          status: {
+            state: 'TASK_STATE_COMPLETED',
+          },
+          metadata: testTask.metadata,
+        },
+        {
+          id: 'task-2',
+          contextId: testTask.contextId,
+          status: {
+            state: 'TASK_STATE_COMPLETED',
+          },
+          metadata: testTask.metadata,
+        },
+      ];
+
+      assert.deepEqual(response.body.tasks, expectedResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalled();
+    });
+  });
+
   describe('POST /v1/tasks/:taskId:subscribe', () => {
     it('should resubscribe to task updates via SSE', async () => {
       async function* mockStream() {
