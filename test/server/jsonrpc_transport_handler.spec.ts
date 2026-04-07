@@ -106,7 +106,7 @@ describe('JsonRpcTransportHandler', () => {
     it('should handle valid request with string id', async () => {
       const request = {
         jsonrpc: '2.0',
-        method: 'message/send',
+        method: 'SendMessage',
         id: 'abc-123',
         params: {},
       };
@@ -117,7 +117,7 @@ describe('JsonRpcTransportHandler', () => {
     it('should handle valid request with integer id', async () => {
       const request = {
         jsonrpc: '2.0',
-        method: 'message/send',
+        method: 'SendMessage',
         id: 456,
         params: {},
       };
@@ -128,7 +128,7 @@ describe('JsonRpcTransportHandler', () => {
     it('should handle valid request with null id', async () => {
       const request = {
         jsonrpc: '2.0',
-        method: 'message/send',
+        method: 'SendMessage',
         id: null,
         params: {},
       } as any;
@@ -151,7 +151,7 @@ describe('JsonRpcTransportHandler', () => {
       it(`should return an invalid params error if params are ${name}`, async () => {
         const request = {
           jsonrpc: '2.0',
-          method: 'message/send',
+          method: 'SendMessage',
           id: 1,
           params,
         };
@@ -165,7 +165,7 @@ describe('JsonRpcTransportHandler', () => {
     it('should handle valid request with params as dict', async () => {
       const request = {
         jsonrpc: '2.0',
-        method: 'message/send',
+        method: 'SendMessage',
         id: 456,
         params: { this: 'is a dict' },
       };

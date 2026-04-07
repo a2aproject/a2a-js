@@ -234,7 +234,7 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/card`);
+      expect(url).to.equal(`${endpoint}/v1/extendedAgentCard`);
       expect(options?.method).to.equal('GET');
     });
   });

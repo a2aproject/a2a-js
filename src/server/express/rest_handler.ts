@@ -79,7 +79,7 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  *
  * This handler implements the A2A REST API specification with snake_case
  * field names, providing endpoints for:
- * - Agent card retrieval (GET /v1/card)
+ * - Agent card retrieval (GET /v1/extendedAgentCard)
  * - Message sending with optional streaming (POST /v1/message:send|stream)
  * - Task management (GET/POST /v1/tasks/:taskId:cancel|subscribe)
  * - Push notification configuration
@@ -268,7 +268,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   // ============================================================================
 
   /**
-   * GET /v1/card
+   * GET /v1/extendedAgentCard
    *
    * Retrieves the authenticated extended agent card.
    *
@@ -276,7 +276,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 500 Internal Server Error on failure
    */
   router.get(
-    '/v1/card',
+    '/v1/extendedAgentCard',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);

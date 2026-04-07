@@ -63,7 +63,7 @@ export class RestTransport implements Transport {
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const response = await this._sendRequest<undefined, AgentCard>(
       'GET',
-      '/v1/card',
+      '/v1/extendedAgentCard',
       undefined,
       options,
       undefined,

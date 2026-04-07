@@ -22,7 +22,7 @@ import { FromProto } from '../../../src/types/converters/from_proto.js';
  * Test suite for restHandler - HTTP+JSON/REST transport implementation
  *
  * This suite tests the REST API endpoints following the A2A specification:
- * - GET /v1/card - Agent card retrieval
+ * - GET /v1/extendedAgentCard - Agent card retrieval
  * - POST /v1/message:send - Send message (non-streaming)
  * - POST /v1/message:stream - Send message with SSE streaming
  * - GET /v1/tasks/:taskId - Get task status
@@ -118,9 +118,9 @@ describe('restHandler', () => {
     vi.restoreAllMocks();
   });
 
-  describe('GET /v1/card', () => {
+  describe('GET /v1/extendedAgentCard', () => {
     it('should return the agent card with 200 OK', async () => {
-      const response = await request(app).get('/v1/card').expect(200);
+      const response = await request(app).get('/v1/extendedAgentCard').expect(200);
 
       // REST API returns data (format checked by handler)
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
@@ -132,7 +132,7 @@ describe('restHandler', () => {
         new RequestMalformedError('Card fetch failed')
       );
 
-      const response = await request(app).get('/v1/card').expect(400);
+      const response = await request(app).get('/v1/extendedAgentCard').expect(400);
 
       assert.property(response.body, 'name');
       assert.property(response.body, 'message');
