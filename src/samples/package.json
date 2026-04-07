@@ -23,6 +23,6 @@
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.14.3",
     "google-auth-library": "^10.5.0",
-    "uuid": "^11.1.0"
+    "uuid": "^13.0.0"
   }
 }
