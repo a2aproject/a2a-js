@@ -14,7 +14,11 @@ import {
   mapErrorToStatus,
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
-import { ServerCallContext } from '../context.js';
+import {
+  ServerCallContext,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../context.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
@@ -30,6 +34,7 @@ import { Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '.
 export interface RestHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /**
@@ -108,9 +113,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
-    return new ServerCallContext(
+    const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
+    return ctxBuilder(
       Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
-      user
+      user,
+      req.headers
     );
   };
 
@@ -359,7 +366,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getTask(
-        req.params.taskId,
+        req.params.taskId as string,
         context,
         //TODO: clarify for version 1.0.0 the format of the historyLength query parameter, and if history should always be added to the returned object
         req.query.historyLength ?? req.query.history_length
@@ -384,7 +391,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/tasks/:taskId\\:cancel',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const result = await restTransportHandler.cancelTask(req.params.taskId, context);
+      const result = await restTransportHandler.cancelTask(req.params.taskId as string, context);
       const protoResult = ToProto.task(result);
       sendResponse<a2a.Task>(res, HTTP_STATUS.ACCEPTED, context, protoResult, a2a.Task);
     })
@@ -405,7 +412,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     '/v1/tasks/:taskId\\:subscribe',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const stream = await restTransportHandler.resubscribe(req.params.taskId, context);
+      const stream = await restTransportHandler.resubscribe(req.params.taskId as string, context);
       await sendStreamResponse(res, stream, context);
     })
   );
@@ -453,7 +460,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.listTaskPushNotificationConfigs(
-        req.params.taskId,
+        req.params.taskId as string,
         context
       );
       const protoResult = ToProto.listTaskPushNotificationConfig(result);
@@ -482,8 +489,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getTaskPushNotificationConfig(
-        req.params.taskId,
-        req.params.configId,
+        req.params.taskId as string,
+        req.params.configId as string,
         context
       );
       const protoResult = ToProto.taskPushNotificationConfig(result);
@@ -512,8 +519,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       await restTransportHandler.deleteTaskPushNotificationConfig(
-        req.params.taskId,
-        req.params.configId,
+        req.params.taskId as string,
+        req.params.configId as string,
         context
       );
       sendResponse(res, HTTP_STATUS.NO_CONTENT, context);
