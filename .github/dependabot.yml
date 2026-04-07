@@ -6,13 +6,12 @@ updates:
       - '/src/samples'
     schedule:
       interval: 'weekly'
+    open-pull-requests-limit: 0
     commit-message:
       prefix: 'chore'
       include: 'scope'
     groups:
-      npm-minor-patch:
+      security-patches:
+        applies-to: security-updates
         patterns:
           - '*'
-        update-types:
-          - 'minor'
-          - 'patch'
