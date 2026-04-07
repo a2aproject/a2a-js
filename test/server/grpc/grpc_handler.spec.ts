@@ -11,6 +11,7 @@ import {
   Role,
   TaskState,
   TaskStatus,
+  ListTasksResponse,
 } from '../../../src/index.js';
 
 vi.mock('../../../src/types/converters/from_proto.js');
@@ -87,6 +88,7 @@ describe('grpcHandler', () => {
       sendMessage: vi.fn().mockResolvedValue(testTask),
       sendMessageStream: vi.fn(),
       getTask: vi.fn(),
+      listTasks: vi.fn(),
       cancelTask: vi.fn(),
       createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
@@ -182,6 +184,28 @@ describe('grpcHandler', () => {
         })
       );
       expect(call.end).toHaveBeenCalled();
+    });
+  });
+
+  describe('listTasks', () => {
+    it('should successfully list tasks', async () => {
+      const mockResponse: ListTasksResponse = {
+        tasks: [testTask],
+        nextPageToken: '',
+        pageSize: 1,
+        totalSize: 1,
+      };
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockResponse);
+
+      const call = createMockUnaryCall({ tenant: '', contextId: '' });
+      const callback = vi.fn();
+
+      await handler.listTasks(call, callback);
+
+      const [err, response] = callback.mock.calls[0];
+      assert.isNull(err);
+      assert.equal(response.tasks.length, 1);
+      assert.equal(response.tasks[0].id, testTask.id);
     });
   });
 

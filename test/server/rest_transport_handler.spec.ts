@@ -93,6 +93,7 @@ describe('RestTransportHandler', () => {
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       resubscribe: vi.fn(),
+      listTasks: vi.fn(),
     };
     transportHandler = new RestTransportHandler(mockRequestHandler);
     mockContext = new ServerCallContext();

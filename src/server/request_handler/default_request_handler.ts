@@ -26,6 +26,8 @@ import {
   ListTaskPushNotificationConfigsRequest,
   DeleteTaskPushNotificationConfigRequest,
   SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../index.js';
 import { AgentExecutor } from '../agent_execution/agent_executor.js';
 import { RequestContext } from '../agent_execution/request_context.js';
@@ -45,6 +47,7 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
+import { DEFAULT_PAGE_SIZE } from '../../constants.js';
 import { TERMINAL_STATE_LIST } from '../utils.js';
 
 export class DefaultRequestHandler implements A2ARequestHandler {
@@ -430,6 +433,23 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       task.history = [];
     }
     return task;
+  }
+
+  async listTasks(
+    params: ListTasksRequest,
+    context?: ServerCallContext
+  ): Promise<ListTasksResponse> {
+    const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
+
+    if (pageSize < 1 || pageSize > 100) {
+      throw new RequestMalformedError('pageSize must be between 1 and 100');
+    }
+
+    if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
+      throw new RequestMalformedError('statusTimestampAfter must be a valid ISO 8601 date string');
+    }
+
+    return this.taskStore.list({ ...params, pageSize }, context);
   }
 
   async cancelTask(params: CancelTaskRequest, context?: ServerCallContext): Promise<Task> {
