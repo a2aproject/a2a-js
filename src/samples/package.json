@@ -9,20 +9,20 @@
     "agents:authentication-agent": "tsx authentication/index.ts"
   },
   "devDependencies": {
-    "@genkit-ai/googleai": "^1.8.0",
-    "@types/express": "^5.0.5",
+    "@genkit-ai/googleai": "^1.28.0",
+    "@types/express": "^5.0.6",
     "@types/passport": "^1.0.17",
     "@types/passport-jwt": "^4.0.1",
     "express": "^5.1.0",
     "genkit": "^1.8.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "tsx": "^4.19.3"
+    "tsx": "^4.21.0"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.10.2",
+    "@bufbuild/protobuf": "^2.11.0",
     "@grpc/grpc-js": "^1.14.3",
-    "google-auth-library": "^10.5.0",
+    "google-auth-library": "^10.6.2",
     "uuid": "^11.1.0"
   }
 }
