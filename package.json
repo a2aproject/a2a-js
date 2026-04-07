@@ -91,7 +91,7 @@
     "supertest": "^7.1.4",
     "tsup": "^8.5.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.2",
     "typescript-eslint": "^8.46.4",
     "vitest": "^3.2.4"
   },
