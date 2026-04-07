@@ -63,7 +63,7 @@ export class RestTransport implements Transport {
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const response = await this._sendRequest<undefined, AgentCard>(
       'GET',
-      '/v1/extendedAgentCard',
+      '/extendedAgentCard',
       undefined,
       options,
       undefined,
@@ -79,7 +79,7 @@ export class RestTransport implements Transport {
     const requestBody = params;
     const response = await this._sendRequest<SendMessageRequest, SendMessageResponse>(
       'POST',
-      '/v1/message:send',
+      '/message:send',
       requestBody,
       options,
       SendMessageRequest,
@@ -93,7 +93,7 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const requestBody = SendMessageRequest.toJSON(params);
-    yield* this._sendStreamingRequest('/v1/message:stream', requestBody, options);
+    yield* this._sendStreamingRequest('/message:stream', requestBody, options);
   }
 
   async createTaskPushNotificationConfig(
@@ -105,7 +105,7 @@ export class RestTransport implements Transport {
       TaskPushNotificationConfig
     >(
       'POST',
-      `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
       params,
       options,
       TaskPushNotificationConfig,
@@ -120,7 +120,7 @@ export class RestTransport implements Transport {
   ): Promise<TaskPushNotificationConfig> {
     const response = await this._sendRequest<undefined, TaskPushNotificationConfig>(
       'GET',
-      `/v1/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
+      `/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
       undefined,
       options,
       undefined,
@@ -135,7 +135,7 @@ export class RestTransport implements Transport {
   ): Promise<TaskPushNotificationConfig[]> {
     const response = await this._sendRequest<undefined, ListTaskPushNotificationConfigsResponse>(
       'GET',
-      `/v1/tasks/${params.taskId}/pushNotificationConfigs`,
+      `/tasks/${params.taskId}/pushNotificationConfigs`,
       undefined,
       options,
       undefined,
@@ -150,7 +150,7 @@ export class RestTransport implements Transport {
   ): Promise<void> {
     await this._sendRequest<undefined, void>(
       'DELETE',
-      `/v1/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
+      `/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
       undefined,
       options,
       undefined,
@@ -164,7 +164,7 @@ export class RestTransport implements Transport {
       queryParams.set('historyLength', String(params.historyLength));
     }
     const queryString = queryParams.toString();
-    const path = `/v1/tasks/${params.id}${queryString ? `?${queryString}` : ''}`;
+    const path = `/tasks/${params.id}${queryString ? `?${queryString}` : ''}`;
     const response = await this._sendRequest<undefined, Task>(
       'GET',
       path,
@@ -179,7 +179,7 @@ export class RestTransport implements Transport {
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
     const response = await this._sendRequest<undefined, Task>(
       'POST',
-      `/v1/tasks/${params.id}:cancel`,
+      `/tasks/${params.id}:cancel`,
       undefined,
       options,
       undefined,
@@ -192,7 +192,7 @@ export class RestTransport implements Transport {
     params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest(`/v1/tasks/${params.id}:subscribe`, undefined, options);
+    yield* this._sendStreamingRequest(`/tasks/${params.id}:subscribe`, undefined, options);
   }
 
   private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
