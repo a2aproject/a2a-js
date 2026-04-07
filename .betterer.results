@@ -27,7 +27,7 @@ exports[`TypeScript Strict Mode`] = {
       [248, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
       [271, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
     ],
-    "src/server/express/rest_handler.ts:2436698925": [
+    "src/server/express/rest_handler.ts:2171147963": [
       [204, 50, 17, "tsc: Argument of type \'unknown\' is not assignable to parameter of type \'Message | Task | TaskArtifactUpdateEvent | TaskStatusUpdateEvent\'.", "3749434707"]
     ],
     "src/server/request_handler/default_request_handler.ts:1208203039": [

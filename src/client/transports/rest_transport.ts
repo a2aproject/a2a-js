@@ -51,7 +51,7 @@ export class RestTransport implements Transport {
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
     const response = await this._sendRequest<undefined, a2a.AgentCard>(
       'GET',
-      '/v1/card',
+      '/extendedAgentCard',
       undefined,
       options,
       undefined,
@@ -67,7 +67,7 @@ export class RestTransport implements Transport {
     const requestBody = ToProto.messageSendParams(params);
     const response = await this._sendRequest<a2a.SendMessageRequest, a2a.SendMessageResponse>(
       'POST',
-      '/v1/message:send',
+      '/message:send',
       requestBody,
       options,
       a2a.SendMessageRequest,
@@ -82,7 +82,7 @@ export class RestTransport implements Transport {
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const protoParams = ToProto.messageSendParams(params);
     const requestBody = a2a.SendMessageRequest.toJSON(protoParams);
-    yield* this._sendStreamingRequest('/v1/message:stream', requestBody, options);
+    yield* this._sendStreamingRequest('/message:stream', requestBody, options);
   }
 
   async setTaskPushNotificationConfig(
@@ -95,7 +95,7 @@ export class RestTransport implements Transport {
       a2a.TaskPushNotificationConfig
     >(
       'POST',
-      `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
       requestBody,
       options,
       a2a.TaskPushNotificationConfig,
@@ -116,7 +116,7 @@ export class RestTransport implements Transport {
     }
     const response = await this._sendRequest<undefined, a2a.TaskPushNotificationConfig>(
       'GET',
-      `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(pushNotificationConfigId)}`,
+      `/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(pushNotificationConfigId)}`,
       undefined,
       options,
       undefined,
@@ -131,7 +131,7 @@ export class RestTransport implements Transport {
   ): Promise<TaskPushNotificationConfig[]> {
     const response = await this._sendRequest<undefined, a2a.ListTaskPushNotificationConfigResponse>(
       'GET',
-      `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
+      `/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs`,
       undefined,
       options,
       undefined,
@@ -146,7 +146,7 @@ export class RestTransport implements Transport {
   ): Promise<void> {
     await this._sendRequest<undefined, void>(
       'DELETE',
-      `/v1/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(params.pushNotificationConfigId)}`,
+      `/tasks/${encodeURIComponent(params.id)}/pushNotificationConfigs/${encodeURIComponent(params.pushNotificationConfigId)}`,
       undefined,
       options,
       undefined,
@@ -160,7 +160,7 @@ export class RestTransport implements Transport {
       queryParams.set('historyLength', String(params.historyLength));
     }
     const queryString = queryParams.toString();
-    const path = `/v1/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`;
+    const path = `/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`;
     const response = await this._sendRequest<undefined, a2a.Task>(
       'GET',
       path,
@@ -175,7 +175,7 @@ export class RestTransport implements Transport {
   async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
     const response = await this._sendRequest<undefined, a2a.Task>(
       'POST',
-      `/v1/tasks/${encodeURIComponent(params.id)}:cancel`,
+      `/tasks/${encodeURIComponent(params.id)}:cancel`,
       undefined,
       options,
       undefined,
@@ -189,7 +189,7 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<A2AStreamEventData, void, undefined> {
     yield* this._sendStreamingRequest(
-      `/v1/tasks/${encodeURIComponent(params.id)}:subscribe`,
+      `/tasks/${encodeURIComponent(params.id)}:subscribe`,
       undefined,
       options
     );
