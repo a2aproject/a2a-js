@@ -78,7 +78,7 @@
     "@eslint/js": "^9.39.1",
     "@grpc/grpc-js": "^1.11.0",
     "@types/express": "^5.0.3",
-    "@types/node": "^22.13.14",
+    "@types/node": "^25.5.2",
     "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^3.2.4",
     "esbuild": "^0.27.0",
