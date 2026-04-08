@@ -22,7 +22,7 @@ import {
   TaskState,
 } from '../../../index.js';
 import {
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
   TaskNotCancelableError,
@@ -62,7 +62,7 @@ export function mapErrorToStatus(error: unknown): number {
   if (error instanceof TaskNotCancelableError) return HTTP_STATUS.CONFLICT;
   if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof AuthenticatedExtendedCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof ExtendedAgentCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
   return HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 

@@ -26,7 +26,7 @@ import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import {
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   RequestMalformedError,
@@ -267,7 +267,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   else if (error instanceof UnsupportedOperationError) code = grpc.status.UNIMPLEMENTED;
   else if (error instanceof ContentTypeNotSupportedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
-  else if (error instanceof AuthenticatedExtendedCardNotConfiguredError)
+  else if (error instanceof ExtendedAgentCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof GenericError) code = grpc.status.INTERNAL;
