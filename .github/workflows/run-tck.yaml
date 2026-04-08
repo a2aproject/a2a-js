@@ -2,9 +2,9 @@ name: Run TCK
 
 on:
   push:
-    branches: [ "main", "epic" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "epic" ]
+    branches: [ "main" ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
@@ -15,11 +15,13 @@ on:
 
 env:
   # Tag of the TCK
-  TCK_VERSION: 1.0-dev
+  TCK_VERSION: 0.3.0.beta3
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
   # Base URL for the SUT agent
   SUT_BASE_URL: http://localhost:41241
+  # Base URL for the SUT agent JSON-RPC transport
+  SUT_JSONRPC_URL: http://localhost:41241/a2a/jsonrpc
   # Slow system on CI
   TCK_STREAMING_TIMEOUT: 5.0
 
@@ -37,41 +39,34 @@ jobs:
     steps:
       - name: Checkout a2a-js
         uses: actions/checkout@v4
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
-
       - run: |
           npm ci
           npm run build
-
       - name: Checkout a2a-tck
         uses: actions/checkout@v4
         with:
           repository: a2aproject/a2a-tck
           path: tck/a2a-tck
           ref: ${{ env.TCK_VERSION }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version-file: "tck/a2a-tck/pyproject.toml"
-
       - name: Install uv and Python dependencies
         run: |
           pip install uv
           uv pip install -e .
         working-directory: tck/a2a-tck
-
       - name: Start SUT
         run: |
           cd tck
           npm run tck:sut-agent &
-
       - name: Wait for SUT to start
         run: |
           URL="${{ env.SUT_BASE_URL }}/.well-known/agent-card.json"
@@ -109,8 +104,15 @@ jobs:
       - name: Run TCK (mandatory)
         id: run-tck-mandatory
         timeout-minutes: 5
-        run: ./run_tck.py --sut-host ${{ env.SUT_BASE_URL }} --level must --transport jsonrpc,rest,grpc
-
+        run: |
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc,rest,grpc
+        working-directory: tck/a2a-tck
+      - name: Run TCK (capabilities)
+        id: run-tck-capabilities
+        timeout-minutes: 5
+        run: |
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports jsonrpc,rest,grpc
+        working-directory: tck/a2a-tck
       - name: Stop SUT
         if: always()
         run: |
