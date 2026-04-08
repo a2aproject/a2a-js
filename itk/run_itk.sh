@@ -57,8 +57,8 @@ docker build -t itk_service a2a-samples/itk
 
 # 5. Start docker service
 # Mounting a2a-python as repo and itk as current agent
-A2A_PYTHON_ROOT=$(cd .. && pwd)
-ITK_DIR=$(pwd)
+A2A_PYTHON_ROOT=$(dirname "$0")/..
+ITK_DIR=$(dirname "$0")
 
 # Stop existing container if any
 docker rm -f itk-service || true
@@ -134,10 +134,11 @@ RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
 echo "--------------------------------------------------------"
 echo "ITK TEST RESULTS:"
 echo "--------------------------------------------------------"
-echo "$RESPONSE" | python3 -c "
+printf '%s\n' "$RESPONSE" | python3 -c "
 import sys, json
+raw_input = sys.stdin.read()
 try:
-    data = json.load(sys.stdin)
+    data = json.loads(raw_input)
     all_passed = data.get('all_passed', False)
     results = data.get('results', {})
     for test, passed in results.items():
@@ -149,7 +150,7 @@ try:
         sys.exit(1)
 except Exception as e:
     print(f'Error parsing results: {e}')
-    print(f'Raw response: {data if \"data\" in locals() else \"no data\"}')
+    print(f'Raw response: {raw_input}')
     sys.exit(1)
 "
 RESULT=$?
