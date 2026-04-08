@@ -58,7 +58,7 @@ describe('RestTransport', () => {
       await trailingSlashTransport.sendMessage(createMessageParams());
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).to.equal('https://example.com/a2a/rest/v1/message:send');
+      expect(url).to.equal('https://example.com/a2a/rest/message:send');
     });
 
     it('should trim multiple trailing slashes from endpoint', async () => {
@@ -72,7 +72,7 @@ describe('RestTransport', () => {
       await trailingSlashTransport.sendMessage(createMessageParams());
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).to.equal('https://example.com/a2a/rest/v1/message:send');
+      expect(url).to.equal('https://example.com/a2a/rest/message:send');
     });
   });
 
@@ -95,7 +95,7 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/message:send`);
+      expect(url).to.equal(`${endpoint}/message:send`);
       expect(options?.method).to.equal('POST');
       expect((options?.headers as Record<string, string>)['Content-Type']).to.equal(
         'application/json'
@@ -138,7 +138,7 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}?historyLength=0`);
+      expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=0`);
       expect(options?.method).to.equal('GET');
     });
 
@@ -155,7 +155,7 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}?historyLength=${historyLength}`);
+      expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=${historyLength}`);
       expect(options?.method).to.equal('GET');
     });
 
@@ -181,7 +181,7 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}:cancel`);
+      expect(url).to.equal(`${endpoint}/tasks/${taskId}:cancel`);
       expect(options?.method).to.equal('POST');
     });
 
@@ -234,7 +234,7 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/card`);
+      expect(url).to.equal(`${endpoint}/extendedAgentCard`);
       expect(options?.method).to.equal('GET');
     });
   });
@@ -261,7 +261,7 @@ describe('RestTransport', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('POST');
       });
 
@@ -290,7 +290,7 @@ describe('RestTransport', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs/${configId}`);
         expect(options?.method).to.equal('GET');
       });
     });
@@ -338,7 +338,7 @@ describe('RestTransport', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('GET');
       });
     });
@@ -356,7 +356,7 @@ describe('RestTransport', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs/${configId}`);
         expect(options?.method).to.equal('DELETE');
       });
     });

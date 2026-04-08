@@ -88,7 +88,7 @@ let fetchImpl: typeof fetch = fetch;
 let agentCardPath = AGENT_CARD_PATH;
 if (process.argv.includes('--agent-engine')) {
   fetchImpl = createAuthenticatingFetchWithRetry(fetch, new ADCHandler());
-  agentCardPath = 'a2a/v1/card'; // Agent Engine doesn't use well-known public agent card endpoint.
+  agentCardPath = 'a2a/extendedAgentCard'; // Agent Engine doesn't use well-known public agent card endpoint.
 }
 const factory = new ClientFactory(
   ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {

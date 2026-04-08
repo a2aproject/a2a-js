@@ -94,21 +94,18 @@ export class JsonRpcTransportHandler {
 
     const { method, id: requestId = null } = rpcRequest;
     try {
-      if (
-        method !== 'agent/getAuthenticatedExtendedCard' &&
-        !this.paramsAreValid(rpcRequest.params)
-      ) {
+      if (method !== 'GetExtendedAgentCard' && !this.paramsAreValid(rpcRequest.params)) {
         throw new RequestMalformedError(`Invalid method parameters.`);
       }
 
-      if (method === 'message/stream' || method === 'tasks/resubscribe') {
+      if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();
         if (!agentCard.capabilities?.streaming) {
           throw new UnsupportedOperationError(`Method ${method} requires streaming capability.`);
         }
         const agentEventStream =
-          method === 'message/stream'
+          method === 'SendStreamingMessage'
             ? this.requestHandler.sendMessageStream(SendMessageRequest.fromJSON(params), context)
             : this.requestHandler.resubscribe(SubscribeToTaskRequest.fromJSON(params), context);
 
@@ -157,7 +154,7 @@ export class JsonRpcTransportHandler {
         // Handle non-streaming methods
         let result: unknown;
         switch (method) {
-          case 'message/send': {
+          case 'SendMessage': {
             const messageOrTask = await this.requestHandler.sendMessage(
               SendMessageRequest.fromJSON(rpcRequest.params),
               context
@@ -170,51 +167,51 @@ export class JsonRpcTransportHandler {
             };
             break;
           }
-          case 'tasks/get':
+          case 'GetTask':
             result = await this.requestHandler.getTask(
               GetTaskRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
-          case 'tasks/list':
+          case 'ListTasks':
             result = await this.requestHandler.listTasks(
               ListTasksRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
-          case 'tasks/cancel':
+          case 'CancelTask':
             result = await this.requestHandler.cancelTask(
               CancelTaskRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
-          case 'tasks/pushNotificationConfig/create': {
+          case 'CreateTaskPushNotificationConfig': {
             result = await this.requestHandler.createTaskPushNotificationConfig(
               TaskPushNotificationConfig.fromJSON(rpcRequest.params),
               context
             );
             break;
           }
-          case 'tasks/pushNotificationConfig/get':
+          case 'GetTaskPushNotificationConfig':
             result = await this.requestHandler.getTaskPushNotificationConfig(
               GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
-          case 'tasks/pushNotificationConfig/delete':
+          case 'DeleteTaskPushNotificationConfig':
             await this.requestHandler.deleteTaskPushNotificationConfig(
               DeleteTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
               context
             );
             result = null;
             break;
-          case 'tasks/pushNotificationConfig/list':
+          case 'ListTaskPushNotificationConfigs':
             result = await this.requestHandler.listTaskPushNotificationConfigs(
               ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
               context
             );
             break;
-          case 'agent/getAuthenticatedExtendedCard':
+          case 'GetExtendedAgentCard':
             result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
             break;
           default:

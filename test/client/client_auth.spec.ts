@@ -126,7 +126,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
           Accept: 'application/json',
         },
       });
-      expect(mockFetch.mock.calls[0][1].body).to.include('"method":"message/send"');
+      expect(mockFetch.mock.calls[0][1].body).to.include('"method":"SendMessage"');
 
       // Second call: RPC request with auth header
       expect(mockFetch.mock.calls[1][0]).to.equal('https://test-agent.example.com/api');
@@ -142,7 +142,7 @@ describe('JsonRpcTransport Authentication Tests', () => {
       expect(mockFetch.mock.calls[1][1].headers).to.have.property('Authorization');
 
       expect(mockFetch.mock.calls[1][1].headers['Authorization']).to.match(/^Bearer .+$/);
-      expect(mockFetch.mock.calls[1][1].body).to.include('"method":"message/send"');
+      expect(mockFetch.mock.calls[1][1].body).to.include('"method":"SendMessage"');
 
       // Verify the result
       expect(result).to.exist;
