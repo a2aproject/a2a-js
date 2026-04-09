@@ -110,21 +110,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const inMemoryStore = new InMemoryTaskStore();
     mockTaskStore = {
       save: async (task: Task, ctx: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
         return inMemoryStore.save(task, ctx);
       },
       load: async (id: string, ctx: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
         return inMemoryStore.load(id, ctx);
       },
       list: async (params: ListTasksRequest, ctx: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
         return inMemoryStore.list(params, ctx);
       },
     };

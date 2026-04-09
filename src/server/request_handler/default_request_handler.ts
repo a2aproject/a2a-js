@@ -97,7 +97,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (typeof this.extendedAgentCardProvider === 'function') {
       return this.extendedAgentCardProvider(context);
     }
-    if (context?.user?.isAuthenticated) {
+    if (context.user?.isAuthenticated) {
       return this.extendedAgentCardProvider;
     }
     return this.agentCard;
@@ -147,7 +147,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
     // Validate requested extensions against agent capabilities
-    if (context?.requestedExtensions) {
+    if (context.requestedExtensions) {
       const agentCard = await this.getAgentCard();
       const exposedExtensions = new Set(
         agentCard.capabilities?.extensions?.map((ext) => ext.uri) || []
