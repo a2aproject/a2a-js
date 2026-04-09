@@ -1,0 +1,34 @@
+name: Run ITK
+
+on:
+  push:
+    branches: [ "main", "epic" ]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'itk/**'
+
+permissions:
+  contents: read
+
+# Only run the latest job
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  itk-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Run ITK Tests
+        run: bash run_itk.sh
+        working-directory: itk
+        env:
+          A2A_SAMPLES_REVISION: itk-v.0.11-alpha
