@@ -24,7 +24,7 @@ import {
   JsonRpcTransportFactory,
   RestTransportFactory,
 } from '../client/index.js';
-import { GrpcTransportFactory } from '../client/transports/grpc/index.js';
+import { GrpcTransportFactory } from '../client/transports/grpc/grpc_transport.js';
 
 // --- ANSI Colors ---
 const colors = {
