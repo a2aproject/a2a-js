@@ -23,8 +23,8 @@ import {
   DefaultAgentCardResolver,
   JsonRpcTransportFactory,
   RestTransportFactory,
-  GrpcTransportFactory,
 } from '../client/index.js';
+import { GrpcTransportFactory } from '../client/transports/grpc/index.js';
 
 // --- ANSI Colors ---
 const colors = {

@@ -13,7 +13,6 @@ export type { Transport, TransportFactory } from './transports/transport.js';
 export { ClientFactory, ClientFactoryOptions } from './factory.js';
 export { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 export { RestTransportFactory } from './transports/rest_transport.js';
-export { GrpcTransportFactory } from './transports/grpc/grpc_transport.js';
 export type {
   CallInterceptor,
   BeforeArgs,
