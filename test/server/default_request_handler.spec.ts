@@ -107,27 +107,25 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   // Before each test, reset the components to a clean state
   beforeEach(() => {
-    // Wrap in-memory store into a store which ensures we pass server call context.
-    // The parameter is optional to avoid breaking changes, however it should be passed.
     const inMemoryStore = new InMemoryTaskStore();
     mockTaskStore = {
-      save: async (task: Task, ctx?: ServerCallContext) => {
+      save: async (task: Task, ctx: ServerCallContext) => {
         if (!ctx) {
           throw new Error('Missing server call context');
         }
-        return inMemoryStore.save(task);
+        return inMemoryStore.save(task, ctx);
       },
-      load: async (id: string, ctx?: ServerCallContext) => {
+      load: async (id: string, ctx: ServerCallContext) => {
         if (!ctx) {
           throw new Error('Missing server call context');
         }
-        return inMemoryStore.load(id);
+        return inMemoryStore.load(id, ctx);
       },
-      list: async (params: ListTasksRequest, ctx?: ServerCallContext) => {
+      list: async (params: ListTasksRequest, ctx: ServerCallContext) => {
         if (!ctx) {
           throw new Error('Missing server call context');
         }
-        return inMemoryStore.list(params);
+        return inMemoryStore.list(params, ctx);
       },
     };
     // Default mock for most tests
@@ -2450,7 +2448,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     it('getAuthenticatedExtendedAgentCard should fail if the agent card does not support extended agent card', async () => {
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard();
+        await handler.getAuthenticatedExtendedAgentCard(serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {
@@ -2470,7 +2468,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       );
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard();
+        await handler.getAuthenticatedExtendedAgentCard(serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {

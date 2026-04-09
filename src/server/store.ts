@@ -15,7 +15,7 @@ export interface TaskStore {
    * @param context The context of the current call.
    * @returns A promise resolving when the save operation is complete.
    */
-  save(task: Task, context?: ServerCallContext): Promise<void>;
+  save(task: Task, context: ServerCallContext): Promise<void>;
 
   /**
    * Loads a task by task ID.
@@ -23,36 +23,39 @@ export interface TaskStore {
    * @param context The context of the current call.
    * @returns A promise resolving to an object containing the Task, or undefined if not found.
    */
-  load(taskId: string, context?: ServerCallContext): Promise<Task | undefined>;
+  load(taskId: string, context: ServerCallContext): Promise<Task | undefined>;
 
   /**
    * Lists tasks with filtering and pagination.
    * @param params Filtering and pagination parameters.
    * @param context The context of the current call.
    */
-  list(params: ListTasksRequest, context?: ServerCallContext): Promise<ListTasksResponse>;
+  list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse>;
 }
 
 // ========================
 // InMemoryTaskStore
 // ========================
+//
+// Methods in InMemoryTaskStore accept ServerCallContext but do not use it.
+// This is intentional to match the TaskStore interface.
 
 // Use Task directly for storage
 export class InMemoryTaskStore implements TaskStore {
   private store: Map<string, Task> = new Map();
 
-  async load(taskId: string): Promise<Task | undefined> {
+  async load(taskId: string, _context: ServerCallContext): Promise<Task | undefined> {
     const entry = this.store.get(taskId);
     // Return copies to prevent external mutation
     return entry ? { ...entry } : undefined;
   }
 
-  async save(task: Task): Promise<void> {
+  async save(task: Task, _context: ServerCallContext): Promise<void> {
     // Store copies to prevent internal mutation if caller reuses objects
     this.store.set(task.id, { ...task });
   }
 
-  async list(params: ListTasksRequest): Promise<ListTasksResponse> {
+  async list(params: ListTasksRequest, _context: ServerCallContext): Promise<ListTasksResponse> {
     const {
       contextId,
       status,

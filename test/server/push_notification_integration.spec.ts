@@ -40,6 +40,7 @@ describe('Push Notification Integration Tests', () => {
   let pushNotificationStore: InMemoryPushNotificationStore;
   let pushNotificationSender: DefaultPushNotificationSender;
   let pushNotificationSenderSpy: PushNotificationSenderSpy;
+  let defaultContext: ServerCallContext;
 
   const testAgentCard: AgentCard = {
     name: 'Test Agent',
@@ -137,6 +138,7 @@ describe('Push Notification Integration Tests', () => {
     pushNotificationStore = new InMemoryPushNotificationStore();
     pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
     pushNotificationSenderSpy = vi.spyOn(pushNotificationSender, 'send');
+    defaultContext = new ServerCallContext();
 
     handler = new DefaultRequestHandler(
       testAgentCard,
@@ -215,7 +217,7 @@ describe('Push Notification Integration Tests', () => {
       });
 
       // Send message and wait for completion
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -315,12 +317,12 @@ describe('Push Notification Integration Tests', () => {
         artifacts: [],
         metadata: {},
       };
-      await taskStore.save(task);
+      await taskStore.save(task, defaultContext);
 
       // Set multiple push notification configs for this message
-      await handler.createTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
+      await handler.createTaskPushNotificationConfig(pushConfig1, defaultContext);
 
-      await handler.createTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
+      await handler.createTaskPushNotificationConfig(pushConfig2, defaultContext);
 
       // Mock the agent executor to publish only completed state
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
@@ -355,7 +357,7 @@ describe('Push Notification Integration Tests', () => {
       });
 
       // Send a message to trigger notifications
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -420,7 +422,7 @@ describe('Push Notification Integration Tests', () => {
       });
 
       // Send message and wait for completion - this should not throw an error
-      const result = await handler.sendMessage(params);
+      const result = await handler.sendMessage(params, defaultContext);
       const taskResult = result as Task;
 
       // Wait for async push notifications to be sent
@@ -509,7 +511,7 @@ describe('Push Notification Integration Tests', () => {
         bus.finished();
       });
 
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -607,7 +609,7 @@ describe('Push Notification Integration Tests', () => {
         bus.finished();
       });
 
-      await customHandler.sendMessage(params);
+      await customHandler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(customSenderSpy);
@@ -691,7 +693,7 @@ describe('Push Notification Integration Tests', () => {
         bus.finished();
       });
 
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -778,11 +780,11 @@ describe('Push Notification Integration Tests', () => {
         artifacts: [],
         metadata: {},
       };
-      await taskStore.save(task);
+      await taskStore.save(task, defaultContext);
 
-      await customHandler.createTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
+      await customHandler.createTaskPushNotificationConfig(pushConfig1, defaultContext);
 
-      await customHandler.createTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
+      await customHandler.createTaskPushNotificationConfig(pushConfig2, defaultContext);
 
       // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
@@ -803,7 +805,7 @@ describe('Push Notification Integration Tests', () => {
         bus.finished();
       });
 
-      await customHandler.sendMessage(params);
+      await customHandler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(customSenderSpy);

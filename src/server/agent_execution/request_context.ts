@@ -7,15 +7,15 @@ export class RequestContext {
   public readonly contextId: string;
   public readonly task?: Task;
   public readonly referenceTasks?: Task[];
-  public readonly context?: ServerCallContext;
+  public readonly context: ServerCallContext;
 
   constructor(
     userMessage: Message,
     taskId: string,
     contextId: string,
-    task?: Task,
-    referenceTasks?: Task[],
-    context?: ServerCallContext
+    task: Task | undefined,
+    referenceTasks: Task[] | undefined,
+    context: ServerCallContext
   ) {
     this.userMessage = userMessage;
     this.taskId = taskId;
