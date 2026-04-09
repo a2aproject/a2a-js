@@ -163,7 +163,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       contextId,
       taskId,
     };
-    return new RequestContext(messageForContext, taskId, contextId, task, referenceTasks, context);
+    return new RequestContext(messageForContext, taskId, contextId, context, task, referenceTasks);
   }
 
   private async _processEvents(

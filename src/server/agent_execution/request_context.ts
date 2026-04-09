@@ -13,15 +13,15 @@ export class RequestContext {
     userMessage: Message,
     taskId: string,
     contextId: string,
-    task: Task | undefined,
-    referenceTasks: Task[] | undefined,
-    context: ServerCallContext
+    context: ServerCallContext,
+    task?: Task,
+    referenceTasks?: Task[]
   ) {
     this.userMessage = userMessage;
     this.taskId = taskId;
     this.contextId = contextId;
+    this.context = context;
     this.task = task;
     this.referenceTasks = referenceTasks;
-    this.context = context;
   }
 }
