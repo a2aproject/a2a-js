@@ -1,5 +1,1 @@
-export {
-  GrpcTransport,
-  GrpcTransportFactory,
-  type GrpcTransportOptions,
-} from './grpc_transport.js';
+export { GrpcTransportFactory } from './grpc_transport.js';
