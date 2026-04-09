@@ -252,6 +252,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     ) {
       await this.pushNotificationStore?.save(
         taskId,
+        context,
         params.configuration.taskPushNotificationConfig
       );
     }
@@ -366,6 +367,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     ) {
       await this.pushNotificationStore?.save(
         taskId,
+        context,
         params.configuration.taskPushNotificationConfig
       );
     }
@@ -530,7 +532,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    await this.pushNotificationStore?.save(taskId, params);
+    await this.pushNotificationStore?.save(taskId, context, params);
 
     return params;
   }
@@ -548,7 +550,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    const configs = (await this.pushNotificationStore?.load(taskId)) || [];
+    const configs = (await this.pushNotificationStore?.load(taskId, context)) || [];
     if (configs.length === 0) {
       throw new GenericError(`Push notification config not found for task ${taskId}.`);
     }
@@ -576,7 +578,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    return (await this.pushNotificationStore?.load(taskId)) || [];
+    return (await this.pushNotificationStore?.load(taskId, context)) || [];
   }
 
   async deleteTaskPushNotificationConfig(
@@ -591,7 +593,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
-    await this.pushNotificationStore?.delete(taskId, params.id);
+    await this.pushNotificationStore?.delete(taskId, context, params.id);
   }
 
   async *resubscribe(
