@@ -33,7 +33,7 @@ export {
   UnsupportedOperationError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../errors.js';
 
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';

@@ -22,7 +22,7 @@ import { Transport, TransportFactory } from '../transport.js';
 import { FromProto } from '../../../types/converters/from_proto.js';
 
 import {
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
   PushNotificationNotSupportedError,
   TaskNotFoundError,
   TaskNotCancelableError,
@@ -303,7 +303,7 @@ export class GrpcTransport implements Transport {
           return new TaskNotCancelableError(error.details);
         }
         if (method === 'getExtendedAgentCard') {
-          return new AuthenticatedExtendedCardNotConfiguredError(error.details);
+          return new ExtendedAgentCardNotConfiguredError(error.details);
         }
         break;
       case grpc.status.UNIMPLEMENTED:

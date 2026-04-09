@@ -1,7 +1,6 @@
 import { TransportProtocolName } from '../../core.js';
 import {
   A2A_ERROR_CODE,
-  AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,
@@ -9,6 +8,7 @@ import {
   TaskNotCancelableError,
   UnsupportedOperationError,
   RequestMalformedError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../errors.js';
 
 import { A2AStreamEventData, SendMessageResult } from '../../index.js';
@@ -354,8 +354,8 @@ export class RestTransport implements Transport {
           return new ContentTypeNotSupportedError(message);
         case 'InvalidAgentResponseError':
           return new InvalidAgentResponseError(message);
-        case 'AuthenticatedExtendedCardNotConfiguredError':
-          return new AuthenticatedExtendedCardNotConfiguredError(message);
+        case 'ExtendedAgentCardNotConfiguredError':
+          return new ExtendedAgentCardNotConfiguredError(message);
         case 'RequestMalformedError':
           return new RequestMalformedError(message);
       }
@@ -375,8 +375,8 @@ export class RestTransport implements Transport {
           return new ContentTypeNotSupportedError(message);
         case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
           return new InvalidAgentResponseError(message);
-        case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
-          return new AuthenticatedExtendedCardNotConfiguredError(message);
+        case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
+          return new ExtendedAgentCardNotConfiguredError(message);
       }
     }
 

@@ -35,7 +35,7 @@ export {
 } from './service-parameters.js';
 export { ClientCallContext, type ContextUpdate, ClientCallContextKey } from './context.js';
 export {
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,

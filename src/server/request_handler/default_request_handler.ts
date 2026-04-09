@@ -1,13 +1,13 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
-  AuthenticatedExtendedCardNotConfiguredError,
   RequestMalformedError,
   PushNotificationNotSupportedError,
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
   GenericError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../errors.js';
 
 import {
@@ -92,7 +92,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new UnsupportedOperationError('Agent does not support authenticated extended card.');
     }
     if (!this.extendedAgentCardProvider) {
-      throw new AuthenticatedExtendedCardNotConfiguredError();
+      throw new ExtendedAgentCardNotConfiguredError();
     }
     if (typeof this.extendedAgentCardProvider === 'function') {
       return this.extendedAgentCardProvider(context);
@@ -117,8 +117,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
       }
       if (task.status?.state !== undefined && TERMINAL_STATE_LIST.includes(task.status.state)) {
-        // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
-        throw new RequestMalformedError(
+        // Throw UnsupportedOperationError as required by TCK for terminal tasks.
+        throw new UnsupportedOperationError(
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
         );
       }

@@ -11,9 +11,9 @@ import {
   UnsupportedOperationError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
-  AuthenticatedExtendedCardNotConfiguredError,
   A2A_ERROR_CODE,
   GenericError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../src/errors.js';
 
 describe('JsonRpcTransportHandler', () => {
@@ -231,14 +231,12 @@ describe('JsonRpcTransportHandler', () => {
       expect(mappedError.message).to.equal('Invalid Agent Response');
     });
 
-    it('should map AuthenticatedExtendedCardNotConfiguredError to code and message', async () => {
+    it('should map ExtendedAgentCardNotConfiguredError to code and message', async () => {
       const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
-        new AuthenticatedExtendedCardNotConfiguredError(
-          'Authenticated Extended Card Not Configured'
-        )
+        new ExtendedAgentCardNotConfiguredError('Extended Agent Card Not Configured')
       );
-      expect(mappedError.code).to.equal(A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED);
-      expect(mappedError.message).to.equal('Authenticated Extended Card Not Configured');
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED);
+      expect(mappedError.message).to.equal('Extended Agent Card Not Configured');
     });
 
     it('should map RequestMalformedError to code and message', async () => {
