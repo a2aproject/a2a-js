@@ -107,19 +107,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   // Before each test, reset the components to a clean state
   beforeEach(() => {
-    const inMemoryStore = new InMemoryTaskStore();
-    mockTaskStore = {
-      save: async (task: Task, ctx: ServerCallContext) => {
-        return inMemoryStore.save(task, ctx);
-      },
-      load: async (id: string, ctx: ServerCallContext) => {
-        return inMemoryStore.load(id, ctx);
-      },
-      list: async (params: ListTasksRequest, ctx: ServerCallContext) => {
-        return inMemoryStore.list(params, ctx);
-      },
-    };
     // Default mock for most tests
+    mockTaskStore = new InMemoryTaskStore();
     mockAgentExecutor = new MockAgentExecutor();
     executionEventBusManager = new DefaultExecutionEventBusManager();
     handler = new DefaultRequestHandler(
