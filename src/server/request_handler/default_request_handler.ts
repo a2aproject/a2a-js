@@ -686,7 +686,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     // Send push notification in the background.
-    this.pushNotificationSender?.send(task);
+    this.pushNotificationSender?.send(task, context);
   }
 
   private async _handleProcessingError(

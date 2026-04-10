@@ -32,8 +32,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     };
   }
 
-  async send(task: Task): Promise<void> {
-    const pushConfigs = await this.pushNotificationStore.load(task.id, new ServerCallContext());
+  async send(task: Task, context: ServerCallContext): Promise<void> {
+    const pushConfigs = await this.pushNotificationStore.load(task.id, context);
     if (!pushConfigs || pushConfigs.length === 0) {
       return;
     }
