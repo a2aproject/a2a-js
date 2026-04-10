@@ -64,7 +64,7 @@ export class JsonRpcTransportHandler {
     // TODO: remove the eslint disable and replace the any (https://github.com/a2aproject/a2a-js/issues/179)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     requestBody: any,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
     let rpcRequest: A2ARequest;
 
