@@ -662,6 +662,17 @@ async function main() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rewriteResponse = (data: any) => {
+      const stateMap: { [key: number]: string } = {
+        0: 'unknown',
+        1: 'submitted',
+        2: 'working',
+        3: 'completed',
+        4: 'failed',
+        5: 'canceled',
+        6: 'input-required',
+        7: 'rejected',
+      };
+
       if (isGoAgent) {
         // Go agent expects {"task": {...}} or {"statusUpdate": {...}}
         // Handle stream event (payload at root)
@@ -672,16 +683,6 @@ async function main() {
           if (caseName === 'message') {
             rewriteMessage(value);
           } else if (caseName === 'statusUpdate' || caseName === 'task') {
-            const stateMap: { [key: number]: string } = {
-              0: 'unknown',
-              1: 'submitted',
-              2: 'working',
-              3: 'completed',
-              4: 'failed',
-              5: 'canceled',
-              6: 'input-required',
-              7: 'rejected',
-            };
             if (value.status && typeof value.status.state === 'number') {
               value.status.state = stateMap[value.status.state] || 'unknown';
             }
@@ -706,16 +707,6 @@ async function main() {
           if (caseName === 'message') {
             rewriteMessage(value);
           } else if (caseName === 'statusUpdate' || caseName === 'task') {
-            const stateMap: { [key: number]: string } = {
-              0: 'unknown',
-              1: 'submitted',
-              2: 'working',
-              3: 'completed',
-              4: 'failed',
-              5: 'canceled',
-              6: 'input-required',
-              7: 'rejected',
-            };
             if (value.status && typeof value.status.state === 'number') {
               value.status.state = stateMap[value.status.state] || 'unknown';
             }
@@ -749,16 +740,6 @@ async function main() {
             } else if (caseName === 'statusUpdate') {
               value.kind = 'status-update';
             }
-            const stateMap: { [key: number]: string } = {
-              0: 'unknown',
-              1: 'submitted',
-              2: 'working',
-              3: 'completed',
-              4: 'failed',
-              5: 'canceled',
-              6: 'input-required',
-              7: 'rejected',
-            };
 
             if (value.status && typeof value.status.state === 'number') {
               value.status.state = stateMap[value.status.state] || 'unknown';
