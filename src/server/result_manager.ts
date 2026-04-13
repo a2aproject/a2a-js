@@ -5,13 +5,13 @@ import { TaskStore } from './store.js';
 
 export class ResultManager {
   private readonly taskStore: TaskStore;
-  private readonly serverCallContext?: ServerCallContext;
+  private readonly serverCallContext: ServerCallContext;
 
   private currentTask?: Task;
   private latestUserMessage?: Message; // To add to history if a new task is created
   private finalMessageResult?: Message; // Stores the message if it's the final result
 
-  constructor(taskStore: TaskStore, serverCallContext?: ServerCallContext) {
+  constructor(taskStore: TaskStore, serverCallContext: ServerCallContext) {
     this.taskStore = taskStore;
     this.serverCallContext = serverCallContext;
   }
