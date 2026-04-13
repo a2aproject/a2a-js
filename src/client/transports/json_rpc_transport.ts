@@ -76,11 +76,32 @@ export class JsonRpcTransport implements Transport {
       SendMessageRequest
     );
 
-    if (!rpcResponse.result?.payload?.value) {
-      throw new Error('Invalid response structure from agent.');
+    const result = rpcResponse.result;
+    if (!result) {
+      throw new Error('Invalid response structure from agent: missing result.');
     }
 
-    return rpcResponse.result.payload.value;
+    let value: unknown;
+    const resultRecord = result as unknown as Record<string, unknown>;
+    if (result.payload?.value) {
+      value = result.payload.value;
+    } else if (resultRecord.task) {
+      value = resultRecord.task;
+    } else if (resultRecord.message) {
+      value = resultRecord.message;
+    } else if (resultRecord.id && resultRecord.status) {
+      // Looks like a Task directly
+      value = result;
+    } else if (resultRecord.messageId && resultRecord.parts) {
+      // Looks like a Message directly
+      value = result;
+    }
+
+    if (!value) {
+      throw new Error('Invalid response structure from agent: missing payload value.');
+    }
+
+    return value as SendMessageResult;
   }
 
   async *sendMessageStream(
@@ -307,9 +328,10 @@ export class JsonRpcTransport implements Transport {
         `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}`
       );
     }
-    if (!response.headers.get('Content-Type')?.startsWith('text/event-stream')) {
+    const contentType = response.headers.get('Content-Type');
+    if (!contentType?.startsWith('text/event-stream')) {
       throw new Error(
-        `Invalid response Content-Type for SSE stream for ${method}. Expected 'text/event-stream'.`
+        `Invalid response Content-Type for SSE stream for ${method}. Expected 'text/event-stream', got '${contentType}'.`
       );
     }
 
