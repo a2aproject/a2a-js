@@ -31,6 +31,14 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: npm install
+
       - name: Run ITK Tests
         run: bash run_itk.sh
         working-directory: itk
