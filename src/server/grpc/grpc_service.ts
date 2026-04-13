@@ -21,11 +21,19 @@ import { Empty } from '../../grpc/pb/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { ServerCallContext } from '../context.js';
+import {
+  ServerCallContext,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../context.js';
 import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
 import { HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { A2AError } from '../error.js';
+
+type ContextBuilderCallArgument =
+  | grpc.ServerUnaryCall<unknown, unknown>
+  | grpc.ServerWritableStream<unknown, unknown>;
 
 /**
  * Options for configuring the gRPC handler.
@@ -33,6 +41,7 @@ import { A2AError } from '../error.js';
 export interface GrpcServiceOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /**
@@ -53,6 +62,20 @@ export interface GrpcServiceOptions {
 export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   const requestHandler = options.requestHandler;
 
+  const buildContext = async (call: ContextBuilderCallArgument): Promise<ServerCallContext> => {
+    const user = await options.userBuilder(call);
+    const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
+    const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
+
+    // Convert gRPC metadata to the transport-agnostic RequestHeaders shape.
+    const headers: Record<string, string | string[] | undefined> = {};
+    for (const [key, value] of Object.entries(call.metadata.getMap())) {
+      headers[key] = value.toString();
+    }
+    const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
+    return ctxBuilder(Extensions.parseServiceParameter(extensionString), user, headers);
+  };
+
   /**
    * Helper to wrap Unary calls with common logic (context, metadata, error handling)
    */
@@ -64,7 +87,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     converter: (res: TResult) => TRes
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      const context = await buildContext(call);
       const params = parser(call.request);
       const result = await handler(params, context);
       call.sendMetadata(buildMetadata(context));
@@ -84,7 +107,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     converter: (res: TResult) => TRes
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      const context = await buildContext(call);
       const params = parser(call.request);
       const stream = await handler(params, context);
       const metadata = buildMetadata(context);
@@ -263,17 +286,6 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
     code: mapping[a2aError.code] ?? grpc.status.UNKNOWN,
     details: a2aError.message,
   };
-};
-
-const buildContext = async (
-  call: grpc.ServerUnaryCall<unknown, unknown> | grpc.ServerWritableStream<unknown, unknown>,
-  userBuilder: UserBuilder
-): Promise<ServerCallContext> => {
-  const user = await userBuilder(call);
-  const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
-  const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
-
-  return new ServerCallContext(Extensions.parseServiceParameter(extensionString), user);
 };
 
 const buildMetadata = (context: ServerCallContext): grpc.Metadata => {
