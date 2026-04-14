@@ -30,12 +30,12 @@ import {
   UserBuilder as GrpcUserBuilder,
 } from '../src/server/grpc/index.js';
 
+// This middle layer is required as current Python orchestrator uses v0.3 protocol spec to send and receive messages.
+// Once ITK is updated to transport-agnostic orchestrator, this conversion middle layer will become obsolete.
+
 export class ItkAgentExecutor implements AgentExecutor {
   async execute(context: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     console.log(`Executing task ${context.taskId}`);
-
-    // This middle layer is required as current Python orchestrator uses v0.3 protocol spec to send and receive messages.
-    // Once ITK is updated to transport-agnostic orchestrator, this conversion middle layer will become obsolete.
 
     // Publish initial task state to satisfy ResultManager
     eventBus.publish({
