@@ -221,6 +221,21 @@ describe('FromProto', () => {
       expect(result).toEqual({ kind: 'data', data });
     });
 
+    it('should convert data parts with array and scalar values', () => {
+      const arrayData = ['foo', { nested: true }, 3];
+      const scalarData = 7;
+
+      const arrayPart = {
+        part: { $case: 'data', value: { data: arrayData } },
+      } as any as proto.Part;
+      const scalarPart = {
+        part: { $case: 'data', value: { data: scalarData } },
+      } as any as proto.Part;
+
+      expect(FromProto.part(arrayPart)).toEqual({ kind: 'data', data: arrayData });
+      expect(FromProto.part(scalarPart)).toEqual({ kind: 'data', data: scalarData });
+    });
+
     it('should throw for an unknown part type', () => {
       const part: proto.Part = { part: { $case: 'invalid', value: undefined } as any }; // Invalid state
       expect(() => FromProto.part(part)).toThrow(new A2AError(-32602, 'Invalid part type'));

@@ -49,6 +49,7 @@ export type A2ARequest =
  * via the `definition` "Part".
  */
 export type Part = TextPart | FilePart | DataPart;
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 /**
  * Defines a security scheme that can be used to secure an agent's endpoints.
  * This is a discriminated union type based on the OpenAPI 3.0 Security Scheme Object.
@@ -675,9 +676,7 @@ export interface DataPart {
   /**
    * The structured data content.
    */
-  data: {
-    [k: string]: unknown;
-  };
+  data: JsonValue;
   /**
    * The type of this part, used as a discriminator. Always 'data'.
    */
