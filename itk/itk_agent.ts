@@ -293,7 +293,9 @@ export class ItkAgentExecutor implements AgentExecutor {
             }
             const response = await fetch(input, init);
             const contentType = response.headers.get('Content-Type');
-            console.log(`[ItkAgent fetchImpl] URL: ${input.toString()}, Status: ${response.status}, Content-Type: ${contentType}`);
+            console.log(
+              `[ItkAgent fetchImpl] URL: ${input.toString()}, Status: ${response.status}, Content-Type: ${contentType}`
+            );
             if (response.ok) {
               let text = '';
               try {
@@ -313,7 +315,7 @@ export class ItkAgentExecutor implements AgentExecutor {
                   } else if (resultRecord.messageId && resultRecord.parts) {
                     value = result;
                   }
-                  
+
                   data.result = { payload: { value: value } };
                 }
                 return new Response(JSON.stringify(data), {
