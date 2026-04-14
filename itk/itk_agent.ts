@@ -549,16 +549,6 @@ async function main() {
   );
   app.use(jsonRpcPath, express.json());
   app.use(jsonRpcPath, (req, res, next) => {
-    if (req.body && req.body.method) {
-      if (req.body.method === 'message/send') {
-        req.body.method = 'SendMessage';
-      } else if (req.body.method === 'message/stream') {
-        req.body.method = 'SendStreamingMessage';
-      }
-    }
-    next();
-  });
-  app.use(jsonRpcPath, (req, res, next) => {
     console.log('[ItkAgent] Request headers:', req.headers);
     console.log('[ItkAgent] Raw JSON-RPC request:', JSON.stringify(req.body, null, 2));
 
