@@ -291,7 +291,45 @@ export class ItkAgentExecutor implements AgentExecutor {
                 /* ignore */
               }
             }
-            return fetch(input, init);
+            const response = await fetch(input, init);
+            const contentType = response.headers.get('Content-Type');
+            console.log(`[ItkAgent fetchImpl] URL: ${input.toString()}, Status: ${response.status}, Content-Type: ${contentType}`);
+            if (response.ok) {
+              let text = '';
+              try {
+                text = await response.text();
+                console.log(`[ItkAgent fetchImpl] Raw response text: ${text}`);
+                const data = JSON.parse(text);
+                const result = data.result;
+                if (result && !result.payload?.value) {
+                  let value: unknown = result;
+                  const resultRecord = result as Record<string, unknown>;
+                  if (resultRecord.task) {
+                    value = resultRecord.task;
+                  } else if (resultRecord.message) {
+                    value = resultRecord.message;
+                  } else if (resultRecord.id && resultRecord.status) {
+                    value = result;
+                  } else if (resultRecord.messageId && resultRecord.parts) {
+                    value = result;
+                  }
+                  
+                  data.result = { payload: { value: value } };
+                }
+                return new Response(JSON.stringify(data), {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: response.headers,
+                });
+              } catch (_e) {
+                return new Response(text, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: response.headers,
+                });
+              }
+            }
+            return response;
           },
         }),
         new GrpcTransportFactory(),
