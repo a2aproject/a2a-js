@@ -1,4 +1,5 @@
 import { Task, TaskPushNotificationConfig } from '../../index.js';
+import { ServerCallContext } from '../context.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore } from './push_notification_store.js';
 
@@ -31,8 +32,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     };
   }
 
-  async send(task: Task): Promise<void> {
-    const pushConfigs = await this.pushNotificationStore.load(task.id);
+  async send(task: Task, context: ServerCallContext): Promise<void> {
+    const pushConfigs = await this.pushNotificationStore.load(task.id, context);
     if (!pushConfigs || pushConfigs.length === 0) {
       return;
     }

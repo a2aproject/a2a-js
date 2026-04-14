@@ -7,7 +7,7 @@ import {
   UnsupportedOperationError,
   RequestMalformedError,
   TaskNotCancelableError,
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../src/errors.js';
 import {
   TaskStore,
@@ -107,30 +107,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   // Before each test, reset the components to a clean state
   beforeEach(() => {
-    // Wrap in-memory store into a store which ensures we pass server call context.
-    // The parameter is optional to avoid breaking changes, however it should be passed.
-    const inMemoryStore = new InMemoryTaskStore();
-    mockTaskStore = {
-      save: async (task: Task, ctx?: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
-        return inMemoryStore.save(task);
-      },
-      load: async (id: string, ctx?: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
-        return inMemoryStore.load(id);
-      },
-      list: async (params: ListTasksRequest, ctx?: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
-        return inMemoryStore.list(params);
-      },
-    };
     // Default mock for most tests
+    mockTaskStore = new InMemoryTaskStore();
     mockAgentExecutor = new MockAgentExecutor();
     executionEventBusManager = new DefaultExecutionEventBusManager();
     handler = new DefaultRequestHandler(
@@ -1073,7 +1051,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await handler.sendMessage(params, serverCallContext);
         assert.fail(`Should have thrown for state: ${state}`);
       } catch (error: any) {
-        expect(error).to.be.instanceOf(RequestMalformedError);
+        expect(error).to.be.instanceOf(UnsupportedOperationError);
         expect(error.message).to.contain(
           `Task ${taskId} is in a terminal state (${state}) and cannot be modified.`
         );
@@ -1103,7 +1081,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       await generator.next();
       assert.fail('sendMessageStream should have thrown an error');
     } catch (error: any) {
-      expect(error).to.be.instanceOf(RequestMalformedError);
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
       expect(error.message).toContain(`Task ${taskId} is in a terminal state`);
     }
   });
@@ -2450,7 +2428,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     it('getAuthenticatedExtendedAgentCard should fail if the agent card does not support extended agent card', async () => {
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard();
+        await handler.getAuthenticatedExtendedAgentCard(serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {
@@ -2470,12 +2448,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       );
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard();
+        await handler.getAuthenticatedExtendedAgentCard(serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {
-        expect(caughtError).to.be.instanceOf(AuthenticatedExtendedCardNotConfiguredError);
-        expect(caughtError.message).to.contain('Authenticated Extended Card not configured');
+        expect(caughtError).to.be.instanceOf(ExtendedAgentCardNotConfiguredError);
+        expect(caughtError.message).to.contain('Extended Agent Card not configured');
       }
     });
 

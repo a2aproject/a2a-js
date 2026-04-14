@@ -11,7 +11,9 @@ export const A2A_ERROR_CODE = {
   UNSUPPORTED_OPERATION: -32004,
   CONTENT_TYPE_NOT_SUPPORTED: -32005,
   INVALID_AGENT_RESPONSE: -32006,
-  AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED: -32007,
+  EXTENDED_CARD_NOT_CONFIGURED: -32007,
+  EXTENSION_SUPPORT_REQUIRED: -32008,
+  VERSION_NOT_SUPPORTED: -32009,
 } as const;
 
 // --------------------------------------------------
@@ -79,9 +81,23 @@ export class InvalidAgentResponseError extends Error {
   }
 }
 
-export class AuthenticatedExtendedCardNotConfiguredError extends Error {
+export class ExtendedAgentCardNotConfiguredError extends Error {
   constructor(message?: string) {
-    super(message ?? 'Authenticated Extended Card not configured');
-    this.name = 'AuthenticatedExtendedCardNotConfiguredError';
+    super(message ?? 'Extended Agent Card not configured');
+    this.name = 'ExtendedAgentCardNotConfiguredError';
+  }
+}
+
+export class ExtensionSupportRequiredError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Extension support required');
+    this.name = 'ExtensionSupportRequiredError';
+  }
+}
+
+export class VersionNotSupportedError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Version not supported');
+    this.name = 'VersionNotSupportedError';
   }
 }

@@ -1,13 +1,13 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
-  AuthenticatedExtendedCardNotConfiguredError,
   RequestMalformedError,
   PushNotificationNotSupportedError,
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
   GenericError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../errors.js';
 
 import {
@@ -87,17 +87,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return this.agentCard;
   }
 
-  async getAuthenticatedExtendedAgentCard(context?: ServerCallContext): Promise<AgentCard> {
+  async getAuthenticatedExtendedAgentCard(context: ServerCallContext): Promise<AgentCard> {
     if (!this.agentCard.capabilities?.extendedAgentCard) {
       throw new UnsupportedOperationError('Agent does not support authenticated extended card.');
     }
     if (!this.extendedAgentCardProvider) {
-      throw new AuthenticatedExtendedCardNotConfiguredError();
+      throw new ExtendedAgentCardNotConfiguredError();
     }
     if (typeof this.extendedAgentCardProvider === 'function') {
       return this.extendedAgentCardProvider(context);
     }
-    if (context?.user?.isAuthenticated) {
+    if (context.user?.isAuthenticated) {
       return this.extendedAgentCardProvider;
     }
     return this.agentCard;
@@ -105,7 +105,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   private async _createRequestContext(
     incomingMessage: Message,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<RequestContext> {
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
@@ -117,8 +117,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
       }
       if (task.status?.state !== undefined && TERMINAL_STATE_LIST.includes(task.status.state)) {
-        // Throw an error that conforms to the JSON-RPC Invalid Request error specification.
-        throw new RequestMalformedError(
+        // Throw UnsupportedOperationError as required by TCK for terminal tasks.
+        throw new UnsupportedOperationError(
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
         );
       }
@@ -147,7 +147,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
     // Validate requested extensions against agent capabilities
-    if (context?.requestedExtensions) {
+    if (context.requestedExtensions) {
       const agentCard = await this.getAgentCard();
       const exposedExtensions = new Set(
         agentCard.capabilities?.extensions?.map((ext) => ext.uri) || []
@@ -163,14 +163,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       contextId,
       taskId,
     };
-    return new RequestContext(messageForContext, taskId, contextId, task, referenceTasks, context);
+    return new RequestContext(messageForContext, taskId, contextId, context, task, referenceTasks);
   }
 
   private async _processEvents(
     taskId: string,
     resultManager: ResultManager,
     eventQueue: ExecutionEventQueue,
-    context: ServerCallContext | undefined,
+    context: ServerCallContext,
     options?: {
       firstResultResolver?: (value: Message | Task | PromiseLike<Message | Task>) => void;
       firstResultRejector?: (reason?: unknown) => void;
@@ -226,7 +226,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async sendMessage(
     params: SendMessageRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<Message | Task> {
     const incomingMessage = params.message;
     if (!incomingMessage?.messageId) {
@@ -252,6 +252,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     ) {
       await this.pushNotificationStore?.save(
         taskId,
+        context,
         params.configuration.taskPushNotificationConfig
       );
     }
@@ -335,7 +336,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async *sendMessageStream(
     params: SendMessageRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): AsyncGenerator<
     Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
     void,
@@ -366,6 +367,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     ) {
       await this.pushNotificationStore?.save(
         taskId,
+        context,
         params.configuration.taskPushNotificationConfig
       );
     }
@@ -418,7 +420,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  async getTask(params: GetTaskRequest, context?: ServerCallContext): Promise<Task> {
+  async getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
@@ -437,7 +439,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async listTasks(
     params: ListTasksRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<ListTasksResponse> {
     const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
 
@@ -452,7 +454,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return this.taskStore.list({ ...params, pageSize }, context);
   }
 
-  async cancelTask(params: CancelTaskRequest, context?: ServerCallContext): Promise<Task> {
+  async cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
@@ -519,7 +521,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
@@ -530,14 +532,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    await this.pushNotificationStore?.save(taskId, params);
+    await this.pushNotificationStore?.save(taskId, context, params);
 
     return params;
   }
 
   async getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
@@ -548,7 +550,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    const configs = (await this.pushNotificationStore?.load(taskId)) || [];
+    const configs = (await this.pushNotificationStore?.load(taskId, context)) || [];
     if (configs.length === 0) {
       throw new GenericError(`Push notification config not found for task ${taskId}.`);
     }
@@ -565,7 +567,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigsRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<TaskPushNotificationConfig[]> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
@@ -576,12 +578,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    return (await this.pushNotificationStore?.load(taskId)) || [];
+    return (await this.pushNotificationStore?.load(taskId, context)) || [];
   }
 
   async deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<void> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
@@ -591,12 +593,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
-    await this.pushNotificationStore?.delete(taskId, params.id);
+    await this.pushNotificationStore?.delete(taskId, context, params.id);
   }
 
   async *resubscribe(
     params: SubscribeToTaskRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): AsyncGenerator<
     | Task // Initial task state
     | TaskStatusUpdateEvent
@@ -658,7 +660,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   private async _sendPushNotificationIfNeeded(
     event: AgentExecutionEvent,
-    context: ServerCallContext | undefined
+    context: ServerCallContext
   ): Promise<void> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       return;
@@ -684,7 +686,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     // Send push notification in the background.
-    this.pushNotificationSender?.send(task);
+    this.pushNotificationSender?.send(task, context);
   }
 
   private async _handleProcessingError(
@@ -749,4 +751,4 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 }
 
-export type ExtendedAgentCardProvider = (context?: ServerCallContext) => Promise<AgentCard>;
+export type ExtendedAgentCardProvider = (context: ServerCallContext) => Promise<AgentCard>;

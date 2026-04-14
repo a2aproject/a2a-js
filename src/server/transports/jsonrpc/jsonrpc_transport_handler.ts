@@ -23,8 +23,9 @@ import {
   UnsupportedOperationError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
-  AuthenticatedExtendedCardNotConfiguredError,
   GenericError,
+  VersionNotSupportedError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../../errors.js';
 import { JSONRPCErrorResponse } from '../../../core.js';
 
@@ -63,7 +64,7 @@ export class JsonRpcTransportHandler {
     // TODO: remove the eslint disable and replace the any (https://github.com/a2aproject/a2a-js/issues/179)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     requestBody: any,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
     let rpcRequest: A2ARequest;
 
@@ -291,11 +292,14 @@ export class JsonRpcTransportHandler {
     if (error instanceof InvalidAgentResponseError) {
       return { code: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE, message: error.message };
     }
-    if (error instanceof AuthenticatedExtendedCardNotConfiguredError) {
+    if (error instanceof ExtendedAgentCardNotConfiguredError) {
       return {
-        code: A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED,
+        code: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
         message: error.message,
       };
+    }
+    if (error instanceof VersionNotSupportedError) {
+      return { code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED, message: error.message };
     }
     if (error instanceof RequestMalformedError) {
       return { code: A2A_ERROR_CODE.INVALID_PARAMS, message: error.message };
