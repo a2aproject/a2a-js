@@ -76,11 +76,21 @@ export class JsonRpcTransport implements Transport {
       SendMessageRequest
     );
 
-    if (!rpcResponse.result?.payload?.value) {
-      throw new Error('Invalid response structure from agent.');
+    const result = rpcResponse.result as {
+      payload?: { value: unknown };
+      task?: unknown;
+      message?: unknown;
+    };
+    if (result?.payload?.value) {
+      return result.payload.value as SendMessageResult;
     }
-
-    return rpcResponse.result.payload.value;
+    if (result?.task) {
+      return result.task as SendMessageResult;
+    }
+    if (result?.message) {
+      return result.message as SendMessageResult;
+    }
+    throw new Error('Invalid response structure from agent.');
   }
 
   async *sendMessageStream(

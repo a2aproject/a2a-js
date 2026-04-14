@@ -255,81 +255,19 @@ export class ItkAgentExecutor implements AgentExecutor {
       transports: [
         new JsonRpcTransportFactory({
           fetchImpl: async (input: RequestInfo | URL, init?: RequestInit) => {
-            if (init && init.body && typeof init.body === 'string') {
-              try {
-                const data = JSON.parse(init.body);
-
-                // Rewrite outgoing methods for compatibility with Go agent expecting v0.3
-                if (data.method === 'SendStreamingMessage') {
-                  data.method = 'message/stream';
-                } else if (data.method === 'SendMessage') {
-                  data.method = 'message/send';
-                }
-
-                if (data.method === 'message/stream' || data.method === 'message/send') {
-                  const params = data.params;
-                  if (params && params.message) {
-                    if (params.message.role === 'ROLE_USER') {
-                      params.message.role = 'user';
-                    } else if (params.message.role === 'ROLE_AGENT') {
-                      params.message.role = 'agent';
-                    }
-                    if (params.message.parts) {
-                      params.message.parts = params.message.parts.map(
-                        (part: Record<string, unknown>) => {
-                          if (part.text !== undefined && part.kind === undefined) {
-                            part.kind = 'text';
-                          }
-                          return part;
-                        }
-                      );
-                    }
-                  }
-                }
-                init.body = JSON.stringify(data);
-              } catch (_e) {
-                /* ignore */
-              }
-            }
             const response = await fetch(input, init);
             const contentType = response.headers.get('Content-Type');
             console.log(
               `[ItkAgent fetchImpl] URL: ${input.toString()}, Status: ${response.status}, Content-Type: ${contentType}`
             );
             if (response.ok) {
-              let text = '';
-              try {
-                text = await response.text();
-                console.log(`[ItkAgent fetchImpl] Raw response text: ${text}`);
-                const data = JSON.parse(text);
-                const result = data.result;
-                if (result && !result.payload?.value) {
-                  let value: unknown = result;
-                  const resultRecord = result as Record<string, unknown>;
-                  if (resultRecord.task) {
-                    value = resultRecord.task;
-                  } else if (resultRecord.message) {
-                    value = resultRecord.message;
-                  } else if (resultRecord.id && resultRecord.status) {
-                    value = result;
-                  } else if (resultRecord.messageId && resultRecord.parts) {
-                    value = result;
-                  }
-
-                  data.result = { payload: { value: value } };
-                }
-                return new Response(JSON.stringify(data), {
-                  status: response.status,
-                  statusText: response.statusText,
-                  headers: response.headers,
-                });
-              } catch (_e) {
-                return new Response(text, {
-                  status: response.status,
-                  statusText: response.statusText,
-                  headers: response.headers,
-                });
-              }
+              const text = await response.text();
+              console.log(`[ItkAgent fetchImpl] Raw response text: ${text}`);
+              return new Response(text, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers,
+              });
             }
             return response;
           },
@@ -482,6 +420,12 @@ export class ItkAgentExecutor implements AgentExecutor {
             message = event;
           } else if ('status' in event && event.status?.message) {
             message = event.status.message;
+          } else if ('statusUpdate' in event) {
+            const statusUpdate = (event as { statusUpdate?: { status?: { message?: Message } } })
+              .statusUpdate;
+            if (statusUpdate?.status?.message) {
+              message = statusUpdate.status.message;
+            }
           }
 
           if (message) {

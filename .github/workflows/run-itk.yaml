@@ -13,7 +13,7 @@ permissions:
 
 env:
   # Tag of the a2a-samples
-  A2A_SAMPLES_REVISION: itk-v.013-alpha
+  A2A_SAMPLES_REVISION: make-itk-test-orchestration-sdk-agnostic
 
 # Only run the latest job
 concurrency:
