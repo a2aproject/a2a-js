@@ -23,6 +23,7 @@ describe('ClientFactory', () => {
       deleteTaskPushNotificationConfig: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
+      listTasks: vi.fn(),
       resubscribeTask: vi.fn(),
       protocolName: 'MockTransport',
     };

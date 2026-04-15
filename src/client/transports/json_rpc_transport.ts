@@ -32,6 +32,8 @@ import {
   SendMessageResponse,
   ListTaskPushNotificationConfigsResponse,
   StreamResponse,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../types/pb/a2a.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
@@ -62,7 +64,7 @@ export class JsonRpcTransport implements Transport {
       options,
       undefined
     );
-    return rpcResponse.result;
+    return AgentCard.fromJSON(rpcResponse.result);
   }
 
   async sendMessage(
@@ -169,6 +171,16 @@ export class JsonRpcTransport implements Transport {
       CancelTaskRequest
     );
     return Task.fromJSON(rpcResponse.result);
+  }
+
+  async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    const rpcResponse = await this._sendRpcRequest<ListTasksRequest, ListTasksResponse>(
+      'ListTasks',
+      params,
+      options,
+      ListTasksRequest
+    );
+    return ListTasksResponse.fromJSON(rpcResponse.result);
   }
 
   async *resubscribeTask(
