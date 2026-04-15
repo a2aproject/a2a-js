@@ -120,13 +120,12 @@ export class JsonRpcTransport implements Transport {
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
     const rpcResponse = await this._sendRpcRequest<
       ListTaskPushNotificationConfigsRequest,
       ListTaskPushNotificationConfigsResponse
     >('ListTaskPushNotificationConfigs', params, options, ListTaskPushNotificationConfigsRequest);
-    const configs = rpcResponse.result.configs || [];
-    return configs.map((c: unknown) => TaskPushNotificationConfig.fromJSON(c));
+    return rpcResponse.result;
   }
 
   async deleteTaskPushNotificationConfig(

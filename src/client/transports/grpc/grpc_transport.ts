@@ -147,13 +147,17 @@ export class GrpcTransport implements Transport {
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
-    const rpcResponse = await this._sendGrpcRequest(
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
+    const rpcResponse = await this._sendGrpcRequest<
+      ListTaskPushNotificationConfigsRequest,
+      ListTaskPushNotificationConfigsResponse,
+      ListTaskPushNotificationConfigsResponse
+    >(
       'listTaskPushNotificationConfigs',
       params,
       options,
       this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient),
-      (res) => (res as ListTaskPushNotificationConfigsResponse).configs
+      (res) => res
     );
     return rpcResponse;
   }

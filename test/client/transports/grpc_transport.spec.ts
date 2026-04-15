@@ -351,7 +351,7 @@ describe('GrpcTransport', () => {
           pageToken: '',
         });
 
-        expect(result).toEqual(mockList);
+        expect(result.configs).toEqual(mockList);
       });
     });
 

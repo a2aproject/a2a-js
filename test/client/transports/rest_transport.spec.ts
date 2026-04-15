@@ -334,7 +334,7 @@ describe('RestTransport', () => {
           pageToken: '',
         });
 
-        expect(result).to.deep.equal(expectedConfigs);
+        expect(result.configs).to.deep.equal(expectedConfigs);
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];

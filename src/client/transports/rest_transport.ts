@@ -132,7 +132,7 @@ export class RestTransport implements Transport {
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
     const response = await this._sendRequest<undefined, ListTaskPushNotificationConfigsResponse>(
       'GET',
       `/tasks/${params.taskId}/pushNotificationConfigs`,
@@ -141,7 +141,7 @@ export class RestTransport implements Transport {
       undefined,
       ListTaskPushNotificationConfigsResponse
     );
-    return response.configs;
+    return response;
   }
 
   async deleteTaskPushNotificationConfig(
