@@ -171,12 +171,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         callback,
         (req) => req,
         requestHandler.listTaskPushNotificationConfigs.bind(requestHandler),
-        (res) => {
-          return {
-            configs: res,
-            nextPageToken: '',
-          };
-        }
+        (res) => res
       );
     },
 

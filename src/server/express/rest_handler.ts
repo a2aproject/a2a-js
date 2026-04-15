@@ -460,15 +460,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.params.taskId,
         context
       );
-      const response: ListTaskPushNotificationConfigsResponse = {
-        configs: result,
-        nextPageToken: '',
-      };
       sendResponse<ListTaskPushNotificationConfigsResponse>(
         res,
         HTTP_STATUS.OK,
         context,
-        response,
+        result,
         ListTaskPushNotificationConfigsResponse
       );
     })
