@@ -16,6 +16,8 @@ import {
   SendMessageConfiguration,
   SendMessageRequest,
   SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../types/pb/a2a.js';
 import { ClientCallContext } from './context.js';
 import {
@@ -258,6 +260,17 @@ export class Client {
       { method: 'cancelTask', value: params },
       options,
       this.transport.cancelTask.bind(this.transport)
+    );
+  }
+
+  /**
+   * Retrieves a list of tasks with optional filtering and pagination.
+   */
+  listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    return this.executeWithInterceptors(
+      { method: 'listTasks', value: params },
+      options,
+      this.transport.listTasks.bind(this.transport)
     );
   }
 

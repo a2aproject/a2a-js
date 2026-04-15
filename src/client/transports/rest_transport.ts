@@ -31,6 +31,10 @@ import {
   Task,
   TaskPushNotificationConfig,
   SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
+  TaskState,
+  taskStateToJSON,
 } from '../../types/pb/a2a.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
@@ -184,6 +188,36 @@ export class RestTransport implements Transport {
       options,
       undefined,
       Task
+    );
+    return response;
+  }
+
+  async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    const queryParams = new URLSearchParams();
+    if (params.tenant) queryParams.set('tenant', params.tenant);
+    if (params.contextId) queryParams.set('contextId', params.contextId);
+    if (params.status !== undefined && params.status !== TaskState.TASK_STATE_UNSPECIFIED) {
+      queryParams.set('status', taskStateToJSON(params.status));
+    }
+    if (params.pageSize !== undefined) queryParams.set('pageSize', String(params.pageSize));
+    if (params.pageToken) queryParams.set('pageToken', params.pageToken);
+    if (params.historyLength !== undefined)
+      queryParams.set('historyLength', String(params.historyLength));
+    if (params.statusTimestampAfter)
+      queryParams.set('statusTimestampAfter', params.statusTimestampAfter);
+    if (params.includeArtifacts !== undefined)
+      queryParams.set('includeArtifacts', String(params.includeArtifacts));
+
+    const queryString = queryParams.toString();
+    const path = `/tasks${queryString ? `?${queryString}` : ''}`;
+
+    const response = await this._sendRequest<undefined, ListTasksResponse>(
+      'GET',
+      path,
+      undefined,
+      options,
+      undefined,
+      ListTasksResponse
     );
     return response;
   }

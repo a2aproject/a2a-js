@@ -10,6 +10,8 @@ import {
   SubscribeToTaskRequest,
   A2AStreamEventData,
   SendMessageResult,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 
@@ -48,6 +50,8 @@ export interface Transport {
   getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task>;
 
   cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task>;
+
+  listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse>;
 
   resubscribeTask(
     params: SubscribeToTaskRequest,
