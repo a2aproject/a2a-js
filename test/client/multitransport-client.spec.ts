@@ -18,6 +18,8 @@ import {
   ListTaskPushNotificationConfigsRequest,
   SendMessageRequest,
   SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../src/types/pb/a2a.js';
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
@@ -37,6 +39,7 @@ describe('Client', () => {
       deleteTaskPushNotificationConfig: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
+      listTasks: vi.fn(),
       resubscribeTask: vi.fn(),
       protocolName: 'MockTransport',
     };
@@ -341,6 +344,37 @@ describe('Client', () => {
     expect(transport.cancelTask.mock.contexts[0]).toBe(transport);
     expect(transport.cancelTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
     expect(result).to.equal(task);
+  });
+
+  it('should call transport.listTasks', async () => {
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx1',
+      status: TaskState.TASK_STATE_WORKING,
+      pageToken: '',
+      statusTimestampAfter: undefined,
+    };
+    const response: ListTasksResponse = {
+      tasks: [
+        {
+          id: '123',
+          contextId: 'ctx1',
+          status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        },
+      ],
+      nextPageToken: '',
+      pageSize: 1,
+      totalSize: 1,
+    };
+    transport.listTasks.mockResolvedValue(response);
+
+    const result = await client.listTasks(params);
+
+    expect(transport.listTasks).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(result).to.equal(response);
   });
 
   it('should call transport.resubscribeTask', async () => {
