@@ -13,7 +13,7 @@ permissions:
 
 env:
   # Tag of the a2a-samples
-  A2A_SAMPLES_REVISION: itk-v.014-alpha
+  A2A_SAMPLES_REVISION: implement-itk-service
 
 # Only run the latest job
 concurrency:
