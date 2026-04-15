@@ -7,7 +7,7 @@ import {
   ListTaskPushNotificationConfigsRequest,
   SubscribeToTaskRequest,
 } from '../../../grpc/pb/a2a.js';
-import { Task, AgentCard } from '../../../types/pb/a2a.js';
+import { Task, AgentCard, ListTaskPushNotificationConfigsResponse } from '../../../types/pb/a2a.js';
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
@@ -153,7 +153,7 @@ export class GrpcTransport implements Transport {
       params,
       options,
       this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient),
-      FromProto.listTaskPushNotificationConfig
+      (res) => (res as ListTaskPushNotificationConfigsResponse).configs
     );
     return rpcResponse;
   }

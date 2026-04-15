@@ -460,12 +460,15 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         req.params.taskId,
         context
       );
-      const protoResult = ToProto.listTaskPushNotificationConfig(result);
+      const response: ListTaskPushNotificationConfigsResponse = {
+        configs: result,
+        nextPageToken: '',
+      };
       sendResponse<ListTaskPushNotificationConfigsResponse>(
         res,
         HTTP_STATUS.OK,
         context,
-        protoResult,
+        response,
         ListTaskPushNotificationConfigsResponse
       );
     })

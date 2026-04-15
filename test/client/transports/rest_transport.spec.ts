@@ -27,7 +27,6 @@ import {
   TaskState,
   TaskPushNotificationConfig,
 } from '../../../src/types/pb/a2a.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
 
 describe('RestTransport', () => {
   let transport: RestTransport;
@@ -321,9 +320,10 @@ describe('RestTransport', () => {
         ];
         mockFetch.mockResolvedValue(
           createRestResponse(
-            ListTaskPushNotificationConfigsResponse.toJSON(
-              ToProto.listTaskPushNotificationConfig(protoConfigs)
-            )
+            ListTaskPushNotificationConfigsResponse.toJSON({
+              configs: protoConfigs,
+              nextPageToken: '',
+            })
           )
         );
 
