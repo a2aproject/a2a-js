@@ -16,6 +16,8 @@ import {
   SendMessageRequest,
   A2AStreamEventData,
   SendMessageResult,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../../index.js';
 import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
@@ -190,6 +192,15 @@ export class GrpcTransport implements Transport {
       this.grpcClient.cancelTask.bind(this.grpcClient),
       (req) => req
     );
+    return rpcResponse;
+  }
+
+  async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    const rpcResponse = await this._sendGrpcRequest<
+      ListTasksRequest,
+      ListTasksResponse,
+      ListTasksResponse
+    >('listTasks', params, options, this.grpcClient.listTasks.bind(this.grpcClient), (req) => req);
     return rpcResponse;
   }
 
