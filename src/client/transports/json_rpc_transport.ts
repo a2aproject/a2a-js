@@ -64,7 +64,7 @@ export class JsonRpcTransport implements Transport {
       options,
       undefined
     );
-    return rpcResponse.result;
+    return AgentCard.fromJSON(rpcResponse.result);
   }
 
   async sendMessage(
