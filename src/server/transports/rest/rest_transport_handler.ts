@@ -20,6 +20,7 @@ import {
   ListTasksRequest,
   ListTasksResponse,
   TaskState,
+  ListTaskPushNotificationConfigsResponse,
 } from '../../../index.js';
 import {
   ExtendedAgentCardNotConfiguredError,
@@ -247,12 +248,12 @@ export class RestTransportHandler {
   async listTaskPushNotificationConfigs(
     taskId: string,
     context: ServerCallContext
-  ): Promise<TaskPushNotificationConfig[]> {
-    const configs = await this.requestHandler.listTaskPushNotificationConfigs(
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
+    const result = await this.requestHandler.listTaskPushNotificationConfigs(
       { taskId, pageSize: 0, pageToken: '', tenant: '' },
       context
     );
-    return configs;
+    return result;
   }
 
   /**

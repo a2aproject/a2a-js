@@ -3,8 +3,6 @@ import {
   Message,
   SendMessageResponse,
   Task,
-  TaskPushNotificationConfig,
-  ListTaskPushNotificationConfigsResponse,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   StreamResponse,
@@ -23,12 +21,6 @@ export class FromProto {
       return response.payload.value;
     }
     throw new GenericError('Invalid SendMessageResponse: missing result');
-  }
-
-  static listTaskPushNotificationConfig(
-    request: ListTaskPushNotificationConfigsResponse
-  ): TaskPushNotificationConfig[] {
-    return request.configs;
   }
 
   static messageStreamResult(
