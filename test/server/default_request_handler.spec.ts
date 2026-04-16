@@ -312,7 +312,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Task status should be failed'
     );
     assert.include(
-      (blockingTask.status.message?.parts[0].content as any).value,
+      (blockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -501,7 +501,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Task status should be failed'
     );
     assert.include(
-      (nonBlockingTask.status.message?.parts[0].content as any).value,
+      (nonBlockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -700,25 +700,37 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((secondTask.history![0].parts[0].content as any).value, 'Message 1');
+    assert.equal(
+      (secondTask.history![0].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 1'
+    );
     assert.equal(
       secondTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((secondTask.history![1].parts[0].content as any).value, 'Response to message 1');
+    assert.equal(
+      (secondTask.history![1].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 1'
+    );
     assert.equal(
       secondTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((secondTask.history![2].parts[0].content as any).value, 'Message 2');
+    assert.equal(
+      (secondTask.history![2].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 2'
+    );
     assert.equal(
       secondTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((secondTask.history![3].parts[0].content as any).value, 'Response to message 2');
+    assert.equal(
+      (secondTask.history![3].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 2'
+    );
     assert.equal(secondTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(
       secondTask.artifacts![0].name,
@@ -731,7 +743,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (secondTask.artifacts![0].parts[0].content as any).value,
+      (secondTask.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
@@ -947,25 +959,37 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((finalTask.history![0].parts[0].content as any).value, 'Message 1');
+    assert.equal(
+      (finalTask.history![0].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 1'
+    );
     assert.equal(
       finalTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((finalTask.history![1].parts[0].content as any).value, 'Response to message 1');
+    assert.equal(
+      (finalTask.history![1].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 1'
+    );
     assert.equal(
       finalTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((finalTask.history![2].parts[0].content as any).value, 'Message 2');
+    assert.equal(
+      (finalTask.history![2].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 2'
+    );
     assert.equal(
       finalTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((finalTask.history![3].parts[0].content as any).value, 'Response to message 2');
+    assert.equal(
+      (finalTask.history![3].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 2'
+    );
     assert.equal(finalTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(finalTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
     assert.equal(
@@ -974,7 +998,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (finalTask.artifacts![0].parts[0].content as any).value,
+      (finalTask.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
@@ -1014,15 +1038,26 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as any).payload.value.status.state, TaskState.TASK_STATE_SUBMITTED);
-    assert.equal((events[1] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((events[2] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (events[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (events[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (events[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
   });
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
@@ -1118,14 +1153,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     assert.lengthOf(events, 2);
-    const lastEvent = events[1] as any;
-    assert.equal(lastEvent.payload.value.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
+    const lastEvent = events[1];
+    assert.equal(
+      (lastEvent.payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_INPUT_REQUIRED
+    );
   });
 
   it('resubscribe: should allow multiple clients to receive events for the same task', async () => {
@@ -1170,23 +1209,29 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const stream1_iterator = stream1_generator[Symbol.asyncIterator]();
 
     const firstEventResult = await stream1_iterator.next();
-    const firstEvent = firstEventResult.value as any;
-    assert.equal(firstEvent.payload.value.id, taskId, 'Should get task event first');
+    assert.isFalse(firstEventResult.done, 'Generator should not be done yet');
+    const firstEvent = firstEventResult.value as StreamResponse;
+    assert.equal(
+      (firstEvent.payload as { $case: 'task'; value: Task }).value.id,
+      taskId,
+      'Should get task event first'
+    );
 
     const secondEventResult = await stream1_iterator.next();
-    const secondEvent = secondEventResult.value as any;
+    assert.isFalse(secondEventResult.done, 'Generator should not be done yet');
+    const secondEvent = secondEventResult.value as StreamResponse;
     assert.equal(
-      secondEvent.payload.value.taskId,
+      (secondEvent.payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.taskId,
       taskId,
       'Should get the task status update event second'
     );
 
     const stream2_generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
-    const results1: any[] = [firstEvent, secondEvent];
-    const results2: any[] = [];
+    const results1: StreamResponse[] = [firstEvent, secondEvent];
+    const results2: StreamResponse[] = [];
 
-    const collect = async (iterator: AsyncGenerator<any>, results: any[]) => {
+    const collect = async (iterator: AsyncGenerator<StreamResponse>, results: StreamResponse[]) => {
       for await (const res of iterator) {
         results.push(res);
       }
@@ -1198,13 +1243,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await vi.runAllTimersAsync();
     await Promise.all([p1, p2]);
 
-    assert.equal((results1[0] as any).payload.value.status?.state, TaskState.TASK_STATE_SUBMITTED);
-    assert.equal((results1[1] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((results1[2] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (results1[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (results1[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (results1[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     // First event of resubscribe is always a task.
-    assert.equal((results2[0] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((results2[1] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (results2[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (results2[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     expect(saveSpy).toHaveBeenCalledTimes(3);
     const lastSaveCall = saveSpy.mock.calls[saveSpy.mock.calls.length - 1][0];
@@ -1825,16 +1888,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     // Verify stream events
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as any).payload.value.status.state, TaskState.TASK_STATE_SUBMITTED);
-    assert.equal((events[1] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((events[2] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (events[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (events[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (events[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     // Verify push notifications were sent with complete task objects
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
@@ -2474,9 +2548,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('ExecutionEventQueue should be instantiable and return an object', () => {
     const fakeBus = {
-      on: () => {},
-      off: () => {},
-    } as any;
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      publish: vi.fn(),
+      finished: vi.fn(),
+      removeAllListeners: vi.fn(),
+    } as unknown as ExecutionEventBus;
     const queue = new ExecutionEventQueue(fakeBus);
     expect(queue).to.be.instanceOf(ExecutionEventQueue);
   });

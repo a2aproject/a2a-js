@@ -7,7 +7,6 @@
 
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 import { ServerCallContext } from '../../context.js';
-import { ToProto } from '../../../types/converters/to_proto.js';
 import {
   Message,
   Task,
@@ -216,14 +215,7 @@ export class RestTransportHandler {
     context: ServerCallContext
   ): Promise<AsyncGenerator<StreamResponse, void, undefined>> {
     await this.requireCapability('streaming');
-    const stream = this.requestHandler.resubscribe({ id: taskId, tenant: '' }, context);
-
-    async function* wrap() {
-      for await (const event of stream) {
-        yield ToProto.messageStreamResult(event);
-      }
-    }
-    return wrap();
+    return this.requestHandler.resubscribe({ id: taskId, tenant: '' }, context);
   }
 
   /**

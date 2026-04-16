@@ -67,19 +67,19 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   }
 
   private _getTaskId(streamResponse: StreamResponse): string {
-    const p = streamResponse.payload;
-    if (!p) {
+    const payload = streamResponse.payload;
+    if (!payload) {
       throw new Error('StreamResponse payload is undefined');
     }
-    switch (p.$case) {
+    switch (payload.$case) {
       case 'task':
-        return p.value.id;
+        return payload.value.id;
       case 'message':
       case 'statusUpdate':
       case 'artifactUpdate':
-        return p.value.taskId;
+        return payload.value.taskId;
       default:
-        throw new Error(`Unknown payload case: ${(p as unknown as { $case: string }).$case}`);
+        throw new Error(`Unknown payload case: ${(payload as unknown as { $case: string }).$case}`);
     }
   }
 
