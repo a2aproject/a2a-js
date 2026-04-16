@@ -1451,7 +1451,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       serverCallContext
     );
 
-    const configs = await handler.listTaskPushNotificationConfigs(
+    const result = await handler.listTaskPushNotificationConfigs(
       {
         tenant: '',
         taskId: taskId,
@@ -1460,8 +1460,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       },
       serverCallContext
     );
-    expect(configs).to.have.lengthOf(1);
-    expect(configs[0].url).to.equal('https://new.url');
+    expect(result.configs).to.have.lengthOf(1);
+    expect(result.configs[0].url).to.equal('https://new.url');
+    expect(result.nextPageToken).to.equal('');
   });
 
   it('listTaskPushNotificationConfigs: should return all configs for a task', async () => {
@@ -1522,10 +1523,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       pageSize: 0,
       pageToken: '',
     };
-    const listResponse = await handler.listTaskPushNotificationConfigs(
-      listParams,
-      serverCallContext
-    );
+    const listResponse = (
+      await handler.listTaskPushNotificationConfigs(listParams, serverCallContext)
+    ).configs;
 
     expect(listResponse).to.be.an('array').with.lengthOf(2);
     assert.deepInclude(listResponse, {
@@ -1605,15 +1605,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await handler.deleteTaskPushNotificationConfig(deleteParams, serverCallContext);
 
-    const remainingConfigs = await handler.listTaskPushNotificationConfigs(
-      {
-        taskId: taskId,
-        tenant: '',
-        pageSize: 0,
-        pageToken: '',
-      },
-      serverCallContext
-    );
+    const remainingConfigs = (
+      await handler.listTaskPushNotificationConfigs(
+        {
+          taskId: taskId,
+          tenant: '',
+          pageSize: 0,
+          pageToken: '',
+        },
+        serverCallContext
+      )
+    ).configs;
     expect(remainingConfigs).to.have.lengthOf(1);
     expect(remainingConfigs[0].id).to.equal('cfg-del-2');
   });
@@ -1660,7 +1662,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       serverCallContext
     );
 
-    const configs = await handler.listTaskPushNotificationConfigs(
+    const result = await handler.listTaskPushNotificationConfigs(
       {
         taskId: taskId,
         tenant: '',
@@ -1669,7 +1671,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       },
       serverCallContext
     );
-    expect(configs).to.be.an('array').with.lengthOf(0);
+    expect(result.configs).to.be.an('array').with.lengthOf(0);
+    expect(result.nextPageToken).to.equal('');
   });
 
   it('should send push notification when task update is received', async () => {

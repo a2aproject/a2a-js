@@ -470,7 +470,10 @@ describe('restHandler', () => {
     describe('GET /tasks/:taskId/pushNotificationConfigs', () => {
       it('should list push notification configs and return 200', async () => {
         const configs = [mockConfig];
-        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue(configs);
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue({
+          configs: configs,
+          nextPageToken: '',
+        });
 
         const response = await request(app)
           .get('/tasks/task-1/pushNotificationConfigs')

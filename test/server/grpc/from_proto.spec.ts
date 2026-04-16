@@ -68,19 +68,6 @@ describe('FromProto', () => {
     });
   });
 
-  describe('listTaskPushNotificationConfig', () => {
-    it('should return configs array', () => {
-      const configs: proto.TaskPushNotificationConfig[] = [
-        { tenant: '', taskId: '', id: 'config-1', url: '', token: '', authentication: undefined },
-      ];
-      const response: proto.ListTaskPushNotificationConfigsResponse = {
-        configs,
-        nextPageToken: '',
-      };
-      expect(FromProto.listTaskPushNotificationConfig(response)).toEqual(configs);
-    });
-  });
-
   describe('messageStreamResult', () => {
     it('should return payload value if payload is present', () => {
       const task: proto.Task = {

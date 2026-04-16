@@ -5,21 +5,10 @@ import {
   StreamResponse,
   Task,
   TaskArtifactUpdateEvent,
-  TaskPushNotificationConfig,
   TaskStatusUpdateEvent,
-  ListTaskPushNotificationConfigsResponse,
 } from '../pb/a2a.js';
 
 export class ToProto {
-  static listTaskPushNotificationConfig(
-    configs: TaskPushNotificationConfig[]
-  ): ListTaskPushNotificationConfigsResponse {
-    return {
-      configs,
-      nextPageToken: '',
-    };
-  }
-
   static messageStreamResult(
     event: Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
   ): StreamResponse {
