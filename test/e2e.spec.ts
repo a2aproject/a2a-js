@@ -9,14 +9,7 @@ import {
   InMemoryTaskStore,
   RequestContext,
 } from '../src/server/index.js';
-import {
-  AgentCard,
-  Message,
-  Role,
-  TaskState,
-  A2AStreamEventData,
-  StreamResponse,
-} from '../src/index.js';
+import { AgentCard, Message, Role, TaskState, StreamResponse } from '../src/index.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';
@@ -260,7 +253,7 @@ describe('Client E2E tests', () => {
           agentExecutor.events = [responseMessage];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          const actual: A2AStreamEventData[] = [];
+          const actual: StreamResponse[] = [];
           for await (const message of client.sendMessageStream({
             tenant: '',
             message: requestMessage,

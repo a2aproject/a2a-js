@@ -1,11 +1,5 @@
 import { PushNotificationNotSupportedError } from '../errors.js';
-import {
-  TaskPushNotificationConfig,
-  Task,
-  AgentCard,
-  A2AStreamEventData,
-  SendMessageResult,
-} from '../index.js';
+import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
@@ -119,7 +113,7 @@ export class Client {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'sendMessageStream';
 
     params = this.applyClientConfig({ params, returnImmediately: false });
@@ -289,7 +283,7 @@ export class Client {
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {

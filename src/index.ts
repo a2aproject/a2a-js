@@ -5,11 +5,10 @@
  * Use the server/index.ts file to import the server-only codebase.
  */
 
-import { Message, Task, StreamResponse } from './types/pb/a2a.js';
+import { Message, Task } from './types/pb/a2a.js';
 
 export * from './types/pb/a2a.js';
 export { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from './constants.js';
 export { Extensions, type ExtensionURI } from './extensions.js';
 
-export type A2AStreamEventData = StreamResponse;
 export type SendMessageResult = Message | Task;
