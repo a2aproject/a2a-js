@@ -276,7 +276,7 @@ export class GrpcTransport implements Transport {
 
     try {
       for await (const response of streamResponse) {
-        yield FromProto.messageStreamResult(response);
+        yield response as unknown as A2AStreamEventData;
       }
     } catch (error) {
       if (this.isServiceError(error)) {

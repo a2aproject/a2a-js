@@ -4,7 +4,7 @@ import request from 'supertest';
 
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
-import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
+import { AgentCard, Task, Message, TaskState, TaskStatus } from '../../../src/index.js';
 import {
   RequestMalformedError,
   TaskNotFoundError,
@@ -83,7 +83,7 @@ describe('restHandler', () => {
 
   const testTask: Task = {
     id: 'task-1',
-    status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    status: { state: TaskState.TASK_STATE_COMPLETED } as TaskStatus,
     contextId: 'ctx-1',
     history: [],
     artifacts: [],
@@ -359,7 +359,7 @@ describe('restHandler', () => {
         yield testTask;
       }
 
-      (mockRequestHandler.resubscribe as Mock).mockResolvedValue(mockStream());
+      (mockRequestHandler.resubscribe as Mock).mockReturnValue(mockStream());
 
       const response = await request(app).post('/tasks/task-1:subscribe').expect(200);
 

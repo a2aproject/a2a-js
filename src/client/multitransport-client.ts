@@ -15,6 +15,7 @@ import {
   ListTaskPushNotificationConfigsResponse,
   SendMessageConfiguration,
   SendMessageRequest,
+  StreamResponse,
   SubscribeToTaskRequest,
   ListTasksRequest,
   ListTasksResponse,
@@ -143,8 +144,16 @@ export class Client {
 
     if (!this.agentCard.capabilities?.streaming) {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
+
+      let streamValue: StreamResponse;
+      if ('artifacts' in result) {
+        streamValue = { payload: { $case: 'task', value: result } };
+      } else {
+        streamValue = { payload: { $case: 'message', value: result } };
+      }
+
       const afterArgs: AfterArgs<'sendMessageStream'> = {
-        result: { method, value: result },
+        result: { method, value: streamValue },
         agentCard: this.agentCard,
         options: beforeArgs.options,
       };

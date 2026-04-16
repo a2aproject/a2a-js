@@ -339,11 +339,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async *sendMessageStream(
     params: SendMessageRequest,
     context: ServerCallContext
-  ): AsyncGenerator<
-    Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-    void,
-    undefined
-  > {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const incomingMessage = params.message;
     if (!incomingMessage?.messageId) {
       // For streams, messageId might be set by client, or server can generate if not present.
@@ -414,7 +410,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
         await this._sendPushNotificationIfNeeded(event, context);
-        yield event; // Stream the event to the client
+        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        if (streamResponse) {
+          yield streamResponse; // Stream the event to the client
+        }
       }
     } finally {
       // Cleanup when the stream is fully consumed or breaks
@@ -663,14 +662,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  private async _sendPushNotificationIfNeeded(
+  private async _mapEventToStreamResponse(
     event: AgentExecutionEvent,
     context: ServerCallContext
-  ): Promise<void> {
-    if (!this.agentCard.capabilities?.pushNotifications) {
-      return;
-    }
-
+  ): Promise<StreamResponse | undefined> {
     let taskId: string = '';
     if ('artifacts' in event) {
       const task = event as Task;
@@ -681,31 +676,42 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     if (!taskId) {
       console.error(`Task ID not found for event.`);
-      return;
+      return undefined;
     }
-
-    let streamResponse: StreamResponse;
 
     if ('artifacts' in event) {
       const fullTask = await this.taskStore.load(taskId, context);
-      streamResponse = { payload: { $case: 'task', value: fullTask || (event as Task) } };
-    } else if ('messageId' in event) {
-      streamResponse = { payload: { $case: 'message', value: event as Message } };
-    } else if ('artifact' in event) {
-      streamResponse = {
+      return { payload: { $case: 'task', value: fullTask || (event as Task) } };
+    }
+    if ('messageId' in event) {
+      return { payload: { $case: 'message', value: event as Message } };
+    }
+    if ('artifact' in event) {
+      return {
         payload: { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent },
       };
-    } else if ('status' in event) {
-      streamResponse = {
+    }
+    if ('status' in event) {
+      return {
         payload: { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent },
       };
-    } else {
-      console.error(`Unknown event type for push notification:`, event);
+    }
+    console.error(`Unknown event type for stream response:`, event);
+    return undefined;
+  }
+
+  private async _sendPushNotificationIfNeeded(
+    event: AgentExecutionEvent,
+    context: ServerCallContext
+  ): Promise<void> {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       return;
     }
 
-    // Send push notification in the background.
-    this.pushNotificationSender?.send(streamResponse, context);
+    const streamResponse = await this._mapEventToStreamResponse(event, context);
+    if (streamResponse) {
+      this.pushNotificationSender?.send(streamResponse, context);
+    }
   }
 
   private async _handleProcessingError(

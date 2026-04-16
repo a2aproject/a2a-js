@@ -10,34 +10,37 @@ import {
 
 export class ToProto {
   static messageStreamResult(
-    event: Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
+    event: Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent | StreamResponse
   ): StreamResponse {
+    if (event && typeof event === 'object' && 'payload' in event) {
+      return event as StreamResponse;
+    }
     if ('messageId' in event) {
       return {
         payload: {
           $case: 'message',
-          value: event,
+          value: event as Message,
         },
       };
     } else if ('artifacts' in event) {
       return {
         payload: {
           $case: 'task',
-          value: event,
+          value: event as Task,
         },
       };
     } else if ('status' in event) {
       return {
         payload: {
           $case: 'statusUpdate',
-          value: event,
+          value: event as TaskStatusUpdateEvent,
         },
       };
     } else if ('artifact' in event) {
       return {
         payload: {
           $case: 'artifactUpdate',
-          value: event,
+          value: event as TaskArtifactUpdateEvent,
         },
       };
     }

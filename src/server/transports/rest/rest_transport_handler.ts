@@ -7,14 +7,14 @@
 
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 import { ServerCallContext } from '../../context.js';
+import { ToProto } from '../../../types/converters/to_proto.js';
 import {
   Message,
   Task,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
   AgentCard,
   SendMessageRequest,
+  StreamResponse,
   GetTaskRequest,
   CancelTaskRequest,
   ListTasksRequest,
@@ -154,13 +154,7 @@ export class RestTransportHandler {
   async sendMessageStream(
     params: SendMessageRequest,
     context: ServerCallContext
-  ): Promise<
-    AsyncGenerator<
-      Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-      void,
-      undefined
-    >
-  > {
+  ): Promise<AsyncGenerator<StreamResponse, void, undefined>> {
     await this.requireCapability('streaming');
     this.validateSendMessageRequest(params);
     return this.requestHandler.sendMessageStream(params, context);
@@ -220,11 +214,16 @@ export class RestTransportHandler {
   async resubscribe(
     taskId: string,
     context: ServerCallContext
-  ): Promise<
-    AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>
-  > {
+  ): Promise<AsyncGenerator<StreamResponse, void, undefined>> {
     await this.requireCapability('streaming');
-    return this.requestHandler.resubscribe({ id: taskId, tenant: '' }, context);
+    const stream = this.requestHandler.resubscribe({ id: taskId, tenant: '' }, context);
+
+    async function* wrap() {
+      for await (const event of stream) {
+        yield ToProto.messageStreamResult(event);
+      }
+    }
+    return wrap();
   }
 
   /**

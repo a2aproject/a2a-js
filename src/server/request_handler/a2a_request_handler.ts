@@ -15,6 +15,7 @@ import {
   ListTasksRequest,
   ListTasksResponse,
   ListTaskPushNotificationConfigsResponse,
+  StreamResponse,
 } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
@@ -28,11 +29,7 @@ export interface A2ARequestHandler {
   sendMessageStream(
     params: SendMessageRequest,
     context: ServerCallContext
-  ): AsyncGenerator<
-    Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-    void,
-    undefined
-  >;
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 
   getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task>;
   cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task>;

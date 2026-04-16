@@ -176,20 +176,38 @@ describe('Client', () => {
     };
     const events: A2AStreamEventData[] = [
       {
-        id: '123',
-        contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
-        metadata: {},
-        artifacts: [],
-        history: [],
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
       {
-        id: '123',
-        contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, message: undefined },
-        metadata: {},
-        artifacts: [],
-        history: [],
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
     ];
     async function* stream() {
@@ -381,20 +399,38 @@ describe('Client', () => {
     const params: SubscribeToTaskRequest = { tenant: '', id: '123' };
     const events: A2AStreamEventData[] = [
       {
-        id: '123',
-        contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
-        metadata: {},
-        artifacts: [],
-        history: [],
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
       {
-        id: '123',
-        contextId: 'ctx1',
-        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: undefined, message: undefined },
-        metadata: {},
-        artifacts: [],
-        history: [],
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
     ];
     async function* stream() {
@@ -696,7 +732,12 @@ describe('Client', () => {
         },
       };
       expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
-      expect(yielded.value).to.deep.equal(response);
+      expect(yielded.value).to.deep.equal({
+        payload: {
+          $case: 'message',
+          value: response,
+        },
+      });
     });
   });
 
@@ -974,20 +1015,34 @@ describe('Client', () => {
       };
       const events: A2AStreamEventData[] = [
         {
-          taskId: '123',
-          contextId: 'ctx1',
-          status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
-          metadata: {},
+          payload: {
+            $case: 'statusUpdate',
+            value: {
+              taskId: '123',
+              contextId: 'ctx1',
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                timestamp: undefined,
+                message: undefined,
+              },
+              metadata: {},
+            },
+          },
         },
         {
-          taskId: '123',
-          contextId: 'ctx1',
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            timestamp: undefined,
-            message: undefined,
+          payload: {
+            $case: 'statusUpdate',
+            value: {
+              taskId: '123',
+              contextId: 'ctx1',
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                timestamp: undefined,
+                message: undefined,
+              },
+              metadata: {},
+            },
           },
-          metadata: {},
         },
       ];
       async function* stream() {
@@ -1000,10 +1055,13 @@ describe('Client', () => {
             before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
-                args.result.value = {
-                  ...args.result.value,
-                  metadata: { foo: 'bar' },
-                };
+                const val = args.result.value;
+                if (val.payload?.$case === 'statusUpdate') {
+                  val.payload.value.metadata = {
+                    ...val.payload.value.metadata,
+                    foo: 'bar',
+                  };
+                }
               }
             },
           },
@@ -1030,7 +1088,23 @@ describe('Client', () => {
         expectedParams,
         undefined
       );
-      expect(got).to.deep.equal(events.map((event) => ({ ...event, metadata: { foo: 'bar' } })));
+      expect(got).to.deep.equal(
+        events.map((event) => {
+          if (event.payload?.$case === 'statusUpdate') {
+            return {
+              ...event,
+              payload: {
+                ...event.payload,
+                value: {
+                  ...event.payload.value,
+                  metadata: { foo: 'bar' },
+                },
+              },
+            };
+          }
+          return event;
+        })
+      );
     });
 
     it('should intercept after non-streaming sendMessage for sendMessageStream', async () => {
@@ -1066,7 +1140,13 @@ describe('Client', () => {
             before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
-                args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
+                const val = args.result.value;
+                if (val.payload?.$case === 'message') {
+                  val.payload.value.metadata = {
+                    ...val.payload.value.metadata,
+                    foo: 'bar',
+                  };
+                }
               }
             },
           },
@@ -1084,7 +1164,17 @@ describe('Client', () => {
       for await (const event of result) {
         got.push(event);
       }
-      expect(got).to.deep.equal([{ ...responseMock, metadata: { foo: 'bar' } }]);
+      expect(got).to.deep.equal([
+        {
+          payload: {
+            $case: 'message',
+            value: {
+              ...responseMock,
+              metadata: { foo: 'bar' },
+            },
+          },
+        },
+      ]);
     });
 
     const iteratorsTests = [
@@ -1121,24 +1211,34 @@ describe('Client', () => {
         it('should return early from iterator (before)', async () => {
           const events: A2AStreamEventData[] = [
             {
-              taskId: '123',
-              contextId: 'ctx1',
-              status: {
-                state: TaskState.TASK_STATE_WORKING,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_WORKING,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
             {
-              taskId: '123',
-              contextId: 'ctx1',
-              status: {
-                state: TaskState.TASK_STATE_COMPLETED,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_COMPLETED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
           ];
           async function* stream() {
@@ -1196,24 +1296,34 @@ describe('Client', () => {
         it('should return early from iterator (after)', async () => {
           const events: A2AStreamEventData[] = [
             {
-              taskId: '123',
-              contextId: 'ctx1',
-              status: {
-                state: TaskState.TASK_STATE_WORKING,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_WORKING,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
             {
-              taskId: '123',
-              contextId: 'ctx1',
-              status: {
-                state: TaskState.TASK_STATE_COMPLETED,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_COMPLETED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
           ];
           async function* stream() {
@@ -1228,7 +1338,10 @@ describe('Client', () => {
                 after: async (args) => {
                   if (args.result.method === test.name) {
                     const event = args.result.value as A2AStreamEventData;
-                    if ('status' in event && event.status?.state === TaskState.TASK_STATE_WORKING) {
+                    if (
+                      event.payload?.$case === 'statusUpdate' &&
+                      event.payload.value.status?.state === TaskState.TASK_STATE_WORKING
+                    ) {
                       args.earlyReturn = true;
                     }
                   }

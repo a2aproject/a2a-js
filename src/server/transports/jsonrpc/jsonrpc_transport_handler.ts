@@ -120,7 +120,9 @@ export class JsonRpcTransportHandler {
             for await (const event of agentEventStream) {
               let payload: StreamResponse['payload'];
 
-              if ('messageId' in event) {
+              if (event && typeof event === 'object' && 'payload' in event) {
+                payload = (event as StreamResponse).payload;
+              } else if ('messageId' in event) {
                 payload = { $case: 'message', value: event as Message };
               } else if ('artifacts' in event) {
                 payload = { $case: 'task', value: event as Task };
@@ -132,7 +134,7 @@ export class JsonRpcTransportHandler {
 
               yield {
                 jsonrpc: '2.0',
-                id: requestId, // Use the original request ID for all streamed responses
+                id: requestId,
                 result: { payload },
               };
             }

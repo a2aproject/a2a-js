@@ -361,8 +361,7 @@ export class RestTransport implements Transport {
 
     try {
       const response = JSON.parse(jsonData);
-      const protoResponse = StreamResponse.fromJSON(response);
-      return FromProto.messageStreamResult(protoResponse);
+      return StreamResponse.fromJSON(response);
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
       throw new Error(

@@ -1020,9 +1020,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
 
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as Task).status.state, TaskState.TASK_STATE_SUBMITTED);
-    assert.equal((events[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal((events[0] as any).payload.value.status.state, TaskState.TASK_STATE_SUBMITTED);
+    assert.equal((events[1] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
+    assert.equal((events[2] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
   });
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
@@ -1124,8 +1124,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
 
     assert.lengthOf(events, 2);
-    const lastEvent = events[1] as TaskStatusUpdateEvent;
-    assert.equal(lastEvent.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
+    const lastEvent = events[1] as any;
+    assert.equal(lastEvent.payload.value.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
   });
 
   it('resubscribe: should allow multiple clients to receive events for the same task', async () => {
@@ -1170,12 +1170,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const stream1_iterator = stream1_generator[Symbol.asyncIterator]();
 
     const firstEventResult = await stream1_iterator.next();
-    const firstEvent = firstEventResult.value as Task;
-    assert.equal(firstEvent.id, taskId, 'Should get task event first');
+    const firstEvent = firstEventResult.value as any;
+    assert.equal(firstEvent.payload.value.id, taskId, 'Should get task event first');
 
     const secondEventResult = await stream1_iterator.next();
-    const secondEvent = secondEventResult.value as TaskStatusUpdateEvent;
-    assert.equal(secondEvent.taskId, taskId, 'Should get the task status update event second');
+    const secondEvent = secondEventResult.value as any;
+    assert.equal(
+      secondEvent.payload.value.taskId,
+      taskId,
+      'Should get the task status update event second'
+    );
 
     const stream2_generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
@@ -1194,22 +1198,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await vi.runAllTimersAsync();
     await Promise.all([p1, p2]);
 
-    assert.equal(
-      (results1[0] as TaskStatusUpdateEvent).status.state,
-      TaskState.TASK_STATE_SUBMITTED
-    );
-    assert.equal((results1[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal(
-      (results1[2] as TaskStatusUpdateEvent).status.state,
-      TaskState.TASK_STATE_COMPLETED
-    );
+    assert.equal((results1[0] as any).payload.value.status?.state, TaskState.TASK_STATE_SUBMITTED);
+    assert.equal((results1[1] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
+    assert.equal((results1[2] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
 
     // First event of resubscribe is always a task.
-    assert.equal((results2[0] as Task).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal(
-      (results2[1] as TaskStatusUpdateEvent).status.state,
-      TaskState.TASK_STATE_COMPLETED
-    );
+    assert.equal((results2[0] as any).status.state, TaskState.TASK_STATE_WORKING);
+    assert.equal((results2[1] as any).status.state, TaskState.TASK_STATE_COMPLETED);
 
     expect(saveSpy).toHaveBeenCalledTimes(3);
     const lastSaveCall = saveSpy.mock.calls[saveSpy.mock.calls.length - 1][0];
@@ -1837,9 +1832,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     // Verify stream events
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as Task).status.state, TaskState.TASK_STATE_SUBMITTED);
-    assert.equal((events[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal((events[0] as any).payload.value.status.state, TaskState.TASK_STATE_SUBMITTED);
+    assert.equal((events[1] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
+    assert.equal((events[2] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
 
     // Verify push notifications were sent with complete task objects
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
@@ -2244,9 +2239,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Allow the task to be created and enter the TaskState.TASK_STATE_WORKING state
     await vi.advanceTimersByTimeAsync(25);
 
-    const createdTask = streamEvents.find((e) => 'id' in e) as Task;
-    assert.isDefined(createdTask, 'Task creation event should have been received');
-    const taskId = createdTask.id;
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
 
     // Now, issue the cancel request
     const cancelPromise = handler.cancelTask(
@@ -2300,9 +2295,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Allow the task to be created and enter the TaskState.TASK_STATE_WORKING state
     await vi.advanceTimersByTimeAsync(25);
 
-    const createdTask = streamEvents.find((e) => 'id' in e) as Task;
-    assert.isDefined(createdTask, 'Task creation event should have been received');
-    const taskId = createdTask.id;
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
 
     let cancelResponse: Task | undefined;
     let thrownError: any;

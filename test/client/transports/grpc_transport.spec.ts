@@ -5,7 +5,6 @@ import {
   GrpcTransportFactory,
 } from '../../../src/client/transports/grpc/grpc_transport.js';
 import { A2AServiceClient } from '../../../src/grpc/pb/a2a.js';
-import { FromProto } from '../../../src/types/converters/from_proto.js';
 import {
   TaskNotFoundError,
   TaskNotCancelableError,
@@ -175,7 +174,7 @@ describe('GrpcTransport', () => {
     it('should yield messages from stream', async () => {
       const params = createMessageParams();
       const mockMsg = createMockMessage();
-      const mockMsgResponse = { payload: { $case: 'msg', value: mockMsg } };
+      const mockMsgResponse = { payload: { $case: 'message', value: mockMsg } };
 
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
@@ -189,7 +188,6 @@ describe('GrpcTransport', () => {
       const result = await iterator.next();
 
       expect(result.value).toEqual(mockMsgResponse);
-      expect(FromProto.messageStreamResult).toHaveBeenCalledWith(mockMsgResponse);
       expect(mockGrpcClient.sendStreamingMessage).toHaveBeenCalled();
     });
 
@@ -388,7 +386,6 @@ describe('GrpcTransport', () => {
       const result = await iterator.next();
 
       expect(result.value).toEqual(mockResponse);
-      expect(FromProto.messageStreamResult).toHaveBeenCalledWith(mockResponse);
     });
   });
 });
