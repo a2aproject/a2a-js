@@ -36,6 +36,7 @@ import {
   Artifact,
   SendMessageConfiguration,
   ListTasksRequest,
+  StreamResponse,
 } from '../../src/types/pb/a2a.js';
 import {
   DefaultExecutionEventBusManager,
@@ -1729,31 +1730,54 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     // Verify first call (submitted state)
-    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][0] as Task;
-    const expectedFirstTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+    const firstCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[0][0] as StreamResponse;
+    const expectedFirstResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        },
+      },
     };
-    assert.deepEqual(firstCallTask, expectedFirstTask);
+    assert.deepEqual(firstCallResponse, expectedFirstResponse);
 
     // // Verify second call (working state)
-    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][0] as Task;
-    const expectedSecondTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    const secondCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    const expectedSecondResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        },
+      },
     };
-    assert.deepEqual(secondCallTask, expectedSecondTask);
+    assert.deepEqual(secondCallResponse, expectedSecondResponse);
 
     // // Verify third call (completed state)
-    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][0] as Task;
-    const expectedThirdTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    const thirdCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[2][0] as StreamResponse;
+    const expectedThirdResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        },
+      },
     };
-    assert.deepEqual(thirdCallTask, expectedThirdTask);
+    assert.deepEqual(thirdCallResponse, expectedThirdResponse);
   });
 
   it('sendMessageStream: should send push notification when task update is received', async () => {
@@ -1823,31 +1847,54 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       history: [params.message as Message],
     };
     // Verify first call (submitted state)
-    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][0] as Task;
-    const expectedFirstTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+    const firstCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[0][0] as StreamResponse;
+    const expectedFirstResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        },
+      },
     };
-    assert.deepEqual(firstCallTask, expectedFirstTask);
+    assert.deepEqual(firstCallResponse, expectedFirstResponse);
 
     // Verify second call (working state)
-    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][0] as Task;
-    const expectedSecondTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    const secondCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    const expectedSecondResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        },
+      },
     };
-    assert.deepEqual(secondCallTask, expectedSecondTask);
+    assert.deepEqual(secondCallResponse, expectedSecondResponse);
 
     // Verify third call (completed state)
-    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][0] as Task;
-    const expectedThirdTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    const thirdCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[2][0] as StreamResponse;
+    const expectedThirdResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        },
+      },
     };
-    assert.deepEqual(thirdCallTask, expectedThirdTask);
+    assert.deepEqual(thirdCallResponse, expectedThirdResponse);
   });
 
   it('Push Notification methods should throw error if task does not exist', async () => {
