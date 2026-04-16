@@ -122,18 +122,30 @@ export class JsonRpcTransportHandler {
             // TODO: Improve the conversion below once the agentEventStream will be AsyncGenerator of StreamResponse
             for await (const event of agentEventStream) {
               let result: unknown;
-              if ('messageId' in event) {
-                result = { message: Message.toJSON(event) };
-              } else if ('artifacts' in event) {
-                result = { task: Task.toJSON(event) };
-              } else if ('status' in event) {
-                result = {
-                  statusUpdate: TaskStatusUpdateEvent.toJSON(event),
-                };
-              } else if ('artifact' in event) {
-                result = {
-                  artifactUpdate: TaskArtifactUpdateEvent.toJSON(event),
-                };
+              if ('payload' in event && event.payload) {
+                const payload = event.payload;
+                switch (payload.$case) {
+                  case 'message':
+                    result = { message: Message.toJSON(payload.value) };
+                    break;
+                  case 'task':
+                    result = { task: Task.toJSON(payload.value) };
+                    break;
+                  case 'statusUpdate':
+                    result = { statusUpdate: TaskStatusUpdateEvent.toJSON(payload.value) };
+                    break;
+                  case 'artifactUpdate':
+                    result = { artifactUpdate: TaskArtifactUpdateEvent.toJSON(payload.value) };
+                    break;
+                }
+              } else {
+                if ('artifacts' in event) {
+                  result = { task: Task.toJSON(event) };
+                } else if ('status' in event) {
+                  result = { statusUpdate: TaskStatusUpdateEvent.toJSON(event) };
+                } else if ('artifact' in event) {
+                  result = { artifactUpdate: TaskArtifactUpdateEvent.toJSON(event) };
+                }
               }
 
               yield {

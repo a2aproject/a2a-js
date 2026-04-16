@@ -77,30 +77,11 @@ export class JsonRpcTransport implements Transport {
       options,
       SendMessageRequest
     );
-<<<<<<< HEAD
-
-    const result = rpcResponse.result as {
-      payload?: { value: unknown };
-      task?: unknown;
-      message?: unknown;
-    };
-    if (result?.payload?.value) {
-      return result.payload.value as SendMessageResult;
-    }
-    if (result?.task) {
-      return result.task as SendMessageResult;
-    }
-    if (result?.message) {
-      return result.message as SendMessageResult;
-    }
-    throw new Error('Invalid response structure from agent.');
-=======
     const response = SendMessageResponse.fromJSON(rpcResponse.result);
     if (!response.payload) {
       throw new Error('Invalid response: missing payload');
     }
     return response.payload.value;
->>>>>>> origin/epic/1.0_breaking_changes
   }
 
   async *sendMessageStream(
@@ -384,10 +365,7 @@ export class JsonRpcTransport implements Transport {
     }
 
     const response = StreamResponse.fromJSON(a2aStreamResponse.result);
-    if (!response.payload) {
-      throw new Error('Invalid stream response: missing payload');
-    }
-    return response.payload.value as unknown as TStreamItem;
+    return response as unknown as TStreamItem;
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
