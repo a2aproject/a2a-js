@@ -29,6 +29,7 @@ import {
   ListTasksRequest,
   ListTasksResponse,
   ListTaskPushNotificationConfigsResponse,
+  StreamResponse,
 } from '../../index.js';
 import { AgentExecutor } from '../agent_execution/agent_executor.js';
 import { RequestContext } from '../agent_execution/request_context.js';
@@ -683,15 +684,28 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       return;
     }
 
-    const task = await this.taskStore.load(taskId, context);
-    if (!task) {
-      console.error(`Task ${taskId} not found.`);
+    let streamResponse: StreamResponse;
+
+    if ('artifacts' in event) {
+      const fullTask = await this.taskStore.load(taskId, context);
+      streamResponse = { payload: { $case: 'task', value: fullTask || (event as Task) } };
+    } else if ('messageId' in event) {
+      streamResponse = { payload: { $case: 'message', value: event as Message } };
+    } else if ('artifact' in event) {
+      streamResponse = {
+        payload: { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent },
+      };
+    } else if ('status' in event) {
+      streamResponse = {
+        payload: { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent },
+      };
+    } else {
+      console.error(`Unknown event type for push notification:`, event);
       return;
     }
 
     // Send push notification in the background.
-    // TODO: This doesnt need to be solely a Task event
-    this.pushNotificationSender?.send({ payload: { $case: 'task', value: task } }, context);
+    this.pushNotificationSender?.send(streamResponse, context);
   }
 
   private async _handleProcessingError(

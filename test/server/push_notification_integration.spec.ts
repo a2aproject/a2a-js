@@ -249,7 +249,9 @@ describe('Push Notification Integration Tests', () => {
       );
 
       // Verify all three states are present
-      const states = receivedNotifications.map((n) => n.body.task?.status?.state);
+      const states = receivedNotifications.map(
+        (n) => n.body.task?.status?.state || n.body.statusUpdate?.status?.state
+      );
       assert.include(
         states,
         TaskState[TaskState.TASK_STATE_SUBMITTED],
@@ -294,14 +296,16 @@ describe('Push Notification Integration Tests', () => {
         secondNotification.body,
         StreamResponse.toJSON({
           payload: {
-            $case: 'task',
+            $case: 'statusUpdate',
             value: {
-              ...expectedTaskResult,
+              taskId: taskId,
+              contextId: contextId,
               status: {
                 state: TaskState.TASK_STATE_WORKING,
                 message: undefined,
                 timestamp: undefined,
               },
+              metadata: {},
             },
           },
         })
@@ -312,14 +316,16 @@ describe('Push Notification Integration Tests', () => {
         thirdNotification.body,
         StreamResponse.toJSON({
           payload: {
-            $case: 'task',
+            $case: 'statusUpdate',
             value: {
-              ...expectedTaskResult,
+              taskId: taskId,
+              contextId: contextId,
               status: {
                 state: TaskState.TASK_STATE_COMPLETED,
                 message: undefined,
                 timestamp: undefined,
               },
+              metadata: {},
             },
           },
         })
