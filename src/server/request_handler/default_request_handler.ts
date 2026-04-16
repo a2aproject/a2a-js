@@ -409,8 +409,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
-        await this._sendPushNotificationIfNeeded(event, context);
-        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        const streamResponse = await this._sendPushNotificationIfNeeded(event, context);
         if (streamResponse) {
           yield streamResponse; // Stream the event to the client
         }
@@ -697,15 +696,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private async _sendPushNotificationIfNeeded(
     event: AgentExecutionEvent,
     context: ServerCallContext
-  ): Promise<void> {
-    if (!this.agentCard.capabilities?.pushNotifications) {
-      return;
-    }
-
+  ): Promise<StreamResponse | undefined> {
     const streamResponse = await this._mapEventToStreamResponse(event, context);
-    if (streamResponse) {
+    if (this.agentCard.capabilities?.pushNotifications && streamResponse) {
       this.pushNotificationSender?.send(streamResponse, context);
     }
+    return streamResponse;
   }
 
   private async _handleProcessingError(
