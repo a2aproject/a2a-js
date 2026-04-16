@@ -14,6 +14,7 @@ import {
   SendMessageRequest,
   ListTasksRequest,
   ListTasksResponse,
+  ListTaskPushNotificationConfigsResponse,
 } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
@@ -49,7 +50,7 @@ export interface A2ARequestHandler {
   listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigsRequest,
     context: ServerCallContext
-  ): Promise<TaskPushNotificationConfig[]>;
+  ): Promise<ListTaskPushNotificationConfigsResponse>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,

@@ -3,6 +3,7 @@ import {
   SendMessageRequest,
   CancelTaskRequest,
   ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskRequest,
   GetTaskPushNotificationConfigRequest,
@@ -39,7 +40,7 @@ export interface Transport {
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]>;
+  ): Promise<ListTaskPushNotificationConfigsResponse>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,

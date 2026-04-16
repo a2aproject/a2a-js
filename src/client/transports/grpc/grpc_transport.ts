@@ -7,7 +7,7 @@ import {
   ListTaskPushNotificationConfigsRequest,
   SubscribeToTaskRequest,
 } from '../../../grpc/pb/a2a.js';
-import { Task, AgentCard } from '../../../types/pb/a2a.js';
+import { Task, AgentCard, ListTaskPushNotificationConfigsResponse } from '../../../types/pb/a2a.js';
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
@@ -149,13 +149,17 @@ export class GrpcTransport implements Transport {
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
-    const rpcResponse = await this._sendGrpcRequest(
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
+    const rpcResponse = await this._sendGrpcRequest<
+      ListTaskPushNotificationConfigsRequest,
+      ListTaskPushNotificationConfigsResponse,
+      ListTaskPushNotificationConfigsResponse
+    >(
       'listTaskPushNotificationConfigs',
       params,
       options,
       this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient),
-      FromProto.listTaskPushNotificationConfig
+      (res) => res
     );
     return rpcResponse;
   }

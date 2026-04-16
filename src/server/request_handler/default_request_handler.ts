@@ -28,6 +28,7 @@ import {
   SubscribeToTaskRequest,
   ListTasksRequest,
   ListTasksResponse,
+  ListTaskPushNotificationConfigsResponse,
 } from '../../index.js';
 import { AgentExecutor } from '../agent_execution/agent_executor.js';
 import { RequestContext } from '../agent_execution/request_context.js';
@@ -568,7 +569,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigsRequest,
     context: ServerCallContext
-  ): Promise<TaskPushNotificationConfig[]> {
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
@@ -578,7 +579,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    return (await this.pushNotificationStore?.load(taskId, context)) || [];
+    return {
+      configs: (await this.pushNotificationStore?.load(taskId, context)) || [],
+      nextPageToken: '',
+    };
   }
 
   async deleteTaskPushNotificationConfig(

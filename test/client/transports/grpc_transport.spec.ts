@@ -340,7 +340,9 @@ describe('GrpcTransport', () => {
     describe('listTaskPushNotificationConfig', () => {
       it('should list configs successfully', async () => {
         const mockList = [mockConfig];
-        mockUnarySuccess(mockGrpcClient.listTaskPushNotificationConfigs as Mock, mockList);
+        mockUnarySuccess(mockGrpcClient.listTaskPushNotificationConfigs as Mock, {
+          configs: mockList,
+        });
 
         const result = await transport.listTaskPushNotificationConfig({
           taskId,
@@ -349,7 +351,7 @@ describe('GrpcTransport', () => {
           pageToken: '',
         });
 
-        expect(result).toEqual(mockList);
+        expect(result.configs).toEqual(mockList);
       });
     });
 

@@ -12,6 +12,7 @@ import {
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse,
   SendMessageConfiguration,
   SendMessageRequest,
   SubscribeToTaskRequest,
@@ -213,7 +214,7 @@ export class Client {
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
