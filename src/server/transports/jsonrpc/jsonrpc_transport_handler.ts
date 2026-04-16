@@ -1,5 +1,4 @@
 import {
-  StreamResponse,
   Message,
   Task,
   TaskStatusUpdateEvent,
@@ -121,22 +120,25 @@ export class JsonRpcTransportHandler {
         > {
           try {
             for await (const event of agentEventStream) {
-              let payload: StreamResponse['payload'];
-
+              let result: unknown;
               if ('messageId' in event) {
-                payload = { $case: 'message', value: event as Message };
+                result = { message: Message.toJSON(event) };
               } else if ('artifacts' in event) {
-                payload = { $case: 'task', value: event as Task };
+                result = { task: Task.toJSON(event) };
               } else if ('status' in event) {
-                payload = { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent };
+                result = {
+                  statusUpdate: TaskStatusUpdateEvent.toJSON(event),
+                };
               } else if ('artifact' in event) {
-                payload = { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent };
+                result = {
+                  artifactUpdate: TaskArtifactUpdateEvent.toJSON(event),
+                };
               }
 
               yield {
                 jsonrpc: '2.0',
                 id: requestId, // Use the original request ID for all streamed responses
-                result: { payload },
+                result,
               };
             }
           } catch (streamError) {

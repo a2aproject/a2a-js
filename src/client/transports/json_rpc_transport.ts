@@ -364,12 +364,11 @@ export class JsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    const result = a2aStreamResponse.result;
-    if (result?.payload?.value) {
-      return result.payload.value as TStreamItem;
+    const response = StreamResponse.fromJSON(a2aStreamResponse.result);
+    if (!response.payload) {
+      throw new Error('Invalid stream response: missing payload');
     }
-
-    return result as TStreamItem;
+    return response.payload.value as unknown as TStreamItem;
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
