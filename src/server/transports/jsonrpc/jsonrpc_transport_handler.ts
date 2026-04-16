@@ -1,5 +1,4 @@
 import {
-  StreamResponse,
   Message,
   Task,
   TaskStatusUpdateEvent,
@@ -13,6 +12,9 @@ import {
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
   ListTasksRequest,
+  ListTasksResponse,
+  ListTaskPushNotificationConfigsResponse,
+  AgentCard,
 } from '../../../index.js';
 import {
   A2A_ERROR_CODE,
@@ -117,25 +119,27 @@ export class JsonRpcTransportHandler {
           undefined
         > {
           try {
+            // TODO: Improve the conversion below once the agentEventStream will be AsyncGenerator of StreamResponse
             for await (const event of agentEventStream) {
-              let payload: StreamResponse['payload'];
-
-              if (event && typeof event === 'object' && 'payload' in event) {
-                payload = (event as StreamResponse).payload;
-              } else if ('messageId' in event) {
-                payload = { $case: 'message', value: event as Message };
+              let result: unknown;
+              if ('messageId' in event) {
+                result = { message: Message.toJSON(event) };
               } else if ('artifacts' in event) {
-                payload = { $case: 'task', value: event as Task };
+                result = { task: Task.toJSON(event) };
               } else if ('status' in event) {
-                payload = { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent };
+                result = {
+                  statusUpdate: TaskStatusUpdateEvent.toJSON(event),
+                };
               } else if ('artifact' in event) {
-                payload = { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent };
+                result = {
+                  artifactUpdate: TaskArtifactUpdateEvent.toJSON(event),
+                };
               }
 
               yield {
                 jsonrpc: '2.0',
                 id: requestId,
-                result: { payload },
+                result,
               };
             }
           } catch (streamError) {
@@ -162,43 +166,48 @@ export class JsonRpcTransportHandler {
               SendMessageRequest.fromJSON(rpcRequest.params),
               context
             );
-            result = {
-              payload: {
-                $case: 'messageId' in messageOrTask ? 'message' : 'task',
-                value: messageOrTask,
-              },
-            };
+            result =
+              'messageId' in messageOrTask
+                ? { message: Message.toJSON(messageOrTask as Message) }
+                : { task: Task.toJSON(messageOrTask as Task) };
             break;
           }
           case 'GetTask':
-            result = await this.requestHandler.getTask(
-              GetTaskRequest.fromJSON(rpcRequest.params),
-              context
+            result = Task.toJSON(
+              await this.requestHandler.getTask(GetTaskRequest.fromJSON(rpcRequest.params), context)
             );
             break;
           case 'ListTasks':
-            result = await this.requestHandler.listTasks(
-              ListTasksRequest.fromJSON(rpcRequest.params),
-              context
+            result = ListTasksResponse.toJSON(
+              await this.requestHandler.listTasks(
+                ListTasksRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'CancelTask':
-            result = await this.requestHandler.cancelTask(
-              CancelTaskRequest.fromJSON(rpcRequest.params),
-              context
+            result = Task.toJSON(
+              await this.requestHandler.cancelTask(
+                CancelTaskRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'CreateTaskPushNotificationConfig': {
-            result = await this.requestHandler.createTaskPushNotificationConfig(
-              TaskPushNotificationConfig.fromJSON(rpcRequest.params),
-              context
+            result = TaskPushNotificationConfig.toJSON(
+              await this.requestHandler.createTaskPushNotificationConfig(
+                TaskPushNotificationConfig.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           }
           case 'GetTaskPushNotificationConfig':
-            result = await this.requestHandler.getTaskPushNotificationConfig(
-              GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
-              context
+            result = TaskPushNotificationConfig.toJSON(
+              await this.requestHandler.getTaskPushNotificationConfig(
+                GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'DeleteTaskPushNotificationConfig':
@@ -209,13 +218,17 @@ export class JsonRpcTransportHandler {
             result = null;
             break;
           case 'ListTaskPushNotificationConfigs':
-            result = await this.requestHandler.listTaskPushNotificationConfigs(
-              ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
-              context
+            result = ListTaskPushNotificationConfigsResponse.toJSON(
+              await this.requestHandler.listTaskPushNotificationConfigs(
+                ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'GetExtendedAgentCard':
-            result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
+            result = AgentCard.toJSON(
+              await this.requestHandler.getAuthenticatedExtendedAgentCard(context)
+            );
             break;
           default:
             return {

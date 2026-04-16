@@ -422,14 +422,7 @@ export function createMockFetch(
 
       const requestBody = JSON.parse((options?.body as string) || '{}');
       const wrappedResult =
-        requestBody.method === 'SendMessage'
-          ? {
-              payload: {
-                $case: 'msg',
-                value: mockMessage,
-              },
-            }
-          : mockMessage;
+        requestBody.method === 'SendMessage' ? { message: mockMessage } : mockMessage;
 
       return createResponse(requestId, wrappedResult);
     }
