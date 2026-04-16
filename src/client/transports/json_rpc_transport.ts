@@ -128,7 +128,6 @@ export class JsonRpcTransport implements Transport {
       ListTaskPushNotificationConfigsResponse
     >('ListTaskPushNotificationConfigs', params, options, ListTaskPushNotificationConfigsRequest);
     return ListTaskPushNotificationConfigsResponse.fromJSON(rpcResponse.result);
-
   }
 
   async deleteTaskPushNotificationConfig(
