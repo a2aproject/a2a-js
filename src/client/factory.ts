@@ -98,9 +98,13 @@ export class ClientFactory {
    */
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const interfaces = agentCard.supportedInterfaces ?? [];
-    const urlsPerAgentTransports = new CaseInsensitiveMap<string>(
-      interfaces.map((i) => [i.protocolBinding, i.url])
-    );
+    const urlsPerAgentTransports = new CaseInsensitiveMap<string>();
+    for (const i of interfaces) {
+      const existing = urlsPerAgentTransports.get(i.protocolBinding);
+      if (!existing || i.protocolVersion === '1.0') {
+        urlsPerAgentTransports.set(i.protocolBinding, i.url);
+      }
+    }
     const transportsByPreference = [
       ...(this.options.preferredTransports ?? []),
       ...interfaces.map((i) => i.protocolBinding),

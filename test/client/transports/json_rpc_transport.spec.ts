@@ -69,13 +69,10 @@ describe('JsonRpcTransport', () => {
           JSON.stringify({
             jsonrpc: '2.0',
             result: {
-              payload: {
-                $case: 'msg',
-                value: {
-                  messageId: 'response-msg-1',
-                  role: Role.ROLE_AGENT,
-                  content: [{ part: { $case: 'text', value: 'Response' } }],
-                },
+              message: {
+                messageId: 'response-msg-1',
+                role: Role.ROLE_AGENT,
+                content: [{ part: { $case: 'text', value: 'Response' } }],
               },
             },
             id: 1,
