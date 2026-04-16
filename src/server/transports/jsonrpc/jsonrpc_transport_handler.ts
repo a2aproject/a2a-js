@@ -119,6 +119,7 @@ export class JsonRpcTransportHandler {
           undefined
         > {
           try {
+            // TODO: Improve the conversion below once the agentEventStream will be AsyncGenerator of StreamResponse
             for await (const event of agentEventStream) {
               let result: unknown;
               if ('messageId' in event) {
