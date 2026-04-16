@@ -603,13 +603,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async *resubscribe(
     params: SubscribeToTaskRequest,
     context: ServerCallContext
-  ): AsyncGenerator<
-    | Task // Initial task state
-    | TaskStatusUpdateEvent
-    | TaskArtifactUpdateEvent,
-    void,
-    undefined
-  > {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     if (!this.agentCard.capabilities?.streaming) {
       throw new UnsupportedOperationError('Streaming (and thus resubscription) is not supported.');
     }
@@ -621,7 +615,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     // Yield the current task state first
-    yield task;
+    yield { payload: { $case: 'task', value: task } };
 
     // If task is already in a final state, no more events will come.
     if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
@@ -646,12 +640,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // The event bus might be shared if messageId was reused, though
         // ExecutionEventBusManager tries to give one bus per original message.
         if ('status' in event && 'taskId' in event && event.taskId === taskId) {
-          yield event as TaskStatusUpdateEvent;
+          yield { payload: { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent } };
         } else if ('artifact' in event && event.taskId === taskId) {
-          yield event as TaskArtifactUpdateEvent;
+          yield { payload: { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent } };
         } else if ('artifacts' in event && (event as Task).id === taskId) {
           // This implies the task was re-emitted, yield it.
-          yield event as Task;
+          yield { payload: { $case: 'task', value: event as Task } };
         }
         // We don't yield 'message' events on resubscribe typically,
         // as those signal the end of an interaction for the *original* request.

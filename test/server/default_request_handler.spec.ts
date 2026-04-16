@@ -1203,8 +1203,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal((results1[2] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
 
     // First event of resubscribe is always a task.
-    assert.equal((results2[0] as any).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((results2[1] as any).status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal((results2[0] as any).payload.value.status.state, TaskState.TASK_STATE_WORKING);
+    assert.equal((results2[1] as any).payload.value.status.state, TaskState.TASK_STATE_COMPLETED);
 
     expect(saveSpy).toHaveBeenCalledTimes(3);
     const lastSaveCall = saveSpy.mock.calls[saveSpy.mock.calls.length - 1][0];

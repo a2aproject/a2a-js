@@ -9,8 +9,8 @@ exports[`TypeScript Strict Mode`] = {
       [248, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
       [271, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
     ],
-    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:3349415906": [
-      [93, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
+    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:3231104525": [
+      [91, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
     ],
     "src/types/converters/to_proto.ts:780360333": [
       [49, 52, 19, "tsc: Function lacks ending return statement and return type does not include \'undefined\'.", "2245381585"]

@@ -2,8 +2,6 @@ import {
   Message,
   AgentCard,
   Task,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
   ListTaskPushNotificationConfigsRequest,
   GetTaskPushNotificationConfigRequest,
@@ -57,7 +55,7 @@ export interface A2ARequestHandler {
   resubscribe(
     params: SubscribeToTaskRequest,
     context: ServerCallContext
-  ): AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>;
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 
   listTasks(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse>;
 }
