@@ -13,6 +13,9 @@ import {
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
   ListTasksRequest,
+  ListTasksResponse,
+  ListTaskPushNotificationConfigsResponse,
+  AgentCard,
 } from '../../../index.js';
 import {
   A2A_ERROR_CODE,
@@ -160,43 +163,48 @@ export class JsonRpcTransportHandler {
               SendMessageRequest.fromJSON(rpcRequest.params),
               context
             );
-            result = {
-              payload: {
-                $case: 'messageId' in messageOrTask ? 'message' : 'task',
-                value: messageOrTask,
-              },
-            };
+            result =
+              'messageId' in messageOrTask
+                ? { message: Message.toJSON(messageOrTask as Message) }
+                : { task: Task.toJSON(messageOrTask as Task) };
             break;
           }
           case 'GetTask':
-            result = await this.requestHandler.getTask(
-              GetTaskRequest.fromJSON(rpcRequest.params),
-              context
+            result = Task.toJSON(
+              await this.requestHandler.getTask(GetTaskRequest.fromJSON(rpcRequest.params), context)
             );
             break;
           case 'ListTasks':
-            result = await this.requestHandler.listTasks(
-              ListTasksRequest.fromJSON(rpcRequest.params),
-              context
+            result = ListTasksResponse.toJSON(
+              await this.requestHandler.listTasks(
+                ListTasksRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'CancelTask':
-            result = await this.requestHandler.cancelTask(
-              CancelTaskRequest.fromJSON(rpcRequest.params),
-              context
+            result = Task.toJSON(
+              await this.requestHandler.cancelTask(
+                CancelTaskRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'CreateTaskPushNotificationConfig': {
-            result = await this.requestHandler.createTaskPushNotificationConfig(
-              TaskPushNotificationConfig.fromJSON(rpcRequest.params),
-              context
+            result = TaskPushNotificationConfig.toJSON(
+              await this.requestHandler.createTaskPushNotificationConfig(
+                TaskPushNotificationConfig.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           }
           case 'GetTaskPushNotificationConfig':
-            result = await this.requestHandler.getTaskPushNotificationConfig(
-              GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
-              context
+            result = TaskPushNotificationConfig.toJSON(
+              await this.requestHandler.getTaskPushNotificationConfig(
+                GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'DeleteTaskPushNotificationConfig':
@@ -207,13 +215,17 @@ export class JsonRpcTransportHandler {
             result = null;
             break;
           case 'ListTaskPushNotificationConfigs':
-            result = await this.requestHandler.listTaskPushNotificationConfigs(
-              ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
-              context
+            result = ListTaskPushNotificationConfigsResponse.toJSON(
+              await this.requestHandler.listTaskPushNotificationConfigs(
+                ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'GetExtendedAgentCard':
-            result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
+            result = AgentCard.toJSON(
+              await this.requestHandler.getAuthenticatedExtendedAgentCard(context)
+            );
             break;
           default:
             return {

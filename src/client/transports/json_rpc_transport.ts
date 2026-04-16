@@ -77,22 +77,11 @@ export class JsonRpcTransport implements Transport {
       options,
       SendMessageRequest
     );
-
-    const result = rpcResponse.result as {
-      payload?: { value: unknown };
-      task?: unknown;
-      message?: unknown;
-    };
-    if (result?.payload?.value) {
-      return result.payload.value as SendMessageResult;
+    const response = SendMessageResponse.fromJSON(rpcResponse.result);
+    if (!response.payload) {
+      throw new Error('Invalid response: missing payload');
     }
-    if (result?.task) {
-      return result.task as SendMessageResult;
-    }
-    if (result?.message) {
-      return result.message as SendMessageResult;
-    }
-    throw new Error('Invalid response structure from agent.');
+    return response.payload.value;
   }
 
   async *sendMessageStream(
