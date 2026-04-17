@@ -16,7 +16,6 @@ import {
   Task,
   TaskState,
   TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
   Role,
   TaskPushNotificationConfig,
   SendMessageRequest,
@@ -37,12 +36,15 @@ import {
   ExecutionEventBusManager,
   DefaultExecutionEventBusManager,
 } from '../events/execution_event_bus_manager.js';
-import { AgentExecutionEvent } from '../events/execution_event_bus.js';
+import {
+  AgentExecutionEvent,
+  AgentEvent,
+  assertUnreachableEvent,
+} from '../events/execution_event_bus.js';
 import { ExecutionEventQueue } from '../events/execution_event_queue.js';
 import { ResultManager } from '../result_manager.js';
 import { TaskStore } from '../store.js';
 import { A2ARequestHandler } from './a2a_request_handler.js';
-import { ToProto } from '../../types/converters/to_proto.js';
 import {
   InMemoryPushNotificationStore,
   PushNotificationStore,
@@ -185,17 +187,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          await this._sendPushNotificationIfNeeded(event, context);
+          await this._mapEventAndNotify(event, context);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
 
         if (options?.firstResultResolver && !firstResultSent) {
           let firstResult: Message | Task | undefined;
-          if ('messageId' in event) {
-            firstResult = event;
-          } else if ('artifacts' in event) {
-            firstResult = event as Task;
+          if (event.kind === 'message') {
+            firstResult = event.data;
+          } else if (event.kind === 'task') {
+            firstResult = event.data;
           } else {
             const finalResult = resultManager.getFinalResult();
             if (finalResult && ('messageId' in finalResult || 'id' in finalResult)) {
@@ -304,14 +306,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           errorTask.history?.push(finalMessageForAgent);
         }
       }
-      eventBus.publish(errorTask);
-      eventBus.publish({
-        taskId: errorTask.id,
-        contextId: errorTask.contextId,
-        status: errorTask.status,
-        final: true,
-        metadata: {},
-      } as TaskStatusUpdateEvent);
+      eventBus.publish(AgentEvent.task(errorTask));
+      eventBus.publish(
+        AgentEvent.statusUpdate({
+          taskId: errorTask.id,
+          contextId: errorTask.contextId,
+          status: errorTask.status,
+          metadata: {},
+        })
+      );
       eventBus.finished();
     });
 
@@ -404,16 +407,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         },
         metadata: {},
       };
-      eventBus.publish(errorTaskStatus);
+      eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
     });
 
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
-        const streamResponse = await this._sendPushNotificationIfNeeded(event, context);
-        if (streamResponse) {
-          yield streamResponse; // Stream the event to the client
-        }
+        const streamResponse = await this._mapEventAndNotify(event, context);
+        yield streamResponse;
       }
     } finally {
       // Cleanup when the stream is fully consumed or breaks
@@ -636,20 +637,28 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     try {
       for await (const event of eventQueue.events()) {
-        // We only care about updates related to *this* task.
-        // The event bus might be shared if messageId was reused, though
-        // ExecutionEventBusManager tries to give one bus per original message.
-        if ('status' in event && 'taskId' in event && event.taskId === taskId) {
-          yield { payload: { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent } };
-        } else if ('artifact' in event && event.taskId === taskId) {
-          yield { payload: { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent } };
-        } else if ('artifacts' in event && (event as Task).id === taskId) {
-          // This implies the task was re-emitted, yield it.
-          yield { payload: { $case: 'task', value: event as Task } };
+        switch (event.kind) {
+          case 'statusUpdate':
+            if (event.data.taskId === taskId) {
+              yield { payload: { $case: 'statusUpdate', value: event.data } };
+            }
+            break;
+          case 'artifactUpdate':
+            if (event.data.taskId === taskId) {
+              yield { payload: { $case: 'artifactUpdate', value: event.data } };
+            }
+            break;
+          case 'task':
+            if (event.data.id === taskId) {
+              yield { payload: { $case: 'task', value: event.data } };
+            }
+            break;
+          // Messages are not yielded on resubscribe
+          case 'message':
+            break;
+          default:
+            assertUnreachableEvent(event);
         }
-        // We don't yield 'message' events on resubscribe typically,
-        // as those signal the end of an interaction for the *original* request.
-        // If a 'message' event for the original request terminates the bus, this loop will also end.
       }
     } finally {
       eventQueue.stop();
@@ -657,56 +666,50 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   /**
-   * Maps a raw AgentExecutionEvent to a StreamResponse discriminated union.
+   * Maps an AgentExecutionEvent to a StreamResponse.
    *
-   * For Task events (identified by 'artifacts' property), the full task is loaded
-   * from the store to include accumulated history and artifacts.
-   *
-   * For non-Task events, delegates to `ToProto.messageStreamResult` which uses
-   * duck-typing with the following check order (order is significant because
-   * Task also has 'status', so 'artifacts' must be checked first):
-   *   1. 'messageId' -> Message
-   *   2. 'artifacts' -> Task
-   *   3. 'status' -> TaskStatusUpdateEvent
-   *   4. 'artifact' -> TaskArtifactUpdateEvent
+   * For Task events, the full task is loaded from the store to include
+   * accumulated history and artifacts. For all other event types, the
+   * event data is wrapped directly in a StreamResponse payload.
    */
   private async _mapEventToStreamResponse(
     event: AgentExecutionEvent,
     context: ServerCallContext
-  ): Promise<StreamResponse | undefined> {
-    try {
-      if ('artifacts' in event) {
-        const task = event as Task;
-        const taskId = task.id;
-        if (!taskId) {
-          console.error(`Task ID not found for task event.`);
-          return undefined;
-        }
+  ): Promise<StreamResponse> {
+    switch (event.kind) {
+      case 'task': {
+        const taskId = event.data.id;
         const fullTask = await this.taskStore.load(taskId, context).catch((error): Task | null => {
           console.warn('Failed to load full task from store, falling back to event data:', error);
           return null;
         });
-        return { payload: { $case: 'task', value: fullTask || task } };
+        return { payload: { $case: 'task', value: fullTask || event.data } };
       }
-
-      // All other event types are wrapped directly via ToProto.
-      return ToProto.messageStreamResult(event);
-    } catch (error) {
-      console.warn(`Unable to map event to StreamResponse, event will be skipped:`, event, error);
-      return undefined;
+      case 'message':
+        return { payload: { $case: 'message', value: event.data } };
+      case 'statusUpdate':
+        return { payload: { $case: 'statusUpdate', value: event.data } };
+      case 'artifactUpdate':
+        return { payload: { $case: 'artifactUpdate', value: event.data } };
+      default:
+        assertUnreachableEvent(event);
     }
   }
 
-  private async _sendPushNotificationIfNeeded(
+  /**
+   * Maps an event to a StreamResponse, yields it to the stream, and
+   * fires a push notification if configured. Returns the StreamResponse
+   * so the caller can yield it.
+   */
+  private async _mapEventAndNotify(
     event: AgentExecutionEvent,
     context: ServerCallContext
-  ): Promise<StreamResponse | undefined> {
+  ): Promise<StreamResponse> {
     const streamResponse = await this._mapEventToStreamResponse(event, context);
-    if (!streamResponse) {
-      return undefined;
-    }
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
+      // Fire-and-forget: push notification delivery should not block the stream or response.
+      // Errors are logged but do not propagate to the caller.
+      Promise.resolve(this.pushNotificationSender.send(streamResponse, context)).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }
@@ -763,7 +766,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       };
 
       try {
-        await resultManager.processEvent(statusUpdateFailed);
+        await resultManager.processEvent(AgentEvent.statusUpdate(statusUpdateFailed));
       } catch (error) {
         console.error(
           `Event processing loop failed for task ${taskId}: ${(error instanceof Error && error.message) || 'Unknown error'}`

@@ -3,6 +3,7 @@ import { describe, it, beforeEach, expect } from 'vitest';
 import {
   DefaultExecutionEventBus,
   AgentExecutionEvent,
+  AgentEvent,
 } from '../../src/server/events/execution_event_bus.js';
 import { Message, Role } from '../../src/index.js';
 
@@ -43,10 +44,10 @@ describe('DefaultExecutionEventBus', () => {
         receivedEvents.push(event);
       });
 
-      eventBus.publish(message);
+      eventBus.publish(AgentEvent.message(message));
 
       expect(receivedEvents).to.have.length(1);
-      expect(receivedEvents[0]).to.deep.equal(message);
+      expect(receivedEvents[0]).to.deep.equal(AgentEvent.message(message));
     });
 
     it('should emit events to multiple listeners in registration order', () => {
@@ -56,7 +57,7 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.on('event', () => order.push('second'));
       eventBus.on('event', () => order.push('third'));
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(order).to.deep.equal(['first', 'second', 'third']);
     });
@@ -71,7 +72,7 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.on('event', listener);
       eventBus.on('event', listener);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(callCount).to.equal(3);
     });
@@ -112,7 +113,7 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.on('event', listener);
       eventBus.off('event', listener);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(callCount).to.equal(0);
     });
@@ -131,21 +132,21 @@ describe('DefaultExecutionEventBus', () => {
       // Remove one instance
       eventBus.off('event', listener);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(2);
 
       // Remove another instance
       callCount = 0;
       eventBus.off('event', listener);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(1);
 
       // Remove last instance
       callCount = 0;
       eventBus.off('event', listener);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(0);
     });
 
@@ -170,8 +171,8 @@ describe('DefaultExecutionEventBus', () => {
         callCount++;
       });
 
-      eventBus.publish(createMessage('test1'));
-      eventBus.publish(createMessage('test2'));
+      eventBus.publish(AgentEvent.message(createMessage('test1')));
+      eventBus.publish(AgentEvent.message(createMessage('test2')));
 
       expect(callCount).to.equal(1);
     });
@@ -186,12 +187,12 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.once('event', listener);
 
       // First event should trigger both once listeners
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(2);
 
       // Second event should trigger none
       callCount = 0;
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(0);
     });
 
@@ -204,7 +205,7 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.once('event', listener);
       eventBus.off('event', listener);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(callCount).to.equal(0);
     });
@@ -234,7 +235,7 @@ describe('DefaultExecutionEventBus', () => {
 
       eventBus.removeAllListeners('event');
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       eventBus.finished();
 
       expect(eventCount).to.equal(0);
@@ -250,7 +251,7 @@ describe('DefaultExecutionEventBus', () => {
 
       eventBus.removeAllListeners();
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       eventBus.finished();
 
       expect(eventCount).to.equal(0);
@@ -267,7 +268,7 @@ describe('DefaultExecutionEventBus', () => {
 
       eventBus.removeAllListeners('event');
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(callCount).to.equal(0);
     });
@@ -280,7 +281,7 @@ describe('DefaultExecutionEventBus', () => {
 
       eventBus.removeAllListeners('event');
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(callCount).to.equal(0);
     });
@@ -296,12 +297,12 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.once('event', () => order.push('once-2'));
 
       // First emit
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(order).to.deep.equal(['on-1', 'once-1', 'on-2', 'once-2']);
 
       // Second emit - only on() listeners should fire
       order.length = 0;
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(order).to.deep.equal(['on-1', 'on-2']);
     });
   });
@@ -335,7 +336,7 @@ describe('DefaultExecutionEventBus', () => {
 
       eventBus.on('event', listener).on('event', listener).once('event', listener);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(count).to.equal(3);
     });
   });
@@ -356,7 +357,7 @@ describe('DefaultExecutionEventBus', () => {
       const thisCapture = createThisCapture();
       eventBus.on('event', thisCapture.capture);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(thisCapture.value).to.equal(eventBus);
     });
@@ -374,7 +375,7 @@ describe('DefaultExecutionEventBus', () => {
       const thisCapture = createThisCapture();
       eventBus.once('event', thisCapture.capture);
 
-      eventBus.publish(createMessage('test'));
+      eventBus.publish(AgentEvent.message(createMessage('test')));
 
       expect(thisCapture.value).to.equal(eventBus);
     });

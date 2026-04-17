@@ -14,6 +14,7 @@ import {
   AGENT_CARD_PATH,
 } from '../index.js';
 import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/pb/a2a.js';
+import { AgentExecutionEvent, AgentEvent } from '../server/index.js';
 
 import {
   AuthenticationHandler,
@@ -112,14 +113,13 @@ const rl = readline.createInterface({
 });
 
 // --- Response Handling ---
-// Function now accepts the unwrapped event payload directly
-function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent) {
+// Function accepts a discriminated AgentExecutionEvent and uses `kind` to narrow the type.
+function printAgentEvent(event: AgentExecutionEvent) {
   const timestamp = new Date().toLocaleTimeString();
   const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
-  // Check if it's a TaskStatusUpdateEvent
-  if ('status' in event && 'taskId' in event) {
-    const update = event as TaskStatusUpdateEvent; // Cast for type safety
+  if (event.kind === 'statusUpdate') {
+    const update = event.data;
     const state = update.status?.state;
     let stateEmoji = '❓';
     let stateColor: keyof typeof colors = 'yellow';
@@ -158,10 +158,8 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
     if (update.status?.message) {
       printMessageContent(update.status.message);
     }
-  }
-  // Check if it's a TaskArtifactUpdateEvent
-  else if ('artifact' in event) {
-    const update = event as TaskArtifactUpdateEvent; // Cast for type safety
+  } else if (event.kind === 'artifactUpdate') {
+    const update = event.data;
     console.log(
       `${prefix} 📄 Artifact Received: ${
         update.artifact?.name || '(unnamed)'
@@ -377,7 +375,7 @@ async function main() {
         switch (payload.$case) {
           case 'statusUpdate': {
             const typedEvent = payload.value as TaskStatusUpdateEvent;
-            printAgentEvent(typedEvent);
+            printAgentEvent(AgentEvent.statusUpdate(typedEvent));
 
             if (
               typedEvent.status?.state === TaskState.TASK_STATE_COMPLETED ||
@@ -397,7 +395,7 @@ async function main() {
           }
           case 'artifactUpdate': {
             const typedEvent = payload.value as TaskArtifactUpdateEvent;
-            printAgentEvent(typedEvent);
+            printAgentEvent(AgentEvent.artifactUpdate(typedEvent));
             break;
           }
           case 'msg': {

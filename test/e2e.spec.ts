@@ -9,6 +9,7 @@ import {
   InMemoryTaskStore,
   RequestContext,
 } from '../src/server/index.js';
+import { AgentEvent } from '../src/server/events/execution_event_bus.js';
 import { AgentCard, Message, Role, TaskState, StreamResponse } from '../src/index.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
@@ -162,7 +163,7 @@ describe('Client E2E tests', () => {
       describe('sendMessage', () => {
         it('should send a message to the agent', async () => {
           const expected = createTestMessage('1', 'test');
-          agentExecutor.events = [expected];
+          agentExecutor.events = [AgentEvent.message(expected)];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual = await client.sendMessage({
@@ -228,9 +229,11 @@ describe('Client E2E tests', () => {
               },
             },
           ];
-          agentExecutor.events = expected.map(
-            (e: any) => e.payload!.value
-          ) as AgentExecutionEvent[];
+          agentExecutor.events = expected.map((e: any) => {
+            const $case = e.payload!.$case;
+            const value = e.payload!.value;
+            return AgentEvent[$case as keyof typeof AgentEvent](value);
+          });
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual: StreamResponse[] = [];
@@ -250,7 +253,7 @@ describe('Client E2E tests', () => {
           agentCard.capabilities.streaming = false;
           const requestMessage = createTestMessage('1', 'request-message');
           const responseMessage = createTestMessage('2', 'response-message');
-          agentExecutor.events = [responseMessage];
+          agentExecutor.events = [AgentEvent.message(responseMessage)];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual: StreamResponse[] = [];

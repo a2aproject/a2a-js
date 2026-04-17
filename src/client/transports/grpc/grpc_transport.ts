@@ -204,7 +204,7 @@ export class GrpcTransport implements Transport {
       ListTasksRequest,
       ListTasksResponse,
       ListTasksResponse
-    >('listTasks', params, options, this.grpcClient.listTasks.bind(this.grpcClient), (req) => req);
+    >('listTasks', params, options, this.grpcClient.listTasks.bind(this.grpcClient), (res) => res);
     return rpcResponse;
   }
 

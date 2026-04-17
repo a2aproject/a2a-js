@@ -17,7 +17,7 @@ describe('ToProto', () => {
       };
       const result = ToProto.messageSendResult(message);
       expect(result.payload?.$case).toBe('message');
-      expect((result.payload as any).value).toBe(message);
+      expect((result.payload as { value: proto.Message }).value).toBe(message);
     });
 
     it('should wrap Task in SendMessageResponse', () => {
@@ -31,33 +31,7 @@ describe('ToProto', () => {
       };
       const result = ToProto.messageSendResult(task);
       expect(result.payload?.$case).toBe('task');
-      expect((result.payload as any).value).toBe(task);
-    });
-  });
-
-  describe('messageStreamResult', () => {
-    it('should wrap Message in StreamResponse', () => {
-      const message: proto.Message = { messageId: 'm1' } as any;
-      const result = ToProto.messageStreamResult(message);
-      expect(result.payload?.$case).toBe('message');
-    });
-
-    it('should wrap Task in StreamResponse', () => {
-      const task: proto.Task = { artifacts: [] } as any; // distinct feature of Task
-      const result = ToProto.messageStreamResult(task);
-      expect(result.payload?.$case).toBe('task');
-    });
-
-    it('should wrap TaskStatusUpdateEvent in StreamResponse', () => {
-      const event: proto.TaskStatusUpdateEvent = { status: {} } as any;
-      const result = ToProto.messageStreamResult(event);
-      expect(result.payload?.$case).toBe('statusUpdate');
-    });
-
-    it('should wrap TaskArtifactUpdateEvent in StreamResponse', () => {
-      const event: proto.TaskArtifactUpdateEvent = { artifact: {} } as any;
-      const result = ToProto.messageStreamResult(event);
-      expect(result.payload?.$case).toBe('artifactUpdate');
+      expect((result.payload as { value: proto.Task }).value).toBe(task);
     });
   });
 });

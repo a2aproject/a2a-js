@@ -17,6 +17,7 @@ import {
   RequestContext,
   ExecutionEventBus,
   DefaultRequestHandler,
+  AgentEvent,
 } from '../../src/server/index.js';
 import {
   jsonRpcHandler,
@@ -45,7 +46,7 @@ class SUTAgentExecutor implements AgentExecutor {
       },
       metadata: {},
     };
-    eventBus.publish(cancelledUpdate);
+    eventBus.publish(AgentEvent.statusUpdate(cancelledUpdate));
   };
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
@@ -77,7 +78,7 @@ class SUTAgentExecutor implements AgentExecutor {
         history: [userMessage], // Start history with the current user message
         metadata: userMessage.metadata, // Carry over metadata from message if any
       };
-      eventBus.publish(initialTask);
+      eventBus.publish(AgentEvent.task(initialTask));
     }
 
     // 2. Publish "working" status update
@@ -107,7 +108,7 @@ class SUTAgentExecutor implements AgentExecutor {
       },
       metadata: {},
     };
-    eventBus.publish(workingStatusUpdate);
+    eventBus.publish(AgentEvent.statusUpdate(workingStatusUpdate));
 
     // 3. Publish final task status update
     const agentReplyText = this.parseInputMessage(userMessage);
@@ -148,7 +149,7 @@ class SUTAgentExecutor implements AgentExecutor {
       },
       metadata: {},
     };
-    eventBus.publish(finalUpdate);
+    eventBus.publish(AgentEvent.statusUpdate(finalUpdate));
   }
 
   parseInputMessage(message: Message): string {

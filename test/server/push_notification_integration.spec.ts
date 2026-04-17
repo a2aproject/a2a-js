@@ -16,12 +16,12 @@ import {
   Role,
   TaskState,
   TaskStatus,
-  TaskStatusUpdateEvent,
   StreamResponse,
 } from '../../src/types/pb/a2a.js';
 import { SendMessageRequest } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
+import { AgentEvent } from '../../src/server/events/execution_event_bus.js';
 
 type PushNotificationSenderSpy = MockInstance<(streamResponse: StreamResponse) => Promise<void>>;
 
@@ -388,28 +388,32 @@ describe('Push Notification Integration Tests', () => {
         const contextId = ctx.contextId;
 
         // Publish working status
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_WORKING,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         // Publish completion directly
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
@@ -542,29 +546,33 @@ describe('Push Notification Integration Tests', () => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          artifacts: [],
-          history: [],
-          metadata: {},
-        } as Task);
+        bus.publish(
+          AgentEvent.task({
+            id: taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
@@ -640,29 +648,33 @@ describe('Push Notification Integration Tests', () => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          artifacts: [],
-          history: [],
-          metadata: {},
-        } as Task);
+        bus.publish(
+          AgentEvent.task({
+            id: taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
@@ -724,29 +736,33 @@ describe('Push Notification Integration Tests', () => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          artifacts: [],
-          history: [],
-          metadata: {},
-        } as Task);
+        bus.publish(
+          AgentEvent.task({
+            id: taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
@@ -849,16 +865,18 @@ describe('Push Notification Integration Tests', () => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
