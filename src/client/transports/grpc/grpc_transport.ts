@@ -327,7 +327,7 @@ export class GrpcTransport implements Transport {
             'getTaskPushNotificationConfig',
             'createTaskPushNotificationConfig',
             'deleteTaskPushNotificationConfig',
-            'listTaskPushNotificationConfigs',
+            'listTaskPushNotificationConfig',
           ].includes(method)
         ) {
           return new PushNotificationNotSupportedError(error.details);
