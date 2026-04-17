@@ -43,7 +43,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     // Chain promises to ensure notifications for the same task are sent sequentially.
     // Once the promise is resolved, the Garbage Collector will clean it up if there are no other references to it.
     // This will prevent memory to linearly grow with the number of notifications sent.
-    const newPromise = lastPromise.then(async () => {
+    const newPromise = lastPromise.catch(() => {}).then(async () => {
       const dispatches = pushConfigs.map(async (pushConfig) => {
         try {
           await this._dispatchNotification(streamResponse, pushConfig, taskId);

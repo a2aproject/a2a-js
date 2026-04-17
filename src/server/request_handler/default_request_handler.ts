@@ -674,22 +674,22 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     event: AgentExecutionEvent,
     context: ServerCallContext
   ): Promise<StreamResponse | undefined> {
-    if ('artifacts' in event) {
-      const task = event as Task;
-      const taskId = task.id;
-      if (!taskId) {
-        console.error(`Task ID not found for task event.`);
-        return undefined;
-      }
-      const fullTask = await this.taskStore.load(taskId, context);
-      return { payload: { $case: 'task', value: fullTask || task } };
-    }
-
-    // All other event types are wrapped directly via ToProto.
     try {
+      if ('artifacts' in event) {
+        const task = event as Task;
+        const taskId = task.id;
+        if (!taskId) {
+          console.error(`Task ID not found for task event.`);
+          return undefined;
+        }
+        const fullTask = await this.taskStore.load(taskId, context);
+        return { payload: { $case: 'task', value: fullTask || task } };
+      }
+
+      // All other event types are wrapped directly via ToProto.
       return ToProto.messageStreamResult(event);
-    } catch {
-      console.warn(`Unable to map event to StreamResponse, event will be skipped:`, event);
+    } catch (error) {
+      console.warn(`Unable to map event to StreamResponse, event will be skipped:`, event, error);
       return undefined;
     }
   }
