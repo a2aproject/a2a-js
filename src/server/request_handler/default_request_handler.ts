@@ -682,7 +682,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           console.error(`Task ID not found for task event.`);
           return undefined;
         }
-        const fullTask = await this.taskStore.load(taskId, context);
+        const fullTask = await this.taskStore.load(taskId, context).catch((error): Task | null => {
+          console.warn('Failed to load full task from store, falling back to event data:', error);
+          return null;
+        });
         return { payload: { $case: 'task', value: fullTask || task } };
       }
 
@@ -703,7 +706,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       return undefined;
     }
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      Promise.resolve(this.pushNotificationSender.send(streamResponse, context)).catch((error) => {
+      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }

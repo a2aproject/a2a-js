@@ -186,7 +186,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       firstResult = await iterator.next();
     } catch (error) {
       // Early error - return proper HTTP error
-      sendResponse(res, mapErrorToStatus(error), context, toHTTPError(error));
+      setExtensionsHeader(res, context);
+      res.status(mapErrorToStatus(error)).json(toHTTPError(error));
       return;
     }
 

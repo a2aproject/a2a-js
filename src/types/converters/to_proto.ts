@@ -63,5 +63,6 @@ export class ToProto {
         },
       };
     }
+    throw new GenericError('Invalid SendMessageResult type');
   }
 }

@@ -5,5 +5,5 @@ import { ServerCallContext } from '../../../src/server/context.js';
 
 export class MockPushNotificationSender implements PushNotificationSender {
   public send: Mock<(streamResponse: StreamResponse, context: ServerCallContext) => Promise<void>> =
-    vi.fn();
+    vi.fn().mockResolvedValue(undefined);
 }

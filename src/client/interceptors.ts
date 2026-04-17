@@ -1,6 +1,5 @@
 import { AgentCard, StreamResponse } from '../index.js';
-import { Client } from './multitransport-client.js';
-import { RequestOptions } from './multitransport-client.js';
+import { Client, RequestOptions } from './multitransport-client.js';
 
 export interface CallInterceptor {
   /**

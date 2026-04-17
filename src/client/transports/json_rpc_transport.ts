@@ -318,14 +318,14 @@ export class JsonRpcTransport implements Transport {
     }
 
     for await (const event of parseSseStream(response)) {
-      yield this._processSseEventData<StreamResponse>(event.data, clientRequestId);
+      yield this._processSseEventData(event.data, clientRequestId);
     }
   }
 
-  private _processSseEventData<TStreamItem>(
+  private _processSseEventData(
     jsonData: string,
     originalRequestId: number | string | null
-  ): TStreamItem {
+  ): StreamResponse {
     if (!jsonData.trim()) {
       throw new Error('Attempted to process empty SSE event data.');
     }
@@ -358,8 +358,7 @@ export class JsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    const response = StreamResponse.fromJSON(a2aStreamResponse.result);
-    return response as unknown as TStreamItem;
+    return StreamResponse.fromJSON(a2aStreamResponse.result);
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {
