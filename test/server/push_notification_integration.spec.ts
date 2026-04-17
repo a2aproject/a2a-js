@@ -97,8 +97,7 @@ describe('Push Notification Integration Tests', () => {
         // Simulate delay for 'submitted' status to test correct ordering of notifications
         if (
           scenario === 'delay_on_submitted' &&
-          (req.body.task?.status?.state === 'TASK_STATE_SUBMITTED' ||
-            req.body.task?.status?.state === TaskState.TASK_STATE_SUBMITTED)
+          req.body.task?.status?.state === 'TASK_STATE_SUBMITTED'
         ) {
           await new Promise((resolve) => setTimeout(resolve, 10));
         }
