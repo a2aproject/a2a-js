@@ -30,12 +30,14 @@ import {
   SendMessageRequest,
   Role,
   TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
   DeleteTaskPushNotificationConfigRequest,
   TaskPushNotificationConfig,
   Message,
   Artifact,
   SendMessageConfiguration,
   ListTasksRequest,
+  StreamResponse,
 } from '../../src/types/pb/a2a.js';
 import {
   DefaultExecutionEventBusManager,
@@ -310,7 +312,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Task status should be failed'
     );
     assert.include(
-      (blockingTask.status.message?.parts[0].content as any).value,
+      (blockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -499,7 +501,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Task status should be failed'
     );
     assert.include(
-      (nonBlockingTask.status.message?.parts[0].content as any).value,
+      (nonBlockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -698,25 +700,37 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((secondTask.history![0].parts[0].content as any).value, 'Message 1');
+    assert.equal(
+      (secondTask.history![0].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 1'
+    );
     assert.equal(
       secondTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((secondTask.history![1].parts[0].content as any).value, 'Response to message 1');
+    assert.equal(
+      (secondTask.history![1].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 1'
+    );
     assert.equal(
       secondTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((secondTask.history![2].parts[0].content as any).value, 'Message 2');
+    assert.equal(
+      (secondTask.history![2].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 2'
+    );
     assert.equal(
       secondTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((secondTask.history![3].parts[0].content as any).value, 'Response to message 2');
+    assert.equal(
+      (secondTask.history![3].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 2'
+    );
     assert.equal(secondTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(
       secondTask.artifacts![0].name,
@@ -729,7 +743,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (secondTask.artifacts![0].parts[0].content as any).value,
+      (secondTask.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
@@ -945,25 +959,37 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((finalTask.history![0].parts[0].content as any).value, 'Message 1');
+    assert.equal(
+      (finalTask.history![0].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 1'
+    );
     assert.equal(
       finalTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((finalTask.history![1].parts[0].content as any).value, 'Response to message 1');
+    assert.equal(
+      (finalTask.history![1].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 1'
+    );
     assert.equal(
       finalTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((finalTask.history![2].parts[0].content as any).value, 'Message 2');
+    assert.equal(
+      (finalTask.history![2].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 2'
+    );
     assert.equal(
       finalTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((finalTask.history![3].parts[0].content as any).value, 'Response to message 2');
+    assert.equal(
+      (finalTask.history![3].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 2'
+    );
     assert.equal(finalTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(finalTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
     assert.equal(
@@ -972,7 +998,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (finalTask.artifacts![0].parts[0].content as any).value,
+      (finalTask.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
@@ -1012,15 +1038,26 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as Task).status.state, TaskState.TASK_STATE_SUBMITTED);
-    assert.equal((events[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (events[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (events[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (events[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
   });
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
@@ -1116,14 +1153,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     assert.lengthOf(events, 2);
-    const lastEvent = events[1] as TaskStatusUpdateEvent;
-    assert.equal(lastEvent.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
+    const lastEvent = events[1];
+    assert.equal(
+      (lastEvent.payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_INPUT_REQUIRED
+    );
   });
 
   it('resubscribe: should allow multiple clients to receive events for the same task', async () => {
@@ -1168,19 +1209,29 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const stream1_iterator = stream1_generator[Symbol.asyncIterator]();
 
     const firstEventResult = await stream1_iterator.next();
-    const firstEvent = firstEventResult.value as Task;
-    assert.equal(firstEvent.id, taskId, 'Should get task event first');
+    assert.isFalse(firstEventResult.done, 'Generator should not be done yet');
+    const firstEvent = firstEventResult.value as StreamResponse;
+    assert.equal(
+      (firstEvent.payload as { $case: 'task'; value: Task }).value.id,
+      taskId,
+      'Should get task event first'
+    );
 
     const secondEventResult = await stream1_iterator.next();
-    const secondEvent = secondEventResult.value as TaskStatusUpdateEvent;
-    assert.equal(secondEvent.taskId, taskId, 'Should get the task status update event second');
+    assert.isFalse(secondEventResult.done, 'Generator should not be done yet');
+    const secondEvent = secondEventResult.value as StreamResponse;
+    assert.equal(
+      (secondEvent.payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.taskId,
+      taskId,
+      'Should get the task status update event second'
+    );
 
     const stream2_generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
-    const results1: any[] = [firstEvent, secondEvent];
-    const results2: any[] = [];
+    const results1: StreamResponse[] = [firstEvent, secondEvent];
+    const results2: StreamResponse[] = [];
 
-    const collect = async (iterator: AsyncGenerator<any>, results: any[]) => {
+    const collect = async (iterator: AsyncGenerator<StreamResponse>, results: StreamResponse[]) => {
       for await (const res of iterator) {
         results.push(res);
       }
@@ -1193,19 +1244,28 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await Promise.all([p1, p2]);
 
     assert.equal(
-      (results1[0] as TaskStatusUpdateEvent).status.state,
+      (results1[0].payload as { $case: 'task'; value: Task }).value.status?.state,
       TaskState.TASK_STATE_SUBMITTED
     );
-    assert.equal((results1[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
     assert.equal(
-      (results1[2] as TaskStatusUpdateEvent).status.state,
+      (results1[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (results1[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
       TaskState.TASK_STATE_COMPLETED
     );
 
     // First event of resubscribe is always a task.
-    assert.equal((results2[0] as Task).status.state, TaskState.TASK_STATE_WORKING);
     assert.equal(
-      (results2[1] as TaskStatusUpdateEvent).status.state,
+      (results2[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (results2[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
       TaskState.TASK_STATE_COMPLETED
     );
 
@@ -1732,31 +1792,58 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     // Verify first call (submitted state)
-    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][0] as Task;
-    const expectedFirstTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+    const firstCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[0][0] as StreamResponse;
+    const expectedFirstResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        },
+      },
     };
-    assert.deepEqual(firstCallTask, expectedFirstTask);
+    assert.deepEqual(firstCallResponse, expectedFirstResponse);
 
-    // // Verify second call (working state)
-    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][0] as Task;
-    const expectedSecondTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    // Verify second call (working state)
+    const secondCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    const expectedSecondResponse: StreamResponse = {
+      payload: {
+        $case: 'statusUpdate',
+        value: {
+          taskId: taskId,
+          contextId: contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        },
+      },
     };
-    assert.deepEqual(secondCallTask, expectedSecondTask);
+    assert.deepEqual(secondCallResponse, expectedSecondResponse);
 
-    // // Verify third call (completed state)
-    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][0] as Task;
-    const expectedThirdTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    // Verify third call (completed state)
+    const thirdCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[2][0] as StreamResponse;
+    const expectedThirdResponse: StreamResponse = {
+      payload: {
+        $case: 'statusUpdate',
+        value: {
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        },
+      },
     };
-    assert.deepEqual(thirdCallTask, expectedThirdTask);
+    assert.deepEqual(thirdCallResponse, expectedThirdResponse);
   });
 
   it('sendMessageStream: should send push notification when task update is received', async () => {
@@ -1801,16 +1888,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     // Verify stream events
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as Task).status.state, TaskState.TASK_STATE_SUBMITTED);
-    assert.equal((events[1] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_WORKING);
-    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, TaskState.TASK_STATE_COMPLETED);
+    assert.equal(
+      (events[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (events[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (events[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     // Verify push notifications were sent with complete task objects
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
@@ -1826,31 +1924,258 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       history: [params.message as Message],
     };
     // Verify first call (submitted state)
-    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][0] as Task;
-    const expectedFirstTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+    const firstCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[0][0] as StreamResponse;
+    const expectedFirstResponse: StreamResponse = {
+      payload: {
+        $case: 'task',
+        value: {
+          ...expectedTask,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        },
+      },
     };
-    assert.deepEqual(firstCallTask, expectedFirstTask);
+    assert.deepEqual(firstCallResponse, expectedFirstResponse);
 
     // Verify second call (working state)
-    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][0] as Task;
-    const expectedSecondTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    const secondCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    const expectedSecondResponse: StreamResponse = {
+      payload: {
+        $case: 'statusUpdate',
+        value: {
+          taskId: taskId,
+          contextId: contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        },
+      },
     };
-    assert.deepEqual(secondCallTask, expectedSecondTask);
+    assert.deepEqual(secondCallResponse, expectedSecondResponse);
 
     // Verify third call (completed state)
-    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][0] as Task;
-    const expectedThirdTask: Task = {
-      ...expectedTask,
-      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    const thirdCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[2][0] as StreamResponse;
+    const expectedThirdResponse: StreamResponse = {
+      payload: {
+        $case: 'statusUpdate',
+        value: {
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        },
+      },
     };
-    assert.deepEqual(thirdCallTask, expectedThirdTask);
+    assert.deepEqual(thirdCallResponse, expectedThirdResponse);
+  });
+
+  it('should send push notification when message event is received', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      url: 'https://push-1.com',
+      id: 'push-1',
+      token: 'token-1',
+      authentication: undefined,
+    };
+    const contextId = 'ctx-push-message';
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-message', 'Test message push'),
+        contextId: contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
+    };
+
+    let taskId: string;
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      bus.publish({
+        messageId: 'msg-reply-1',
+        taskId: taskId,
+        contextId: contextId,
+        parts: [],
+        metadata: {},
+        extensions: [],
+        referenceTaskIds: [],
+      } as Message);
+      bus.finished();
+    });
+
+    await handler.sendMessage(params, serverCallContext);
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
+    const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[0][0] as StreamResponse;
+    expect(callResponse.payload.$case).toBe('message');
+    expect((callResponse.payload as { value: Message }).value.messageId).toBe('msg-reply-1');
+  });
+
+  it('should send push notification when statusUpdate event is received', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      url: 'https://push-1.com',
+      id: 'push-1',
+      token: 'token-1',
+      authentication: undefined,
+    };
+    const contextId = 'ctx-push-status';
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-status', 'Test status push'),
+        contextId: contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
+    };
+
+    let taskId: string;
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      bus.publish({
+        id: taskId,
+        contextId: contextId,
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      } as Task);
+      bus.publish({
+        taskId: taskId,
+        contextId: contextId,
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: new Date().toISOString() },
+        metadata: {},
+      } as TaskStatusUpdateEvent);
+      bus.publish({
+        taskId: taskId,
+        contextId: contextId,
+        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: new Date().toISOString() },
+        metadata: {},
+      } as TaskStatusUpdateEvent);
+      bus.finished();
+    });
+
+    await handler.sendMessage(params, serverCallContext);
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
+    const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    expect(callResponse.payload.$case).toBe('statusUpdate');
+  });
+
+  it('should send push notification when artifactUpdate event is received', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      url: 'https://push-1.com',
+      id: 'push-1',
+      token: 'token-1',
+      authentication: undefined,
+    };
+    const contextId = 'ctx-push-artifact';
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-artifact', 'Test artifact push'),
+        contextId: contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
+    };
+
+    let taskId: string;
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      bus.publish({
+        id: taskId,
+        contextId: contextId,
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      } as Task);
+      bus.publish({
+        taskId: taskId,
+        contextId: contextId,
+        artifact: {
+          name: 'art-1',
+          mimeType: 'text/plain',
+          content: Buffer.from('hello').toString('base64'),
+        },
+        metadata: {},
+        append: false,
+        lastChunk: true,
+      } as unknown as TaskArtifactUpdateEvent);
+      bus.publish({
+        taskId: taskId,
+        contextId: contextId,
+        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: new Date().toISOString() },
+        metadata: {},
+      } as TaskStatusUpdateEvent);
+      bus.finished();
+    });
+
+    await handler.sendMessage(params, serverCallContext);
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
+    const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    expect(callResponse.payload.$case).toBe('artifactUpdate');
   });
 
   it('Push Notification methods should throw error if task does not exist', async () => {
@@ -1988,9 +2313,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Allow the task to be created and enter the TaskState.TASK_STATE_WORKING state
     await vi.advanceTimersByTimeAsync(25);
 
-    const createdTask = streamEvents.find((e) => 'id' in e) as Task;
-    assert.isDefined(createdTask, 'Task creation event should have been received');
-    const taskId = createdTask.id;
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
 
     // Now, issue the cancel request
     const cancelPromise = handler.cancelTask(
@@ -2044,9 +2369,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Allow the task to be created and enter the TaskState.TASK_STATE_WORKING state
     await vi.advanceTimersByTimeAsync(25);
 
-    const createdTask = streamEvents.find((e) => 'id' in e) as Task;
-    assert.isDefined(createdTask, 'Task creation event should have been received');
-    const taskId = createdTask.id;
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
 
     let cancelResponse: Task | undefined;
     let thrownError: any;
@@ -2223,9 +2548,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('ExecutionEventQueue should be instantiable and return an object', () => {
     const fakeBus = {
-      on: () => {},
-      off: () => {},
-    } as any;
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      publish: vi.fn(),
+      finished: vi.fn(),
+      removeAllListeners: vi.fn(),
+    } as unknown as ExecutionEventBus;
     const queue = new ExecutionEventQueue(fakeBus);
     expect(queue).to.be.instanceOf(ExecutionEventQueue);
   });

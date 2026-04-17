@@ -1,12 +1,5 @@
 import { GenericError } from '../../errors.js';
-import {
-  Message,
-  SendMessageResponse,
-  Task,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
-  StreamResponse,
-} from '../pb/a2a.js';
+import { Message, SendMessageResponse, Task } from '../pb/a2a.js';
 
 /**
  * Converts proto types to internal types.
@@ -21,14 +14,5 @@ export class FromProto {
       return response.payload.value;
     }
     throw new GenericError('Invalid SendMessageResponse: missing result');
-  }
-
-  static messageStreamResult(
-    event: StreamResponse
-  ): Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent {
-    if (event.payload) {
-      return event.payload.value;
-    }
-    throw new GenericError('Invalid event type in StreamResponse');
   }
 }

@@ -14,7 +14,6 @@ import {
   ListTasksResponse,
 } from '../../../src/index.js';
 
-vi.mock('../../../src/types/converters/from_proto.js');
 describe('grpcHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let handler: ReturnType<typeof grpcService>;

@@ -1,5 +1,8 @@
-import { TaskPushNotificationConfig, Task, AgentCard } from '../../index.js';
 import {
+  TaskPushNotificationConfig,
+  Task,
+  AgentCard,
+  StreamResponse,
   SendMessageRequest,
   CancelTaskRequest,
   ListTaskPushNotificationConfigsRequest,
@@ -8,7 +11,6 @@ import {
   GetTaskRequest,
   GetTaskPushNotificationConfigRequest,
   SubscribeToTaskRequest,
-  A2AStreamEventData,
   SendMessageResult,
   ListTasksRequest,
   ListTasksResponse,
@@ -25,7 +27,7 @@ export interface Transport {
   sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined>;
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 
   createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
@@ -56,7 +58,7 @@ export interface Transport {
   resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined>;
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 }
 
 export interface TransportFactory {
