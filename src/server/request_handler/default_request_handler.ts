@@ -42,6 +42,7 @@ import { ExecutionEventQueue } from '../events/execution_event_queue.js';
 import { ResultManager } from '../result_manager.js';
 import { TaskStore } from '../store.js';
 import { A2ARequestHandler } from './a2a_request_handler.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 import {
   InMemoryPushNotificationStore,
   PushNotificationStore,
@@ -655,42 +656,42 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
+  /**
+   * Maps a raw AgentExecutionEvent to a StreamResponse discriminated union.
+   *
+   * For Task events (identified by 'artifacts' property), the full task is loaded
+   * from the store to include accumulated history and artifacts.
+   *
+   * For non-Task events, delegates to `ToProto.messageStreamResult` which uses
+   * duck-typing with the following check order (order is significant because
+   * Task also has 'status', so 'artifacts' must be checked first):
+   *   1. 'messageId' -> Message
+   *   2. 'artifacts' -> Task
+   *   3. 'status' -> TaskStatusUpdateEvent
+   *   4. 'artifact' -> TaskArtifactUpdateEvent
+   */
   private async _mapEventToStreamResponse(
     event: AgentExecutionEvent,
     context: ServerCallContext
   ): Promise<StreamResponse | undefined> {
-    let taskId: string = '';
     if ('artifacts' in event) {
       const task = event as Task;
-      taskId = task.id;
-    } else {
-      taskId = event.taskId;
+      const taskId = task.id;
+      if (!taskId) {
+        console.error(`Task ID not found for task event.`);
+        return undefined;
+      }
+      const fullTask = await this.taskStore.load(taskId, context);
+      return { payload: { $case: 'task', value: fullTask || task } };
     }
 
-    if (!taskId) {
-      console.error(`Task ID not found for event.`);
+    // All other event types are wrapped directly via ToProto.
+    try {
+      return ToProto.messageStreamResult(event);
+    } catch {
+      console.warn(`Unable to map event to StreamResponse, event will be skipped:`, event);
       return undefined;
     }
-
-    if ('artifacts' in event) {
-      const fullTask = await this.taskStore.load(taskId, context);
-      return { payload: { $case: 'task', value: fullTask || (event as Task) } };
-    }
-    if ('messageId' in event) {
-      return { payload: { $case: 'message', value: event as Message } };
-    }
-    if ('artifact' in event) {
-      return {
-        payload: { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent },
-      };
-    }
-    if ('status' in event) {
-      return {
-        payload: { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent },
-      };
-    }
-    console.error(`Unknown event type for stream response:`, event);
-    return undefined;
   }
 
   private async _sendPushNotificationIfNeeded(
@@ -698,8 +699,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     context: ServerCallContext
   ): Promise<StreamResponse | undefined> {
     const streamResponse = await this._mapEventToStreamResponse(event, context);
-    if (this.agentCard.capabilities?.pushNotifications && streamResponse) {
-      this.pushNotificationSender?.send(streamResponse, context);
+    if (!streamResponse) {
+      return undefined;
+    }
+    if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
+      Promise.resolve(this.pushNotificationSender.send(streamResponse, context)).catch((error) => {
+        console.error(`Failed to send push notification:`, error);
+      });
     }
     return streamResponse;
   }

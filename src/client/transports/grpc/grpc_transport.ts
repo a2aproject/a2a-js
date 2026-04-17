@@ -256,11 +256,11 @@ export class GrpcTransport implements Transport {
     });
   }
 
-  private async *_sendGrpcStreamingRequest<TReq, TRes>(
+  private async *_sendGrpcStreamingRequest<TReq>(
     method: 'sendStreamingMessage' | 'subscribeToTask',
     params: TReq,
     options: RequestOptions | undefined,
-    call: GrpcStreamCall<TReq, TRes>
+    call: GrpcStreamCall<TReq, StreamResponse>
   ): AsyncGenerator<StreamResponse, void, undefined> {
     const streamResponse = call(params, this._buildMetadata(options), this.grpcCallOptions ?? {});
 
@@ -276,7 +276,7 @@ export class GrpcTransport implements Transport {
 
     try {
       for await (const response of streamResponse) {
-        yield response as unknown as StreamResponse;
+        yield response;
       }
     } catch (error) {
       if (this.isServiceError(error)) {

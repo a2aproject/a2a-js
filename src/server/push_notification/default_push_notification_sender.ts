@@ -78,8 +78,12 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       case 'statusUpdate':
       case 'artifactUpdate':
         return payload.value.taskId;
-      default:
-        throw new Error(`Unknown payload case: ${(payload as unknown as { $case: string }).$case}`);
+      default: {
+        // Exhaustive check: if a new $case is added to the StreamResponse union
+        // without updating this switch, TypeScript will report a compile error here.
+        const _exhaustive: never = payload;
+        throw new Error(`Unknown payload case: ${(_exhaustive as { $case: string }).$case}`);
+      }
     }
   }
 
