@@ -127,7 +127,6 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     sendStreamingMessage(
       call: grpc.ServerWritableStream<SendMessageRequest, StreamResponse>
     ): Promise<void> {
-      // sendMessageStream already yields StreamResponse, no conversion needed.
       return wrapStreaming(
         call,
         (req) => req,
@@ -139,7 +138,6 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     subscribeToTask(
       call: grpc.ServerWritableStream<SubscribeToTaskRequest, StreamResponse>
     ): Promise<void> {
-      // resubscribe already yields StreamResponse, no conversion needed.
       return wrapStreaming(
         call,
         (req) => req,
