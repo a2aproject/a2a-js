@@ -37,25 +37,10 @@ vi.mock('../../../src/grpc/pb/a2a.js', () => {
   return { A2AServiceClient };
 });
 
-// Mock ToProto and FromProto to act as pass-throughs or return simple objects for testing flow
-vi.mock('../../../src/types/converters/to_proto.js', () => ({
-  ToProto: {
-    taskPushNotificationConfig: vi.fn((x) => x),
-  },
-}));
-
+// Mock FromProto to act as pass-through for testing transport flow
 vi.mock('../../../src/types/converters/from_proto.js', () => ({
   FromProto: {
-    agentCard: vi.fn((x) => x),
     sendMessageResult: vi.fn((x) => x),
-    message: vi.fn((x) => x),
-    getTaskPushNotificationConfig: vi.fn((x) => x),
-    listTaskPushNotificationConfig: vi.fn((x) => x),
-    task: vi.fn((x) => x),
-    taskStatusUpdate: vi.fn((x) => x),
-    taskArtifactUpdate: vi.fn((x) => x),
-    taskPushNotificationConfig: vi.fn((x) => x),
-    messageStreamResult: vi.fn((x) => x),
   },
 }));
 
