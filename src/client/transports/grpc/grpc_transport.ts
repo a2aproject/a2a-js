@@ -78,8 +78,7 @@ export class GrpcTransport implements Transport {
       'getExtendedAgentCard',
       { tenant: '' },
       options,
-      this.grpcClient.getExtendedAgentCard.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.getExtendedAgentCard.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -122,8 +121,7 @@ export class GrpcTransport implements Transport {
       'createTaskPushNotificationConfig',
       params,
       options,
-      this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -140,8 +138,7 @@ export class GrpcTransport implements Transport {
       'getTaskPushNotificationConfig',
       params,
       options,
-      this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -158,8 +155,7 @@ export class GrpcTransport implements Transport {
       'listTaskPushNotificationConfigs',
       params,
       options,
-      this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient),
-      (res) => res
+      this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -182,8 +178,7 @@ export class GrpcTransport implements Transport {
       'getTask',
       params,
       options,
-      this.grpcClient.getTask.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.getTask.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -193,8 +188,7 @@ export class GrpcTransport implements Transport {
       'cancelTask',
       params,
       options,
-      this.grpcClient.cancelTask.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.cancelTask.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -204,7 +198,7 @@ export class GrpcTransport implements Transport {
       ListTasksRequest,
       ListTasksResponse,
       ListTasksResponse
-    >('listTasks', params, options, this.grpcClient.listTasks.bind(this.grpcClient), (res) => res);
+    >('listTasks', params, options, this.grpcClient.listTasks.bind(this.grpcClient));
     return rpcResponse;
   }
 
@@ -225,7 +219,7 @@ export class GrpcTransport implements Transport {
     params: TReq,
     options: RequestOptions | undefined,
     call: GrpcUnaryCall<TReq, TRes>,
-    converter: (res: TRes) => TResponse
+    converter: (res: TRes) => TResponse = (res) => res as unknown as TResponse
   ): Promise<TResponse> {
     return new Promise((resolve, reject) => {
       let onAbort: (() => void) | undefined;

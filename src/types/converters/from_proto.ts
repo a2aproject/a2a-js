@@ -8,9 +8,7 @@ import { Message, SendMessageResponse, Task } from '../pb/a2a.js';
  */
 export class FromProto {
   static sendMessageResult(response: SendMessageResponse): Task | Message {
-    if (response.payload?.$case === 'task') {
-      return response.payload.value;
-    } else if (response.payload?.$case === 'message') {
+    if (response.payload?.$case === 'task' || response.payload?.$case === 'message') {
       return response.payload.value;
     }
     throw new GenericError('Invalid SendMessageResponse: missing result');
