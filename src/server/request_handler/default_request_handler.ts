@@ -610,32 +610,41 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const taskId = params.id;
-    const task = await this.taskStore.load(taskId, context);
-    if (!task) {
-      throw new TaskNotFoundError(`Task not found: ${taskId}`);
-    }
 
-    // Yield the current task state first
-    yield { payload: { $case: 'task', value: task } };
-
-    // If task is already in a final state, no more events will come.
-    if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
-      return;
-    }
-
+    // Attach to the event bus BEFORE loading the task from the store.
+    // This eliminates the race condition where events published between the store
+    // load and the subscription would be missed. The ExecutionEventQueue constructor
+    // synchronously registers listeners, so all events from this point forward are
+    // buffered in the queue's internal array.
     const eventBus = this.eventBusManager.getByTaskId(taskId);
-    if (!eventBus) {
-      // No active execution for this task, so no live events.
-      console.warn(`Resubscribe: No active event bus for task ${taskId}.`);
-      return;
-    }
-
-    // Attach a new queue to the existing bus for this resubscription
-    const eventQueue = new ExecutionEventQueue(eventBus);
-    // Note: The ResultManager part is already handled by the original execution flow.
-    // Resubscribe just listens for new events.
+    const eventQueue = eventBus ? new ExecutionEventQueue(eventBus) : undefined;
 
     try {
+      const task = await this.taskStore.load(taskId, context);
+      if (!task) {
+        throw new TaskNotFoundError(`Task not found: ${taskId}`);
+      }
+      if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
+        throw new UnsupportedOperationError(
+          `Task ${taskId} is in a terminal state (${task.status!.state}) and cannot be subscribed to.`
+        );
+      }
+
+      // Per spec 3.1.6: "The operation MUST return a Task object as the first event
+      // in the stream, representing the current state of the task at the time of
+      // subscription."
+      yield { payload: { $case: 'task', value: task } };
+
+      // If no active event bus exists, the task has no running execution
+      // to produce further events.
+      if (!eventQueue) {
+        console.warn(`Resubscribe: No active event bus for task ${taskId}.`);
+        return;
+      }
+
+      // Stream live events, filtering by taskId.
+      // The ResultManager is already handled by the original execution flow;
+      // resubscribe only listens for new events.
       for await (const event of eventQueue.events()) {
         switch (event.kind) {
           case 'statusUpdate':
@@ -661,7 +670,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
       }
     } finally {
-      eventQueue.stop();
+      eventQueue?.stop();
     }
   }
 
