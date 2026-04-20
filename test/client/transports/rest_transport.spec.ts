@@ -101,6 +101,19 @@ describe('RestTransport', () => {
       );
     });
 
+    it('should send message with tenant prefix successfully', async () => {
+      const messageParams = createMessageParams();
+      messageParams.tenant = 'tenant1';
+      const mockResponse = createMockProtoMessage();
+
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.sendMessage(messageParams);
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/message:send`);
+    });
+
     it('should correctly add the extension headers', async () => {
       const messageParams = createMessageParams();
       const expectedExtensions = 'extension1,extension2';
@@ -139,6 +152,18 @@ describe('RestTransport', () => {
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=0`);
       expect(options?.method).to.equal('GET');
+    });
+
+    it('should get task with tenant prefix successfully', async () => {
+      const taskId = 'task-123';
+      const mockTask = createMockProtoTask(taskId);
+
+      mockFetch.mockResolvedValue(createRestResponse(mockTask));
+
+      await transport.getTask({ id: taskId, tenant: 'tenant1', historyLength: 0 });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/tasks/${taskId}?historyLength=0`);
     });
 
     it('should pass historyLength as query parameter', async () => {
@@ -190,6 +215,44 @@ describe('RestTransport', () => {
       await expect(
         transport.cancelTask({ id: 'task-123', tenant: '', metadata: {} })
       ).rejects.toThrow(TaskNotCancelableError);
+    });
+  });
+
+  describe('listTasks', () => {
+    it('should list tasks successfully', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      const result = await transport.listTasks({
+        tenant: '',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+      });
+
+      expect(result).to.deep.equal(mockResponse);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tasks?status=0`);
+      expect(options?.method).to.equal('GET');
+    });
+
+    it('should list tasks with tenant prefix successfully', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.listTasks({
+        tenant: 'tenant1',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+      });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/tasks?status=0`);
     });
   });
 

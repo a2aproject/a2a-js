@@ -128,6 +128,13 @@ describe('restHandler', () => {
       assert.deepEqual(response.body.name, testAgentCard.name);
     });
 
+    it('should return the agent card with 200 OK when tenant is provided', async () => {
+      const response = await request(app).get('/tenant1/extendedAgentCard').expect(200);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
+      assert.deepEqual(response.body.name, testAgentCard.name);
+    });
+
     it('should return 400 if getAuthenticatedExtendedAgentCard fails', async () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
         new RequestMalformedError('Card fetch failed')
@@ -162,6 +169,23 @@ describe('restHandler', () => {
       assert.deepEqual((converted_result as Task).id, testTask.id);
       // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
+    });
+
+    it('should accept message with tenant prefix and pass tenant to handler', async () => {
+      const message = ProtoMessage.toJSON(testMessage);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
+
+      await request(app).post('/tenant1/message:send').send({ message }).expect(201);
+
+      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: 'tenant1',
+          message: expect.objectContaining({
+            messageId: 'msg-1',
+          }),
+        }),
+        expect.anything()
+      );
     });
 
     it('should return 400 when message is invalid', async () => {
