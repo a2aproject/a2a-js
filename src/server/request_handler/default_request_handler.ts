@@ -185,7 +185,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          await this._sendPushNotificationIfNeeded(event, context);
+          const streamResponse = await this._mapEventToStreamResponse(event, context);
+          await this._sendPushNotificationIfNeeded(context, streamResponse);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -410,7 +411,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
-        const streamResponse = await this._sendPushNotificationIfNeeded(event, context);
+        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        await this._sendPushNotificationIfNeeded(context, streamResponse);
         if (streamResponse) {
           yield streamResponse; // Stream the event to the client
         }
@@ -698,10 +700,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   private async _sendPushNotificationIfNeeded(
-    event: AgentExecutionEvent,
-    context: ServerCallContext
+    context: ServerCallContext,
+    streamResponse: StreamResponse | undefined
   ): Promise<StreamResponse | undefined> {
-    const streamResponse = await this._mapEventToStreamResponse(event, context);
     if (!streamResponse) {
       return undefined;
     }
