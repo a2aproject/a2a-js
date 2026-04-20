@@ -10,13 +10,7 @@ import {
   RequestMalformedError,
   ExtendedAgentCardNotConfiguredError,
 } from '../../errors.js';
-import {
-  Task,
-  AgentCard,
-  TaskPushNotificationConfig,
-  A2AStreamEventData,
-  SendMessageResult,
-} from '../../index.js';
+import { Task, AgentCard, TaskPushNotificationConfig, SendMessageResult } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -87,7 +81,7 @@ export class JsonRpcTransport implements Transport {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendStreamingRequest<SendMessageRequest>(
       'SendStreamingMessage',
       params,
@@ -174,7 +168,7 @@ export class JsonRpcTransport implements Transport {
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendStreamingRequest<SubscribeToTaskRequest>(
       'SubscribeToTask',
       params,
@@ -285,7 +279,7 @@ export class JsonRpcTransport implements Transport {
     params: TParams,
     options: RequestOptions | undefined,
     requestType: MessageFns<TParams> | undefined
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const clientRequestId = this.requestIdCounter++;
     const rpcRequest: JSONRPCRequest = {
       jsonrpc: '2.0',
@@ -324,14 +318,14 @@ export class JsonRpcTransport implements Transport {
     }
 
     for await (const event of parseSseStream(response)) {
-      yield this._processSseEventData<A2AStreamEventData>(event.data, clientRequestId);
+      yield this._processSseEventData(event.data, clientRequestId);
     }
   }
 
-  private _processSseEventData<TStreamItem>(
+  private _processSseEventData(
     jsonData: string,
     originalRequestId: number | string | null
-  ): TStreamItem {
+  ): StreamResponse {
     if (!jsonData.trim()) {
       throw new Error('Attempted to process empty SSE event data.');
     }
@@ -364,11 +358,7 @@ export class JsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    const response = StreamResponse.fromJSON(a2aStreamResponse.result);
-    if (!response.payload) {
-      throw new Error('Invalid stream response: missing payload');
-    }
-    return response.payload.value as unknown as TStreamItem;
+    return StreamResponse.fromJSON(a2aStreamResponse.result);
   }
 
   private static mapToError(response: JSONRPCErrorResponse): Error {

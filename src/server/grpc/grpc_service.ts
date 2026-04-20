@@ -131,7 +131,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         (req) => req,
         requestHandler.sendMessageStream.bind(requestHandler),
-        ToProto.messageStreamResult
+        (res) => res
       );
     },
 
@@ -142,7 +142,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         call,
         (req) => req,
         requestHandler.resubscribe.bind(requestHandler),
-        ToProto.messageStreamResult
+        (res) => res
       );
     },
 

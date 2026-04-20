@@ -1,4 +1,4 @@
-import { Task, TaskPushNotificationConfig } from '../../index.js';
+import { TaskPushNotificationConfig, StreamResponse } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore } from './push_notification_store.js';
@@ -32,42 +32,68 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     };
   }
 
-  async send(task: Task, context: ServerCallContext): Promise<void> {
-    const pushConfigs = await this.pushNotificationStore.load(task.id, context);
+  async send(streamResponse: StreamResponse, context: ServerCallContext): Promise<void> {
+    const taskId = this._getTaskId(streamResponse);
+    const pushConfigs = await this.pushNotificationStore.load(taskId, context);
     if (!pushConfigs || pushConfigs.length === 0) {
       return;
     }
 
-    const lastPromise = this.notificationChain.get(task.id) ?? Promise.resolve();
+    const lastPromise = this.notificationChain.get(taskId) ?? Promise.resolve();
     // Chain promises to ensure notifications for the same task are sent sequentially.
     // Once the promise is resolved, the Garbage Collector will clean it up if there are no other references to it.
     // This will prevent memory to linearly grow with the number of notifications sent.
-    const newPromise = lastPromise.then(async () => {
-      const dispatches = pushConfigs.map(async (pushConfig) => {
-        try {
-          await this._dispatchNotification(task, pushConfig);
-        } catch (error) {
-          console.error(
-            `Error sending push notification for task_id=${task.id} to URL: ${pushConfig.url}. Error:`,
-            error
-          );
-        }
+    const newPromise = lastPromise
+      .catch(() => {})
+      .then(async () => {
+        const dispatches = pushConfigs.map(async (pushConfig) => {
+          try {
+            await this._dispatchNotification(streamResponse, pushConfig, taskId);
+          } catch (error) {
+            console.error(
+              `Error sending push notification for task_id=${taskId} to URL: ${pushConfig.url}. Error:`,
+              error
+            );
+          }
+        });
+        await Promise.all(dispatches);
       });
-      await Promise.all(dispatches);
-    });
-    this.notificationChain.set(task.id, newPromise);
+    this.notificationChain.set(taskId, newPromise);
 
     return newPromise.finally(() => {
       // Clean up the chain if it's the last notification
-      if (this.notificationChain.get(task.id) === newPromise) {
-        this.notificationChain.delete(task.id);
+      if (this.notificationChain.get(taskId) === newPromise) {
+        this.notificationChain.delete(taskId);
       }
     });
   }
 
+  private _getTaskId(streamResponse: StreamResponse): string {
+    const payload = streamResponse.payload;
+    if (!payload) {
+      throw new Error('StreamResponse payload is undefined');
+    }
+    switch (payload.$case) {
+      case 'task':
+        return payload.value.id;
+      case 'statusUpdate':
+      case 'artifactUpdate':
+        return payload.value.taskId;
+      case 'message':
+        throw new Error('Push notification should not be sent for message payload.');
+      default: {
+        // Exhaustive check: if a new $case is added to the StreamResponse union
+        // without updating this switch, TypeScript will report a compile error here.
+        const _exhaustive: never = payload;
+        throw new Error(`Unknown payload case: ${(_exhaustive as { $case: string }).$case}`);
+      }
+    }
+  }
+
   private async _dispatchNotification(
-    task: Task,
-    pushConfig: TaskPushNotificationConfig
+    streamResponse: StreamResponse,
+    pushConfig: TaskPushNotificationConfig,
+    taskId: string
   ): Promise<void> {
     const url = pushConfig.url;
     const controller = new AbortController();
@@ -86,7 +112,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(task),
+        body: JSON.stringify(StreamResponse.toJSON(streamResponse)),
         signal: controller.signal,
       });
 
@@ -94,7 +120,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      console.info(`Push notification sent for task_id=${task.id} to URL: ${url}`);
+      console.info(`Push notification sent for task_id=${taskId} to URL: ${url}`);
     } finally {
       clearTimeout(timeoutId);
     }

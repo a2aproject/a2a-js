@@ -29,6 +29,7 @@ import {
   ListTasksRequest,
   ListTasksResponse,
   ListTaskPushNotificationConfigsResponse,
+  StreamResponse,
 } from '../../index.js';
 import { AgentExecutor } from '../agent_execution/agent_executor.js';
 import { RequestContext } from '../agent_execution/request_context.js';
@@ -41,6 +42,7 @@ import { ExecutionEventQueue } from '../events/execution_event_queue.js';
 import { ResultManager } from '../result_manager.js';
 import { TaskStore } from '../store.js';
 import { A2ARequestHandler } from './a2a_request_handler.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 import {
   InMemoryPushNotificationStore,
   PushNotificationStore,
@@ -183,7 +185,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          await this._sendPushNotificationIfNeeded(event, context);
+          const streamResponse = await this._mapEventToStreamResponse(event, context);
+          await this._sendPushNotificationIfNeeded(context, streamResponse);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -338,11 +341,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async *sendMessageStream(
     params: SendMessageRequest,
     context: ServerCallContext
-  ): AsyncGenerator<
-    Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-    void,
-    undefined
-  > {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const incomingMessage = params.message;
     if (!incomingMessage?.messageId) {
       // For streams, messageId might be set by client, or server can generate if not present.
@@ -412,8 +411,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
-        await this._sendPushNotificationIfNeeded(event, context);
-        yield event; // Stream the event to the client
+        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        await this._sendPushNotificationIfNeeded(context, streamResponse);
+        if (streamResponse) {
+          yield streamResponse; // Stream the event to the client
+        }
       }
     } finally {
       // Cleanup when the stream is fully consumed or breaks
@@ -603,13 +605,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async *resubscribe(
     params: SubscribeToTaskRequest,
     context: ServerCallContext
-  ): AsyncGenerator<
-    | Task // Initial task state
-    | TaskStatusUpdateEvent
-    | TaskArtifactUpdateEvent,
-    void,
-    undefined
-  > {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     if (!this.agentCard.capabilities?.streaming) {
       throw new UnsupportedOperationError('Streaming (and thus resubscription) is not supported.');
     }
@@ -621,7 +617,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     // Yield the current task state first
-    yield task;
+    yield { payload: { $case: 'task', value: task } };
 
     // If task is already in a final state, no more events will come.
     if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
@@ -646,12 +642,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // The event bus might be shared if messageId was reused, though
         // ExecutionEventBusManager tries to give one bus per original message.
         if ('status' in event && 'taskId' in event && event.taskId === taskId) {
-          yield event as TaskStatusUpdateEvent;
+          yield { payload: { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent } };
         } else if ('artifact' in event && event.taskId === taskId) {
-          yield event as TaskArtifactUpdateEvent;
+          yield { payload: { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent } };
         } else if ('artifacts' in event && (event as Task).id === taskId) {
           // This implies the task was re-emitted, yield it.
-          yield event as Task;
+          yield { payload: { $case: 'task', value: event as Task } };
         }
         // We don't yield 'message' events on resubscribe typically,
         // as those signal the end of an interaction for the *original* request.
@@ -662,35 +658,60 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
-  private async _sendPushNotificationIfNeeded(
+  /**
+   * Maps a raw AgentExecutionEvent to a StreamResponse discriminated union.
+   *
+   * For Task events (identified by 'artifacts' property), the full task is loaded
+   * from the store to include accumulated history and artifacts.
+   *
+   * For non-Task events, delegates to `ToProto.messageStreamResult` which uses
+   * duck-typing with the following check order (order is significant because
+   * Task also has 'status', so 'artifacts' must be checked first):
+   *   1. 'messageId' -> Message
+   *   2. 'artifacts' -> Task
+   *   3. 'status' -> TaskStatusUpdateEvent
+   *   4. 'artifact' -> TaskArtifactUpdateEvent
+   */
+  private async _mapEventToStreamResponse(
     event: AgentExecutionEvent,
     context: ServerCallContext
-  ): Promise<void> {
-    if (!this.agentCard.capabilities?.pushNotifications) {
-      return;
-    }
+  ): Promise<StreamResponse | undefined> {
+    try {
+      if ('artifacts' in event) {
+        const task = event as Task;
+        const taskId = task.id;
+        if (!taskId) {
+          console.error(`Task ID not found for task event.`);
+          return undefined;
+        }
+        const fullTask = await this.taskStore.load(taskId, context).catch((error): Task | null => {
+          console.warn('Failed to load full task from store, falling back to event data:', error);
+          return null;
+        });
+        return { payload: { $case: 'task', value: fullTask || task } };
+      }
 
-    let taskId: string = '';
-    if ('artifacts' in event) {
-      const task = event as Task;
-      taskId = task.id;
-    } else {
-      taskId = event.taskId;
+      // All other event types are wrapped directly via ToProto.
+      return ToProto.messageStreamResult(event);
+    } catch (error) {
+      console.warn(`Unable to map event to StreamResponse, event will be skipped:`, event, error);
+      return undefined;
     }
+  }
 
-    if (!taskId) {
-      console.error(`Task ID not found for event.`);
-      return;
+  private async _sendPushNotificationIfNeeded(
+    context: ServerCallContext,
+    streamResponse: StreamResponse | undefined
+  ): Promise<StreamResponse | undefined> {
+    if (!streamResponse) {
+      return undefined;
     }
-
-    const task = await this.taskStore.load(taskId, context);
-    if (!task) {
-      console.error(`Task ${taskId} not found.`);
-      return;
+    if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
+      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
+        console.error(`Failed to send push notification:`, error);
+      });
     }
-
-    // Send push notification in the background.
-    this.pushNotificationSender?.send(task, context);
+    return streamResponse;
   }
 
   private async _handleProcessingError(

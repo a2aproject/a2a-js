@@ -14,7 +14,7 @@ import {
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   SendMessageRequest,
-  A2AStreamEventData,
+  StreamResponse,
   SendMessageResult,
   ListTasksRequest,
   ListTasksResponse,
@@ -101,7 +101,7 @@ export class GrpcTransport implements Transport {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendGrpcStreamingRequest(
       'sendStreamingMessage',
       params,
@@ -211,7 +211,7 @@ export class GrpcTransport implements Transport {
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendGrpcStreamingRequest(
       'subscribeToTask',
       params,
@@ -256,12 +256,12 @@ export class GrpcTransport implements Transport {
     });
   }
 
-  private async *_sendGrpcStreamingRequest<TReq, TRes>(
+  private async *_sendGrpcStreamingRequest<TReq>(
     method: 'sendStreamingMessage' | 'subscribeToTask',
     params: TReq,
     options: RequestOptions | undefined,
-    call: GrpcStreamCall<TReq, TRes>
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    call: GrpcStreamCall<TReq, StreamResponse>
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const streamResponse = call(params, this._buildMetadata(options), this.grpcCallOptions ?? {});
 
     let onAbort: (() => void) | undefined;
@@ -276,7 +276,7 @@ export class GrpcTransport implements Transport {
 
     try {
       for await (const response of streamResponse) {
-        yield FromProto.messageStreamResult(response);
+        yield response;
       }
     } catch (error) {
       if (this.isServiceError(error)) {
@@ -327,7 +327,7 @@ export class GrpcTransport implements Transport {
             'getTaskPushNotificationConfig',
             'createTaskPushNotificationConfig',
             'deleteTaskPushNotificationConfig',
-            'listTaskPushNotificationConfig',
+            'listTaskPushNotificationConfigs',
           ].includes(method)
         ) {
           return new PushNotificationNotSupportedError(error.details);

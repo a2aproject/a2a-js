@@ -1,5 +1,6 @@
 import express from 'express';
 import { Message, AgentCard, AGENT_CARD_PATH, TaskStatusUpdateEvent, Task } from '../src/index.js';
+import { StreamResponse } from '../src/types/pb/a2a.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -352,8 +353,6 @@ export class ItkAgentExecutor implements AgentExecutor {
           let textValue = '';
           if (part.content?.$case === 'text') {
             textValue = part.content.value;
-          } else if ('text' in part) {
-            textValue = (part as unknown as Record<string, unknown>).text as string;
           }
 
           if (textValue) {
@@ -380,14 +379,6 @@ export class ItkAgentExecutor implements AgentExecutor {
           if (part.content?.$case === 'raw') {
             if (part.content.value) {
               rawBuf = Buffer.from(part.content.value);
-            }
-          } else if ('raw' in part) {
-            const rawValue = (part as unknown as Record<string, unknown>).raw;
-            if (rawValue) {
-              rawBuf =
-                typeof rawValue === 'string'
-                  ? Buffer.from(rawValue, 'base64')
-                  : Buffer.from(rawValue as ArrayLike<number>);
             }
           }
 
@@ -416,15 +407,15 @@ export class ItkAgentExecutor implements AgentExecutor {
           console.log('Event received from called agent:', JSON.stringify(event));
           let message: Message | undefined;
 
-          if ('parts' in event) {
-            message = event;
-          } else if ('status' in event && event.status?.message) {
-            message = event.status.message;
-          } else if ('statusUpdate' in event) {
-            const statusUpdate = (event as { statusUpdate?: { status?: { message?: Message } } })
-              .statusUpdate;
-            if (statusUpdate?.status?.message) {
-              message = statusUpdate.status.message;
+          const streamResponse = event as StreamResponse;
+          if (streamResponse.payload) {
+            const payload = streamResponse.payload;
+            if (payload.$case === 'message') {
+              message = payload.value;
+            } else if (payload.$case === 'statusUpdate') {
+              message = payload.value.status?.message;
+            } else if (payload.$case === 'task') {
+              message = payload.value.status?.message;
             }
           }
 
