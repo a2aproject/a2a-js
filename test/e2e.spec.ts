@@ -229,11 +229,9 @@ describe('Client E2E tests', () => {
               },
             },
           ];
-          agentExecutor.events = expected.map((e: any) => {
-            const $case = e.payload!.$case;
-            const value = e.payload!.value;
-            return AgentEvent[$case as keyof typeof AgentEvent](value);
-          });
+          agentExecutor.events = expected.map(
+            (e: any) => e.payload!.value
+          ) as AgentExecutionEvent[];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual: StreamResponse[] = [];

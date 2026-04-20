@@ -76,10 +76,11 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     switch (payload.$case) {
       case 'task':
         return payload.value.id;
-      case 'message':
       case 'statusUpdate':
       case 'artifactUpdate':
         return payload.value.taskId;
+      case 'message':
+        throw new Error('Push notification should not be sent for message payload.');
       default: {
         // Exhaustive check: if a new $case is added to the StreamResponse union
         // without updating this switch, TypeScript will report a compile error here.

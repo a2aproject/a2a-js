@@ -187,7 +187,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          await this._mapEventAndNotify(event, context);
+          const streamResponse = await this._mapEventToStreamResponse(event, context);
+          await this._notify(context, streamResponse);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -413,7 +414,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
-        const streamResponse = await this._mapEventAndNotify(event, context);
+        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        await this._notify(context, streamResponse);
         yield streamResponse;
       }
     } finally {
@@ -701,11 +703,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * fires a push notification if configured. Returns the StreamResponse
    * so the caller can yield it.
    */
-  private async _mapEventAndNotify(
-    event: AgentExecutionEvent,
-    context: ServerCallContext
-  ): Promise<StreamResponse> {
-    const streamResponse = await this._mapEventToStreamResponse(event, context);
+  private async _notify(context: ServerCallContext, streamResponse: StreamResponse): Promise<void> {
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
       // Fire-and-forget: push notification delivery should not block the stream or response.
       // Errors are logged but do not propagate to the caller.
@@ -713,7 +711,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         console.error(`Failed to send push notification:`, error);
       });
     }
-    return streamResponse;
   }
 
   private async _handleProcessingError(
