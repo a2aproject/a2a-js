@@ -11,7 +11,7 @@ import {
   ExtendedAgentCardNotConfiguredError,
 } from '../../errors.js';
 
-import { A2AStreamEventData, SendMessageResult } from '../../index.js';
+import { SendMessageResult } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -95,7 +95,7 @@ export class RestTransport implements Transport {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const requestBody = SendMessageRequest.toJSON(params);
     yield* this._sendStreamingRequest('/message:stream', requestBody, options);
   }
@@ -225,7 +225,7 @@ export class RestTransport implements Transport {
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendStreamingRequest(`/tasks/${params.id}:subscribe`, undefined, options);
   }
 
@@ -320,7 +320,7 @@ export class RestTransport implements Transport {
     path: string,
     body: unknown | undefined,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const url = `${this.endpoint}${path}`;
     const requestInit: RequestInit = {
       method: 'POST',
@@ -354,15 +354,14 @@ export class RestTransport implements Transport {
     }
   }
 
-  private _processSseEventData(jsonData: string): A2AStreamEventData {
+  private _processSseEventData(jsonData: string): StreamResponse {
     if (!jsonData.trim()) {
       throw new Error('Attempted to process empty SSE event data.');
     }
 
     try {
       const response = JSON.parse(jsonData);
-      const protoResponse = StreamResponse.fromJSON(response);
-      return FromProto.messageStreamResult(protoResponse);
+      return StreamResponse.fromJSON(response);
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
       throw new Error(
