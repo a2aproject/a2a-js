@@ -912,7 +912,7 @@ describe('Push Notification Integration Tests', () => {
   });
 
   describe('StreamResponse payload types', () => {
-    it('should send message payload correctly', async () => {
+    it('should throw if tried to send message payload', async () => {
       const taskId = 'test-message-payload';
       const pushConfig: TaskPushNotificationConfig = {
         tenant: '',
@@ -947,15 +947,17 @@ describe('Push Notification Integration Tests', () => {
         },
       };
 
-      await pushNotificationSender.send(streamResponse, defaultContext);
+      let threw = false;
+      try {
+        await pushNotificationSender.send(streamResponse, defaultContext);
+      } catch (error: any) {
+        threw = true;
+        assert.include(error.message, 'Push notification should not be sent for message payload');
+      }
+      assert.isTrue(threw, 'Should have thrown an error');
 
-      // Wait for notifications to be processed (it's async in the background)
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      assert.equal(receivedNotifications.length, 1);
-      const notification = receivedNotifications[0];
-      assert.equal(notification.url, '/notify');
-      assert.deepEqual(notification.body, StreamResponse.toJSON(streamResponse));
+      // Verify no notifications were sent
+      assert.equal(receivedNotifications.length, 0);
     });
 
     it('should send statusUpdate payload correctly', async () => {
