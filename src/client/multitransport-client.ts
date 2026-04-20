@@ -140,10 +140,10 @@ export class Client {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
 
       let streamValue: StreamResponse;
-      if ('artifacts' in result) {
-        streamValue = { payload: { $case: 'task', value: result } };
-      } else {
+      if ('messageId' in result) {
         streamValue = { payload: { $case: 'message', value: result } };
+      } else {
+        streamValue = { payload: { $case: 'task', value: result } };
       }
 
       const afterArgs: AfterArgs<'sendMessageStream'> = {
