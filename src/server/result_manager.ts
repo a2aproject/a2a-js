@@ -111,7 +111,7 @@ export class ResultManager {
           // Basic append logic, assuming parts are compatible
           // More sophisticated merging might be needed for specific part types
           const existingArtifact = this.currentTask.artifacts[existingArtifactIndex];
-          existingArtifact.parts.push(...(artifact.parts || []));
+          existingArtifact.parts = [...(existingArtifact.parts || []), ...(artifact.parts || [])];
           if (artifact.description) existingArtifact.description = artifact.description;
           if (artifact.name) existingArtifact.name = artifact.name;
           if (artifact.metadata)
