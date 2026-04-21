@@ -1,5 +1,5 @@
 import express from 'express';
-import { Message, AgentCard, AGENT_CARD_PATH } from '../src/index.js';
+import { Message, AgentCard, AGENT_CARD_PATH, TaskState, Role } from '../src/index.js';
 import { StreamResponse } from '../src/types/pb/a2a.js';
 import {
   InMemoryTaskStore,
