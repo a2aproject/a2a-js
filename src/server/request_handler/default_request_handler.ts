@@ -610,6 +610,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!this.agentCard.capabilities?.streaming) {
       throw new UnsupportedOperationError('Streaming (and thus resubscription) is not supported.');
     }
+
     const taskId = params.id;
 
     // Attach to the event bus BEFORE loading the task from the store.
@@ -716,9 +717,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     streamResponse: StreamResponse
   ): Promise<void> {
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      // Fire-and-forget: push notification delivery should not block the stream or response.
-      // Errors are logged but do not propagate to the caller.
-      Promise.resolve(this.pushNotificationSender.send(streamResponse, context)).catch((error) => {
+      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }
