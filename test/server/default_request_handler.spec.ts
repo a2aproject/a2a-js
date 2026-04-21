@@ -30,6 +30,7 @@ import {
   SendMessageRequest,
   Role,
   TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
   DeleteTaskPushNotificationConfigRequest,
   TaskPushNotificationConfig,
   Message,

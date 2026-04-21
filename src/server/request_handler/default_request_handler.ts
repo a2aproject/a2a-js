@@ -45,6 +45,7 @@ import { ExecutionEventQueue } from '../events/execution_event_queue.js';
 import { ResultManager } from '../result_manager.js';
 import { TaskStore } from '../store.js';
 import { A2ARequestHandler } from './a2a_request_handler.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 import {
   InMemoryPushNotificationStore,
   PushNotificationStore,
@@ -610,6 +611,18 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const taskId = params.id;
+    const task = await this.taskStore.load(taskId, context);
+    if (!task) {
+      throw new TaskNotFoundError(`Task not found: ${taskId}`);
+    }
+
+    // Yield the current task state first
+    yield { payload: { $case: 'task', value: task } };
+
+    // If task is already in a final state, no more events will come.
+    if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
+      return;
+    }
 
     // Attach to the event bus BEFORE loading the task from the store.
     // This eliminates the race condition where events published between the store
