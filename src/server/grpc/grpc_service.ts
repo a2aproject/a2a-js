@@ -66,11 +66,11 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   /**
    * Helper to wrap Unary calls with common logic (context, metadata, error handling)
    */
-  const wrapUnary = async <TReq, TRes, TResult = TRes>(
+  const wrapUnaryWithConverter = async <TReq, TRes, TResult>(
     call: grpc.ServerUnaryCall<TReq, TRes>,
     callback: grpc.sendUnaryData<TRes>,
     handler: (req: TReq, ctx: ServerCallContext) => Promise<TResult>,
-    converter: (res: TResult) => TRes = (res) => res as unknown as TRes
+    converter: (res: TResult) => TRes
   ) => {
     try {
       const context = await buildContext(call, options.userBuilder);
@@ -80,6 +80,14 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     } catch (error) {
       callback(mapToError(error), null);
     }
+  };
+
+  const wrapUnary = async <TReq, TRes>(
+    call: grpc.ServerUnaryCall<TReq, TRes>,
+    callback: grpc.sendUnaryData<TRes>,
+    handler: (req: TReq, ctx: ServerCallContext) => Promise<TRes>
+  ) => {
+    return wrapUnaryWithConverter(call, callback, handler, (res: TRes) => res);
   };
 
   /**
@@ -108,7 +116,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       call: grpc.ServerUnaryCall<SendMessageRequest, SendMessageResponse>,
       callback: grpc.sendUnaryData<SendMessageResponse>
     ): Promise<void> {
-      return wrapUnary(
+      return wrapUnaryWithConverter(
         call,
         callback,
         requestHandler.sendMessage.bind(requestHandler),
@@ -132,7 +140,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       call: grpc.ServerUnaryCall<DeleteTaskPushNotificationConfigRequest, Empty>,
       callback: grpc.sendUnaryData<Empty>
     ): Promise<void> {
-      return wrapUnary(
+      return wrapUnaryWithConverter(
         call,
         callback,
         requestHandler.deleteTaskPushNotificationConfig.bind(requestHandler),
