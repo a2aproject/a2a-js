@@ -41,7 +41,9 @@ export class ExecutionEventQueue {
         yield event;
         if (
           event.kind === 'message' ||
-          (event.kind === 'statusUpdate' && event.data.status && TERMINAL_STATE_LIST.includes(event.data.status.state))
+          (event.kind === 'statusUpdate' &&
+            event.data.status &&
+            TERMINAL_STATE_LIST.includes(event.data.status.state))
         ) {
           this.handleFinished();
           break;
