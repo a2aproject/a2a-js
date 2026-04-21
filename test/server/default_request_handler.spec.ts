@@ -1434,9 +1434,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     await mockTaskStore.save(fakeTask, serverCallContext);
 
-    // No active event bus, so the stream will end after the initial task yield
+    // Create an active event bus
+    const bus = executionEventBusManager.createOrGetByTaskId(taskId);
+
     const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
-    const results: StreamResponse[] = [];
+
+    // Advance once to yield the task and create the event queue
+    const firstResult = await generator.next();
+    assert.isFalse(firstResult.done);
+
+    // Now finish the bus to unblock the stream
+    bus.finished();
+
+    const results: StreamResponse[] = [firstResult.value];
     for await (const event of generator) {
       results.push(event);
     }
@@ -1444,6 +1454,30 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(results, 1, 'Should yield exactly one event (the initial task snapshot)');
     assert.equal(results[0].payload?.$case, 'task');
     assert.deepEqual((results[0].payload as { $case: 'task'; value: Task }).value, fakeTask);
+  });
+
+  it('resubscribe: should throw UnsupportedOperationError when no active event bus exists', async () => {
+    const taskId = 'task-resub-no-bus';
+    const fakeTask: Task = {
+      id: taskId,
+      contextId: 'ctx-resub-no-bus',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
+    try {
+      await generator.next();
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.contain(
+        `Resubscribe: No active event bus for task ${taskId}`
+      );
+    }
   });
 
   it('getTask: should return an existing task from the store', async () => {

@@ -632,17 +632,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       }
 
+      if (!eventQueue) {
+        throw new UnsupportedOperationError(`Resubscribe: No active event bus for task ${taskId}.`);
+      }
+
       // Per spec 3.1.6: "The operation MUST return a Task object as the first event
       // in the stream, representing the current state of the task at the time of
       // subscription."
       yield { payload: { $case: 'task', value: task } };
-
-      // If no active event bus exists, the task has no running execution
-      // to produce further events.
-      if (!eventQueue) {
-        console.warn(`Resubscribe: No active event bus for task ${taskId}.`);
-        return;
-      }
 
       // Stream live events, filtering by taskId.
       // The ResultManager is already handled by the original execution flow;
