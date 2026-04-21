@@ -30,7 +30,6 @@ import {
   SendMessageRequest,
   Role,
   TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
   DeleteTaskPushNotificationConfigRequest,
   TaskPushNotificationConfig,
   Message,
@@ -43,6 +42,7 @@ import {
   DefaultExecutionEventBusManager,
   ExecutionEventBusManager,
 } from '../../src/server/events/execution_event_bus_manager.js';
+import { AgentEvent } from '../../src/server/events/execution_event_bus.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import {
   MockAgentExecutor,
@@ -174,16 +174,22 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // Publish task creation event so ResultManager creates the task
-      bus.publish({
-        id: ctx.taskId,
-        contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       const responseWithTaskId = { ...agentResponse, taskId: ctx.taskId };
-      bus.publish(responseWithTaskId);
+      bus.publish(AgentEvent.message(responseWithTaskId));
       bus.finished();
     });
 
@@ -225,54 +231,66 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        artifact: testArtifact,
-        append: false,
-        lastChunk: true,
-        metadata: {},
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_COMPLETED,
-          timestamp: undefined,
-          message: {
-            role: Role.ROLE_AGENT,
-            parts: [
-              {
-                content: { $case: 'text', value: 'Done!' },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: undefined,
-              },
-            ],
-            messageId: 'agent-msg-2',
-            taskId,
-            contextId,
-            extensions: [],
-            metadata: {},
-            referenceTaskIds: [],
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
           },
-        },
-        metadata: {},
-      });
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: testArtifact,
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: {
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Done!' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              messageId: 'agent-msg-2',
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -338,24 +356,36 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // First event is the task creation, which should be returned immediately
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Simulate work before publishing more events
       await vi.advanceTimersByTimeAsync(500);
 
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -417,24 +447,36 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const contextId = 'ctx-nonblock-abc';
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // First event is the task creation, which should be returned immediately
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Simulate work before publishing more events
       await vi.advanceTimersByTimeAsync(500);
 
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -526,50 +568,60 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskId = ctx.taskId;
 
       // Publish task creation
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Publish working status
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       // Mark as input-required with agent response message
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_INPUT_REQUIRED,
-          timestamp: undefined,
-          message: {
-            messageId: 'agent-msg-1',
-            role: Role.ROLE_AGENT,
-            parts: [
-              {
-                content: { $case: 'text', value: 'Response to message 1' },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: undefined,
-              },
-            ],
-            taskId,
-            contextId,
-            extensions: [],
-            metadata: {},
-            referenceTaskIds: [],
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-1',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 1' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
           },
-        },
-        metadata: {},
-      });
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -609,76 +661,84 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // Publish a status update with working state
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       // Publish a status update with working state and message
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_WORKING,
-          timestamp: undefined,
-          message: {
-            messageId: 'agent-msg-2',
-            role: Role.ROLE_AGENT,
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-2',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 2' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
+          },
+          metadata: {},
+        })
+      );
+
+      // Publish an artifact update
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: {
+            artifactId: 'artifact-1',
+            name: 'Test Document',
+            description: 'A test artifact.',
             parts: [
               {
-                content: { $case: 'text', value: 'Response to message 2' },
+                content: { $case: 'text', value: 'This is the content of the artifact.' },
                 mediaType: 'text/plain',
                 filename: '',
                 metadata: undefined,
               },
             ],
-            taskId,
-            contextId,
-            extensions: [],
             metadata: {},
-            referenceTaskIds: [],
+            extensions: [],
           },
-        },
-        metadata: {},
-      });
-
-      // Publish an artifact update
-      bus.publish({
-        taskId,
-        contextId,
-        artifact: {
-          artifactId: 'artifact-1',
-          name: 'Test Document',
-          description: 'A test artifact.',
-          parts: [
-            {
-              content: { $case: 'text', value: 'This is the content of the artifact.' },
-              mediaType: 'text/plain',
-              filename: '',
-              metadata: undefined,
-            },
-          ],
+          append: false,
+          lastChunk: true,
           metadata: {},
-          extensions: [],
-        },
-        append: false,
-        lastChunk: true,
-        metadata: {},
-      });
+        })
+      );
 
       // Mark as completed
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_COMPLETED,
-          timestamp: undefined,
-          message: undefined,
-        },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: undefined,
+          },
+          metadata: {},
+        })
+      );
 
       bus.finished();
     });
@@ -769,50 +829,60 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskId = ctx.taskId;
 
       // Publish task creation
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Publish working status
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       // Mark as input-required with agent response message
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_INPUT_REQUIRED,
-          timestamp: undefined,
-          message: {
-            messageId: 'agent-msg-1',
-            role: Role.ROLE_AGENT,
-            parts: [
-              {
-                content: { $case: 'text', value: 'Response to message 1' },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: undefined,
-              },
-            ],
-            taskId,
-            contextId,
-            extensions: [],
-            metadata: {},
-            referenceTaskIds: [],
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-1',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 1' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
           },
-        },
-        metadata: {},
-      });
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -858,78 +928,86 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // Publish a status update with working state
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       await vi.advanceTimersByTimeAsync(10);
 
       // Publish a status update with working state and message
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_WORKING,
-          timestamp: undefined,
-          message: {
-            messageId: 'agent-msg-2',
-            role: Role.ROLE_AGENT,
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-2',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 2' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
+          },
+          metadata: {},
+        })
+      );
+
+      // Publish an artifact update
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: {
+            artifactId: 'artifact-1',
+            name: 'Test Document',
+            description: 'A test artifact.',
             parts: [
               {
-                content: { $case: 'text', value: 'Response to message 2' },
+                content: { $case: 'text', value: 'This is the content of the artifact.' },
                 mediaType: 'text/plain',
                 filename: '',
                 metadata: undefined,
               },
             ],
-            taskId,
-            contextId,
-            extensions: [],
             metadata: {},
-            referenceTaskIds: [],
+            extensions: [],
           },
-        },
-        metadata: {},
-      });
-
-      // Publish an artifact update
-      bus.publish({
-        taskId,
-        contextId,
-        artifact: {
-          artifactId: 'artifact-1',
-          name: 'Test Document',
-          description: 'A test artifact.',
-          parts: [
-            {
-              content: { $case: 'text', value: 'This is the content of the artifact.' },
-              mediaType: 'text/plain',
-              filename: '',
-              metadata: undefined,
-            },
-          ],
+          append: false,
+          lastChunk: true,
           metadata: {},
-          extensions: [],
-        },
-        append: false,
-        lastChunk: true,
-        metadata: {},
-      });
+        })
+      );
 
       // Mark as completed
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_COMPLETED,
-          timestamp: undefined,
-          message: undefined,
-        },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: undefined,
+          },
+          metadata: {},
+        })
+      );
 
       bus.finished();
     });
@@ -1012,28 +1090,42 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const contextId = 'ctx-stream-1';
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       await new Promise((res) => setTimeout(res, 10));
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
       await new Promise((res) => setTimeout(res, 10));
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -1131,24 +1223,32 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const contextId = 'ctx-input';
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_INPUT_REQUIRED,
-          message: undefined,
-          timestamp: undefined,
-        },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -1181,27 +1281,41 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskId = ctx.taskId;
       contextId = ctx.contextId;
 
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
       await vi.advanceTimersByTimeAsync(100);
-      bus.publish({
-        taskId,
-        contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -2015,15 +2129,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let taskId: string;
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       taskId = ctx.taskId;
-      bus.publish({
-        messageId: 'msg-reply-1',
-        taskId: taskId,
-        contextId: contextId,
-        parts: [],
-        metadata: {},
-        extensions: [],
-        referenceTaskIds: [],
-      } as Message);
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'msg-reply-1',
+          taskId: taskId,
+          contextId: contextId,
+          role: Role.ROLE_AGENT,
+          parts: [],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
       bus.finished();
     });
 
@@ -2073,26 +2190,44 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let taskId: string;
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       taskId = ctx.taskId;
-      bus.publish({
-        id: taskId,
-        contextId: contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      } as Task);
-      bus.publish({
-        taskId: taskId,
-        contextId: contextId,
-        status: { state: TaskState.TASK_STATE_WORKING, timestamp: new Date().toISOString() },
-        metadata: {},
-      } as TaskStatusUpdateEvent);
-      bus.publish({
-        taskId: taskId,
-        contextId: contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: new Date().toISOString() },
-        metadata: {},
-      } as TaskStatusUpdateEvent);
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -2141,32 +2276,46 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let taskId: string;
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       taskId = ctx.taskId;
-      bus.publish({
-        id: taskId,
-        contextId: contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      } as Task);
-      bus.publish({
-        taskId: taskId,
-        contextId: contextId,
-        artifact: {
-          name: 'art-1',
-          mimeType: 'text/plain',
-          content: Buffer.from('hello').toString('base64'),
-        },
-        metadata: {},
-        append: false,
-        lastChunk: true,
-      } as unknown as TaskArtifactUpdateEvent);
-      bus.publish({
-        taskId: taskId,
-        contextId: contextId,
-        status: { state: TaskState.TASK_STATE_COMPLETED, timestamp: new Date().toISOString() },
-        metadata: {},
-      } as TaskStatusUpdateEvent);
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          artifact: {
+            name: 'art-1',
+            mimeType: 'text/plain',
+            content: Buffer.from('hello').toString('base64'),
+          },
+          metadata: {},
+          append: false,
+          lastChunk: true,
+        } as any)
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -2443,14 +2592,20 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let capturedContextId: string | undefined;
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(async (ctx, bus) => {
       capturedContextId = ctx.contextId;
-      bus.publish({
-        id: ctx.taskId,
-        contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       bus.finished();
     });
     await handler.sendMessage(params, serverCallContext);
@@ -2494,14 +2649,20 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let capturedContextId: string | undefined;
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(async (ctx, bus) => {
       capturedContextId = ctx.contextId;
-      bus.publish({
-        id: ctx.taskId,
-        contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       bus.finished();
     });
     await handler.sendMessage(params, serverCallContext);
@@ -2532,14 +2693,20 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     let capturedContextId: string | undefined;
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(async (ctx, bus) => {
       capturedContextId = ctx.contextId;
-      bus.publish({
-        id: ctx.taskId,
-        contextId: ctx.contextId,
-        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
-        artifacts: [],
-        history: [],
-        metadata: {},
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       bus.finished();
     });
     await handler.sendMessage(params, serverCallContext);
@@ -2591,18 +2758,20 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
       async (ctx: RequestContext, bus: ExecutionEventBus) => {
         capturedRequestContext = ctx;
-        bus.publish({
-          id: ctx.taskId,
-          contextId: ctx.contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          artifacts: [],
-          history: [],
-          metadata: {},
-        });
+        bus.publish(
+          AgentEvent.task({
+            id: ctx.taskId,
+            contextId: ctx.contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
         bus.finished();
       }
     );

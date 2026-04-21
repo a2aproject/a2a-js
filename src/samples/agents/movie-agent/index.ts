@@ -20,6 +20,7 @@ import {
   RequestContext,
   ExecutionEventBus,
   DefaultRequestHandler,
+  AgentEvent,
 } from '../../../server/index.js';
 import { agentCardHandler, jsonRpcHandler, UserBuilder } from '../../../server/express/index.js';
 import { MessageData } from 'genkit';
@@ -74,7 +75,7 @@ class MovieAgentExecutor implements AgentExecutor {
         history: [userMessage], // Start history with the current user message
         metadata: userMessage.metadata, // Carry over metadata from message if any
       };
-      eventBus.publish(initialTask);
+      eventBus.publish(AgentEvent.task(initialTask));
     }
 
     // 2. Publish "working" status update
@@ -104,7 +105,7 @@ class MovieAgentExecutor implements AgentExecutor {
       },
       metadata: {},
     };
-    eventBus.publish(workingStatusUpdate);
+    eventBus.publish(AgentEvent.statusUpdate(workingStatusUpdate));
 
     // 3. Prepare messages for Genkit prompt
     const historyForGenkit = contexts.get(contextId) || [];
@@ -157,7 +158,7 @@ class MovieAgentExecutor implements AgentExecutor {
         },
         metadata: {},
       };
-      eventBus.publish(failureUpdate);
+      eventBus.publish(AgentEvent.statusUpdate(failureUpdate));
       return;
     }
 
@@ -189,7 +190,7 @@ class MovieAgentExecutor implements AgentExecutor {
           },
           metadata: {},
         };
-        eventBus.publish(cancelledUpdate);
+        eventBus.publish(AgentEvent.statusUpdate(cancelledUpdate));
         return;
       }
 
@@ -242,7 +243,7 @@ class MovieAgentExecutor implements AgentExecutor {
         append: false,
         metadata: {},
       };
-      eventBus.publish(artifactUpdate);
+      eventBus.publish(AgentEvent.artifactUpdate(artifactUpdate));
 
       // 6. Update local history context (internal only)
       const agentMessage: Message = {
@@ -269,7 +270,7 @@ class MovieAgentExecutor implements AgentExecutor {
         },
         metadata: {},
       };
-      eventBus.publish(finalUpdate);
+      eventBus.publish(AgentEvent.statusUpdate(finalUpdate));
 
       console.log(`[MovieAgentExecutor] Task ${taskId} finished with state: ${finalA2AState}`);
     } catch (error: any) {
@@ -300,7 +301,7 @@ class MovieAgentExecutor implements AgentExecutor {
         },
         metadata: undefined,
       };
-      eventBus.publish(errorUpdate);
+      eventBus.publish(AgentEvent.statusUpdate(errorUpdate));
     }
   }
 }
