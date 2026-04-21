@@ -229,9 +229,22 @@ describe('Client E2E tests', () => {
               },
             },
           ];
-          agentExecutor.events = expected.map(
-            (e: any) => e.payload!.value
-          ) as AgentExecutionEvent[];
+          agentExecutor.events = expected.map((e: any) => {
+            const $case = e.payload!.$case;
+            const value = e.payload!.value;
+            switch ($case) {
+              case 'message':
+                return AgentEvent.message(value);
+              case 'task':
+                return AgentEvent.task(value);
+              case 'statusUpdate':
+                return AgentEvent.statusUpdate(value);
+              case 'artifactUpdate':
+                return AgentEvent.artifactUpdate(value);
+              default:
+                throw new Error(`Unknown $case: ${$case}`);
+            }
+          });
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual: StreamResponse[] = [];
