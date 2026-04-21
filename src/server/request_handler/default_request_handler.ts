@@ -705,13 +705,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
-    streamResponse: StreamResponse | undefined
+    streamResponse: StreamResponse
   ): Promise<void> {
-    if (!streamResponse) {
-      return;
-    }
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      Promise.resolve(this.pushNotificationSender.send(streamResponse, context)).catch((error) => {
+      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }

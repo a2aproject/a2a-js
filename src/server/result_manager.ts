@@ -131,9 +131,15 @@ export class ResultManager {
             );
             if (existingArtifactIndex !== -1) {
               if (artifactEvent.append) {
-                this.currentTask.artifacts[existingArtifactIndex].parts.push(
-                  ...(artifact.parts || [])
-                );
+                const existingArtifact = this.currentTask.artifacts[existingArtifactIndex];
+                existingArtifact.parts.push(...(artifact.parts || []));
+                if (artifact.description) existingArtifact.description = artifact.description;
+                if (artifact.name) existingArtifact.name = artifact.name;
+                if (artifact.metadata)
+                  existingArtifact.metadata = {
+                    ...existingArtifact.metadata,
+                    ...artifact.metadata,
+                  };
               } else {
                 this.currentTask.artifacts[existingArtifactIndex] = artifact;
               }
