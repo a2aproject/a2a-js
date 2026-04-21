@@ -1,5 +1,5 @@
 import express from 'express';
-import { Message, AgentCard, AGENT_CARD_PATH } from '../src/index.js';
+import { Message, AgentCard, AGENT_CARD_PATH, TaskState, Role } from '../src/index.js';
 import { StreamResponse } from '../src/types/pb/a2a.js';
 import {
   InMemoryTaskStore,
@@ -44,7 +44,11 @@ export class ItkAgentExecutor implements AgentExecutor {
       AgentEvent.task({
         id: context.taskId,
         contextId: context.contextId,
-        status: { state: 1, message: undefined, timestamp: new Date().toISOString() },
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
         artifacts: [],
         history: [context.userMessage],
         metadata: {},
@@ -56,7 +60,11 @@ export class ItkAgentExecutor implements AgentExecutor {
       AgentEvent.statusUpdate({
         taskId: context.taskId,
         contextId: context.contextId,
-        status: { state: 1, message: undefined, timestamp: new Date().toISOString() },
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
         metadata: undefined,
       })
     );
@@ -64,7 +72,11 @@ export class ItkAgentExecutor implements AgentExecutor {
       AgentEvent.statusUpdate({
         taskId: context.taskId,
         contextId: context.contextId,
-        status: { state: 2, message: undefined, timestamp: new Date().toISOString() },
+        status: {
+          state: TaskState.TASK_STATE_WORKING,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
         metadata: undefined,
       })
     );
@@ -79,7 +91,7 @@ export class ItkAgentExecutor implements AgentExecutor {
           taskId: context.taskId,
           contextId: context.contextId,
           status: {
-            state: 4, // FAILED
+            state: TaskState.TASK_STATE_FAILED,
             message: {
               messageId: 'fail',
               parts: [
@@ -90,7 +102,7 @@ export class ItkAgentExecutor implements AgentExecutor {
                   metadata: {},
                 },
               ],
-              role: 2, // ROLE_AGENT
+              role: Role.ROLE_AGENT,
               metadata: {},
               contextId: context.contextId,
               taskId: context.taskId,
@@ -116,7 +128,7 @@ export class ItkAgentExecutor implements AgentExecutor {
           taskId: context.taskId,
           contextId: context.contextId,
           status: {
-            state: 3, // COMPLETED
+            state: TaskState.TASK_STATE_COMPLETED,
             message: {
               messageId: 'done',
               parts: [
@@ -127,7 +139,7 @@ export class ItkAgentExecutor implements AgentExecutor {
                   metadata: {},
                 },
               ],
-              role: 2, // ROLE_AGENT
+              role: Role.ROLE_AGENT,
               metadata: {},
               contextId: context.contextId,
               taskId: context.taskId,
@@ -147,7 +159,7 @@ export class ItkAgentExecutor implements AgentExecutor {
           taskId: context.taskId,
           contextId: context.contextId,
           status: {
-            state: 4, // FAILED
+            state: TaskState.TASK_STATE_FAILED,
             message: {
               messageId: 'fail',
               parts: [
@@ -158,7 +170,7 @@ export class ItkAgentExecutor implements AgentExecutor {
                   metadata: {},
                 },
               ],
-              role: 2, // ROLE_AGENT
+              role: Role.ROLE_AGENT,
               metadata: {},
               contextId: context.contextId,
               taskId: context.taskId,
@@ -179,7 +191,11 @@ export class ItkAgentExecutor implements AgentExecutor {
       AgentEvent.statusUpdate({
         taskId: taskId,
         contextId: '',
-        status: { state: 5, message: undefined, timestamp: new Date().toISOString() }, // CANCELED
+        status: {
+          state: TaskState.TASK_STATE_CANCELED,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
         metadata: undefined,
       })
     );
@@ -347,7 +363,7 @@ export class ItkAgentExecutor implements AgentExecutor {
         messageId: Math.random().toString(36).substring(2),
         contextId: '',
         taskId: '',
-        role: 1, // ROLE_USER
+        role: Role.ROLE_USER,
         parts: [
           {
             content: { $case: 'text', value: Buffer.from(instBytes).toString('base64') },
@@ -561,7 +577,7 @@ async function main() {
     if (req.body?.params?.message) {
       const msg = req.body.params.message;
       if (msg.role === 'user') {
-        msg.role = 1; // ROLE_USER
+        msg.role = Role.ROLE_USER;
       }
       if (msg.parts) {
         msg.parts = msg.parts.map((part: Record<string, unknown>) => {
@@ -586,8 +602,8 @@ async function main() {
 
     const rewriteMessage = (msg: Record<string, unknown>) => {
       if (!msg) return;
-      if (msg.role === 1 || msg.role === 'user') msg.role = 'user';
-      if (msg.role === 2 || msg.role === 'agent') msg.role = 'agent';
+      if (msg.role === Role.ROLE_USER) msg.role = 'user';
+      if (msg.role === Role.ROLE_AGENT) msg.role = 'agent';
       if (msg.parts && Array.isArray(msg.parts)) {
         msg.parts = msg.parts.map((partItem: unknown) => {
           const part = partItem as Record<string, unknown>;
@@ -645,15 +661,15 @@ async function main() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rewriteResponse = (data: any) => {
-      const stateMap: { [key: number]: string } = {
-        0: 'unknown',
-        1: 'submitted',
-        2: 'working',
-        3: 'completed',
-        4: 'failed',
-        5: 'canceled',
-        6: 'input-required',
-        7: 'rejected',
+      const stateMap: { [state: number]: string } = {
+        [TaskState.TASK_STATE_UNSPECIFIED]: 'unknown',
+        [TaskState.TASK_STATE_SUBMITTED]: 'submitted',
+        [TaskState.TASK_STATE_WORKING]: 'working',
+        [TaskState.TASK_STATE_COMPLETED]: 'completed',
+        [TaskState.TASK_STATE_FAILED]: 'failed',
+        [TaskState.TASK_STATE_CANCELED]: 'canceled',
+        [TaskState.TASK_STATE_INPUT_REQUIRED]: 'input-required',
+        [TaskState.TASK_STATE_REJECTED]: 'rejected',
       };
 
       if (isGoAgent) {
