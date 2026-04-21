@@ -1,4 +1,4 @@
-import { Message, Task } from '../index.js';
+import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../index.js';
 import { ServerCallContext } from './context.js';
 import { AgentExecutionEvent, assertUnreachableEvent } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
@@ -54,81 +54,78 @@ export class ResultManager {
         break;
       }
       case 'statusUpdate': {
-        const updateEvent = event.data;
-        if (!this.currentTask && updateEvent.taskId) {
-          const loaded = await this.taskStore.load(updateEvent.taskId, this.serverCallContext);
-          if (loaded) {
-            this.currentTask = loaded;
-          } else {
-            console.warn(
-              `ResultManager: Received status update for unknown task ${updateEvent.taskId}`
-            );
-          }
-        }
-
-        if (this.currentTask && this.currentTask.id === updateEvent.taskId) {
-          this.currentTask.status = updateEvent.status;
-          const update = updateEvent.status?.message;
-          if (update) {
-            // Add message to history if not already present
-            if (!this.currentTask.history?.find((msg) => msg.messageId === update.messageId)) {
-              this.currentTask.history = [...(this.currentTask.history || []), update];
-            }
-          }
-          await this.saveCurrentTask();
-        }
-        // If it's a final status update, the ExecutionEventQueue will stop.
-        // The final result will be the currentTask.
+        await this.applyStatusUpdate(event.data);
         break;
       }
       case 'artifactUpdate': {
-        const artifactEvent = event.data;
-        const artifact = artifactEvent.artifact;
-        
-        if (!this.currentTask && artifactEvent.taskId && artifact) {
-          // Similar to status update, try to load if task not in memory
-          const loaded = await this.taskStore.load(artifactEvent.taskId, this.serverCallContext);
-          if (loaded) {
-            this.currentTask = loaded;
-          } else {
-            console.warn(
-              `ResultManager: Received artifact update for unknown task ${artifactEvent.taskId}`
-            );
-          }
-        }
-
-        if (this.currentTask && this.currentTask.id === artifactEvent.taskId && artifact) {
-          if (!this.currentTask.artifacts) {
-            this.currentTask.artifacts = [];
-          }
-          const existingArtifactIndex = this.currentTask.artifacts.findIndex(
-            (art) => art.artifactId === artifact.artifactId
-          );
-          if (existingArtifactIndex !== -1) {
-            if (artifactEvent.append) {
-              // Basic append logic, assuming parts are compatible
-              // More sophisticated merging might be needed for specific part types
-              const existingArtifact = this.currentTask.artifacts[existingArtifactIndex];
-              existingArtifact.parts.push(...(artifact.parts || []));
-              if (artifact.description) existingArtifact.description = artifact.description;
-              if (artifact.name) existingArtifact.name = artifact.name;
-              if (artifact.metadata)
-                existingArtifact.metadata = {
-                  ...existingArtifact.metadata,
-                  ...artifact.metadata,
-                };
-            } else {
-              this.currentTask.artifacts[existingArtifactIndex] = artifact;
-            }
-          } else {
-            this.currentTask.artifacts.push(artifact);
-          }
-          await this.saveCurrentTask();
-        }
+        await this.applyArtifactUpdate(event.data);
         break;
       }
       default:
         assertUnreachableEvent(event);
+    }
+  }
+
+  private async ensureTaskLoaded(taskId: string | undefined, eventName: string): Promise<void> {
+    if (!this.currentTask && taskId) {
+      const loaded = await this.taskStore.load(taskId, this.serverCallContext);
+      if (loaded) {
+        this.currentTask = loaded;
+      } else {
+        console.warn(`ResultManager: Received ${eventName} for unknown task ${taskId}`);
+      }
+    }
+  }
+
+  private async applyStatusUpdate(updateEvent: TaskStatusUpdateEvent): Promise<void> {
+    await this.ensureTaskLoaded(updateEvent.taskId, 'status update');
+
+    if (this.currentTask && this.currentTask.id === updateEvent.taskId) {
+      this.currentTask.status = updateEvent.status;
+      const update = updateEvent.status?.message;
+      if (update) {
+        // Add message to history if not already present
+        if (!this.currentTask.history?.find((msg) => msg.messageId === update.messageId)) {
+          this.currentTask.history = [...(this.currentTask.history || []), update];
+        }
+      }
+      await this.saveCurrentTask();
+    }
+  }
+
+  private async applyArtifactUpdate(artifactEvent: TaskArtifactUpdateEvent): Promise<void> {
+    const artifact = artifactEvent.artifact;
+    if (!artifact) return;
+
+    await this.ensureTaskLoaded(artifactEvent.taskId, 'artifact update');
+
+    if (this.currentTask && this.currentTask.id === artifactEvent.taskId) {
+      if (!this.currentTask.artifacts) {
+        this.currentTask.artifacts = [];
+      }
+      const existingArtifactIndex = this.currentTask.artifacts.findIndex(
+        (art) => art.artifactId === artifact.artifactId
+      );
+      if (existingArtifactIndex !== -1) {
+        if (artifactEvent.append) {
+          // Basic append logic, assuming parts are compatible
+          // More sophisticated merging might be needed for specific part types
+          const existingArtifact = this.currentTask.artifacts[existingArtifactIndex];
+          existingArtifact.parts.push(...(artifact.parts || []));
+          if (artifact.description) existingArtifact.description = artifact.description;
+          if (artifact.name) existingArtifact.name = artifact.name;
+          if (artifact.metadata)
+            existingArtifact.metadata = {
+              ...existingArtifact.metadata,
+              ...artifact.metadata,
+            };
+        } else {
+          this.currentTask.artifacts[existingArtifactIndex] = artifact;
+        }
+      } else {
+        this.currentTask.artifacts.push(artifact);
+      }
+      await this.saveCurrentTask();
     }
   }
 
