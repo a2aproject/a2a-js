@@ -235,7 +235,7 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/tasks?status=0`);
+      expect(url).to.equal(`${endpoint}/tasks`);
       expect(options?.method).to.equal('GET');
     });
 
@@ -252,7 +252,7 @@ describe('RestTransport', () => {
       });
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/tenant1/tasks?status=0`);
+      expect(url).to.equal(`${endpoint}/tenant1/tasks`);
     });
   });
 

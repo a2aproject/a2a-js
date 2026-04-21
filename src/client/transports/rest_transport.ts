@@ -33,6 +33,8 @@ import {
   SubscribeToTaskRequest,
   ListTasksRequest,
   ListTasksResponse,
+  TaskState,
+  taskStateToJSON,
 } from '../../types/pb/a2a.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
@@ -202,15 +204,17 @@ export class RestTransport implements Transport {
   async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
     const queryParams = new URLSearchParams();
     if (params.contextId) queryParams.set('contextId', params.contextId);
-    if (params.status !== undefined) queryParams.set('status', params.status.toString());
-    if (params.pageSize !== undefined) queryParams.set('pageSize', params.pageSize.toString());
+    if (params.status !== undefined && params.status !== TaskState.TASK_STATE_UNSPECIFIED) {
+      queryParams.set('status', taskStateToJSON(params.status));
+    }
+    if (params.pageSize !== undefined) queryParams.set('pageSize', String(params.pageSize));
     if (params.pageToken) queryParams.set('pageToken', params.pageToken);
     if (params.historyLength !== undefined)
-      queryParams.set('historyLength', params.historyLength.toString());
+      queryParams.set('historyLength', String(params.historyLength));
     if (params.statusTimestampAfter)
       queryParams.set('statusTimestampAfter', params.statusTimestampAfter);
     if (params.includeArtifacts !== undefined)
-      queryParams.set('includeArtifacts', params.includeArtifacts.toString());
+      queryParams.set('includeArtifacts', String(params.includeArtifacts));
 
     const queryString = queryParams.toString();
     const path = this._buildPath(`/tasks${queryString ? `?${queryString}` : ''}`, params.tenant);
