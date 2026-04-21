@@ -626,9 +626,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       if (!task) {
         throw new TaskNotFoundError(`Task not found: ${taskId}`);
       }
-      if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
+      if (task.status?.state !== undefined && TERMINAL_STATE_LIST.includes(task.status.state)) {
         throw new UnsupportedOperationError(
-          `Task ${taskId} is in a terminal state (${task.status!.state}) and cannot be subscribed to.`
+          `Task ${taskId} is in a terminal state (${task.status.state}) and cannot be subscribed to.`
         );
       }
 
