@@ -108,7 +108,6 @@ export class RestTransport implements Transport {
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const requestBody = params;
     const path = this._buildPath(
       `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
       params.tenant
@@ -116,7 +115,7 @@ export class RestTransport implements Transport {
     const response = await this._sendRequest<
       TaskPushNotificationConfig,
       TaskPushNotificationConfig
-    >('POST', path, requestBody, options, TaskPushNotificationConfig, TaskPushNotificationConfig);
+    >('POST', path, params, options, TaskPushNotificationConfig, TaskPushNotificationConfig);
     return response;
   }
 
@@ -201,18 +200,19 @@ export class RestTransport implements Transport {
   }
 
   async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
-    const queryParams: Record<string, string> = {};
-    if (params.contextId) queryParams.contextId = params.contextId;
-    if (params.status !== undefined) queryParams.status = params.status.toString();
-    if (params.pageSize !== undefined) queryParams.pageSize = params.pageSize.toString();
-    if (params.pageToken) queryParams.pageToken = params.pageToken;
+    const queryParams = new URLSearchParams();
+    if (params.contextId) queryParams.set('contextId', params.contextId);
+    if (params.status !== undefined) queryParams.set('status', params.status.toString());
+    if (params.pageSize !== undefined) queryParams.set('pageSize', params.pageSize.toString());
+    if (params.pageToken) queryParams.set('pageToken', params.pageToken);
     if (params.historyLength !== undefined)
-      queryParams.historyLength = params.historyLength.toString();
-    if (params.statusTimestampAfter) queryParams.statusTimestampAfter = params.statusTimestampAfter;
+      queryParams.set('historyLength', params.historyLength.toString());
+    if (params.statusTimestampAfter)
+      queryParams.set('statusTimestampAfter', params.statusTimestampAfter);
     if (params.includeArtifacts !== undefined)
-      queryParams.includeArtifacts = params.includeArtifacts.toString();
+      queryParams.set('includeArtifacts', params.includeArtifacts.toString());
 
-    const queryString = new URLSearchParams(queryParams).toString();
+    const queryString = queryParams.toString();
     const path = this._buildPath(`/tasks${queryString ? `?${queryString}` : ''}`, params.tenant);
 
     const response = await this._sendRequest<void, ListTasksResponse>(
