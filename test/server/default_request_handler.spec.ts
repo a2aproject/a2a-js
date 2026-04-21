@@ -1404,9 +1404,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         assert.fail(`Should have thrown for terminal state: ${state}`);
       } catch (error: unknown) {
         expect(error).to.be.instanceOf(UnsupportedOperationError);
-        expect((error as Error).message).to.contain(
-          `Task ${taskId} is in a terminal state`
-        );
+        expect((error as Error).message).to.contain(`Task ${taskId} is in a terminal state`);
       }
     }
   });
@@ -1445,10 +1443,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     assert.lengthOf(results, 1, 'Should yield exactly one event (the initial task snapshot)');
     assert.equal(results[0].payload?.$case, 'task');
-    assert.deepEqual(
-      (results[0].payload as { $case: 'task'; value: Task }).value,
-      fakeTask
-    );
+    assert.deepEqual((results[0].payload as { $case: 'task'; value: Task }).value, fakeTask);
   });
 
   it('getTask: should return an existing task from the store', async () => {
