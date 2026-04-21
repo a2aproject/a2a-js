@@ -14,7 +14,7 @@ import {
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   SendMessageRequest,
-  A2AStreamEventData,
+  StreamResponse,
   SendMessageResult,
   ListTasksRequest,
   ListTasksResponse,
@@ -70,16 +70,11 @@ export class GrpcTransport implements Transport {
   }
 
   async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendGrpcRequest<
-      GetExtendedAgentCardRequest,
-      AgentCard,
-      AgentCard
-    >(
+    const rpcResponse = await this._sendGrpcRequest<GetExtendedAgentCardRequest, AgentCard>(
       'getExtendedAgentCard',
       { tenant: '' },
       options,
-      this.grpcClient.getExtendedAgentCard.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.getExtendedAgentCard.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -88,7 +83,7 @@ export class GrpcTransport implements Transport {
     params: SendMessageRequest,
     options?: RequestOptions
   ): Promise<SendMessageResult> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequestWithConverter(
       'sendMessage',
       params,
       options,
@@ -101,7 +96,7 @@ export class GrpcTransport implements Transport {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendGrpcStreamingRequest(
       'sendStreamingMessage',
       params,
@@ -116,14 +111,12 @@ export class GrpcTransport implements Transport {
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendGrpcRequest<
       TaskPushNotificationConfig,
-      TaskPushNotificationConfig,
       TaskPushNotificationConfig
     >(
       'createTaskPushNotificationConfig',
       params,
       options,
-      this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -134,14 +127,12 @@ export class GrpcTransport implements Transport {
   ): Promise<TaskPushNotificationConfig> {
     const rpcResponse = await this._sendGrpcRequest<
       GetTaskPushNotificationConfigRequest,
-      TaskPushNotificationConfig,
       TaskPushNotificationConfig
     >(
       'getTaskPushNotificationConfig',
       params,
       options,
-      this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -152,14 +143,12 @@ export class GrpcTransport implements Transport {
   ): Promise<ListTaskPushNotificationConfigsResponse> {
     const rpcResponse = await this._sendGrpcRequest<
       ListTaskPushNotificationConfigsRequest,
-      ListTaskPushNotificationConfigsResponse,
       ListTaskPushNotificationConfigsResponse
     >(
       'listTaskPushNotificationConfigs',
       params,
       options,
-      this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient),
-      (res) => res
+      this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient)
     );
     return rpcResponse;
   }
@@ -168,7 +157,7 @@ export class GrpcTransport implements Transport {
     params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
-    await this._sendGrpcRequest(
+    await this._sendGrpcRequestWithConverter(
       'deleteTaskPushNotificationConfig',
       params,
       options,
@@ -178,40 +167,39 @@ export class GrpcTransport implements Transport {
   }
 
   async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest<GetTaskRequest, Task, Task>(
+    const rpcResponse = await this._sendGrpcRequest<GetTaskRequest, Task>(
       'getTask',
       params,
       options,
-      this.grpcClient.getTask.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.getTask.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest<CancelTaskRequest, Task, Task>(
+    const rpcResponse = await this._sendGrpcRequest<CancelTaskRequest, Task>(
       'cancelTask',
       params,
       options,
-      this.grpcClient.cancelTask.bind(this.grpcClient),
-      (req) => req
+      this.grpcClient.cancelTask.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
   async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
-    const rpcResponse = await this._sendGrpcRequest<
-      ListTasksRequest,
-      ListTasksResponse,
-      ListTasksResponse
-    >('listTasks', params, options, this.grpcClient.listTasks.bind(this.grpcClient), (req) => req);
+    const rpcResponse = await this._sendGrpcRequest<ListTasksRequest, ListTasksResponse>(
+      'listTasks',
+      params,
+      options,
+      this.grpcClient.listTasks.bind(this.grpcClient)
+    );
     return rpcResponse;
   }
 
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendGrpcStreamingRequest(
       'subscribeToTask',
       params,
@@ -220,7 +208,7 @@ export class GrpcTransport implements Transport {
     );
   }
 
-  private async _sendGrpcRequest<TReq, TRes, TResponse>(
+  private async _sendGrpcRequestWithConverter<TReq, TRes, TResponse>(
     method: keyof A2AServiceClient,
     params: TReq,
     options: RequestOptions | undefined,
@@ -256,12 +244,21 @@ export class GrpcTransport implements Transport {
     });
   }
 
-  private async *_sendGrpcStreamingRequest<TReq, TRes>(
+  private async _sendGrpcRequest<TReq, TRes>(
+    method: keyof A2AServiceClient,
+    params: TReq,
+    options: RequestOptions | undefined,
+    call: GrpcUnaryCall<TReq, TRes>
+  ): Promise<TRes> {
+    return this._sendGrpcRequestWithConverter(method, params, options, call, (res: TRes) => res);
+  }
+
+  private async *_sendGrpcStreamingRequest<TReq>(
     method: 'sendStreamingMessage' | 'subscribeToTask',
     params: TReq,
     options: RequestOptions | undefined,
-    call: GrpcStreamCall<TReq, TRes>
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    call: GrpcStreamCall<TReq, StreamResponse>
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const streamResponse = call(params, this._buildMetadata(options), this.grpcCallOptions ?? {});
 
     let onAbort: (() => void) | undefined;
@@ -276,7 +273,7 @@ export class GrpcTransport implements Transport {
 
     try {
       for await (const response of streamResponse) {
-        yield FromProto.messageStreamResult(response);
+        yield response;
       }
     } catch (error) {
       if (this.isServiceError(error)) {
@@ -327,7 +324,7 @@ export class GrpcTransport implements Transport {
             'getTaskPushNotificationConfig',
             'createTaskPushNotificationConfig',
             'deleteTaskPushNotificationConfig',
-            'listTaskPushNotificationConfig',
+            'listTaskPushNotificationConfigs',
           ].includes(method)
         ) {
           return new PushNotificationNotSupportedError(error.details);

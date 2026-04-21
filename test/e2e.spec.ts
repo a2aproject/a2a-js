@@ -9,7 +9,8 @@ import {
   InMemoryTaskStore,
   RequestContext,
 } from '../src/server/index.js';
-import { AgentCard, Message, Role, TaskState, A2AStreamEventData } from '../src/index.js';
+import { AgentEvent } from '../src/server/events/execution_event_bus.js';
+import { AgentCard, Message, Role, TaskState, StreamResponse } from '../src/index.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';
@@ -162,7 +163,7 @@ describe('Client E2E tests', () => {
       describe('sendMessage', () => {
         it('should send a message to the agent', async () => {
           const expected = createTestMessage('1', 'test');
-          agentExecutor.events = [expected];
+          agentExecutor.events = [AgentEvent.message(expected)];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual = await client.sendMessage({
@@ -179,44 +180,74 @@ describe('Client E2E tests', () => {
         it('should send a message to the agent and read event stream', async () => {
           const taskId = '1';
           const contextId = '2';
-          const expected: AgentExecutionEvent[] = [
+          const expected: StreamResponse[] = [
             {
-              id: taskId,
-              contextId,
-              status: {
-                state: TaskState.TASK_STATE_SUBMITTED,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'task',
+                value: {
+                  id: taskId,
+                  contextId,
+                  status: {
+                    state: TaskState.TASK_STATE_SUBMITTED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  artifacts: [],
+                  history: [createTestMessage('1', 'test')],
+                  metadata: {},
+                },
               },
-              artifacts: [],
-              history: [],
-              metadata: {},
             },
             {
-              taskId,
-              contextId,
-              status: {
-                state: TaskState.TASK_STATE_WORKING,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId,
+                  contextId,
+                  status: {
+                    state: TaskState.TASK_STATE_WORKING,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
             {
-              taskId,
-              contextId,
-              status: {
-                state: TaskState.TASK_STATE_COMPLETED,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId,
+                  contextId,
+                  status: {
+                    state: TaskState.TASK_STATE_COMPLETED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
           ];
-          agentExecutor.events = expected;
+          agentExecutor.events = expected.map((e: any) => {
+            const $case = e.payload!.$case;
+            const value = e.payload!.value;
+            switch ($case) {
+              case 'message':
+                return AgentEvent.message(value);
+              case 'task':
+                return AgentEvent.task(value);
+              case 'statusUpdate':
+                return AgentEvent.statusUpdate(value);
+              case 'artifactUpdate':
+                return AgentEvent.artifactUpdate(value);
+              default:
+                throw new Error(`Unknown $case: ${$case}`);
+            }
+          });
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          const actual: A2AStreamEventData[] = [];
+          const actual: StreamResponse[] = [];
           for await (const message of client.sendMessageStream({
             tenant: '',
             message: createTestMessage('1', 'test'),
@@ -233,10 +264,10 @@ describe('Client E2E tests', () => {
           agentCard.capabilities.streaming = false;
           const requestMessage = createTestMessage('1', 'request-message');
           const responseMessage = createTestMessage('2', 'response-message');
-          agentExecutor.events = [responseMessage];
+          agentExecutor.events = [AgentEvent.message(responseMessage)];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          const actual: A2AStreamEventData[] = [];
+          const actual: StreamResponse[] = [];
           for await (const message of client.sendMessageStream({
             tenant: '',
             message: requestMessage,
@@ -248,7 +279,12 @@ describe('Client E2E tests', () => {
 
           expect(actual).to.have.lengthOf(1);
           expect(removeUndefinedFields(actual[0])).to.deep.equal(
-            removeUndefinedFields(responseMessage)
+            removeUndefinedFields({
+              payload: {
+                $case: 'message',
+                value: responseMessage,
+              },
+            })
           );
         });
       });

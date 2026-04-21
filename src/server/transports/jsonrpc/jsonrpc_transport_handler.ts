@@ -1,8 +1,7 @@
 import {
   Message,
   Task,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
+  StreamResponse,
   SendMessageRequest,
   SubscribeToTaskRequest,
   GetTaskRequest,
@@ -119,27 +118,11 @@ export class JsonRpcTransportHandler {
           undefined
         > {
           try {
-            // TODO: Improve the conversion below once the agentEventStream will be AsyncGenerator of StreamResponse
             for await (const event of agentEventStream) {
-              let result: unknown;
-              if ('messageId' in event) {
-                result = { message: Message.toJSON(event) };
-              } else if ('artifacts' in event) {
-                result = { task: Task.toJSON(event) };
-              } else if ('status' in event) {
-                result = {
-                  statusUpdate: TaskStatusUpdateEvent.toJSON(event),
-                };
-              } else if ('artifact' in event) {
-                result = {
-                  artifactUpdate: TaskArtifactUpdateEvent.toJSON(event),
-                };
-              }
-
               yield {
                 jsonrpc: '2.0',
-                id: requestId, // Use the original request ID for all streamed responses
-                result,
+                id: requestId,
+                result: StreamResponse.toJSON(event),
               };
             }
           } catch (streamError) {

@@ -1,49 +1,7 @@
 import { GenericError } from '../../errors.js';
-import {
-  Message,
-  SendMessageResponse,
-  StreamResponse,
-  Task,
-  TaskArtifactUpdateEvent,
-  TaskStatusUpdateEvent,
-} from '../pb/a2a.js';
+import { Message, SendMessageResponse, Task } from '../pb/a2a.js';
 
 export class ToProto {
-  static messageStreamResult(
-    event: Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent
-  ): StreamResponse {
-    if ('messageId' in event) {
-      return {
-        payload: {
-          $case: 'message',
-          value: event,
-        },
-      };
-    } else if ('artifacts' in event) {
-      return {
-        payload: {
-          $case: 'task',
-          value: event,
-        },
-      };
-    } else if ('status' in event) {
-      return {
-        payload: {
-          $case: 'statusUpdate',
-          value: event,
-        },
-      };
-    } else if ('artifact' in event) {
-      return {
-        payload: {
-          $case: 'artifactUpdate',
-          value: event,
-        },
-      };
-    }
-    throw new GenericError('Invalid event type');
-  }
-
   static messageSendResult(params: Message | Task): SendMessageResponse {
     if ('messageId' in params) {
       return {
@@ -60,5 +18,6 @@ export class ToProto {
         },
       };
     }
+    throw new GenericError('Invalid SendMessageResult type');
   }
 }

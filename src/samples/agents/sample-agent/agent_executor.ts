@@ -9,7 +9,12 @@ import {
   Artifact,
   Role,
 } from '../../../index.js';
-import { AgentExecutor, RequestContext, ExecutionEventBus } from '../../../server/index.js';
+import {
+  AgentExecutor,
+  RequestContext,
+  ExecutionEventBus,
+  AgentEvent,
+} from '../../../server/index.js';
 
 /**
  * SampleAgentExecutor implements the agent's core logic.
@@ -43,7 +48,7 @@ export class SampleAgentExecutor implements AgentExecutor {
         history: [userMessage], // Start history with the current user message
         metadata: userMessage.metadata, // Carry over metadata from message if any
       };
-      eventBus.publish(initialTask);
+      eventBus.publish(AgentEvent.task(initialTask));
     }
 
     // 2. Publish "working" status update
@@ -73,7 +78,7 @@ export class SampleAgentExecutor implements AgentExecutor {
       },
       metadata: {},
     };
-    eventBus.publish(workingStatusUpdate);
+    eventBus.publish(AgentEvent.statusUpdate(workingStatusUpdate));
 
     // 3. Publish artifact with the result
     const agentReplyText = this.parseInputMessage(userMessage);
@@ -105,7 +110,7 @@ export class SampleAgentExecutor implements AgentExecutor {
       metadata: undefined,
     };
     await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing delay
-    eventBus.publish(artifactUpdate);
+    eventBus.publish(AgentEvent.artifactUpdate(artifactUpdate));
 
     // 4. Publish final task status update (completed, no message)
     const finalUpdate: TaskStatusUpdateEvent = {
@@ -118,7 +123,7 @@ export class SampleAgentExecutor implements AgentExecutor {
       },
       metadata: undefined,
     };
-    eventBus.publish(finalUpdate);
+    eventBus.publish(AgentEvent.statusUpdate(finalUpdate));
 
     console.log(`[SampleAgentExecutor] Task ${taskId} finished with state: completed`);
   }

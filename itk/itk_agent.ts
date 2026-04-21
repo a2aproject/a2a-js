@@ -1,5 +1,6 @@
 import express from 'express';
-import { Message, AgentCard, AGENT_CARD_PATH, TaskStatusUpdateEvent, Task } from '../src/index.js';
+import { Message, AgentCard, AGENT_CARD_PATH, TaskState, Role } from '../src/index.js';
+import { StreamResponse } from '../src/types/pb/a2a.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -7,6 +8,7 @@ import {
   DefaultRequestHandler,
   RequestContext,
   ExecutionEventBus,
+  AgentEvent,
 } from '../src/server/index.js';
 import {
   agentCardHandler,
@@ -38,60 +40,80 @@ export class ItkAgentExecutor implements AgentExecutor {
     console.log(`Executing task ${context.taskId}`);
 
     // Publish initial task state to satisfy ResultManager
-    eventBus.publish({
-      id: context.taskId,
-      contextId: context.contextId,
-      status: { state: 1, message: undefined, timestamp: new Date().toISOString() },
-      artifacts: [],
-      history: [context.userMessage],
-      metadata: {},
-    } as Task);
+    eventBus.publish(
+      AgentEvent.task({
+        id: context.taskId,
+        contextId: context.contextId,
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
+        artifacts: [],
+        history: [context.userMessage],
+        metadata: {},
+      })
+    );
 
     // Publish submitted and working states
-    eventBus.publish({
-      taskId: context.taskId,
-      contextId: context.contextId,
-      status: { state: 1, message: undefined, timestamp: new Date().toISOString() },
-      metadata: undefined,
-    } as TaskStatusUpdateEvent);
-    eventBus.publish({
-      taskId: context.taskId,
-      contextId: context.contextId,
-      status: { state: 2, message: undefined, timestamp: new Date().toISOString() },
-      metadata: undefined,
-    } as TaskStatusUpdateEvent);
+    eventBus.publish(
+      AgentEvent.statusUpdate({
+        taskId: context.taskId,
+        contextId: context.contextId,
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
+        metadata: undefined,
+      })
+    );
+    eventBus.publish(
+      AgentEvent.statusUpdate({
+        taskId: context.taskId,
+        contextId: context.contextId,
+        status: {
+          state: TaskState.TASK_STATE_WORKING,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
+        metadata: undefined,
+      })
+    );
 
     const message = context.userMessage;
     const instruction = this.extractInstruction(message);
     if (!instruction) {
       const errorMsg = 'No valid instruction found in request';
       console.error(errorMsg);
-      eventBus.publish({
-        taskId: context.taskId,
-        contextId: context.contextId,
-        status: {
-          state: 4, // FAILED
-          message: {
-            messageId: 'fail',
-            parts: [
-              {
-                content: { $case: 'text', value: errorMsg },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: {},
-              },
-            ],
-            role: 2, // ROLE_AGENT
-            metadata: {},
-            contextId: context.contextId,
-            taskId: context.taskId,
-            extensions: [],
-            referenceTaskIds: [],
+      eventBus.publish(
+        AgentEvent.statusUpdate({
+          taskId: context.taskId,
+          contextId: context.contextId,
+          status: {
+            state: TaskState.TASK_STATE_FAILED,
+            message: {
+              messageId: 'fail',
+              parts: [
+                {
+                  content: { $case: 'text', value: errorMsg },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: {},
+                },
+              ],
+              role: Role.ROLE_AGENT,
+              metadata: {},
+              contextId: context.contextId,
+              taskId: context.taskId,
+              extensions: [],
+              referenceTaskIds: [],
+            },
+            timestamp: new Date().toISOString(),
           },
-          timestamp: new Date().toISOString(),
-        },
-        metadata: undefined,
-      } as TaskStatusUpdateEvent);
+          metadata: undefined,
+        })
+      );
       return;
     }
 
@@ -101,72 +123,82 @@ export class ItkAgentExecutor implements AgentExecutor {
       const responseText = results.join('\n');
       console.log('Response:', responseText);
 
-      eventBus.publish({
-        taskId: context.taskId,
-        contextId: context.contextId,
-        status: {
-          state: 3, // COMPLETED
-          message: {
-            messageId: 'done',
-            parts: [
-              {
-                content: { $case: 'text', value: responseText },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: {},
-              },
-            ],
-            role: 2, // ROLE_AGENT
-            metadata: {},
-            contextId: context.contextId,
-            taskId: context.taskId,
-            extensions: [],
-            referenceTaskIds: [],
+      eventBus.publish(
+        AgentEvent.statusUpdate({
+          taskId: context.taskId,
+          contextId: context.contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: {
+              messageId: 'done',
+              parts: [
+                {
+                  content: { $case: 'text', value: responseText },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: {},
+                },
+              ],
+              role: Role.ROLE_AGENT,
+              metadata: {},
+              contextId: context.contextId,
+              taskId: context.taskId,
+              extensions: [],
+              referenceTaskIds: [],
+            },
+            timestamp: new Date().toISOString(),
           },
-          timestamp: new Date().toISOString(),
-        },
-        metadata: undefined,
-      } as TaskStatusUpdateEvent);
+          metadata: undefined,
+        })
+      );
       console.log(`Task ${context.taskId} completed`);
     } catch (error) {
       console.error('Error handling instruction:', error);
-      eventBus.publish({
-        taskId: context.taskId,
-        contextId: context.contextId,
-        status: {
-          state: 4, // FAILED
-          message: {
-            messageId: 'fail',
-            parts: [
-              {
-                content: { $case: 'text', value: String(error) },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: {},
-              },
-            ],
-            role: 2, // ROLE_AGENT
-            metadata: {},
-            contextId: context.contextId,
-            taskId: context.taskId,
-            extensions: [],
-            referenceTaskIds: [],
+      eventBus.publish(
+        AgentEvent.statusUpdate({
+          taskId: context.taskId,
+          contextId: context.contextId,
+          status: {
+            state: TaskState.TASK_STATE_FAILED,
+            message: {
+              messageId: 'fail',
+              parts: [
+                {
+                  content: { $case: 'text', value: String(error) },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: {},
+                },
+              ],
+              role: Role.ROLE_AGENT,
+              metadata: {},
+              contextId: context.contextId,
+              taskId: context.taskId,
+              extensions: [],
+              referenceTaskIds: [],
+            },
+            timestamp: new Date().toISOString(),
           },
-          timestamp: new Date().toISOString(),
-        },
-        metadata: undefined,
-      } as TaskStatusUpdateEvent);
+          metadata: undefined,
+        })
+      );
     }
   }
 
   async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
     console.log(`Cancel requested for task ${taskId}`);
-    eventBus.publish({
-      taskId: taskId,
-      contextId: '',
-      status: { state: 5, message: undefined, timestamp: new Date().toISOString() }, // CANCELED
-      metadata: undefined,
-    } as TaskStatusUpdateEvent);
+    eventBus.publish(
+      AgentEvent.statusUpdate({
+        taskId: taskId,
+        contextId: '',
+        status: {
+          state: TaskState.TASK_STATE_CANCELED,
+          message: undefined,
+          timestamp: new Date().toISOString(),
+        },
+        metadata: undefined,
+      })
+    );
   }
 
   private extractInstruction(message: Message): Instruction | null {
@@ -331,7 +363,7 @@ export class ItkAgentExecutor implements AgentExecutor {
         messageId: Math.random().toString(36).substring(2),
         contextId: '',
         taskId: '',
-        role: 1, // ROLE_USER
+        role: Role.ROLE_USER,
         parts: [
           {
             content: { $case: 'text', value: Buffer.from(instBytes).toString('base64') },
@@ -352,8 +384,6 @@ export class ItkAgentExecutor implements AgentExecutor {
           let textValue = '';
           if (part.content?.$case === 'text') {
             textValue = part.content.value;
-          } else if ('text' in part) {
-            textValue = (part as unknown as Record<string, unknown>).text as string;
           }
 
           if (textValue) {
@@ -380,14 +410,6 @@ export class ItkAgentExecutor implements AgentExecutor {
           if (part.content?.$case === 'raw') {
             if (part.content.value) {
               rawBuf = Buffer.from(part.content.value);
-            }
-          } else if ('raw' in part) {
-            const rawValue = (part as unknown as Record<string, unknown>).raw;
-            if (rawValue) {
-              rawBuf =
-                typeof rawValue === 'string'
-                  ? Buffer.from(rawValue, 'base64')
-                  : Buffer.from(rawValue as ArrayLike<number>);
             }
           }
 
@@ -416,15 +438,15 @@ export class ItkAgentExecutor implements AgentExecutor {
           console.log('Event received from called agent:', JSON.stringify(event));
           let message: Message | undefined;
 
-          if ('parts' in event) {
-            message = event;
-          } else if ('status' in event && event.status?.message) {
-            message = event.status.message;
-          } else if ('statusUpdate' in event) {
-            const statusUpdate = (event as { statusUpdate?: { status?: { message?: Message } } })
-              .statusUpdate;
-            if (statusUpdate?.status?.message) {
-              message = statusUpdate.status.message;
+          const streamResponse = event as StreamResponse;
+          if (streamResponse.payload) {
+            const payload = streamResponse.payload;
+            if (payload.$case === 'message') {
+              message = payload.value;
+            } else if (payload.$case === 'statusUpdate') {
+              message = payload.value.status?.message;
+            } else if (payload.$case === 'task') {
+              message = payload.value.status?.message;
             }
           }
 
@@ -555,7 +577,7 @@ async function main() {
     if (req.body?.params?.message) {
       const msg = req.body.params.message;
       if (msg.role === 'user') {
-        msg.role = 1; // ROLE_USER
+        msg.role = Role.ROLE_USER;
       }
       if (msg.parts) {
         msg.parts = msg.parts.map((part: Record<string, unknown>) => {
@@ -580,8 +602,8 @@ async function main() {
 
     const rewriteMessage = (msg: Record<string, unknown>) => {
       if (!msg) return;
-      if (msg.role === 1 || msg.role === 'user') msg.role = 'user';
-      if (msg.role === 2 || msg.role === 'agent') msg.role = 'agent';
+      if (msg.role === Role.ROLE_USER) msg.role = 'user';
+      if (msg.role === Role.ROLE_AGENT) msg.role = 'agent';
       if (msg.parts && Array.isArray(msg.parts)) {
         msg.parts = msg.parts.map((partItem: unknown) => {
           const part = partItem as Record<string, unknown>;
@@ -639,15 +661,15 @@ async function main() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rewriteResponse = (data: any) => {
-      const stateMap: { [key: number]: string } = {
-        0: 'unknown',
-        1: 'submitted',
-        2: 'working',
-        3: 'completed',
-        4: 'failed',
-        5: 'canceled',
-        6: 'input-required',
-        7: 'rejected',
+      const stateMap: { [state: number]: string } = {
+        [TaskState.TASK_STATE_UNSPECIFIED]: 'unknown',
+        [TaskState.TASK_STATE_SUBMITTED]: 'submitted',
+        [TaskState.TASK_STATE_WORKING]: 'working',
+        [TaskState.TASK_STATE_COMPLETED]: 'completed',
+        [TaskState.TASK_STATE_FAILED]: 'failed',
+        [TaskState.TASK_STATE_CANCELED]: 'canceled',
+        [TaskState.TASK_STATE_INPUT_REQUIRED]: 'input-required',
+        [TaskState.TASK_STATE_REJECTED]: 'rejected',
       };
 
       if (isGoAgent) {

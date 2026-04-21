@@ -383,7 +383,7 @@ describe('restHandler', () => {
         yield testTask;
       }
 
-      (mockRequestHandler.resubscribe as Mock).mockResolvedValue(mockStream());
+      (mockRequestHandler.resubscribe as Mock).mockReturnValue(mockStream());
 
       const response = await request(app).post('/tasks/task-1:subscribe').expect(200);
 

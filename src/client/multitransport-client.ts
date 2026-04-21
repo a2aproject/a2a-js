@@ -1,11 +1,5 @@
 import { PushNotificationNotSupportedError } from '../errors.js';
-import {
-  TaskPushNotificationConfig,
-  Task,
-  AgentCard,
-  A2AStreamEventData,
-  SendMessageResult,
-} from '../index.js';
+import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
@@ -15,6 +9,7 @@ import {
   ListTaskPushNotificationConfigsResponse,
   SendMessageConfiguration,
   SendMessageRequest,
+  StreamResponse,
   SubscribeToTaskRequest,
   ListTasksRequest,
   ListTasksResponse,
@@ -118,7 +113,7 @@ export class Client {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'sendMessageStream';
 
     params = this.applyClientConfig({ params, returnImmediately: false });
@@ -143,8 +138,16 @@ export class Client {
 
     if (!this.agentCard.capabilities?.streaming) {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
+
+      let streamValue: StreamResponse;
+      if ('messageId' in result) {
+        streamValue = { payload: { $case: 'message', value: result } };
+      } else {
+        streamValue = { payload: { $case: 'task', value: result } };
+      }
+
       const afterArgs: AfterArgs<'sendMessageStream'> = {
-        result: { method, value: result },
+        result: { method, value: streamValue },
         agentCard: this.agentCard,
         options: beforeArgs.options,
       };
@@ -280,7 +283,7 @@ export class Client {
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {

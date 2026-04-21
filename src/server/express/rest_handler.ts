@@ -30,8 +30,6 @@ import {
   TaskPushNotificationConfig,
 } from '../../types/pb/a2a.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-
-import { Message, TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '../../index.js';
 import { RequestMalformedError } from '../../errors.js';
 
 /**
@@ -177,22 +175,19 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   const sendStreamResponse = async (
     res: Response,
-    stream: AsyncGenerator<
-      Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-      void,
-      undefined
-    >,
+    stream: AsyncGenerator<StreamResponse, void, undefined>,
     context: ServerCallContext
   ): Promise<void> => {
     // Get first event before flushing headers to catch early errors
     // This allows returning proper HTTP error codes instead of 200 + SSE error
     const iterator = stream[Symbol.asyncIterator]();
-    let firstResult: IteratorResult<unknown>;
+    let firstResult: IteratorResult<StreamResponse>;
     try {
       firstResult = await iterator.next();
     } catch (error) {
       // Early error - return proper HTTP error
-      sendResponse(res, mapErrorToStatus(error), context, toHTTPError(error));
+      setExtensionsHeader(res, context);
+      res.status(mapErrorToStatus(error)).json(toHTTPError(error));
       return;
     }
 
@@ -206,13 +201,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     try {
       // Write first event
       if (!firstResult.done) {
-        const proto = ToProto.messageStreamResult(firstResult.value);
-        const result = StreamResponse.toJSON(proto);
+        const result = StreamResponse.toJSON(firstResult.value);
         res.write(formatSSEEvent(result));
       }
       for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
-        const proto = ToProto.messageStreamResult(event);
-        const result = StreamResponse.toJSON(proto);
+        const result = StreamResponse.toJSON(event);
         res.write(formatSSEEvent(result));
       }
     } catch (streamError: unknown) {
