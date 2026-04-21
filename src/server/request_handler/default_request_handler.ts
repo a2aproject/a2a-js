@@ -699,9 +699,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   /**
-   * Maps an event to a StreamResponse, yields it to the stream, and
-   * fires a push notification if configured. Returns the StreamResponse
-   * so the caller can yield it.
+   * Sends a push notification if configured.
+   * Fire-and-forget: push notification delivery should not block the stream or response.
+   * Errors are logged but do not propagate to the caller.
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
@@ -711,8 +711,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       return;
     }
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      // Fire-and-forget: push notification delivery should not block the stream or response.
-      // Errors are logged but do not propagate to the caller.
       Promise.resolve(this.pushNotificationSender.send(streamResponse, context)).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
