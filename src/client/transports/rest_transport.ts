@@ -61,7 +61,7 @@ export class RestTransport implements Transport {
   }
 
   private _buildPath(path: string, tenant?: string): string {
-    return tenant ? `/${tenant}${path}` : path;
+    return tenant ? '/' + encodeURIComponent(tenant) + path : path;
   }
 
   get protocolName(): string {
