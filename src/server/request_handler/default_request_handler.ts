@@ -56,6 +56,26 @@ import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
 import { TERMINAL_STATE_LIST } from '../utils.js';
 
+/**
+ * Default implementation of the A2A request handler.
+ *
+ * ## Multi-Tenancy
+ *
+ * This handler supports multi-tenant deployments through the `tenant` field present
+ * on all request objects (per A2A spec Sections 3.1.x and 4.4.6). The tenant value
+ * flows through the system as follows:
+ *
+ * 1. **Transport layer** extracts tenant from the protocol-specific source:
+ *    - REST: URL path prefix (`/:tenant/...`)
+ *    - JSON-RPC: `params.tenant` in the request body
+ *    - gRPC: `tenant` field in the request message
+ *
+ * 2. **`ServerCallContext.tenant`** carries the tenant to all downstream components,
+ *    including `TaskStore`, `PushNotificationStore`, and `AgentExecutor`.
+ *
+ * 3. **`InMemoryTaskStore`** and **`InMemoryPushNotificationStore`** use `context.tenant`
+ *    to scope data with composite keys (`{tenant}:{id}`), providing tenant isolation.
+ */
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
   private readonly taskStore: TaskStore;
@@ -93,7 +113,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return this.agentCard;
   }
 
-  async getAuthenticatedExtendedAgentCard(_params: GetExtendedAgentCardRequest, context: ServerCallContext): Promise<AgentCard> {
+  async getAuthenticatedExtendedAgentCard(
+    _params: GetExtendedAgentCardRequest,
+    context: ServerCallContext
+  ): Promise<AgentCard> {
     if (!this.agentCard.capabilities?.extendedAgentCard) {
       throw new UnsupportedOperationError('Agent does not support authenticated extended card.');
     }

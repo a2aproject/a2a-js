@@ -101,6 +101,15 @@ export class JsonRpcTransportHandler {
         throw new RequestMalformedError(`Invalid method parameters.`);
       }
 
+      // For JSON-RPC, tenant is inside the params body. Extract it and enrich the
+      // context so downstream components (stores, executors) can scope by tenant.
+      const paramsTenant = (rpcRequest.params as Record<string, unknown> | undefined)?.tenant as
+        | string
+        | undefined;
+      if (paramsTenant && !context.tenant) {
+        context = new ServerCallContext(context.requestedExtensions, context.user, paramsTenant);
+      }
+
       if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
         const params = rpcRequest.params;
         const agentCard = await this.requestHandler.getAgentCard();

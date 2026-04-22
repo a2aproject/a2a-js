@@ -64,7 +64,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   const requestHandler = options.requestHandler;
 
   /**
-   * Helper to wrap Unary calls with common logic (context, metadata, error handling)
+   * Helper to wrap Unary calls with common logic (context, metadata, error handling).
+   * Extracts tenant from the request if available and enriches the context.
    */
   const wrapUnaryWithConverter = async <TReq, TRes, TResult>(
     call: grpc.ServerUnaryCall<TReq, TRes>,
@@ -73,7 +74,13 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     converter: (res: TResult) => TRes
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      let context = await buildContext(call, options.userBuilder);
+      // For gRPC, tenant is inside the request message. Extract it and enrich
+      // the context so downstream components (stores, executors) can scope by tenant.
+      const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
+      if (tenant) {
+        context = new ServerCallContext(context.requestedExtensions, context.user, tenant);
+      }
       const result = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       callback(null, converter(result));
@@ -91,14 +98,21 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   };
 
   /**
-   * Helper to wrap Streaming calls with common logic (context, metadata, error handling)
+   * Helper to wrap Streaming calls with common logic (context, metadata, error handling).
+   * Extracts tenant from the request if available and enriches the context.
    */
   const wrapStreaming = async <TReq, TRes>(
     call: grpc.ServerWritableStream<TReq, TRes>,
     handler: (req: TReq, ctx: ServerCallContext) => AsyncGenerator<TRes>
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      let context = await buildContext(call, options.userBuilder);
+      // For gRPC, tenant is inside the request message. Extract it and enrich
+      // the context so downstream components (stores, executors) can scope by tenant.
+      const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
+      if (tenant) {
+        context = new ServerCallContext(context.requestedExtensions, context.user, tenant);
+      }
       const stream = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       for await (const responsePart of stream) {

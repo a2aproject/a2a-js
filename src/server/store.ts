@@ -6,13 +6,18 @@ import { RequestMalformedError } from '../errors.js';
 /**
  * Simplified interface for task storage providers.
  * Stores and retrieves the task.
+ *
+ * Implementations SHOULD use `context.tenant` (when present) to scope data access.
+ * Per spec Section 13.1, servers MUST ensure appropriate scope limitation based on
+ * the authenticated caller's authorization boundaries, which includes tenant isolation
+ * in multi-tenant deployments.
  */
 export interface TaskStore {
   /**
    * Saves a task.
    * Overwrites existing data if the task ID exists.
    * @param task The task to save.
-   * @param context The context of the current call.
+   * @param context The context of the current call. Use `context.tenant` for tenant-scoped storage.
    * @returns A promise resolving when the save operation is complete.
    */
   save(task: Task, context: ServerCallContext): Promise<void>;
@@ -20,7 +25,7 @@ export interface TaskStore {
   /**
    * Loads a task by task ID.
    * @param taskId The ID of the task to load.
-   * @param context The context of the current call.
+   * @param context The context of the current call. Use `context.tenant` for tenant-scoped lookups.
    * @returns A promise resolving to an object containing the Task, or undefined if not found.
    */
   load(taskId: string, context: ServerCallContext): Promise<Task | undefined>;
@@ -28,7 +33,7 @@ export interface TaskStore {
   /**
    * Lists tasks with filtering and pagination.
    * @param params Filtering and pagination parameters.
-   * @param context The context of the current call.
+   * @param context The context of the current call. Use `context.tenant` for tenant-scoped listing.
    */
   list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse>;
 }
@@ -37,25 +42,34 @@ export interface TaskStore {
 // InMemoryTaskStore
 // ========================
 //
-// Methods in InMemoryTaskStore accept ServerCallContext but do not use it.
-// This is intentional to match the TaskStore interface.
+// InMemoryTaskStore provides tenant-scoped data isolation using `context.tenant`.
+// Tasks are stored with a composite key of `{tenant}:{taskId}` when a tenant is present.
+// When no tenant is specified, tasks are stored under the taskId alone (global scope).
 
-// Use Task directly for storage
 export class InMemoryTaskStore implements TaskStore {
   private store: Map<string, Task> = new Map();
 
-  async load(taskId: string, _context: ServerCallContext): Promise<Task | undefined> {
-    const entry = this.store.get(taskId);
+  /**
+   * Builds a composite storage key from tenant and task ID.
+   * When tenant is present, the key is `{tenant}:{taskId}` to provide tenant isolation.
+   * When tenant is absent, the key is the taskId alone (global scope).
+   */
+  private _storageKey(taskId: string, context: ServerCallContext): string {
+    return context.tenant ? `${context.tenant}:${taskId}` : taskId;
+  }
+
+  async load(taskId: string, context: ServerCallContext): Promise<Task | undefined> {
+    const entry = this.store.get(this._storageKey(taskId, context));
     // Return copies to prevent external mutation
     return entry ? { ...entry } : undefined;
   }
 
-  async save(task: Task, _context: ServerCallContext): Promise<void> {
+  async save(task: Task, context: ServerCallContext): Promise<void> {
     // Store copies to prevent internal mutation if caller reuses objects
-    this.store.set(task.id, { ...task });
+    this.store.set(this._storageKey(task.id, context), { ...task });
   }
 
-  async list(params: ListTasksRequest, _context: ServerCallContext): Promise<ListTasksResponse> {
+  async list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse> {
     const {
       contextId,
       status,
@@ -66,7 +80,16 @@ export class InMemoryTaskStore implements TaskStore {
       includeArtifacts = false,
     } = params;
 
-    let tasks = Array.from(this.store.values());
+    let tasks = Array.from(this.store.entries())
+      // Filter by tenant: only return tasks whose storage key belongs to the current tenant scope
+      .filter(([key]) => {
+        if (context.tenant) {
+          return key.startsWith(`${context.tenant}:`);
+        }
+        // When no tenant is specified, only return global-scope tasks (no ':' prefix from tenanting)
+        return !key.includes(':') || this._isGlobalKey(key);
+      })
+      .map(([, task]) => task);
 
     // Filter by contextId
     if (contextId) {
@@ -153,5 +176,15 @@ export class InMemoryTaskStore implements TaskStore {
       pageSize,
       totalSize,
     };
+  }
+
+  /**
+   * Checks if a key that contains ':' is actually a global-scope key
+   * (i.e., the task ID itself contains ':'). This is determined by checking
+   * whether the key exists in the store as a task whose ID matches the full key.
+   */
+  private _isGlobalKey(key: string): boolean {
+    const task = this.store.get(key);
+    return task !== undefined && task.id === key;
   }
 }

@@ -20,6 +20,7 @@ import {
   AgentCard,
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   ListTaskPushNotificationConfigsRequest,
@@ -68,10 +69,14 @@ export class RestTransport implements Transport {
     return PROTOCOL_NAME;
   }
 
-  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
+  async getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard> {
+    const path = this._buildPath('/extendedAgentCard', params.tenant);
     const response = await this._sendRequest<undefined, AgentCard>(
       'GET',
-      '/extendedAgentCard',
+      path,
       undefined,
       options,
       undefined,

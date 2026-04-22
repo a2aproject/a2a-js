@@ -69,10 +69,13 @@ export class GrpcTransport implements Transport {
     return PROTOCOL_NAME;
   }
 
-  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
+  async getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard> {
     const rpcResponse = await this._sendGrpcRequest<GetExtendedAgentCardRequest, AgentCard>(
       'getExtendedAgentCard',
-      { tenant: '' },
+      params,
       options,
       this.grpcClient.getExtendedAgentCard.bind(this.grpcClient)
     );

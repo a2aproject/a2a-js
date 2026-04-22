@@ -1,6 +1,12 @@
 import { TaskPushNotificationConfig } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
+/**
+ * Interface for push notification configuration storage.
+ *
+ * Implementations SHOULD use `context.tenant` (when present) to scope data access,
+ * ensuring push notification configs from one tenant are not accessible to another.
+ */
 export interface PushNotificationStore {
   save(
     taskId: string,
@@ -11,15 +17,27 @@ export interface PushNotificationStore {
   delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void>;
 }
 
+/**
+ * In-memory push notification config store with tenant-scoped data isolation.
+ * Uses `context.tenant` to build composite storage keys, preventing cross-tenant access.
+ */
 export class InMemoryPushNotificationStore implements PushNotificationStore {
   private store: Map<string, TaskPushNotificationConfig[]> = new Map();
 
+  /**
+   * Builds a composite storage key from tenant and task ID.
+   */
+  private _storageKey(taskId: string, context: ServerCallContext): string {
+    return context.tenant ? `${context.tenant}:${taskId}` : taskId;
+  }
+
   async save(
     taskId: string,
-    _context: ServerCallContext,
+    context: ServerCallContext,
     pushNotificationConfig: TaskPushNotificationConfig
   ): Promise<void> {
-    const configs = this.store.get(taskId) || [];
+    const key = this._storageKey(taskId, context);
+    const configs = this.store.get(key) || [];
 
     // Set ID if it's not already set
     if (!pushNotificationConfig.id) {
@@ -34,21 +52,23 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
 
     // Add the new/updated config
     configs.push(pushNotificationConfig);
-    this.store.set(taskId, configs);
+    this.store.set(key, configs);
   }
 
-  async load(taskId: string, _context: ServerCallContext): Promise<TaskPushNotificationConfig[]> {
-    const configs = this.store.get(taskId);
+  async load(taskId: string, context: ServerCallContext): Promise<TaskPushNotificationConfig[]> {
+    const key = this._storageKey(taskId, context);
+    const configs = this.store.get(key);
     return configs || [];
   }
 
-  async delete(taskId: string, _context: ServerCallContext, configId?: string): Promise<void> {
+  async delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void> {
     // If no configId is provided, use taskId as the configId (backward compatibility)
     if (configId === undefined) {
       configId = taskId;
     }
 
-    const configs = this.store.get(taskId);
+    const key = this._storageKey(taskId, context);
+    const configs = this.store.get(key);
     if (!configs) {
       return;
     }
@@ -59,9 +79,9 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     }
 
     if (configs.length === 0) {
-      this.store.delete(taskId);
+      this.store.delete(key);
     } else {
-      this.store.set(taskId, configs);
+      this.store.set(key, configs);
     }
   }
 }

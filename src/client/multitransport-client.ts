@@ -77,13 +77,19 @@ export class Client {
   /**
    * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
    * Otherwise it will return the current agent card value.
+   *
+   * The tenant for the request is inferred from the agent card's interface declaration.
    */
   async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
     if (this.agentCard.capabilities?.extendedAgentCard) {
+      const tenant =
+        this.agentCard.supportedInterfaces?.find(
+          (iface) => iface.protocolBinding === this.transport.protocolName
+        )?.tenant ?? '';
       this.agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
-        (_, options) => this.transport.getExtendedAgentCard(options)
+        (_, options) => this.transport.getExtendedAgentCard({ tenant }, options)
       );
     }
     return this.agentCard;

@@ -290,7 +290,7 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(AgentCard.toJSON(mockCard)));
 
-      const result = await transport.getExtendedAgentCard();
+      const result = await transport.getExtendedAgentCard({ tenant: '' });
 
       expect(result).toEqual(expect.objectContaining(mockCard));
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -298,6 +298,45 @@ describe('RestTransport', () => {
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/extendedAgentCard`);
       expect(options?.method).to.equal('GET');
+    });
+
+    it('should get extended agent card with tenant prefix', async () => {
+      const mockCard: AgentCard = {
+        name: 'Test Agent',
+        description: 'A test agent for testing',
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          extensions: [],
+        },
+        skills: [],
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+        supportedInterfaces: [
+          {
+            url: endpoint,
+            protocolBinding: 'HTTP+JSON',
+            tenant: 'my-tenant',
+            protocolVersion: '1.0.0',
+          },
+        ],
+        version: '1.0.0',
+        provider: {
+          url: '',
+          organization: '',
+        },
+        securityRequirements: [],
+        securitySchemes: {},
+        documentationUrl: '',
+        signatures: [],
+      };
+
+      mockFetch.mockResolvedValue(createRestResponse(AgentCard.toJSON(mockCard)));
+
+      await transport.getExtendedAgentCard({ tenant: 'my-tenant' });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/my-tenant/extendedAgentCard`);
     });
   });
 

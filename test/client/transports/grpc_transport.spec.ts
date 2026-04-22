@@ -89,7 +89,7 @@ describe('GrpcTransport', () => {
       const mockCard = createMockAgentCard();
       mockUnarySuccess(mockGrpcClient.getExtendedAgentCard as Mock, mockCard);
 
-      const result = await transport.getExtendedAgentCard();
+      const result = await transport.getExtendedAgentCard({ tenant: '' });
 
       expect(result).toEqual(mockCard);
       expect(mockGrpcClient.getExtendedAgentCard).toHaveBeenCalled();

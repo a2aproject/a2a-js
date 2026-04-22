@@ -4,6 +4,11 @@ import { RequestContext } from './request_context.js';
 export interface AgentExecutor {
   /**
    * Executes the agent logic based on the request context and publishes events.
+   *
+   * In multi-tenant deployments, the tenant identifier is available via
+   * `requestContext.context.tenant`. Implementations MAY use this to scope
+   * agent behavior or data access by tenant.
+   *
    * @param requestContext The context of the current request.
    * @param eventBus The bus to publish execution events to.
    */
