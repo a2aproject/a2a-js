@@ -108,7 +108,7 @@ describe('grpcHandler', () => {
 
   describe('getExtendedAgentCard', () => {
     it('should return agent card via gRPC callback', async () => {
-      const call = createMockUnaryCall({});
+      const call = createMockUnaryCall({ tenant: '' });
       const callback = vi.fn();
       await handler.getExtendedAgentCard(call, callback);
 
@@ -123,7 +123,7 @@ describe('grpcHandler', () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
         new TaskNotFoundError('Not Found')
       );
-      const call = createMockUnaryCall({});
+      const call = createMockUnaryCall({ tenant: '' });
       const callback = vi.fn();
 
       await handler.getExtendedAgentCard(call, callback);
@@ -131,6 +131,17 @@ describe('grpcHandler', () => {
       const [err] = callback.mock.calls[0];
       assert.equal(err.code, grpc.status.NOT_FOUND);
       assert.equal(err.details, 'Not Found');
+    });
+
+    it('should pass tenant from request to request handler', async () => {
+      const call = createMockUnaryCall({ tenant: 'test-tenant' });
+      const callback = vi.fn();
+      await handler.getExtendedAgentCard(call, callback);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'test-tenant' }),
+        expect.anything()
+      );
     });
   });
 

@@ -5,6 +5,7 @@ import {
   SendMessageRequest,
   SubscribeToTaskRequest,
   GetTaskRequest,
+  GetExtendedAgentCardRequest,
   CancelTaskRequest,
   TaskPushNotificationConfig,
   GetTaskPushNotificationConfigRequest,
@@ -210,7 +211,10 @@ export class JsonRpcTransportHandler {
             break;
           case 'GetExtendedAgentCard':
             result = AgentCard.toJSON(
-              await this.requestHandler.getAuthenticatedExtendedAgentCard(context)
+              await this.requestHandler.getAuthenticatedExtendedAgentCard(
+                GetExtendedAgentCardRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           default:

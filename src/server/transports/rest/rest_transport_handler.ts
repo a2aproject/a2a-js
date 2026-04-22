@@ -16,6 +16,7 @@ import {
   StreamResponse,
   GetTaskRequest,
   CancelTaskRequest,
+  GetExtendedAgentCardRequest,
   ListTasksRequest,
   ListTasksResponse,
   TaskState,
@@ -119,8 +120,11 @@ export class RestTransportHandler {
   /**
    * Gets the authenticated extended agent card.
    */
-  async getAuthenticatedExtendedAgentCard(context: ServerCallContext): Promise<AgentCard> {
-    return this.requestHandler.getAuthenticatedExtendedAgentCard(context);
+  async getAuthenticatedExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    context: ServerCallContext
+  ): Promise<AgentCard> {
+    return this.requestHandler.getAuthenticatedExtendedAgentCard(params, context);
   }
 
   /**

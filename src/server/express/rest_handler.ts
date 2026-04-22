@@ -282,7 +282,10 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('get', '/extendedAgentCard', async (req, res) => {
     const context = await buildContext(req);
-    const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
+    const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(
+      { tenant: (req.params.tenant as string) || '' },
+      context
+    );
     sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
   });
 

@@ -201,6 +201,23 @@ describe('JsonRpcTransportHandler', () => {
     });
   });
 
+  describe('Method handling', () => {
+    it('should pass tenant from params to getAuthenticatedExtendedAgentCard', async () => {
+      const request = {
+        jsonrpc: '2.0',
+        method: 'GetExtendedAgentCard',
+        id: 1,
+        params: { tenant: 'test-tenant' },
+      };
+      await transportHandler.handle(request, defaultContext);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'test-tenant' }),
+        expect.anything()
+      );
+    });
+  });
+
   describe('Error mapping', () => {
     it('should map RequestMalformedError to code and message', async () => {
       const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(

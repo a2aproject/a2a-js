@@ -21,6 +21,7 @@ import {
   SendMessageRequest,
   GetTaskRequest,
   CancelTaskRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
   DeleteTaskPushNotificationConfigRequest,
@@ -92,7 +93,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return this.agentCard;
   }
 
-  async getAuthenticatedExtendedAgentCard(context: ServerCallContext): Promise<AgentCard> {
+  async getAuthenticatedExtendedAgentCard(_params: GetExtendedAgentCardRequest, context: ServerCallContext): Promise<AgentCard> {
     if (!this.agentCard.capabilities?.extendedAgentCard) {
       throw new UnsupportedOperationError('Agent does not support authenticated extended card.');
     }

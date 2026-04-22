@@ -202,8 +202,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       call: grpc.ServerUnaryCall<GetExtendedAgentCardRequest, AgentCard>,
       callback: grpc.sendUnaryData<AgentCard>
     ): Promise<void> {
-      return wrapUnary(call, callback, (_params, context) =>
-        requestHandler.getAuthenticatedExtendedAgentCard(context)
+      return wrapUnary(call, callback, (params, context) =>
+        requestHandler.getAuthenticatedExtendedAgentCard(params, context)
       );
     },
     listTasks(
