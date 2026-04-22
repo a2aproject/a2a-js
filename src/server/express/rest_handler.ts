@@ -345,8 +345,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       const result = await restTransportHandler.getTask(
         req.params.taskId,
         context,
-        //TODO: clarify for version 1.0.0 the format of the historyLength query parameter, and if history should always be added to the returned object
-        req.query.historyLength ?? req.query.history_length
+        req.query.historyLength
       );
       sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
     })

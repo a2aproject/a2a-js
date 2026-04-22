@@ -9,8 +9,8 @@ exports[`TypeScript Strict Mode`] = {
       [327, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
       [350, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
     ],
-    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:3231104525": [
-      [91, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
+    "src/server/transports/jsonrpc/jsonrpc_transport_handler.ts:1878858438": [
+      [89, 12, 10, "tsc: Variable \'rpcRequest\' is used before being assigned.", "3927050741"]
     ]
   }`
 };
