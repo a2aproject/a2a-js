@@ -74,13 +74,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     converter: (res: TResult) => TRes
   ) => {
     try {
-      let context = await buildContext(call, options.userBuilder);
-      // For gRPC, tenant is inside the request message. Extract it and enrich
-      // the context so downstream components (stores, executors) can scope by tenant.
-      const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
-      if (tenant) {
-        context = new ServerCallContext(context.requestedExtensions, context.user, tenant);
-      }
+      const context = await _buildContext(call, options.userBuilder);
       const result = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       callback(null, converter(result));
@@ -106,13 +100,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     handler: (req: TReq, ctx: ServerCallContext) => AsyncGenerator<TRes>
   ) => {
     try {
-      let context = await buildContext(call, options.userBuilder);
-      // For gRPC, tenant is inside the request message. Extract it and enrich
-      // the context so downstream components (stores, executors) can scope by tenant.
-      const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
-      if (tenant) {
-        context = new ServerCallContext(context.requestedExtensions, context.user, tenant);
-      }
+      const context = await _buildContext(call, options.userBuilder);
       const stream = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       for await (const responsePart of stream) {
@@ -255,7 +243,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   };
 };
 
-const buildContext = async (
+const _buildContext = async (
   call: grpc.ServerUnaryCall<unknown, unknown> | grpc.ServerWritableStream<unknown, unknown>,
   userBuilder: UserBuilder
 ): Promise<ServerCallContext> => {
@@ -263,7 +251,15 @@ const buildContext = async (
   const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
   const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
 
-  return new ServerCallContext(Extensions.parseServiceParameter(extensionString), user);
+  let context = new ServerCallContext(Extensions.parseServiceParameter(extensionString), user);
+
+  // For gRPC, tenant is inside the request message. Extract it and enrich
+  // the context so downstream components (stores, executors) can scope by tenant.
+  const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
+  if (tenant) {
+    context = new ServerCallContext(context.requestedExtensions, context.user, tenant);
+  }
+  return context;
 };
 
 const buildMetadata = (context: ServerCallContext): grpc.Metadata => {
