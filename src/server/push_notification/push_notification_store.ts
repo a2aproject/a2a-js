@@ -1,3 +1,4 @@
+import { RequestMalformedError } from '../../errors.js';
 import { TaskPushNotificationConfig } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
@@ -28,7 +29,13 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
    * Builds a composite storage key from tenant and task ID.
    */
   private _storageKey(taskId: string, context: ServerCallContext): string {
-    return context.tenant ? `${context.tenant}:${taskId}` : taskId;
+    if (context.tenant) {
+      return `${context.tenant}:${taskId}`;
+    }
+    if (taskId && taskId.includes(':')) {
+      throw new RequestMalformedError('Task ID cannot contain ":" character for global tasks.');
+    }
+    return taskId;
   }
 
   async save(

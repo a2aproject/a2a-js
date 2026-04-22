@@ -55,7 +55,13 @@ export class InMemoryTaskStore implements TaskStore {
    * When tenant is absent, the key is the taskId alone (global scope).
    */
   private _storageKey(taskId: string, context: ServerCallContext): string {
-    return context.tenant ? `${context.tenant}:${taskId}` : taskId;
+    if (context.tenant) {
+      return `${context.tenant}:${taskId}`;
+    }
+    if (taskId && taskId.includes(':')) {
+      throw new RequestMalformedError('Task ID cannot contain ":" character for global tasks.');
+    }
+    return taskId;
   }
 
   async load(taskId: string, context: ServerCallContext): Promise<Task | undefined> {
