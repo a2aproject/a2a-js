@@ -53,6 +53,7 @@ import {
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { MockTaskStore } from './mocks/task_store.mock.js';
+import { TERMINAL_STATE_LIST } from '../../src/server/utils.js';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let handler: A2ARequestHandler;
@@ -1154,14 +1155,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
     const taskId = 'task-terminal-1';
-    const terminalStates: TaskState[] = [
-      TaskState.TASK_STATE_COMPLETED,
-      TaskState.TASK_STATE_FAILED,
-      TaskState.TASK_STATE_CANCELED,
-      TaskState.TASK_STATE_REJECTED,
-    ];
 
-    for (const state of terminalStates) {
+    for (const state of TERMINAL_STATE_LIST) {
       const fakeTask: Task = {
         id: taskId,
         contextId: 'ctx-terminal',
@@ -1387,6 +1382,102 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const lastSaveCall = saveSpy.mock.calls[saveSpy.mock.calls.length - 1][0];
     assert.equal(lastSaveCall.id, taskId);
     assert.equal(lastSaveCall.status.state, TaskState.TASK_STATE_COMPLETED);
+  });
+
+  it('resubscribe: should throw UnsupportedOperationError for terminal-state tasks', async () => {
+    const taskId = 'task-terminal-resub';
+
+    for (const state of TERMINAL_STATE_LIST) {
+      const fakeTask: Task = {
+        id: taskId,
+        contextId: 'ctx-terminal-resub',
+        status: { state: state as TaskState, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(fakeTask, serverCallContext);
+
+      const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
+      try {
+        await generator.next();
+        assert.fail(`Should have thrown for terminal state: ${state}`);
+      } catch (error: unknown) {
+        expect(error).to.be.instanceOf(UnsupportedOperationError);
+        expect((error as Error).message).to.contain(`Task ${taskId} is in a terminal state`);
+      }
+    }
+  });
+
+  it('resubscribe: should throw TaskNotFoundError for non-existent task', async () => {
+    const generator = handler.resubscribe(
+      { id: 'non-existent-task', tenant: '' },
+      serverCallContext
+    );
+    try {
+      await generator.next();
+      assert.fail('Should have thrown TaskNotFoundError');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(TaskNotFoundError);
+    }
+  });
+
+  it('resubscribe: should yield Task as the first event with current state', async () => {
+    const taskId = 'task-resub-first-event';
+    const fakeTask: Task = {
+      id: taskId,
+      contextId: 'ctx-resub-first',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    // Create an active event bus
+    const bus = executionEventBusManager.createOrGetByTaskId(taskId);
+
+    const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
+
+    // Advance once to yield the task and create the event queue
+    const firstResult = await generator.next();
+    assert.isFalse(firstResult.done);
+
+    // Now finish the bus to unblock the stream
+    bus.finished();
+
+    const results: StreamResponse[] = [firstResult.value];
+    for await (const event of generator) {
+      results.push(event);
+    }
+
+    assert.lengthOf(results, 1, 'Should yield exactly one event (the initial task snapshot)');
+    assert.equal(results[0].payload?.$case, 'task');
+    assert.deepEqual((results[0].payload as { $case: 'task'; value: Task }).value, fakeTask);
+  });
+
+  it('resubscribe: should throw UnsupportedOperationError when no active event bus exists', async () => {
+    const taskId = 'task-resub-no-bus';
+    const fakeTask: Task = {
+      id: taskId,
+      contextId: 'ctx-resub-no-bus',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
+    try {
+      await generator.next();
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.contain(
+        `Resubscribe: No active event bus for task ${taskId}`
+      );
+    }
   });
 
   it('getTask: should return an existing task from the store', async () => {
