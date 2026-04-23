@@ -4,11 +4,17 @@ import { User } from './authentication/user.js';
 export class ServerCallContext {
   private readonly _requestedExtensions?: Extensions;
   private readonly _user?: User;
+  private readonly _tenant?: string;
   private _activatedExtensions?: Extensions;
 
-  constructor(requestedExtensions?: Extensions, user?: User) {
+  constructor(requestedExtensions?: Extensions, user?: User, tenant?: string) {
     this._requestedExtensions = requestedExtensions;
     this._user = user;
+    this._tenant = tenant;
+  }
+
+  get tenant(): string | undefined {
+    return this._tenant;
   }
 
   get user(): User | undefined {

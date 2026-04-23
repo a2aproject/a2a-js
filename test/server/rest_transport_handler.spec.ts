@@ -137,7 +137,10 @@ describe('RestTransportHandler', () => {
 
   describe('getAuthenticatedExtendedAgentCard', () => {
     it('should return extended agent card from request handler', async () => {
-      const card = await transportHandler.getAuthenticatedExtendedAgentCard(mockContext);
+      const card = await transportHandler.getAuthenticatedExtendedAgentCard(
+        { tenant: '' },
+        mockContext
+      );
 
       expect(card).to.deep.equal(testAgentCard);
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);

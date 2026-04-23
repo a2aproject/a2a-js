@@ -3020,7 +3020,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     it('getAuthenticatedExtendedAgentCard should fail if the agent card does not support extended agent card', async () => {
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard(serverCallContext);
+        await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {
@@ -3040,7 +3040,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       );
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard(serverCallContext);
+        await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {
@@ -3061,7 +3061,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       );
 
       const context = new ServerCallContext(undefined, new A2AUser(true));
-      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, context);
       assert.deepEqual(agentCard, extendedAgentCard);
     });
 
@@ -3077,7 +3077,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       );
 
       const context = new ServerCallContext(undefined, new A2AUser(false));
-      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, context);
       assert(agentCard.capabilities.extensions.length === 1);
       assert.deepEqual(agentCard.capabilities.extensions[0], {
         uri: 'requested-extension-uri',

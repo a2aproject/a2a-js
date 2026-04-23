@@ -16,6 +16,7 @@ import {
   StreamResponse,
   GetTaskRequest,
   CancelTaskRequest,
+  GetExtendedAgentCardRequest,
   ListTasksRequest,
   ListTasksResponse,
   TaskState,
@@ -119,8 +120,11 @@ export class RestTransportHandler {
   /**
    * Gets the authenticated extended agent card.
    */
-  async getAuthenticatedExtendedAgentCard(context: ServerCallContext): Promise<AgentCard> {
-    return this.requestHandler.getAuthenticatedExtendedAgentCard(context);
+  async getAuthenticatedExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    context: ServerCallContext
+  ): Promise<AgentCard> {
+    return this.requestHandler.getAuthenticatedExtendedAgentCard(params, context);
   }
 
   /**
@@ -166,9 +170,10 @@ export class RestTransportHandler {
   async getTask(
     taskId: string,
     context: ServerCallContext,
-    historyLength?: unknown
+    historyLength?: unknown,
+    tenant?: string
   ): Promise<Task> {
-    const params: GetTaskRequest = { id: taskId, historyLength: 0, tenant: '' };
+    const params: GetTaskRequest = { id: taskId, historyLength: 0, tenant: tenant || '' };
     if (historyLength !== undefined) {
       params.historyLength = this.parseHistoryLength(historyLength);
     }
@@ -178,8 +183,8 @@ export class RestTransportHandler {
   /**
    * Cancels a task.
    */
-  async cancelTask(taskId: string, context: ServerCallContext): Promise<Task> {
-    const params: CancelTaskRequest = { id: taskId, tenant: '', metadata: {} };
+  async cancelTask(taskId: string, context: ServerCallContext, tenant?: string): Promise<Task> {
+    const params: CancelTaskRequest = { id: taskId, tenant: tenant || '', metadata: {} };
     return this.requestHandler.cancelTask(params, context);
   }
 
@@ -212,10 +217,11 @@ export class RestTransportHandler {
    */
   async resubscribe(
     taskId: string,
-    context: ServerCallContext
+    context: ServerCallContext,
+    tenant?: string
   ): Promise<AsyncGenerator<StreamResponse, void, undefined>> {
     await this.requireCapability('streaming');
-    return this.requestHandler.resubscribe({ id: taskId, tenant: '' }, context);
+    return this.requestHandler.resubscribe({ id: taskId, tenant: tenant || '' }, context);
   }
 
   /**
@@ -238,10 +244,11 @@ export class RestTransportHandler {
    */
   async listTaskPushNotificationConfigs(
     taskId: string,
-    context: ServerCallContext
+    context: ServerCallContext,
+    tenant?: string
   ): Promise<ListTaskPushNotificationConfigsResponse> {
     const result = await this.requestHandler.listTaskPushNotificationConfigs(
-      { taskId, pageSize: 0, pageToken: '', tenant: '' },
+      { taskId, pageSize: 0, pageToken: '', tenant: tenant || '' },
       context
     );
     return result;
@@ -253,10 +260,11 @@ export class RestTransportHandler {
   async getTaskPushNotificationConfig(
     taskId: string,
     configId: string,
-    context: ServerCallContext
+    context: ServerCallContext,
+    tenant?: string
   ): Promise<TaskPushNotificationConfig> {
     const config = await this.requestHandler.getTaskPushNotificationConfig(
-      { taskId, id: configId, tenant: '' },
+      { taskId, id: configId, tenant: tenant || '' },
       context
     );
     return config;
@@ -268,10 +276,11 @@ export class RestTransportHandler {
   async deleteTaskPushNotificationConfig(
     taskId: string,
     configId: string,
-    context: ServerCallContext
+    context: ServerCallContext,
+    tenant?: string
   ): Promise<void> {
     await this.requestHandler.deleteTaskPushNotificationConfig(
-      { taskId, id: configId, tenant: '' },
+      { taskId, id: configId, tenant: tenant || '' },
       context
     );
   }

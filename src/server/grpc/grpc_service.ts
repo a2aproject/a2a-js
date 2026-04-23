@@ -64,7 +64,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   const requestHandler = options.requestHandler;
 
   /**
-   * Helper to wrap Unary calls with common logic (context, metadata, error handling)
+   * Helper to wrap Unary calls with common logic (context, metadata, error handling).
+   * Extracts tenant from the request if available and enriches the context.
    */
   const wrapUnaryWithConverter = async <TReq, TRes, TResult>(
     call: grpc.ServerUnaryCall<TReq, TRes>,
@@ -73,7 +74,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     converter: (res: TResult) => TRes
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      const context = await _buildContext(call, options.userBuilder);
       const result = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       callback(null, converter(result));
@@ -91,14 +92,15 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   };
 
   /**
-   * Helper to wrap Streaming calls with common logic (context, metadata, error handling)
+   * Helper to wrap Streaming calls with common logic (context, metadata, error handling).
+   * Extracts tenant from the request if available and enriches the context.
    */
   const wrapStreaming = async <TReq, TRes>(
     call: grpc.ServerWritableStream<TReq, TRes>,
     handler: (req: TReq, ctx: ServerCallContext) => AsyncGenerator<TRes>
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      const context = await _buildContext(call, options.userBuilder);
       const stream = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       for await (const responsePart of stream) {
@@ -202,8 +204,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       call: grpc.ServerUnaryCall<GetExtendedAgentCardRequest, AgentCard>,
       callback: grpc.sendUnaryData<AgentCard>
     ): Promise<void> {
-      return wrapUnary(call, callback, (_params, context) =>
-        requestHandler.getAuthenticatedExtendedAgentCard(context)
+      return wrapUnary(call, callback, (params, context) =>
+        requestHandler.getAuthenticatedExtendedAgentCard(params, context)
       );
     },
     listTasks(
@@ -241,15 +243,15 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   };
 };
 
-const buildContext = async (
+const _buildContext = async (
   call: grpc.ServerUnaryCall<unknown, unknown> | grpc.ServerWritableStream<unknown, unknown>,
   userBuilder: UserBuilder
 ): Promise<ServerCallContext> => {
   const user = await userBuilder(call);
   const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
   const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
-
-  return new ServerCallContext(Extensions.parseServiceParameter(extensionString), user);
+  const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
+  return new ServerCallContext(Extensions.parseServiceParameter(extensionString), user, tenant);
 };
 
 const buildMetadata = (context: ServerCallContext): grpc.Metadata => {

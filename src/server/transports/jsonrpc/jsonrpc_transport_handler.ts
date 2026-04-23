@@ -5,6 +5,7 @@ import {
   SendMessageRequest,
   SubscribeToTaskRequest,
   GetTaskRequest,
+  GetExtendedAgentCardRequest,
   CancelTaskRequest,
   TaskPushNotificationConfig,
   GetTaskPushNotificationConfigRequest,
@@ -96,6 +97,15 @@ export class JsonRpcTransportHandler {
     try {
       if (method !== 'GetExtendedAgentCard' && !this.paramsAreValid(rpcRequest.params)) {
         throw new RequestMalformedError(`Invalid method parameters.`);
+      }
+
+      // For JSON-RPC, tenant is inside the params body. Extract it and enrich the
+      // context so downstream components (stores, executors) can scope by tenant.
+      const paramsTenant = (rpcRequest.params as Record<string, unknown> | undefined)?.tenant as
+        | string
+        | undefined;
+      if (paramsTenant && !context.tenant) {
+        context = new ServerCallContext(context.requestedExtensions, context.user, paramsTenant);
       }
 
       if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
@@ -208,7 +218,10 @@ export class JsonRpcTransportHandler {
             break;
           case 'GetExtendedAgentCard':
             result = AgentCard.toJSON(
-              await this.requestHandler.getAuthenticatedExtendedAgentCard(context)
+              await this.requestHandler.getAuthenticatedExtendedAgentCard(
+                GetExtendedAgentCardRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           default:

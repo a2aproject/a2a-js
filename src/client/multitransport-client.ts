@@ -77,13 +77,17 @@ export class Client {
   /**
    * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
    * Otherwise it will return the current agent card value.
+   *
+   * When a default tenant is configured (via `TenantTransportDecorator`, wired
+   * automatically by `ClientFactory` from `AgentInterface.tenant`), the tenant
+   * is applied to the request transparently.
    */
   async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
     if (this.agentCard.capabilities?.extendedAgentCard) {
       this.agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
-        (_, options) => this.transport.getExtendedAgentCard(options)
+        (_, options) => this.transport.getExtendedAgentCard({ tenant: '' }, options)
       );
     }
     return this.agentCard;

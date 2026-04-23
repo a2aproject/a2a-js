@@ -9,6 +9,7 @@ import {
   ListTaskPushNotificationConfigsResponse,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   SubscribeToTaskRequest,
   SendMessageResult,
@@ -20,7 +21,10 @@ import { RequestOptions } from '../multitransport-client.js';
 export interface Transport {
   get protocolName(): string;
 
-  getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard>;
+  getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard>;
 
   sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult>;
 
