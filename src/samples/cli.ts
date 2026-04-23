@@ -254,7 +254,6 @@ async function fetchAndDisplayAgentCard() {
     }
     console.log(`  Supported Transports: ${Array.from(supportedTransports).join(', ')}`);
 
-    // TODO (https://github.com/a2aproject/a2a-js/issues/179): Add a way to get the protocol name from the transport.
     console.log(
       colorize(
         'green',
