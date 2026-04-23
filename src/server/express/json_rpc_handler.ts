@@ -10,11 +10,12 @@ import { JSONRPCResponse } from '../transports/jsonrpc/jsonrpc_transport_handler
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
 import { RequestMalformedError } from '../../errors.js';
+import { validateVersion } from '../version.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -42,10 +43,14 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   router.post('/', async (req: Request, res: Response) => {
     try {
       const user = await options.userBuilder(req);
+      const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
       const context = new ServerCallContext(
         Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
-        user
+        user,
+        requestedVersion
       );
+      const agentCard = await options.requestHandler.getAgentCard();
+      validateVersion(context.requestedVersion, agentCard);
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
       if (context.activatedExtensions) {

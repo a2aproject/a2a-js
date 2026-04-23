@@ -9,7 +9,17 @@ import {
   Role,
   TaskState,
   StreamResponse,
+  A2A_VERSION_HEADER,
+  A2A_PROTOCOL_VERSION,
 } from '../../src/index.js';
+
+/**
+ * Helper: the default RequestOptions that the Client injects when the caller
+ * passes no explicit options. Contains the auto-injected A2A-Version header.
+ */
+const defaultVersionOptions: RequestOptions = {
+  serviceParameters: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION },
+};
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
@@ -90,7 +100,9 @@ describe('Client', () => {
 
     expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(1);
     expect(result).to.equal(extendedAgentCard);
-    expect(caughtOptions).to.equal(expectedOptions);
+    expect(caughtOptions).toEqual({
+      serviceParameters: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION, key: 'value' },
+    });
   });
 
   it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
@@ -154,7 +166,10 @@ describe('Client', () => {
       },
     };
     expect(transport.sendMessage.mock.contexts[0]).toBe(transport);
-    expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+    expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+      expectedParams,
+      defaultVersionOptions
+    );
     expect(result).to.deep.equal(response);
   });
 
@@ -231,7 +246,7 @@ describe('Client', () => {
       },
     };
     expect(transport.sendMessageStream).toHaveBeenCalledTimes(1);
-    expect(transport.sendMessageStream).toHaveBeenCalledWith(expectedParams, undefined);
+    expect(transport.sendMessageStream).toHaveBeenCalledWith(expectedParams, defaultVersionOptions);
     expect(got).to.deep.equal(events);
   });
 
@@ -251,7 +266,7 @@ describe('Client', () => {
     expect(transport.createTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
     expect(transport.createTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
       config,
-      undefined
+      defaultVersionOptions
     );
     expect(result).to.equal(config);
   });
@@ -277,7 +292,7 @@ describe('Client', () => {
     expect(transport.getTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
     expect(transport.getTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
       params,
-      undefined
+      defaultVersionOptions
     );
     expect(result).to.equal(config);
   });
@@ -305,7 +320,7 @@ describe('Client', () => {
 
     expect(transport.listTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
       params,
-      undefined
+      defaultVersionOptions
     );
     expect(result).to.equal(configs);
   });
@@ -323,7 +338,7 @@ describe('Client', () => {
     expect(transport.deleteTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
     expect(transport.deleteTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
       params,
-      undefined
+      defaultVersionOptions
     );
   });
 
@@ -341,7 +356,7 @@ describe('Client', () => {
 
     const result = await client.getTask(params);
 
-    expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     expect(result).to.equal(task);
   });
 
@@ -360,7 +375,7 @@ describe('Client', () => {
     const result = await client.cancelTask(params);
 
     expect(transport.cancelTask.mock.contexts[0]).toBe(transport);
-    expect(transport.cancelTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(transport.cancelTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     expect(result).to.equal(task);
   });
 
@@ -391,7 +406,7 @@ describe('Client', () => {
 
     const result = await client.listTasks(params);
 
-    expect(transport.listTasks).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(transport.listTasks).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     expect(result).to.equal(response);
   });
 
@@ -445,7 +460,10 @@ describe('Client', () => {
       got.push(event);
     }
     expect(transport.resubscribeTask.mock.contexts[0]).toBe(transport);
-    expect(transport.resubscribeTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(transport.resubscribeTask).toHaveBeenCalledExactlyOnceWith(
+      params,
+      defaultVersionOptions
+    );
     expect(got).to.deep.equal(events);
   });
 
@@ -479,7 +497,10 @@ describe('Client', () => {
           acceptedOutputModes: [] as string[],
         },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should set blocking=false when explicitly provided in request', async () => {
@@ -516,7 +537,10 @@ describe('Client', () => {
           taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should apply acceptedOutputModes', async () => {
@@ -549,7 +573,10 @@ describe('Client', () => {
           taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should use acceptedOutputModes from request when provided', async () => {
@@ -587,7 +614,10 @@ describe('Client', () => {
           taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should apply pushNotificationConfig', async () => {
@@ -628,7 +658,10 @@ describe('Client', () => {
           taskPushNotificationConfig: pushConfig,
         },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should use pushNotificationConfig from request when provided', async () => {
@@ -684,7 +717,10 @@ describe('Client', () => {
           acceptedOutputModes: [] as string[],
         },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
   });
 
@@ -731,7 +767,10 @@ describe('Client', () => {
           taskPushNotificationConfig: undefined as any,
         },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
       expect(yielded.value).to.deep.equal({
         payload: {
           $case: 'message',
@@ -771,7 +810,7 @@ describe('Client', () => {
 
       expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(
         { tenant: '', id: '123', historyLength: 99 },
-        undefined
+        defaultVersionOptions
       );
       expect(result).to.equal(task);
     });
@@ -803,7 +842,7 @@ describe('Client', () => {
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
       expect(result).to.deep.equal({ ...task, metadata: { foo: 'bar' } });
     });
 
@@ -939,7 +978,7 @@ describe('Client', () => {
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
       expect(result).to.equal(task);
     });
 
@@ -1086,7 +1125,7 @@ describe('Client', () => {
       };
       expect(transport.sendMessageStream).toHaveBeenCalledExactlyOnceWith(
         expectedParams,
-        undefined
+        defaultVersionOptions
       );
       expect(got).to.deep.equal(
         events.map((event) => {
@@ -1360,6 +1399,92 @@ describe('Client', () => {
           expect(transportStub).toHaveBeenCalledTimes(1);
           expect(got).to.deep.equal([events[0]]);
         });
+      });
+    });
+  });
+
+  describe('A2A-Version header', () => {
+    it('should resolve protocolVersion from matching interface', () => {
+      const cardWithInterfaces = {
+        ...agentCard,
+        supportedInterfaces: [
+          {
+            url: 'https://example.com',
+            protocolBinding: 'MockTransport',
+            protocolVersion: '1.0',
+            tenant: '',
+          },
+        ],
+      };
+      const client = new Client(transport, cardWithInterfaces);
+      expect(client.protocolVersion).toBe('1.0');
+    });
+
+    it('should resolve protocolVersion case-insensitively', () => {
+      const cardWithInterfaces = {
+        ...agentCard,
+        supportedInterfaces: [
+          {
+            url: 'https://example.com',
+            protocolBinding: 'mocktransport',
+            protocolVersion: '1.0',
+            tenant: '',
+          },
+        ],
+      };
+      const client = new Client(transport, cardWithInterfaces);
+      expect(client.protocolVersion).toBe('1.0');
+    });
+
+    it('should fall back to SDK default when no interface matches', () => {
+      const client = new Client(transport, agentCard);
+      expect(client.protocolVersion).toBe(A2A_PROTOCOL_VERSION);
+    });
+
+    it('should inject A2A-Version into service parameters', async () => {
+      const task: Task = {
+        id: '123',
+        contextId: 'ctx1',
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          timestamp: undefined,
+          message: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      transport.getTask.mockResolvedValue(task);
+
+      const params = { tenant: '', id: '123', historyLength: 0 };
+      await client.getTask(params);
+
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
+    });
+
+    it('should not override user-provided A2A-Version', async () => {
+      const task: Task = {
+        id: '123',
+        contextId: 'ctx1',
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          timestamp: undefined,
+          message: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      transport.getTask.mockResolvedValue(task);
+
+      const params = { tenant: '', id: '123', historyLength: 0 };
+      const options: RequestOptions = {
+        serviceParameters: { [A2A_VERSION_HEADER]: '0.3' },
+      };
+      await client.getTask(params, options);
+
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+        serviceParameters: { [A2A_VERSION_HEADER]: '0.3' },
       });
     });
   });

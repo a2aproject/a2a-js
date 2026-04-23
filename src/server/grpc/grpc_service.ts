@@ -24,7 +24,7 @@ import { ToProto } from '../../types/converters/to_proto.js';
 import { ServerCallContext } from '../context.js';
 import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
-import { HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import {
   ExtendedAgentCardNotConfiguredError,
   ContentTypeNotSupportedError,
@@ -35,7 +35,9 @@ import {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
+  VersionNotSupportedError,
 } from '../../errors.js';
+import { validateVersion } from '../version.js';
 
 /**
  * Options for configuring the gRPC handler.
@@ -73,7 +75,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     converter: (res: TResult) => TRes
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      const context = await buildContext(call, options.userBuilder, requestHandler);
       const result = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       callback(null, converter(result));
@@ -98,7 +100,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     handler: (req: TReq, ctx: ServerCallContext) => AsyncGenerator<TRes>
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
+      const context = await buildContext(call, options.userBuilder, requestHandler);
       const stream = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       for await (const responsePart of stream) {
@@ -230,6 +232,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
   else if (error instanceof ExtendedAgentCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof VersionNotSupportedError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof GenericError) code = grpc.status.INTERNAL;
 
@@ -243,13 +246,27 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
 
 const buildContext = async (
   call: grpc.ServerUnaryCall<unknown, unknown> | grpc.ServerWritableStream<unknown, unknown>,
-  userBuilder: UserBuilder
+  userBuilder: UserBuilder,
+  requestHandler: A2ARequestHandler
 ): Promise<ServerCallContext> => {
   const user = await userBuilder(call);
   const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
   const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
 
-  return new ServerCallContext(Extensions.parseServiceParameter(extensionString), user);
+  // gRPC metadata keys are normalized to lowercase per gRPC conventions (§10.2).
+  const versionHeaders = call.metadata.get(A2A_VERSION_HEADER.toLowerCase());
+  const requestedVersion = versionHeaders.length > 0 ? versionHeaders[0].toString() : undefined;
+
+  const context = new ServerCallContext(
+    Extensions.parseServiceParameter(extensionString),
+    user,
+    requestedVersion
+  );
+
+  const agentCard = await requestHandler.getAgentCard();
+  validateVersion(context.requestedVersion, agentCard);
+
+  return context;
 };
 
 const buildMetadata = (context: ServerCallContext): grpc.Metadata => {

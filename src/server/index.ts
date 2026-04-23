@@ -30,6 +30,8 @@ export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
 export { ServerCallContext } from './context.js';
+export type { ServerCallContextOptions } from './context.js';
+export { validateVersion, getSupportedVersions } from './version.js';
 export {
   RequestMalformedError,
   TaskNotFoundError,
@@ -39,6 +41,7 @@ export {
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   ExtendedAgentCardNotConfiguredError,
+  VersionNotSupportedError,
 } from '../errors.js';
 
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';

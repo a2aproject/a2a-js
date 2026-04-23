@@ -9,6 +9,7 @@ import {
   UnsupportedOperationError,
   RequestMalformedError,
   ExtendedAgentCardNotConfiguredError,
+  VersionNotSupportedError,
 } from '../../errors.js';
 import { Task, AgentCard, TaskPushNotificationConfig, SendMessageResult } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
@@ -384,6 +385,8 @@ export class JsonRpcTransport implements Transport {
         return new InvalidAgentResponseError(errorMessage);
       case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
         return new ExtendedAgentCardNotConfiguredError(errorMessage);
+      case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
+        return new VersionNotSupportedError(errorMessage);
       default:
         return new JSONRPCTransportError(response);
     }

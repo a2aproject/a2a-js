@@ -566,4 +566,46 @@ describe('A2AExpressApp', () => {
       assert.deepEqual(response.body, expectedErrorResponse);
     });
   });
+
+  describe('A2A-Version header validation', () => {
+    beforeEach(() => {
+      setupA2ARoutes(expressApp, mockRequestHandler);
+    });
+
+    it('should accept requests without A2A-Version header (defaults to 0.3)', async () => {
+      handleStub.mockResolvedValue({ jsonrpc: '2.0', id: '1', result: {} });
+
+      const response = await request(expressApp)
+        .post('/')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(200);
+
+      assert.equal(response.body.jsonrpc, '2.0');
+    });
+
+    it('should accept requests with a supported A2A-Version header', async () => {
+      handleStub.mockResolvedValue({ jsonrpc: '2.0', id: '1', result: {} });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(200);
+
+      assert.equal(response.body.jsonrpc, '2.0');
+    });
+
+    it('should reject requests with an unsupported A2A-Version header', async () => {
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '9.9')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(500);
+
+      assert.equal(response.body.jsonrpc, '2.0');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
+      assert.include(response.body.error.message, '9.9');
+    });
+  });
 });

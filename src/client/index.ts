@@ -35,4 +35,5 @@ export {
   TaskNotFoundError,
   UnsupportedOperationError,
   RequestMalformedError,
+  VersionNotSupportedError,
 } from '../errors.js';

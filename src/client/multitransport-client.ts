@@ -1,3 +1,4 @@
+import { A2A_VERSION_HEADER, A2A_PROTOCOL_VERSION } from '../constants.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
@@ -68,11 +69,33 @@ export interface RequestOptions {
 }
 
 export class Client {
+  /**
+   * The A2A protocol version sent with every request via the A2A-Version header.
+   * Derived from the agent card's matching interface protocolVersion,
+   * falling back to {@link A2A_PROTOCOL_VERSION} if no match is found.
+   * Clients MUST send this header per §3.6.1.
+   */
+  public readonly protocolVersion: string;
+
   constructor(
     public readonly transport: Transport,
     private agentCard: AgentCard,
     public readonly config?: ClientConfig
-  ) {}
+  ) {
+    this.protocolVersion = this.resolveProtocolVersion();
+  }
+
+  /**
+   * Resolves the protocol version from the agent card's supported interfaces
+   * matching the current transport's protocol name. Falls back to the SDK's
+   * built-in protocol version if no match is found.
+   */
+  private resolveProtocolVersion(): string {
+    const agentInterface = this.agentCard.supportedInterfaces?.find(
+      (i) => i.protocolBinding.toUpperCase() === this.transport.protocolName.toUpperCase()
+    );
+    return agentInterface?.protocolVersion || A2A_PROTOCOL_VERSION;
+  }
 
   /**
    * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
@@ -120,7 +143,7 @@ export class Client {
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -289,7 +312,7 @@ export class Client {
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -349,6 +372,26 @@ export class Client {
     return result;
   }
 
+  /**
+   * Ensures the A2A-Version header is present in the request's service parameters.
+   * Per §3.6.1: "Clients MUST send the A2A-Version header with each request."
+   * User-provided service parameters take precedence over the auto-injected version.
+   */
+  private withVersionHeader(options: RequestOptions | undefined): RequestOptions {
+    const existing = options?.serviceParameters;
+    // Allow user to override the version via explicit service parameters.
+    if (existing?.[A2A_VERSION_HEADER]) {
+      return options!;
+    }
+    return {
+      ...options,
+      serviceParameters: {
+        [A2A_VERSION_HEADER]: this.protocolVersion,
+        ...existing,
+      },
+    };
+  }
+
   private async executeWithInterceptors<K extends keyof Client>(
     input: ClientCallInput<K>,
     options: RequestOptions | undefined,
@@ -360,7 +403,7 @@ export class Client {
     const beforeArgs: BeforeArgs<K> = {
       input: input,
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 

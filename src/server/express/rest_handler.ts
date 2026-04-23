@@ -14,9 +14,10 @@ import {
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
+import { validateVersion } from '../version.js';
 
 import {
   AgentCard,
@@ -108,17 +109,24 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
 
   /**
    * Builds a ServerCallContext from the Express request.
-   * Extracts protocol extensions from headers and builds user from request.
+   * Extracts protocol extensions and A2A-Version from headers and builds user from request.
+   * Validates the requested version against the agent card's supported versions.
    *
    * @param req - Express request object
-   * @returns ServerCallContext with requested extensions and authenticated user
+   * @returns ServerCallContext with requested extensions, version, and authenticated user
+   * @throws {VersionNotSupportedError} If the requested version is not supported.
    */
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
-    return new ServerCallContext(
+    const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
+    const context = new ServerCallContext(
       Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
-      user
+      user,
+      requestedVersion
     );
+    const agentCard = await restTransportHandler.getAgentCard();
+    validateVersion(context.requestedVersion, agentCard);
+    return context;
   };
 
   /**

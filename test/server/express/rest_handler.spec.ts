@@ -685,4 +685,29 @@ describe('restHandler', () => {
       assert.deepEqual(response.body.name, 'Error'); // Generic Error instance
     });
   });
+
+  describe('A2A-Version header validation', () => {
+    it('should accept requests without A2A-Version header (defaults to 0.3)', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app).get('/tasks/task-1').expect(200);
+    });
+
+    it('should accept requests with a supported A2A-Version header', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app).get('/tasks/task-1').set('A2A-Version', '1.0').expect(200);
+    });
+
+    it('should reject requests with an unsupported A2A-Version header', async () => {
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '9.9')
+        .expect(400);
+
+      assert.property(response.body, 'name');
+      assert.equal(response.body.name, 'VersionNotSupportedError');
+      assert.include(response.body.message, '9.9');
+    });
+  });
 });
