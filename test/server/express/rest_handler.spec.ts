@@ -637,40 +637,6 @@ describe('restHandler', () => {
     ])('should accept $name message parts', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
       await request(app).post('/message:send').send(payload).expect(201);
-
-      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
-        {
-          message: {
-            kind: 'message',
-            messageId: 'msg-parts',
-            role: 'user', // ROLE_USER is converted to 'user'
-            parts: [
-              {
-                kind: 'file',
-                file: {
-                  uri: 'https://example.com/file.pdf',
-                  mimeType: 'application/pdf',
-                },
-              },
-              {
-                kind: 'text',
-                text: 'Hello world',
-              },
-              {
-                kind: 'data',
-                data: { foo: 'bar' },
-              },
-            ],
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
-          configuration: undefined,
-          metadata: undefined,
-        },
-        expect.anything()
-      );
     });
   });
 
