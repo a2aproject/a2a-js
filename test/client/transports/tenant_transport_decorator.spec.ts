@@ -3,6 +3,13 @@ import { TenantTransportDecorator } from '../../../src/client/transports/tenant_
 import { Transport } from '../../../src/client/transports/transport.js';
 import { SendMessageRequest } from '../../../src/types/pb/a2a.js';
 
+/** Drains an async generator to completion. */
+async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
+  while (!(await gen.next()).done) {
+    // consume all values
+  }
+}
+
 describe('TenantTransportDecorator', () => {
   const DEFAULT_TENANT = 'default-tenant';
   let mockTransport: Record<Exclude<keyof Transport, 'protocolName'>, Mock> & {
@@ -143,25 +150,21 @@ describe('TenantTransportDecorator', () => {
     });
 
     it('should apply default tenant to sendMessageStream when tenant is empty', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of decorator.sendMessageStream({
-        tenant: '',
-        message: undefined,
-        configuration: undefined,
-        metadata: {},
-      })) {
-        // consume
-      }
+      await drain(
+        decorator.sendMessageStream({
+          tenant: '',
+          message: undefined,
+          configuration: undefined,
+          metadata: {},
+        })
+      );
 
       const passedParams = mockTransport.sendMessageStream.mock.calls[0][0];
       expect(passedParams.tenant).to.equal(DEFAULT_TENANT);
     });
 
     it('should apply default tenant to resubscribeTask when tenant is empty', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of decorator.resubscribeTask({ id: 'task-1', tenant: '' })) {
-        // consume
-      }
+      await drain(decorator.resubscribeTask({ id: 'task-1', tenant: '' }));
 
       const passedParams = mockTransport.resubscribeTask.mock.calls[0][0];
       expect(passedParams.tenant).to.equal(DEFAULT_TENANT);
@@ -247,28 +250,26 @@ describe('TenantTransportDecorator', () => {
     });
 
     it('should preserve caller-specified tenant on sendMessageStream', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of decorator.sendMessageStream({
-        tenant: CALLER_TENANT,
-        message: undefined,
-        configuration: undefined,
-        metadata: {},
-      })) {
-        // consume
-      }
+      await drain(
+        decorator.sendMessageStream({
+          tenant: CALLER_TENANT,
+          message: undefined,
+          configuration: undefined,
+          metadata: {},
+        })
+      );
 
       const passedParams = mockTransport.sendMessageStream.mock.calls[0][0];
       expect(passedParams.tenant).to.equal(CALLER_TENANT);
     });
 
     it('should preserve caller-specified tenant on resubscribeTask', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of decorator.resubscribeTask({
-        id: 'task-1',
-        tenant: CALLER_TENANT,
-      })) {
-        // consume
-      }
+      await drain(
+        decorator.resubscribeTask({
+          id: 'task-1',
+          tenant: CALLER_TENANT,
+        })
+      );
 
       const passedParams = mockTransport.resubscribeTask.mock.calls[0][0];
       expect(passedParams.tenant).to.equal(CALLER_TENANT);
