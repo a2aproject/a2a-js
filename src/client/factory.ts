@@ -105,7 +105,6 @@ export class ClientFactory {
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const interfaces = agentCard.supportedInterfaces ?? [];
 
-    // Track the best interface per protocol binding (prefer version 1.0).
     const bestInterfacePerProtocol = new CaseInsensitiveMap<(typeof interfaces)[number]>();
     for (const agentInterface of interfaces) {
       const existing = bestInterfacePerProtocol.get(agentInterface.protocolBinding);
