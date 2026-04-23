@@ -21,6 +21,7 @@ import {
   AgentCard,
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   ListTaskPushNotificationConfigsRequest,
@@ -61,14 +62,22 @@ export class RestTransport implements Transport {
     this.customFetchImpl = options.fetchImpl;
   }
 
+  private _buildPath(path: string, tenant?: string): string {
+    return tenant ? '/' + encodeURIComponent(tenant) + path : path;
+  }
+
   get protocolName(): string {
     return PROTOCOL_NAME;
   }
 
-  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
+  async getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard> {
+    const path = this._buildPath('/extendedAgentCard', params.tenant);
     const response = await this._sendRequest<undefined, AgentCard>(
       'GET',
-      '/extendedAgentCard',
+      path,
       undefined,
       options,
       undefined,
@@ -82,9 +91,10 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): Promise<SendMessageResult> {
     const requestBody = params;
+    const path = this._buildPath('/message:send', params.tenant);
     const response = await this._sendRequest<SendMessageRequest, SendMessageResponse>(
       'POST',
-      '/message:send',
+      path,
       requestBody,
       options,
       SendMessageRequest,
@@ -98,24 +108,22 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<StreamResponse, void, undefined> {
     const requestBody = SendMessageRequest.toJSON(params);
-    yield* this._sendStreamingRequest('/message:stream', requestBody, options);
+    const path = this._buildPath('/message:stream', params.tenant);
+    yield* this._sendStreamingRequest(path, requestBody, options);
   }
 
   async createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      params.tenant
+    );
     const response = await this._sendRequest<
       TaskPushNotificationConfig,
       TaskPushNotificationConfig
-    >(
-      'POST',
-      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
-      params,
-      options,
-      TaskPushNotificationConfig,
-      TaskPushNotificationConfig
-    );
+    >('POST', path, params, options, TaskPushNotificationConfig, TaskPushNotificationConfig);
     return response;
   }
 
@@ -123,9 +131,15 @@ export class RestTransport implements Transport {
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const response = await this._sendRequest<undefined, TaskPushNotificationConfig>(
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs/${encodeURIComponent(
+        params.id
+      )}`,
+      params.tenant
+    );
+    const response = await this._sendRequest<void, TaskPushNotificationConfig>(
       'GET',
-      `/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
+      path,
       undefined,
       options,
       undefined,
@@ -138,9 +152,13 @@ export class RestTransport implements Transport {
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
   ): Promise<ListTaskPushNotificationConfigsResponse> {
-    const response = await this._sendRequest<undefined, ListTaskPushNotificationConfigsResponse>(
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      params.tenant
+    );
+    const response = await this._sendRequest<void, ListTaskPushNotificationConfigsResponse>(
       'GET',
-      `/tasks/${params.taskId}/pushNotificationConfigs`,
+      path,
       undefined,
       options,
       undefined,
@@ -153,24 +171,26 @@ export class RestTransport implements Transport {
     params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
-    await this._sendRequest<undefined, void>(
-      'DELETE',
-      `/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
-      undefined,
-      options,
-      undefined,
-      undefined
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs/${encodeURIComponent(
+        params.id
+      )}`,
+      params.tenant
     );
+    await this._sendRequest<void, void>('DELETE', path, undefined, options, undefined, undefined);
   }
 
   async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     const queryParams = new URLSearchParams();
     if (params.historyLength !== undefined) {
-      queryParams.set('historyLength', String(params.historyLength));
+      queryParams.set('historyLength', params.historyLength.toString());
     }
     const queryString = queryParams.toString();
-    const path = `/tasks/${params.id}${queryString ? `?${queryString}` : ''}`;
-    const response = await this._sendRequest<undefined, Task>(
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`,
+      params.tenant
+    );
+    const response = await this._sendRequest<void, Task>(
       'GET',
       path,
       undefined,
@@ -182,9 +202,10 @@ export class RestTransport implements Transport {
   }
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
-    const response = await this._sendRequest<undefined, Task>(
+    const path = this._buildPath(`/tasks/${encodeURIComponent(params.id)}:cancel`, params.tenant);
+    const response = await this._sendRequest<void, Task>(
       'POST',
-      `/tasks/${params.id}:cancel`,
+      path,
       undefined,
       options,
       undefined,
@@ -195,7 +216,6 @@ export class RestTransport implements Transport {
 
   async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
     const queryParams = new URLSearchParams();
-    if (params.tenant) queryParams.set('tenant', params.tenant);
     if (params.contextId) queryParams.set('contextId', params.contextId);
     if (params.status !== undefined && params.status !== TaskState.TASK_STATE_UNSPECIFIED) {
       queryParams.set('status', taskStateToJSON(params.status));
@@ -210,9 +230,9 @@ export class RestTransport implements Transport {
       queryParams.set('includeArtifacts', String(params.includeArtifacts));
 
     const queryString = queryParams.toString();
-    const path = `/tasks${queryString ? `?${queryString}` : ''}`;
+    const path = this._buildPath(`/tasks${queryString ? `?${queryString}` : ''}`, params.tenant);
 
-    const response = await this._sendRequest<undefined, ListTasksResponse>(
+    const response = await this._sendRequest<void, ListTasksResponse>(
       'GET',
       path,
       undefined,
@@ -227,7 +247,11 @@ export class RestTransport implements Transport {
     params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<StreamResponse, void, undefined> {
-    yield* this._sendStreamingRequest(`/tasks/${params.id}:subscribe`, undefined, options);
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.id)}:subscribe`,
+      params.tenant
+    );
+    yield* this._sendStreamingRequest(path, undefined, options);
   }
 
   private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {

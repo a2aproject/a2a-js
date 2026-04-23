@@ -87,8 +87,10 @@ describe('Client', () => {
     };
     client = new Client(transport, agentCardWithExtendedSupport);
 
-    let caughtOptions;
-    transport.getExtendedAgentCard.mockImplementation(async (options) => {
+    let caughtParams: unknown;
+    let caughtOptions: unknown;
+    transport.getExtendedAgentCard.mockImplementation(async (params, options) => {
+      caughtParams = params;
       caughtOptions = options;
       return extendedAgentCard;
     });
@@ -100,6 +102,7 @@ describe('Client', () => {
 
     expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(1);
     expect(result).to.equal(extendedAgentCard);
+    expect(caughtParams).to.deep.equal({ tenant: '' });
     expect(caughtOptions).toEqual({
       serviceParameters: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION, key: 'value' },
     });

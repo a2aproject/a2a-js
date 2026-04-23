@@ -5,6 +5,7 @@ import { User } from './authentication/user.js';
 export interface ServerCallContextOptions {
   requestedExtensions?: Extensions;
   user?: User;
+  tenant?: string;
 
   /**
    * The A2A protocol version requested by the client via the A2A-Version
@@ -18,14 +19,21 @@ export class ServerCallContext {
   private readonly _requestedExtensions?: Extensions;
   private readonly _user?: User;
   private readonly _requestedVersion: string;
+  private readonly _tenant?: string;
   private _activatedExtensions?: Extensions;
 
-  constructor(requestedExtensions?: Extensions, user?: User, requestedVersion?: string);
+  constructor(
+    requestedExtensions?: Extensions,
+    user?: User,
+    requestedVersion?: string,
+    tenant?: string
+  );
   constructor(options: ServerCallContextOptions);
   constructor(
     extensionsOrOptions?: Extensions | ServerCallContextOptions,
     user?: User,
-    requestedVersion?: string
+    requestedVersion?: string,
+    tenant?: string
   ) {
     if (
       extensionsOrOptions &&
@@ -35,12 +43,18 @@ export class ServerCallContext {
       const options = extensionsOrOptions as ServerCallContextOptions;
       this._requestedExtensions = options.requestedExtensions;
       this._user = options.user;
+      this._tenant = options.tenant;
       this._requestedVersion = options.requestedVersion || A2A_DEFAULT_VERSION;
     } else {
       this._requestedExtensions = extensionsOrOptions as Extensions | undefined;
       this._user = user;
       this._requestedVersion = requestedVersion || A2A_DEFAULT_VERSION;
+      this._tenant = tenant;
     }
+  }
+
+  get tenant(): string | undefined {
+    return this._tenant;
   }
 
   get user(): User | undefined {

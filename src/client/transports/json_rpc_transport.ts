@@ -18,6 +18,7 @@ import { Transport, TransportFactory } from './transport.js';
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
+  GetExtendedAgentCardRequest,
   MessageFns,
   SendMessageRequest,
   SubscribeToTaskRequest,
@@ -52,12 +53,15 @@ export class JsonRpcTransport implements Transport {
     return PROTOCOL_NAME;
   }
 
-  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendRpcRequest<undefined, AgentCard>(
+  async getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard> {
+    const rpcResponse = await this._sendRpcRequest<GetExtendedAgentCardRequest, AgentCard>(
       'GetExtendedAgentCard',
-      undefined,
+      params,
       options,
-      undefined
+      GetExtendedAgentCardRequest
     );
     return AgentCard.fromJSON(rpcResponse.result);
   }
