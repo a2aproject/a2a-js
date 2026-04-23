@@ -251,9 +251,7 @@ const _buildContext = async (
   const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
   const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
   const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
-  return tenant
-    ? new ServerCallContext(Extensions.parseServiceParameter(extensionString), user, tenant)
-    : new ServerCallContext(Extensions.parseServiceParameter(extensionString), user);
+  return new ServerCallContext(Extensions.parseServiceParameter(extensionString), user, tenant);
 };
 
 const buildMetadata = (context: ServerCallContext): grpc.Metadata => {
