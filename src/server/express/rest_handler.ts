@@ -264,7 +264,60 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   // ============================================================================
 
   /**
+   * Middleware that resolves tenant from the URL path parameter and normalizes
+   * it into the request so downstream handlers don't need to deal with tenant
+   * resolution at all.
+   *
+   * For tenant-prefixed routes (`/:tenant/...`), the path tenant is the
+   * canonical source (per spec: "provided as a path parameter"). If the
+   * request body or query string also carries a tenant that differs, a warning
+   * is logged and the path tenant wins.
+   *
+   * The resolved tenant is written to:
+   * - `req.body.tenant` for POST / PUT / DELETE requests that may carry a JSON body
+   * - `req.query.tenant` for GET requests that use query parameters
+   *
+   * Non-tenant-prefixed routes pass through unchanged.
+   */
+  const tenantMiddleware = (req: Request, _res: Response, next: () => void): void => {
+    const pathTenant = req.params.tenant as string | undefined;
+    if (!pathTenant) {
+      next();
+      return;
+    }
+
+    // Detect conflict with body tenant (POST / PUT / DELETE with JSON body)
+    const bodyTenant = req.body?.tenant as string | undefined;
+    if (bodyTenant && bodyTenant !== pathTenant) {
+      console.warn(
+        `Tenant mismatch: URL path tenant "${pathTenant}" differs from request body ` +
+          `tenant "${bodyTenant}". Using path tenant as the canonical value.`
+      );
+    }
+
+    // Detect conflict with query tenant (GET)
+    const queryTenant = req.query?.tenant as string | undefined;
+    if (queryTenant && queryTenant !== pathTenant) {
+      console.warn(
+        `Tenant mismatch: URL path tenant "${pathTenant}" differs from query param ` +
+          `tenant "${queryTenant}". Using path tenant as the canonical value.`
+      );
+    }
+
+    // Normalize: write path tenant into both body and query so handlers can
+    // read it from whichever source they naturally consume.
+    if (req.body) {
+      req.body.tenant = pathTenant;
+    }
+    (req.query as Record<string, unknown>).tenant = pathTenant;
+
+    next();
+  };
+
+  /**
    * Helper to register routes with and without optional tenant prefix.
+   * Tenant-prefixed routes get `tenantMiddleware` applied automatically,
+   * so individual handlers never need to resolve tenant themselves.
    */
   const registerRoute = (
     method: 'get' | 'post' | 'delete' | 'put',
@@ -272,35 +325,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     handler: AsyncRouteHandler
   ) => {
     router[method](path, asyncHandler(handler));
-    router[method](`/:tenant${path}`, asyncHandler(handler));
-  };
-
-  /**
-   * Resolves the tenant for a request from the URL path parameter, optionally
-   * validating it against an existing tenant value from the request body or
-   * query string. The path-based tenant always takes precedence (per spec:
-   * "provided as a path parameter").
-   *
-   * When called with only `req`, returns the path tenant or empty string.
-   * When called with `req` and an existing `bodyTenant`, logs a warning if
-   * they conflict and returns the path tenant.
-   *
-   * @param req - Express request with potential `req.params.tenant`
-   * @param bodyTenant - Optional tenant value from the request body or query
-   * @returns The resolved tenant string
-   */
-  const resolvePathTenant = (req: Request, bodyTenant?: string): string => {
-    const pathTenant = req.params.tenant as string | undefined;
-    if (pathTenant) {
-      if (bodyTenant && bodyTenant !== pathTenant) {
-        console.warn(
-          `Tenant mismatch: URL path tenant "${pathTenant}" differs from request ` +
-            `tenant "${bodyTenant}". Using path tenant as the canonical value.`
-        );
-      }
-      return pathTenant;
-    }
-    return bodyTenant || '';
+    router[method](`/:tenant${path}`, tenantMiddleware, asyncHandler(handler));
   };
 
   /**
@@ -314,7 +339,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('get', '/extendedAgentCard', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(
-      { tenant: resolvePathTenant(req) },
+      { tenant: (req.query.tenant as string) || '' },
       context
     );
     sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
@@ -334,7 +359,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('post', '/message\\:send', async (req, res) => {
     const context = await buildContext(req);
     const params = SendMessageRequest.fromJSON(req.body);
-    params.tenant = resolvePathTenant(req, params.tenant);
     const result = await restTransportHandler.sendMessage(params, context);
     const protoResult = ToProto.messageSendResult(result);
     sendResponse<SendMessageResponse>(
@@ -361,7 +385,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('post', '/message\\:stream', async (req, res) => {
     const context = await buildContext(req);
     const params = SendMessageRequest.fromJSON(req.body);
-    params.tenant = resolvePathTenant(req, params.tenant);
     const stream = await restTransportHandler.sendMessageStream(params, context);
     await sendStreamResponse(res, stream, context);
   });
@@ -383,7 +406,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       req.params.taskId,
       context,
       req.query.historyLength,
-      resolvePathTenant(req)
+      (req.query.tenant as string) || ''
     );
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
@@ -404,7 +427,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const result = await restTransportHandler.cancelTask(
       req.params.taskId,
       context,
-      resolvePathTenant(req)
+      (req.query.tenant as string) || ''
     );
     sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, result, Task);
   });
@@ -419,9 +442,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('get', '/tasks', async (req, res) => {
     const context = await buildContext(req);
-    const query = { ...req.query };
-    query.tenant = resolvePathTenant(req, query.tenant as string | undefined);
-    const result = await restTransportHandler.listTasks(query, context);
+    const result = await restTransportHandler.listTasks(req.query, context);
     sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
   });
 
@@ -441,7 +462,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const stream = await restTransportHandler.resubscribe(
       req.params.taskId,
       context,
-      resolvePathTenant(req)
+      (req.query.tenant as string) || ''
     );
     await sendStreamResponse(res, stream, context);
   });
@@ -460,7 +481,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
     const params = TaskPushNotificationConfig.fromJSON(req.body);
-    params.tenant = resolvePathTenant(req, params.tenant);
     const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
     sendResponse<TaskPushNotificationConfig>(
       res,
@@ -485,7 +505,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const result = await restTransportHandler.listTaskPushNotificationConfigs(
       req.params.taskId,
       context,
-      resolvePathTenant(req)
+      (req.query.tenant as string) || ''
     );
     sendResponse<ListTaskPushNotificationConfigsResponse>(
       res,
@@ -512,7 +532,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       req.params.taskId,
       req.params.configId,
       context,
-      resolvePathTenant(req)
+      (req.query.tenant as string) || ''
     );
     sendResponse<TaskPushNotificationConfig>(
       res,
@@ -539,7 +559,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       req.params.taskId,
       req.params.configId,
       context,
-      resolvePathTenant(req)
+      (req.query.tenant as string) || ''
     );
     sendResponse(res, HTTP_STATUS.NO_CONTENT, context);
   });
