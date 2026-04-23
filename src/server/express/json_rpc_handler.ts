@@ -50,7 +50,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         requestedVersion
       );
       const agentCard = await options.requestHandler.getAgentCard();
-      validateVersion(context.requestedVersion, agentCard);
+      validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
 
       if (context.activatedExtensions) {

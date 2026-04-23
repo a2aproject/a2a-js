@@ -9,12 +9,17 @@ import { AgentCard } from '../index.js';
  * interpreting them as 0.3 (§3.6.2).
  *
  * @param agentCard - The agent card to extract versions from.
+ * @param protocolBinding - The protocol binding to filter versions by.
  * @returns A Set of supported version strings (Major.Minor format).
  */
-export function getSupportedVersions(agentCard: AgentCard): Set<string> {
+export function getSupportedVersions(agentCard: AgentCard, protocolBinding?: string): Set<string> {
   const versions = new Set<string>();
   versions.add(A2A_DEFAULT_VERSION);
+  const bindingUpper = protocolBinding?.toUpperCase();
   for (const agentInterface of agentCard.supportedInterfaces ?? []) {
+    if (bindingUpper && agentInterface.protocolBinding.toUpperCase() !== bindingUpper) {
+      continue;
+    }
     if (agentInterface.protocolVersion) {
       versions.add(agentInterface.protocolVersion);
     }
@@ -31,10 +36,15 @@ export function getSupportedVersions(agentCard: AgentCard): Set<string> {
  *
  * @param requestedVersion - The version requested by the client (from A2A-Version header).
  * @param agentCard - The agent card declaring supported interfaces/versions.
+ * @param protocolBinding - The protocol binding to filter versions by.
  * @throws {VersionNotSupportedError} If the requested version is not supported.
  */
-export function validateVersion(requestedVersion: string, agentCard: AgentCard): void {
-  const supported = getSupportedVersions(agentCard);
+export function validateVersion(
+  requestedVersion: string,
+  agentCard: AgentCard,
+  protocolBinding?: string
+): void {
+  const supported = getSupportedVersions(agentCard, protocolBinding);
   if (!supported.has(requestedVersion)) {
     throw new VersionNotSupportedError(
       `The requested A2A protocol version '${requestedVersion}' is not supported. ` +

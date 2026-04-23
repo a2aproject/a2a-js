@@ -264,7 +264,7 @@ const buildContext = async (
   );
 
   const agentCard = await requestHandler.getAgentCard();
-  validateVersion(context.requestedVersion, agentCard);
+  validateVersion(context.requestedVersion, agentCard, 'GRPC');
 
   return context;
 };

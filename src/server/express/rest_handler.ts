@@ -125,7 +125,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       requestedVersion
     );
     const agentCard = await restTransportHandler.getAgentCard();
-    validateVersion(context.requestedVersion, agentCard);
+    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
     return context;
   };
 
