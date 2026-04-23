@@ -1,4 +1,5 @@
 import { A2A_DEFAULT_VERSION } from '../constants.js';
+import { TransportProtocolName } from '../core.js';
 import { VersionNotSupportedError } from '../errors.js';
 import { AgentCard } from '../index.js';
 
@@ -12,12 +13,14 @@ import { AgentCard } from '../index.js';
  * @param protocolBinding - The protocol binding to filter versions by.
  * @returns A Set of supported version strings (Major.Minor format).
  */
-export function getSupportedVersions(agentCard: AgentCard, protocolBinding?: string): Set<string> {
+export function getSupportedVersions(
+  agentCard: AgentCard,
+  protocolBinding?: TransportProtocolName
+): Set<string> {
   const versions = new Set<string>();
   versions.add(A2A_DEFAULT_VERSION);
-  const bindingUpper = protocolBinding?.toUpperCase();
   for (const agentInterface of agentCard.supportedInterfaces ?? []) {
-    if (bindingUpper && agentInterface.protocolBinding.toUpperCase() !== bindingUpper) {
+    if (protocolBinding && agentInterface.protocolBinding !== protocolBinding) {
       continue;
     }
     if (agentInterface.protocolVersion) {
@@ -42,7 +45,7 @@ export function getSupportedVersions(agentCard: AgentCard, protocolBinding?: str
 export function validateVersion(
   requestedVersion: string,
   agentCard: AgentCard,
-  protocolBinding?: string
+  protocolBinding?: TransportProtocolName
 ): void {
   const supported = getSupportedVersions(agentCard, protocolBinding);
   if (!supported.has(requestedVersion)) {

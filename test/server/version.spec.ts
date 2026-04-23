@@ -57,7 +57,7 @@ describe('getSupportedVersions', () => {
       { protocolBinding: 'HTTP+JSON', protocolVersion: '1.0' },
     ]);
     const versions = getSupportedVersions(card);
-    expect(versions.size).toBe(2); // '0.3' and '1.0'
+    expect(versions.size).toBe(2);
   });
 
   it('should handle multiple different versions', () => {
@@ -95,6 +95,73 @@ describe('validateVersion', () => {
   it('should include the requested version in error message', () => {
     const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
     expect(() => validateVersion('9.9', card)).toThrow(/9\.9/);
+  });
+});
+
+describe('protocolBinding filtering', () => {
+  const multiBindingCard = createAgentCard([
+    { protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+    { protocolBinding: 'HTTP+JSON', protocolVersion: '1.0' },
+    { protocolBinding: 'GRPC', protocolVersion: '1.0' },
+  ]);
+
+  describe('getSupportedVersions with protocolBinding', () => {
+    it('should return versions only for the matching binding', () => {
+      const card = createAgentCard([
+        { protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+        { protocolBinding: 'HTTP+JSON', protocolVersion: '2.0' },
+      ]);
+      const versions = getSupportedVersions(card, 'HTTP+JSON');
+      expect(versions.has('2.0')).toBe(true);
+      expect(versions.has('1.0')).toBe(false);
+      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
+    });
+
+    it('should always include default version even when filtering', () => {
+      const versions = getSupportedVersions(multiBindingCard, 'GRPC');
+      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
+    });
+
+    it('should return only default version when no binding matches', () => {
+      const versions = getSupportedVersions(multiBindingCard, 'UNKNOWN' as any);
+      expect(versions.size).toBe(1);
+      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
+    });
+
+    it('should return all versions when protocolBinding is undefined', () => {
+      const card = createAgentCard([
+        { protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+        { protocolBinding: 'HTTP+JSON', protocolVersion: '2.0' },
+      ]);
+      const versions = getSupportedVersions(card);
+      expect(versions.has('1.0')).toBe(true);
+      expect(versions.has('2.0')).toBe(true);
+      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
+    });
+  });
+
+  describe('validateVersion with protocolBinding', () => {
+    it('should accept a version supported by the specified binding', () => {
+      expect(() => validateVersion('1.0', multiBindingCard, 'JSONRPC')).not.toThrow();
+    });
+
+    it('should reject a version not supported by the specified binding', () => {
+      const card = createAgentCard([
+        { protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+        { protocolBinding: 'HTTP+JSON', protocolVersion: '2.0' },
+      ]);
+      expect(() => validateVersion('2.0', card, 'JSONRPC')).toThrow(VersionNotSupportedError);
+    });
+
+    it('should always accept the default version regardless of binding', () => {
+      expect(() => validateVersion(A2A_DEFAULT_VERSION, multiBindingCard, 'GRPC')).not.toThrow();
+    });
+
+    it('should use exact match for protocolBinding comparison', () => {
+      const card = createAgentCard([{ protocolBinding: 'HTTP+JSON', protocolVersion: '1.0' }]);
+      // 'rest' does not match 'HTTP+JSON'
+      expect(() => validateVersion('1.0', card, 'rest' as any)).toThrow(VersionNotSupportedError);
+    });
   });
 });
 
