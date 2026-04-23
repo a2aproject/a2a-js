@@ -10,6 +10,7 @@ export {
 } from './card-resolver.js';
 export { Client, type ClientConfig, type RequestOptions } from './multitransport-client.js';
 export type { Transport, TransportFactory } from './transports/transport.js';
+export { TenantTransportDecorator } from './transports/tenant_transport_decorator.js';
 export { ClientFactory, ClientFactoryOptions } from './factory.js';
 export { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 export { RestTransportFactory } from './transports/rest_transport.js';
