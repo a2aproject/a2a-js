@@ -75,15 +75,15 @@ export class Client {
    * falling back to {@link A2A_PROTOCOL_VERSION} if no match is found.
    * Clients MUST send this header per §3.6.1.
    */
-  public readonly protocolVersion: string;
+  public get protocolVersion(): string {
+    return this.resolveProtocolVersion();
+  }
 
   constructor(
     public readonly transport: Transport,
     private agentCard: AgentCard,
     public readonly config?: ClientConfig
-  ) {
-    this.protocolVersion = this.resolveProtocolVersion();
-  }
+  ) {}
 
   /**
    * Resolves the protocol version from the agent card's supported interfaces
