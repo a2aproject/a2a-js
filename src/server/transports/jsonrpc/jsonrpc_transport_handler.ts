@@ -5,6 +5,7 @@ import {
   SendMessageRequest,
   SubscribeToTaskRequest,
   GetTaskRequest,
+  GetExtendedAgentCardRequest,
   CancelTaskRequest,
   TaskPushNotificationConfig,
   GetTaskPushNotificationConfigRequest,
@@ -62,9 +63,7 @@ export class JsonRpcTransportHandler {
    * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
    */
   public async handle(
-    // TODO: remove the eslint disable and replace the any (https://github.com/a2aproject/a2a-js/issues/179)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    requestBody: any,
+    requestBody: string | Record<string, unknown>,
     context: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
     let rpcRequest: A2ARequest = { jsonrpc: '2.0', method: '' };
@@ -97,6 +96,15 @@ export class JsonRpcTransportHandler {
     try {
       if (method !== 'GetExtendedAgentCard' && !this.paramsAreValid(rpcRequest.params)) {
         throw new RequestMalformedError(`Invalid method parameters.`);
+      }
+
+      // For JSON-RPC, tenant is inside the params body. Extract it and enrich the
+      // context so downstream components (stores, executors) can scope by tenant.
+      const paramsTenant = (rpcRequest.params as Record<string, unknown> | undefined)?.tenant as
+        | string
+        | undefined;
+      if (paramsTenant && !context.tenant) {
+        context = new ServerCallContext(context.requestedExtensions, context.user, paramsTenant);
       }
 
       if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
@@ -209,7 +217,10 @@ export class JsonRpcTransportHandler {
             break;
           case 'GetExtendedAgentCard':
             result = AgentCard.toJSON(
-              await this.requestHandler.getAuthenticatedExtendedAgentCard(context)
+              await this.requestHandler.getAuthenticatedExtendedAgentCard(
+                GetExtendedAgentCardRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           default:

@@ -108,16 +108,19 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
 
   /**
    * Builds a ServerCallContext from the Express request.
-   * Extracts protocol extensions from headers and builds user from request.
+   * Extracts protocol extensions from headers, builds user from request,
+   * and extracts tenant from the URL path parameter if present.
    *
    * @param req - Express request object
-   * @returns ServerCallContext with requested extensions and authenticated user
+   * @returns ServerCallContext with requested extensions, authenticated user, and tenant
    */
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
+    const tenant = (req.params.tenant as string) || undefined;
     return new ServerCallContext(
       Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
-      user
+      user,
+      tenant
     );
   };
 
@@ -261,6 +264,71 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   // ============================================================================
 
   /**
+   * Middleware that resolves tenant from the URL path parameter and normalizes
+   * it into the request so downstream handlers don't need to deal with tenant
+   * resolution at all.
+   *
+   * For tenant-prefixed routes (`/:tenant/...`), the path tenant is the
+   * canonical source (per spec: "provided as a path parameter"). If the
+   * request body or query string also carries a tenant that differs, a warning
+   * is logged and the path tenant wins.
+   *
+   * The resolved tenant is written to:
+   * - `req.body.tenant` for POST / PUT / DELETE requests that may carry a JSON body
+   * - `req.query.tenant` for GET requests that use query parameters
+   *
+   * Non-tenant-prefixed routes pass through unchanged.
+   */
+  const tenantMiddleware = (req: Request, _res: Response, next: () => void): void => {
+    const pathTenant = req.params.tenant as string | undefined;
+    if (!pathTenant) {
+      next();
+      return;
+    }
+
+    // Detect conflict with body tenant (POST / PUT / DELETE with JSON body)
+    const bodyTenant = req.body?.tenant as string | undefined;
+    if (bodyTenant && bodyTenant !== pathTenant) {
+      console.warn(
+        `Tenant mismatch: URL path tenant "${pathTenant}" differs from request body ` +
+          `tenant "${bodyTenant}". Using path tenant as the canonical value.`
+      );
+    }
+
+    // Detect conflict with query tenant (GET)
+    const queryTenant = req.query?.tenant as string | undefined;
+    if (queryTenant && queryTenant !== pathTenant) {
+      console.warn(
+        `Tenant mismatch: URL path tenant "${pathTenant}" differs from query param ` +
+          `tenant "${queryTenant}". Using path tenant as the canonical value.`
+      );
+    }
+
+    // Normalize: write path tenant into both body and query so handlers can
+    // read it from whichever source they naturally consume.
+    if (req.body) {
+      req.body.tenant = pathTenant;
+    }
+    (req.query as Record<string, unknown>).tenant = pathTenant;
+
+    next();
+  };
+
+  /**
+   * Helper to register routes with and without optional tenant prefix.
+   * Tenant-prefixed routes get `tenantMiddleware` applied automatically,
+   * so individual handlers never need to resolve tenant themselves.
+   */
+  const registerRoute = (
+    method: 'get' | 'post' | 'delete' | 'put',
+    path: string,
+    handler: AsyncRouteHandler
+  ) => {
+    router[method](path, asyncHandler(handler));
+    router[method](`/:tenant${path}`, tenantMiddleware, asyncHandler(handler));
+  };
+
+  /**
    * GET /extendedAgentCard
    *
    * Retrieves the authenticated extended agent card.
@@ -268,14 +336,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 200 OK with agent card
    * @returns 500 Internal Server Error on failure
    */
-  router.get(
-    '/extendedAgentCard',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
-      sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
-    })
-  );
+  registerRoute('get', '/extendedAgentCard', async (req, res) => {
+    const context = await buildContext(req);
+    const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(
+      { tenant: (req.query.tenant as string) || '' },
+      context
+    );
+    sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
+  });
 
   /**
    * POST /message:send
@@ -288,22 +356,19 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 201 Created with RestMessage or RestTask
    * @returns 400 Bad Request if message is invalid
    */
-  router.post(
-    '/message\\:send',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const params = SendMessageRequest.fromJSON(req.body);
-      const result = await restTransportHandler.sendMessage(params, context);
-      const protoResult = ToProto.messageSendResult(result);
-      sendResponse<SendMessageResponse>(
-        res,
-        HTTP_STATUS.CREATED,
-        context,
-        protoResult,
-        SendMessageResponse
-      );
-    })
-  );
+  registerRoute('post', '/message\\:send', async (req, res) => {
+    const context = await buildContext(req);
+    const params = SendMessageRequest.fromJSON(req.body);
+    const result = await restTransportHandler.sendMessage(params, context);
+    const protoResult = ToProto.messageSendResult(result);
+    sendResponse<SendMessageResponse>(
+      res,
+      HTTP_STATUS.CREATED,
+      context,
+      protoResult,
+      SendMessageResponse
+    );
+  });
 
   /**
    * POST /message:stream
@@ -317,15 +382,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 400 Bad Request if message is invalid
    * @returns 501 Not Implemented if streaming not supported
    */
-  router.post(
-    '/message\\:stream',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const params = SendMessageRequest.fromJSON(req.body);
-      const stream = await restTransportHandler.sendMessageStream(params, context);
-      await sendStreamResponse(res, stream, context);
-    })
-  );
+  registerRoute('post', '/message\\:stream', async (req, res) => {
+    const context = await buildContext(req);
+    const params = SendMessageRequest.fromJSON(req.body);
+    const stream = await restTransportHandler.sendMessageStream(params, context);
+    await sendStreamResponse(res, stream, context);
+  });
 
   /**
    * GET /tasks/:taskId
@@ -338,19 +400,16 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 400 Bad Request if historyLength is invalid
    * @returns 404 Not Found if task doesn't exist
    */
-  router.get(
-    '/tasks/:taskId',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const result = await restTransportHandler.getTask(
-        req.params.taskId,
-        context,
-        //TODO: clarify for version 1.0.0 the format of the historyLength query parameter, and if history should always be added to the returned object
-        req.query.historyLength ?? req.query.history_length
-      );
-      sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
-    })
-  );
+  registerRoute('get', '/tasks/:taskId', async (req, res) => {
+    const context = await buildContext(req);
+    const result = await restTransportHandler.getTask(
+      req.params.taskId,
+      context,
+      req.query.historyLength,
+      (req.query.tenant as string) || ''
+    );
+    sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
+  });
 
   /**
    * POST /tasks/:taskId:cancel
@@ -363,14 +422,15 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 404 Not Found if task doesn't exist
    * @returns 409 Conflict if task cannot be canceled
    */
-  router.post(
-    '/tasks/:taskId\\:cancel',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const result = await restTransportHandler.cancelTask(req.params.taskId, context);
-      sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, result, Task);
-    })
-  );
+  registerRoute('post', '/tasks/:taskId\\:cancel', async (req, res) => {
+    const context = await buildContext(req);
+    const result = await restTransportHandler.cancelTask(
+      req.params.taskId,
+      context,
+      (req.query.tenant as string) || ''
+    );
+    sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, result, Task);
+  });
 
   /**
    * GET /tasks
@@ -380,14 +440,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 200 OK with ListTasksResponse
    * @returns 400 Bad Request if filter or pageSize is invalid
    */
-  router.get(
-    '/tasks',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const result = await restTransportHandler.listTasks(req.query, context);
-      sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
-    })
-  );
+  registerRoute('get', '/tasks', async (req, res) => {
+    const context = await buildContext(req);
+    const result = await restTransportHandler.listTasks(req.query, context);
+    sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
+  });
 
   /**
    * POST /tasks/:taskId:subscribe
@@ -400,14 +457,15 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 404 Not Found if task doesn't exist
    * @returns 501 Not Implemented if streaming not supported
    */
-  router.post(
-    '/tasks/:taskId\\:subscribe',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const stream = await restTransportHandler.resubscribe(req.params.taskId, context);
-      await sendStreamResponse(res, stream, context);
-    })
-  );
+  registerRoute('post', '/tasks/:taskId\\:subscribe', async (req, res) => {
+    const context = await buildContext(req);
+    const stream = await restTransportHandler.resubscribe(
+      req.params.taskId,
+      context,
+      (req.query.tenant as string) || ''
+    );
+    await sendStreamResponse(res, stream, context);
+  });
 
   /**
    * POST /tasks/:taskId/pushNotificationConfigs
@@ -420,21 +478,18 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 201 Created with TaskPushNotificationConfig
    * @returns 501 Not Implemented if push notifications not supported
    */
-  router.post(
-    '/tasks/:taskId/pushNotificationConfigs',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const params = TaskPushNotificationConfig.fromJSON(req.body);
-      const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
-      sendResponse<TaskPushNotificationConfig>(
-        res,
-        HTTP_STATUS.CREATED,
-        context,
-        result,
-        TaskPushNotificationConfig
-      );
-    })
-  );
+  registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
+    const context = await buildContext(req);
+    const params = TaskPushNotificationConfig.fromJSON(req.body);
+    const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
+    sendResponse<TaskPushNotificationConfig>(
+      res,
+      HTTP_STATUS.CREATED,
+      context,
+      result,
+      TaskPushNotificationConfig
+    );
+  });
 
   /**
    * GET /tasks/:taskId/pushNotificationConfigs
@@ -445,23 +500,21 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 200 OK with array of TaskPushNotificationConfig
    * @returns 404 Not Found if task doesn't exist
    */
-  router.get(
-    '/tasks/:taskId/pushNotificationConfigs',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const result = await restTransportHandler.listTaskPushNotificationConfigs(
-        req.params.taskId,
-        context
-      );
-      sendResponse<ListTaskPushNotificationConfigsResponse>(
-        res,
-        HTTP_STATUS.OK,
-        context,
-        result,
-        ListTaskPushNotificationConfigsResponse
-      );
-    })
-  );
+  registerRoute('get', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
+    const context = await buildContext(req);
+    const result = await restTransportHandler.listTaskPushNotificationConfigs(
+      req.params.taskId,
+      context,
+      (req.query.tenant as string) || ''
+    );
+    sendResponse<ListTaskPushNotificationConfigsResponse>(
+      res,
+      HTTP_STATUS.OK,
+      context,
+      result,
+      ListTaskPushNotificationConfigsResponse
+    );
+  });
 
   /**
    * GET /tasks/:taskId/pushNotificationConfigs/:configId
@@ -473,24 +526,22 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 200 OK with TaskPushNotificationConfig
    * @returns 404 Not Found if task or config doesn't exist
    */
-  router.get(
-    '/tasks/:taskId/pushNotificationConfigs/:configId',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const result = await restTransportHandler.getTaskPushNotificationConfig(
-        req.params.taskId,
-        req.params.configId,
-        context
-      );
-      sendResponse<TaskPushNotificationConfig>(
-        res,
-        HTTP_STATUS.OK,
-        context,
-        result,
-        TaskPushNotificationConfig
-      );
-    })
-  );
+  registerRoute('get', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
+    const context = await buildContext(req);
+    const result = await restTransportHandler.getTaskPushNotificationConfig(
+      req.params.taskId,
+      req.params.configId,
+      context,
+      (req.query.tenant as string) || ''
+    );
+    sendResponse<TaskPushNotificationConfig>(
+      res,
+      HTTP_STATUS.OK,
+      context,
+      result,
+      TaskPushNotificationConfig
+    );
+  });
 
   /**
    * DELETE /tasks/:taskId/pushNotificationConfigs/:configId
@@ -502,18 +553,16 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 204 No Content on success
    * @returns 404 Not Found if task or config doesn't exist
    */
-  router.delete(
-    '/tasks/:taskId/pushNotificationConfigs/:configId',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      await restTransportHandler.deleteTaskPushNotificationConfig(
-        req.params.taskId,
-        req.params.configId,
-        context
-      );
-      sendResponse(res, HTTP_STATUS.NO_CONTENT, context);
-    })
-  );
+  registerRoute('delete', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
+    const context = await buildContext(req);
+    await restTransportHandler.deleteTaskPushNotificationConfig(
+      req.params.taskId,
+      req.params.configId,
+      context,
+      (req.query.tenant as string) || ''
+    );
+    sendResponse(res, HTTP_STATUS.NO_CONTENT, context);
+  });
 
   return router;
 }

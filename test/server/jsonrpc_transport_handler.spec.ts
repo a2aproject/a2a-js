@@ -56,7 +56,10 @@ describe('JsonRpcTransportHandler', () => {
     });
 
     it('should return an invalid params error for a non-string/non-object request body', async () => {
-      const response = (await transportHandler.handle(123, defaultContext)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        123 as any,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid request body type.');
     });
@@ -198,6 +201,23 @@ describe('JsonRpcTransportHandler', () => {
       };
       const response = await transportHandler.handle(request, defaultContext);
       expect(response).to.have.property('result');
+    });
+  });
+
+  describe('Method handling', () => {
+    it('should pass tenant from params to getAuthenticatedExtendedAgentCard', async () => {
+      const request = {
+        jsonrpc: '2.0',
+        method: 'GetExtendedAgentCard',
+        id: 1,
+        params: { tenant: 'test-tenant' },
+      };
+      await transportHandler.handle(request, defaultContext);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'test-tenant' }),
+        expect.anything()
+      );
     });
   });
 
