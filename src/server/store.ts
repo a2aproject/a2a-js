@@ -43,36 +43,40 @@ export interface TaskStore {
 // ========================
 //
 // InMemoryTaskStore provides tenant-scoped data isolation using `context.tenant`.
-// Tasks are stored with a composite key of `{tenant}:{taskId}` when a tenant is present.
-// When no tenant is specified, tasks are stored under the taskId alone (global scope).
+// A nested Map structure (tenant -> taskId -> Task) is used so that tenant scoping
+// is structural rather than key-convention based, imposing no restrictions on task ID format.
 
 export class InMemoryTaskStore implements TaskStore {
-  private store: Map<string, Task> = new Map();
+  // Outer map: tenant key ('' for global/no-tenant) -> inner map of taskId -> Task
+  private store: Map<string, Map<string, Task>> = new Map();
 
-  /**
-   * Builds a composite storage key from tenant and task ID.
-   * When tenant is present, the key is `{tenant}:{taskId}` to provide tenant isolation.
-   * When tenant is absent, the key is the taskId alone (global scope).
-   */
-  private _storageKey(taskId: string, context: ServerCallContext): string {
-    if (context.tenant) {
-      return `${context.tenant}:${taskId}`;
+  private _tenantKey(context: ServerCallContext): string {
+    return context.tenant ?? '';
+  }
+
+  private _getTenantBucket(context: ServerCallContext): Map<string, Task> | undefined {
+    return this.store.get(this._tenantKey(context));
+  }
+
+  private _getOrCreateTenantBucket(context: ServerCallContext): Map<string, Task> {
+    const key = this._tenantKey(context);
+    let bucket = this.store.get(key);
+    if (!bucket) {
+      bucket = new Map();
+      this.store.set(key, bucket);
     }
-    if (taskId && taskId.includes(':')) {
-      throw new RequestMalformedError('Task ID cannot contain ":" character for global tasks.');
-    }
-    return taskId;
+    return bucket;
   }
 
   async load(taskId: string, context: ServerCallContext): Promise<Task | undefined> {
-    const entry = this.store.get(this._storageKey(taskId, context));
+    const entry = this._getTenantBucket(context)?.get(taskId);
     // Return copies to prevent external mutation
     return entry ? { ...entry } : undefined;
   }
 
   async save(task: Task, context: ServerCallContext): Promise<void> {
     // Store copies to prevent internal mutation if caller reuses objects
-    this.store.set(this._storageKey(task.id, context), { ...task });
+    this._getOrCreateTenantBucket(context).set(task.id, { ...task });
   }
 
   async list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse> {
@@ -86,16 +90,8 @@ export class InMemoryTaskStore implements TaskStore {
       includeArtifacts = false,
     } = params;
 
-    let tasks = Array.from(this.store.entries())
-      // Filter by tenant: only return tasks whose storage key belongs to the current tenant scope
-      .filter(([key]) => {
-        if (context.tenant) {
-          return key.startsWith(`${context.tenant}:`);
-        }
-        // When no tenant is specified, only return global-scope tasks (no ':' prefix from tenanting)
-        return !key.includes(':') || this._isGlobalKey(key);
-      })
-      .map(([, task]) => task);
+    const bucket = this._getTenantBucket(context);
+    let tasks = bucket ? Array.from(bucket.values()) : [];
 
     // Filter by contextId
     if (contextId) {
@@ -182,15 +178,5 @@ export class InMemoryTaskStore implements TaskStore {
       pageSize,
       totalSize,
     };
-  }
-
-  /**
-   * Checks if a key that contains ':' is actually a global-scope key
-   * (i.e., the task ID itself contains ':'). This is determined by checking
-   * whether the key exists in the store as a task whose ID matches the full key.
-   */
-  private _isGlobalKey(key: string): boolean {
-    const task = this.store.get(key);
-    return task !== undefined && task.id === key;
   }
 }

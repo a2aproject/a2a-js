@@ -1,4 +1,3 @@
-import { RequestMalformedError } from '../../errors.js';
 import { TaskPushNotificationConfig } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
@@ -20,22 +19,33 @@ export interface PushNotificationStore {
 
 /**
  * In-memory push notification config store with tenant-scoped data isolation.
- * Uses `context.tenant` to build composite storage keys, preventing cross-tenant access.
+ * A nested Map structure (tenant -> taskId -> configs[]) is used so that tenant
+ * scoping is structural, imposing no restrictions on task ID format.
  */
 export class InMemoryPushNotificationStore implements PushNotificationStore {
-  private store: Map<string, TaskPushNotificationConfig[]> = new Map();
+  // Outer map: tenant key ('' for global/no-tenant) -> inner map of taskId -> configs
+  private store: Map<string, Map<string, TaskPushNotificationConfig[]>> = new Map();
 
-  /**
-   * Builds a composite storage key from tenant and task ID.
-   */
-  private _storageKey(taskId: string, context: ServerCallContext): string {
-    if (context.tenant) {
-      return `${context.tenant}:${taskId}`;
+  private _tenantKey(context: ServerCallContext): string {
+    return context.tenant ?? '';
+  }
+
+  private _getTenantBucket(
+    context: ServerCallContext
+  ): Map<string, TaskPushNotificationConfig[]> | undefined {
+    return this.store.get(this._tenantKey(context));
+  }
+
+  private _getOrCreateTenantBucket(
+    context: ServerCallContext
+  ): Map<string, TaskPushNotificationConfig[]> {
+    const key = this._tenantKey(context);
+    let bucket = this.store.get(key);
+    if (!bucket) {
+      bucket = new Map();
+      this.store.set(key, bucket);
     }
-    if (taskId && taskId.includes(':')) {
-      throw new RequestMalformedError('Task ID cannot contain ":" character for global tasks.');
-    }
-    return taskId;
+    return bucket;
   }
 
   async save(
@@ -43,8 +53,8 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     context: ServerCallContext,
     pushNotificationConfig: TaskPushNotificationConfig
   ): Promise<void> {
-    const key = this._storageKey(taskId, context);
-    const configs = this.store.get(key) || [];
+    const bucket = this._getOrCreateTenantBucket(context);
+    const configs = bucket.get(taskId) || [];
 
     // Set ID if it's not already set
     if (!pushNotificationConfig.id) {
@@ -59,12 +69,11 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
 
     // Add the new/updated config
     configs.push(pushNotificationConfig);
-    this.store.set(key, configs);
+    bucket.set(taskId, configs);
   }
 
   async load(taskId: string, context: ServerCallContext): Promise<TaskPushNotificationConfig[]> {
-    const key = this._storageKey(taskId, context);
-    const configs = this.store.get(key);
+    const configs = this._getTenantBucket(context)?.get(taskId);
     return configs || [];
   }
 
@@ -74,8 +83,12 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
       configId = taskId;
     }
 
-    const key = this._storageKey(taskId, context);
-    const configs = this.store.get(key);
+    const bucket = this._getTenantBucket(context);
+    if (!bucket) {
+      return;
+    }
+
+    const configs = bucket.get(taskId);
     if (!configs) {
       return;
     }
@@ -86,9 +99,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     }
 
     if (configs.length === 0) {
-      this.store.delete(key);
-    } else {
-      this.store.set(key, configs);
+      bucket.delete(taskId);
     }
   }
 }
