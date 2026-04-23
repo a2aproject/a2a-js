@@ -56,7 +56,10 @@ describe('JsonRpcTransportHandler', () => {
     });
 
     it('should return an invalid params error for a non-string/non-object request body', async () => {
-      const response = (await transportHandler.handle(123, defaultContext)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        123 as any,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid request body type.');
     });
