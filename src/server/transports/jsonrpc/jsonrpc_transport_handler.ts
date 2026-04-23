@@ -67,8 +67,7 @@ export class JsonRpcTransportHandler {
     requestBody: any,
     context: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
-    let rpcRequest: A2ARequest;
-
+    let rpcRequest = {} as A2ARequest;
     try {
       if (typeof requestBody === 'string') {
         rpcRequest = JSON.parse(requestBody);
@@ -89,7 +88,7 @@ export class JsonRpcTransportHandler {
       );
       return {
         jsonrpc: '2.0',
-        id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
+        id: rpcRequest.id !== undefined ? rpcRequest.id : null,
         error: mappedError,
       } as JSONRPCErrorResponse;
     }
