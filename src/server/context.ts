@@ -29,6 +29,7 @@ export class ServerCallContext {
   ) {
     if (
       extensionsOrOptions &&
+      !(extensionsOrOptions instanceof Extensions) &&
       !Array.isArray(extensionsOrOptions) &&
       typeof extensionsOrOptions === 'object'
     ) {
