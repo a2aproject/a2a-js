@@ -12,8 +12,9 @@ async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
 
 describe('TenantTransportDecorator', () => {
   const DEFAULT_TENANT = 'default-tenant';
-  let mockTransport: Record<Exclude<keyof Transport, 'protocolName'>, Mock> & {
+  let mockTransport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
     protocolName: string;
+    protocolVersion: string;
   };
   let decorator: TenantTransportDecorator;
 
@@ -31,6 +32,7 @@ describe('TenantTransportDecorator', () => {
       listTasks: vi.fn().mockResolvedValue({ tasks: [] }),
       resubscribeTask: vi.fn().mockReturnValue((async function* () {})()),
       protocolName: 'MockTransport',
+      protocolVersion: '1.0',
     };
     decorator = new TenantTransportDecorator(mockTransport, DEFAULT_TENANT);
   });

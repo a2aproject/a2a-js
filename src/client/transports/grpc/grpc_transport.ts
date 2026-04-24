@@ -18,6 +18,7 @@ import {
   SendMessageResult,
   ListTasksRequest,
   ListTasksResponse,
+  A2A_PROTOCOL_VERSION,
 } from '../../../index.js';
 import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
@@ -67,6 +68,10 @@ export class GrpcTransport implements Transport {
 
   get protocolName(): string {
     return PROTOCOL_NAME;
+  }
+
+  get protocolVersion(): string {
+    return A2A_PROTOCOL_VERSION;
   }
 
   async getExtendedAgentCard(

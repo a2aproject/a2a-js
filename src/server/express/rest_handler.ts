@@ -14,9 +14,10 @@ import {
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
+import { validateVersion } from '../version.js';
 
 import {
   AgentCard,
@@ -110,6 +111,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * Builds a ServerCallContext from the Express request.
    * Extracts protocol extensions from headers, builds user from request,
    * and extracts tenant from the URL path parameter if present.
+   * Validates the requested version against the agent card's supported versions.
+
    *
    * @param req - Express request object
    * @returns ServerCallContext with requested extensions, authenticated user, and tenant
@@ -117,11 +120,17 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
     const tenant = (req.params.tenant as string) || undefined;
-    return new ServerCallContext(
-      Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+    const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
+
+    const context = new ServerCallContext({
+      requestedExtensions: Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
       user,
-      tenant
-    );
+      requestedVersion,
+      tenant,
+    });
+    const agentCard = await restTransportHandler.getAgentCard();
+    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
+    return context;
   };
 
   /**

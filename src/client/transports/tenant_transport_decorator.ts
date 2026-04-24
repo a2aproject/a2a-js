@@ -40,6 +40,10 @@ export class TenantTransportDecorator implements Transport {
     return this.base.protocolName;
   }
 
+  get protocolVersion(): string {
+    return this.base.protocolVersion;
+  }
+
   /**
    * Returns the request tenant if non-empty, otherwise falls back to the default.
    */

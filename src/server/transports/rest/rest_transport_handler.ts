@@ -29,6 +29,7 @@ import {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
+  VersionNotSupportedError,
 } from '../../../errors.js';
 
 // ============================================================================
@@ -64,6 +65,7 @@ export function mapErrorToStatus(error: unknown): number {
   if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof ExtendedAgentCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof VersionNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
   return HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 

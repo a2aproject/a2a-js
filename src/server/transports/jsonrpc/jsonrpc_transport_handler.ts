@@ -66,8 +66,7 @@ export class JsonRpcTransportHandler {
     requestBody: string | Record<string, unknown>,
     context: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
-    let rpcRequest: A2ARequest;
-
+    let rpcRequest: A2ARequest = { jsonrpc: '2.0', method: '' };
     try {
       if (typeof requestBody === 'string') {
         rpcRequest = JSON.parse(requestBody);
@@ -88,7 +87,7 @@ export class JsonRpcTransportHandler {
       );
       return {
         jsonrpc: '2.0',
-        id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
+        id: rpcRequest.id ?? null,
         error: mappedError,
       } as JSONRPCErrorResponse;
     }
@@ -105,7 +104,12 @@ export class JsonRpcTransportHandler {
         | string
         | undefined;
       if (paramsTenant && !context.tenant) {
-        context = new ServerCallContext(context.requestedExtensions, context.user, paramsTenant);
+        context = new ServerCallContext({
+          requestedExtensions: context.requestedExtensions,
+          user: context.user,
+          requestedVersion: context.requestedVersion,
+          tenant: paramsTenant,
+        });
       }
 
       if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
