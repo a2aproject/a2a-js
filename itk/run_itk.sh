@@ -120,6 +120,14 @@ RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
         "behavior": "send_message"
       },
       {
+        "name": "Current vs Go v10 - HTTP_JSON (Non-Streaming)",
+        "sdks": ["current", "go_v10"],
+        "traversal": "euler",
+        "edges": ["0->1", "1->0"],
+        "protocols": ["http_json"],
+        "behavior": "send_message"
+      },
+      {
         "name": "Current vs Go v10 - JSONRPC & GRPC (Streaming)",
         "sdks": ["current", "go_v10"],
         "traversal": "euler",
