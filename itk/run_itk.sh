@@ -144,6 +144,22 @@ RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
         "protocols": ["http_json"],
         "streaming": true,
         "behavior": "send_message"
+      },
+      {
+        "name": "Push Notification - JSONRPC & GRPC",
+        "sdks": ["current", "go_v10"],
+        "traversal": "euler",
+        "edges": ["0->1", "1->0"],
+        "protocols": ["jsonrpc", "grpc"],
+        "behavior": "push_notification"
+      },
+      {
+        "name": "Push Notification - HTTP_JSON",
+        "sdks": ["current", "go_v10"],
+        "traversal": "euler",
+        "edges": ["0->1", "1->0"],
+        "protocols": ["http_json"],
+        "behavior": "push_notification"
       }
     ]
   }')
