@@ -19,6 +19,19 @@ import {
 } from '../../src/server/express/index.js';
 import { grpcService, A2AService } from '../../src/server/grpc/index.js';
 
+async function ensureRuntimeCrypto() {
+  if (typeof globalThis.crypto !== 'undefined') {
+    return;
+  }
+
+  const { webcrypto } = await import('node:crypto');
+
+  Object.defineProperty(globalThis, 'crypto', {
+    value: webcrypto,
+    configurable: true,
+  });
+}
+
 /**
  * SUTAgentExecutor implements the agent's core logic.
  */
@@ -244,4 +257,4 @@ async function main() {
   });
 }
 
-main().catch(console.error);
+ensureRuntimeCrypto().then(main).catch(console.error);
