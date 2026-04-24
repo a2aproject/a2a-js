@@ -6,6 +6,7 @@ import {
   TaskState,
   Role,
   TaskPushNotificationConfig,
+  Task,
 } from '../src/index.js';
 import { StreamResponse } from '../src/types/pb/a2a.js';
 import {
@@ -246,8 +247,10 @@ export class ItkAgentExecutor implements AgentExecutor {
       const client = await factory.createFromUrl(baseUri);
       console.log('[ItkAgent] Created client for', call.agentCardUri);
 
-      // Wrap nested instruction as protobuf binary
-      const instBytes = Instruction.encode(call.instruction!).finish();
+      if (!call.instruction) {
+        throw new Error('Instruction missing in callAgent step');
+      }
+      const instBytes = Instruction.encode(call.instruction).finish();
       const nestedMsg: Message = {
         messageId: Math.random().toString(36).substring(2),
         contextId: '',
@@ -300,8 +303,9 @@ export class ItkAgentExecutor implements AgentExecutor {
         if ('parts' in response) {
           processMessage(response as Message);
         } else if ('status' in response) {
-          const task = response as { status?: { message?: Message }; history?: Message[] };
+          const task = response as Task;
           processMessage(task.status?.message);
+          task.history?.forEach(processMessage)
         }
       }
 
