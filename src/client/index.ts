@@ -25,6 +25,7 @@ export {
   ServiceParameters,
   type ServiceParametersUpdate,
   withA2AExtensions,
+  withA2AVersion,
 } from './service-parameters.js';
 export { ClientCallContext, type ContextUpdate, ClientCallContextKey } from './context.js';
 export {

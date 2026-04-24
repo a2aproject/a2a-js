@@ -1437,7 +1437,7 @@ describe('Client', () => {
       expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     });
 
-    it('should not override user-provided A2A-Version', async () => {
+    it('should use transport version even when user provides A2A-Version', async () => {
       const task: Task = {
         id: '123',
         contextId: 'ctx1',
@@ -1458,9 +1458,8 @@ describe('Client', () => {
       };
       await client.getTask(params, options);
 
-      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
-        serviceParameters: { [A2A_VERSION_HEADER]: '0.3' },
-      });
+      // The transport's protocolVersion always takes precedence
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     });
   });
 });

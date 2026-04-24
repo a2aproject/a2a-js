@@ -1,4 +1,4 @@
-import { A2A_VERSION_HEADER } from '../constants.js';
+import { withA2AVersion } from './service-parameters.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
@@ -366,20 +366,14 @@ export class Client {
   /**
    * Ensures the A2A-Version header is present in the request's service parameters.
    * Per §3.6.1: "Clients MUST send the A2A-Version header with each request."
-   * User-provided service parameters take precedence over the auto-injected version.
    */
   private withVersionHeader(options: RequestOptions | undefined): RequestOptions {
-    const existing = options?.serviceParameters;
-    // Allow user to override the version via explicit service parameters.
-    if (existing?.[A2A_VERSION_HEADER]) {
-      return options!;
-    }
     return {
       ...options,
-      serviceParameters: {
-        [A2A_VERSION_HEADER]: this.protocolVersion,
-        ...existing,
-      },
+      serviceParameters: ServiceParameters.createFrom(
+        options?.serviceParameters,
+        withA2AVersion(this.protocolVersion)
+      ),
     };
   }
 
