@@ -1,5 +1,5 @@
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
+import { randomUUID } from 'node:crypto';
 
 import {
   AgentCard,
@@ -86,7 +86,7 @@ class MovieAgentExecutor implements AgentExecutor {
         message: {
           kind: 'message',
           role: 'agent',
-          messageId: uuidv4(),
+          messageId: randomUUID(),
           parts: [{ kind: 'text', text: 'Processing your question, hang tight!' }],
           taskId: taskId,
           contextId: contextId,
@@ -128,7 +128,7 @@ class MovieAgentExecutor implements AgentExecutor {
           message: {
             kind: 'message',
             role: 'agent',
-            messageId: uuidv4(),
+            messageId: randomUUID(),
             parts: [{ kind: 'text', text: 'No message found to process.' }],
             taskId: taskId,
             contextId: contextId,
@@ -197,7 +197,7 @@ class MovieAgentExecutor implements AgentExecutor {
 
       // 5. Publish artifact with the result
       const parts: Part[] = [{ kind: 'text', text: agentReplyText || 'Completed.' }];
-      const artifactId = uuidv4();
+      const artifactId = randomUUID();
       const resultArtifact: Artifact = {
         artifactId: artifactId,
         name: 'Result',
@@ -218,7 +218,7 @@ class MovieAgentExecutor implements AgentExecutor {
       const agentMessage: Message = {
         kind: 'message',
         role: 'agent',
-        messageId: uuidv4(),
+        messageId: randomUUID(),
         parts: parts,
         taskId: taskId,
         contextId: contextId,
@@ -251,7 +251,7 @@ class MovieAgentExecutor implements AgentExecutor {
           message: {
             kind: 'message',
             role: 'agent',
-            messageId: uuidv4(),
+            messageId: randomUUID(),
             parts: [{ kind: 'text', text: `Agent error: ${error.message}` }],
             taskId: taskId,
             contextId: contextId,

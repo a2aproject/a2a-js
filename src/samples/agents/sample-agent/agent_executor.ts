@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
+import { randomUUID } from 'node:crypto';
 
 import {
   Task,
@@ -53,7 +53,7 @@ export class SampleAgentExecutor implements AgentExecutor {
         message: {
           kind: 'message',
           role: 'agent',
-          messageId: uuidv4(),
+          messageId: randomUUID(),
           parts: [{ kind: 'text', text: 'Processing your question' }],
           taskId: taskId,
           contextId: contextId,
@@ -68,7 +68,7 @@ export class SampleAgentExecutor implements AgentExecutor {
     const agentReplyText = this.parseInputMessage(userMessage);
     console.info(`[SampleAgentExecutor] Prompt response: ${agentReplyText}`);
 
-    const artifactId = uuidv4();
+    const artifactId = randomUUID();
     const resultArtifact: Artifact = {
       artifactId: artifactId,
       name: 'Result',
