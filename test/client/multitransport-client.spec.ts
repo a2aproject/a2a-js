@@ -34,7 +34,10 @@ import {
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {
-  let transport: Record<Exclude<keyof Transport, 'protocolName'>, Mock> & { protocolName: string };
+  let transport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
+    protocolName: string;
+    protocolVersion: string;
+  };
   let client: Client;
   let agentCard: AgentCard;
 
@@ -52,6 +55,7 @@ describe('Client', () => {
       listTasks: vi.fn(),
       resubscribeTask: vi.fn(),
       protocolName: 'MockTransport',
+      protocolVersion: '1.0',
     };
     agentCard = {
       name: 'Test Agent',
@@ -1407,41 +1411,9 @@ describe('Client', () => {
   });
 
   describe('A2A-Version header', () => {
-    it('should resolve protocolVersion from matching interface', () => {
-      const cardWithInterfaces = {
-        ...agentCard,
-        supportedInterfaces: [
-          {
-            url: 'https://example.com',
-            protocolBinding: 'MockTransport',
-            protocolVersion: '1.0',
-            tenant: '',
-          },
-        ],
-      };
-      const client = new Client(transport, cardWithInterfaces);
-      expect(client.protocolVersion).toBe('1.0');
-    });
-
-    it('should resolve protocolVersion case-insensitively', () => {
-      const cardWithInterfaces = {
-        ...agentCard,
-        supportedInterfaces: [
-          {
-            url: 'https://example.com',
-            protocolBinding: 'mocktransport',
-            protocolVersion: '1.0',
-            tenant: '',
-          },
-        ],
-      };
-      const client = new Client(transport, cardWithInterfaces);
-      expect(client.protocolVersion).toBe('1.0');
-    });
-
-    it('should fall back to SDK default when no interface matches', () => {
+    it('should resolve protocolVersion from transport', () => {
       const client = new Client(transport, agentCard);
-      expect(client.protocolVersion).toBe(A2A_PROTOCOL_VERSION);
+      expect(client.protocolVersion).toBe(transport.protocolVersion);
     });
 
     it('should inject A2A-Version into service parameters', async () => {

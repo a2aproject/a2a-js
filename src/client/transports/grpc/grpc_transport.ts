@@ -51,14 +51,17 @@ export interface GrpcTransportOptions {
   endpoint: string;
   grpcChannelCredentials?: grpc.ChannelCredentials;
   grpcCallOptions?: Partial<grpc.CallOptions>;
+  protocolVersion: string;
 }
 
 export class GrpcTransport implements Transport {
   private readonly grpcCallOptions?: Partial<grpc.CallOptions>;
   private readonly grpcClient: A2AServiceClient;
+  private readonly _protocolVersion: string;
 
   constructor(options: GrpcTransportOptions) {
     this.grpcCallOptions = options.grpcCallOptions;
+    this._protocolVersion = options.protocolVersion;
     this.grpcClient = new A2AServiceClient(
       options.endpoint,
       options.grpcChannelCredentials ?? grpc.credentials.createInsecure()
@@ -67,6 +70,10 @@ export class GrpcTransport implements Transport {
 
   get protocolName(): string {
     return PROTOCOL_NAME;
+  }
+
+  get protocolVersion(): string {
+    return this._protocolVersion;
   }
 
   async getExtendedAgentCard(
@@ -360,11 +367,12 @@ export class GrpcTransportFactory implements TransportFactory {
     return PROTOCOL_NAME;
   }
 
-  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
+  async create(url: string, _agentCard: AgentCard, protocolVersion: string): Promise<Transport> {
     return new GrpcTransport({
       endpoint: url,
       grpcChannelCredentials: this.options?.grpcChannelCredentials,
       grpcCallOptions: this.options?.grpcCallOptions,
+      protocolVersion,
     });
   }
 }

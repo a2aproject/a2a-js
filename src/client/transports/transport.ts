@@ -20,6 +20,7 @@ import { RequestOptions } from '../multitransport-client.js';
 
 export interface Transport {
   get protocolName(): string;
+  get protocolVersion(): string;
 
   getExtendedAgentCard(
     params: GetExtendedAgentCardRequest,
@@ -68,5 +69,5 @@ export interface Transport {
 export interface TransportFactory {
   get protocolName(): string;
 
-  create(url: string, agentCard: AgentCard): Promise<Transport>;
+  create(url: string, agentCard: AgentCard, protocolVersion: string): Promise<Transport>;
 }

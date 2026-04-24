@@ -44,6 +44,7 @@ const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
 export interface RestTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
+  protocolVersion: string;
 }
 
 interface RestErrorResponse {
@@ -56,10 +57,12 @@ interface RestErrorResponse {
 export class RestTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   private readonly endpoint: string;
+  private readonly _protocolVersion: string;
 
   constructor(options: RestTransportOptions) {
     this.endpoint = options.endpoint.replace(/\/+$/, '');
     this.customFetchImpl = options.fetchImpl;
+    this._protocolVersion = options.protocolVersion;
   }
 
   private _buildPath(path: string, tenant?: string): string {
@@ -68,6 +71,10 @@ export class RestTransport implements Transport {
 
   get protocolName(): string {
     return PROTOCOL_NAME;
+  }
+
+  get protocolVersion(): string {
+    return this._protocolVersion;
   }
 
   async getExtendedAgentCard(
@@ -463,10 +470,11 @@ export class RestTransportFactory implements TransportFactory {
     return PROTOCOL_NAME;
   }
 
-  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
+  async create(url: string, _agentCard: AgentCard, protocolVersion: string): Promise<Transport> {
     return new RestTransport({
       endpoint: url,
       fetchImpl: this.options?.fetchImpl,
+      protocolVersion,
     });
   }
 }

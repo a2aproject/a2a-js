@@ -21,6 +21,7 @@ describe('JsonRpcTransport', () => {
     transport = new JsonRpcTransport({
       endpoint,
       fetchImpl: mockFetch,
+      protocolVersion: '1.0',
     });
   });
 

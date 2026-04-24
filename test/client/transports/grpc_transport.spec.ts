@@ -71,7 +71,7 @@ describe('GrpcTransport', () => {
 
   beforeEach(() => {
     mockGrpcClient = new A2AServiceClient(endpoint, credentials.createInsecure());
-    transport = new GrpcTransport({ endpoint });
+    transport = new GrpcTransport({ endpoint, protocolVersion: '1.0' });
   });
 
   afterEach(() => {
@@ -388,7 +388,7 @@ describe('GrpcTransportFactory', () => {
         { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '1.0.0' },
       ],
     });
-    const transport = await factory.create('localhost:50051', agentCard);
+    const transport = await factory.create('localhost:50051', agentCard, '1.0');
 
     expect(transport).toBeInstanceOf(GrpcTransport);
   });

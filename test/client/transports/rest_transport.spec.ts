@@ -38,6 +38,7 @@ describe('RestTransport', () => {
     transport = new RestTransport({
       endpoint,
       fetchImpl: mockFetch,
+      protocolVersion: '1.0',
     });
   });
 
@@ -50,6 +51,7 @@ describe('RestTransport', () => {
       const trailingSlashTransport = new RestTransport({
         endpoint: 'https://example.com/a2a/rest/',
         fetchImpl: mockFetch,
+        protocolVersion: '1.0',
       });
       const mockResponse = createMockProtoMessage();
       mockFetch.mockResolvedValue(createRestResponse(mockResponse));
@@ -64,6 +66,7 @@ describe('RestTransport', () => {
       const trailingSlashTransport = new RestTransport({
         endpoint: 'https://example.com/a2a/rest///',
         fetchImpl: mockFetch,
+        protocolVersion: '1.0',
       });
       const mockResponse = createMockProtoMessage();
       mockFetch.mockResolvedValue(createRestResponse(mockResponse));
@@ -506,7 +509,7 @@ describe('RestTransportFactory', () => {
         },
       ],
     });
-    const transport = await factory.create('https://example.com/api', agentCard);
+    const transport = await factory.create('https://example.com/api', agentCard, '1.0');
     expect(transport).to.be.instanceOf(RestTransport);
   });
 });

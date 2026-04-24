@@ -1,4 +1,4 @@
-import { A2A_VERSION_HEADER, A2A_PROTOCOL_VERSION } from '../constants.js';
+import { A2A_VERSION_HEADER } from '../constants.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
@@ -71,12 +71,11 @@ export interface RequestOptions {
 export class Client {
   /**
    * The A2A protocol version sent with every request via the A2A-Version header.
-   * Derived from the agent card's matching interface protocolVersion,
-   * falling back to {@link A2A_PROTOCOL_VERSION} if no match is found.
-   * Clients MUST send this header per §3.6.1.
+   * Determined by the transport, which receives the version from the matched
+   * AgentInterface during factory creation. Clients MUST send this header per §3.6.1.
    */
   public get protocolVersion(): string {
-    return this.resolveProtocolVersion();
+    return this.transport.protocolVersion;
   }
 
   constructor(
@@ -84,18 +83,6 @@ export class Client {
     private agentCard: AgentCard,
     public readonly config?: ClientConfig
   ) {}
-
-  /**
-   * Resolves the protocol version from the agent card's supported interfaces
-   * matching the current transport's protocol name. Falls back to the SDK's
-   * built-in protocol version if no match is found.
-   */
-  private resolveProtocolVersion(): string {
-    const agentInterface = this.agentCard.supportedInterfaces?.find(
-      (i) => i.protocolBinding.toUpperCase() === this.transport.protocolName.toUpperCase()
-    );
-    return agentInterface?.protocolVersion || A2A_PROTOCOL_VERSION;
-  }
 
   /**
    * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,

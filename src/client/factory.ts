@@ -121,7 +121,11 @@ export class ClientFactory {
       const selectedInterface = bestInterfacePerProtocol.get(transportName);
       const factory = this.transportsByName.get(transportName);
       if (factory && selectedInterface) {
-        let transport = await factory.create(selectedInterface.url, agentCard);
+        let transport = await factory.create(
+          selectedInterface.url,
+          agentCard,
+          selectedInterface.protocolVersion
+        );
 
         // If the agent interface declares a default tenant, wrap the transport
         // so the tenant is automatically applied to all requests.
