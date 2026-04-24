@@ -260,12 +260,12 @@ const _buildContext = async (
   const requestedVersion = versionHeaders.length > 0 ? versionHeaders[0].toString() : undefined;
   const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
 
-  const context = new ServerCallContext(
-    Extensions.parseServiceParameter(extensionString),
+  const context = new ServerCallContext({
+    requestedExtensions: Extensions.parseServiceParameter(extensionString),
     user,
     requestedVersion,
-    tenant
-  );
+    tenant,
+  });
 
   const agentCard = await requestHandler.getAgentCard();
   validateVersion(context.requestedVersion, agentCard, 'GRPC');

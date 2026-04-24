@@ -22,35 +22,11 @@ export class ServerCallContext {
   private readonly _tenant?: string;
   private _activatedExtensions?: Extensions;
 
-  constructor(
-    requestedExtensions?: Extensions,
-    user?: User,
-    requestedVersion?: string,
-    tenant?: string
-  );
-  constructor(options: ServerCallContextOptions);
-  constructor(
-    extensionsOrOptions?: Extensions | ServerCallContextOptions,
-    user?: User,
-    requestedVersion?: string,
-    tenant?: string
-  ) {
-    if (
-      extensionsOrOptions &&
-      !Array.isArray(extensionsOrOptions) &&
-      typeof extensionsOrOptions === 'object'
-    ) {
-      const options = extensionsOrOptions as ServerCallContextOptions;
-      this._requestedExtensions = options.requestedExtensions;
-      this._user = options.user;
-      this._tenant = options.tenant;
-      this._requestedVersion = options.requestedVersion || A2A_DEFAULT_VERSION;
-    } else {
-      this._requestedExtensions = extensionsOrOptions as Extensions | undefined;
-      this._user = user;
-      this._requestedVersion = requestedVersion || A2A_DEFAULT_VERSION;
-      this._tenant = tenant;
-    }
+  constructor(options?: ServerCallContextOptions) {
+    this._requestedExtensions = options?.requestedExtensions;
+    this._user = options?.user;
+    this._tenant = options?.tenant;
+    this._requestedVersion = options?.requestedVersion || A2A_DEFAULT_VERSION;
   }
 
   get tenant(): string | undefined {

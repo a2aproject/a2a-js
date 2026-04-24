@@ -44,11 +44,11 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
     try {
       const user = await options.userBuilder(req);
       const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
-      const context = new ServerCallContext(
-        Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+      const context = new ServerCallContext({
+        requestedExtensions: Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
         user,
-        requestedVersion
-      );
+        requestedVersion,
+      });
       const agentCard = await options.requestHandler.getAgentCard();
       validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
       const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);

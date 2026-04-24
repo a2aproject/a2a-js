@@ -5,7 +5,7 @@ import { ServerCallContext } from '../../src/server/context.js';
 import { Task, TaskState, TaskPushNotificationConfig } from '../../src/index.js';
 
 function createContext(tenant?: string): ServerCallContext {
-  return new ServerCallContext(undefined, undefined, undefined, tenant);
+  return new ServerCallContext({ tenant });
 }
 
 function createTask(id: string, contextId: string = 'ctx-1'): Task {

@@ -2882,10 +2882,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
     await handler.sendMessage(
       params,
-      new ServerCallContext(
-        [expectedExtension, 'not-available-extension-by-agent-card'],
-        new UnauthenticatedUser()
-      )
+      new ServerCallContext({
+        requestedExtensions: [expectedExtension, 'not-available-extension-by-agent-card'],
+        user: new UnauthenticatedUser(),
+      })
     );
 
     expect(capturedRequestContext).to.be.instanceOf(
@@ -3060,7 +3060,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         extendedAgentCard
       );
 
-      const context = new ServerCallContext(undefined, new A2AUser(true));
+      const context = new ServerCallContext({ user: new A2AUser(true) });
       const agentCard = await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, context);
       assert.deepEqual(agentCard, extendedAgentCard);
     });
@@ -3076,7 +3076,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         extendedAgentcardProvider
       );
 
-      const context = new ServerCallContext(undefined, new A2AUser(false));
+      const context = new ServerCallContext({ user: new A2AUser(false) });
       const agentCard = await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, context);
       assert(agentCard.capabilities.extensions.length === 1);
       assert.deepEqual(agentCard.capabilities.extensions[0], {

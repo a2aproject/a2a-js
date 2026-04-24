@@ -122,12 +122,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const tenant = (req.params.tenant as string) || undefined;
     const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
 
-    const context = new ServerCallContext(
-      Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+    const context = new ServerCallContext({
+      requestedExtensions: Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
       user,
       requestedVersion,
-      tenant
-    );
+      tenant,
+    });
     const agentCard = await restTransportHandler.getAgentCard();
     validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
     return context;

@@ -172,21 +172,16 @@ describe('ServerCallContext version', () => {
   });
 
   it('should default requestedVersion to 0.3 when empty string is provided', () => {
-    const context = new ServerCallContext(undefined, undefined, '');
+    const context = new ServerCallContext({ requestedVersion: '' });
     expect(context.requestedVersion).toBe(A2A_DEFAULT_VERSION);
   });
 
   it('should store the provided version', () => {
-    const context = new ServerCallContext(undefined, undefined, '1.0');
-    expect(context.requestedVersion).toBe('1.0');
-  });
-
-  it('should accept options-style constructor', () => {
     const context = new ServerCallContext({ requestedVersion: '1.0' });
     expect(context.requestedVersion).toBe('1.0');
   });
 
-  it('should default to 0.3 with options-style constructor when version omitted', () => {
+  it('should default to 0.3 when version omitted', () => {
     const context = new ServerCallContext({});
     expect(context.requestedVersion).toBe(A2A_DEFAULT_VERSION);
   });
