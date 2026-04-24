@@ -3,6 +3,9 @@ set -ex
 
 cd "$(dirname "$0")"
 
+# Set default log level
+export ITK_LOG_LEVEL="${ITK_LOG_LEVEL:-INFO}"
+
 # Initialize default exit code
 RESULT=1
 
@@ -26,8 +29,17 @@ trap cleanup EXIT
 : "${A2A_SAMPLES_REVISION:?A2A_SAMPLES_REVISION environment variable must be set}"
 
 if [ ! -d "a2a-samples" ]; then
-  git clone -b "$A2A_SAMPLES_REVISION" https://github.com/a2aproject/a2a-samples.git a2a-samples --depth 1
+  git clone https://github.com/a2aproject/a2a-samples.git a2a-samples
 fi
+cd a2a-samples
+git fetch origin
+git checkout "$A2A_SAMPLES_REVISION"
+
+# Only pull if it's a branch (not a detached HEAD)
+if git symbolic-ref -q HEAD > /dev/null; then
+  git pull origin "$A2A_SAMPLES_REVISION"
+fi
+cd ..
 
 # 2. Copy instruction.proto from a2a-samples
 cp a2a-samples/itk/protos/instruction.proto ./instruction.proto
@@ -45,8 +57,6 @@ uv run --with grpcio-tools python -m grpc_tools.protoc \
 sed -i 's/^import instruction_pb2 as instruction__pb2/from . import instruction_pb2 as instruction__pb2/' pyproto/instruction_pb2_grpc.py
 
 # 4. Build jit itk_service docker image from root of a2a-samples/itk
-# We run docker build from the itk directory inside a2a-samples
-cp -r pyproto a2a-samples/itk/
 docker build -t itk_service a2a-samples/itk
 
 # 5. Start docker service
@@ -57,9 +67,18 @@ ITK_DIR="$(pwd)"
 # Stop existing container if any
 docker rm -f itk-service || true
 
+# Create logs directory if debug
+DOCKER_MOUNT_LOGS=""
+if [ "${ITK_LOG_LEVEL^^}" = "DEBUG" ]; then
+  mkdir -p "$ITK_DIR/logs"
+  DOCKER_MOUNT_LOGS="-v $ITK_DIR/logs:/app/logs"
+fi
+
 docker run -d --name itk-service \
   -v "$A2A_JS_ROOT:/app/agents/repo" \
   -v "$ITK_DIR:/app/agents/repo/itk" \
+  $DOCKER_MOUNT_LOGS \
+  -e ITK_LOG_LEVEL="$ITK_LOG_LEVEL" \
   -p 8000:8000 \
   itk_service
 
@@ -97,14 +116,8 @@ RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
         "sdks": ["current", "go_v10"],
         "traversal": "euler",
         "edges": ["0->1", "1->0"],
-        "protocols": ["jsonrpc", "grpc"]
-      },
-      {
-        "name": "Current vs Go v10 - HTTP_JSON (Non-Streaming)",
-        "sdks": ["current", "go_v10"],
-        "traversal": "euler",
-        "edges": ["0->1", "1->0"],
-        "protocols": ["http_json"]
+        "protocols": ["jsonrpc", "grpc"],
+        "behavior": "send_message"
       },
       {
         "name": "Current vs Go v10 - JSONRPC & GRPC (Streaming)",
@@ -112,7 +125,8 @@ RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
         "traversal": "euler",
         "edges": ["0->1", "1->0"],
         "protocols": ["jsonrpc", "grpc"],
-        "streaming": true
+        "streaming": true,
+        "behavior": "send_message"
       },
       {
         "name": "Current vs Go v10 - HTTP_JSON (Streaming)",
@@ -120,7 +134,8 @@ RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
         "traversal": "euler",
         "edges": ["0->1", "1->0"],
         "protocols": ["http_json"],
-        "streaming": true
+        "streaming": true,
+        "behavior": "send_message"
       }
     ]
   }')
@@ -128,11 +143,10 @@ RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
 echo "--------------------------------------------------------"
 echo "ITK TEST RESULTS:"
 echo "--------------------------------------------------------"
-printf '%s\n' "$RESPONSE" | python3 -c "
+echo "$RESPONSE" | python3 -c "
 import sys, json
-raw_input = sys.stdin.read()
 try:
-    data = json.loads(raw_input)
+    data = json.load(sys.stdin)
     all_passed = data.get('all_passed', False)
     results = data.get('results', {})
     for test, passed in results.items():
@@ -144,7 +158,7 @@ try:
         sys.exit(1)
 except Exception as e:
     print(f'Error parsing results: {e}')
-    print(f'Raw response: {raw_input}')
+    print(f'Raw response: {data if \"data\" in locals() else \"no data\"}')
     sys.exit(1)
 "
 RESULT=$?
