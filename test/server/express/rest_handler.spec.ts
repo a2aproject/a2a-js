@@ -157,7 +157,7 @@ describe('restHandler', () => {
   });
 
   describe('POST /message:send', () => {
-    it('should accept camelCase message and return 201 with Task', async () => {
+    it('should accept camelCase message and return 200 with Task', async () => {
       const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
@@ -165,7 +165,7 @@ describe('restHandler', () => {
         .post('/message:send')
         .set('A2A-Version', '1.0')
         .send({ message })
-        .expect(201);
+        .expect(200);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -192,7 +192,7 @@ describe('restHandler', () => {
         .post('/tenant1/message:send')
         .set('A2A-Version', '1.0')
         .send({ message })
-        .expect(201);
+        .expect(200);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -701,7 +701,7 @@ describe('restHandler', () => {
       },
     ])('should accept $name message parts', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(201);
+      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(200);
     });
   });
 
@@ -737,14 +737,14 @@ describe('restHandler', () => {
       },
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(201);
+      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(200);
 
       const protoMessage = ProtoMessage.toJSON(testMessage);
       await request(app)
         .post('/message:send')
         .set('A2A-Version', '1.0')
         .send({ message: protoMessage, configuration: payload.configuration })
-        .expect(201);
+        .expect(200);
     });
   });
 

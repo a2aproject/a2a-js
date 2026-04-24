@@ -372,7 +372,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const protoResult = ToProto.messageSendResult(result);
     sendResponse<SendMessageResponse>(
       res,
-      HTTP_STATUS.CREATED,
+      HTTP_STATUS.OK,
       context,
       protoResult,
       SendMessageResponse
