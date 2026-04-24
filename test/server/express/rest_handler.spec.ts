@@ -121,7 +121,10 @@ describe('restHandler', () => {
 
   describe('GET /extendedAgentCard', () => {
     it('should return the agent card with 200 OK', async () => {
-      const response = await request(app).get('/extendedAgentCard').expect(200);
+      const response = await request(app)
+        .get('/extendedAgentCard')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       // REST API returns data (format checked by handler)
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
@@ -129,7 +132,10 @@ describe('restHandler', () => {
     });
 
     it('should return the agent card with 200 OK when tenant is provided', async () => {
-      const response = await request(app).get('/tenant1/extendedAgentCard').expect(200);
+      const response = await request(app)
+        .get('/tenant1/extendedAgentCard')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
       assert.deepEqual(response.body.name, testAgentCard.name);
@@ -140,7 +146,10 @@ describe('restHandler', () => {
         new RequestMalformedError('Card fetch failed')
       );
 
-      const response = await request(app).get('/extendedAgentCard').expect(400);
+      const response = await request(app)
+        .get('/extendedAgentCard')
+        .set('A2A-Version', '1.0')
+        .expect(400);
 
       assert.property(response.body, 'name');
       assert.property(response.body, 'message');
@@ -152,7 +161,11 @@ describe('restHandler', () => {
       const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app).post('/message:send').send({ message }).expect(201);
+      const response = await request(app)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(201);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -175,7 +188,11 @@ describe('restHandler', () => {
       const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      await request(app).post('/tenant1/message:send').send({ message }).expect(201);
+      await request(app)
+        .post('/tenant1/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(201);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -193,7 +210,11 @@ describe('restHandler', () => {
         new RequestMalformedError('Message is required')
       );
 
-      await request(app).post('/message:send').send({ request: null }).expect(400);
+      await request(app)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ request: null })
+        .expect(400);
     });
   });
 
@@ -206,7 +227,11 @@ describe('restHandler', () => {
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const response = await request(app).post('/message:stream').send({ message }).expect(200);
+      const response = await request(app)
+        .post('/message:stream')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
 
@@ -236,7 +261,11 @@ describe('restHandler', () => {
         })
       );
 
-      await request(noStreamApp).post('/message:stream').send({ request: testMessage }).expect(400);
+      await request(noStreamApp)
+        .post('/message:stream')
+        .set('A2A-Version', '1.0')
+        .send({ request: testMessage })
+        .expect(400);
     });
   });
 
@@ -244,7 +273,10 @@ describe('restHandler', () => {
     it('should return task with 200 OK', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app).get('/tasks/task-1').expect(200);
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       assert.deepEqual(response.body.id, testTask.id);
       // Kind is not present in Proto JSON
@@ -260,7 +292,10 @@ describe('restHandler', () => {
     it('should support historyLength query parameter', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
-      await request(app).get('/tasks/task-1?historyLength=10').expect(200);
+      await request(app)
+        .get('/tasks/task-1?historyLength=10')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         {
@@ -273,13 +308,19 @@ describe('restHandler', () => {
     });
 
     it('should return 400 if historyLength is invalid', async () => {
-      await request(app).get('/tasks/task-1?historyLength=invalid').expect(400);
+      await request(app)
+        .get('/tasks/task-1?historyLength=invalid')
+        .set('A2A-Version', '1.0')
+        .expect(400);
     });
 
     it('should return 404 if task is not found', async () => {
       (mockRequestHandler.getTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
-      const response = await request(app).get('/tasks/task-1').expect(404);
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(404);
 
       assert.property(response.body, 'name');
       assert.property(response.body, 'message');
@@ -294,7 +335,10 @@ describe('restHandler', () => {
       };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
-      const response = await request(app).post('/tasks/task-1:cancel').expect(202);
+      const response = await request(app)
+        .post('/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .expect(202);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
       assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELED');
@@ -307,7 +351,10 @@ describe('restHandler', () => {
     it('should return 404 if task is not found', async () => {
       (mockRequestHandler.cancelTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
-      const response = await request(app).post('/tasks/task-1:cancel').expect(404);
+      const response = await request(app)
+        .post('/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .expect(404);
 
       assert.property(response.body, 'name');
       assert.property(response.body, 'message');
@@ -318,7 +365,10 @@ describe('restHandler', () => {
         new TaskNotCancelableError('task-1')
       );
 
-      const response = await request(app).post('/tasks/task-1:cancel').expect(409);
+      const response = await request(app)
+        .post('/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .expect(409);
 
       assert.property(response.body, 'name');
       assert.property(response.body, 'message');
@@ -330,7 +380,7 @@ describe('restHandler', () => {
       const tasks = [testTask];
       (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks });
 
-      const response = await request(app).get('/tasks').expect(200);
+      const response = await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
 
       const expectedResponse = [
         {
@@ -351,7 +401,7 @@ describe('restHandler', () => {
       const tasks = [testTask, { ...testTask, id: 'task-2' }];
       (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks });
 
-      const response = await request(app).get('/tasks').expect(200);
+      const response = await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
 
       const expectedResponse = [
         {
@@ -385,7 +435,10 @@ describe('restHandler', () => {
 
       (mockRequestHandler.resubscribe as Mock).mockReturnValue(mockStream());
 
-      const response = await request(app).post('/tasks/task-1:subscribe').expect(200);
+      const response = await request(app)
+        .post('/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
       expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
@@ -411,7 +464,10 @@ describe('restHandler', () => {
         })
       );
 
-      const response = await request(noStreamApp).post('/tasks/task-1:subscribe').expect(400);
+      const response = await request(noStreamApp)
+        .post('/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(400);
 
       assert.property(response.body, 'name');
       assert.property(response.body, 'message');
@@ -453,6 +509,7 @@ describe('restHandler', () => {
 
         const response = await request(app)
           .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
           .send(payload)
           .expect(201);
 
@@ -479,6 +536,7 @@ describe('restHandler', () => {
 
         await request(noPNApp)
           .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
           .send({
             pushNotificationConfig: {
               id: 'config-1',
@@ -501,6 +559,7 @@ describe('restHandler', () => {
 
         const response = await request(app)
           .get('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
           .expect(200);
 
         const convertedResult = ListTaskPushNotificationConfigsResponse.fromJSON(
@@ -517,6 +576,7 @@ describe('restHandler', () => {
 
         const response = await request(app)
           .get('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
           .expect(200);
 
         // REST API returns camelCase
@@ -539,6 +599,7 @@ describe('restHandler', () => {
 
         const response = await request(app)
           .get('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
           .expect(404);
 
         assert.property(response.body, 'name');
@@ -550,7 +611,10 @@ describe('restHandler', () => {
       it('should delete push notification config and return 204', async () => {
         (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockResolvedValue(undefined);
 
-        await request(app).delete('/tasks/task-1/pushNotificationConfigs/config-1').expect(204);
+        await request(app)
+          .delete('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
+          .expect(204);
 
         expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
           {
@@ -569,6 +633,7 @@ describe('restHandler', () => {
 
         const response = await request(app)
           .delete('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
           .expect(404);
 
         assert.property(response.body, 'name');
@@ -636,7 +701,7 @@ describe('restHandler', () => {
       },
     ])('should accept $name message parts', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/message:send').send(payload).expect(201);
+      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(201);
     });
   });
 
@@ -672,11 +737,12 @@ describe('restHandler', () => {
       },
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/message:send').send(payload).expect(201);
+      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(201);
 
       const protoMessage = ProtoMessage.toJSON(testMessage);
       await request(app)
         .post('/message:send')
+        .set('A2A-Version', '1.0')
         .send({ message: protoMessage, configuration: payload.configuration })
         .expect(201);
     });
@@ -685,12 +751,16 @@ describe('restHandler', () => {
   describe('Error Handling', () => {
     it('should return 404 for unknown message action (route not matched)', async () => {
       // Unknown actions don't match the route pattern, so Express returns default 404
-      await request(app).post('/message:unknown').send({ request: testMessage }).expect(404);
+      await request(app)
+        .post('/message:unknown')
+        .set('A2A-Version', '1.0')
+        .send({ request: testMessage })
+        .expect(404);
     });
 
     it('should return 404 for unknown task action (route not matched)', async () => {
       // Unknown actions don't match the route pattern, so Express returns default 404
-      await request(app).post('/tasks/task-1:unknown').expect(404);
+      await request(app).post('/tasks/task-1:unknown').set('A2A-Version', '1.0').expect(404);
     });
 
     it('should handle internal server errors gracefully', async () => {
@@ -701,6 +771,7 @@ describe('restHandler', () => {
       const messageProto = ProtoMessage.toJSON(testMessage);
       const response = await request(app)
         .post('/message:send')
+        .set('A2A-Version', '1.0')
         .send({ message: messageProto })
         .expect(500);
 
@@ -711,10 +782,11 @@ describe('restHandler', () => {
   });
 
   describe('A2A-Version header validation', () => {
-    it('should accept requests without A2A-Version header (defaults to 0.3)', async () => {
-      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+    it('should reject requests without A2A-Version header (defaults to 0.3, not supported)', async () => {
+      const response = await request(app).get('/tasks/task-1').expect(400);
 
-      await request(app).get('/tasks/task-1').expect(200);
+      assert.property(response.body, 'name');
+      assert.equal(response.body.name, 'VersionNotSupportedError');
     });
 
     it('should accept requests with a supported A2A-Version header', async () => {

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { validateVersion, getSupportedVersions } from '../../src/server/version.js';
 import { VersionNotSupportedError } from '../../src/errors.js';
 import { AgentCard } from '../../src/index.js';
-import { A2A_DEFAULT_VERSION } from '../../src/constants.js';
 import { ServerCallContext } from '../../src/server/context.js';
 
 function createAgentCard(
@@ -35,20 +34,20 @@ function createAgentCard(
 }
 
 describe('getSupportedVersions', () => {
-  it('should always include the default version (0.3)', () => {
+  it('should return an empty set for an agent card with no interfaces', () => {
     const card = createAgentCard([]);
     const versions = getSupportedVersions(card);
-    expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
+    expect(versions.size).toBe(0);
   });
 
-  it('should include versions from supported interfaces', () => {
+  it('should return only versions declared in supported interfaces', () => {
     const card = createAgentCard([
       { protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
       { protocolBinding: 'GRPC', protocolVersion: '1.0' },
     ]);
     const versions = getSupportedVersions(card);
     expect(versions.has('1.0')).toBe(true);
-    expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
+    expect(versions.size).toBe(1);
   });
 
   it('should deduplicate versions', () => {
@@ -57,7 +56,7 @@ describe('getSupportedVersions', () => {
       { protocolBinding: 'HTTP+JSON', protocolVersion: '1.0' },
     ]);
     const versions = getSupportedVersions(card);
-    expect(versions.size).toBe(2);
+    expect(versions.size).toBe(1);
   });
 
   it('should handle multiple different versions', () => {
@@ -69,6 +68,12 @@ describe('getSupportedVersions', () => {
     expect(versions.has('0.3')).toBe(true);
     expect(versions.has('1.0')).toBe(true);
   });
+
+  it('should not implicitly include 0.3 unless declared', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
+    const versions = getSupportedVersions(card);
+    expect(versions.has('0.3')).toBe(false);
+  });
 });
 
 describe('validateVersion', () => {
@@ -77,9 +82,14 @@ describe('validateVersion', () => {
     expect(() => validateVersion('1.0', card)).not.toThrow();
   });
 
-  it('should not throw for the default version (0.3)', () => {
+  it('should throw for 0.3 when the agent does not declare it', () => {
     const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
-    expect(() => validateVersion(A2A_DEFAULT_VERSION, card)).not.toThrow();
+    expect(() => validateVersion('0.3', card)).toThrow(VersionNotSupportedError);
+  });
+
+  it('should not throw for 0.3 when the agent explicitly declares it', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '0.3' }]);
+    expect(() => validateVersion('0.3', card)).not.toThrow();
   });
 
   it('should throw VersionNotSupportedError for an unsupported version', () => {
@@ -114,18 +124,11 @@ describe('protocolBinding filtering', () => {
       const versions = getSupportedVersions(card, 'HTTP+JSON');
       expect(versions.has('2.0')).toBe(true);
       expect(versions.has('1.0')).toBe(false);
-      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
     });
 
-    it('should always include default version even when filtering', () => {
-      const versions = getSupportedVersions(multiBindingCard, 'GRPC');
-      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
-    });
-
-    it('should return only default version when no binding matches', () => {
+    it('should return an empty set when no binding matches', () => {
       const versions = getSupportedVersions(multiBindingCard, 'UNKNOWN' as any);
-      expect(versions.size).toBe(1);
-      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
+      expect(versions.size).toBe(0);
     });
 
     it('should return all versions when protocolBinding is undefined', () => {
@@ -136,7 +139,6 @@ describe('protocolBinding filtering', () => {
       const versions = getSupportedVersions(card);
       expect(versions.has('1.0')).toBe(true);
       expect(versions.has('2.0')).toBe(true);
-      expect(versions.has(A2A_DEFAULT_VERSION)).toBe(true);
     });
   });
 
@@ -153,8 +155,10 @@ describe('protocolBinding filtering', () => {
       expect(() => validateVersion('2.0', card, 'JSONRPC')).toThrow(VersionNotSupportedError);
     });
 
-    it('should always accept the default version regardless of binding', () => {
-      expect(() => validateVersion(A2A_DEFAULT_VERSION, multiBindingCard, 'GRPC')).not.toThrow();
+    it('should reject 0.3 when the binding does not declare it', () => {
+      expect(() => validateVersion('0.3', multiBindingCard, 'GRPC')).toThrow(
+        VersionNotSupportedError
+      );
     });
 
     it('should use exact match for protocolBinding comparison', () => {
@@ -168,12 +172,12 @@ describe('protocolBinding filtering', () => {
 describe('ServerCallContext version', () => {
   it('should default requestedVersion to 0.3 when not provided', () => {
     const context = new ServerCallContext();
-    expect(context.requestedVersion).toBe(A2A_DEFAULT_VERSION);
+    expect(context.requestedVersion).toBe('0.3');
   });
 
   it('should default requestedVersion to 0.3 when empty string is provided', () => {
     const context = new ServerCallContext({ requestedVersion: '' });
-    expect(context.requestedVersion).toBe(A2A_DEFAULT_VERSION);
+    expect(context.requestedVersion).toBe('0.3');
   });
 
   it('should store the provided version', () => {
@@ -183,6 +187,6 @@ describe('ServerCallContext version', () => {
 
   it('should default to 0.3 when version omitted', () => {
     const context = new ServerCallContext({});
-    expect(context.requestedVersion).toBe(A2A_DEFAULT_VERSION);
+    expect(context.requestedVersion).toBe('0.3');
   });
 });

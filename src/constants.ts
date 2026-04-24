@@ -27,12 +27,6 @@ export const A2A_VERSION_HEADER = 'A2A-Version';
 export const A2A_PROTOCOL_VERSION = '1.0';
 
 /**
- * The default A2A version assumed when the A2A-Version header is empty or absent.
- * Per §3.6.2: "Agents MUST interpret empty value as 0.3 version."
- */
-export const A2A_DEFAULT_VERSION = '0.3';
-
-/**
  * The default page size for listing tasks
  */
 export const DEFAULT_PAGE_SIZE = 50;

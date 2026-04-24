@@ -1,13 +1,14 @@
-import { A2A_DEFAULT_VERSION } from '../constants.js';
 import { TransportProtocolName } from '../core.js';
 import { VersionNotSupportedError } from '../errors.js';
 import { AgentCard } from '../index.js';
 
 /**
  * Extracts the set of unique protocol versions from an AgentCard's
- * supported interfaces. Results always include {@link A2A_DEFAULT_VERSION}
- * because agents MUST accept requests with an empty version header,
- * interpreting them as 0.3 (§3.6.2).
+ * supported interfaces.
+ *
+ * Only versions explicitly declared in the agent card are returned.
+ * An agent that does not list a version in its interfaces does not
+ * support it — there is no implicit default.
  *
  * @param agentCard - The agent card to extract versions from.
  * @param protocolBinding - The protocol binding to filter versions by.
@@ -18,7 +19,6 @@ export function getSupportedVersions(
   protocolBinding?: TransportProtocolName
 ): Set<string> {
   const versions = new Set<string>();
-  versions.add(A2A_DEFAULT_VERSION);
   for (const agentInterface of agentCard.supportedInterfaces ?? []) {
     if (protocolBinding && agentInterface.protocolBinding !== protocolBinding) {
       continue;

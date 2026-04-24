@@ -13,7 +13,6 @@ export {
   HTTP_EXTENSION_HEADER,
   A2A_VERSION_HEADER,
   A2A_PROTOCOL_VERSION,
-  A2A_DEFAULT_VERSION,
 } from './constants.js';
 export { Extensions, type ExtensionURI } from './extensions.js';
 

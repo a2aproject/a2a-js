@@ -1,6 +1,11 @@
-import { A2A_DEFAULT_VERSION } from '../constants.js';
 import { Extensions } from '../extensions.js';
 import { User } from './authentication/user.js';
+
+/**
+ * The A2A version assumed when the A2A-Version header is absent or empty.
+ * Per §3.6.2: "Agents MUST interpret empty value as 0.3 version."
+ */
+const ABSENT_HEADER_VERSION = '0.3';
 
 export interface ServerCallContextOptions {
   requestedExtensions?: Extensions;
@@ -9,8 +14,8 @@ export interface ServerCallContextOptions {
 
   /**
    * The A2A protocol version requested by the client via the A2A-Version
-   * service parameter. Defaults to {@link A2A_DEFAULT_VERSION} ('0.3')
-   * when the header is absent or empty, per §3.6.2.
+   * service parameter. Defaults to '0.3' when the header is absent or
+   * empty, per §3.6.2.
    */
   requestedVersion?: string;
 }
@@ -26,7 +31,7 @@ export class ServerCallContext {
     this._requestedExtensions = options?.requestedExtensions;
     this._user = options?.user;
     this._tenant = options?.tenant;
-    this._requestedVersion = options?.requestedVersion || A2A_DEFAULT_VERSION;
+    this._requestedVersion = options?.requestedVersion || ABSENT_HEADER_VERSION;
   }
 
   get tenant(): string | undefined {

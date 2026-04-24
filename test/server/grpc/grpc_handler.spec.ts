@@ -25,7 +25,7 @@ describe('grpcHandler', () => {
     supportedInterfaces: [
       {
         url: 'http://localhost:8080',
-        protocolBinding: 'gRPC',
+        protocolBinding: 'GRPC',
         tenant: '',
         protocolVersion: '1.0',
       },
@@ -60,6 +60,9 @@ describe('grpcHandler', () => {
     metadataValues: Record<string, string> = {}
   ): grpc.ServerUnaryCall<any, any> => {
     const metadata = new grpc.Metadata();
+    if (!('a2a-version' in metadataValues)) {
+      metadata.set('a2a-version', '1.0');
+    }
     Object.entries(metadataValues).forEach(([k, v]) => metadata.set(k, v));
     return {
       request,
@@ -70,9 +73,11 @@ describe('grpcHandler', () => {
 
   // Helper to create a mock gRPC Writable Stream
   const createMockWritableStream = (request: any) => {
+    const metadata = new grpc.Metadata();
+    metadata.set('a2a-version', '1.0');
     return {
       request,
-      metadata: new grpc.Metadata(),
+      metadata,
       sendMetadata: vi.fn(),
       write: vi.fn(),
       end: vi.fn(),
