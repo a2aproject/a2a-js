@@ -305,7 +305,7 @@ export class ItkAgentExecutor implements AgentExecutor {
         } else if ('status' in response) {
           const task = response as Task;
           processMessage(task.status?.message);
-          task.history?.forEach(processMessage)
+          task.history?.forEach(processMessage);
         }
       }
 
