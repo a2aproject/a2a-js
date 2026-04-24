@@ -29,17 +29,8 @@ trap cleanup EXIT
 : "${A2A_SAMPLES_REVISION:?A2A_SAMPLES_REVISION environment variable must be set}"
 
 if [ ! -d "a2a-samples" ]; then
-  git clone https://github.com/a2aproject/a2a-samples.git a2a-samples
+  git clone -b "$A2A_SAMPLES_REVISION" https://github.com/a2aproject/a2a-samples.git a2a-samples --depth 1
 fi
-cd a2a-samples
-git fetch origin
-git checkout "$A2A_SAMPLES_REVISION"
-
-# Only pull if it's a branch (not a detached HEAD)
-if git symbolic-ref -q HEAD > /dev/null; then
-  git pull origin "$A2A_SAMPLES_REVISION"
-fi
-cd ..
 
 # 2. Copy instruction.proto from a2a-samples
 cp a2a-samples/itk/protos/instruction.proto ./instruction.proto
