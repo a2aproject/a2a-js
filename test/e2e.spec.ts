@@ -82,7 +82,7 @@ describe('Client E2E tests', () => {
               url: 'localhost',
               protocolBinding: transportConfig.preferredTransport,
               tenant: '',
-              protocolVersion: '1.0.0',
+              protocolVersion: '1.0',
             },
           ],
           capabilities: {
@@ -313,7 +313,7 @@ describe('Multi-tenancy E2E tests', () => {
             url: 'localhost',
             protocolBinding: 'HTTP+JSON',
             tenant: 'test-tenant',
-            protocolVersion: '1.0.0',
+            protocolVersion: '1.0',
           },
         ],
         capabilities: {
@@ -453,7 +453,7 @@ describe('Multi-tenancy E2E tests', () => {
               url: baseUrl,
               protocolBinding: 'HTTP+JSON',
               tenant: 'tenant-A',
-              protocolVersion: '1.0.0',
+              protocolVersion: '1.0',
             },
           ],
         };
@@ -474,7 +474,7 @@ describe('Multi-tenancy E2E tests', () => {
               url: baseUrl,
               protocolBinding: 'HTTP+JSON',
               tenant: 'tenant-B',
-              protocolVersion: '1.0.0',
+              protocolVersion: '1.0',
             },
           ],
         };

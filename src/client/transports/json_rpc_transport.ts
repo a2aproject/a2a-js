@@ -11,7 +11,13 @@ import {
   ExtendedAgentCardNotConfiguredError,
   VersionNotSupportedError,
 } from '../../errors.js';
-import { Task, AgentCard, TaskPushNotificationConfig, SendMessageResult } from '../../index.js';
+import {
+  Task,
+  AgentCard,
+  TaskPushNotificationConfig,
+  SendMessageResult,
+  A2A_PROTOCOL_VERSION,
+} from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -37,19 +43,16 @@ const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
 export interface JsonRpcTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
-  protocolVersion: string;
 }
 
 export class JsonRpcTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   private readonly endpoint: string;
-  private readonly _protocolVersion: string;
   private requestIdCounter: number = 1;
 
   constructor(options: JsonRpcTransportOptions) {
     this.endpoint = options.endpoint;
     this.customFetchImpl = options.fetchImpl;
-    this._protocolVersion = options.protocolVersion;
   }
 
   get protocolName(): string {
@@ -57,7 +60,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   get protocolVersion(): string {
-    return this._protocolVersion;
+    return A2A_PROTOCOL_VERSION;
   }
 
   async getExtendedAgentCard(
@@ -415,11 +418,10 @@ export class JsonRpcTransportFactory implements TransportFactory {
     return PROTOCOL_NAME;
   }
 
-  async create(url: string, _agentCard: AgentCard, protocolVersion: string): Promise<Transport> {
+  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
     return new JsonRpcTransport({
       endpoint: url,
       fetchImpl: this.options?.fetchImpl,
-      protocolVersion,
     });
   }
 }

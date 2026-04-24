@@ -143,8 +143,7 @@ describe('ClientFactory', () => {
       expect(client).to.be.instanceOf(Client);
       expect(mockTransportFactory1.create).toHaveBeenCalledExactlyOnceWith(
         'http://transport1.com',
-        agentCard,
-        '1.0.0'
+        agentCard
       );
     });
 
@@ -224,8 +223,7 @@ describe('ClientFactory', () => {
       expect(client).to.be.instanceOf(Client);
       expect(mockTransportFactory1.create).toHaveBeenCalledExactlyOnceWith(
         'http://transport1.com',
-        agentCard,
-        '1.0.0'
+        agentCard
       );
     });
 

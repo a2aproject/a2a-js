@@ -95,7 +95,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
     client = new JsonRpcTransport({
       endpoint: 'https://test-agent.example.com/api',
       fetchImpl: authHandlingFetch,
-      protocolVersion: '1.0',
     });
   });
 
@@ -215,7 +214,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
       const clientNoRetry = new JsonRpcTransport({
         endpoint: 'https://test-agent.example.com/api',
         fetchImpl: mockFetch,
-        protocolVersion: '1.0',
       });
 
       const messageParams = createMessageParams({
@@ -249,7 +247,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
       const clientAuthTest = new JsonRpcTransport({
         endpoint: 'https://test-agent.example.com/api',
         fetchImpl: authHandlingFetch,
-        protocolVersion: '1.0',
       });
 
       const messageParams = createMessageParams({
@@ -286,7 +283,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
       const clientNoAuth = new JsonRpcTransport({
         endpoint: 'https://test-agent.example.com/api',
         fetchImpl: noAuthRequiredFetch,
-        protocolVersion: '1.0',
       });
 
       const messageParams = createMessageParams({
@@ -320,7 +316,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
       const clientNoAuthHandler = new JsonRpcTransport({
         endpoint: 'https://test-agent.example.com/api',
         fetchImpl: fetchWithApiError,
-        protocolVersion: '1.0',
       });
 
       const messageParams = createMessageParams({
