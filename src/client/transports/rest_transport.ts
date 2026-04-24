@@ -9,9 +9,10 @@ import {
   UnsupportedOperationError,
   RequestMalformedError,
   ExtendedAgentCardNotConfiguredError,
+  VersionNotSupportedError,
 } from '../../errors.js';
 
-import { SendMessageResult } from '../../index.js';
+import { SendMessageResult, A2A_PROTOCOL_VERSION } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -67,6 +68,10 @@ export class RestTransport implements Transport {
 
   get protocolName(): string {
     return PROTOCOL_NAME;
+  }
+
+  get protocolVersion(): string {
+    return A2A_PROTOCOL_VERSION;
   }
 
   async getExtendedAgentCard(
@@ -413,6 +418,8 @@ export class RestTransport implements Transport {
           return new InvalidAgentResponseError(message);
         case 'ExtendedAgentCardNotConfiguredError':
           return new ExtendedAgentCardNotConfiguredError(message);
+        case 'VersionNotSupportedError':
+          return new VersionNotSupportedError(message);
         case 'RequestMalformedError':
           return new RequestMalformedError(message);
       }
@@ -434,6 +441,8 @@ export class RestTransport implements Transport {
           return new InvalidAgentResponseError(message);
         case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
           return new ExtendedAgentCardNotConfiguredError(message);
+        case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
+          return new VersionNotSupportedError(message);
       }
     }
 

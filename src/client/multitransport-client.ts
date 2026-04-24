@@ -1,3 +1,4 @@
+import { withA2AVersion } from './service-parameters.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
@@ -68,6 +69,15 @@ export interface RequestOptions {
 }
 
 export class Client {
+  /**
+   * The A2A protocol version sent with every request via the A2A-Version header.
+   * Determined by the transport, which receives the version from the matched
+   * AgentInterface during factory creation. Clients MUST send this header per §3.6.1.
+   */
+  public get protocolVersion(): string {
+    return this.transport.protocolVersion;
+  }
+
   constructor(
     public readonly transport: Transport,
     private agentCard: AgentCard,
@@ -124,7 +134,7 @@ export class Client {
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -293,7 +303,7 @@ export class Client {
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -353,6 +363,20 @@ export class Client {
     return result;
   }
 
+  /**
+   * Ensures the A2A-Version header is present in the request's service parameters.
+   * Per §3.6.1: "Clients MUST send the A2A-Version header with each request."
+   */
+  private withVersionHeader(options: RequestOptions | undefined): RequestOptions {
+    return {
+      ...options,
+      serviceParameters: ServiceParameters.createFrom(
+        options?.serviceParameters,
+        withA2AVersion(this.protocolVersion)
+      ),
+    };
+  }
+
   private async executeWithInterceptors<K extends keyof Client>(
     input: ClientCallInput<K>,
     options: RequestOptions | undefined,
@@ -364,7 +388,7 @@ export class Client {
     const beforeArgs: BeforeArgs<K> = {
       input: input,
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 

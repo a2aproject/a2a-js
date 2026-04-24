@@ -8,7 +8,12 @@
 import { Message, Task } from './types/pb/a2a.js';
 
 export * from './types/pb/a2a.js';
-export { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from './constants.js';
+export {
+  AGENT_CARD_PATH,
+  HTTP_EXTENSION_HEADER,
+  A2A_VERSION_HEADER,
+  A2A_PROTOCOL_VERSION,
+} from './constants.js';
 export { Extensions, type ExtensionURI } from './extensions.js';
 
 export type SendMessageResult = Message | Task;

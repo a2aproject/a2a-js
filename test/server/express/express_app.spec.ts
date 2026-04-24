@@ -165,7 +165,11 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('test-id');
 
-      const response = await request(expressApp).post('/').send(requestBody).expect(200);
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       assert.deepEqual(response.body, mockResponse);
       expect(handleStub).toHaveBeenCalledExactlyOnceWith(requestBody, expect.anything());
@@ -183,7 +187,11 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('stream-test', 'message/stream');
 
-      const response = await request(expressApp).post('/').send(requestBody).expect(200);
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       assert.include(response.headers['content-type'], 'text/event-stream');
       assert.equal(response.headers['cache-control'], 'no-cache');
@@ -206,7 +214,11 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('stream-error-test', 'message/stream');
 
-      const response = await request(expressApp).post('/').send(requestBody).expect(200);
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       const responseText = response.text;
       assert.include(responseText, 'event: error');
@@ -225,7 +237,11 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('immediate-stream-error-test', 'message/stream');
 
-      const response = await request(expressApp).post('/').send(requestBody).expect(200);
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       // Assert SSE headers and error event content
       assert.include(response.headers['content-type'], 'text/event-stream');
@@ -243,7 +259,11 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('error-test');
 
-      const response = await request(expressApp).post('/').send(requestBody).expect(500);
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(500);
 
       const expectedErrorResponse = {
         jsonrpc: '2.0',
@@ -263,7 +283,11 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest('generic-error-test');
 
-      const response = await request(expressApp).post('/').send(requestBody).expect(500);
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(500);
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.equal(response.body.id, 'generic-error-test');
@@ -276,7 +300,11 @@ describe('A2AExpressApp', () => {
 
       const requestBody = createRpcRequest(null);
 
-      const response = await request(expressApp).post('/').send(requestBody).expect(500);
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(500);
 
       assert.equal(response.body.id, null);
     });
@@ -294,6 +322,7 @@ describe('A2AExpressApp', () => {
 
       await request(expressApp)
         .post('/')
+        .set('A2A-Version', '1.0')
         .set(HTTP_EXTENSION_HEADER, uriExtensionsValues)
         .set('Not-Relevant-Header', 'unused-value')
         .send(requestBody)
@@ -329,6 +358,7 @@ describe('A2AExpressApp', () => {
       );
       const response = await request(expressApp)
         .post('/')
+        .set('A2A-Version', '1.0')
         .set(HTTP_EXTENSION_HEADER, uriExtensionsValues)
         .set('Not-Relevant-Header', 'unused-value')
         .send(requestBody)
@@ -377,7 +407,11 @@ describe('A2AExpressApp', () => {
       handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
-      await request(middlewareApp).post('/').send(requestBody).expect(200);
+      await request(middlewareApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       expect(handleStub).toHaveBeenCalledTimes(1);
       const serverCallContext = handleStub.mock.calls[0][1];
@@ -419,7 +453,11 @@ describe('A2AExpressApp', () => {
       handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
-      await request(middlewareApp).post('/').send(requestBody).expect(200);
+      await request(middlewareApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       expect(handleStub).toHaveBeenCalledTimes(1);
       const serverCallContext = handleStub.mock.calls[0][1];
@@ -469,7 +507,11 @@ describe('A2AExpressApp', () => {
       handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
-      await request(middlewareApp).post('/').send(requestBody).expect(200);
+      await request(middlewareApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       expect(handleStub).toHaveBeenCalledTimes(1);
       const serverCallContext = handleStub.mock.calls[0][1];
@@ -505,7 +547,11 @@ describe('A2AExpressApp', () => {
       handleStub.mockResolvedValue(mockResponse);
 
       const requestBody = createRpcRequest('test-id');
-      await request(middlewareApp).post('/').send(requestBody).expect(200);
+      await request(middlewareApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(requestBody)
+        .expect(200);
 
       expect(handleStub).toHaveBeenCalledTimes(1);
       const serverCallContext = handleStub.mock.calls[0][1];
@@ -539,7 +585,7 @@ describe('A2AExpressApp', () => {
         test: 'data',
       });
 
-      await request(jsonApp).post('/').send(requestBody).expect(200);
+      await request(jsonApp).post('/').set('A2A-Version', '1.0').send(requestBody).expect(200);
 
       expect(handleStub).toHaveBeenCalledExactlyOnceWith(requestBody, expect.anything());
     });
@@ -564,6 +610,48 @@ describe('A2AExpressApp', () => {
         },
       };
       assert.deepEqual(response.body, expectedErrorResponse);
+    });
+  });
+
+  describe('A2A-Version header validation', () => {
+    beforeEach(() => {
+      setupA2ARoutes(expressApp, mockRequestHandler);
+    });
+
+    it('should accept requests without A2A-Version header (defaults to 0.3)', async () => {
+      const response = await request(expressApp)
+        .post('/')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(500);
+
+      assert.equal(response.body.jsonrpc, '2.0');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
+    });
+
+    it('should accept requests with a supported A2A-Version header', async () => {
+      handleStub.mockResolvedValue({ jsonrpc: '2.0', id: '1', result: {} });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(200);
+
+      assert.equal(response.body.jsonrpc, '2.0');
+    });
+
+    it('should reject requests with an unsupported A2A-Version header', async () => {
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '9.9')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(500);
+
+      assert.equal(response.body.jsonrpc, '2.0');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
+      assert.include(response.body.error.message, '9.9');
     });
   });
 });

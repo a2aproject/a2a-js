@@ -1,4 +1,4 @@
-import { HTTP_EXTENSION_HEADER } from '../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../constants.js';
 import { Extensions } from '../extensions.js';
 
 export type ServiceParameters = Record<string, string>;
@@ -25,5 +25,15 @@ export const ServiceParameters = {
 export function withA2AExtensions(...extensions: Extensions): ServiceParametersUpdate {
   return (parameters: ServiceParameters) => {
     parameters[HTTP_EXTENSION_HEADER] = Extensions.toServiceParameter(extensions);
+  };
+}
+
+/**
+ * Creates a {@link ServiceParametersUpdate} that sets the A2A-Version header.
+ * Per §3.6.1: "Clients MUST send the A2A-Version header with each request."
+ */
+export function withA2AVersion(version: string): ServiceParametersUpdate {
+  return (parameters: ServiceParameters) => {
+    parameters[A2A_VERSION_HEADER] = version;
   };
 }
