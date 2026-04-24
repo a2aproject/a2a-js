@@ -366,26 +366,8 @@ async function main() {
         protocolVersion: '1.0',
       },
       {
-        url: `http://127.0.0.1:${httpPort}/jsonrpc`,
-        protocolBinding: 'JSONRPC',
-        tenant: '',
-        protocolVersion: '0.3',
-      },
-      {
         url: `127.0.0.1:${grpcPort}`,
         protocolBinding: 'GRPC',
-        tenant: '',
-        protocolVersion: '1.0',
-      },
-      {
-        url: `127.0.0.1:${grpcPort}`,
-        protocolBinding: 'GRPC',
-        tenant: '',
-        protocolVersion: '0.3',
-      },
-      {
-        url: `http://127.0.0.1:${httpPort}/rest`,
-        protocolBinding: 'HTTP+JSON',
         tenant: '',
         protocolVersion: '1.0',
       },
@@ -393,7 +375,7 @@ async function main() {
         url: `http://127.0.0.1:${httpPort}/rest`,
         protocolBinding: 'HTTP+JSON',
         tenant: '',
-        protocolVersion: '0.3',
+        protocolVersion: '1.0',
       },
     ],
     provider: {
