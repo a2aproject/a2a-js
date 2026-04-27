@@ -2,15 +2,15 @@ name: Run TCK
 
 on:
   push:
-    branches: [ "main", "epic" ]
-  pull_request:
-    branches: [ "main", "epic" ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.github/CODEOWNERS'
-      - 'test/**'
-      - 'src/samples/**'
+    # branches: [ "main", "epic" ]
+  # pull_request:
+  #   branches: [ "main", "epic" ]
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'LICENSE'
+  #     - '.github/CODEOWNERS'
+  #     - 'test/**'
+  #     - 'src/samples/**'
 
 
 env:
