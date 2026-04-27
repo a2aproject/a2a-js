@@ -24,38 +24,10 @@ import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
 import { FromProto } from '../../../types/converters/from_proto.js';
 
-import {
-  ExtendedAgentCardNotConfiguredError,
-  PushNotificationNotSupportedError,
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  UnsupportedOperationError,
-  RequestMalformedError,
-  ContentTypeNotSupportedError,
-  InvalidAgentResponseError,
-  ExtensionSupportRequiredError,
-  VersionNotSupportedError,
-  GenericError,
-  A2A_REASON_TO_ERROR,
-  ERROR_INFO_TYPE,
-} from '../../../errors.js';
+import { A2A_REASON_TO_ERROR_CLASS, ERROR_INFO_TYPE } from '../../../errors.js';
 import { decodeStatus, decodeErrorInfo } from '../../../server/grpc/error_details.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'GRPC';
-
-const ERROR_CLASS_MAP: Record<string, new (message?: string) => Error> = {
-  TASK_NOT_FOUND: TaskNotFoundError,
-  TASK_NOT_CANCELABLE: TaskNotCancelableError,
-  PUSH_NOTIFICATION_NOT_SUPPORTED: PushNotificationNotSupportedError,
-  UNSUPPORTED_OPERATION: UnsupportedOperationError,
-  CONTENT_TYPE_NOT_SUPPORTED: ContentTypeNotSupportedError,
-  INVALID_AGENT_RESPONSE: InvalidAgentResponseError,
-  EXTENDED_AGENT_CARD_NOT_CONFIGURED: ExtendedAgentCardNotConfiguredError,
-  EXTENSION_SUPPORT_REQUIRED: ExtensionSupportRequiredError,
-  VERSION_NOT_SUPPORTED: VersionNotSupportedError,
-  INVALID_PARAMS: RequestMalformedError,
-  INTERNAL_ERROR: GenericError,
-};
 
 type GrpcUnaryCall<TReq, TRes> = (
   request: TReq,
@@ -347,10 +319,8 @@ export class GrpcTransport implements Transport {
     for (const detail of status.details) {
       if (detail.typeUrl === ERROR_INFO_TYPE) {
         const errorInfo = decodeErrorInfo(detail.value);
-        const className = A2A_REASON_TO_ERROR[errorInfo.reason];
-        if (!className) return undefined;
 
-        const ErrorClass = ERROR_CLASS_MAP[errorInfo.reason];
+        const ErrorClass = A2A_REASON_TO_ERROR_CLASS[errorInfo.reason];
         if (!ErrorClass) return undefined;
 
         return new ErrorClass(error.details);

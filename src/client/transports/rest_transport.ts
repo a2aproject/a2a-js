@@ -1,11 +1,10 @@
 import { TransportProtocolName } from '../../core.js';
 import {
   A2A_ERROR_CODE,
-  A2A_REASON_TO_ERROR,
+  A2A_NAME_TO_ERROR_CLASS,
+  A2A_REASON_TO_ERROR_CLASS,
   ERROR_INFO_TYPE,
   ContentTypeNotSupportedError,
-  ExtensionSupportRequiredError,
-  GenericError,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,
   TaskNotFoundError,
@@ -436,24 +435,20 @@ export class RestTransport implements Transport {
   private static mapToError(error: RestErrorResponse, status?: number): Error {
     const message = error.message || 'Unknown error';
 
-    // Strategy 1: Enriched format – extract reason from google.rpc.ErrorInfo details.
+    // Strategy 1: Enriched format — extract reason from google.rpc.ErrorInfo details.
     const details = error.error?.details;
     if (Array.isArray(details)) {
       const errorInfo = details.find((d) => d['@type'] === ERROR_INFO_TYPE);
       if (errorInfo && typeof errorInfo['reason'] === 'string') {
-        const reason = errorInfo['reason'] as string;
-        const errorClassName = A2A_REASON_TO_ERROR[reason];
-        if (errorClassName) {
-          const mapped = RestTransport._constructErrorByName(errorClassName, message);
-          if (mapped) return mapped;
-        }
+        const ErrorClass = A2A_REASON_TO_ERROR_CLASS[errorInfo['reason'] as string];
+        if (ErrorClass) return new ErrorClass(message);
       }
     }
 
-    // Strategy 2: Legacy flat format – match by error class name.
+    // Strategy 2: Legacy flat format — match by error class name.
     if (error.name) {
-      const mapped = RestTransport._constructErrorByName(error.name, message);
-      if (mapped) return mapped;
+      const ErrorClass = A2A_NAME_TO_ERROR_CLASS[error.name];
+      if (ErrorClass) return new ErrorClass(message);
     }
 
     // Strategy 3: Legacy JSON-RPC error code.
@@ -486,39 +481,6 @@ export class RestTransport implements Transport {
     return new Error(
       `REST error: ${error.name || 'Error'} - ${message}${status ? ` (Status: ${status})` : ''}${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
     );
-  }
-
-  /**
-   * Constructs an SDK error instance by its class name, or returns undefined
-   * if the name is not recognized.
-   */
-  private static _constructErrorByName(name: string, message: string): Error | undefined {
-    switch (name) {
-      case 'TaskNotFoundError':
-        return new TaskNotFoundError(message);
-      case 'TaskNotCancelableError':
-        return new TaskNotCancelableError(message);
-      case 'PushNotificationNotSupportedError':
-        return new PushNotificationNotSupportedError(message);
-      case 'UnsupportedOperationError':
-        return new UnsupportedOperationError(message);
-      case 'ContentTypeNotSupportedError':
-        return new ContentTypeNotSupportedError(message);
-      case 'InvalidAgentResponseError':
-        return new InvalidAgentResponseError(message);
-      case 'ExtendedAgentCardNotConfiguredError':
-        return new ExtendedAgentCardNotConfiguredError(message);
-      case 'ExtensionSupportRequiredError':
-        return new ExtensionSupportRequiredError(message);
-      case 'VersionNotSupportedError':
-        return new VersionNotSupportedError(message);
-      case 'RequestMalformedError':
-        return new RequestMalformedError(message);
-      case 'GenericError':
-        return new GenericError(message);
-      default:
-        return undefined;
-    }
   }
 }
 

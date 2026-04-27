@@ -230,3 +230,35 @@ export class VersionNotSupportedError extends Error {
     this.name = 'VersionNotSupportedError';
   }
 }
+
+/**
+ * Maps UPPER_SNAKE_CASE reason codes to error class constructors.
+ * Used by client transports to reconstruct SDK error instances from
+ * `google.rpc.ErrorInfo.reason` values received in error responses.
+ */
+export const A2A_REASON_TO_ERROR_CLASS: Record<string, new (message?: string) => Error> = {
+  TASK_NOT_FOUND: TaskNotFoundError,
+  TASK_NOT_CANCELABLE: TaskNotCancelableError,
+  PUSH_NOTIFICATION_NOT_SUPPORTED: PushNotificationNotSupportedError,
+  UNSUPPORTED_OPERATION: UnsupportedOperationError,
+  CONTENT_TYPE_NOT_SUPPORTED: ContentTypeNotSupportedError,
+  INVALID_AGENT_RESPONSE: InvalidAgentResponseError,
+  EXTENDED_AGENT_CARD_NOT_CONFIGURED: ExtendedAgentCardNotConfiguredError,
+  EXTENSION_SUPPORT_REQUIRED: ExtensionSupportRequiredError,
+  VERSION_NOT_SUPPORTED: VersionNotSupportedError,
+  INVALID_PARAMS: RequestMalformedError,
+  INTERNAL_ERROR: GenericError,
+};
+
+/**
+ * Maps error class names to error class constructors.
+ * Used by client transports to reconstruct SDK error instances from
+ * legacy error responses that include the error class name.
+ */
+export const A2A_NAME_TO_ERROR_CLASS: Record<string, new (message?: string) => Error> =
+  Object.fromEntries(
+    Object.entries(A2A_ERROR_REASON).map(([name, reason]) => [
+      name,
+      A2A_REASON_TO_ERROR_CLASS[reason],
+    ])
+  );
