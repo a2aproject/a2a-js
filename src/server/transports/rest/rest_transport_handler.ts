@@ -23,13 +23,20 @@ import {
   ListTaskPushNotificationConfigsResponse,
 } from '../../../index.js';
 import {
+  buildErrorInfo,
+  ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
+  getGrpcStatusName,
+  InvalidAgentResponseError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
   VersionNotSupportedError,
+  type ErrorDetail,
+  type RestErrorBody,
 } from '../../../errors.js';
 
 // ============================================================================
@@ -53,39 +60,69 @@ export const HTTP_STATUS = {
 } as const;
 
 /**
- * Maps varying errors to appropriate HTTP status codes.
+ * Maps error instances to appropriate HTTP status codes per §5.4.
  *
  * @param error - The actual error instance
  * @returns Corresponding HTTP status code
  */
 export function mapErrorToStatus(error: unknown): number {
-  if (error instanceof RequestMalformedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof TaskNotFoundError) return HTTP_STATUS.NOT_FOUND;
-  if (error instanceof TaskNotCancelableError) return HTTP_STATUS.CONFLICT;
+  if (error instanceof TaskNotCancelableError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof ContentTypeNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof InvalidAgentResponseError) return HTTP_STATUS.INTERNAL_SERVER_ERROR;
   if (error instanceof ExtendedAgentCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof ExtensionSupportRequiredError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof VersionNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof RequestMalformedError) return HTTP_STATUS.BAD_REQUEST;
   return HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 
 // ============================================================================
-// HTTP Error Conversion
+// HTTP Error Conversion (google.rpc.Status JSON per §11.6)
 // ============================================================================
 
 /**
- * Converts any Error to an HTTP+JSON transport format.
+ * Converts any Error to a `google.rpc.Status` JSON response body per §11.6.
+ *
+ * The response structure is:
+ * ```json
+ * {
+ *   "error": {
+ *     "code": <HTTP status code>,
+ *     "status": "<gRPC status name>",
+ *     "message": "<human-readable message>",
+ *     "details": [
+ *       { "@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "...", "domain": "a2a-protocol.org" }
+ *     ]
+ *   }
+ * }
+ * ```
  *
  * @param error - The error to convert
- * @returns Error payload
+ * @param httpStatus - The HTTP status code for this error
+ * @returns `google.rpc.Status` JSON body
  */
-export function toHTTPError(error: unknown): {
-  name: string;
-  message: string;
-} {
+export function toHTTPError(error: unknown, httpStatus: number): RestErrorBody {
+  const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
+  const status = getGrpcStatusName(error, httpStatus);
+  const details: ErrorDetail[] = [];
+
+  if (error instanceof Error) {
+    const errorInfo = buildErrorInfo(error);
+    if (errorInfo) {
+      details.push(errorInfo);
+    }
+  }
+
   return {
-    name: error instanceof Error ? error.name : 'Error',
-    message: error instanceof Error ? error.message : 'An unexpected error occurred.',
+    error: {
+      code: httpStatus,
+      status,
+      message,
+      details,
+    },
   };
 }
 

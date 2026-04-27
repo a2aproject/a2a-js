@@ -57,7 +57,9 @@ const restErrorHandler: ErrorRequestHandler = (
   next: NextFunction
 ) => {
   if (err instanceof SyntaxError && 'body' in err) {
-    return res.status(400).json(toHTTPError(new RequestMalformedError('Invalid JSON payload.')));
+    return res
+      .status(400)
+      .json(toHTTPError(new RequestMalformedError('Invalid JSON payload.'), 400));
   }
   next(err);
 };
@@ -199,7 +201,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     } catch (error) {
       // Early error - return proper HTTP error
       setExtensionsHeader(res, context);
-      res.status(mapErrorToStatus(error)).json(toHTTPError(error));
+      const statusCode = mapErrorToStatus(error);
+      res.status(statusCode).json(toHTTPError(error, statusCode));
       return;
     }
 
@@ -223,7 +226,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     } catch (streamError: unknown) {
       console.error('SSE streaming error:', streamError);
       if (!res.writableEnded) {
-        res.write(formatSSEErrorEvent(toHTTPError(streamError)));
+        res.write(formatSSEErrorEvent(toHTTPError(streamError, mapErrorToStatus(streamError))));
       }
     } finally {
       if (!res.writableEnded) {
@@ -248,7 +251,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       return;
     }
     const statusCode = mapErrorToStatus(error);
-    res.status(statusCode).json(toHTTPError(error));
+    res.status(statusCode).json(toHTTPError(error, statusCode));
   };
 
   /**

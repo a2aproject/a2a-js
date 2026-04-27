@@ -23,10 +23,12 @@ import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { ServerCallContext } from '../context.js';
 import { Extensions } from '../../extensions.js';
+import { buildGrpcErrorMetadata } from './error_details.js';
 import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import {
   ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   RequestMalformedError,
@@ -222,28 +224,43 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
 // --- Internal Helpers ---
 
 /**
- * Maps A2AError or standard Error to gRPC Status codes
+ * Maps an error to a gRPC error with status details per §10.6.
+ *
+ * For A2A-specific errors, includes a `google.rpc.ErrorInfo` in the
+ * `grpc-status-details-bin` trailing metadata with `reason` and `domain`.
  */
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   let code = grpc.status.UNKNOWN;
   if (error instanceof TaskNotFoundError) code = grpc.status.NOT_FOUND;
   else if (error instanceof TaskNotCancelableError) code = grpc.status.FAILED_PRECONDITION;
-  else if (error instanceof PushNotificationNotSupportedError) code = grpc.status.UNIMPLEMENTED;
-  else if (error instanceof UnsupportedOperationError) code = grpc.status.UNIMPLEMENTED;
+  else if (error instanceof PushNotificationNotSupportedError)
+    code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof UnsupportedOperationError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof ContentTypeNotSupportedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
   else if (error instanceof ExtendedAgentCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof ExtensionSupportRequiredError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof VersionNotSupportedError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof GenericError) code = grpc.status.INTERNAL;
 
   const message = error instanceof Error ? error.message : 'Internal server error';
 
-  return {
+  const result: Partial<grpc.ServiceError> = {
     code,
     details: message,
   };
+
+  // Attach google.rpc.ErrorInfo in grpc-status-details-bin metadata
+  if (error instanceof Error) {
+    const errorMetadata = buildGrpcErrorMetadata(code, message, error);
+    if (errorMetadata) {
+      result.metadata = errorMetadata;
+    }
+  }
+
+  return result;
 };
 
 const _buildContext = async (

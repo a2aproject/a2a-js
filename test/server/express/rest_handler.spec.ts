@@ -151,8 +151,9 @@ describe('restHandler', () => {
         .set('A2A-Version', '1.0')
         .expect(400);
 
-      assert.property(response.body, 'name');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 400);
+      assert.equal(response.body.error.details[0].reason, 'INVALID_PARAMS');
     });
   });
 
@@ -261,11 +262,14 @@ describe('restHandler', () => {
         })
       );
 
-      await request(noStreamApp)
+      const response = await request(noStreamApp)
         .post('/message:stream')
         .set('A2A-Version', '1.0')
         .send({ request: testMessage })
         .expect(400);
+
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'UNSUPPORTED_OPERATION');
     });
   });
 
@@ -322,8 +326,9 @@ describe('restHandler', () => {
         .set('A2A-Version', '1.0')
         .expect(404);
 
-      assert.property(response.body, 'name');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 404);
+      assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
     });
   });
 
@@ -356,11 +361,12 @@ describe('restHandler', () => {
         .set('A2A-Version', '1.0')
         .expect(404);
 
-      assert.property(response.body, 'name');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 404);
+      assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
     });
 
-    it('should return 409 if task is not cancelable', async () => {
+    it('should return 400 if task is not cancelable', async () => {
       (mockRequestHandler.cancelTask as Mock).mockRejectedValue(
         new TaskNotCancelableError('task-1')
       );
@@ -368,10 +374,10 @@ describe('restHandler', () => {
       const response = await request(app)
         .post('/tasks/task-1:cancel')
         .set('A2A-Version', '1.0')
-        .expect(409);
+        .expect(400);
 
-      assert.property(response.body, 'name');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'TASK_NOT_CANCELABLE');
     });
   });
 
@@ -469,8 +475,8 @@ describe('restHandler', () => {
         .set('A2A-Version', '1.0')
         .expect(400);
 
-      assert.property(response.body, 'name');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'UNSUPPORTED_OPERATION');
     });
   });
 
@@ -602,8 +608,9 @@ describe('restHandler', () => {
           .set('A2A-Version', '1.0')
           .expect(404);
 
-        assert.property(response.body, 'name');
-        assert.property(response.body, 'message');
+        assert.property(response.body, 'error');
+        assert.equal(response.body.error.code, 404);
+        assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
       });
     });
 
@@ -636,8 +643,9 @@ describe('restHandler', () => {
           .set('A2A-Version', '1.0')
           .expect(404);
 
-        assert.property(response.body, 'name');
-        assert.property(response.body, 'message');
+        assert.property(response.body, 'error');
+        assert.equal(response.body.error.code, 404);
+        assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
       });
     });
   });
@@ -775,9 +783,9 @@ describe('restHandler', () => {
         .send({ message: messageProto })
         .expect(500);
 
-      assert.property(response.body, 'name');
-      assert.property(response.body, 'message');
-      assert.deepEqual(response.body.name, 'Error'); // Generic Error instance
+      assert.property(response.body, 'error');
+      assert.property(response.body.error, 'message');
+      assert.equal(response.body.error.code, 500);
     });
   });
 
@@ -785,8 +793,8 @@ describe('restHandler', () => {
     it('should reject requests without A2A-Version header (defaults to 0.3, not supported)', async () => {
       const response = await request(app).get('/tasks/task-1').expect(400);
 
-      assert.property(response.body, 'name');
-      assert.equal(response.body.name, 'VersionNotSupportedError');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
     });
 
     it('should accept requests with a supported A2A-Version header', async () => {
@@ -801,9 +809,9 @@ describe('restHandler', () => {
         .set('A2A-Version', '9.9')
         .expect(400);
 
-      assert.property(response.body, 'name');
-      assert.equal(response.body.name, 'VersionNotSupportedError');
-      assert.include(response.body.message, '9.9');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
+      assert.include(response.body.error.message, '9.9');
     });
   });
 });

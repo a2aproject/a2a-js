@@ -28,6 +28,8 @@ import {
   GenericError,
   VersionNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
+  buildErrorInfo,
+  type ErrorDetail,
 } from '../../../errors.js';
 import { JSONRPCErrorResponse } from '../../../core.js';
 
@@ -286,39 +288,31 @@ export class JsonRpcTransportHandler {
     return true;
   }
 
-  public static mapToJSONRPCError(error: unknown) {
-    if (error instanceof TaskNotFoundError) {
-      return { code: A2A_ERROR_CODE.TASK_NOT_FOUND, message: error.message };
-    }
-    if (error instanceof TaskNotCancelableError) {
-      return { code: A2A_ERROR_CODE.TASK_NOT_CANCELABLE, message: error.message };
-    }
-    if (error instanceof PushNotificationNotSupportedError) {
-      return { code: A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED, message: error.message };
-    }
-    if (error instanceof UnsupportedOperationError) {
-      return { code: A2A_ERROR_CODE.UNSUPPORTED_OPERATION, message: error.message };
-    }
-    if (error instanceof ContentTypeNotSupportedError) {
-      return { code: A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED, message: error.message };
-    }
-    if (error instanceof InvalidAgentResponseError) {
-      return { code: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE, message: error.message };
-    }
-    if (error instanceof ExtendedAgentCardNotConfiguredError) {
-      return {
-        code: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
-        message: error.message,
-      };
-    }
-    if (error instanceof VersionNotSupportedError) {
-      return { code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED, message: error.message };
-    }
-    if (error instanceof RequestMalformedError) {
-      return { code: A2A_ERROR_CODE.INVALID_PARAMS, message: error.message };
-    }
-    if (error instanceof GenericError) {
-      return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message: error.message };
+  public static mapToJSONRPCError(error: unknown): {
+    code: number;
+    message: string;
+    data?: ErrorDetail[];
+  } {
+    const codeMap: Array<[abstract new (...args: never[]) => Error, number]> = [
+      [TaskNotFoundError, A2A_ERROR_CODE.TASK_NOT_FOUND],
+      [TaskNotCancelableError, A2A_ERROR_CODE.TASK_NOT_CANCELABLE],
+      [PushNotificationNotSupportedError, A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED],
+      [UnsupportedOperationError, A2A_ERROR_CODE.UNSUPPORTED_OPERATION],
+      [ContentTypeNotSupportedError, A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED],
+      [InvalidAgentResponseError, A2A_ERROR_CODE.INVALID_AGENT_RESPONSE],
+      [ExtendedAgentCardNotConfiguredError, A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED],
+      [VersionNotSupportedError, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED],
+      [RequestMalformedError, A2A_ERROR_CODE.INVALID_PARAMS],
+      [GenericError, A2A_ERROR_CODE.INTERNAL_ERROR],
+    ];
+
+    for (const [ErrorClass, code] of codeMap) {
+      if (error instanceof ErrorClass) {
+        const data: ErrorDetail[] = [];
+        const errorInfo = buildErrorInfo(error);
+        if (errorInfo) data.push(errorInfo);
+        return { code, message: error.message, ...(data.length > 0 ? { data } : {}) };
+      }
     }
 
     const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
