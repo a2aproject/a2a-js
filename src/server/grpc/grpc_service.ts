@@ -27,6 +27,7 @@ import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import {
   ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   RequestMalformedError,
@@ -234,6 +235,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
   else if (error instanceof ExtendedAgentCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof ExtensionSupportRequiredError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof VersionNotSupportedError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof GenericError) code = grpc.status.INTERNAL;
