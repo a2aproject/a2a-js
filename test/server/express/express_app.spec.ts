@@ -271,6 +271,13 @@ describe('A2AExpressApp', () => {
         error: {
           code: -32603,
           message: 'Processing error',
+          data: [
+            {
+              '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+              reason: 'INTERNAL_ERROR',
+              domain: 'a2a-protocol.org',
+            },
+          ],
         },
       };
 
@@ -607,6 +614,13 @@ describe('A2AExpressApp', () => {
         error: {
           code: A2A_ERROR_CODE.INVALID_PARAMS,
           message: 'Invalid JSON payload.',
+          data: [
+            {
+              '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+              reason: 'INVALID_PARAMS',
+              domain: 'a2a-protocol.org',
+            },
+          ],
         },
       };
       assert.deepEqual(response.body, expectedErrorResponse);

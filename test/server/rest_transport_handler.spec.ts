@@ -107,7 +107,7 @@ describe('RestTransportHandler', () => {
     it.each([
       [new RequestMalformedError(''), HTTP_STATUS.BAD_REQUEST],
       [new TaskNotFoundError(''), HTTP_STATUS.NOT_FOUND],
-      [new TaskNotCancelableError(''), HTTP_STATUS.CONFLICT],
+      [new TaskNotCancelableError(''), HTTP_STATUS.BAD_REQUEST],
       [new PushNotificationNotSupportedError(''), HTTP_STATUS.BAD_REQUEST],
       [new UnsupportedOperationError(''), HTTP_STATUS.BAD_REQUEST],
       [new Error(''), HTTP_STATUS.INTERNAL_SERVER_ERROR],
@@ -117,12 +117,19 @@ describe('RestTransportHandler', () => {
   });
 
   describe('toHTTPError', () => {
-    it('should convert A2AError to HTTP error format', () => {
+    it('should convert A2AError to google.rpc.Status JSON format', () => {
       const error = new RequestMalformedError('Invalid input');
-      const httpError = toHTTPError(error);
+      const httpError = toHTTPError(error, 400);
 
-      expect(httpError.name).to.equal('RequestMalformedError');
-      expect(httpError.message).to.equal('Invalid input');
+      expect(httpError.error.code).to.equal(400);
+      expect(httpError.error.status).to.equal('INVALID_ARGUMENT');
+      expect(httpError.error.message).to.equal('Invalid input');
+      expect(httpError.error.details).to.be.an('array');
+      expect(httpError.error.details[0]).to.deep.include({
+        '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+        reason: 'INVALID_PARAMS',
+        domain: 'a2a-protocol.org',
+      });
     });
   });
 

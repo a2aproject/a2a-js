@@ -1,6 +1,9 @@
 import { TransportProtocolName } from '../../core.js';
 import {
   A2A_ERROR_CODE,
+  A2A_NAME_TO_ERROR_CLASS,
+  A2A_REASON_TO_ERROR_CLASS,
+  ERROR_INFO_TYPE,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,
@@ -46,11 +49,19 @@ export interface RestTransportOptions {
   fetchImpl?: typeof fetch;
 }
 
+interface RestRpcStatus {
+  code?: number;
+  status?: string;
+  message?: string;
+  details?: Array<Record<string, unknown>>;
+}
+
 interface RestErrorResponse {
   name?: string;
   message?: string;
   code?: number;
   data?: Record<string, unknown>;
+  error?: RestRpcStatus;
 }
 
 export class RestTransport implements Transport {
@@ -336,6 +347,18 @@ export class RestTransport implements Transport {
       );
     }
 
+    // Try enriched format: { error: { code, status, message, details } }
+    if (errorBody?.error && typeof errorBody.error === 'object') {
+      const rpcStatus = errorBody.error;
+      const enriched: RestErrorResponse = {
+        message: rpcStatus.message,
+        code: rpcStatus.code,
+        error: rpcStatus,
+      };
+      throw RestTransport.mapToError(enriched, response.status);
+    }
+
+    // Fall back to legacy flat format: { name, message, code }
     if (errorBody && (typeof errorBody.name === 'string' || typeof errorBody.code === 'number')) {
       throw RestTransport.mapToError(errorBody, response.status);
     }
@@ -376,7 +399,17 @@ export class RestTransport implements Transport {
 
     for await (const event of parseSseStream(response)) {
       if (event.type === 'error') {
-        const errorData = JSON.parse(event.data);
+        const errorData = JSON.parse(event.data) as RestErrorResponse;
+        // Handle enriched SSE error format: { error: { ... } }
+        if (errorData.error && typeof errorData.error === 'object') {
+          const rpcStatus = errorData.error;
+          const enriched: RestErrorResponse = {
+            message: rpcStatus.message,
+            code: rpcStatus.code,
+            error: rpcStatus,
+          };
+          throw RestTransport.mapToError(enriched);
+        }
         throw RestTransport.mapToError(errorData);
       }
       yield this._processSseEventData(event.data);
@@ -402,29 +435,23 @@ export class RestTransport implements Transport {
   private static mapToError(error: RestErrorResponse, status?: number): Error {
     const message = error.message || 'Unknown error';
 
-    if (error.name) {
-      switch (error.name) {
-        case 'TaskNotFoundError':
-          return new TaskNotFoundError(message);
-        case 'TaskNotCancelableError':
-          return new TaskNotCancelableError(message);
-        case 'PushNotificationNotSupportedError':
-          return new PushNotificationNotSupportedError(message);
-        case 'UnsupportedOperationError':
-          return new UnsupportedOperationError(message);
-        case 'ContentTypeNotSupportedError':
-          return new ContentTypeNotSupportedError(message);
-        case 'InvalidAgentResponseError':
-          return new InvalidAgentResponseError(message);
-        case 'ExtendedAgentCardNotConfiguredError':
-          return new ExtendedAgentCardNotConfiguredError(message);
-        case 'VersionNotSupportedError':
-          return new VersionNotSupportedError(message);
-        case 'RequestMalformedError':
-          return new RequestMalformedError(message);
+    // Strategy 1: Enriched format — extract reason from google.rpc.ErrorInfo details.
+    const details = error.error?.details;
+    if (Array.isArray(details)) {
+      const errorInfo = details.find((d) => d['@type'] === ERROR_INFO_TYPE);
+      if (errorInfo && typeof errorInfo['reason'] === 'string') {
+        const ErrorClass = A2A_REASON_TO_ERROR_CLASS[errorInfo['reason'] as string];
+        if (ErrorClass) return new ErrorClass(message);
       }
     }
 
+    // Strategy 2: Legacy flat format — match by error class name.
+    if (error.name) {
+      const ErrorClass = A2A_NAME_TO_ERROR_CLASS[error.name];
+      if (ErrorClass) return new ErrorClass(message);
+    }
+
+    // Strategy 3: Legacy JSON-RPC error code.
     if (error.code !== undefined) {
       switch (error.code) {
         case A2A_ERROR_CODE.TASK_NOT_FOUND:
@@ -446,6 +473,7 @@ export class RestTransport implements Transport {
       }
     }
 
+    // Strategy 4: Infer from HTTP status code.
     if (status === 400) return new RequestMalformedError(message);
     if (status === 404) return new TaskNotFoundError(message);
     if (status === 409) return new TaskNotCancelableError(message);
