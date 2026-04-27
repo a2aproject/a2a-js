@@ -2,20 +2,20 @@ name: Run TCK
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.github/CODEOWNERS'
-      - 'test/**'
-      - 'src/samples/**'
+    # branches: [ "main", "epic" ]
+  # pull_request:
+  #   branches: [ "main", "epic" ]
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'LICENSE'
+  #     - '.github/CODEOWNERS'
+  #     - 'test/**'
+  #     - 'src/samples/**'
 
 
 env:
   # Tag of the TCK
-  TCK_VERSION: 0.3.0.beta3
+  TCK_VERSION: 1.0-dev
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
   # Base URL for the SUT agent
