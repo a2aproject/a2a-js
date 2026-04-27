@@ -1,28 +1,38 @@
-import { TaskPushNotificationConfig, Task, AgentCard } from '../../index.js';
 import {
+  TaskPushNotificationConfig,
+  Task,
+  AgentCard,
+  StreamResponse,
   SendMessageRequest,
   CancelTaskRequest,
   ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   SubscribeToTaskRequest,
-  A2AStreamEventData,
   SendMessageResult,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 
 export interface Transport {
   get protocolName(): string;
+  get protocolVersion(): string;
 
-  getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard>;
+  getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard>;
 
   sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult>;
 
   sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined>;
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 
   createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
@@ -37,7 +47,7 @@ export interface Transport {
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]>;
+  ): Promise<ListTaskPushNotificationConfigsResponse>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,
@@ -48,10 +58,12 @@ export interface Transport {
 
   cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task>;
 
+  listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse>;
+
   resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined>;
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 }
 
 export interface TransportFactory {

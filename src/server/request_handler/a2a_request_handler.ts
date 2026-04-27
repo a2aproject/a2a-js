@@ -2,64 +2,64 @@ import {
   Message,
   AgentCard,
   Task,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
   TaskPushNotificationConfig,
   ListTaskPushNotificationConfigsRequest,
   GetTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
+  GetExtendedAgentCardRequest,
   CancelTaskRequest,
   GetTaskRequest,
   SubscribeToTaskRequest,
   SendMessageRequest,
   ListTasksRequest,
   ListTasksResponse,
+  ListTaskPushNotificationConfigsResponse,
+  StreamResponse,
 } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
 export interface A2ARequestHandler {
   getAgentCard(): Promise<AgentCard>;
 
-  getAuthenticatedExtendedAgentCard(context?: ServerCallContext): Promise<AgentCard>;
+  getAuthenticatedExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    context: ServerCallContext
+  ): Promise<AgentCard>;
 
-  sendMessage(params: SendMessageRequest, context?: ServerCallContext): Promise<Message | Task>;
+  sendMessage(params: SendMessageRequest, context: ServerCallContext): Promise<Message | Task>;
 
   sendMessageStream(
     params: SendMessageRequest,
-    context?: ServerCallContext
-  ): AsyncGenerator<
-    Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent,
-    void,
-    undefined
-  >;
+    context: ServerCallContext
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 
-  getTask(params: GetTaskRequest, context?: ServerCallContext): Promise<Task>;
-  cancelTask(params: CancelTaskRequest, context?: ServerCallContext): Promise<Task>;
+  getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task>;
+  cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task>;
 
   createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<TaskPushNotificationConfig>;
 
   getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<TaskPushNotificationConfig>;
 
   listTaskPushNotificationConfigs(
     params: ListTaskPushNotificationConfigsRequest,
-    context?: ServerCallContext
-  ): Promise<TaskPushNotificationConfig[]>;
+    context: ServerCallContext
+  ): Promise<ListTaskPushNotificationConfigsResponse>;
 
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,
-    context?: ServerCallContext
+    context: ServerCallContext
   ): Promise<void>;
 
   resubscribe(
     params: SubscribeToTaskRequest,
-    context?: ServerCallContext
-  ): AsyncGenerator<Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, void, undefined>;
+    context: ServerCallContext
+  ): AsyncGenerator<StreamResponse, void, undefined>;
 
-  listTasks(params: ListTasksRequest, context?: ServerCallContext): Promise<ListTasksResponse>;
+  listTasks(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse>;
 }

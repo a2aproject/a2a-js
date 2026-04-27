@@ -5,7 +5,6 @@ import {
   GrpcTransportFactory,
 } from '../../../src/client/transports/grpc/grpc_transport.js';
 import { A2AServiceClient } from '../../../src/grpc/pb/a2a.js';
-import { FromProto } from '../../../src/types/converters/from_proto.js';
 import {
   TaskNotFoundError,
   TaskNotCancelableError,
@@ -38,25 +37,10 @@ vi.mock('../../../src/grpc/pb/a2a.js', () => {
   return { A2AServiceClient };
 });
 
-// Mock ToProto and FromProto to act as pass-throughs or return simple objects for testing flow
-vi.mock('../../../src/types/converters/to_proto.js', () => ({
-  ToProto: {
-    taskPushNotificationConfig: vi.fn((x) => x),
-  },
-}));
-
+// Mock FromProto to act as pass-through for testing transport flow
 vi.mock('../../../src/types/converters/from_proto.js', () => ({
   FromProto: {
-    agentCard: vi.fn((x) => x),
     sendMessageResult: vi.fn((x) => x),
-    message: vi.fn((x) => x),
-    getTaskPushNotificationConfig: vi.fn((x) => x),
-    listTaskPushNotificationConfig: vi.fn((x) => x),
-    task: vi.fn((x) => x),
-    taskStatusUpdate: vi.fn((x) => x),
-    taskArtifactUpdate: vi.fn((x) => x),
-    taskPushNotificationConfig: vi.fn((x) => x),
-    messageStreamResult: vi.fn((x) => x),
   },
 }));
 
@@ -105,7 +89,7 @@ describe('GrpcTransport', () => {
       const mockCard = createMockAgentCard();
       mockUnarySuccess(mockGrpcClient.getExtendedAgentCard as Mock, mockCard);
 
-      const result = await transport.getExtendedAgentCard();
+      const result = await transport.getExtendedAgentCard({ tenant: '' });
 
       expect(result).toEqual(mockCard);
       expect(mockGrpcClient.getExtendedAgentCard).toHaveBeenCalled();
@@ -175,7 +159,7 @@ describe('GrpcTransport', () => {
     it('should yield messages from stream', async () => {
       const params = createMessageParams();
       const mockMsg = createMockMessage();
-      const mockMsgResponse = { payload: { $case: 'msg', value: mockMsg } };
+      const mockMsgResponse = { payload: { $case: 'message', value: mockMsg } };
 
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
@@ -189,7 +173,6 @@ describe('GrpcTransport', () => {
       const result = await iterator.next();
 
       expect(result.value).toEqual(mockMsgResponse);
-      expect(FromProto.messageStreamResult).toHaveBeenCalledWith(mockMsgResponse);
       expect(mockGrpcClient.sendStreamingMessage).toHaveBeenCalled();
     });
 
@@ -340,7 +323,9 @@ describe('GrpcTransport', () => {
     describe('listTaskPushNotificationConfig', () => {
       it('should list configs successfully', async () => {
         const mockList = [mockConfig];
-        mockUnarySuccess(mockGrpcClient.listTaskPushNotificationConfigs as Mock, mockList);
+        mockUnarySuccess(mockGrpcClient.listTaskPushNotificationConfigs as Mock, {
+          configs: mockList,
+        });
 
         const result = await transport.listTaskPushNotificationConfig({
           taskId,
@@ -349,7 +334,7 @@ describe('GrpcTransport', () => {
           pageToken: '',
         });
 
-        expect(result).toEqual(mockList);
+        expect(result.configs).toEqual(mockList);
       });
     });
 
@@ -386,7 +371,6 @@ describe('GrpcTransport', () => {
       const result = await iterator.next();
 
       expect(result.value).toEqual(mockResponse);
-      expect(FromProto.messageStreamResult).toHaveBeenCalledWith(mockResponse);
     });
   });
 });

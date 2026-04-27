@@ -1,7 +1,6 @@
 import { TransportProtocolName } from '../../core.js';
 import {
   A2A_ERROR_CODE,
-  AuthenticatedExtendedCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,
@@ -9,9 +8,11 @@ import {
   TaskNotCancelableError,
   UnsupportedOperationError,
   RequestMalformedError,
+  ExtendedAgentCardNotConfiguredError,
+  VersionNotSupportedError,
 } from '../../errors.js';
 
-import { A2AStreamEventData, SendMessageResult } from '../../index.js';
+import { SendMessageResult, A2A_PROTOCOL_VERSION } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -20,6 +21,7 @@ import {
   AgentCard,
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
+  GetExtendedAgentCardRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   ListTaskPushNotificationConfigsRequest,
@@ -31,6 +33,10 @@ import {
   Task,
   TaskPushNotificationConfig,
   SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
+  TaskState,
+  taskStateToJSON,
 } from '../../types/pb/a2a.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
@@ -56,14 +62,26 @@ export class RestTransport implements Transport {
     this.customFetchImpl = options.fetchImpl;
   }
 
+  private _buildPath(path: string, tenant?: string): string {
+    return tenant ? '/' + encodeURIComponent(tenant) + path : path;
+  }
+
   get protocolName(): string {
     return PROTOCOL_NAME;
   }
 
-  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
+  get protocolVersion(): string {
+    return A2A_PROTOCOL_VERSION;
+  }
+
+  async getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard> {
+    const path = this._buildPath('/extendedAgentCard', params.tenant);
     const response = await this._sendRequest<undefined, AgentCard>(
       'GET',
-      '/extendedAgentCard',
+      path,
       undefined,
       options,
       undefined,
@@ -77,9 +95,10 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): Promise<SendMessageResult> {
     const requestBody = params;
+    const path = this._buildPath('/message:send', params.tenant);
     const response = await this._sendRequest<SendMessageRequest, SendMessageResponse>(
       'POST',
-      '/message:send',
+      path,
       requestBody,
       options,
       SendMessageRequest,
@@ -91,26 +110,24 @@ export class RestTransport implements Transport {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const requestBody = SendMessageRequest.toJSON(params);
-    yield* this._sendStreamingRequest('/message:stream', requestBody, options);
+    const path = this._buildPath('/message:stream', params.tenant);
+    yield* this._sendStreamingRequest(path, requestBody, options);
   }
 
   async createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      params.tenant
+    );
     const response = await this._sendRequest<
       TaskPushNotificationConfig,
       TaskPushNotificationConfig
-    >(
-      'POST',
-      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
-      params,
-      options,
-      TaskPushNotificationConfig,
-      TaskPushNotificationConfig
-    );
+    >('POST', path, params, options, TaskPushNotificationConfig, TaskPushNotificationConfig);
     return response;
   }
 
@@ -118,9 +135,15 @@ export class RestTransport implements Transport {
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const response = await this._sendRequest<undefined, TaskPushNotificationConfig>(
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs/${encodeURIComponent(
+        params.id
+      )}`,
+      params.tenant
+    );
+    const response = await this._sendRequest<void, TaskPushNotificationConfig>(
       'GET',
-      `/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
+      path,
       undefined,
       options,
       undefined,
@@ -132,40 +155,46 @@ export class RestTransport implements Transport {
   async listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
-    const response = await this._sendRequest<undefined, ListTaskPushNotificationConfigsResponse>(
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      params.tenant
+    );
+    const response = await this._sendRequest<void, ListTaskPushNotificationConfigsResponse>(
       'GET',
-      `/tasks/${params.taskId}/pushNotificationConfigs`,
+      path,
       undefined,
       options,
       undefined,
       ListTaskPushNotificationConfigsResponse
     );
-    return response.configs;
+    return response;
   }
 
   async deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
-    await this._sendRequest<undefined, void>(
-      'DELETE',
-      `/tasks/${params.taskId}/pushNotificationConfigs/${params.id}`,
-      undefined,
-      options,
-      undefined,
-      undefined
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs/${encodeURIComponent(
+        params.id
+      )}`,
+      params.tenant
     );
+    await this._sendRequest<void, void>('DELETE', path, undefined, options, undefined, undefined);
   }
 
   async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     const queryParams = new URLSearchParams();
     if (params.historyLength !== undefined) {
-      queryParams.set('historyLength', String(params.historyLength));
+      queryParams.set('historyLength', params.historyLength.toString());
     }
     const queryString = queryParams.toString();
-    const path = `/tasks/${params.id}${queryString ? `?${queryString}` : ''}`;
-    const response = await this._sendRequest<undefined, Task>(
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.id)}${queryString ? `?${queryString}` : ''}`,
+      params.tenant
+    );
+    const response = await this._sendRequest<void, Task>(
       'GET',
       path,
       undefined,
@@ -177,9 +206,10 @@ export class RestTransport implements Transport {
   }
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
-    const response = await this._sendRequest<undefined, Task>(
+    const path = this._buildPath(`/tasks/${encodeURIComponent(params.id)}:cancel`, params.tenant);
+    const response = await this._sendRequest<void, Task>(
       'POST',
-      `/tasks/${params.id}:cancel`,
+      path,
       undefined,
       options,
       undefined,
@@ -188,11 +218,44 @@ export class RestTransport implements Transport {
     return response;
   }
 
+  async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    const queryParams = new URLSearchParams();
+    if (params.contextId) queryParams.set('contextId', params.contextId);
+    if (params.status !== undefined && params.status !== TaskState.TASK_STATE_UNSPECIFIED) {
+      queryParams.set('status', taskStateToJSON(params.status));
+    }
+    if (params.pageSize !== undefined) queryParams.set('pageSize', String(params.pageSize));
+    if (params.pageToken) queryParams.set('pageToken', params.pageToken);
+    if (params.historyLength !== undefined)
+      queryParams.set('historyLength', String(params.historyLength));
+    if (params.statusTimestampAfter)
+      queryParams.set('statusTimestampAfter', params.statusTimestampAfter);
+    if (params.includeArtifacts !== undefined)
+      queryParams.set('includeArtifacts', String(params.includeArtifacts));
+
+    const queryString = queryParams.toString();
+    const path = this._buildPath(`/tasks${queryString ? `?${queryString}` : ''}`, params.tenant);
+
+    const response = await this._sendRequest<void, ListTasksResponse>(
+      'GET',
+      path,
+      undefined,
+      options,
+      undefined,
+      ListTasksResponse
+    );
+    return response;
+  }
+
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    yield* this._sendStreamingRequest(`/tasks/${params.id}:subscribe`, undefined, options);
+  ): AsyncGenerator<StreamResponse, void, undefined> {
+    const path = this._buildPath(
+      `/tasks/${encodeURIComponent(params.id)}:subscribe`,
+      params.tenant
+    );
+    yield* this._sendStreamingRequest(path, undefined, options);
   }
 
   private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
@@ -286,7 +349,7 @@ export class RestTransport implements Transport {
     path: string,
     body: unknown | undefined,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const url = `${this.endpoint}${path}`;
     const requestInit: RequestInit = {
       method: 'POST',
@@ -320,15 +383,14 @@ export class RestTransport implements Transport {
     }
   }
 
-  private _processSseEventData(jsonData: string): A2AStreamEventData {
+  private _processSseEventData(jsonData: string): StreamResponse {
     if (!jsonData.trim()) {
       throw new Error('Attempted to process empty SSE event data.');
     }
 
     try {
       const response = JSON.parse(jsonData);
-      const protoResponse = StreamResponse.fromJSON(response);
-      return FromProto.messageStreamResult(protoResponse);
+      return StreamResponse.fromJSON(response);
     } catch (e) {
       console.error('Failed to parse SSE event data:', jsonData, e);
       throw new Error(
@@ -354,8 +416,10 @@ export class RestTransport implements Transport {
           return new ContentTypeNotSupportedError(message);
         case 'InvalidAgentResponseError':
           return new InvalidAgentResponseError(message);
-        case 'AuthenticatedExtendedCardNotConfiguredError':
-          return new AuthenticatedExtendedCardNotConfiguredError(message);
+        case 'ExtendedAgentCardNotConfiguredError':
+          return new ExtendedAgentCardNotConfiguredError(message);
+        case 'VersionNotSupportedError':
+          return new VersionNotSupportedError(message);
         case 'RequestMalformedError':
           return new RequestMalformedError(message);
       }
@@ -375,8 +439,10 @@ export class RestTransport implements Transport {
           return new ContentTypeNotSupportedError(message);
         case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
           return new InvalidAgentResponseError(message);
-        case A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED:
-          return new AuthenticatedExtendedCardNotConfiguredError(message);
+        case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
+          return new ExtendedAgentCardNotConfiguredError(message);
+        case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
+          return new VersionNotSupportedError(message);
       }
     }
 

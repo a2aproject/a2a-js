@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { ClientFactory, ClientFactoryOptions } from '../../src/client/factory.js';
 import { Transport } from '../../src/client/transports/transport.js';
+import { TenantTransportDecorator } from '../../src/client/transports/tenant_transport_decorator.js';
 import { AgentCard } from '../../src/index.js';
 import { Client } from '../../src/client/multitransport-client.js';
 import { CallInterceptor } from '../../src/client/interceptors.js';
@@ -8,8 +9,9 @@ import { CallInterceptor } from '../../src/client/interceptors.js';
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
   let mockTransportFactory2: { protocolName: string; create: Mock };
-  let mockTransport: Record<Exclude<keyof Transport, 'protocolName'>, Mock> & {
+  let mockTransport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
     protocolName: string;
+    protocolVersion: string;
   };
 
   beforeEach(() => {
@@ -23,8 +25,10 @@ describe('ClientFactory', () => {
       deleteTaskPushNotificationConfig: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
+      listTasks: vi.fn(),
       resubscribeTask: vi.fn(),
       protocolName: 'MockTransport',
+      protocolVersion: '1.0',
     };
 
     mockTransportFactory1 = {
@@ -297,6 +301,40 @@ describe('ClientFactory', () => {
         'http://transport1.com',
         'a2a/my-agent-card.json'
       );
+    });
+
+    it('should wrap transport with TenantTransportDecorator when interface has tenant', async () => {
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'Transport1',
+          tenant: 'my-tenant',
+          protocolVersion: '1.0.0',
+        },
+      ];
+      const factory = new ClientFactory({ transports: [mockTransportFactory1] });
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(client.transport).to.be.instanceOf(TenantTransportDecorator);
+    });
+
+    it('should NOT wrap transport with TenantTransportDecorator when interface has no tenant', async () => {
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'Transport1',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
+      const factory = new ClientFactory({ transports: [mockTransportFactory1] });
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(client.transport).not.to.be.instanceOf(TenantTransportDecorator);
     });
   });
 

@@ -27,7 +27,6 @@ import {
   TaskState,
   TaskPushNotificationConfig,
 } from '../../../src/types/pb/a2a.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
 
 describe('RestTransport', () => {
   let transport: RestTransport;
@@ -102,6 +101,19 @@ describe('RestTransport', () => {
       );
     });
 
+    it('should send message with tenant prefix successfully', async () => {
+      const messageParams = createMessageParams();
+      messageParams.tenant = 'tenant1';
+      const mockResponse = createMockProtoMessage();
+
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.sendMessage(messageParams);
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/message:send`);
+    });
+
     it('should correctly add the extension headers', async () => {
       const messageParams = createMessageParams();
       const expectedExtensions = 'extension1,extension2';
@@ -140,6 +152,18 @@ describe('RestTransport', () => {
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=0`);
       expect(options?.method).to.equal('GET');
+    });
+
+    it('should get task with tenant prefix successfully', async () => {
+      const taskId = 'task-123';
+      const mockTask = createMockProtoTask(taskId);
+
+      mockFetch.mockResolvedValue(createRestResponse(mockTask));
+
+      await transport.getTask({ id: taskId, tenant: 'tenant1', historyLength: 0 });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/tasks/${taskId}?historyLength=0`);
     });
 
     it('should pass historyLength as query parameter', async () => {
@@ -194,6 +218,44 @@ describe('RestTransport', () => {
     });
   });
 
+  describe('listTasks', () => {
+    it('should list tasks successfully', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      const result = await transport.listTasks({
+        tenant: '',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+      });
+
+      expect(result).to.deep.equal(mockResponse);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tasks`);
+      expect(options?.method).to.equal('GET');
+    });
+
+    it('should list tasks with tenant prefix successfully', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.listTasks({
+        tenant: 'tenant1',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+      });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/tasks`);
+    });
+  });
+
   describe('getExtendedAgentCard', () => {
     it('should get extended agent card successfully', async () => {
       const mockCard: AgentCard = {
@@ -228,7 +290,7 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(AgentCard.toJSON(mockCard)));
 
-      const result = await transport.getExtendedAgentCard();
+      const result = await transport.getExtendedAgentCard({ tenant: '' });
 
       expect(result).toEqual(expect.objectContaining(mockCard));
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -236,6 +298,45 @@ describe('RestTransport', () => {
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/extendedAgentCard`);
       expect(options?.method).to.equal('GET');
+    });
+
+    it('should get extended agent card with tenant prefix', async () => {
+      const mockCard: AgentCard = {
+        name: 'Test Agent',
+        description: 'A test agent for testing',
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          extensions: [],
+        },
+        skills: [],
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+        supportedInterfaces: [
+          {
+            url: endpoint,
+            protocolBinding: 'HTTP+JSON',
+            tenant: 'my-tenant',
+            protocolVersion: '1.0.0',
+          },
+        ],
+        version: '1.0.0',
+        provider: {
+          url: '',
+          organization: '',
+        },
+        securityRequirements: [],
+        securitySchemes: {},
+        documentationUrl: '',
+        signatures: [],
+      };
+
+      mockFetch.mockResolvedValue(createRestResponse(AgentCard.toJSON(mockCard)));
+
+      await transport.getExtendedAgentCard({ tenant: 'my-tenant' });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/my-tenant/extendedAgentCard`);
     });
   });
 
@@ -321,9 +422,10 @@ describe('RestTransport', () => {
         ];
         mockFetch.mockResolvedValue(
           createRestResponse(
-            ListTaskPushNotificationConfigsResponse.toJSON(
-              ToProto.listTaskPushNotificationConfig(protoConfigs)
-            )
+            ListTaskPushNotificationConfigsResponse.toJSON({
+              configs: protoConfigs,
+              nextPageToken: '',
+            })
           )
         );
 
@@ -334,7 +436,7 @@ describe('RestTransport', () => {
           pageToken: '',
         });
 
-        expect(result).to.deep.equal(expectedConfigs);
+        expect(result.configs).to.deep.equal(expectedConfigs);
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];

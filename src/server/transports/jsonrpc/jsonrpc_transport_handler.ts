@@ -1,18 +1,20 @@
 import {
-  StreamResponse,
   Message,
   Task,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
+  StreamResponse,
   SendMessageRequest,
   SubscribeToTaskRequest,
   GetTaskRequest,
+  GetExtendedAgentCardRequest,
   CancelTaskRequest,
   TaskPushNotificationConfig,
   GetTaskPushNotificationConfigRequest,
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
   ListTasksRequest,
+  ListTasksResponse,
+  ListTaskPushNotificationConfigsResponse,
+  AgentCard,
 } from '../../../index.js';
 import {
   A2A_ERROR_CODE,
@@ -23,8 +25,9 @@ import {
   UnsupportedOperationError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
-  AuthenticatedExtendedCardNotConfiguredError,
   GenericError,
+  VersionNotSupportedError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../../errors.js';
 import { JSONRPCErrorResponse } from '../../../core.js';
 
@@ -60,13 +63,10 @@ export class JsonRpcTransportHandler {
    * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
    */
   public async handle(
-    // TODO: remove the eslint disable and replace the any (https://github.com/a2aproject/a2a-js/issues/179)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    requestBody: any,
-    context?: ServerCallContext
+    requestBody: string | Record<string, unknown>,
+    context: ServerCallContext
   ): Promise<JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>> {
-    let rpcRequest: A2ARequest;
-
+    let rpcRequest: A2ARequest = { jsonrpc: '2.0', method: '' };
     try {
       if (typeof requestBody === 'string') {
         rpcRequest = JSON.parse(requestBody);
@@ -87,7 +87,7 @@ export class JsonRpcTransportHandler {
       );
       return {
         jsonrpc: '2.0',
-        id: rpcRequest?.id !== undefined ? rpcRequest.id : null,
+        id: rpcRequest.id ?? null,
         error: mappedError,
       } as JSONRPCErrorResponse;
     }
@@ -96,6 +96,20 @@ export class JsonRpcTransportHandler {
     try {
       if (method !== 'GetExtendedAgentCard' && !this.paramsAreValid(rpcRequest.params)) {
         throw new RequestMalformedError(`Invalid method parameters.`);
+      }
+
+      // For JSON-RPC, tenant is inside the params body. Extract it and enrich the
+      // context so downstream components (stores, executors) can scope by tenant.
+      const paramsTenant = (rpcRequest.params as Record<string, unknown> | undefined)?.tenant as
+        | string
+        | undefined;
+      if (paramsTenant && !context.tenant) {
+        context = new ServerCallContext({
+          requestedExtensions: context.requestedExtensions,
+          user: context.user,
+          requestedVersion: context.requestedVersion,
+          tenant: paramsTenant,
+        });
       }
 
       if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
@@ -117,22 +131,10 @@ export class JsonRpcTransportHandler {
         > {
           try {
             for await (const event of agentEventStream) {
-              let payload: StreamResponse['payload'];
-
-              if ('messageId' in event) {
-                payload = { $case: 'message', value: event as Message };
-              } else if ('artifacts' in event) {
-                payload = { $case: 'task', value: event as Task };
-              } else if ('status' in event) {
-                payload = { $case: 'statusUpdate', value: event as TaskStatusUpdateEvent };
-              } else if ('artifact' in event) {
-                payload = { $case: 'artifactUpdate', value: event as TaskArtifactUpdateEvent };
-              }
-
               yield {
                 jsonrpc: '2.0',
-                id: requestId, // Use the original request ID for all streamed responses
-                result: { payload },
+                id: requestId,
+                result: StreamResponse.toJSON(event),
               };
             }
           } catch (streamError) {
@@ -159,43 +161,48 @@ export class JsonRpcTransportHandler {
               SendMessageRequest.fromJSON(rpcRequest.params),
               context
             );
-            result = {
-              payload: {
-                $case: 'messageId' in messageOrTask ? 'message' : 'task',
-                value: messageOrTask,
-              },
-            };
+            result =
+              'messageId' in messageOrTask
+                ? { message: Message.toJSON(messageOrTask as Message) }
+                : { task: Task.toJSON(messageOrTask as Task) };
             break;
           }
           case 'GetTask':
-            result = await this.requestHandler.getTask(
-              GetTaskRequest.fromJSON(rpcRequest.params),
-              context
+            result = Task.toJSON(
+              await this.requestHandler.getTask(GetTaskRequest.fromJSON(rpcRequest.params), context)
             );
             break;
           case 'ListTasks':
-            result = await this.requestHandler.listTasks(
-              ListTasksRequest.fromJSON(rpcRequest.params),
-              context
+            result = ListTasksResponse.toJSON(
+              await this.requestHandler.listTasks(
+                ListTasksRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'CancelTask':
-            result = await this.requestHandler.cancelTask(
-              CancelTaskRequest.fromJSON(rpcRequest.params),
-              context
+            result = Task.toJSON(
+              await this.requestHandler.cancelTask(
+                CancelTaskRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'CreateTaskPushNotificationConfig': {
-            result = await this.requestHandler.createTaskPushNotificationConfig(
-              TaskPushNotificationConfig.fromJSON(rpcRequest.params),
-              context
+            result = TaskPushNotificationConfig.toJSON(
+              await this.requestHandler.createTaskPushNotificationConfig(
+                TaskPushNotificationConfig.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           }
           case 'GetTaskPushNotificationConfig':
-            result = await this.requestHandler.getTaskPushNotificationConfig(
-              GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
-              context
+            result = TaskPushNotificationConfig.toJSON(
+              await this.requestHandler.getTaskPushNotificationConfig(
+                GetTaskPushNotificationConfigRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'DeleteTaskPushNotificationConfig':
@@ -206,13 +213,20 @@ export class JsonRpcTransportHandler {
             result = null;
             break;
           case 'ListTaskPushNotificationConfigs':
-            result = await this.requestHandler.listTaskPushNotificationConfigs(
-              ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
-              context
+            result = ListTaskPushNotificationConfigsResponse.toJSON(
+              await this.requestHandler.listTaskPushNotificationConfigs(
+                ListTaskPushNotificationConfigsRequest.fromJSON(rpcRequest.params),
+                context
+              )
             );
             break;
           case 'GetExtendedAgentCard':
-            result = await this.requestHandler.getAuthenticatedExtendedAgentCard(context);
+            result = AgentCard.toJSON(
+              await this.requestHandler.getAuthenticatedExtendedAgentCard(
+                GetExtendedAgentCardRequest.fromJSON(rpcRequest.params),
+                context
+              )
+            );
             break;
           default:
             return {
@@ -291,11 +305,14 @@ export class JsonRpcTransportHandler {
     if (error instanceof InvalidAgentResponseError) {
       return { code: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE, message: error.message };
     }
-    if (error instanceof AuthenticatedExtendedCardNotConfiguredError) {
+    if (error instanceof ExtendedAgentCardNotConfiguredError) {
       return {
-        code: A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED,
+        code: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
         message: error.message,
       };
+    }
+    if (error instanceof VersionNotSupportedError) {
+      return { code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED, message: error.message };
     }
     if (error instanceof RequestMalformedError) {
       return { code: A2A_ERROR_CODE.INVALID_PARAMS, message: error.message };

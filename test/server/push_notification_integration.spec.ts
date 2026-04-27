@@ -16,13 +16,14 @@ import {
   Role,
   TaskState,
   TaskStatus,
-  TaskStatusUpdateEvent,
+  StreamResponse,
 } from '../../src/types/pb/a2a.js';
 import { SendMessageRequest } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';
+import { AgentEvent } from '../../src/server/events/execution_event_bus.js';
 
-type PushNotificationSenderSpy = MockInstance<(task: Task) => Promise<void>>;
+type PushNotificationSenderSpy = MockInstance<(streamResponse: StreamResponse) => Promise<void>>;
 
 describe('Push Notification Integration Tests', () => {
   let testServer: Server;
@@ -40,6 +41,7 @@ describe('Push Notification Integration Tests', () => {
   let pushNotificationStore: InMemoryPushNotificationStore;
   let pushNotificationSender: DefaultPushNotificationSender;
   let pushNotificationSenderSpy: PushNotificationSenderSpy;
+  let defaultContext: ServerCallContext;
 
   const testAgentCard: AgentCard = {
     name: 'Test Agent',
@@ -93,7 +95,10 @@ describe('Push Notification Integration Tests', () => {
       app.post('/notify/:scenario', async (req: Request, res: Response) => {
         const scenario = req.params.scenario;
         // Simulate delay for 'submitted' status to test correct ordering of notifications
-        if (scenario === 'delay_on_submitted' && req.body.status.state === 'TASK_STATE_SUBMITTED') {
+        if (
+          scenario === 'delay_on_submitted' &&
+          req.body.task?.status?.state === 'TASK_STATE_SUBMITTED'
+        ) {
           await new Promise((resolve) => setTimeout(resolve, 10));
         }
 
@@ -137,6 +142,7 @@ describe('Push Notification Integration Tests', () => {
     pushNotificationStore = new InMemoryPushNotificationStore();
     pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
     pushNotificationSenderSpy = vi.spyOn(pushNotificationSender, 'send');
+    defaultContext = new ServerCallContext();
 
     handler = new DefaultRequestHandler(
       testAgentCard,
@@ -215,7 +221,7 @@ describe('Push Notification Integration Tests', () => {
       });
 
       // Send message and wait for completion
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -242,10 +248,24 @@ describe('Push Notification Integration Tests', () => {
       );
 
       // Verify all three states are present
-      const states = receivedNotifications.map((n) => n.body.status.state);
-      assert.include(states, TaskState.TASK_STATE_SUBMITTED, 'Should include submitted state');
-      assert.include(states, TaskState.TASK_STATE_WORKING, 'Should include working state');
-      assert.include(states, TaskState.TASK_STATE_COMPLETED, 'Should include completed state');
+      const states = receivedNotifications.map(
+        (n) => n.body.task?.status?.state || n.body.statusUpdate?.status?.state
+      );
+      assert.include(
+        states,
+        TaskState[TaskState.TASK_STATE_SUBMITTED],
+        'Should include submitted state'
+      );
+      assert.include(
+        states,
+        TaskState[TaskState.TASK_STATE_WORKING],
+        'Should include working state'
+      );
+      assert.include(
+        states,
+        TaskState[TaskState.TASK_STATE_COMPLETED],
+        'Should include completed state'
+      );
 
       // Verify first notification has correct format
       const firstNotification = receivedNotifications[0];
@@ -253,22 +273,62 @@ describe('Push Notification Integration Tests', () => {
       assert.equal(firstNotification.url, '/notify/delay_on_submitted');
       assert.equal(firstNotification.headers['content-type'], 'application/json');
       assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
-      assert.deepEqual(firstNotification.body, {
-        ...expectedTaskResult,
-        status: { state: TaskState.TASK_STATE_SUBMITTED },
-      });
+      assert.deepEqual(
+        firstNotification.body,
+        StreamResponse.toJSON({
+          payload: {
+            $case: 'task',
+            value: {
+              ...expectedTaskResult,
+              status: {
+                state: TaskState.TASK_STATE_SUBMITTED,
+                message: undefined,
+                timestamp: undefined,
+              },
+            },
+          },
+        })
+      );
 
       const secondNotification = receivedNotifications[1];
-      assert.deepEqual(secondNotification.body, {
-        ...expectedTaskResult,
-        status: { state: TaskState.TASK_STATE_WORKING },
-      });
+      assert.deepEqual(
+        secondNotification.body,
+        StreamResponse.toJSON({
+          payload: {
+            $case: 'statusUpdate',
+            value: {
+              taskId: taskId,
+              contextId: contextId,
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                message: undefined,
+                timestamp: undefined,
+              },
+              metadata: {},
+            },
+          },
+        })
+      );
 
       const thirdNotification = receivedNotifications[2];
-      assert.deepEqual(thirdNotification.body, {
-        ...expectedTaskResult,
-        status: { state: TaskState.TASK_STATE_COMPLETED },
-      });
+      assert.deepEqual(
+        thirdNotification.body,
+        StreamResponse.toJSON({
+          payload: {
+            $case: 'statusUpdate',
+            value: {
+              taskId: taskId,
+              contextId: contextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              metadata: {},
+            },
+          },
+        })
+      );
     });
 
     it('should handle multiple push notification endpoints for the same task', async () => {
@@ -315,12 +375,12 @@ describe('Push Notification Integration Tests', () => {
         artifacts: [],
         metadata: {},
       };
-      await taskStore.save(task);
+      await taskStore.save(task, defaultContext);
 
       // Set multiple push notification configs for this message
-      await handler.createTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
+      await handler.createTaskPushNotificationConfig(pushConfig1, defaultContext);
 
-      await handler.createTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
+      await handler.createTaskPushNotificationConfig(pushConfig2, defaultContext);
 
       // Mock the agent executor to publish only completed state
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
@@ -328,34 +388,38 @@ describe('Push Notification Integration Tests', () => {
         const contextId = ctx.contextId;
 
         // Publish working status
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_WORKING,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         // Publish completion directly
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
 
       // Send a message to trigger notifications
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -420,7 +484,7 @@ describe('Push Notification Integration Tests', () => {
       });
 
       // Send message and wait for completion - this should not throw an error
-      const result = await handler.sendMessage(params);
+      const result = await handler.sendMessage(params, defaultContext);
       const taskResult = result as Task;
 
       // Wait for async push notifications to be sent
@@ -482,34 +546,38 @@ describe('Push Notification Integration Tests', () => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          artifacts: [],
-          history: [],
-          metadata: {},
-        } as Task);
+        bus.publish(
+          AgentEvent.task({
+            id: taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
 
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -580,34 +648,38 @@ describe('Push Notification Integration Tests', () => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          artifacts: [],
-          history: [],
-          metadata: {},
-        } as Task);
+        bus.publish(
+          AgentEvent.task({
+            id: taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
 
-      await customHandler.sendMessage(params);
+      await customHandler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(customSenderSpy);
@@ -664,34 +736,38 @@ describe('Push Notification Integration Tests', () => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          id: taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          artifacts: [],
-          history: [],
-          metadata: {},
-        } as Task);
+        bus.publish(
+          AgentEvent.task({
+            id: taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
 
-      await handler.sendMessage(params);
+      await handler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
@@ -778,32 +854,34 @@ describe('Push Notification Integration Tests', () => {
         artifacts: [],
         metadata: {},
       };
-      await taskStore.save(task);
+      await taskStore.save(task, defaultContext);
 
-      await customHandler.createTaskPushNotificationConfig(pushConfig1, new ServerCallContext());
+      await customHandler.createTaskPushNotificationConfig(pushConfig1, defaultContext);
 
-      await customHandler.createTaskPushNotificationConfig(pushConfig2, new ServerCallContext());
+      await customHandler.createTaskPushNotificationConfig(pushConfig2, defaultContext);
 
       // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        bus.publish({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          } as TaskStatus,
-          metadata: {},
-        } as TaskStatusUpdateEvent);
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            } as TaskStatus,
+            metadata: {},
+          })
+        );
 
         bus.finished();
       });
 
-      await customHandler.sendMessage(params);
+      await customHandler.sendMessage(params, defaultContext);
 
       // Wait for async push notifications to be sent
       await waitForPushNotifications(customSenderSpy);
@@ -848,6 +926,142 @@ describe('Push Notification Integration Tests', () => {
           'Should include content-type header'
         );
       });
+    });
+  });
+
+  describe('StreamResponse payload types', () => {
+    it('should throw if tried to send message payload', async () => {
+      const taskId = 'test-message-payload';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId,
+        id: 'config-message',
+        url: `${testServerUrl}/notify`,
+        token: 'test-token',
+        authentication: undefined,
+      };
+      await pushNotificationStore.save(taskId, defaultContext, pushConfig);
+
+      const streamResponse: StreamResponse = {
+        payload: {
+          $case: 'message',
+          value: {
+            messageId: 'msg-123',
+            taskId,
+            role: Role.ROLE_AGENT,
+            parts: [
+              {
+                content: { $case: 'text', value: 'Hello' },
+                filename: '',
+                mediaType: 'text/plain',
+                metadata: {},
+              },
+            ],
+            contextId: 'ctx-123',
+            extensions: [],
+            metadata: {},
+            referenceTaskIds: [],
+          },
+        },
+      };
+
+      let threw = false;
+      try {
+        await pushNotificationSender.send(streamResponse, defaultContext);
+      } catch (error: any) {
+        threw = true;
+        assert.include(error.message, 'Push notification should not be sent for message payload');
+      }
+      assert.isTrue(threw, 'Should have thrown an error');
+
+      // Verify no notifications were sent
+      assert.equal(receivedNotifications.length, 0);
+    });
+
+    it('should send statusUpdate payload correctly', async () => {
+      const taskId = 'test-status-payload';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId,
+        id: 'config-status',
+        url: `${testServerUrl}/notify`,
+        token: 'test-token',
+        authentication: undefined,
+      };
+      await pushNotificationStore.save(taskId, defaultContext, pushConfig);
+
+      const streamResponse: StreamResponse = {
+        payload: {
+          $case: 'statusUpdate',
+          value: {
+            taskId,
+            contextId: 'ctx-123',
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              message: undefined,
+              timestamp: '2026-04-15T14:00:00Z',
+            },
+            metadata: {},
+          },
+        },
+      };
+
+      await pushNotificationSender.send(streamResponse, defaultContext);
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      assert.equal(receivedNotifications.length, 1);
+      const notification = receivedNotifications[0];
+      assert.deepEqual(notification.body, StreamResponse.toJSON(streamResponse));
+    });
+
+    it('should send artifactUpdate payload correctly', async () => {
+      const taskId = 'test-artifact-payload';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId,
+        id: 'config-artifact',
+        url: `${testServerUrl}/notify`,
+        token: 'test-token',
+        authentication: undefined,
+      };
+      await pushNotificationStore.save(taskId, defaultContext, pushConfig);
+
+      const streamResponse: StreamResponse = {
+        payload: {
+          $case: 'artifactUpdate',
+          value: {
+            taskId,
+            contextId: 'ctx-123',
+            artifact: {
+              artifactId: 'art-123',
+              name: 'test.txt',
+              description: 'A test artifact',
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Artifact content' },
+                  filename: 'test.txt',
+                  mediaType: 'text/plain',
+                  metadata: {},
+                },
+              ],
+              metadata: {},
+              extensions: [],
+            },
+            append: false,
+            lastChunk: true,
+            metadata: {},
+          },
+        },
+      };
+
+      await pushNotificationSender.send(streamResponse, defaultContext);
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      assert.equal(receivedNotifications.length, 1);
+      const notification = receivedNotifications[0];
+      assert.deepEqual(notification.body, StreamResponse.toJSON(streamResponse));
     });
   });
 });

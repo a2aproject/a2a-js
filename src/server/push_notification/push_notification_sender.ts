@@ -1,5 +1,6 @@
-import { Task } from '../../index.js';
+import { StreamResponse } from '../../index.js';
+import { ServerCallContext } from '../context.js';
 
 export interface PushNotificationSender {
-  send(task: Task): Promise<void>;
+  send(streamResponse: StreamResponse, context: ServerCallContext): Promise<void>;
 }

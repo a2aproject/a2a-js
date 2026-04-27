@@ -4,6 +4,7 @@ import { AgentCardResolver } from './card-resolver.js';
 import { Client, ClientConfig } from './multitransport-client.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 import { RestTransportFactory } from './transports/rest_transport.js';
+import { TenantTransportDecorator } from './transports/tenant_transport_decorator.js';
 import { TransportFactory } from './transports/transport.js';
 
 export interface ClientFactoryOptions {
@@ -95,25 +96,40 @@ export class ClientFactory {
 
   /**
    * Creates a new client from the provided agent card.
+   *
+   * When the selected `AgentInterface` declares a non-empty `tenant` value
+   * (per spec Section 4.4.6), the transport is automatically wrapped with a
+   * {@link TenantTransportDecorator} so the default tenant is applied to every
+   * request without requiring callers to set it manually.
    */
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const interfaces = agentCard.supportedInterfaces ?? [];
-    const urlsPerAgentTransports = new CaseInsensitiveMap<string>(
-      interfaces.map((i) => [i.protocolBinding, i.url])
-    );
+
+    const bestInterfacePerProtocol = new CaseInsensitiveMap<(typeof interfaces)[number]>();
+    for (const agentInterface of interfaces) {
+      const existing = bestInterfacePerProtocol.get(agentInterface.protocolBinding);
+      if (!existing || agentInterface.protocolVersion === '1.0') {
+        bestInterfacePerProtocol.set(agentInterface.protocolBinding, agentInterface);
+      }
+    }
+
     const transportsByPreference = [
       ...(this.options.preferredTransports ?? []),
       ...interfaces.map((i) => i.protocolBinding),
     ];
-    for (const transport of transportsByPreference) {
-      const url = urlsPerAgentTransports.get(transport);
-      const factory = this.transportsByName.get(transport);
-      if (factory && url) {
-        return new Client(
-          await factory.create(url, agentCard),
-          agentCard,
-          this.options.clientConfig
-        );
+    for (const transportName of transportsByPreference) {
+      const selectedInterface = bestInterfacePerProtocol.get(transportName);
+      const factory = this.transportsByName.get(transportName);
+      if (factory && selectedInterface) {
+        let transport = await factory.create(selectedInterface.url, agentCard);
+
+        // If the agent interface declares a default tenant, wrap the transport
+        // so the tenant is automatically applied to all requests.
+        if (selectedInterface.tenant) {
+          transport = new TenantTransportDecorator(transport, selectedInterface.tenant);
+        }
+
+        return new Client(transport, agentCard, this.options.clientConfig);
       }
     }
     throw new Error(

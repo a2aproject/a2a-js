@@ -3,6 +3,7 @@ import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vite
 import { JsonRpcTransportHandler } from '../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { JSONRPCErrorResponse } from '../../src/core.js';
+import { ServerCallContext } from '../../src/server/context.js';
 import {
   RequestMalformedError,
   TaskNotFoundError,
@@ -11,14 +12,15 @@ import {
   UnsupportedOperationError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
-  AuthenticatedExtendedCardNotConfiguredError,
   A2A_ERROR_CODE,
   GenericError,
+  ExtendedAgentCardNotConfiguredError,
 } from '../../src/errors.js';
 
 describe('JsonRpcTransportHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let transportHandler: JsonRpcTransportHandler;
+  let defaultContext: ServerCallContext;
 
   beforeEach(() => {
     mockRequestHandler = {
@@ -36,6 +38,7 @@ describe('JsonRpcTransportHandler', () => {
       listTasks: vi.fn(),
     };
     transportHandler = new JsonRpcTransportHandler(mockRequestHandler);
+    defaultContext = new ServerCallContext();
   });
 
   afterEach(() => {
@@ -45,19 +48,28 @@ describe('JsonRpcTransportHandler', () => {
   describe('Check JSON-RPC request format', () => {
     it('should return an invalid params error for an invalid JSON string', async () => {
       const invalidJson = '{ "jsonrpc": "2.0", "method": "foo", "id": 1, }'; // trailing comma
-      const response = (await transportHandler.handle(invalidJson)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        invalidJson,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
     });
 
     it('should return an invalid params error for a non-string/non-object request body', async () => {
-      const response = (await transportHandler.handle(123)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        123 as any,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid request body type.');
     });
 
     it('should return an invalid params error for missing jsonrpc property', async () => {
       const request = { method: 'foo', id: 1 };
-      const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        request,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
@@ -65,7 +77,10 @@ describe('JsonRpcTransportHandler', () => {
 
     it('should return an invalid params error for incorrect jsonrpc version', async () => {
       const request = { jsonrpc: '1.0', method: 'foo', id: 1 };
-      const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        request,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
@@ -73,7 +88,10 @@ describe('JsonRpcTransportHandler', () => {
 
     it('should return an invalid params error for missing method property', async () => {
       const request = { jsonrpc: '2.0', id: 1 };
-      const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        request,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
@@ -81,7 +99,10 @@ describe('JsonRpcTransportHandler', () => {
 
     it('should return an invalid params error for non-string method property', async () => {
       const request = { jsonrpc: '2.0', method: 123, id: 1 };
-      const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        request,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1);
@@ -89,7 +110,10 @@ describe('JsonRpcTransportHandler', () => {
 
     it('should return an invalid params error for invalid id type (object)', async () => {
       const request = { jsonrpc: '2.0', method: 'foo', id: {} };
-      const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        request,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.deep.equal({});
@@ -97,7 +121,10 @@ describe('JsonRpcTransportHandler', () => {
 
     it('should return an invalid params error for invalid id type (float)', async () => {
       const request = { jsonrpc: '2.0', method: 'foo', id: 1.23 };
-      const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
+      const response = (await transportHandler.handle(
+        request,
+        defaultContext
+      )) as JSONRPCErrorResponse;
       expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
       expect(response.error.message).to.equal('Invalid JSON-RPC Request.');
       expect(response.id).to.equal(1.23);
@@ -110,7 +137,7 @@ describe('JsonRpcTransportHandler', () => {
         id: 'abc-123',
         params: {},
       };
-      const response = await transportHandler.handle(request);
+      const response = await transportHandler.handle(request, defaultContext);
       expect(response).to.have.property('result');
     });
 
@@ -121,7 +148,7 @@ describe('JsonRpcTransportHandler', () => {
         id: 456,
         params: {},
       };
-      const response = await transportHandler.handle(request);
+      const response = await transportHandler.handle(request, defaultContext);
       expect(response).to.have.property('result');
     });
 
@@ -135,7 +162,7 @@ describe('JsonRpcTransportHandler', () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockResolvedValue({
         card: 'data',
       });
-      const response = await transportHandler.handle(request);
+      const response = await transportHandler.handle(request, defaultContext);
       expect(response).to.have.property('result');
     });
 
@@ -155,7 +182,10 @@ describe('JsonRpcTransportHandler', () => {
           id: 1,
           params,
         };
-        const response = (await transportHandler.handle(request)) as JSONRPCErrorResponse;
+        const response = (await transportHandler.handle(
+          request,
+          defaultContext
+        )) as JSONRPCErrorResponse;
         expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
         expect(response.error.message).to.equal('Invalid method parameters.');
         expect(response.id).to.equal(1);
@@ -169,8 +199,25 @@ describe('JsonRpcTransportHandler', () => {
         id: 456,
         params: { this: 'is a dict' },
       };
-      const response = await transportHandler.handle(request);
+      const response = await transportHandler.handle(request, defaultContext);
       expect(response).to.have.property('result');
+    });
+  });
+
+  describe('Method handling', () => {
+    it('should pass tenant from params to getAuthenticatedExtendedAgentCard', async () => {
+      const request = {
+        jsonrpc: '2.0',
+        method: 'GetExtendedAgentCard',
+        id: 1,
+        params: { tenant: 'test-tenant' },
+      };
+      await transportHandler.handle(request, defaultContext);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'test-tenant' }),
+        expect.anything()
+      );
     });
   });
 
@@ -231,14 +278,12 @@ describe('JsonRpcTransportHandler', () => {
       expect(mappedError.message).to.equal('Invalid Agent Response');
     });
 
-    it('should map AuthenticatedExtendedCardNotConfiguredError to code and message', async () => {
+    it('should map ExtendedAgentCardNotConfiguredError to code and message', async () => {
       const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
-        new AuthenticatedExtendedCardNotConfiguredError(
-          'Authenticated Extended Card Not Configured'
-        )
+        new ExtendedAgentCardNotConfiguredError('Extended Agent Card Not Configured')
       );
-      expect(mappedError.code).to.equal(A2A_ERROR_CODE.AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED);
-      expect(mappedError.message).to.equal('Authenticated Extended Card Not Configured');
+      expect(mappedError.code).to.equal(A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED);
+      expect(mappedError.message).to.equal('Extended Agent Card Not Configured');
     });
 
     it('should map RequestMalformedError to code and message', async () => {

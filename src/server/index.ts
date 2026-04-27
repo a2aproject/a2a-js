@@ -8,10 +8,15 @@ export { RequestContext } from './agent_execution/request_context.js';
 
 export type {
   AgentExecutionEvent,
+  AgentExecutionEventKind,
   ExecutionEventBus,
   ExecutionEventName,
 } from './events/execution_event_bus.js';
-export { DefaultExecutionEventBus } from './events/execution_event_bus.js';
+export {
+  AgentEvent,
+  assertUnreachableEvent,
+  DefaultExecutionEventBus,
+} from './events/execution_event_bus.js';
 export type { ExecutionEventBusManager } from './events/execution_event_bus_manager.js';
 export { DefaultExecutionEventBusManager } from './events/execution_event_bus_manager.js';
 export { ExecutionEventQueue } from './events/execution_event_queue.js';
@@ -25,6 +30,8 @@ export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
 export { ServerCallContext } from './context.js';
+export type { ServerCallContextOptions } from './context.js';
+export { validateVersion, getSupportedVersions } from './version.js';
 export {
   RequestMalformedError,
   TaskNotFoundError,
@@ -33,7 +40,8 @@ export {
   UnsupportedOperationError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
+  VersionNotSupportedError,
 } from '../errors.js';
 
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';

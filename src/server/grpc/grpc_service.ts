@@ -24,9 +24,9 @@ import { ToProto } from '../../types/converters/to_proto.js';
 import { ServerCallContext } from '../context.js';
 import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
-import { HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import {
-  AuthenticatedExtendedCardNotConfiguredError,
+  ExtendedAgentCardNotConfiguredError,
   ContentTypeNotSupportedError,
   InvalidAgentResponseError,
   RequestMalformedError,
@@ -35,7 +35,9 @@ import {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
+  VersionNotSupportedError,
 } from '../../errors.js';
+import { validateVersion } from '../version.js';
 
 /**
  * Options for configuring the gRPC handler.
@@ -64,19 +66,18 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   const requestHandler = options.requestHandler;
 
   /**
-   * Helper to wrap Unary calls with common logic (context, metadata, error handling)
+   * Helper to wrap Unary calls with common logic (context, metadata, error handling).
+   * Extracts tenant from the request if available and enriches the context.
    */
-  const wrapUnary = async <TReq, TRes, TParams, TResult>(
+  const wrapUnaryWithConverter = async <TReq, TRes, TResult>(
     call: grpc.ServerUnaryCall<TReq, TRes>,
     callback: grpc.sendUnaryData<TRes>,
-    parser: (req: TReq) => TParams,
-    handler: (params: TParams, ctx: ServerCallContext) => Promise<TResult>,
+    handler: (req: TReq, ctx: ServerCallContext) => Promise<TResult>,
     converter: (res: TResult) => TRes
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
-      const params = parser(call.request);
-      const result = await handler(params, context);
+      const context = await _buildContext(call, options.userBuilder, requestHandler);
+      const result = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
       callback(null, converter(result));
     } catch (error) {
@@ -84,24 +85,28 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     }
   };
 
+  const wrapUnary = async <TReq, TRes>(
+    call: grpc.ServerUnaryCall<TReq, TRes>,
+    callback: grpc.sendUnaryData<TRes>,
+    handler: (req: TReq, ctx: ServerCallContext) => Promise<TRes>
+  ) => {
+    return wrapUnaryWithConverter(call, callback, handler, (res: TRes) => res);
+  };
+
   /**
-   * Helper to wrap Streaming calls with common logic (context, metadata, error handling)
+   * Helper to wrap Streaming calls with common logic (context, metadata, error handling).
+   * Extracts tenant from the request if available and enriches the context.
    */
-  const wrapStreaming = async <TReq, TRes, TParams, TResult>(
+  const wrapStreaming = async <TReq, TRes>(
     call: grpc.ServerWritableStream<TReq, TRes>,
-    parser: (req: TReq) => TParams,
-    handler: (params: TParams, ctx: ServerCallContext) => AsyncGenerator<TResult>,
-    converter: (res: TResult) => TRes
+    handler: (req: TReq, ctx: ServerCallContext) => AsyncGenerator<TRes>
   ) => {
     try {
-      const context = await buildContext(call, options.userBuilder);
-      const params = parser(call.request);
-      const stream = await handler(params, context);
-      const metadata = buildMetadata(context);
-      call.sendMetadata(metadata);
+      const context = await _buildContext(call, options.userBuilder, requestHandler);
+      const stream = await handler(call.request, context);
+      call.sendMetadata(buildMetadata(context));
       for await (const responsePart of stream) {
-        const response = converter(responsePart);
-        call.write(response);
+        call.write(responsePart);
       }
     } catch (error) {
       call.emit('error', mapToError(error));
@@ -115,10 +120,9 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       call: grpc.ServerUnaryCall<SendMessageRequest, SendMessageResponse>,
       callback: grpc.sendUnaryData<SendMessageResponse>
     ): Promise<void> {
-      return wrapUnary(
+      return wrapUnaryWithConverter(
         call,
         callback,
-        (req) => req,
         requestHandler.sendMessage.bind(requestHandler),
         ToProto.messageSendResult
       );
@@ -127,33 +131,22 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     sendStreamingMessage(
       call: grpc.ServerWritableStream<SendMessageRequest, StreamResponse>
     ): Promise<void> {
-      return wrapStreaming(
-        call,
-        (req) => req,
-        requestHandler.sendMessageStream.bind(requestHandler),
-        ToProto.messageStreamResult
-      );
+      return wrapStreaming(call, requestHandler.sendMessageStream.bind(requestHandler));
     },
 
     subscribeToTask(
       call: grpc.ServerWritableStream<SubscribeToTaskRequest, StreamResponse>
     ): Promise<void> {
-      return wrapStreaming(
-        call,
-        (req) => req,
-        requestHandler.resubscribe.bind(requestHandler),
-        ToProto.messageStreamResult
-      );
+      return wrapStreaming(call, requestHandler.resubscribe.bind(requestHandler));
     },
 
     deleteTaskPushNotificationConfig(
       call: grpc.ServerUnaryCall<DeleteTaskPushNotificationConfigRequest, Empty>,
       callback: grpc.sendUnaryData<Empty>
     ): Promise<void> {
-      return wrapUnary(
+      return wrapUnaryWithConverter(
         call,
         callback,
-        (req) => req,
         requestHandler.deleteTaskPushNotificationConfig.bind(requestHandler),
         () => ({})
       );
@@ -169,9 +162,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        (req) => req,
-        requestHandler.listTaskPushNotificationConfigs.bind(requestHandler),
-        ToProto.listTaskPushNotificationConfig
+        requestHandler.listTaskPushNotificationConfigs.bind(requestHandler)
       );
     },
 
@@ -182,9 +173,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        (req) => req,
-        requestHandler.createTaskPushNotificationConfig.bind(requestHandler),
-        (res) => res
+        requestHandler.createTaskPushNotificationConfig.bind(requestHandler)
       );
     },
 
@@ -195,9 +184,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       return wrapUnary(
         call,
         callback,
-        (req) => req,
-        requestHandler.getTaskPushNotificationConfig.bind(requestHandler),
-        (res) => res
+        requestHandler.getTaskPushNotificationConfig.bind(requestHandler)
       );
     },
 
@@ -205,51 +192,29 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       call: grpc.ServerUnaryCall<GetTaskRequest, Task>,
       callback: grpc.sendUnaryData<Task>
     ): Promise<void> {
-      return wrapUnary(
-        call,
-        callback,
-        (req) => req,
-        requestHandler.getTask.bind(requestHandler),
-        (res) => res
-      );
+      return wrapUnary(call, callback, requestHandler.getTask.bind(requestHandler));
     },
 
     cancelTask(
       call: grpc.ServerUnaryCall<CancelTaskRequest, Task>,
       callback: grpc.sendUnaryData<Task>
     ): Promise<void> {
-      return wrapUnary(
-        call,
-        callback,
-        (req) => req,
-        requestHandler.cancelTask.bind(requestHandler),
-        (res) => res
-      );
+      return wrapUnary(call, callback, requestHandler.cancelTask.bind(requestHandler));
     },
 
     getExtendedAgentCard(
       call: grpc.ServerUnaryCall<GetExtendedAgentCardRequest, AgentCard>,
       callback: grpc.sendUnaryData<AgentCard>
     ): Promise<void> {
-      return wrapUnary(
-        call,
-        callback,
-        () => ({}),
-        (_params, context) => requestHandler.getAuthenticatedExtendedAgentCard(context),
-        (res) => res
+      return wrapUnary(call, callback, (params, context) =>
+        requestHandler.getAuthenticatedExtendedAgentCard(params, context)
       );
     },
     listTasks(
       call: grpc.ServerUnaryCall<ListTasksRequest, ListTasksResponse>,
       callback: grpc.sendUnaryData<ListTasksResponse>
     ): Promise<void> {
-      return wrapUnary(
-        call,
-        callback,
-        (req) => req,
-        requestHandler.listTasks.bind(requestHandler),
-        (res) => res
-      );
+      return wrapUnary(call, callback, requestHandler.listTasks.bind(requestHandler));
     },
   };
 }
@@ -267,8 +232,9 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   else if (error instanceof UnsupportedOperationError) code = grpc.status.UNIMPLEMENTED;
   else if (error instanceof ContentTypeNotSupportedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
-  else if (error instanceof AuthenticatedExtendedCardNotConfiguredError)
+  else if (error instanceof ExtendedAgentCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof VersionNotSupportedError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof GenericError) code = grpc.status.INTERNAL;
 
@@ -280,15 +246,31 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   };
 };
 
-const buildContext = async (
+const _buildContext = async (
   call: grpc.ServerUnaryCall<unknown, unknown> | grpc.ServerWritableStream<unknown, unknown>,
-  userBuilder: UserBuilder
+  userBuilder: UserBuilder,
+  requestHandler: A2ARequestHandler
 ): Promise<ServerCallContext> => {
   const user = await userBuilder(call);
   const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
   const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
 
-  return new ServerCallContext(Extensions.parseServiceParameter(extensionString), user);
+  // gRPC metadata keys are normalized to lowercase per gRPC conventions (§10.2).
+  const versionHeaders = call.metadata.get(A2A_VERSION_HEADER.toLowerCase());
+  const requestedVersion = versionHeaders.length > 0 ? versionHeaders[0].toString() : undefined;
+  const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;
+
+  const context = new ServerCallContext({
+    requestedExtensions: Extensions.parseServiceParameter(extensionString),
+    user,
+    requestedVersion,
+    tenant,
+  });
+
+  const agentCard = await requestHandler.getAgentCard();
+  validateVersion(context.requestedVersion, agentCard, 'GRPC');
+
+  return context;
 };
 
 const buildMetadata = (context: ServerCallContext): grpc.Metadata => {

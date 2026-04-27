@@ -9,7 +9,8 @@ import {
   InMemoryTaskStore,
   RequestContext,
 } from '../src/server/index.js';
-import { AgentCard, Message, Role, TaskState, A2AStreamEventData } from '../src/index.js';
+import { AgentEvent } from '../src/server/events/execution_event_bus.js';
+import { AgentCard, Message, Role, Task, TaskState, StreamResponse } from '../src/index.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';
@@ -81,7 +82,7 @@ describe('Client E2E tests', () => {
               url: 'localhost',
               protocolBinding: transportConfig.preferredTransport,
               tenant: '',
-              protocolVersion: '1.0.0',
+              protocolVersion: '1.0',
             },
           ],
           capabilities: {
@@ -162,7 +163,7 @@ describe('Client E2E tests', () => {
       describe('sendMessage', () => {
         it('should send a message to the agent', async () => {
           const expected = createTestMessage('1', 'test');
-          agentExecutor.events = [expected];
+          agentExecutor.events = [AgentEvent.message(expected)];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
           const actual = await client.sendMessage({
@@ -179,44 +180,74 @@ describe('Client E2E tests', () => {
         it('should send a message to the agent and read event stream', async () => {
           const taskId = '1';
           const contextId = '2';
-          const expected: AgentExecutionEvent[] = [
+          const expected: StreamResponse[] = [
             {
-              id: taskId,
-              contextId,
-              status: {
-                state: TaskState.TASK_STATE_SUBMITTED,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'task',
+                value: {
+                  id: taskId,
+                  contextId,
+                  status: {
+                    state: TaskState.TASK_STATE_SUBMITTED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  artifacts: [],
+                  history: [createTestMessage('1', 'test')],
+                  metadata: {},
+                },
               },
-              artifacts: [],
-              history: [],
-              metadata: {},
             },
             {
-              taskId,
-              contextId,
-              status: {
-                state: TaskState.TASK_STATE_WORKING,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId,
+                  contextId,
+                  status: {
+                    state: TaskState.TASK_STATE_WORKING,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
             {
-              taskId,
-              contextId,
-              status: {
-                state: TaskState.TASK_STATE_COMPLETED,
-                timestamp: undefined,
-                message: undefined,
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId,
+                  contextId,
+                  status: {
+                    state: TaskState.TASK_STATE_COMPLETED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
               },
-              metadata: {},
             },
           ];
-          agentExecutor.events = expected;
+          agentExecutor.events = expected.map((e: any) => {
+            const $case = e.payload!.$case;
+            const value = e.payload!.value;
+            switch ($case) {
+              case 'message':
+                return AgentEvent.message(value);
+              case 'task':
+                return AgentEvent.task(value);
+              case 'statusUpdate':
+                return AgentEvent.statusUpdate(value);
+              case 'artifactUpdate':
+                return AgentEvent.artifactUpdate(value);
+              default:
+                throw new Error(`Unknown $case: ${$case}`);
+            }
+          });
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          const actual: A2AStreamEventData[] = [];
+          const actual: StreamResponse[] = [];
           for await (const message of client.sendMessageStream({
             tenant: '',
             message: createTestMessage('1', 'test'),
@@ -233,10 +264,10 @@ describe('Client E2E tests', () => {
           agentCard.capabilities.streaming = false;
           const requestMessage = createTestMessage('1', 'request-message');
           const responseMessage = createTestMessage('2', 'response-message');
-          agentExecutor.events = [responseMessage];
+          agentExecutor.events = [AgentEvent.message(responseMessage)];
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          const actual: A2AStreamEventData[] = [];
+          const actual: StreamResponse[] = [];
           for await (const message of client.sendMessageStream({
             tenant: '',
             message: requestMessage,
@@ -248,10 +279,220 @@ describe('Client E2E tests', () => {
 
           expect(actual).to.have.lengthOf(1);
           expect(removeUndefinedFields(actual[0])).to.deep.equal(
-            removeUndefinedFields(responseMessage)
+            removeUndefinedFields({
+              payload: {
+                $case: 'message',
+                value: responseMessage,
+              },
+            })
           );
         });
       });
+    });
+  });
+});
+
+describe('Multi-tenancy E2E tests', () => {
+  // Only REST supports tenant-prefixed URL routing. JSON-RPC uses body params,
+  // and gRPC uses request message fields (both tested via the transport handler unit tests).
+  describe('[REST] tenant-scoped routing', () => {
+    let app: Express;
+    let server: Server;
+    let agentExecutor: TestAgentExecutor;
+    let agentCard: AgentCard;
+    let clientFactory: ClientFactory;
+
+    beforeEach(async () => {
+      agentExecutor = new TestAgentExecutor();
+      agentCard = {
+        name: 'Test Agent',
+        description: 'A multi-tenant test agent',
+        version: '1.0.0',
+        supportedInterfaces: [
+          {
+            url: 'localhost',
+            protocolBinding: 'HTTP+JSON',
+            tenant: 'test-tenant',
+            protocolVersion: '1.0',
+          },
+        ],
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          extensions: [],
+        },
+        defaultInputModes: ['text/plain'],
+        defaultOutputModes: ['text/plain'],
+        skills: [],
+        provider: { url: '', organization: '' },
+        documentationUrl: '',
+        securityRequirements: [],
+        securitySchemes: {},
+        signatures: [],
+      };
+      const requestHandler = new DefaultRequestHandler(
+        agentCard,
+        new InMemoryTaskStore(),
+        agentExecutor
+      );
+
+      app = express();
+      app.use(
+        '/a2a/rest',
+        restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication })
+      );
+
+      server = app.listen();
+      const address = server.address() as AddressInfo;
+      agentCard.supportedInterfaces![0].url = `http://localhost:${address.port}/a2a/rest`;
+      clientFactory = new ClientFactory();
+    });
+
+    afterEach(() => {
+      server.close();
+    });
+
+    it('should send a message via tenant-prefixed route and retrieve the task', async () => {
+      const tenant = 'test-tenant';
+      agentExecutor.events = [
+        AgentEvent.task({
+          id: '1',
+          contextId: '2',
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            timestamp: undefined,
+            message: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        }),
+        AgentEvent.statusUpdate({
+          taskId: '1',
+          contextId: '2',
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: undefined,
+          },
+          metadata: {},
+        }),
+      ];
+      const client = await clientFactory.createFromAgentCard(agentCard);
+
+      const result = await client.sendMessage({
+        tenant,
+        message: createTestMessage('msg-1', 'Hello from tenant'),
+        configuration: undefined,
+        metadata: {},
+      });
+
+      // Result should be a Task (not a Message) since we published task events
+      expect('id' in result).to.equal(true);
+      const task = result as Task;
+      expect(task.status?.state).to.equal(TaskState.TASK_STATE_COMPLETED);
+
+      // Should be able to retrieve the task via the same tenant
+      const retrieved = await client.getTask({
+        id: task.id,
+        tenant,
+        historyLength: 10,
+      });
+      expect(retrieved.id).to.equal(task.id);
+    });
+
+    it('should isolate tasks between tenants', async () => {
+      const requestHandler = new DefaultRequestHandler(
+        agentCard,
+        new InMemoryTaskStore(),
+        agentExecutor
+      );
+
+      // Create a separate server with a fresh store
+      const isolationApp = express();
+      isolationApp.use(
+        '/a2a/rest',
+        restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication })
+      );
+      const isolationServer = isolationApp.listen();
+      const address = isolationServer.address() as AddressInfo;
+
+      try {
+        const baseUrl = `http://localhost:${address.port}/a2a/rest`;
+
+        // Send message as tenant-A
+        agentExecutor.events = [
+          AgentEvent.task({
+            id: 'task-a',
+            contextId: 'ctx-a',
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              timestamp: undefined,
+              message: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          }),
+          AgentEvent.statusUpdate({
+            taskId: 'task-a',
+            contextId: 'ctx-a',
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+          }),
+        ];
+
+        const tenantACard = {
+          ...agentCard,
+          supportedInterfaces: [
+            {
+              url: baseUrl,
+              protocolBinding: 'HTTP+JSON',
+              tenant: 'tenant-A',
+              protocolVersion: '1.0',
+            },
+          ],
+        };
+        const clientA = await clientFactory.createFromAgentCard(tenantACard);
+        const resultA = await clientA.sendMessage({
+          tenant: 'tenant-A',
+          message: createTestMessage('msg-a', 'Hello from A'),
+          configuration: undefined,
+          metadata: {},
+        });
+        expect('id' in resultA).to.equal(true);
+
+        // Try to get tenant-A's task as tenant-B -- should fail
+        const tenantBCard = {
+          ...agentCard,
+          supportedInterfaces: [
+            {
+              url: baseUrl,
+              protocolBinding: 'HTTP+JSON',
+              tenant: 'tenant-B',
+              protocolVersion: '1.0',
+            },
+          ],
+        };
+        const clientB = await clientFactory.createFromAgentCard(tenantBCard);
+        try {
+          await clientB.getTask({
+            id: (resultA as any).id,
+            tenant: 'tenant-B',
+            historyLength: 0,
+          });
+          // Should not reach here
+          expect.fail('Expected TaskNotFoundError');
+        } catch (error: unknown) {
+          expect((error as Error).name).to.equal('TaskNotFoundError');
+        }
+      } finally {
+        isolationServer.close();
+      }
     });
   });
 });

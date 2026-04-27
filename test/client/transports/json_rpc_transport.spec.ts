@@ -69,13 +69,10 @@ describe('JsonRpcTransport', () => {
           JSON.stringify({
             jsonrpc: '2.0',
             result: {
-              payload: {
-                $case: 'msg',
-                value: {
-                  messageId: 'response-msg-1',
-                  role: Role.ROLE_AGENT,
-                  content: [{ part: { $case: 'text', value: 'Response' } }],
-                },
+              message: {
+                messageId: 'response-msg-1',
+                role: Role.ROLE_AGENT,
+                content: [{ part: { $case: 'text', value: 'Response' } }],
               },
             },
             id: 1,
@@ -200,8 +197,8 @@ describe('JsonRpcTransport', () => {
       const body = JSON.parse(fetchArgs.body as string);
       expect(body.method).toBe('ListTaskPushNotificationConfigs');
       expect(body.params).toEqual({ taskId: 'task1' });
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(expectedConfig);
+      expect(result.configs).toHaveLength(1);
+      expect(result.configs[0]).toEqual(expectedConfig);
     });
   });
 });

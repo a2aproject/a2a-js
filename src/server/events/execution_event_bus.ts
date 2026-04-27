@@ -1,6 +1,85 @@
 import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../../index.js';
 
-export type AgentExecutionEvent = Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
+/**
+ * Discriminant values for AgentExecutionEvent.
+ * These values intentionally mirror StreamResponse.payload.$case values
+ * ('message', 'task', 'statusUpdate', 'artifactUpdate') for trivial conversion.
+ */
+export type AgentExecutionEventKind = 'message' | 'task' | 'statusUpdate' | 'artifactUpdate';
+
+/**
+ * A discriminated union wrapper for agent execution events.
+ * The `kind` property acts as the TypeScript discriminant, enabling
+ * exhaustive switch/case narrowing without duck-typing or unsafe casts.
+ *
+ * @example
+ * ```ts
+ * switch (event.kind) {
+ *   case 'message':
+ *     console.log(event.data.messageId);  // TypeScript narrows data to Message
+ *     break;
+ *   case 'task':
+ *     console.log(event.data.id);         // narrows to Task
+ *     break;
+ *   case 'statusUpdate':
+ *     console.log(event.data.status);     // narrows to TaskStatusUpdateEvent
+ *     break;
+ *   case 'artifactUpdate':
+ *     console.log(event.data.artifact);   // narrows to TaskArtifactUpdateEvent
+ *     break;
+ * }
+ * ```
+ */
+export type AgentExecutionEvent =
+  | { kind: 'message'; data: Message }
+  | { kind: 'task'; data: Task }
+  | { kind: 'statusUpdate'; data: TaskStatusUpdateEvent }
+  | { kind: 'artifactUpdate'; data: TaskArtifactUpdateEvent };
+
+/**
+ * Factory functions for constructing type-safe AgentExecutionEvent wrappers.
+ * Prefer these over constructing the wrapper object literals directly.
+ *
+ * @example
+ * ```ts
+ * eventBus.publish(AgentEvent.task({ id: '...', contextId: '...', ... }));
+ * eventBus.publish(AgentEvent.statusUpdate({ taskId: '...', status: { ... }, ... }));
+ * ```
+ */
+export const AgentEvent = {
+  message: (data: Message): AgentExecutionEvent => ({ kind: 'message', data }),
+  task: (data: Task): AgentExecutionEvent => ({ kind: 'task', data }),
+  statusUpdate: (data: TaskStatusUpdateEvent): AgentExecutionEvent => ({
+    kind: 'statusUpdate',
+    data,
+  }),
+  artifactUpdate: (data: TaskArtifactUpdateEvent): AgentExecutionEvent => ({
+    kind: 'artifactUpdate',
+    data,
+  }),
+} as const;
+
+/**
+ * Compile-time exhaustiveness guard for AgentExecutionEvent switch statements.
+ * Place in the `default` case of any `switch (event.kind)` to ensure all variants
+ * are handled. If a new kind is added without updating the switch, TypeScript will
+ * report: "Argument of type '...' is not assignable to parameter of type 'never'".
+ *
+ * @example
+ * ```ts
+ * switch (event.kind) {
+ *   case 'message': ...
+ *   case 'task': ...
+ *   case 'statusUpdate': ...
+ *   case 'artifactUpdate': ...
+ *   default:
+ *     assertUnreachableEvent(event);
+ * }
+ * ```
+ */
+export function assertUnreachableEvent(event: never): never {
+  throw new Error(`Unhandled event kind: ${(event as AgentExecutionEvent).kind}`);
+}
 
 /**
  * Event names supported by ExecutionEventBus.

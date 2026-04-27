@@ -67,48 +67,4 @@ describe('FromProto', () => {
       expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
     });
   });
-
-  describe('listTaskPushNotificationConfig', () => {
-    it('should return configs array', () => {
-      const configs: proto.TaskPushNotificationConfig[] = [
-        { tenant: '', taskId: '', id: 'config-1', url: '', token: '', authentication: undefined },
-      ];
-      const response: proto.ListTaskPushNotificationConfigsResponse = {
-        configs,
-        nextPageToken: '',
-      };
-      expect(FromProto.listTaskPushNotificationConfig(response)).toEqual(configs);
-    });
-  });
-
-  describe('messageStreamResult', () => {
-    it('should return payload value if payload is present', () => {
-      const task: proto.Task = {
-        id: 'task-1',
-        history: [],
-        artifacts: [],
-        metadata: {},
-        status: {
-          state: proto.TaskState.TASK_STATE_COMPLETED,
-          timestamp: undefined,
-          message: undefined,
-        } as proto.TaskStatus,
-        contextId: '',
-      };
-      const event: proto.StreamResponse = {
-        payload: { $case: 'task', value: task },
-      };
-      expect(FromProto.messageStreamResult(event)).toEqual(task);
-    });
-
-    it('should throw GenericError if payload is missing', () => {
-      const event: proto.StreamResponse = {};
-      try {
-        FromProto.messageStreamResult(event);
-      } catch (error) {
-        expect(error).toBeInstanceOf(GenericError);
-        expect((error as GenericError).message).toContain('Invalid event type in StreamResponse');
-      }
-    });
-  });
 });

@@ -1,20 +1,19 @@
+import { withA2AVersion } from './service-parameters.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
-import {
-  TaskPushNotificationConfig,
-  Task,
-  AgentCard,
-  A2AStreamEventData,
-  SendMessageResult,
-} from '../index.js';
+import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
   GetTaskPushNotificationConfigRequest,
   GetTaskRequest,
   ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse,
   SendMessageConfiguration,
   SendMessageRequest,
+  StreamResponse,
   SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
 } from '../types/pb/a2a.js';
 import { ClientCallContext } from './context.js';
 import {
@@ -70,6 +69,15 @@ export interface RequestOptions {
 }
 
 export class Client {
+  /**
+   * The A2A protocol version sent with every request via the A2A-Version header.
+   * Determined by the transport, which receives the version from the matched
+   * AgentInterface during factory creation. Clients MUST send this header per §3.6.1.
+   */
+  public get protocolVersion(): string {
+    return this.transport.protocolVersion;
+  }
+
   constructor(
     public readonly transport: Transport,
     private agentCard: AgentCard,
@@ -79,13 +87,17 @@ export class Client {
   /**
    * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
    * Otherwise it will return the current agent card value.
+   *
+   * When a default tenant is configured (via `TenantTransportDecorator`, wired
+   * automatically by `ClientFactory` from `AgentInterface.tenant`), the tenant
+   * is applied to the request transparently.
    */
   async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
     if (this.agentCard.capabilities?.extendedAgentCard) {
       this.agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
-        (_, options) => this.transport.getExtendedAgentCard(options)
+        (_, options) => this.transport.getExtendedAgentCard({ tenant: '' }, options)
       );
     }
     return this.agentCard;
@@ -115,14 +127,14 @@ export class Client {
   async *sendMessageStream(
     params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'sendMessageStream';
 
     params = this.applyClientConfig({ params, returnImmediately: false });
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -140,8 +152,16 @@ export class Client {
 
     if (!this.agentCard.capabilities?.streaming) {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
+
+      let streamValue: StreamResponse;
+      if ('messageId' in result) {
+        streamValue = { payload: { $case: 'message', value: result } };
+      } else {
+        streamValue = { payload: { $case: 'task', value: result } };
+      }
+
       const afterArgs: AfterArgs<'sendMessageStream'> = {
-        result: { method, value: result },
+        result: { method, value: streamValue },
         agentCard: this.agentCard,
         options: beforeArgs.options,
       };
@@ -211,7 +231,7 @@ export class Client {
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
     if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
@@ -261,18 +281,29 @@ export class Client {
   }
 
   /**
+   * Retrieves a list of tasks with optional filtering and pagination.
+   */
+  listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    return this.executeWithInterceptors(
+      { method: 'listTasks', value: params },
+      options,
+      this.transport.listTasks.bind(this.transport)
+    );
+  }
+
+  /**
    * Allows a client to reconnect to an updates stream for an ongoing task after a previous connection was interrupted.
    */
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -332,6 +363,20 @@ export class Client {
     return result;
   }
 
+  /**
+   * Ensures the A2A-Version header is present in the request's service parameters.
+   * Per §3.6.1: "Clients MUST send the A2A-Version header with each request."
+   */
+  private withVersionHeader(options: RequestOptions | undefined): RequestOptions {
+    return {
+      ...options,
+      serviceParameters: ServiceParameters.createFrom(
+        options?.serviceParameters,
+        withA2AVersion(this.protocolVersion)
+      ),
+    };
+  }
+
   private async executeWithInterceptors<K extends keyof Client>(
     input: ClientCallInput<K>,
     options: RequestOptions | undefined,
@@ -343,7 +388,7 @@ export class Client {
     const beforeArgs: BeforeArgs<K> = {
       input: input,
       agentCard: this.agentCard,
-      options,
+      options: this.withVersionHeader(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
