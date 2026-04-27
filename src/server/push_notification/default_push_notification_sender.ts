@@ -105,11 +105,11 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    */
   private _buildAuthHeaders(pushConfig: TaskPushNotificationConfig): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const auth = pushConfig.authentication;
 
-    if (auth?.scheme != null && auth?.credentials != null) {
-      headers['Authorization'] = auth.scheme + ' ' + auth.credentials;
-    } else if (pushConfig.token != null) {
+    if (pushConfig.authentication?.scheme && pushConfig.authentication?.credentials) {
+      headers['Authorization'] =
+        `${pushConfig.authentication.scheme} ${pushConfig.authentication.credentials}`;
+    } else if (pushConfig.token) {
       headers[this.options.tokenHeaderName] = pushConfig.token;
     }
 
