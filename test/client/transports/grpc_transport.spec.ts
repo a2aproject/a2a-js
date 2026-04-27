@@ -137,7 +137,7 @@ describe('GrpcTransport', () => {
       const params = createMessageParams();
       mockUnaryError(mockGrpcClient.sendMessage as Mock, status.UNKNOWN, 'Internal Error');
 
-      await expect(transport.sendMessage(params)).rejects.toThrow('gRPC error:');
+      await expect(transport.sendMessage(params)).rejects.toThrow('gRPC error for sendMessage');
     });
 
     it('should cancel request when signal is aborted', async () => {
@@ -195,7 +195,7 @@ describe('GrpcTransport', () => {
       (mockGrpcClient.sendStreamingMessage as Mock).mockReturnValue(mockStream);
 
       const iterator = transport.sendMessageStream(params);
-      await expect(iterator.next()).rejects.toThrow('gRPC error:');
+      await expect(iterator.next()).rejects.toThrow('gRPC error for sendStreamingMessage');
     });
 
     it('should cancel stream when signal is aborted', async () => {

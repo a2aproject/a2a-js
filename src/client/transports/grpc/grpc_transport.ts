@@ -229,7 +229,7 @@ export class GrpcTransport implements Transport {
             options.signal.removeEventListener('abort', onAbort);
           }
           if (error) {
-            return reject(GrpcTransport.mapToError(error));
+            return reject(GrpcTransport.mapToError(error, method));
           }
           resolve(converter(response));
         }
@@ -279,7 +279,7 @@ export class GrpcTransport implements Transport {
       }
     } catch (error) {
       if (this.isServiceError(error)) {
-        throw GrpcTransport.mapToError(error);
+        throw GrpcTransport.mapToError(error, method);
       } else {
         throw new Error(`GRPC error for ${String(method)}!`, {
           cause: error,
@@ -339,11 +339,14 @@ export class GrpcTransport implements Transport {
    * ErrorInfo (e.g., non-A2A gRPC services), returns a generic Error
    * preserving the original gRPC code and details.
    */
-  private static mapToError(error: grpc.ServiceError): Error {
+  private static mapToError(error: grpc.ServiceError, method?: keyof A2AServiceClient): Error {
     const fromErrorInfo = GrpcTransport.mapFromErrorInfo(error);
     if (fromErrorInfo) return fromErrorInfo;
 
-    return new Error(`gRPC error: ${error.code} ${error.details}`, { cause: error });
+    const methodContext = method ? ' for ' + String(method) : '';
+    return new Error('gRPC error' + methodContext + ': ' + error.code + ' ' + error.details, {
+      cause: error,
+    });
   }
 }
 
