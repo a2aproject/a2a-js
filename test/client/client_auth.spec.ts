@@ -122,8 +122,8 @@ describe('JsonRpcTransport Authentication Tests', () => {
       expect(mockFetch.mock.calls[0][1]).to.deep.include({
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
+          'Content-Type': 'application/a2a+json',
+          Accept: 'application/a2a+json',
         },
       });
       expect(mockFetch.mock.calls[0][1].body).to.include('"method":"SendMessage"');
@@ -136,9 +136,9 @@ describe('JsonRpcTransport Authentication Tests', () => {
       // Check headers separately to avoid issues with Authorization header
       expect(mockFetch.mock.calls[1][1].headers).to.have.property(
         'Content-Type',
-        'application/json'
+        'application/a2a+json'
       );
-      expect(mockFetch.mock.calls[1][1].headers).to.have.property('Accept', 'application/json');
+      expect(mockFetch.mock.calls[1][1].headers).to.have.property('Accept', 'application/a2a+json');
       expect(mockFetch.mock.calls[1][1].headers).to.have.property('Authorization');
 
       expect(mockFetch.mock.calls[1][1].headers['Authorization']).to.match(/^Bearer .+$/);

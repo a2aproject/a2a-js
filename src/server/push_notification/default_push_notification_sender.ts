@@ -102,7 +102,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
     try {
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/a2a+json',
       };
 
       if (pushConfig.token) {

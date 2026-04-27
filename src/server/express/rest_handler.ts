@@ -14,7 +14,7 @@ import {
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_CONTENT_TYPE, A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 import { validateVersion } from '../version.js';
@@ -57,7 +57,10 @@ const restErrorHandler: ErrorRequestHandler = (
   next: NextFunction
 ) => {
   if (err instanceof SyntaxError && 'body' in err) {
-    return res.status(400).json(toHTTPError(new RequestMalformedError('Invalid JSON payload.')));
+    return res
+      .status(400)
+      .setHeader('Content-Type', A2A_CONTENT_TYPE)
+      .json(toHTTPError(new RequestMalformedError('Invalid JSON payload.')));
   }
   next(err);
 };
@@ -101,7 +104,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
-  router.use(express.json(), restErrorHandler);
+  router.use(express.json({ type: ['application/json', A2A_CONTENT_TYPE] }), restErrorHandler);
 
   // ============================================================================
   // Helper Functions
@@ -171,6 +174,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       if (!responseType || body === undefined) {
         throw new Error('Bug: toJson serializer and body must be provided for non-204 responses.');
       }
+      res.setHeader('Content-Type', A2A_CONTENT_TYPE);
       res.json(responseType.toJSON(body));
     }
   };
@@ -199,7 +203,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     } catch (error) {
       // Early error - return proper HTTP error
       setExtensionsHeader(res, context);
-      res.status(mapErrorToStatus(error)).json(toHTTPError(error));
+      const statusCode = mapErrorToStatus(error);
+      res.status(statusCode).setHeader('Content-Type', A2A_CONTENT_TYPE).json(toHTTPError(error));
       return;
     }
 
@@ -248,7 +253,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       return;
     }
     const statusCode = mapErrorToStatus(error);
-    res.status(statusCode).json(toHTTPError(error));
+    res.status(statusCode).setHeader('Content-Type', A2A_CONTENT_TYPE).json(toHTTPError(error));
   };
 
   /**

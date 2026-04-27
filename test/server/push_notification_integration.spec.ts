@@ -78,7 +78,7 @@ describe('Push Notification Integration Tests', () => {
   }> => {
     return new Promise((resolve) => {
       const app = express();
-      app.use(express.json());
+      app.use(express.json({ type: ['application/json', 'application/a2a+json'] }));
 
       // Endpoint to receive push notifications
       app.post('/notify', (req: Request, res: Response) => {
@@ -271,7 +271,7 @@ describe('Push Notification Integration Tests', () => {
       const firstNotification = receivedNotifications[0];
       assert.equal(firstNotification.method, 'POST');
       assert.equal(firstNotification.url, '/notify/delay_on_submitted');
-      assert.equal(firstNotification.headers['content-type'], 'application/json');
+      assert.equal(firstNotification.headers['content-type'], 'application/a2a+json');
       assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
       assert.deepEqual(
         firstNotification.body,
@@ -597,7 +597,7 @@ describe('Push Notification Integration Tests', () => {
         );
         assert.equal(
           notification.headers['content-type'],
-          'application/json',
+          'application/a2a+json',
           'Should include content-type header'
         );
       });
@@ -703,7 +703,7 @@ describe('Push Notification Integration Tests', () => {
         );
         assert.equal(
           notification.headers['content-type'],
-          'application/json',
+          'application/a2a+json',
           'Should include content-type header'
         );
       });
@@ -786,7 +786,7 @@ describe('Push Notification Integration Tests', () => {
         );
         assert.equal(
           notification.headers['content-type'],
-          'application/json',
+          'application/a2a+json',
           'Should include content-type header'
         );
       });
@@ -922,7 +922,7 @@ describe('Push Notification Integration Tests', () => {
       receivedNotifications.forEach((notification) => {
         assert.equal(
           notification.headers['content-type'],
-          'application/json',
+          'application/a2a+json',
           'Should include content-type header'
         );
       });
