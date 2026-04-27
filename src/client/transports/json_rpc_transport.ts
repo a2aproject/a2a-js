@@ -17,6 +17,7 @@ import {
   TaskPushNotificationConfig,
   SendMessageResult,
   A2A_PROTOCOL_VERSION,
+  A2A_CONTENT_TYPE,
 } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
@@ -233,7 +234,7 @@ export class JsonRpcTransport implements Transport {
       id: requestId,
     };
 
-    const httpResponse = await this._fetchRpc(rpcRequest, 'application/json', options);
+    const httpResponse = await this._fetchRpc(rpcRequest, A2A_CONTENT_TYPE, options);
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
@@ -273,14 +274,14 @@ export class JsonRpcTransport implements Transport {
 
   private async _fetchRpc(
     rpcRequest: JSONRPCRequest,
-    acceptHeader: string = 'application/json',
+    acceptHeader: string = A2A_CONTENT_TYPE,
     options?: RequestOptions
   ): Promise<Response> {
     const requestInit: RequestInit = {
       method: 'POST',
       headers: {
         ...options?.serviceParameters,
-        'Content-Type': 'application/json',
+        'Content-Type': A2A_CONTENT_TYPE,
         Accept: acceptHeader,
       },
       body: JSON.stringify(rpcRequest),

@@ -27,6 +27,13 @@ export const A2A_VERSION_HEADER = 'A2A-Version';
 export const A2A_PROTOCOL_VERSION = '1.0';
 
 /**
+ * The A2A JSON content type per §11.1.
+ * REST responses SHOULD use this content type.
+ * Push notification payloads MUST use this content type (§14.1).
+ */
+export const A2A_CONTENT_TYPE = 'application/a2a+json';
+
+/**
  * The default page size for listing tasks
  */
 export const DEFAULT_PAGE_SIZE = 50;

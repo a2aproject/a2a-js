@@ -10,7 +10,7 @@ import { JSONRPCResponse } from '../transports/jsonrpc/jsonrpc_transport_handler
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_CONTENT_TYPE, A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
@@ -38,7 +38,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
   const router = express.Router();
 
-  router.use(express.json(), jsonErrorHandler);
+  router.use(express.json({ type: ['application/json', A2A_CONTENT_TYPE] }), jsonErrorHandler);
 
   router.post('/', async (req: Request, res: Response) => {
     try {
@@ -82,7 +82,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           };
           if (!res.headersSent) {
             // Should not happen if flushHeaders worked
-            res.status(500).json(errorResponse); // Should be JSON, not SSE here
+            res.status(500).setHeader('Content-Type', A2A_CONTENT_TYPE).json(errorResponse);
           } else {
             // Try to send as last SSE event if possible, though client might have disconnected
             // Use shared formatSSEErrorEvent utility
@@ -96,7 +96,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       } else {
         // Single JSON-RPC response
         const rpcResponse = rpcResponseOrStream as JSONRPCResponse;
-        res.status(200).json(rpcResponse);
+        res.status(200).setHeader('Content-Type', A2A_CONTENT_TYPE).json(rpcResponse);
       }
     } catch (error) {
       // Catch errors from jsonRpcTransportHandler.handle itself (e.g., initial parse error)
@@ -107,7 +107,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         error: JsonRpcTransportHandler.mapToJSONRPCError(error),
       };
       if (!res.headersSent) {
-        res.status(500).json(errorResponse);
+        res.status(500).setHeader('Content-Type', A2A_CONTENT_TYPE).json(errorResponse);
       } else if (!res.writableEnded) {
         // If headers sent (likely during a stream attempt that failed early), try to end gracefully
         res.end();
