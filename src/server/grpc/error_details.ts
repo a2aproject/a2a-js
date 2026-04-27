@@ -51,7 +51,7 @@ export function buildGrpcErrorMetadata(
   );
 
   const metadata = new grpc.Metadata();
-  metadata.set('grpc-status-details-bin', Buffer.from(statusBytes));
+  metadata.set('grpc-status-details-bin', statusBytes);
   return metadata;
 }
 
