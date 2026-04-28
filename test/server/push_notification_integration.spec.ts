@@ -929,6 +929,232 @@ describe('Push Notification Integration Tests', () => {
     });
   });
 
+  describe('AuthenticationInfo (§4.3.3)', () => {
+    it('should set Authorization header from authentication config', async () => {
+      const contextId = 'ctx-auth-info';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId: '',
+        id: 'config-auth-info',
+        url: `${testServerUrl}/notify`,
+        token: '',
+        authentication: { scheme: 'Bearer', credentials: 'my-jwt-token-123' },
+      };
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          ...createTestMessage('Auth info test'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        metadata: {},
+        configuration: {
+          taskPushNotificationConfig: pushConfig,
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        fakeTaskExecute(ctx, bus);
+      });
+
+      await handler.sendMessage(params, defaultContext);
+      await waitForPushNotifications(pushNotificationSenderSpy);
+
+      assert.isAtLeast(receivedNotifications.length, 1, 'Should receive at least one notification');
+      const notification = receivedNotifications[0];
+      assert.equal(
+        notification.headers['authorization'],
+        'Bearer my-jwt-token-123',
+        'Should set Authorization header from AuthenticationInfo'
+      );
+      assert.isUndefined(
+        notification.headers['x-a2a-notification-token'],
+        'Should not set legacy token header when authentication is provided'
+      );
+    });
+
+    it('should support Basic auth scheme', async () => {
+      const contextId = 'ctx-basic-auth';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId: '',
+        id: 'config-basic-auth',
+        url: `${testServerUrl}/notify`,
+        token: '',
+        authentication: { scheme: 'Basic', credentials: 'dXNlcjpwYXNz' },
+      };
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          ...createTestMessage('Basic auth test'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        metadata: {},
+        configuration: {
+          taskPushNotificationConfig: pushConfig,
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        fakeTaskExecute(ctx, bus);
+      });
+
+      await handler.sendMessage(params, defaultContext);
+      await waitForPushNotifications(pushNotificationSenderSpy);
+
+      assert.isAtLeast(receivedNotifications.length, 1);
+      assert.equal(receivedNotifications[0].headers['authorization'], 'Basic dXNlcjpwYXNz');
+    });
+
+    it('should prefer authentication over legacy token', async () => {
+      const contextId = 'ctx-auth-precedence';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId: '',
+        id: 'config-precedence',
+        url: `${testServerUrl}/notify`,
+        token: 'legacy-token-value',
+        authentication: { scheme: 'Bearer', credentials: 'new-auth-token' },
+      };
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          ...createTestMessage('Precedence test'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        metadata: {},
+        configuration: {
+          taskPushNotificationConfig: pushConfig,
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        fakeTaskExecute(ctx, bus);
+      });
+
+      await handler.sendMessage(params, defaultContext);
+      await waitForPushNotifications(pushNotificationSenderSpy);
+
+      assert.isAtLeast(receivedNotifications.length, 1);
+      const notification = receivedNotifications[0];
+      assert.equal(
+        notification.headers['authorization'],
+        'Bearer new-auth-token',
+        'Should use AuthenticationInfo credentials'
+      );
+      assert.isUndefined(
+        notification.headers['x-a2a-notification-token'],
+        'Should not set legacy token header when authentication takes precedence'
+      );
+    });
+
+    it('should fall back to legacy token when authentication is undefined', async () => {
+      const contextId = 'ctx-legacy-fallback';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId: '',
+        id: 'config-legacy',
+        url: `${testServerUrl}/notify`,
+        token: 'fallback-token',
+        authentication: undefined,
+      };
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          ...createTestMessage('Legacy fallback test'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        metadata: {},
+        configuration: {
+          taskPushNotificationConfig: pushConfig,
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        fakeTaskExecute(ctx, bus);
+      });
+
+      await handler.sendMessage(params, defaultContext);
+      await waitForPushNotifications(pushNotificationSenderSpy);
+
+      assert.isAtLeast(receivedNotifications.length, 1);
+      const notification = receivedNotifications[0];
+      assert.equal(
+        notification.headers['x-a2a-notification-token'],
+        'fallback-token',
+        'Should use legacy token header as fallback'
+      );
+      assert.isUndefined(
+        notification.headers['authorization'],
+        'Should not set Authorization header when using legacy token'
+      );
+    });
+
+    it('should send no auth headers when neither authentication nor token is set', async () => {
+      const contextId = 'ctx-no-auth';
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId: '',
+        id: 'config-no-auth',
+        url: `${testServerUrl}/notify`,
+        token: '',
+        authentication: undefined,
+      };
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          ...createTestMessage('No auth test'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        metadata: {},
+        configuration: {
+          taskPushNotificationConfig: pushConfig,
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        fakeTaskExecute(ctx, bus);
+      });
+
+      await handler.sendMessage(params, defaultContext);
+      await waitForPushNotifications(pushNotificationSenderSpy);
+
+      assert.isAtLeast(receivedNotifications.length, 1);
+      const notification = receivedNotifications[0];
+      assert.isUndefined(notification.headers['authorization']);
+      assert.isUndefined(notification.headers['x-a2a-notification-token']);
+    });
+  });
+
   describe('StreamResponse payload types', () => {
     it('should throw if tried to send message payload', async () => {
       const taskId = 'test-message-payload';

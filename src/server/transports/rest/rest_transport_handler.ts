@@ -23,7 +23,9 @@ import {
   ListTaskPushNotificationConfigsResponse,
 } from '../../../index.js';
 import {
+  ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
   TaskNotCancelableError,
@@ -59,13 +61,15 @@ export const HTTP_STATUS = {
  * @returns Corresponding HTTP status code
  */
 export function mapErrorToStatus(error: unknown): number {
-  if (error instanceof RequestMalformedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof TaskNotFoundError) return HTTP_STATUS.NOT_FOUND;
   if (error instanceof TaskNotCancelableError) return HTTP_STATUS.CONFLICT;
   if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof ContentTypeNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof ExtendedAgentCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof ExtensionSupportRequiredError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof VersionNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof RequestMalformedError) return HTTP_STATUS.BAD_REQUEST;
   return HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 

@@ -8,6 +8,7 @@ import {
   RequestMalformedError,
   TaskNotCancelableError,
   ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
 } from '../../src/errors.js';
 import {
   TaskStore,
@@ -3086,6 +3087,236 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         params: undefined,
       });
       assert.deepEqual(agentCard.name, extendedAgentCard.name);
+    });
+  });
+
+  describe('ExtensionSupportRequiredError (§3.3.4)', () => {
+    const requiredExtensionUri = 'urn:a2a:required-ext';
+    const optionalExtensionUri = 'urn:a2a:optional-ext';
+
+    const agentCardWithRequiredExtension: AgentCard = {
+      ...testAgentCard,
+      capabilities: {
+        ...testAgentCard.capabilities,
+        extensions: [
+          {
+            uri: requiredExtensionUri,
+            description: 'A required extension',
+            required: true,
+            params: {},
+          },
+          {
+            uri: optionalExtensionUri,
+            description: 'An optional extension',
+            required: false,
+            params: {},
+          },
+        ],
+      },
+    };
+
+    let requiredExtHandler: DefaultRequestHandler;
+
+    beforeEach(() => {
+      requiredExtHandler = new DefaultRequestHandler(
+        agentCardWithRequiredExtension,
+        mockTaskStore,
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager()
+      );
+    });
+
+    it('should reject requests that do not declare a required extension', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-required',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      // No extensions declared by client
+      const context = new ServerCallContext();
+
+      await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+    });
+
+    it('should reject when client declares only optional extensions but not required ones', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-optional-only',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      // Client declares only the optional extension, not the required one
+      const context = new ServerCallContext({
+        requestedExtensions: [optionalExtensionUri],
+      });
+
+      await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+    });
+
+    it('should include missing extension URIs in error message', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-error-msg',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      const context = new ServerCallContext();
+
+      await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
+        requiredExtensionUri
+      );
+    });
+
+    it('should accept requests that declare the required extension', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-accepted',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: 'task-ext',
+              contextId: 'ctx-ext',
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      // Client declares the required extension
+      const context = new ServerCallContext({
+        requestedExtensions: [requiredExtensionUri],
+      });
+
+      // Should not throw
+      const result = await requiredExtHandler.sendMessage(params, context);
+      expect(result).toBeDefined();
+    });
+
+    it('should not reject when agent has no required extensions', async () => {
+      // Use the default handler which has only optional extensions
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-no-required',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: 'task-no-req',
+              contextId: 'ctx-no-req',
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      // No extensions declared, but agent has no required ones
+      const context = new ServerCallContext();
+
+      const result = await handler.sendMessage(params, context);
+      expect(result).toBeDefined();
     });
   });
 });

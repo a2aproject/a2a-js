@@ -28,6 +28,7 @@ import {
   GenericError,
   VersionNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
 } from '../../../errors.js';
 import { JSONRPCErrorResponse } from '../../../core.js';
 
@@ -310,6 +311,9 @@ export class JsonRpcTransportHandler {
         code: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
         message: error.message,
       };
+    }
+    if (error instanceof ExtensionSupportRequiredError) {
+      return { code: A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED, message: error.message };
     }
     if (error instanceof VersionNotSupportedError) {
       return { code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED, message: error.message };
