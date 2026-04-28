@@ -8,6 +8,7 @@ import {
   UnsupportedOperationError,
   GenericError,
   ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
 } from '../../errors.js';
 
 import {
@@ -175,12 +176,27 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Ensure contextId is present
     const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
-    // Validate requested extensions against agent capabilities
-    if (context.requestedExtensions) {
-      const agentCard = await this.getAgentCard();
-      const exposedExtensions = new Set(
-        agentCard.capabilities?.extensions?.map((ext) => ext.uri) || []
+    // Validate requested extensions against agent capabilities per §3.3.4.
+    const agentCard = await this.getAgentCard();
+    const agentExtensions = agentCard.capabilities?.extensions ?? [];
+
+    // Check that the client declares support for all required extensions.
+    // Per §3.3.4: "When a required extension is not declared by the client,
+    // server MUST return ExtensionSupportRequiredError."
+    const requestedSet = new Set(context.requestedExtensions ?? []);
+    const missingRequired = agentExtensions
+      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
+      .map((ext) => ext.uri);
+
+    if (missingRequired.length > 0) {
+      throw new ExtensionSupportRequiredError(
+        `Client must declare support for required extensions: ${missingRequired.join(', ')}`
       );
+    }
+
+    // Filter client-requested extensions to only those the agent exposes.
+    if (context.requestedExtensions) {
+      const exposedExtensions = new Set(agentExtensions.map((ext) => ext.uri));
       const validExtensions = context.requestedExtensions.filter((extension) =>
         exposedExtensions.has(extension)
       );

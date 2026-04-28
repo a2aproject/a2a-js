@@ -9,7 +9,9 @@ export interface DefaultPushNotificationSenderOptions {
    */
   timeout?: number;
   /**
-   * Custom header name for the token. Defaults to 'X-A2A-Notification-Token'.
+   * Custom header name for the legacy token. Defaults to 'X-A2A-Notification-Token'.
+   * Used only when `pushConfig.token` is set and `pushConfig.authentication` is not.
+   * @deprecated Use `pushConfig.authentication` with `AuthenticationInfo` instead.
    */
   tokenHeaderName?: string;
 }
@@ -90,6 +92,30 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     }
   }
 
+  /**
+   * Builds the authentication headers for a push notification request.
+   *
+   * Per §4.3.3, the agent MUST include auth credentials per the push
+   * notification config's `authentication` field when sending notifications.
+   *
+   * Priority:
+   * 1. `pushConfig.authentication` (AuthenticationInfo with scheme + credentials)
+   *    → sets `Authorization: <scheme> <credentials>` per RFC 9110 §11.4
+   * 2. `pushConfig.token` (legacy) → sets the custom token header (deprecated)
+   */
+  private _buildAuthHeaders(pushConfig: TaskPushNotificationConfig): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    if (pushConfig.authentication?.scheme && pushConfig.authentication?.credentials) {
+      headers['Authorization'] =
+        `${pushConfig.authentication.scheme} ${pushConfig.authentication.credentials}`;
+    } else if (pushConfig.token) {
+      headers[this.options.tokenHeaderName] = pushConfig.token;
+    }
+
+    return headers;
+  }
+
   private async _dispatchNotification(
     streamResponse: StreamResponse,
     pushConfig: TaskPushNotificationConfig,
@@ -101,17 +127,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      if (pushConfig.token) {
-        headers[this.options.tokenHeaderName] = pushConfig.token;
-      }
-
       const response = await fetch(url, {
         method: 'POST',
-        headers,
+        headers: this._buildAuthHeaders(pushConfig),
         body: JSON.stringify(StreamResponse.toJSON(streamResponse)),
         signal: controller.signal,
       });

@@ -30,6 +30,7 @@ import {
   ExtendedAgentCardNotConfiguredError,
   buildErrorInfo,
   type ErrorDetail,
+  ExtensionSupportRequiredError,
 } from '../../../errors.js';
 import { JSONRPCErrorResponse } from '../../../core.js';
 
@@ -301,6 +302,7 @@ export class JsonRpcTransportHandler {
       [ContentTypeNotSupportedError, A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED],
       [InvalidAgentResponseError, A2A_ERROR_CODE.INVALID_AGENT_RESPONSE],
       [ExtendedAgentCardNotConfiguredError, A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED],
+      [ExtensionSupportRequiredError, A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED],
       [VersionNotSupportedError, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED],
       [RequestMalformedError, A2A_ERROR_CODE.INVALID_PARAMS],
       [GenericError, A2A_ERROR_CODE.INTERNAL_ERROR],
