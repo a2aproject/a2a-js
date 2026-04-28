@@ -61,7 +61,7 @@ export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandl
 
       // Support conditional requests: if client sends If-None-Match
       // matching the current ETag, return 304 with no body.
-      if (req.headers['if-none-match'] === etag) {
+      if (req.fresh) {
         res.status(304).end();
         return;
       }
