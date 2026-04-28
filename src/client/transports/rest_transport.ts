@@ -12,7 +12,7 @@ import {
   VersionNotSupportedError,
 } from '../../errors.js';
 
-import { SendMessageResult, A2A_PROTOCOL_VERSION } from '../../index.js';
+import { SendMessageResult, A2A_PROTOCOL_VERSION, A2A_CONTENT_TYPE } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -273,11 +273,11 @@ export class RestTransport implements Transport {
 
   private _buildHeaders(
     options: RequestOptions | undefined,
-    acceptHeader: string = 'application/json'
+    acceptHeader: string = A2A_CONTENT_TYPE
   ): HeadersInit {
     return {
       ...options?.serviceParameters,
-      'Content-Type': 'application/json',
+      'Content-Type': A2A_CONTENT_TYPE,
       Accept: acceptHeader,
     };
   }

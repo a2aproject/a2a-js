@@ -806,4 +806,68 @@ describe('restHandler', () => {
       assert.include(response.body.message, '9.9');
     });
   });
+
+  describe('Content-Type: application/a2a+json (§11.1)', () => {
+    it('should return application/a2a+json for successful JSON responses', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should return application/a2a+json for error responses', async () => {
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '9.9')
+        .expect(400);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should accept requests with Content-Type application/a2a+json', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
+
+      const response = await request(app)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .set('Content-Type', 'application/a2a+json')
+        .send(JSON.stringify({ message: testMessage }))
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should accept requests with Content-Type application/json', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .set('Content-Type', 'application/json')
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should return text/event-stream for SSE responses, not application/a2a+json', async () => {
+      const streamResponse = (async function* () {
+        yield { payload: { $case: 'task' as const, value: testTask } };
+      })();
+
+      (mockRequestHandler.sendMessageStream as Mock).mockReturnValue(streamResponse);
+
+      const response = await request(app)
+        .post('/message:stream')
+        .set('A2A-Version', '1.0')
+        .set('Accept', 'text/event-stream')
+        .send({ message: testMessage })
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'text/event-stream');
+    });
+  });
 });

@@ -3,7 +3,7 @@
  */
 
 import { vi, Mock } from 'vitest';
-import { AGENT_CARD_PATH } from '../../src/constants.js';
+import { AGENT_CARD_PATH, JSON_CONTENT_TYPE } from '../../src/constants.js';
 import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/index.js';
 
@@ -42,7 +42,7 @@ export function createAgentCardResponse(
   status: number = 200,
   headers: Record<string, string> = {}
 ): Response {
-  const defaultHeaders = { 'Content-Type': 'application/json' };
+  const defaultHeaders = { 'Content-Type': JSON_CONTENT_TYPE };
   const responseHeaders = { ...defaultHeaders, ...headers };
 
   // Create a fresh body each time to avoid "Body is unusable" errors
@@ -72,7 +72,7 @@ export function createResponse(
   status: number = 200,
   headers: Record<string, string> = {}
 ): Response {
-  const defaultHeaders = { 'Content-Type': 'application/json' };
+  const defaultHeaders = { 'Content-Type': JSON_CONTENT_TYPE };
   const responseHeaders = { ...defaultHeaders, ...headers };
 
   // Construct the JSON-RPC response structure
@@ -451,7 +451,7 @@ export function createRestResponse(
   status: number = 200,
   headers: Record<string, string> = {}
 ): Response {
-  const defaultHeaders = { 'Content-Type': 'application/json' };
+  const defaultHeaders = { 'Content-Type': JSON_CONTENT_TYPE };
   const responseHeaders = { ...defaultHeaders, ...headers };
   return new Response(JSON.stringify(data), { status, headers: responseHeaders });
 }
@@ -474,7 +474,7 @@ export function createRestErrorResponse(
   const errorBody = { code, message, ...(data && { data }) };
   return new Response(JSON.stringify(errorBody), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': JSON_CONTENT_TYPE },
   });
 }
 

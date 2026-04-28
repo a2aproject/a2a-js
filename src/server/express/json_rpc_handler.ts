@@ -82,7 +82,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           };
           if (!res.headersSent) {
             // Should not happen if flushHeaders worked
-            res.status(500).json(errorResponse); // Should be JSON, not SSE here
+            res.status(500).json(errorResponse);
           } else {
             // Try to send as last SSE event if possible, though client might have disconnected
             // Use shared formatSSEErrorEvent utility
