@@ -2,6 +2,7 @@ import { TaskPushNotificationConfig, StreamResponse } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore } from './push_notification_store.js';
+import { A2A_CONTENT_TYPE } from '../../constants.js';
 
 export interface DefaultPushNotificationSenderOptions {
   /**
@@ -104,7 +105,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    * 2. `pushConfig.token` (legacy) → sets the custom token header (deprecated)
    */
   private _buildAuthHeaders(pushConfig: TaskPushNotificationConfig): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { 'Content-Type': A2A_CONTENT_TYPE };
 
     if (pushConfig.authentication?.scheme && pushConfig.authentication?.credentials) {
       headers['Authorization'] =

@@ -37,6 +37,7 @@ import {
   ListTasksRequest,
   ListTasksResponse,
 } from '../../types/pb/a2a.js';
+import { JSON_CONTENT_TYPE } from '../../constants.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
 
@@ -233,7 +234,7 @@ export class JsonRpcTransport implements Transport {
       id: requestId,
     };
 
-    const httpResponse = await this._fetchRpc(rpcRequest, 'application/json', options);
+    const httpResponse = await this._fetchRpc(rpcRequest, JSON_CONTENT_TYPE, options);
 
     if (!httpResponse.ok) {
       let errorBodyText = '(empty or non-JSON response)';
@@ -273,14 +274,14 @@ export class JsonRpcTransport implements Transport {
 
   private async _fetchRpc(
     rpcRequest: JSONRPCRequest,
-    acceptHeader: string = 'application/json',
+    acceptHeader: string = JSON_CONTENT_TYPE,
     options?: RequestOptions
   ): Promise<Response> {
     const requestInit: RequestInit = {
       method: 'POST',
       headers: {
         ...options?.serviceParameters,
-        'Content-Type': 'application/json',
+        'Content-Type': JSON_CONTENT_TYPE,
         Accept: acceptHeader,
       },
       body: JSON.stringify(rpcRequest),
