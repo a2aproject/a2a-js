@@ -27,6 +27,12 @@ export const A2A_VERSION_HEADER = 'A2A-Version';
 export const A2A_PROTOCOL_VERSION = '1.0';
 
 /**
+ * The JSON content type per §9.1.
+ * JSON-RPC requests MUST use this content type.
+ */
+export const JSON_CONTENT_TYPE = 'application/json';
+
+/**
  * The A2A JSON content type per §11.1.
  * REST responses SHOULD use this content type.
  * Push notification payloads MUST use this content type (§14.1).

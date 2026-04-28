@@ -14,7 +14,12 @@ import {
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { A2A_CONTENT_TYPE, A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
+import {
+  JSON_CONTENT_TYPE,
+  A2A_CONTENT_TYPE,
+  A2A_VERSION_HEADER,
+  HTTP_EXTENSION_HEADER,
+} from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 import { validateVersion } from '../version.js';
@@ -106,7 +111,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       res.setHeader('Content-Type', A2A_CONTENT_TYPE);
       next();
     },
-    express.json({ type: ['application/json', A2A_CONTENT_TYPE] }),
+    express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE] }),
     restErrorHandler
   );
 
