@@ -152,6 +152,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
         );
       }
+      // Validate contextId/taskId consistency per §3.4.3:
+      // When a taskId references an existing task, the contextId (if provided)
+      // MUST match the task's contextId. A mismatch indicates the client is
+      // attempting to associate a task with a different context.
+      // This check must occur before any task mutation.
+      if (
+        incomingMessage.contextId &&
+        task.contextId &&
+        incomingMessage.contextId !== task.contextId
+      ) {
+        throw new RequestMalformedError(
+          `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
+            `does not match task '${task.id}' contextId '${task.contextId}'`
+        );
+      }
       // Add incomingMessage to history and save the task.
       task.history = [...(task.history || []), incomingMessage];
       await this.taskStore.save(task, context);
@@ -172,21 +187,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           // Optionally, throw an error or handle as per specific requirements
         }
       }
-    }
-    // Validate contextId/taskId consistency per §3.4.3:
-    // When a taskId references an existing task, the contextId (if provided)
-    // MUST match the task's contextId. A mismatch indicates the client is
-    // attempting to associate a task with a different context.
-    if (
-      task &&
-      incomingMessage.contextId &&
-      task.contextId &&
-      incomingMessage.contextId !== task.contextId
-    ) {
-      throw new RequestMalformedError(
-        `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
-          `does not match task '${task.id}' contextId '${task.contextId}'`
-      );
     }
 
     // Ensure contextId is present
