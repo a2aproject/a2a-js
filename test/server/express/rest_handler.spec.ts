@@ -425,6 +425,48 @@ describe('restHandler', () => {
       assert.deepEqual(response.body.tasks, expectedResponse);
       expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalled();
     });
+
+    it('should parse string enum status filter', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
+
+      await request(app)
+        .get('/tasks?status=TASK_STATE_COMPLETED')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
+      assert.equal(
+        callArgs.status,
+        TaskState.TASK_STATE_COMPLETED,
+        'TASK_STATE_COMPLETED should parse to enum value (3)'
+      );
+    });
+
+    it('should treat unrecognized status values as UNRECOGNIZED (-1)', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
+
+      await request(app).get('/tasks?status=INVALID_VALUE').set('A2A-Version', '1.0').expect(200);
+
+      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
+      assert.equal(
+        callArgs.status,
+        TaskState.UNRECOGNIZED,
+        'Unrecognized status should return UNRECOGNIZED (-1)'
+      );
+    });
+
+    it('should default to TASK_STATE_UNSPECIFIED when status is not provided', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
+
+      await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
+
+      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
+      assert.equal(
+        callArgs.status,
+        TaskState.TASK_STATE_UNSPECIFIED,
+        'Should default to TASK_STATE_UNSPECIFIED (0)'
+      );
+    });
   });
 
   describe('POST /tasks/:taskId:subscribe', () => {
