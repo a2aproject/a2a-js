@@ -152,11 +152,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
         );
       }
-      // Validate contextId/taskId consistency per §3.4.3:
-      // When a taskId references an existing task, the contextId (if provided)
-      // MUST match the task's contextId. A mismatch indicates the client is
-      // attempting to associate a task with a different context.
-      // This check must occur before any task mutation.
+      // Validate contextId/taskId consistency per §3.4.3.
       if (
         incomingMessage.contextId &&
         task.contextId &&
@@ -188,7 +184,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
       }
     }
-
     // Ensure contextId is present
     const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
