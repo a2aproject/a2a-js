@@ -57,10 +57,7 @@ const restErrorHandler: ErrorRequestHandler = (
   next: NextFunction
 ) => {
   if (err instanceof SyntaxError && 'body' in err) {
-    return res
-      .status(400)
-      .setHeader('Content-Type', A2A_CONTENT_TYPE)
-      .json(toHTTPError(new RequestMalformedError('Invalid JSON payload.')));
+    return res.status(400).json(toHTTPError(new RequestMalformedError('Invalid JSON payload.')));
   }
   next(err);
 };
@@ -104,7 +101,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
-  router.use(express.json({ type: ['application/json', A2A_CONTENT_TYPE] }), restErrorHandler);
+  router.use(
+    (_req: Request, res: Response, next: NextFunction) => {
+      res.setHeader('Content-Type', A2A_CONTENT_TYPE);
+      next();
+    },
+    express.json({ type: ['application/json', A2A_CONTENT_TYPE] }),
+    restErrorHandler
+  );
 
   // ============================================================================
   // Helper Functions
@@ -174,7 +178,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       if (!responseType || body === undefined) {
         throw new Error('Bug: toJson serializer and body must be provided for non-204 responses.');
       }
-      res.setHeader('Content-Type', A2A_CONTENT_TYPE);
       res.json(responseType.toJSON(body));
     }
   };
@@ -204,7 +207,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       // Early error - return proper HTTP error
       setExtensionsHeader(res, context);
       const statusCode = mapErrorToStatus(error);
-      res.status(statusCode).setHeader('Content-Type', A2A_CONTENT_TYPE).json(toHTTPError(error));
+      res.status(statusCode).json(toHTTPError(error));
       return;
     }
 
@@ -253,7 +256,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       return;
     }
     const statusCode = mapErrorToStatus(error);
-    res.status(statusCode).setHeader('Content-Type', A2A_CONTENT_TYPE).json(toHTTPError(error));
+    res.status(statusCode).json(toHTTPError(error));
   };
 
   /**
