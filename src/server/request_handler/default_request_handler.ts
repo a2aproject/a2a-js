@@ -173,6 +173,22 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
       }
     }
+    // Validate contextId/taskId consistency per §3.4.3:
+    // When a taskId references an existing task, the contextId (if provided)
+    // MUST match the task's contextId. A mismatch indicates the client is
+    // attempting to associate a task with a different context.
+    if (
+      task &&
+      incomingMessage.contextId &&
+      task.contextId &&
+      incomingMessage.contextId !== task.contextId
+    ) {
+      throw new RequestMalformedError(
+        `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
+          `does not match task '${task.id}' contextId '${task.contextId}'`
+      );
+    }
+
     // Ensure contextId is present
     const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
 
