@@ -206,7 +206,9 @@ export class RestTransportHandler {
       tenant: (queryParams.tenant as string) || '',
       contextId: (queryParams.contextId as string) || '',
       status: queryParams.status
-        ? taskStateFromJSON(queryParams.status)
+        ? taskStateFromJSON(
+            isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
+          )
         : TaskState.TASK_STATE_UNSPECIFIED,
       pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : undefined,
       pageToken: (queryParams.pageToken as string) || '',
