@@ -148,6 +148,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     referenceTaskIds: [],
   });
 
+  const createTestTask = (id: string, history: Message[] = []): Task => ({
+    id,
+    contextId: `ctx-${id}`,
+    status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    artifacts: [],
+    metadata: {},
+    history,
+  });
+
   it('sendMessage: should return a simple message response', async () => {
     const params: SendMessageRequest = {
       message: createTestMessage('msg-1', 'Hello'),
@@ -1482,14 +1491,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   });
 
   it('getTask: should return an existing task from the store', async () => {
-    const fakeTask: Task = {
-      id: 'task-exist',
-      contextId: 'ctx-exist',
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-      artifacts: [],
-      metadata: {},
-      history: [],
-    };
+    const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const result = await handler.getTask(
@@ -1505,14 +1507,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       createTestMessage('h2', 'history msg 2'),
       createTestMessage('h3', 'history msg 3'),
     ];
-    const fakeTask: Task = {
-      id: 'task-history-all',
-      contextId: 'ctx-history-all',
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-      artifacts: [],
-      metadata: {},
-      history,
-    };
+    const fakeTask = createTestTask('task-history-all', history);
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const result = await handler.getTask({ id: fakeTask.id, tenant: '' }, serverCallContext);
@@ -1524,14 +1519,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       createTestMessage('h1', 'history msg 1'),
       createTestMessage('h2', 'history msg 2'),
     ];
-    const fakeTask: Task = {
-      id: 'task-history-zero',
-      contextId: 'ctx-history-zero',
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-      artifacts: [],
-      metadata: {},
-      history,
-    };
+    const fakeTask = createTestTask('task-history-zero', history);
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const result = await handler.getTask(
@@ -1547,14 +1535,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       createTestMessage('h2', 'middle'),
       createTestMessage('h3', 'newest'),
     ];
-    const fakeTask: Task = {
-      id: 'task-history-n',
-      contextId: 'ctx-history-n',
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-      artifacts: [],
-      metadata: {},
-      history,
-    };
+    const fakeTask = createTestTask('task-history-n', history);
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const result = await handler.getTask(
