@@ -1499,6 +1499,73 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(result, fakeTask);
   });
 
+  it('getTask: should return all history when historyLength is undefined (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'history msg 1'),
+      createTestMessage('h2', 'history msg 2'),
+      createTestMessage('h3', 'history msg 3'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-history-all',
+      contextId: 'ctx-history-all',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask({ id: fakeTask.id, tenant: '' }, serverCallContext);
+    assert.lengthOf(result.history!, 3, 'undefined historyLength should return all history');
+  });
+
+  it('getTask: should return empty history when historyLength is 0 (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'history msg 1'),
+      createTestMessage('h2', 'history msg 2'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-history-zero',
+      contextId: 'ctx-history-zero',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask(
+      { id: fakeTask.id, tenant: '', historyLength: 0 },
+      serverCallContext
+    );
+    assert.lengthOf(result.history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('getTask: should return N most recent messages when historyLength is N (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'oldest'),
+      createTestMessage('h2', 'middle'),
+      createTestMessage('h3', 'newest'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-history-n',
+      contextId: 'ctx-history-n',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask(
+      { id: fakeTask.id, tenant: '', historyLength: 2 },
+      serverCallContext
+    );
+    assert.lengthOf(result.history!, 2, 'historyLength=2 should return 2 messages');
+    assert.equal(result.history![0].messageId, 'h2', 'should return most recent messages');
+    assert.equal(result.history![1].messageId, 'h3', 'should return most recent messages');
+  });
+
   it('listTasks: should return tasks from the store', async () => {
     const fakeTask1: Task = {
       id: 'task-list-1',

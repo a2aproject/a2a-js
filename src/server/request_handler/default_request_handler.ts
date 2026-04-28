@@ -475,14 +475,18 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
     }
-    if (params.historyLength !== undefined && params.historyLength >= 0) {
-      if (task.history) {
-        task.history = task.history.slice(-params.historyLength);
+    // Apply historyLength semantics per §3.2.4:
+    // - undefined: no client limit, return all history
+    // - 0: omit history
+    // - N > 0: return at most N most recent messages
+    if (params.historyLength !== undefined) {
+      if (params.historyLength <= 0) {
+        task.history = [];
+      } else {
+        task.history = (task.history ?? []).slice(-params.historyLength);
       }
-    } else {
-      // Negative or invalid historyLength means no history
-      task.history = [];
     }
+    // When historyLength is undefined, return history as-is (all messages)
     return task;
   }
 
