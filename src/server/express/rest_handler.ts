@@ -206,8 +206,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     } catch (error) {
       // Early error - return proper HTTP error
       setExtensionsHeader(res, context);
-      const statusCode = mapErrorToStatus(error);
-      res.status(statusCode).json(toHTTPError(error));
+      res.status(mapErrorToStatus(error)).json(toHTTPError(error));
       return;
     }
 
