@@ -1655,46 +1655,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isAtMost(task.history!.length, 1, 'historyLength=1 should return at most 1 message');
   });
 
-  it('sendMessage: should return all history when historyLength is undefined (§3.2.4)', async () => {
+  it('sendMessage: should not trim history when historyLength is undefined (§3.2.4)', async () => {
     const contextId = 'ctx-send-hist-undef';
 
-    // First, create a task with history by sending an initial message
-    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish(
-        AgentEvent.task({
-          id: ctx.taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_INPUT_REQUIRED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          artifacts: [],
-          history: [],
-          metadata: {},
-        })
-      );
-      bus.finished();
-    });
+    // Agent includes multiple messages in its task event history.
+    // Per §3.7, the agent is responsible for determining which messages
+    // are persisted in the task history.
+    const agentHistory = [
+      createTestMessage('hist-1', 'first message'),
+      createTestMessage('hist-2', 'second message'),
+      createTestMessage('hist-3', 'third message'),
+    ];
 
-    const firstParams: SendMessageRequest = {
-      tenant: '',
-      message: createTestMessage('msg-undef-first', 'first'),
-      configuration: undefined,
-      metadata: {},
-    } as SendMessageRequest;
-    firstParams.message!.contextId = contextId;
-
-    const firstResult = await handler.sendMessage(firstParams, serverCallContext);
-    assert.property(firstResult, 'id');
-    const taskId = (firstResult as Task).id;
-    assert.lengthOf(
-      (firstResult as Task).history!,
-      1,
-      'historyLength=undefined should return all history'
-    );
-
-    // Second message adds to history and completes
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       bus.publish(
         AgentEvent.task({
@@ -1706,39 +1678,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             timestamp: undefined,
           },
           artifacts: [],
-          history: [],
+          history: agentHistory,
           metadata: {},
         })
       );
       bus.finished();
     });
 
-    const secondMessage = createTestMessage('msg-undef-second', 'second');
-    secondMessage.contextId = contextId;
-    secondMessage.taskId = taskId;
-
     const params: SendMessageRequest = {
       tenant: '',
-      message: secondMessage,
+      message: createTestMessage('msg-undef', 'test'),
       configuration: undefined,
       metadata: {},
     } as SendMessageRequest;
+    params.message!.contextId = contextId;
 
     const result = await handler.sendMessage(params, serverCallContext);
 
     assert.property(result, 'id', 'Should return a Task');
     const task = result as Task;
-    // With undefined historyLength, no trimming occurs — all history is returned.
-    // The ResultManager merges the store's history (which includes both user
-    // messages added by _createRequestContext) with the agent event's history.
-    assert.lengthOf(task.history!, 2, 'undefined historyLength should return all history');
-    assert.isTrue(
-      task.history!.some((m) => m.messageId === 'msg-undef-first'),
-      'history should contain the first user message'
-    );
-    assert.isTrue(
-      task.history!.some((m) => m.messageId === 'msg-undef-second'),
-      'history should contain the second user message'
+    // With undefined historyLength, no trimming is applied — all history
+    // from the agent's task event is returned as-is (plus the user message).
+    assert.isAtLeast(
+      task.history!.length,
+      3,
+      'undefined historyLength should not trim agent-provided history'
     );
   });
 

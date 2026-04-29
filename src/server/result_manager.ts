@@ -35,36 +35,19 @@ export class ResultManager {
       }
       case 'task': {
         const taskEvent = event.data;
-        let existingTask: Task | null = null;
-        try {
-          existingTask = (await this.taskStore.load(taskEvent.id, this.serverCallContext)) ?? null;
-        } catch {
-          // Task may not exist yet (first event for a new task)
-        }
-
-        const existingHistory = existingTask?.history ?? [];
-        const eventHistory = taskEvent.history ?? [];
-
-        // Deduplicate by messageId, preserving order from existing history first
-        const seenIds = new Set(existingHistory.map((m) => m.messageId));
-        const mergedHistory = [
-          ...existingHistory,
-          ...eventHistory.filter((m) => !seenIds.has(m.messageId)),
-        ];
-
-        this.currentTask = {
-          ...taskEvent,
-          history: mergedHistory,
-        };
+        this.currentTask = { ...taskEvent }; // Make a copy
 
         // Ensure the latest user message is in history if not already present
         if (this.latestUserMessage) {
           if (
-            !this.currentTask.history.find(
+            !this.currentTask.history?.find(
               (msg) => msg.messageId === this.latestUserMessage?.messageId
             )
           ) {
-            this.currentTask.history = [this.latestUserMessage, ...this.currentTask.history];
+            this.currentTask.history = [
+              this.latestUserMessage,
+              ...(this.currentTask.history || []),
+            ];
           }
         }
         await this.saveCurrentTask();
