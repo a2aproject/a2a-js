@@ -1905,6 +1905,114 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
+  it('listTasks: should return empty history when historyLength is 0', async () => {
+    const history: Message[] = [
+      createTestMessage('lh1', 'message 1'),
+      createTestMessage('lh2', 'message 2'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-0',
+      contextId: 'ctx-list-hist',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(result.tasks[0].history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('listTasks: should return N most recent messages when historyLength is N', async () => {
+    const history: Message[] = [
+      createTestMessage('ln1', 'oldest'),
+      createTestMessage('ln2', 'middle'),
+      createTestMessage('ln3', 'newest'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-n',
+      contextId: 'ctx-list-hist-n',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist-n',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 2,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(result.tasks[0].history!, 2, 'historyLength=2 should return 2 messages');
+    assert.equal(
+      result.tasks[0].history![0].messageId,
+      'ln2',
+      'should return most recent messages'
+    );
+    assert.equal(
+      result.tasks[0].history![1].messageId,
+      'ln3',
+      'should return most recent messages'
+    );
+  });
+
+  it('listTasks: should return all history when historyLength is undefined', async () => {
+    const history: Message[] = [
+      createTestMessage('lu1', 'message 1'),
+      createTestMessage('lu2', 'message 2'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-undef',
+      contextId: 'ctx-list-hist-undef',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist-undef',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: undefined,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(
+      result.tasks[0].history!,
+      2,
+      'undefined historyLength should return all history'
+    );
+  });
+
   it('create/getTaskPushNotificationConfig: should save and retrieve config', async () => {
     const taskId = 'task-push-config';
     const fakeTask: Task = {

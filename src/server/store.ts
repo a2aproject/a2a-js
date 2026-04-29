@@ -85,7 +85,6 @@ export class InMemoryTaskStore implements TaskStore {
       status,
       pageSize = DEFAULT_PAGE_SIZE,
       pageToken,
-      historyLength = 0,
       statusTimestampAfter,
       includeArtifacts = false,
     } = params;
@@ -156,11 +155,6 @@ export class InMemoryTaskStore implements TaskStore {
       const taskCopy = JSON.parse(JSON.stringify(task));
       if (!includeArtifacts) {
         taskCopy.artifacts = [];
-      }
-      if (historyLength > 0 && taskCopy.history) {
-        taskCopy.history = taskCopy.history.slice(-historyLength);
-      } else {
-        taskCopy.history = [];
       }
       return taskCopy;
     });
