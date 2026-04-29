@@ -22,6 +22,7 @@ import {
   TaskState,
   ListTaskPushNotificationConfigsResponse,
 } from '../../../index.js';
+import { taskStateFromJSON } from '../../../types/pb/a2a.js';
 import {
   ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
@@ -204,7 +205,11 @@ export class RestTransportHandler {
     const params: ListTasksRequest = {
       tenant: (queryParams.tenant as string) || '',
       contextId: (queryParams.contextId as string) || '',
-      status: queryParams.status ? Number(queryParams.status) : TaskState.TASK_STATE_UNSPECIFIED,
+      status: queryParams.status
+        ? taskStateFromJSON(
+            isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
+          )
+        : TaskState.TASK_STATE_UNSPECIFIED,
       pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : undefined,
       pageToken: (queryParams.pageToken as string) || '',
       historyLength: queryParams.historyLength ? Number(queryParams.historyLength) : undefined,
