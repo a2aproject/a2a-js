@@ -1481,6 +1481,176 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
+  it('sendMessageStream: should enforce message-only pattern — no events after message', async () => {
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-1', 'message-only test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      // Agent publishes a message, then incorrectly publishes a status update.
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'msg-response',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'response' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+    });
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+      events.push(event);
+    }
+
+    // Only the message should be yielded — the stream should close after it.
+    assert.lengthOf(events, 1, 'Message-only stream should contain exactly one event');
+    assert.equal(events[0].payload?.$case, 'message');
+  });
+
+  it('sendMessageStream: should enforce task-lifecycle pattern — task must come first', async () => {
+    const taskId = 'task-order-1';
+    const contextId = 'ctx-order-1';
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-2', 'task-lifecycle test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      // Agent incorrectly publishes a statusUpdate before a task event.
+      // The enforcement should skip this event.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+
+      // Then publishes the task (this becomes the first valid event).
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+
+      // Then a valid completion update.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+      events.push(event);
+    }
+
+    // The premature statusUpdate should be skipped. Only the task + completed update should appear.
+    assert.lengthOf(events, 2, 'Should skip premature statusUpdate and yield task + completed');
+    assert.equal(events[0].payload?.$case, 'task', 'First event must be a task');
+    assert.equal(events[1].payload?.$case, 'statusUpdate', 'Second event should be statusUpdate');
+  });
+
+  it('sendMessageStream: should skip message events in task-lifecycle pattern', async () => {
+    const taskId = 'task-order-2';
+    const contextId = 'ctx-order-2';
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-3', 'message in task stream'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      // Agent publishes task first (valid).
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+
+      // Then incorrectly publishes a message mid-stream.
+      // The stream ordering enforcement skips this, and the
+      // ExecutionEventQueue also stops on message events.
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'bad-msg',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'should be skipped' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+      events.push(event);
+    }
+
+    // The message event is skipped in a task-lifecycle stream — only the
+    // initial task event is yielded. The stream closes because the
+    // ExecutionEventQueue stops on message events.
+    assert.lengthOf(events, 1, 'Should skip message in task lifecycle');
+    assert.equal(events[0].payload?.$case, 'task', 'Only the initial task should be yielded');
+    // Verify the message was NOT yielded
+    assert.isFalse(
+      events.some((e) => e.payload?.$case === 'message'),
+      'Message should not appear in task-lifecycle stream'
+    );
+  });
+
   it('getTask: should return an existing task from the store', async () => {
     const fakeTask: Task = {
       id: 'task-exist',

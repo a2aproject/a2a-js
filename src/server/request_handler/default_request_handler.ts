@@ -55,7 +55,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-import { TERMINAL_STATE_LIST } from '../utils.js';
+import { TERMINAL_STATE_LIST, StreamPattern } from '../utils.js';
 
 /**
  * Default implementation of the A2A request handler.
@@ -467,9 +467,40 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
     });
 
+    let streamPattern = StreamPattern.UNDETERMINED;
+
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event); // Update store in background
+
+        if (streamPattern === StreamPattern.UNDETERMINED) {
+          if (event.kind === 'message') {
+            streamPattern = StreamPattern.MESSAGE_ONLY;
+          } else if (event.kind === 'task') {
+            streamPattern = StreamPattern.TASK_LIFECYCLE;
+          } else {
+            // statusUpdate or artifactUpdate before a task — invalid per §3.1.2.
+            console.warn(
+              `Stream ordering violation: received '${event.kind}' before initial 'task' event. Skipping.`
+            );
+            continue;
+          }
+        } else if (streamPattern === StreamPattern.MESSAGE_ONLY) {
+          console.warn(
+            `Stream ordering violation: received '${event.kind}' after message-only response. Skipping.`
+          );
+          continue;
+        } else if (streamPattern === StreamPattern.TASK_LIFECYCLE) {
+          if (event.kind === 'message') {
+            // Messages are not part of task lifecycle streams per §3.1.2.
+            console.warn(
+              `Stream ordering violation: received 'message' in task lifecycle stream. Skipping.`
+            );
+            continue;
+          }
+          // 'task', 'statusUpdate', 'artifactUpdate' are all valid in task lifecycle.
+        }
+
         const streamResponse = await this._mapEventToStreamResponse(event, context);
         await this._sendPushNotificationIfNeeded(context, streamResponse);
         yield streamResponse;
