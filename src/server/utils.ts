@@ -1,4 +1,4 @@
-import { TaskStatus, TaskState, Artifact } from '../index.js';
+import { TaskStatus, TaskState, Artifact, Task, Message } from '../index.js';
 
 const TERMINAL_STATE_LIST: TaskState[] = [
   TaskState.TASK_STATE_COMPLETED,
@@ -41,4 +41,12 @@ export function isTaskStatusUpdate(update: unknown): update is Omit<TaskStatus, 
 export function isArtifactUpdate(update: unknown): update is Artifact {
   // Check if it has 'parts'
   return isObject(update) && 'parts' in update;
+}
+
+/**
+ * Type guard to check if a SendMessage result is a Task (not a Message).
+ * Tasks have a `status` field; Messages have a `role` field.
+ */
+export function isTask(result: Message | Task): result is Task {
+  return 'status' in result;
 }

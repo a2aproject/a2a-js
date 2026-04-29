@@ -55,7 +55,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-import { TERMINAL_STATE_LIST } from '../utils.js';
+import { TERMINAL_STATE_LIST, isTask } from '../utils.js';
 
 /**
  * Default implementation of the A2A request handler.
@@ -233,7 +233,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventQueue: ExecutionEventQueue,
     context: ServerCallContext,
     options?: {
-      firstResultResolver?: (value: Message | Task | PromiseLike<Message | Task>) => void;
+      firstResultResolver?: (value: Message | Task) => void;
       firstResultRejector?: (reason?: unknown) => void;
     }
   ): Promise<void> {
@@ -387,7 +387,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       }
 
-      if ('id' in finalResult) {
+      if (isTask(finalResult)) {
         this._applyHistoryLengthSemantics(finalResult, historyLengthConfig ?? {});
       }
       return finalResult;
@@ -396,7 +396,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       return new Promise<Message | Task>((resolve, reject) => {
         this._processEvents(taskId, resultManager, eventQueue, context, {
           firstResultResolver: (result) => {
-            if ('id' in result) {
+            if (isTask(result)) {
               this._applyHistoryLengthSemantics(result, historyLengthConfig ?? {});
             }
             resolve(result);
