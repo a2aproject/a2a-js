@@ -471,35 +471,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     try {
       for await (const event of eventQueue.events()) {
-        await resultManager.processEvent(event); // Update store in background
-
-        if (streamPattern === StreamPattern.UNDETERMINED) {
-          if (event.kind === 'message') {
-            streamPattern = StreamPattern.MESSAGE_ONLY;
-          } else if (event.kind === 'task') {
-            streamPattern = StreamPattern.TASK_LIFECYCLE;
-          } else {
-            // statusUpdate or artifactUpdate before a task — invalid per §3.1.2.
-            console.warn(
-              `Stream ordering violation: received '${event.kind}' before initial 'task' event. Skipping.`
-            );
-            continue;
-          }
-        } else if (streamPattern === StreamPattern.MESSAGE_ONLY) {
-          console.warn(
-            `Stream ordering violation: received '${event.kind}' after message-only response. Skipping.`
-          );
+        const validatedPattern = this._advanceStreamPattern(event, streamPattern);
+        if (validatedPattern === null) {
           continue;
-        } else if (streamPattern === StreamPattern.TASK_LIFECYCLE) {
-          if (event.kind === 'message') {
-            // Messages are not part of task lifecycle streams per §3.1.2.
-            console.warn(
-              `Stream ordering violation: received 'message' in task lifecycle stream. Skipping.`
-            );
-            continue;
-          }
-          // 'task', 'statusUpdate', 'artifactUpdate' are all valid in task lifecycle.
         }
+        streamPattern = validatedPattern;
+
+        await resultManager.processEvent(event); // Update store in background
 
         const streamResponse = await this._mapEventToStreamResponse(event, context);
         await this._sendPushNotificationIfNeeded(context, streamResponse);
@@ -865,6 +843,43 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     } else {
       console.error(`Event processing loop failed for task ${taskId}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Advances the stream pattern state based on the incoming event per §3.1.2.
+   *
+   * Determines whether the event is valid for the current pattern and returns
+   * the (possibly transitioned) pattern. Returns `null` if the event violates
+   * ordering rules and should be skipped.
+   */
+  private _advanceStreamPattern(
+    event: AgentExecutionEvent,
+    currentPattern: StreamPattern
+  ): StreamPattern | null {
+    switch (currentPattern) {
+      case StreamPattern.UNDETERMINED:
+        if (event.kind === 'message') return StreamPattern.MESSAGE_ONLY;
+        if (event.kind === 'task') return StreamPattern.TASK_LIFECYCLE;
+        console.warn(
+          `Stream ordering violation: received '${event.kind}' before initial 'task' event. Skipping.`
+        );
+        return null;
+
+      case StreamPattern.MESSAGE_ONLY:
+        console.warn(
+          `Stream ordering violation: received '${event.kind}' after message-only response. Skipping.`
+        );
+        return null;
+
+      case StreamPattern.TASK_LIFECYCLE:
+        if (event.kind === 'message') {
+          console.warn(
+            `Stream ordering violation: received 'message' in task lifecycle stream. Skipping.`
+          );
+          return null;
+        }
+        return currentPattern;
     }
   }
 }
