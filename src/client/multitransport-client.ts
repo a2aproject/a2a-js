@@ -352,7 +352,6 @@ export class Client {
       result.configuration.acceptedOutputModes ??
       this.config?.acceptedOutputModes ??
       ([] as string[]);
-    result.configuration.historyLength ??= 0;
 
     if (!result.configuration.taskPushNotificationConfig && this.config?.pushNotificationConfig) {
       if (params.message?.taskId !== undefined) {
