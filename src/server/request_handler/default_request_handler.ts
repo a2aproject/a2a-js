@@ -152,6 +152,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
         );
       }
+      // Validate contextId/taskId consistency per §3.4.3.
+      if (
+        incomingMessage.contextId &&
+        task.contextId &&
+        incomingMessage.contextId !== task.contextId
+      ) {
+        throw new RequestMalformedError(
+          `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
+            `does not match task '${task.id}' contextId '${task.contextId}'`
+        );
+      }
       // Add incomingMessage to history and save the task.
       task.history = [...(task.history || []), incomingMessage];
       await this.taskStore.save(task, context);

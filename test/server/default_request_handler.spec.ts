@@ -3319,4 +3319,223 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       expect(result).toBeDefined();
     });
   });
+
+  describe('contextId/taskId mismatch validation (§3.4.3)', () => {
+    it('should reject when message contextId does not match existing task contextId', async () => {
+      const taskContextId = 'task-ctx-original';
+      const messageContextId = 'msg-ctx-different';
+      const taskId = 'task-ctx-mismatch';
+
+      // Create a task with a known contextId
+      const existingTask: Task = {
+        id: taskId,
+        contextId: taskContextId,
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      // Send a message referencing the task but with a different contextId
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-mismatch',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: messageContextId,
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(
+        RequestMalformedError
+      );
+    });
+
+    it('should include both contextIds in the error message', async () => {
+      const taskContextId = 'ctx-AAA';
+      const messageContextId = 'ctx-BBB';
+      const taskId = 'task-ctx-msg';
+
+      const existingTask: Task = {
+        id: taskId,
+        contextId: taskContextId,
+        status: {
+          state: TaskState.TASK_STATE_WORKING,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-err-detail',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: messageContextId,
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(/ctx-AAA/);
+      await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(/ctx-BBB/);
+    });
+
+    it('should accept when message contextId matches existing task contextId', async () => {
+      const contextId = 'ctx-matching';
+      const taskId = 'task-ctx-match';
+
+      const existingTask: Task = {
+        id: taskId,
+        contextId: contextId,
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: taskId,
+              contextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-ok',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: contextId,
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      const result = await handler.sendMessage(params, serverCallContext);
+      expect(result).toBeDefined();
+    });
+
+    it('should accept when message omits contextId for existing task', async () => {
+      const taskId = 'task-ctx-omit';
+      const taskContextId = 'ctx-from-task';
+
+      const existingTask: Task = {
+        id: taskId,
+        contextId: taskContextId,
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: taskId,
+              contextId: taskContextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-none',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      const result = await handler.sendMessage(params, serverCallContext);
+      expect(result).toBeDefined();
+    });
+  });
 });
