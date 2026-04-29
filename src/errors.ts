@@ -88,6 +88,23 @@ export const A2A_REASON_TO_ERROR: Record<string, string> = Object.fromEntries(
 );
 
 /**
+ * Maps JSON-RPC error codes to error class names.
+ */
+export const A2A_ERROR_CODE_TO_CLASS: Record<number, string> = {
+  [A2A_ERROR_CODE.TASK_NOT_FOUND]: 'TaskNotFoundError',
+  [A2A_ERROR_CODE.TASK_NOT_CANCELABLE]: 'TaskNotCancelableError',
+  [A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED]: 'PushNotificationNotSupportedError',
+  [A2A_ERROR_CODE.UNSUPPORTED_OPERATION]: 'UnsupportedOperationError',
+  [A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED]: 'ContentTypeNotSupportedError',
+  [A2A_ERROR_CODE.INVALID_AGENT_RESPONSE]: 'InvalidAgentResponseError',
+  [A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED]: 'ExtendedAgentCardNotConfiguredError',
+  [A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED]: 'ExtensionSupportRequiredError',
+  [A2A_ERROR_CODE.VERSION_NOT_SUPPORTED]: 'VersionNotSupportedError',
+  [A2A_ERROR_CODE.INVALID_PARAMS]: 'RequestMalformedError',
+  [A2A_ERROR_CODE.INTERNAL_ERROR]: 'GenericError',
+};
+
+/**
  * Builds a `google.rpc.ErrorInfo` detail object from an error instance.
  *
  * @param error - The error to build ErrorInfo from.

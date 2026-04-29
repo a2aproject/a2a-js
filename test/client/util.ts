@@ -6,6 +6,13 @@ import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH, JSON_CONTENT_TYPE } from '../../src/constants.js';
 import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/index.js';
+import {
+  A2A_ERROR_CODE_TO_CLASS,
+  A2A_ERROR_DOMAIN,
+  A2A_ERROR_GRPC_STATUS,
+  A2A_ERROR_REASON,
+  ERROR_INFO_TYPE,
+} from '../../src/errors.js';
 
 /**
  * Extracts the request ID from a RequestInit options object.
@@ -457,21 +464,50 @@ export function createRestResponse(
 }
 
 /**
- * Creates a REST error response with A2A error format.
+ * Resolves a JSON-RPC error code to (reason, grpcStatusName) by chaining
+ * through the canonical mappings: code → className → (reason, grpcStatus).
+ */
+function resolveErrorCode(code: number): { reason: string; grpcStatus: string } | undefined {
+  const className = A2A_ERROR_CODE_TO_CLASS[code];
+  if (!className) return undefined;
+  const reason = A2A_ERROR_REASON[className];
+  const grpcStatus = A2A_ERROR_GRPC_STATUS[className];
+  if (!reason || !grpcStatus) return undefined;
+  return { reason, grpcStatus };
+}
+
+/**
+ * Creates a REST error response in the google.rpc.Status JSON format (§11.6).
  *
- * @param code - A2A error code (e.g., -32001 for TaskNotFound)
+ * Produces the enriched format:
+ * ```json
+ * { "error": { "code": 400, "status": "FAILED_PRECONDITION", "message": "...", "details": [...] } }
+ * ```
+ *
+ * @param code - A2A JSON-RPC error code (e.g., -32001 for TaskNotFound)
  * @param message - Error message
  * @param status - HTTP status code (defaults to 400)
- * @param data - Optional additional error data
- * @returns A Response object with error JSON content
+ * @returns A Response object with enriched error JSON content
  */
 export function createRestErrorResponse(
   code: number,
   message: string,
-  status: number = 400,
-  data?: Record<string, unknown>
+  status: number = 400
 ): Response {
-  const errorBody = { code, message, ...(data && { data }) };
+  const mapping = resolveErrorCode(code);
+  const grpcStatus = mapping?.grpcStatus ?? 'UNKNOWN';
+  const details = mapping
+    ? [{ '@type': ERROR_INFO_TYPE, reason: mapping.reason, domain: A2A_ERROR_DOMAIN }]
+    : [];
+
+  const errorBody = {
+    error: {
+      code: status,
+      status: grpcStatus,
+      message,
+      details,
+    },
+  };
   return new Response(JSON.stringify(errorBody), {
     status,
     headers: { 'Content-Type': JSON_CONTENT_TYPE },

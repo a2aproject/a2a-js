@@ -1,18 +1,10 @@
 import { TransportProtocolName } from '../../core.js';
 import {
-  A2A_ERROR_CODE,
-  A2A_NAME_TO_ERROR_CLASS,
   A2A_REASON_TO_ERROR_CLASS,
   ERROR_INFO_TYPE,
-  ContentTypeNotSupportedError,
-  InvalidAgentResponseError,
-  PushNotificationNotSupportedError,
   TaskNotFoundError,
   TaskNotCancelableError,
-  UnsupportedOperationError,
   RequestMalformedError,
-  ExtendedAgentCardNotConfiguredError,
-  VersionNotSupportedError,
 } from '../../errors.js';
 
 import { SendMessageResult, A2A_PROTOCOL_VERSION, A2A_CONTENT_TYPE } from '../../index.js';
@@ -435,7 +427,6 @@ export class RestTransport implements Transport {
   private static mapToError(error: RestErrorResponse, status?: number): Error {
     const message = error.message || 'Unknown error';
 
-    // Strategy 1: Enriched format — extract reason from google.rpc.ErrorInfo details.
     const details = error.error?.details;
     if (Array.isArray(details)) {
       const errorInfo = details.find((d) => d['@type'] === ERROR_INFO_TYPE);
@@ -445,35 +436,7 @@ export class RestTransport implements Transport {
       }
     }
 
-    // Strategy 2: Legacy flat format — match by error class name.
-    if (error.name) {
-      const ErrorClass = A2A_NAME_TO_ERROR_CLASS[error.name];
-      if (ErrorClass) return new ErrorClass(message);
-    }
-
-    // Strategy 3: Legacy JSON-RPC error code.
-    if (error.code !== undefined) {
-      switch (error.code) {
-        case A2A_ERROR_CODE.TASK_NOT_FOUND:
-          return new TaskNotFoundError(message);
-        case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-          return new TaskNotCancelableError(message);
-        case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-          return new PushNotificationNotSupportedError(message);
-        case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-          return new UnsupportedOperationError(message);
-        case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-          return new ContentTypeNotSupportedError(message);
-        case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-          return new InvalidAgentResponseError(message);
-        case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
-          return new ExtendedAgentCardNotConfiguredError(message);
-        case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
-          return new VersionNotSupportedError(message);
-      }
-    }
-
-    // Strategy 4: Infer from HTTP status code.
+    // Infer from HTTP status code.
     if (status === 400) return new RequestMalformedError(message);
     if (status === 404) return new TaskNotFoundError(message);
     if (status === 409) return new TaskNotCancelableError(message);
