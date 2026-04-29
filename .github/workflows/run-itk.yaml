@@ -40,6 +40,9 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
+      - name: Run Error Handling Tests
+        run: bash itk/run_error_tests.sh
+
       - name: Run ITK Tests
         run: bash run_itk.sh
         working-directory: itk
