@@ -1728,14 +1728,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     assert.property(result, 'id', 'Should return a Task');
     const task = result as Task;
-    // With undefined historyLength, no trimming occurs — all history from the
-    // ResultManager is returned. The ResultManager preserves the latest user
-    // message in history; the exact count depends on what the agent event includes.
-    assert.isAtLeast(task.history!.length, 1, 'undefined historyLength should not trim history');
-    // Verify no trimming was applied — the history should contain the second user message
+    // With undefined historyLength, no trimming occurs — all history is returned.
+    // The ResultManager merges the store's history (which includes both user
+    // messages added by _createRequestContext) with the agent event's history.
+    assert.lengthOf(task.history!, 2, 'undefined historyLength should return all history');
+    assert.isTrue(
+      task.history!.some((m) => m.messageId === 'msg-undef-first'),
+      'history should contain the first user message'
+    );
     assert.isTrue(
       task.history!.some((m) => m.messageId === 'msg-undef-second'),
-      'history should contain the most recent user message'
+      'history should contain the second user message'
     );
   });
 
