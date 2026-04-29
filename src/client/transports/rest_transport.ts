@@ -41,19 +41,11 @@ export interface RestTransportOptions {
   fetchImpl?: typeof fetch;
 }
 
-interface RestRpcStatus {
+interface RestErrorStatus {
   code?: number;
   status?: string;
   message?: string;
   details?: Array<Record<string, unknown>>;
-}
-
-interface RestErrorResponse {
-  name?: string;
-  message?: string;
-  code?: number;
-  data?: Record<string, unknown>;
-  error?: RestRpcStatus;
 }
 
 export class RestTransport implements Transport {
@@ -325,34 +317,22 @@ export class RestTransport implements Transport {
 
   private async _handleErrorResponse(response: Response, path: string): Promise<never> {
     let errorBodyText = '(empty or non-JSON response)';
-    let errorBody: RestErrorResponse | undefined;
+    let errorStatus: RestErrorStatus | undefined;
 
     try {
       errorBodyText = await response.text();
       if (errorBodyText) {
-        errorBody = JSON.parse(errorBodyText);
+        const parsed = JSON.parse(errorBodyText);
+        if (parsed?.error && typeof parsed.error === 'object') {
+          errorStatus = parsed.error;
+        }
       }
-    } catch (e) {
-      throw new Error(
-        `HTTP error for ${path}! Status: ${response.status} ${response.statusText}. Response: ${errorBodyText}`,
-        { cause: e }
-      );
+    } catch {
+      // JSON parse failed — fall through to generic error
     }
 
-    // Try enriched format: { error: { code, status, message, details } }
-    if (errorBody?.error && typeof errorBody.error === 'object') {
-      const rpcStatus = errorBody.error;
-      const enriched: RestErrorResponse = {
-        message: rpcStatus.message,
-        code: rpcStatus.code,
-        error: rpcStatus,
-      };
-      throw RestTransport.mapToError(enriched, response.status);
-    }
-
-    // Fall back to legacy flat format: { name, message, code }
-    if (errorBody && (typeof errorBody.name === 'string' || typeof errorBody.code === 'number')) {
-      throw RestTransport.mapToError(errorBody, response.status);
+    if (errorStatus) {
+      throw RestTransport.mapToError(errorStatus, response.status);
     }
 
     throw new Error(
@@ -391,18 +371,11 @@ export class RestTransport implements Transport {
 
     for await (const event of parseSseStream(response)) {
       if (event.type === 'error') {
-        const errorData = JSON.parse(event.data) as RestErrorResponse;
-        // Handle enriched SSE error format: { error: { ... } }
+        const errorData = JSON.parse(event.data) as { error?: RestErrorStatus };
         if (errorData.error && typeof errorData.error === 'object') {
-          const rpcStatus = errorData.error;
-          const enriched: RestErrorResponse = {
-            message: rpcStatus.message,
-            code: rpcStatus.code,
-            error: rpcStatus,
-          };
-          throw RestTransport.mapToError(enriched);
+          throw RestTransport.mapToError(errorData.error);
         }
-        throw RestTransport.mapToError(errorData);
+        throw new Error(`SSE error event: ${JSON.stringify(errorData)}`);
       }
       yield this._processSseEventData(event.data);
     }
@@ -424,25 +397,24 @@ export class RestTransport implements Transport {
     }
   }
 
-  private static mapToError(error: RestErrorResponse, status?: number): Error {
+  private static mapToError(error: RestErrorStatus, httpStatus?: number): Error {
     const message = error.message || 'Unknown error';
 
-    const details = error.error?.details;
-    if (Array.isArray(details)) {
-      const errorInfo = details.find((d) => d['@type'] === ERROR_INFO_TYPE);
+    if (Array.isArray(error.details)) {
+      const errorInfo = error.details.find((d) => d['@type'] === ERROR_INFO_TYPE);
       if (errorInfo && typeof errorInfo['reason'] === 'string') {
         const ErrorClass = A2A_REASON_TO_ERROR_CLASS[errorInfo['reason'] as string];
         if (ErrorClass) return new ErrorClass(message);
       }
     }
 
-    // Infer from HTTP status code.
-    if (status === 400) return new RequestMalformedError(message);
-    if (status === 404) return new TaskNotFoundError(message);
-    if (status === 409) return new TaskNotCancelableError(message);
+    // Fallback: infer from HTTP status code.
+    if (httpStatus === 400) return new RequestMalformedError(message);
+    if (httpStatus === 404) return new TaskNotFoundError(message);
+    if (httpStatus === 409) return new TaskNotCancelableError(message);
 
     return new Error(
-      `REST error: ${error.name || 'Error'} - ${message}${status ? ` (Status: ${status})` : ''}${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
+      `REST error: ${error.status || 'UNKNOWN'} - ${message}${httpStatus ? ` (HTTP ${httpStatus})` : ''}`
     );
   }
 }
