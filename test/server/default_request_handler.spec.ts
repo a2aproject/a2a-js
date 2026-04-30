@@ -1519,7 +1519,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(events[0].payload?.$case, 'message');
   });
 
-  it('sendMessageStream: should enforce task-lifecycle pattern — task must come first', async () => {
+  it('sendMessageStream: should throw when statusUpdate arrives before task', async () => {
     const taskId = 'task-order-1';
     const contextId = 'ctx-order-1';
     const params: SendMessageRequest = {
@@ -1528,7 +1528,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
       // Agent incorrectly publishes a statusUpdate before a task event.
-      // The enforcement should skip this event.
       bus.publish(
         AgentEvent.statusUpdate({
           taskId,
@@ -1541,51 +1540,23 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           metadata: {},
         })
       );
-
-      // Then publishes the task (this becomes the first valid event).
-      bus.publish(
-        AgentEvent.task({
-          id: taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          artifacts: [],
-          history: [],
-          metadata: {},
-        })
-      );
-
-      // Then a valid completion update.
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId,
-          contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          metadata: {},
-        })
-      );
       bus.finished();
     });
 
-    const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
-      events.push(event);
+    const generator = handler.sendMessageStream(params, serverCallContext);
+    try {
+      for await (const _event of generator) {
+        void _event;
+        assert.fail('Should have thrown before yielding any events');
+      }
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.include('statusUpdate');
     }
-
-    // The premature statusUpdate should be skipped. Only the task + completed update should appear.
-    assert.lengthOf(events, 2, 'Should skip premature statusUpdate and yield task + completed');
-    assert.equal(events[0].payload?.$case, 'task', 'First event must be a task');
-    assert.equal(events[1].payload?.$case, 'statusUpdate', 'Second event should be statusUpdate');
   });
 
-  it('sendMessageStream: should skip message events in task-lifecycle pattern', async () => {
+  it('sendMessageStream: should throw when message arrives in task-lifecycle stream', async () => {
     const taskId = 'task-order-2';
     const contextId = 'ctx-order-2';
     const params: SendMessageRequest = {
@@ -1610,8 +1581,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       );
 
       // Then incorrectly publishes a message mid-stream.
-      // The stream ordering enforcement skips this, and the
-      // ExecutionEventQueue also stops on message events.
       bus.publish(
         AgentEvent.message({
           messageId: 'bad-msg',
@@ -1620,7 +1589,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           taskId: '',
           parts: [
             {
-              content: { $case: 'text', value: 'should be skipped' },
+              content: { $case: 'text', value: 'should not be allowed' },
               mediaType: 'text/plain',
               filename: '',
               metadata: {},
@@ -1635,20 +1604,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
-      events.push(event);
+    try {
+      for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+        events.push(event);
+      }
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.include('message');
     }
 
-    // The message event is skipped in a task-lifecycle stream — only the
-    // initial task event is yielded. The stream closes because the
-    // ExecutionEventQueue stops on message events.
-    assert.lengthOf(events, 1, 'Should skip message in task lifecycle');
-    assert.equal(events[0].payload?.$case, 'task', 'Only the initial task should be yielded');
-    // Verify the message was NOT yielded
-    assert.isFalse(
-      events.some((e) => e.payload?.$case === 'message'),
-      'Message should not appear in task-lifecycle stream'
-    );
+    assert.lengthOf(events, 1, 'Task should be yielded before the error');
+    assert.equal(events[0].payload?.$case, 'task');
   });
 
   it('getTask: should return an existing task from the store', async () => {

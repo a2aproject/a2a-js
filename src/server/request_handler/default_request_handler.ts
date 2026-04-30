@@ -471,11 +471,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     try {
       for await (const event of eventQueue.events()) {
-        const validatedPattern = this._advanceStreamPattern(event, streamPattern);
-        if (validatedPattern === null) {
-          continue;
-        }
-        streamPattern = validatedPattern;
+        streamPattern = this._advanceStreamPattern(event, streamPattern);
 
         await resultManager.processEvent(event); // Update store in background
 
@@ -850,35 +846,26 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * Advances the stream pattern state based on the incoming event per §3.1.2.
    *
    * Determines whether the event is valid for the current pattern and returns
-   * the (possibly transitioned) pattern. Returns `null` if the event violates
-   * ordering rules and should be skipped.
+   * the (possibly transitioned) pattern. Throws error for invalid transitions.
    */
   private _advanceStreamPattern(
     event: AgentExecutionEvent,
     currentPattern: StreamPattern
-  ): StreamPattern | null {
+  ): StreamPattern {
     switch (currentPattern) {
       case StreamPattern.UNDETERMINED:
         if (event.kind === 'message') return StreamPattern.MESSAGE_ONLY;
         if (event.kind === 'task') return StreamPattern.TASK_LIFECYCLE;
-        console.warn(
-          `Stream ordering violation: received '${event.kind}' before initial 'task' event. Skipping.`
-        );
-        return null;
+        throw new UnsupportedOperationError(`Received ${event.kind} before initial 'task' event.`);
 
       case StreamPattern.MESSAGE_ONLY:
-        console.warn(
-          `Stream ordering violation: received '${event.kind}' after message-only response. Skipping.`
-        );
-        return null;
+        throw new UnsupportedOperationError(`Received ${event.kind} after message-only response.`);
 
       case StreamPattern.TASK_LIFECYCLE:
-        if (event.kind === 'message') {
-          console.warn(
-            `Stream ordering violation: received 'message' in task lifecycle stream. Skipping.`
+        if (event.kind === 'message')
+          throw new UnsupportedOperationError(
+            `Stream ordering violation: received 'message' in task lifecycle stream.`
           );
-          return null;
-        }
         return currentPattern;
     }
   }
