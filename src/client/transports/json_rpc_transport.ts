@@ -10,6 +10,7 @@ import {
   RequestMalformedError,
   ExtendedAgentCardNotConfiguredError,
   VersionNotSupportedError,
+  ExtensionSupportRequiredError,
 } from '../../errors.js';
 import {
   Task,
@@ -308,26 +309,33 @@ export class JsonRpcTransport implements Transport {
 
     if (!response.ok) {
       let errorBody = '';
-      let errorJson: JSONRPCErrorResponse;
       try {
         errorBody = await response.text();
-        errorJson = JSON.parse(errorBody);
+        const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
+        if (errorJson.error) {
+          throw JsonRpcTransport.mapToError(errorJson);
+        }
       } catch (e) {
-        throw new Error(
-          `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`,
-          { cause: e }
-        );
-      }
-      if (errorJson.error) {
-        throw new Error(
-          `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`
-        );
+        if (e instanceof Error && e.name !== 'SyntaxError') {
+          throw e;
+        }
       }
       throw new Error(
-        `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}`
+        `HTTP error establishing stream for ${method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`
       );
     }
     if (!response.headers.get('Content-Type')?.startsWith('text/event-stream')) {
+      try {
+        const body = await response.text();
+        const errorJson: JSONRPCErrorResponse = JSON.parse(body);
+        if (errorJson.error) {
+          throw JsonRpcTransport.mapToError(errorJson);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name !== 'SyntaxError') {
+          throw e;
+        }
+      }
       throw new Error(
         `Invalid response Content-Type for SSE stream for ${method}. Expected 'text/event-stream'.`
       );
@@ -400,6 +408,8 @@ export class JsonRpcTransport implements Transport {
         return new InvalidAgentResponseError(errorMessage);
       case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
         return new ExtendedAgentCardNotConfiguredError(errorMessage);
+      case A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED:
+        return new ExtensionSupportRequiredError(errorMessage);
       case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
         return new VersionNotSupportedError(errorMessage);
       default:

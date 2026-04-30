@@ -24,14 +24,8 @@ import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
 import { FromProto } from '../../../types/converters/from_proto.js';
 
-import {
-  ExtendedAgentCardNotConfiguredError,
-  PushNotificationNotSupportedError,
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  UnsupportedOperationError,
-  RequestMalformedError,
-} from '../../../errors.js';
+import { A2A_REASON_TO_ERROR_CLASS, ERROR_INFO_TYPE } from '../../../errors.js';
+import { decodeStatus, decodeErrorInfo } from '../../../server/grpc/error_details.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'GRPC';
 
@@ -313,41 +307,44 @@ export class GrpcTransport implements Transport {
     return metadata;
   }
 
-  // TODO: the logic of mapToError will be removed in v1.0.0 with the enriched error model (https://a2a-protocol.org/latest/specification/#106-error-handling)
-  private static mapToError(error: grpc.ServiceError, method: keyof A2AServiceClient): Error {
-    switch (error.code) {
-      case grpc.status.NOT_FOUND:
-        return new TaskNotFoundError(error.details);
-      case grpc.status.FAILED_PRECONDITION:
-        if (method === 'cancelTask') {
-          return new TaskNotCancelableError(error.details);
-        }
-        if (method === 'getExtendedAgentCard') {
-          return new ExtendedAgentCardNotConfiguredError(error.details);
-        }
-        break;
-      case grpc.status.UNIMPLEMENTED:
-        if (
-          [
-            'getTaskPushNotificationConfig',
-            'createTaskPushNotificationConfig',
-            'deleteTaskPushNotificationConfig',
-            'listTaskPushNotificationConfigs',
-          ].includes(method)
-        ) {
-          return new PushNotificationNotSupportedError(error.details);
-        }
-        if (['getExtendedAgentCard', 'subscribeToTask'].includes(method)) {
-          return new UnsupportedOperationError(error.details);
-        }
-        break;
-      case grpc.status.INVALID_ARGUMENT:
-      case grpc.status.INTERNAL:
-        return new RequestMalformedError(error.details);
-      default:
-        break;
+  private static mapFromErrorInfo(error: grpc.ServiceError): Error | undefined {
+    const bin = error.metadata?.get('grpc-status-details-bin');
+    if (!bin || bin.length === 0) return undefined;
+
+    const raw = bin[0];
+    const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw, 'binary');
+
+    const status = decodeStatus(buffer);
+
+    for (const detail of status.details) {
+      if (detail.typeUrl === ERROR_INFO_TYPE) {
+        const errorInfo = decodeErrorInfo(detail.value);
+
+        const ErrorClass = A2A_REASON_TO_ERROR_CLASS[errorInfo.reason];
+        if (!ErrorClass) return undefined;
+
+        return new ErrorClass(error.details);
+      }
     }
-    return new Error(`GRPC error for ${String(method)}! ${error.code} ${error.details}`, {
+
+    return undefined;
+  }
+
+  /**
+   * Maps a gRPC ServiceError to an SDK error class.
+   *
+   * Uses the enriched error model (§10.6): parses `google.rpc.ErrorInfo`
+   * from `grpc-status-details-bin` metadata to precisely identify the A2A
+   * error type via its `reason` code. For servers that do not include
+   * ErrorInfo (e.g., non-A2A gRPC services), returns a generic Error
+   * preserving the original gRPC code and details.
+   */
+  private static mapToError(error: grpc.ServiceError, method?: keyof A2AServiceClient): Error {
+    const fromErrorInfo = GrpcTransport.mapFromErrorInfo(error);
+    if (fromErrorInfo) return fromErrorInfo;
+
+    const methodContext = method ? ' for ' + String(method) : '';
+    return new Error('gRPC error' + methodContext + ': ' + error.code + ' ' + error.details, {
       cause: error,
     });
   }

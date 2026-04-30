@@ -11,6 +11,12 @@ import {
 } from '../src/server/index.js';
 import { AgentEvent } from '../src/server/events/execution_event_bus.js';
 import { AgentCard, Message, Role, Task, TaskState, StreamResponse } from '../src/index.js';
+import {
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  UnsupportedOperationError,
+  ExtensionSupportRequiredError,
+} from '../src/errors.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';
@@ -286,6 +292,95 @@ describe('Client E2E tests', () => {
               },
             })
           );
+        });
+      });
+
+      describe('error round-trip', () => {
+        it('should return TaskNotFoundError for non-existent task', async () => {
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          await expect(client.getTask({ id: 'non-existent-task', tenant: '' })).rejects.toThrow(
+            TaskNotFoundError
+          );
+        });
+
+        it('should return TaskNotFoundError with correct message', async () => {
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          await expect(client.getTask({ id: 'does-not-exist', tenant: '' })).rejects.toThrow(
+            /does-not-exist/
+          );
+        });
+
+        it('should return TaskNotCancelableError for terminal task', async () => {
+          const taskId = 'terminal-task';
+          const contextId = 'ctx-terminal';
+          agentExecutor.events = [
+            AgentEvent.task({
+              id: taskId,
+              contextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            }),
+          ];
+
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          // Create the task first (non-blocking so it returns immediately)
+          await client.sendMessage({
+            tenant: '',
+            message: createTestMessage('msg-terminal', 'test'),
+            configuration: {
+              returnImmediately: true,
+              acceptedOutputModes: [],
+              taskPushNotificationConfig: undefined,
+            },
+            metadata: {},
+          });
+
+          // Try to cancel a completed task
+          await expect(client.cancelTask({ id: taskId, tenant: '', metadata: {} })).rejects.toThrow(
+            TaskNotCancelableError
+          );
+        });
+
+        it('should return UnsupportedOperationError when streaming is disabled', async () => {
+          // Override agent card to disable streaming
+          agentCard.capabilities!.streaming = false;
+
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          // sendMessageStream falls back to sendMessage when streaming is not supported.
+          // Use sendMessage directly to trigger the streaming-specific error path
+          // by attempting to resubscribe to a non-existent task.
+          await expect(
+            client.resubscribeTask({ id: 'non-existent', tenant: '' }).next()
+          ).rejects.toThrow(UnsupportedOperationError);
+        });
+
+        it('should return ExtensionSupportRequiredError when required extension is missing', async () => {
+          // Override agent card to require an extension
+          agentCard.capabilities!.extensions = [
+            { uri: 'urn:a2a:required-ext', required: true, description: 'Required', params: {} },
+          ];
+
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          // Send without declaring the required extension
+          await expect(
+            client.sendMessage({
+              tenant: '',
+              message: createTestMessage('msg-no-ext', 'test'),
+              configuration: undefined,
+              metadata: {},
+            })
+          ).rejects.toThrow(ExtensionSupportRequiredError);
         });
       });
     });

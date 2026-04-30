@@ -1,16 +1,5 @@
 import { TransportProtocolName } from '../../core.js';
-import {
-  A2A_ERROR_CODE,
-  ContentTypeNotSupportedError,
-  InvalidAgentResponseError,
-  PushNotificationNotSupportedError,
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  UnsupportedOperationError,
-  RequestMalformedError,
-  ExtendedAgentCardNotConfiguredError,
-  VersionNotSupportedError,
-} from '../../errors.js';
+import { A2A_REASON_TO_ERROR_CLASS, ERROR_INFO_TYPE } from '../../errors.js';
 
 import { SendMessageResult, A2A_PROTOCOL_VERSION, A2A_CONTENT_TYPE } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
@@ -46,11 +35,11 @@ export interface RestTransportOptions {
   fetchImpl?: typeof fetch;
 }
 
-interface RestErrorResponse {
-  name?: string;
-  message?: string;
+interface RestErrorStatus {
   code?: number;
-  data?: Record<string, unknown>;
+  status?: string;
+  message?: string;
+  details?: Array<Record<string, unknown>>;
 }
 
 export class RestTransport implements Transport {
@@ -322,22 +311,22 @@ export class RestTransport implements Transport {
 
   private async _handleErrorResponse(response: Response, path: string): Promise<never> {
     let errorBodyText = '(empty or non-JSON response)';
-    let errorBody: RestErrorResponse | undefined;
+    let errorStatus: RestErrorStatus | undefined;
 
     try {
       errorBodyText = await response.text();
       if (errorBodyText) {
-        errorBody = JSON.parse(errorBodyText);
+        const parsed = JSON.parse(errorBodyText);
+        if (parsed?.error && typeof parsed.error === 'object') {
+          errorStatus = parsed.error;
+        }
       }
-    } catch (e) {
-      throw new Error(
-        `HTTP error for ${path}! Status: ${response.status} ${response.statusText}. Response: ${errorBodyText}`,
-        { cause: e }
-      );
+    } catch {
+      // JSON parse failed — fall through to generic error
     }
 
-    if (errorBody && (typeof errorBody.name === 'string' || typeof errorBody.code === 'number')) {
-      throw RestTransport.mapToError(errorBody, response.status);
+    if (errorStatus) {
+      throw RestTransport.mapToError(errorStatus);
     }
 
     throw new Error(
@@ -376,8 +365,11 @@ export class RestTransport implements Transport {
 
     for await (const event of parseSseStream(response)) {
       if (event.type === 'error') {
-        const errorData = JSON.parse(event.data);
-        throw RestTransport.mapToError(errorData);
+        const errorData = JSON.parse(event.data) as { error?: RestErrorStatus };
+        if (errorData.error && typeof errorData.error === 'object') {
+          throw RestTransport.mapToError(errorData.error);
+        }
+        throw new Error(`SSE error event: ${JSON.stringify(errorData)}`);
       }
       yield this._processSseEventData(event.data);
     }
@@ -399,59 +391,19 @@ export class RestTransport implements Transport {
     }
   }
 
-  private static mapToError(error: RestErrorResponse, status?: number): Error {
+  private static mapToError(error: RestErrorStatus): Error {
     const message = error.message || 'Unknown error';
 
-    if (error.name) {
-      switch (error.name) {
-        case 'TaskNotFoundError':
-          return new TaskNotFoundError(message);
-        case 'TaskNotCancelableError':
-          return new TaskNotCancelableError(message);
-        case 'PushNotificationNotSupportedError':
-          return new PushNotificationNotSupportedError(message);
-        case 'UnsupportedOperationError':
-          return new UnsupportedOperationError(message);
-        case 'ContentTypeNotSupportedError':
-          return new ContentTypeNotSupportedError(message);
-        case 'InvalidAgentResponseError':
-          return new InvalidAgentResponseError(message);
-        case 'ExtendedAgentCardNotConfiguredError':
-          return new ExtendedAgentCardNotConfiguredError(message);
-        case 'VersionNotSupportedError':
-          return new VersionNotSupportedError(message);
-        case 'RequestMalformedError':
-          return new RequestMalformedError(message);
+    if (Array.isArray(error.details)) {
+      const errorInfo = error.details.find((d) => d['@type'] === ERROR_INFO_TYPE);
+      if (errorInfo && typeof errorInfo['reason'] === 'string') {
+        const ErrorClass = A2A_REASON_TO_ERROR_CLASS[errorInfo['reason'] as string];
+        if (ErrorClass) return new ErrorClass(message);
       }
     }
-
-    if (error.code !== undefined) {
-      switch (error.code) {
-        case A2A_ERROR_CODE.TASK_NOT_FOUND:
-          return new TaskNotFoundError(message);
-        case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-          return new TaskNotCancelableError(message);
-        case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-          return new PushNotificationNotSupportedError(message);
-        case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-          return new UnsupportedOperationError(message);
-        case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-          return new ContentTypeNotSupportedError(message);
-        case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-          return new InvalidAgentResponseError(message);
-        case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
-          return new ExtendedAgentCardNotConfiguredError(message);
-        case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
-          return new VersionNotSupportedError(message);
-      }
-    }
-
-    if (status === 400) return new RequestMalformedError(message);
-    if (status === 404) return new TaskNotFoundError(message);
-    if (status === 409) return new TaskNotCancelableError(message);
 
     return new Error(
-      `REST error: ${error.name || 'Error'} - ${message}${status ? ` (Status: ${status})` : ''}${error.data ? ` Data: ${JSON.stringify(error.data)}` : ''}`
+      `REST error: ${error.status || 'UNKNOWN'} (${error.code || 'unknown code'}) - ${message}`
     );
   }
 }

@@ -2,7 +2,7 @@ export type TransportProtocolName = 'JSONRPC' | 'HTTP+JSON' | 'GRPC' | (string &
 
 export interface JSONRPCError {
   code: number;
-  data?: { [k: string]: unknown };
+  data?: Array<Record<string, unknown>> | { [k: string]: unknown };
   message: string;
 }
 

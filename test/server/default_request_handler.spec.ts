@@ -148,6 +148,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     referenceTaskIds: [],
   });
 
+  const createTestTask = (id: string, history: Message[] = []): Task => ({
+    id,
+    contextId: `ctx-${id}`,
+    status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    artifacts: [],
+    metadata: {},
+    history,
+  });
+
   it('sendMessage: should return a simple message response', async () => {
     const params: SendMessageRequest = {
       message: createTestMessage('msg-1', 'Hello'),
@@ -1633,14 +1642,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   });
 
   it('getTask: should return an existing task from the store', async () => {
-    const fakeTask: Task = {
-      id: 'task-exist',
-      contextId: 'ctx-exist',
-      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-      artifacts: [],
-      metadata: {},
-      history: [],
-    };
+    const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const result = await handler.getTask(
@@ -1648,6 +1650,303 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       serverCallContext
     );
     assert.deepEqual(result, fakeTask);
+  });
+
+  it('getTask: should return all history when historyLength is undefined (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'history msg 1'),
+      createTestMessage('h2', 'history msg 2'),
+      createTestMessage('h3', 'history msg 3'),
+    ];
+    const fakeTask = createTestTask('task-history-all', history);
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask({ id: fakeTask.id, tenant: '' }, serverCallContext);
+    assert.lengthOf(result.history!, 3, 'undefined historyLength should return all history');
+  });
+
+  it('getTask: should return empty history when historyLength is 0 (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'history msg 1'),
+      createTestMessage('h2', 'history msg 2'),
+    ];
+    const fakeTask = createTestTask('task-history-zero', history);
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask(
+      { id: fakeTask.id, tenant: '', historyLength: 0 },
+      serverCallContext
+    );
+    assert.lengthOf(result.history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('getTask: should return N most recent messages when historyLength is N (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'oldest'),
+      createTestMessage('h2', 'middle'),
+      createTestMessage('h3', 'newest'),
+    ];
+    const fakeTask = createTestTask('task-history-n', history);
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask(
+      { id: fakeTask.id, tenant: '', historyLength: 2 },
+      serverCallContext
+    );
+    assert.lengthOf(result.history!, 2, 'historyLength=2 should return 2 messages');
+    assert.equal(result.history![0].messageId, 'h2', 'should return most recent messages');
+    assert.equal(result.history![1].messageId, 'h3', 'should return most recent messages');
+  });
+
+  it('sendMessage: should apply historyLength=0 to omit history from task result (§3.2.4)', async () => {
+    const contextId = 'ctx-send-hist-0';
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-hist-0', 'test'),
+      configuration: { historyLength: 0, acceptedOutputModes: [], returnImmediately: false },
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const result = await handler.sendMessage(params, serverCallContext);
+
+    assert.property(result, 'id', 'Should return a Task');
+    const task = result as Task;
+    assert.lengthOf(task.history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('sendMessage: should apply historyLength=1 to limit history in task result (§3.2.4)', async () => {
+    const contextId = 'ctx-send-hist-1';
+
+    // First, create a task with history by sending an initial message
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    // First message creates the task
+    const firstParams: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-first', 'first message'),
+      configuration: undefined,
+      metadata: {},
+    } as SendMessageRequest;
+    firstParams.message!.contextId = contextId;
+
+    const firstResult = await handler.sendMessage(firstParams, serverCallContext);
+    assert.property(firstResult, 'id');
+    const taskId = (firstResult as Task).id;
+
+    // Second message adds to history and completes the task
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const secondMessage = createTestMessage('msg-second', 'second message');
+    secondMessage.contextId = contextId;
+    secondMessage.taskId = taskId;
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: secondMessage,
+      configuration: { historyLength: 1, acceptedOutputModes: [], returnImmediately: false },
+      metadata: {},
+    } as SendMessageRequest;
+
+    const result = await handler.sendMessage(params, serverCallContext);
+
+    assert.property(result, 'id', 'Should return a Task');
+    const task = result as Task;
+    assert.isAtMost(task.history!.length, 1, 'historyLength=1 should return at most 1 message');
+  });
+
+  it('sendMessage: should not trim history when historyLength is undefined (§3.2.4)', async () => {
+    const contextId = 'ctx-send-hist-undef';
+
+    // Agent includes multiple messages in its task event history.
+    // Per §3.7, the agent is responsible for determining which messages
+    // are persisted in the task history.
+    const agentHistory = [
+      createTestMessage('hist-1', 'first message'),
+      createTestMessage('hist-2', 'second message'),
+      createTestMessage('hist-3', 'third message'),
+    ];
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: agentHistory,
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-undef', 'test'),
+      configuration: undefined,
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const result = await handler.sendMessage(params, serverCallContext);
+
+    assert.property(result, 'id', 'Should return a Task');
+    const task = result as Task;
+    // With undefined historyLength, no trimming is applied — all history
+    // from the agent's task event is returned as-is (plus the user message).
+    assert.isAtLeast(
+      task.history!.length,
+      3,
+      'undefined historyLength should not trim agent-provided history'
+    );
+  });
+
+  it('sendMessageStream: should apply historyLength=0 to task payloads in stream (§3.2.4)', async () => {
+    const contextId = 'ctx-stream-hist-0';
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-stream-0', 'test'),
+      configuration: { historyLength: 0, acceptedOutputModes: [], returnImmediately: false },
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+      events.push(event);
+    }
+
+    const taskEvents = events.filter((e) => e.payload?.$case === 'task');
+    assert.isAtLeast(taskEvents.length, 1, 'Should have at least one task event');
+    for (const taskEvent of taskEvents) {
+      const task = taskEvent.payload!.value as Task;
+      assert.lengthOf(
+        task.history!,
+        0,
+        'historyLength=0 should omit history in stream task events'
+      );
+    }
+  });
+
+  it('sendMessageStream: should return all history in task payloads when historyLength is undefined (§3.2.4)', async () => {
+    const contextId = 'ctx-stream-hist-undef';
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-stream-all', 'test'),
+      configuration: undefined,
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+      events.push(event);
+    }
+
+    const taskEvents = events.filter((e) => e.payload?.$case === 'task');
+    assert.isAtLeast(taskEvents.length, 1, 'Should have at least one task event');
+    for (const taskEvent of taskEvents) {
+      const task = taskEvent.payload!.value as Task;
+      assert.lengthOf(
+        task.history!,
+        1,
+        'undefined historyLength should preserve all history in stream task events'
+      );
+    }
   });
 
   it('listTasks: should return tasks from the store', async () => {
@@ -1722,6 +2021,114 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       expect(error).to.be.instanceOf(RequestMalformedError);
       expect(error.message).to.contain('pageSize must be between 1 and 100');
     }
+  });
+
+  it('listTasks: should return empty history when historyLength is 0', async () => {
+    const history: Message[] = [
+      createTestMessage('lh1', 'message 1'),
+      createTestMessage('lh2', 'message 2'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-0',
+      contextId: 'ctx-list-hist',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(result.tasks[0].history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('listTasks: should return N most recent messages when historyLength is N', async () => {
+    const history: Message[] = [
+      createTestMessage('ln1', 'oldest'),
+      createTestMessage('ln2', 'middle'),
+      createTestMessage('ln3', 'newest'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-n',
+      contextId: 'ctx-list-hist-n',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist-n',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 2,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(result.tasks[0].history!, 2, 'historyLength=2 should return 2 messages');
+    assert.equal(
+      result.tasks[0].history![0].messageId,
+      'ln2',
+      'should return most recent messages'
+    );
+    assert.equal(
+      result.tasks[0].history![1].messageId,
+      'ln3',
+      'should return most recent messages'
+    );
+  });
+
+  it('listTasks: should return all history when historyLength is undefined', async () => {
+    const history: Message[] = [
+      createTestMessage('lu1', 'message 1'),
+      createTestMessage('lu2', 'message 2'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-undef',
+      contextId: 'ctx-list-hist-undef',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist-undef',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: undefined,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(
+      result.tasks[0].history!,
+      2,
+      'undefined historyLength should return all history'
+    );
   });
 
   it('create/getTaskPushNotificationConfig: should save and retrieve config', async () => {

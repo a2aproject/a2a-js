@@ -168,7 +168,6 @@ describe('Client', () => {
       configuration: {
         ...params.configuration,
         returnImmediately: false,
-        historyLength: 0,
         acceptedOutputModes: [] as string[],
       },
     };
@@ -248,7 +247,6 @@ describe('Client', () => {
       configuration: {
         ...params.configuration,
         returnImmediately: false,
-        historyLength: 0,
         acceptedOutputModes: [] as string[],
       },
     };
@@ -500,7 +498,6 @@ describe('Client', () => {
         ...params,
         configuration: {
           returnImmediately: true,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
         },
       };
@@ -526,7 +523,6 @@ describe('Client', () => {
         },
         configuration: {
           returnImmediately: true,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
           taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
@@ -539,7 +535,6 @@ describe('Client', () => {
         ...params,
         configuration: {
           returnImmediately: true,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
           taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
@@ -575,7 +570,6 @@ describe('Client', () => {
         ...params,
         configuration: {
           returnImmediately: false,
-          historyLength: 0,
           acceptedOutputModes: ['application/json'],
           taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
         },
@@ -660,7 +654,6 @@ describe('Client', () => {
         ...params,
         configuration: {
           returnImmediately: false,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
           taskPushNotificationConfig: pushConfig,
         },
@@ -707,7 +700,6 @@ describe('Client', () => {
         configuration: {
           taskPushNotificationConfig: pushConfig,
           returnImmediately: true,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
         },
         metadata: {},
@@ -720,7 +712,6 @@ describe('Client', () => {
         configuration: {
           taskPushNotificationConfig: pushConfig,
           returnImmediately: true,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
         },
       };
@@ -769,7 +760,6 @@ describe('Client', () => {
         ...params,
         configuration: {
           returnImmediately: false,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
           taskPushNotificationConfig: undefined as any,
         },
@@ -1126,7 +1116,6 @@ describe('Client', () => {
         configuration: {
           ...params.configuration,
           returnImmediately: false,
-          historyLength: 0,
           acceptedOutputModes: [] as string[],
         },
       };
