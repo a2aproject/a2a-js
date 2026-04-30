@@ -6,6 +6,10 @@ inputs:
   - git_repo: https://github.com/a2aproject/A2A.git
     ref: v1.0.0
     subdir: specification
+  - module: buf.build/googleapis/googleapis
+    paths:
+      - google/rpc/status.proto
+      - google/rpc/error_details.proto
 plugins:
   - remote: buf.build/community/stephenh-ts-proto:v2.6.1
     opt: 

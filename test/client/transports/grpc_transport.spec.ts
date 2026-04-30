@@ -8,9 +8,9 @@ import { A2AServiceClient } from '../../../src/grpc/pb/a2a.js';
 import {
   TaskNotFoundError,
   TaskNotCancelableError,
-  RequestMalformedError,
   PushNotificationNotSupportedError,
 } from '../../../src/errors.js';
+import { buildGrpcErrorMetadata } from '../../../src/server/grpc/error_details.js';
 import {
   createMessageParams,
   createMockAgentCard,
@@ -57,12 +57,14 @@ describe('GrpcTransport', () => {
     });
   };
 
-  // Helper to simulate a gRPC error
-  const mockUnaryError = (method: Mock, code: number, message: string) => {
+  // Helper to simulate a gRPC error with enriched ErrorInfo metadata
+  const mockUnaryError = (method: Mock, code: number, message: string, sdkError?: Error) => {
     method.mockImplementation((_req: any, _meta: any, _opts: any, callback: any) => {
+      const metadata = sdkError ? buildGrpcErrorMetadata(code, message, sdkError) : undefined;
       const error: Partial<ServiceError> = {
         code: code,
         details: message,
+        metadata: metadata ?? new Metadata(),
       };
       callback(error, null);
       return {};
@@ -119,18 +121,23 @@ describe('GrpcTransport', () => {
       expect(calledMetadata.get('x-test-header')).toEqual(['test-value']);
     });
 
-    it('should throw TaskNotFoundError when mapped from A2A error code', async () => {
+    it('should throw TaskNotFoundError when ErrorInfo reason is TASK_NOT_FOUND', async () => {
       const params = createMessageParams();
-      mockUnaryError(mockGrpcClient.sendMessage as Mock, status.NOT_FOUND, 'Task Missing');
+      mockUnaryError(
+        mockGrpcClient.sendMessage as Mock,
+        status.NOT_FOUND,
+        'Task Missing',
+        new TaskNotFoundError('Task Missing')
+      );
 
       await expect(transport.sendMessage(params)).rejects.toThrow(TaskNotFoundError);
     });
 
-    it('should throw generic Error for unmapped gRPC errors', async () => {
+    it('should throw generic Error when no ErrorInfo is present', async () => {
       const params = createMessageParams();
       mockUnaryError(mockGrpcClient.sendMessage as Mock, status.UNKNOWN, 'Internal Error');
 
-      await expect(transport.sendMessage(params)).rejects.toThrow('GRPC error for sendMessage');
+      await expect(transport.sendMessage(params)).rejects.toThrow('gRPC error for sendMessage');
     });
 
     it('should cancel request when signal is aborted', async () => {
@@ -176,11 +183,11 @@ describe('GrpcTransport', () => {
       expect(mockGrpcClient.sendStreamingMessage).toHaveBeenCalled();
     });
 
-    it('should handle stream errors', async () => {
+    it('should handle stream errors without ErrorInfo as generic Error', async () => {
       const params = createMessageParams();
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
-          throw { code: 13, message: 'Stream failed' };
+          throw { code: 13, message: 'Stream failed', metadata: new Metadata() };
           yield {};
         },
         cancel: vi.fn(),
@@ -188,7 +195,7 @@ describe('GrpcTransport', () => {
       (mockGrpcClient.sendStreamingMessage as Mock).mockReturnValue(mockStream);
 
       const iterator = transport.sendMessageStream(params);
-      await expect(iterator.next()).rejects.toThrow(RequestMalformedError);
+      await expect(iterator.next()).rejects.toThrow('gRPC error for sendStreamingMessage');
     });
 
     it('should cancel stream when signal is aborted', async () => {
@@ -226,7 +233,12 @@ describe('GrpcTransport', () => {
     });
 
     it('should throw TaskNotFoundError', async () => {
-      mockUnaryError(mockGrpcClient.getTask as Mock, status.NOT_FOUND, 'Not Found');
+      mockUnaryError(
+        mockGrpcClient.getTask as Mock,
+        status.NOT_FOUND,
+        'Not Found',
+        new TaskNotFoundError('Not Found')
+      );
       await expect(
         transport.getTask({ id: 'bad-id', tenant: '', historyLength: 0 })
       ).rejects.toThrow(TaskNotFoundError);
@@ -249,7 +261,8 @@ describe('GrpcTransport', () => {
       mockUnaryError(
         mockGrpcClient.cancelTask as Mock,
         status.FAILED_PRECONDITION,
-        'Cannot cancel'
+        'Cannot cancel',
+        new TaskNotCancelableError('Cannot cancel')
       );
       await expect(
         transport.cancelTask({ id: 'task-123', tenant: '', metadata: undefined })
@@ -290,8 +303,9 @@ describe('GrpcTransport', () => {
       it('should throw PushNotificationNotSupportedError', async () => {
         mockUnaryError(
           mockGrpcClient.createTaskPushNotificationConfig as Mock,
-          status.UNIMPLEMENTED,
-          'Not supported'
+          status.FAILED_PRECONDITION,
+          'Not supported',
+          new PushNotificationNotSupportedError('Not supported')
         );
         await expect(
           transport.createTaskPushNotificationConfig({
