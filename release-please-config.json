@@ -1,0 +1,8 @@
+{
+  "release-type": "node",
+  "prerelease": true,
+  "prerelease-type": "alpha",
+  "packages": {
+    ".": {}
+  }
+}
