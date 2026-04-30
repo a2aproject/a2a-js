@@ -442,14 +442,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     // Start agent execution (non-blocking)
-    this.agentExecutor.execute(requestContext, eventBus).catch((err) => {
+    this.agentExecutor.execute(requestContext, eventBus).catch(async (err) => {
       console.error(
         `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
         err
       );
-      // Publish a synthetic error event if needed
+      // Only publish a synthetic error event if the task already exists in the store.
+      // If the agent failed before creating a task, signal the event bus to finish
+      // so the stream consumer doesn't hang indefinitely.
+      const task = await this.taskStore.load(requestContext.taskId, context);
+      if (!task) {
+        eventBus.finished();
+        return;
+      }
       const errorTaskStatus: TaskStatusUpdateEvent = {
-        taskId: requestContext.task?.id || uuidv4(), // Use existing or a placeholder
+        taskId: requestContext.taskId,
         contextId: finalMessageForAgent.contextId!,
         status: {
           state: TaskState.TASK_STATE_FAILED,
