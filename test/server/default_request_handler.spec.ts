@@ -1625,7 +1625,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       assert.fail('Should have thrown UnsupportedOperationError');
     } catch (error) {
       expect(error).to.be.instanceOf(UnsupportedOperationError);
-      expect((error as Error).message).to.include('message');
+      expect((error as Error).message).to.include('received message in task lifecycle stream');
     }
 
     assert.lengthOf(events, 1, 'Task should be yielded before the error');
