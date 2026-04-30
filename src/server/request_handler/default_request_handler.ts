@@ -464,7 +464,18 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         },
         metadata: {},
       };
+      eventBus.publish(
+        AgentEvent.task({
+          id: errorTaskStatus.taskId,
+          contextId: errorTaskStatus.contextId,
+          status: errorTaskStatus.status,
+          artifacts: [],
+          history: requestContext.task?.history ? [...requestContext.task.history] : [],
+          metadata: {},
+        })
+      );
       eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
+      eventBus.finished();
     });
 
     let streamPattern = StreamPattern.UNDETERMINED;

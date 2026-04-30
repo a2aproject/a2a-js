@@ -1481,13 +1481,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
-  it('sendMessageStream: should enforce message-only pattern — no events after message', async () => {
+  it('sendMessageStream: should close stream after a single message (§3.1.2 message-only pattern)', async () => {
     const params: SendMessageRequest = {
       message: createTestMessage('msg-order-1', 'message-only test'),
     } as SendMessageRequest;
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
-      // Agent publishes a message, then incorrectly publishes a status update.
       bus.publish(
         AgentEvent.message({
           messageId: 'msg-response',
@@ -1507,16 +1506,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           referenceTaskIds: [],
         })
       );
+      // Publish a second event — the stream should already be closed.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: 'some-task',
+          contextId: 'some-ctx',
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
+      bus.finished();
     });
 
     const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+    const generator = handler.sendMessageStream(params, serverCallContext);
+    for await (const event of generator) {
       events.push(event);
     }
 
-    // Only the message should be yielded — the stream should close after it.
+    // The stream MUST contain exactly one Message and then close.
     assert.lengthOf(events, 1, 'Message-only stream should contain exactly one event');
     assert.equal(events[0].payload?.$case, 'message');
+
+    // Verify the stream is closed — calling next() should return done: true.
+    const afterClose = await generator.next();
+    assert.isTrue(afterClose.done, 'Stream should be closed after message-only response');
   });
 
   it('sendMessageStream: should throw when statusUpdate arrives before task', async () => {
