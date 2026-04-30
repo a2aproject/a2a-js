@@ -856,15 +856,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       case StreamPattern.UNDETERMINED:
         if (event.kind === 'message') return StreamPattern.MESSAGE_ONLY;
         if (event.kind === 'task') return StreamPattern.TASK_LIFECYCLE;
-        throw new UnsupportedOperationError(`Received ${event.kind} before initial 'task' event.`);
+        throw new UnsupportedOperationError(
+          `Received ${event.kind} before initial 'Message'/'Task' event.`
+        );
 
       case StreamPattern.MESSAGE_ONLY:
         throw new UnsupportedOperationError(`Received ${event.kind} after message-only response.`);
 
       case StreamPattern.TASK_LIFECYCLE:
-        if (event.kind === 'message')
+        if (event.kind !== 'statusUpdate' && event.kind !== 'artifactUpdate')
           throw new UnsupportedOperationError(
-            `Stream ordering violation: received 'message' in task lifecycle stream.`
+            `Stream ordering violation: received ${event.kind} in task lifecycle stream.`
           );
         return currentPattern;
     }
