@@ -1,11 +1,5 @@
 import { TransportProtocolName } from '../../core.js';
-import {
-  A2A_REASON_TO_ERROR_CLASS,
-  ERROR_INFO_TYPE,
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  RequestMalformedError,
-} from '../../errors.js';
+import { A2A_REASON_TO_ERROR_CLASS, ERROR_INFO_TYPE } from '../../errors.js';
 
 import { SendMessageResult, A2A_PROTOCOL_VERSION, A2A_CONTENT_TYPE } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
@@ -332,7 +326,7 @@ export class RestTransport implements Transport {
     }
 
     if (errorStatus) {
-      throw RestTransport.mapToError(errorStatus, response.status);
+      throw RestTransport.mapToError(errorStatus);
     }
 
     throw new Error(
@@ -397,7 +391,7 @@ export class RestTransport implements Transport {
     }
   }
 
-  private static mapToError(error: RestErrorStatus, httpStatus?: number): Error {
+  private static mapToError(error: RestErrorStatus): Error {
     const message = error.message || 'Unknown error';
 
     if (Array.isArray(error.details)) {
@@ -408,13 +402,8 @@ export class RestTransport implements Transport {
       }
     }
 
-    // Fallback: infer from HTTP status code.
-    if (httpStatus === 400) return new RequestMalformedError(message);
-    if (httpStatus === 404) return new TaskNotFoundError(message);
-    if (httpStatus === 409) return new TaskNotCancelableError(message);
-
     return new Error(
-      `REST error: ${error.status || 'UNKNOWN'} - ${message}${httpStatus ? ` (HTTP ${httpStatus})` : ''}`
+      `REST error: ${error.status || 'UNKNOWN'} (${error.code || 'unknown code'}) - ${message}`
     );
   }
 }
