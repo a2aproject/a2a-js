@@ -20,7 +20,7 @@ const sampleAgentCard: AgentCard = {
       url: 'http://localhost:41241/',
       protocolBinding: 'JSONRPC',
       tenant: '',
-      protocolVersion: '0.3.0',
+      protocolVersion: '1.0',
     },
   ],
   provider: {
