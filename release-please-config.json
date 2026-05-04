@@ -2,6 +2,8 @@
   "release-type": "node",
   "prerelease": true,
   "prerelease-type": "alpha",
+  "versioning": "prerelease",
+  "bootstrap-sha": "82d36c7",
   "packages": {
     ".": {}
   }
