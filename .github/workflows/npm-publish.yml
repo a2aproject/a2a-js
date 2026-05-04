@@ -32,7 +32,7 @@ jobs:
         # `--dry-run` will be removed before the merge.
       - name: Publish to NPM
         run: |
-          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+          if [ "${{ github.event.release.prereleased }}" = "true" ]; then
             npm publish --provenance --access public --tag beta --dry-run
           else
             npm publish --provenance --access public --dry-run
