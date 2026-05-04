@@ -50,3 +50,16 @@ export function isArtifactUpdate(update: unknown): update is Artifact {
 export function isTask(result: Message | Task): result is Task {
   return 'status' in result;
 }
+
+/**
+ * Stream ordering patterns per §3.1.2.
+ * Used to track which pattern a streaming response follows.
+ */
+export enum StreamPattern {
+  /** First event not yet received — pattern undetermined. */
+  UNDETERMINED = 'undetermined',
+  /** First event was a Message — stream MUST close immediately after it. */
+  MESSAGE_ONLY = 'message-only',
+  /** First event was a Task — followed by status/artifact updates until terminal state. */
+  TASK_LIFECYCLE = 'task-lifecycle',
+}

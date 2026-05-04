@@ -1490,6 +1490,157 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
+  it('sendMessageStream: should close stream after a single message (§3.1.2 message-only pattern)', async () => {
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-1', 'message-only test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'msg-response',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'response' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      // Publish a second event — the stream should already be closed.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: 'some-task',
+          contextId: 'some-ctx',
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    const generator = handler.sendMessageStream(params, serverCallContext);
+    for await (const event of generator) {
+      events.push(event);
+    }
+
+    // The stream MUST contain exactly one Message and then close.
+    assert.lengthOf(events, 1, 'Message-only stream should contain exactly one event');
+    assert.equal(events[0].payload?.$case, 'message');
+
+    // Verify the stream is closed — calling next() should return done: true.
+    const afterClose = await generator.next();
+    assert.isTrue(afterClose.done, 'Stream should be closed after message-only response');
+  });
+
+  it('sendMessageStream: should throw when statusUpdate arrives before task', async () => {
+    const taskId = 'task-order-1';
+    const contextId = 'ctx-order-1';
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-2', 'task-lifecycle test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      // Agent incorrectly publishes a statusUpdate before a task event.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const generator = handler.sendMessageStream(params, serverCallContext);
+    try {
+      for await (const _event of generator) {
+        void _event;
+        assert.fail('Should have thrown before yielding any events');
+      }
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.include('statusUpdate');
+    }
+  });
+
+  it('sendMessageStream: should throw when message arrives in task-lifecycle stream', async () => {
+    const taskId = 'task-order-2';
+    const contextId = 'ctx-order-2';
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-3', 'message in task stream'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      // Agent publishes task first (valid).
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+
+      // Then incorrectly publishes a message mid-stream.
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'bad-msg',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'should not be allowed' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    try {
+      for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+        events.push(event);
+      }
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.include('received message in task lifecycle stream');
+    }
+
+    assert.lengthOf(events, 1, 'Task should be yielded before the error');
+    assert.equal(events[0].payload?.$case, 'task');
+  });
+
   it('getTask: should return an existing task from the store', async () => {
     const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);

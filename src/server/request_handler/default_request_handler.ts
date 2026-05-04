@@ -55,7 +55,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-import { TERMINAL_STATE_LIST, isTask } from '../utils.js';
+import { TERMINAL_STATE_LIST, isTask, StreamPattern } from '../utils.js';
 
 /**
  * Default implementation of the A2A request handler.
@@ -447,9 +447,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
         err
       );
-      // Publish a synthetic error event if needed
+      // Only publish a synthetic error event if the task already exists in the store.
+      // If the agent failed before creating a task, signal the event bus to finish
+      // so the stream consumer doesn't hang indefinitely.
+      const currentTask = resultManager.getCurrentTask();
+      if (!currentTask) {
+        eventBus.finished();
+        return;
+      }
       const errorTaskStatus: TaskStatusUpdateEvent = {
-        taskId: requestContext.task?.id || uuidv4(), // Use existing or a placeholder
+        taskId: requestContext.taskId,
         contextId: finalMessageForAgent.contextId!,
         status: {
           state: TaskState.TASK_STATE_FAILED,
@@ -477,9 +484,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
     });
 
+    let streamPattern = StreamPattern.UNDETERMINED;
     try {
       for await (const event of eventQueue.events()) {
+        streamPattern = this._advanceStreamPattern(event, streamPattern);
+
         await resultManager.processEvent(event); // Update store in background
+
         const streamResponse = await this._mapEventToStreamResponse(event, context);
         if (streamResponse.payload?.$case === 'task') {
           this._applyHistoryLengthSemantics(
@@ -847,6 +858,36 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     } else {
       console.error(`Event processing loop failed for task ${taskId}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Advances the stream pattern state based on the incoming event per §3.1.2.
+   *
+   * Determines whether the event is valid for the current pattern and returns
+   * the (possibly transitioned) pattern. Throws error for invalid transitions.
+   */
+  private _advanceStreamPattern(
+    event: AgentExecutionEvent,
+    currentPattern: StreamPattern
+  ): StreamPattern {
+    switch (currentPattern) {
+      case StreamPattern.UNDETERMINED:
+        if (event.kind === 'message') return StreamPattern.MESSAGE_ONLY;
+        if (event.kind === 'task') return StreamPattern.TASK_LIFECYCLE;
+        throw new UnsupportedOperationError(
+          `Received ${event.kind} before initial 'Message'/'Task' event.`
+        );
+
+      case StreamPattern.MESSAGE_ONLY:
+        throw new UnsupportedOperationError(`Received ${event.kind} after message-only response.`);
+
+      case StreamPattern.TASK_LIFECYCLE:
+        if (event.kind !== 'statusUpdate' && event.kind !== 'artifactUpdate')
+          throw new UnsupportedOperationError(
+            `Stream ordering violation: received ${event.kind} in task lifecycle stream.`
+          );
+        return currentPattern;
     }
   }
 
