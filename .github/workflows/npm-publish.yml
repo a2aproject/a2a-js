@@ -33,7 +33,7 @@ jobs:
       - name: Publish to NPM
         run: |
           if [ "${{ github.event.release.prereleased }}" = "true" ]; then
-            npm publish --provenance --access public --tag beta --dry-run
+            npm publish --provenance --access public --tag next --dry-run
           else
             npm publish --provenance --access public --dry-run
           fi
