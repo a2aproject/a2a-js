@@ -1,6 +1,6 @@
 {
   "name": "@a2a-js/sdk",
-  "version": "0.3.13",
+  "version": "1.0.0-alpha.0",
   "description": "Server & Client SDK for Agent2Agent protocol",
   "license": "Apache-2.0",
   "repository": {
@@ -106,7 +106,6 @@
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
     "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
     "itk-agent": "tsx itk/itk_agent.ts"
-
   },
   "dependencies": {
     "uuid": "^11.1.0"
