@@ -122,9 +122,10 @@ describe('Agent Card Signature', () => {
         typ: 'JOSE',
       });
 
-      await signer(mockAgentCard);
-      await signer(mockAgentCard);
-      expect(mockAgentCard.signatures).toHaveLength(2);
+      const signed1 = await signer(mockAgentCard);
+      const signed2 = await signer(signed1);
+      expect(signed2.signatures).toHaveLength(2);
+      expect(mockAgentCard.signatures).toHaveLength(0);
     });
   });
 
@@ -142,10 +143,10 @@ describe('Agent Card Signature', () => {
         kid: 'test-key-1',
         typ: 'JOSE',
       });
-      await signer(mockAgentCard);
+      const signedCard = await signer(mockAgentCard);
 
       const verifier = verifyAgentCardSignature(mockRetrieveKey);
-      await expect(verifier(mockAgentCard)).resolves.not.toThrow();
+      await expect(verifier(signedCard)).resolves.not.toThrow();
 
       expect(mockRetrieveKey).toHaveBeenCalledWith('test-key-1', undefined);
     });
@@ -156,11 +157,11 @@ describe('Agent Card Signature', () => {
         kid: 'test-key-1',
         typ: 'JOSE',
       });
-      await signer(mockAgentCard);
+      const signedCard = await signer(mockAgentCard);
 
-      mockAgentCard.name = 'Modified Agent Name';
+      const modifiedAgentCard = { ...signedCard, name: 'Modified Agent Name' };
       const verifier = verifyAgentCardSignature(mockRetrieveKey);
-      await expect(verifier(mockAgentCard)).rejects.toThrow('No valid signatures found');
+      await expect(verifier(modifiedAgentCard)).rejects.toThrow('No valid signatures found');
     });
 
     it('should fail if the signature is invalid/malformed', async () => {
@@ -169,11 +170,11 @@ describe('Agent Card Signature', () => {
         kid: 'test-key-1',
         typ: 'JOSE',
       });
-      await signer(mockAgentCard);
+      const signedCard = await signer(mockAgentCard);
 
-      mockAgentCard.signatures[0].signature = 'invalid_signature_string';
+      (signedCard.signatures as any)[0].signature = 'invalid_signature_string';
       const verifier = verifyAgentCardSignature(mockRetrieveKey);
-      await expect(verifier(mockAgentCard)).rejects.toThrow('No valid signatures found');
+      await expect(verifier(signedCard)).rejects.toThrow('No valid signatures found');
     });
 
     it('should throw if no signatures are present', async () => {
@@ -198,10 +199,10 @@ describe('Agent Card Signature', () => {
         kid: 'test-key-1',
         typ: 'JOSE',
       });
-      await signer(mockAgentCard);
+      const signedCard = await signer(mockAgentCard);
 
       const verifier = verifyAgentCardSignature(mockRetrieveKey);
-      await expect(verifier(mockAgentCard)).resolves.not.toThrow();
+      await expect(verifier(signedCard)).resolves.not.toThrow();
     });
 
     it('should pass jku to retrievePublicKey when present in header', async () => {
@@ -211,10 +212,10 @@ describe('Agent Card Signature', () => {
         typ: 'JOSE',
         jku: 'https://example.com/.well-known/jwks.json',
       });
-      await signer(mockAgentCard);
+      const signedCard = await signer(mockAgentCard);
 
       const verifier = verifyAgentCardSignature(mockRetrieveKey);
-      await verifier(mockAgentCard);
+      await verifier(signedCard);
 
       expect(mockRetrieveKey).toHaveBeenCalledWith(
         'test-key-1',

@@ -44,8 +44,7 @@ export function generateAgentCardSignature(
   header?: jose.JWSHeaderParameters
 ): AgentCardSignatureGenerator {
   return async (agentCard: AgentCard): Promise<AgentCard> => {
-    const { signatures: _, ...cardWithoutSignatures } = agentCard;
-    void _;
+    const { signatures: existingSignatures, ...cardWithoutSignatures } = agentCard;
     const canonicalPayload = canonicalizeAgentCard(cardWithoutSignatures);
 
     const signBuilder = new jose.FlattenedSign(
@@ -64,10 +63,10 @@ export function generateAgentCardSignature(
       header: jws.header,
     };
 
-    if (!agentCard.signatures) agentCard.signatures = [];
-    agentCard.signatures.push(agentCardSignature);
-
-    return agentCard;
+    return {
+      ...agentCard,
+      signatures: [...(existingSignatures ?? []), agentCardSignature],
+    };
   };
 }
 
@@ -132,7 +131,7 @@ export function verifyAgentCardSignature(
         await jose.flattenedVerify(jws, publicKey);
         return; // At least one valid signature found
       } catch (error) {
-        console.warn('Signature verification failed for entry:', error);
+        console.debug('Signature verification on entry was not successful:', signatureEntry, error);
       }
     }
 
