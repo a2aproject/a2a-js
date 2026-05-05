@@ -15,7 +15,8 @@ To test the extension:
 
 ```bash
 curl -X POST http://localhost:41241/
-    -H "X-A2A-Extensions: https://github.com/a2aproject/a2a-js/src/samples/extensions/v1"
+    -H "A2A-Extensions: https://github.com/a2aproject/a2a-js/src/samples/extensions/v1"
+    -H "A2A-Version: 1.0"
     -H "Content-Type: application/json"
     -d '{
         "jsonrpc": "2.0",
