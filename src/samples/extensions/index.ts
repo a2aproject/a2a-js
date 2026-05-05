@@ -8,7 +8,7 @@ import {
   DefaultRequestHandler,
 } from '../../server/index.js';
 import { jsonRpcHandler, agentCardHandler, UserBuilder } from '../../server/express/index.js';
-import { TimestampingAgentExecutor, EXTENSIONS_URI } from './extensions.js';
+import { TimestampingAgentExecutor, EXTENSION_URI } from './extensions.js';
 import { SampleAgentExecutor } from '../agents/sample-agent/agent_executor.js';
 
 // --- Server Setup ---
@@ -33,7 +33,7 @@ const extensionAgentCard: AgentCard = {
   capabilities: {
     extensions: [
       {
-        uri: EXTENSIONS_URI,
+        uri: EXTENSION_URI,
         description: 'Timestamp extension',
         required: false,
         params: {},

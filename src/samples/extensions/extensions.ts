@@ -5,13 +5,13 @@ import {
   AgentExecutionEvent,
 } from '../../server/index.js';
 
-export const EXTENSIONS_URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1';
+export const EXTENSION_URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1';
 
 class TimeStampExtension {
   activate(context: RequestContext): boolean {
     const serverContext = context.context;
-    if (serverContext?.requestedExtensions?.includes(EXTENSIONS_URI)) {
-      serverContext.addActivatedExtension(EXTENSIONS_URI);
+    if (serverContext?.requestedExtensions?.includes(EXTENSION_URI)) {
+      serverContext.addActivatedExtension(EXTENSION_URI);
       return true;
     }
     return false;
