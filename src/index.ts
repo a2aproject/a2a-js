@@ -16,5 +16,12 @@ export {
   A2A_CONTENT_TYPE,
 } from './constants.js';
 export { Extensions, type ExtensionURI } from './extensions.js';
+export {
+  generateAgentCardSignature,
+  verifyAgentCardSignature,
+  canonicalizeAgentCard,
+  type AgentCardSignatureGenerator,
+  type AgentCardSignatureVerifier,
+} from './signature.js';
 
 export type SendMessageResult = Message | Task;
