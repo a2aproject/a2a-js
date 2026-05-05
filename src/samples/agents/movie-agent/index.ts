@@ -61,22 +61,22 @@ class MovieAgentExecutor implements AgentExecutor {
       `[MovieAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
     );
 
-    // 1. Publish initial Task event.
-    const initialTask: Task = existingTask
-      ? { ...existingTask }
-      : {
-          id: taskId,
-          contextId: contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            timestamp: new Date().toISOString(),
-            message: undefined,
-          },
-          artifacts: [],
-          history: [userMessage],
-          metadata: userMessage.metadata,
-        };
-    eventBus.publish(AgentEvent.task(initialTask));
+    // 1. Publish initial Task event if it's a new task
+    if (!existingTask) {
+      const initialTask: Task = {
+        id: taskId,
+        contextId: contextId,
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          timestamp: new Date().toISOString(),
+          message: undefined,
+        },
+        artifacts: [],
+        history: [userMessage], // Start history with the current user message
+        metadata: userMessage.metadata, // Carry over metadata from message if any
+      };
+      eventBus.publish(AgentEvent.task(initialTask));
+    }
 
     // 2. Publish "working" status update
     const workingStatusUpdate: TaskStatusUpdateEvent = {
