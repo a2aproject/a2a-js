@@ -5,7 +5,7 @@ import {
   AgentExecutionEvent,
 } from '../../server/index.js';
 
-const URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions';
+const URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1';
 
 class TimeStampExtension {
   activate(context: RequestContext): boolean {

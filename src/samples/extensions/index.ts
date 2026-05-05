@@ -33,7 +33,7 @@ const extensionAgentCard: AgentCard = {
   capabilities: {
     extensions: [
       {
-        uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions',
+        uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1',
         description: 'Timestamp extension',
         required: false,
         params: {},
