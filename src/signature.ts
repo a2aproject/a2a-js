@@ -44,9 +44,9 @@ export function generateAgentCardSignature(
   header?: jose.JWSHeaderParameters
 ): AgentCardSignatureGenerator {
   return async (agentCard: AgentCard): Promise<AgentCard> => {
-    const cardCopy = JSON.parse(JSON.stringify(agentCard));
-    delete cardCopy.signatures;
-    const canonicalPayload = canonicalizeAgentCard(cardCopy);
+    const { signatures: _, ...cardWithoutSignatures } = agentCard;
+    void _;
+    const canonicalPayload = canonicalizeAgentCard(cardWithoutSignatures);
 
     const signBuilder = new jose.FlattenedSign(
       new TextEncoder().encode(canonicalPayload)
@@ -108,9 +108,9 @@ export function verifyAgentCardSignature(
       throw new Error('No signatures found on agent card to verify.');
     }
 
-    const cardCopy = JSON.parse(JSON.stringify(agentCard));
-    delete cardCopy.signatures;
-    const canonicalPayload = canonicalizeAgentCard(cardCopy);
+    const { signatures: _, ...cardWithoutSignatures } = agentCard;
+    void _;
+    const canonicalPayload = canonicalizeAgentCard(cardWithoutSignatures);
     const payloadBytes = new TextEncoder().encode(canonicalPayload);
     const encodedPayload = jose.base64url.encode(payloadBytes);
 
@@ -150,7 +150,7 @@ function cleanEmpty(d: unknown): unknown {
   }
 
   if (Array.isArray(d)) {
-    const cleanedList = d.map((v) => cleanEmpty(v)).filter((v) => v !== null);
+    const cleanedList = d.map((v) => cleanEmpty(v));
     return cleanedList.length > 0 ? cleanedList : null;
   }
 
