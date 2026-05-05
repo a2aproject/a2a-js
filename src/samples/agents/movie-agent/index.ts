@@ -61,22 +61,22 @@ class MovieAgentExecutor implements AgentExecutor {
       `[MovieAgentExecutor] Processing message ${userMessage.messageId} for task ${taskId} (context: ${contextId})`
     );
 
-    // 1. Publish initial Task event if it's a new task
-    if (!existingTask) {
-      const initialTask: Task = {
-        id: taskId,
-        contextId: contextId,
-        status: {
-          state: TaskState.TASK_STATE_SUBMITTED,
-          timestamp: new Date().toISOString(),
-          message: undefined,
-        },
-        artifacts: [],
-        history: [userMessage], // Start history with the current user message
-        metadata: userMessage.metadata, // Carry over metadata from message if any
-      };
-      eventBus.publish(AgentEvent.task(initialTask));
-    }
+    // 1. Publish initial Task event.
+    const initialTask: Task = existingTask
+      ? { ...existingTask }
+      : {
+          id: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            timestamp: new Date().toISOString(),
+            message: undefined,
+          },
+          artifacts: [],
+          history: [userMessage],
+          metadata: userMessage.metadata,
+        };
+    eventBus.publish(AgentEvent.task(initialTask));
 
     // 2. Publish "working" status update
     const workingStatusUpdate: TaskStatusUpdateEvent = {
@@ -194,7 +194,7 @@ class MovieAgentExecutor implements AgentExecutor {
         return;
       }
 
-      const responseText = response.text; // Access the text property using .text()
+      const responseText = response.text;
       console.info(`[MovieAgentExecutor] Prompt response: ${responseText}`);
       const lines = responseText.trim().split('\n');
       const finalStateLine = lines.at(-1)?.trim().toUpperCase();
@@ -211,9 +211,9 @@ class MovieAgentExecutor implements AgentExecutor {
         finalA2AState = TaskState.TASK_STATE_INPUT_REQUIRED;
       } else {
         console.warn(
-          `[MovieAgentExecutor] Unexpected final state line from prompt: ${finalStateLine}. Defaulting to 'completed'.`
+          `[MovieAgentExecutor] Unexpected final state line from prompt: "${finalStateLine}". Defaulting to 'completed'.`
         );
-        finalA2AState = TaskState.TASK_STATE_COMPLETED; // Default if LLM deviates
+        finalA2AState = TaskState.TASK_STATE_COMPLETED;
       }
 
       // 5. Publish artifact with the result
