@@ -149,7 +149,7 @@ function cleanEmpty(d: unknown): unknown {
   }
 
   if (Array.isArray(d)) {
-    const cleanedList = d.map((v) => cleanEmpty(v));
+    const cleanedList = d.map((v) => cleanEmpty(v)).filter((v) => v !== null);
     return cleanedList.length > 0 ? cleanedList : null;
   }
 
