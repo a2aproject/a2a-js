@@ -154,7 +154,7 @@ function cleanEmpty(d: unknown): unknown {
   }
 
   if (typeof d === 'object') {
-    if (d instanceof Date) return d;
+    if (d instanceof Date) return d.toISOString();
     const cleanedDict: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(d as Record<string, unknown>)) {
       const cleanedValue = cleanEmpty(v);
