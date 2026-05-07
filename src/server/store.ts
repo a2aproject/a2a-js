@@ -72,13 +72,13 @@ export class InMemoryTaskStore implements TaskStore {
 
   async load(taskId: string, context: ServerCallContext): Promise<Task | undefined> {
     const entry = this._scopedStore.getBucket(context)?.get(taskId);
-    // Return copies to prevent external mutation
-    return entry ? { ...entry } : undefined;
+    // Return deep copies to prevent external mutation
+    return entry ? structuredClone(entry) : undefined;
   }
 
   async save(task: Task, context: ServerCallContext): Promise<void> {
-    // Store copies to prevent internal mutation if caller reuses objects
-    this._scopedStore.getOrCreateBucket(context).set(task.id, { ...task });
+    // Store deep copies to prevent internal mutation if caller reuses objects
+    this._scopedStore.getOrCreateBucket(context).set(task.id, structuredClone(task));
   }
 
   async list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse> {
@@ -154,7 +154,7 @@ export class InMemoryTaskStore implements TaskStore {
 
     // Map tasks to response format
     const resultTasks = paginatedTasks.map((task) => {
-      const taskCopy = JSON.parse(JSON.stringify(task));
+      const taskCopy = structuredClone(task);
       if (!includeArtifacts) {
         taskCopy.artifacts = [];
       }
