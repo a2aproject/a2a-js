@@ -205,6 +205,28 @@ describe('Agent Card Signature', () => {
       await expect(verifier(signedCard)).resolves.not.toThrow();
     });
 
+    it('should verify cards with non-schema fields (cross-implementation compat)', async () => {
+      const signer = generateAgentCardSignature(privateKey, {
+        alg: ALG,
+        kid: 'test-key-1',
+        typ: 'JOSE',
+      });
+      const signedCard = await signer(mockAgentCard);
+
+      // Simulate backward-compat fields injected by another SDK implementation
+      // (e.g., Python SDK v0.3 compat layer adds these to the HTTP response)
+      const cardWithExtraFields = {
+        ...signedCard,
+        url: 'http://localhost:8080',
+        preferredTransport: 'JSONRPC',
+        protocolVersion: '0.3',
+        supportsAuthenticatedExtendedCard: false,
+      };
+
+      const verifier = verifyAgentCardSignature(mockRetrieveKey);
+      await expect(verifier(cardWithExtraFields as AgentCard)).resolves.not.toThrow();
+    });
+
     it('should pass jku to retrievePublicKey when present in header', async () => {
       const signer = generateAgentCardSignature(privateKey, {
         alg: ALG,
