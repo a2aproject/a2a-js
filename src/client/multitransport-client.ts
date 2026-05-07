@@ -1,4 +1,5 @@
 import { withA2AVersion } from './service-parameters.js';
+import { AgentCardSignatureVerifier } from '../signature.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
@@ -92,13 +93,19 @@ export class Client {
    * automatically by `ClientFactory` from `AgentInterface.tenant`), the tenant
    * is applied to the request transparently.
    */
-  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
+  async getAgentCard(
+    options?: RequestOptions,
+    verifySignature?: AgentCardSignatureVerifier
+  ): Promise<AgentCard> {
     if (this.agentCard.capabilities?.extendedAgentCard) {
       this.agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
         (_, options) => this.transport.getExtendedAgentCard({ tenant: '' }, options)
       );
+    }
+    if (verifySignature) {
+      await verifySignature(this.agentCard);
     }
     return this.agentCard;
   }
