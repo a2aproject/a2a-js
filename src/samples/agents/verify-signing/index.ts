@@ -41,10 +41,7 @@ const serverUrl = process.argv[2] || 'http://localhost:9999';
  * in a simple {kid: pem_string} JSON format. This function fetches the key
  * and imports it as a CryptoKey for use with the jose library.
  */
-async function retrievePublicKey(
-  kid: string,
-  jku?: string
-): Promise<crypto.webcrypto.CryptoKey> {
+async function retrievePublicKey(kid: string, jku?: string): Promise<crypto.webcrypto.CryptoKey> {
   if (!jku) {
     throw new Error(`No jku (JWK Set URL) provided for kid "${kid}"`);
   }
@@ -58,7 +55,9 @@ async function retrievePublicKey(
   const keys: Record<string, string> = await response.json();
   const pemData = keys[kid];
   if (!pemData) {
-    throw new Error(`Key "${kid}" not found at ${jku}. Available keys: ${Object.keys(keys).join(', ')}`);
+    throw new Error(
+      `Key "${kid}" not found at ${jku}. Available keys: ${Object.keys(keys).join(', ')}`
+    );
   }
 
   // Import the PEM public key as a CryptoKey
@@ -97,9 +96,7 @@ async function main() {
   if (rawCard.signatures?.length) {
     for (let i = 0; i < rawCard.signatures.length; i++) {
       const sig = rawCard.signatures[i];
-      const header = JSON.parse(
-        Buffer.from(sig.protected, 'base64url').toString()
-      );
+      const header = JSON.parse(Buffer.from(sig.protected, 'base64url').toString());
       console.log(`  Signature ${i + 1}:`);
       console.log(`    Algorithm: ${header.alg}`);
       console.log(`    Key ID: ${header.kid}`);
@@ -122,6 +119,7 @@ async function main() {
   // Step 3: Verify canonicalization produces deterministic output
   console.log('--- Step 3: Verify canonicalization ---');
   const { signatures: _, ...cardWithoutSignatures } = rawCard;
+  void _;
   const canonical = canonicalizeAgentCard(cardWithoutSignatures);
   console.log(`  Canonical form (first 200 chars): ${canonical.substring(0, 200)}...`);
   // Run it twice to confirm determinism

@@ -111,7 +111,10 @@ export function verifyAgentCardSignature(
     // fromJSON strips non-schema fields (e.g., backward-compatibility fields
     // injected by other SDK implementations), and toJSON omits fields with
     // default values. This mirrors the Python SDK's MessageToDict behavior.
-    const normalizedCard = AgentCard.toJSON(AgentCard.fromJSON(agentCard)) as Record<string, unknown>;
+    const normalizedCard = AgentCard.toJSON(AgentCard.fromJSON(agentCard)) as Record<
+      string,
+      unknown
+    >;
     delete normalizedCard.signatures;
     const canonicalPayload = canonicalizeAgentCard(normalizedCard as Omit<AgentCard, 'signatures'>);
     const payloadBytes = new TextEncoder().encode(canonicalPayload);
