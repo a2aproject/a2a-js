@@ -112,12 +112,15 @@ switch (part.content?.$case) {
 
 ### 1.2 `kind` Discriminator Removed from All Types
 
-The `kind` field has been removed from `Message`, `Task`,
-`TaskStatusUpdateEvent`, and `TaskArtifactUpdateEvent`. If your code checks
-`event.kind` to identify types, you need to update the logic.
+The `kind` field has been removed from the raw `Message`, `Task`,
+`TaskStatusUpdateEvent`, and `TaskArtifactUpdateEvent` types. The SDK provides
+two typed wrappers that replace `kind`-based discrimination:
+
+- **Client side:** `StreamResponse` -- use `payload.$case` (see [Section 2.4](#24-streaming-return-type-streamresponse))
+- **Server side:** `AgentExecutionEvent` -- use `event.kind` on the wrapper (see [Section 3.5](#35-executioneventbus----discriminated-event-wrapper))
 
 ```typescript
-// v0.3
+// v0.3 -- kind was on the raw object itself
 if (event.kind === 'message') {
   /* Message */
 }
@@ -131,12 +134,30 @@ if (event.kind === 'artifact-update') {
   /* TaskArtifactUpdateEvent */
 }
 
-// v1.0 -- use structural checks or the StreamResponse wrapper (see Migration Guide Section 2.4)
-if ('messageId' in event && 'role' in event) {
-  /* Message */
+// v1.0 client -- use StreamResponse.payload.$case
+switch (streamResponse.payload?.$case) {
+  case 'message':
+    /* streamResponse.payload.value is Message */ break;
+  case 'task':
+    /* streamResponse.payload.value is Task */ break;
+  case 'statusUpdate':
+    /* streamResponse.payload.value is TaskStatusUpdateEvent */ break;
+  case 'artifactUpdate':
+    /* streamResponse.payload.value is TaskArtifactUpdateEvent */ break;
 }
-if ('status' in event && 'contextId' in event && !('artifact' in event)) {
-  /* Task */
+
+// v1.0 server -- use AgentExecutionEvent.kind (on the wrapper, not the raw object)
+import { AgentEvent, type AgentExecutionEvent } from '@a2a-js/sdk/server';
+
+switch (event.kind) {
+  case 'message':
+    /* event.data is Message */ break;
+  case 'task':
+    /* event.data is Task */ break;
+  case 'statusUpdate':
+    /* event.data is TaskStatusUpdateEvent */ break;
+  case 'artifactUpdate':
+    /* event.data is TaskArtifactUpdateEvent */ break;
 }
 ```
 
