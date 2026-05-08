@@ -11,7 +11,8 @@ the [A2A Protocol v1.0 Specification](https://a2a-protocol.org/latest/specificat
 ## Prerequisites
 
 - **Node.js >= 20** is now required (v0.3 supported Node 18).
-- Install the latest SDK: `npm install @a2a-js/sdk@latest`
+- Install the v1.0 SDK: `npm install @a2a-js/sdk@1.0.0-alpha.0`
+  (or `npm install @a2a-js/sdk@alpha` to always get the latest alpha release)
 
 ---
 
@@ -527,7 +528,7 @@ If you interact with the wire protocol directly:
 | `tasks/pushNotificationConfig/list`   | `ListTaskPushNotificationConfigs`  |
 | `tasks/pushNotificationConfig/delete` | `DeleteTaskPushNotificationConfig` |
 | `agent/getAuthenticatedExtendedCard`  | `GetExtendedAgentCard`             |
-| _(new)_                               | `ListTasks`                        |
+|                                       | `ListTasks`_(new)_                 |
 
 ### 2.9 Content-Type Change (REST)
 
@@ -925,7 +926,7 @@ Use this checklist to track your migration progress:
 ### Prerequisites
 
 - [ ] Update Node.js to >= 20
-- [ ] Install `@a2a-js/sdk@latest`
+- [ ] Install `@a2a-js/sdk@1.0.0-alpha.0`
 
 ### Data Model (Critical)
 
