@@ -1,11 +1,16 @@
 import { TaskPushNotificationConfig } from '../../index.js';
 import { ServerCallContext } from '../context.js';
+import { OwnerResolver, resolveUserScope } from '../owner_resolver.js';
+import { ScopedStore } from '../utils.js';
 
 /**
  * Interface for push notification configuration storage.
  *
- * Implementations SHOULD use `context.tenant` (when present) to scope data access,
- * ensuring push notification configs from one tenant are not accessible to another.
+ * Implementations SHOULD use `context.tenant` (when present) and the authenticated
+ * caller's identity to scope data access, ensuring push notification configs from
+ * one tenant or user are not accessible to another.
+ * Per spec §13.1, servers MUST verify the client has appropriate access rights
+ * for push notification configuration operations.
  */
 export interface PushNotificationStore {
   save(
@@ -18,34 +23,18 @@ export interface PushNotificationStore {
 }
 
 /**
- * In-memory push notification config store with tenant-scoped data isolation.
- * A nested Map structure (tenant -> taskId -> configs[]) is used so that tenant
- * scoping is structural, imposing no restrictions on task ID format.
+ * In-memory push notification config store with tenant- and owner-scoped data isolation.
+ * A triple-nested Map structure (tenant -> owner -> taskId -> configs[]) is used so that
+ * both tenant and owner scoping are structural, imposing no restrictions on task ID format.
+ *
+ * Per spec §13.1, servers MUST ensure appropriate scope limitation based on the
+ * authenticated caller's authorization boundaries.
  */
 export class InMemoryPushNotificationStore implements PushNotificationStore {
-  // Outer map: tenant key ('' for global/no-tenant) -> inner map of taskId -> configs
-  private store: Map<string, Map<string, TaskPushNotificationConfig[]>> = new Map();
+  private readonly _scopedStore: ScopedStore<TaskPushNotificationConfig[]>;
 
-  private _tenantKey(context: ServerCallContext): string {
-    return context.tenant ?? '';
-  }
-
-  private _getTenantBucket(
-    context: ServerCallContext
-  ): Map<string, TaskPushNotificationConfig[]> | undefined {
-    return this.store.get(this._tenantKey(context));
-  }
-
-  private _getOrCreateTenantBucket(
-    context: ServerCallContext
-  ): Map<string, TaskPushNotificationConfig[]> {
-    const key = this._tenantKey(context);
-    let bucket = this.store.get(key);
-    if (!bucket) {
-      bucket = new Map();
-      this.store.set(key, bucket);
-    }
-    return bucket;
+  constructor(ownerResolver: OwnerResolver = resolveUserScope) {
+    this._scopedStore = new ScopedStore<TaskPushNotificationConfig[]>(ownerResolver);
   }
 
   async save(
@@ -53,7 +42,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     context: ServerCallContext,
     pushNotificationConfig: TaskPushNotificationConfig
   ): Promise<void> {
-    const bucket = this._getOrCreateTenantBucket(context);
+    const bucket = this._scopedStore.getOrCreateBucket(context);
     const configs = bucket.get(taskId) || [];
 
     // Set ID if it's not already set
@@ -73,7 +62,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
   }
 
   async load(taskId: string, context: ServerCallContext): Promise<TaskPushNotificationConfig[]> {
-    const configs = this._getTenantBucket(context)?.get(taskId);
+    const configs = this._scopedStore.getBucket(context)?.get(taskId);
     return configs || [];
   }
 
@@ -83,7 +72,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
       configId = taskId;
     }
 
-    const bucket = this._getTenantBucket(context);
+    const bucket = this._scopedStore.getBucket(context);
     if (!bucket) {
       return;
     }
