@@ -692,7 +692,6 @@ const movieAgentCard: AgentCard = {
   capabilities: {
     streaming: true,
     pushNotifications: true, // Enable push notifications
-    stateTransitionHistory: true,
   },
   // ... rest of agent card
 };
