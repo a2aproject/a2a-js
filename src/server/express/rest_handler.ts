@@ -70,9 +70,9 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  *
  * This handler implements the A2A REST API specification with snake_case
  * field names, providing endpoints for:
- * - Agent card retrieval (GET /extendedAgentCard)
- * - Message sending with optional streaming (POST /message:send|stream)
- * - Task management (GET/POST /tasks/:taskId:cancel|subscribe)
+ * - Agent card retrieval (GET /v1/card)
+ * - Message sending with optional streaming (POST /v1/message:send|stream)
+ * - Task management (GET/POST /v1/tasks/:taskId:cancel|subscribe)
  * - Push notification configuration
  *
  * The handler acts as an adapter layer, converting between REST format
@@ -274,7 +274,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   // ============================================================================
 
   /**
-   * GET /extendedAgentCard
+   * GET /v1/card
    *
    * Retrieves the authenticated extended agent card.
    *
@@ -282,7 +282,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 500 Internal Server Error on failure
    */
   router.get(
-    '/extendedAgentCard',
+    '/v1/card',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(context);
@@ -292,7 +292,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * POST /message:send
+   * POST /v1/message:send
    *
    * Sends a message to the agent synchronously.
    * Returns either a Message (for immediate responses) or a Task (for async processing).
@@ -303,7 +303,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 400 Bad Request if message is invalid
    */
   router.post(
-    '/message\\:send',
+    '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
@@ -321,7 +321,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * POST /message:stream
+   * POST /v1/message:stream
    *
    * Sends a message to the agent with streaming response.
    * Returns a Server-Sent Events (SSE) stream of updates.
@@ -333,7 +333,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 501 Not Implemented if streaming not supported
    */
   router.post(
-    '/message\\:stream',
+    '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const protoReq = a2a.SendMessageRequest.fromJSON(req.body);
@@ -344,7 +344,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * GET /tasks/:taskId
+   * GET /v1/tasks/:taskId
    *
    * Retrieves the current status and details of a task.
    *
@@ -355,7 +355,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 404 Not Found if task doesn't exist
    */
   router.get(
-    '/tasks/:taskId',
+    '/v1/tasks/:taskId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getTask(
@@ -370,7 +370,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * POST /tasks/:taskId:cancel
+   * POST /v1/tasks/:taskId:cancel
    *
    * Attempts to cancel an ongoing task.
    * The task may not be immediately canceled depending on its current state.
@@ -381,7 +381,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 409 Conflict if task cannot be canceled
    */
   router.post(
-    '/tasks/:taskId\\:cancel',
+    '/v1/tasks/:taskId\\:cancel',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.cancelTask(req.params.taskId, context);
@@ -391,7 +391,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * POST /tasks/:taskId:subscribe
+   * POST /v1/tasks/:taskId:subscribe
    *
    * Resubscribes to an existing task's updates via Server-Sent Events (SSE).
    * Useful for reconnecting to long-running tasks or receiving missed updates.
@@ -402,7 +402,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 501 Not Implemented if streaming not supported
    */
   router.post(
-    '/tasks/:taskId\\:subscribe',
+    '/v1/tasks/:taskId\\:subscribe',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const stream = await restTransportHandler.resubscribe(req.params.taskId, context);
@@ -411,7 +411,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * POST /tasks/:taskId/pushNotificationConfigs
+   * POST /v1/tasks/:taskId/pushNotificationConfigs
    *
    * Creates a push notification configuration for a task.
    * The agent will send task updates to the configured webhook URL.
@@ -422,7 +422,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 501 Not Implemented if push notifications not supported
    */
   router.post(
-    '/tasks/:taskId/pushNotificationConfigs',
+    '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const protoReq = a2a.CreateTaskPushNotificationConfigRequest.fromJSON(req.body);
@@ -440,7 +440,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * GET /tasks/:taskId/pushNotificationConfigs
+   * GET /v1/tasks/:taskId/pushNotificationConfigs
    *
    * Lists all push notification configurations for a task.
    *
@@ -449,7 +449,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 404 Not Found if task doesn't exist
    */
   router.get(
-    '/tasks/:taskId/pushNotificationConfigs',
+    '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.listTaskPushNotificationConfigs(
@@ -468,7 +468,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * GET /tasks/:taskId/pushNotificationConfigs/:configId
+   * GET /v1/tasks/:taskId/pushNotificationConfigs/:configId
    *
    * Retrieves a specific push notification configuration.
    *
@@ -478,7 +478,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 404 Not Found if task or config doesn't exist
    */
   router.get(
-    '/tasks/:taskId/pushNotificationConfigs/:configId',
+    '/v1/tasks/:taskId/pushNotificationConfigs/:configId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await restTransportHandler.getTaskPushNotificationConfig(
@@ -498,7 +498,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   );
 
   /**
-   * DELETE /tasks/:taskId/pushNotificationConfigs/:configId
+   * DELETE /v1/tasks/:taskId/pushNotificationConfigs/:configId
    *
    * Deletes a push notification configuration.
    *
@@ -508,7 +508,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @returns 404 Not Found if task or config doesn't exist
    */
   router.delete(
-    '/tasks/:taskId/pushNotificationConfigs/:configId',
+    '/v1/tasks/:taskId/pushNotificationConfigs/:configId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       await restTransportHandler.deleteTaskPushNotificationConfig(
