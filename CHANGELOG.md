@@ -11,6 +11,7 @@ See the [v0.3 -> v1.0-alpha.0 migration guide](https://github.com/a2aproject/a2a
 
 * Drop support for node 18 ([#368](https://github.com/a2aproject/a2a-js/issues/368))
 * Make ServerCallContext parameter mandatory across all places ([#405](https://github.com/a2aproject/a2a-js/issues/405))
+* Remove JSON-RPC client ([#353](https://github.com/a2aproject/a2a-js/issues/353))
 * Remove transport-specific exports ([#404](https://github.com/a2aproject/a2a-js/issues/404))
 * Update codebase to use A2A 1.0.0 data model ([#375](https://github.com/a2aproject/a2a-js/issues/375))
 * Remove A2AExpressApp ([#363](https://github.com/a2aproject/a2a-js/issues/363))
@@ -25,7 +26,6 @@ See the [v0.3 -> v1.0-alpha.0 migration guide](https://github.com/a2aproject/a2a
 * Enforce events ordering ([#437](https://github.com/a2aproject/a2a-js/issues/437)) ([157cf48](https://github.com/a2aproject/a2a-js/commit/157cf48f5de41be261a8839dc44a4bbdb257182f))
 * Enriched Error Model ([#427](https://github.com/a2aproject/a2a-js/issues/427)) ([c130778](https://github.com/a2aproject/a2a-js/commit/c13077801d8d300eb4f1a81ef207c7d4f0184e11))
 * Implement listTasks method ([#383](https://github.com/a2aproject/a2a-js/issues/383)) ([7d4c472](https://github.com/a2aproject/a2a-js/commit/7d4c472b0a8aa957c8b5ebed0e3d7987df3282a9))
-* Remove JSON-RPC client ([#353](https://github.com/a2aproject/a2a-js/issues/353))
 * Send current task as the first event after subscribing to it ([#418](https://github.com/a2aproject/a2a-js/issues/418)) ([4bfcf5f](https://github.com/a2aproject/a2a-js/commit/4bfcf5f3ebbbe538596d9519a1e31d79cfd6fc45))
 * Support multi-tenancy ([#419](https://github.com/a2aproject/a2a-js/issues/419)) ([1877877](https://github.com/a2aproject/a2a-js/commit/18778775bb755f75d46be1039291057ece625561))
 
