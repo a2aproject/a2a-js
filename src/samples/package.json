@@ -7,7 +7,14 @@
     "agents:sample-agent": "tsx agents/sample-agent/index.ts",
     "agents:extension-agent": "tsx extensions/index.ts",
     "agents:authentication-agent": "tsx authentication/index.ts",
-    "agents:verify-signing": "tsx agents/verify-signing/index.ts"
+    "agents:verify-signing": "tsx agents/verify-signing/index.ts",
+    "agents:push-notification-agent": "tsx agents/push-notification-agent/index.ts",
+    "agents:push-notification-webhook": "tsx agents/push-notification-agent/webhook.ts",
+    "agents:push-notification-client": "tsx agents/push-notification-agent/client.ts",
+    "agents:multi-transport-agent": "tsx agents/multi-transport-agent/index.ts",
+    "agents:cancellable-agent": "tsx agents/cancellable-agent/index.ts",
+    "agents:cancellable-client": "tsx agents/cancellable-agent/client.ts",
+    "client:interceptors": "tsx client/interceptors/index.ts"
   },
   "devDependencies": {
     "@genkit-ai/googleai": "^1.8.0",

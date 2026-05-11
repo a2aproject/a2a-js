@@ -1,5 +1,5 @@
 import express from 'express';
-import { AgentCard } from '../../index.js';
+import { A2A_PROTOCOL_VERSION, AgentCard } from '../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -21,7 +21,7 @@ const authenticationAgentCard: AgentCard = {
       url: 'http://localhost:41241/',
       protocolBinding: 'JSONRPC',
       tenant: '',
-      protocolVersion: '0.3.0',
+      protocolVersion: A2A_PROTOCOL_VERSION,
     },
   ],
   provider: {
@@ -80,9 +80,8 @@ async function main() {
     agentExecutor
   );
 
-  // 4. Create and setup express app, with authentication middleware and user builder
+  // 4. Create and setup express app, with authentication middleware and user builder.
   const app = express();
-  app.use(express.json());
   app.use(authenticationHandler);
   app.use(
     jsonRpcHandler({

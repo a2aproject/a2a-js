@@ -2,6 +2,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
+  A2A_PROTOCOL_VERSION,
   AgentCard,
   Task,
   TaskState,
@@ -316,7 +317,7 @@ const movieAgentCard: AgentCard = {
       url: 'http://localhost:41241/',
       protocolBinding: 'JSONRPC',
       tenant: '',
-      protocolVersion: '1.0',
+      protocolVersion: A2A_PROTOCOL_VERSION,
     },
   ],
   provider: {
