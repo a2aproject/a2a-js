@@ -39,10 +39,15 @@ console.log(header+'.'+payload+'.'+sig);
 
 ## Calling the agent
 
+The `A2A-Version` header is required: when it is omitted the JSON-RPC binding
+falls back to `0.3`, and the server (which advertises only `A2A_PROTOCOL_VERSION`,
+currently `1.0`) rejects the request with `VERSION_NOT_SUPPORTED`.
+
 ```bash
 curl -X POST http://localhost:41241/ \
   -H "Authorization: Bearer <jwt-token>" \
   -H "Content-Type: application/json" \
+  -H "A2A-Version: 1.0" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
