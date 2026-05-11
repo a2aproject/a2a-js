@@ -29,10 +29,6 @@ See the [v0.3 -> v1.0-alpha.0 migration guide](https://github.com/a2aproject/a2a
 * Send current task as the first event after subscribing to it ([#418](https://github.com/a2aproject/a2a-js/issues/418)) ([4bfcf5f](https://github.com/a2aproject/a2a-js/commit/4bfcf5f3ebbbe538596d9519a1e31d79cfd6fc45))
 * Support multi-tenancy ([#419](https://github.com/a2aproject/a2a-js/issues/419)) ([1877877](https://github.com/a2aproject/a2a-js/commit/18778775bb755f75d46be1039291057ece625561))
 
-### Bug Fixes
-
-* Fixing missing push configuration after normalization for rest transport ([#346](https://github.com/a2aproject/a2a-js/issues/346)) ([54ac8c4](https://github.com/a2aproject/a2a-js/commit/54ac8c41cacc54fb0d80526b79c87ba3aede14af))
-
 ### Code Refactoring
 
 * remove A2AExpressApp ([#363](https://github.com/a2aproject/a2a-js/issues/363)) ([0b84728](https://github.com/a2aproject/a2a-js/commit/0b84728e56241ae5b00ff3274fb91dda5121e037))
