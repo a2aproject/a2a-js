@@ -41,97 +41,98 @@ export class CancellableAgentExecutor implements AgentExecutor {
 
     console.log(`[CancellableAgentExecutor] Starting task ${taskId} (context: ${contextId})`);
 
-    // 1. Publish initial Task event if it's a new task.
-    if (!existingTask) {
-      const initialTask: Task = {
-        id: taskId,
-        contextId: contextId,
-        status: {
-          state: TaskState.TASK_STATE_SUBMITTED,
-          timestamp: new Date().toISOString(),
-          message: undefined,
-        },
-        artifacts: [],
-        history: [userMessage],
-        metadata: userMessage.metadata,
-      };
-      eventBus.publish(AgentEvent.task(initialTask));
-    }
+    try {
+      // 1. Publish initial Task event if it's a new task.
+      if (!existingTask) {
+        const initialTask: Task = {
+          id: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            timestamp: new Date().toISOString(),
+            message: undefined,
+          },
+          artifacts: [],
+          history: [userMessage],
+          metadata: userMessage.metadata,
+        };
+        eventBus.publish(AgentEvent.task(initialTask));
+      }
 
-    // 2. Move into the working state.
-    eventBus.publish(
-      AgentEvent.statusUpdate({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_WORKING,
-          timestamp: new Date().toISOString(),
-          message: undefined,
-        },
-        metadata: {},
-      })
-    );
-
-    // 3. Multi-step work, with a cancellation check before every step.
-    const totalSteps = 5;
-    for (let step = 1; step <= totalSteps; step++) {
-      if (this.cancelledTasks.has(taskId)) {
-        console.log(`[CancellableAgentExecutor] Aborting task ${taskId} at step ${step}.`);
-
-        const cancelledUpdate: TaskStatusUpdateEvent = {
+      // 2. Move into the working state.
+      eventBus.publish(
+        AgentEvent.statusUpdate({
           taskId,
           contextId,
           status: {
-            state: TaskState.TASK_STATE_CANCELED,
+            state: TaskState.TASK_STATE_WORKING,
             timestamp: new Date().toISOString(),
-            message: {
-              role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
-              parts: [
-                {
-                  content: {
-                    $case: 'text',
-                    value: `Task cancelled by user at step ${step}/${totalSteps}.`,
-                  },
-                  metadata: undefined,
-                  filename: '',
-                  mediaType: 'text/plain',
-                },
-              ],
-              taskId,
-              contextId,
-              extensions: [],
-              metadata: {},
-              referenceTaskIds: [],
-            },
+            message: undefined,
           },
           metadata: {},
-        };
-        eventBus.publish(AgentEvent.statusUpdate(cancelledUpdate));
+        })
+      );
 
-        // Clean up so the Set does not grow unbounded.
-        this.cancelledTasks.delete(taskId);
-        return;
+      // 3. Multi-step work, with a cancellation check before every step.
+      const totalSteps = 5;
+      for (let step = 1; step <= totalSteps; step++) {
+        if (this.cancelledTasks.has(taskId)) {
+          console.log(`[CancellableAgentExecutor] Aborting task ${taskId} at step ${step}.`);
+
+          const cancelledUpdate: TaskStatusUpdateEvent = {
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_CANCELED,
+              timestamp: new Date().toISOString(),
+              message: {
+                role: Role.ROLE_AGENT,
+                messageId: uuidv4(),
+                parts: [
+                  {
+                    content: {
+                      $case: 'text',
+                      value: `Task cancelled by user at step ${step}/${totalSteps}.`,
+                    },
+                    metadata: undefined,
+                    filename: '',
+                    mediaType: 'text/plain',
+                  },
+                ],
+                taskId,
+                contextId,
+                extensions: [],
+                metadata: {},
+                referenceTaskIds: [],
+              },
+            },
+            metadata: {},
+          };
+          eventBus.publish(AgentEvent.statusUpdate(cancelledUpdate));
+          return;
+        }
+
+        console.log(`[CancellableAgentExecutor] Task ${taskId}: step ${step}/${totalSteps}`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
-      console.log(`[CancellableAgentExecutor] Task ${taskId}: step ${step}/${totalSteps}`);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // 4. If we reach this point, no cancellation was requested.
+      eventBus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: new Date().toISOString(),
+            message: undefined,
+          },
+          metadata: {},
+        })
+      );
+
+      console.log(`[CancellableAgentExecutor] Task ${taskId} completed.`);
+    } finally {
+      this.cancelledTasks.delete(taskId);
     }
-
-    // 4. If we reach this point, no cancellation was requested.
-    eventBus.publish(
-      AgentEvent.statusUpdate({
-        taskId,
-        contextId,
-        status: {
-          state: TaskState.TASK_STATE_COMPLETED,
-          timestamp: new Date().toISOString(),
-          message: undefined,
-        },
-        metadata: {},
-      })
-    );
-
-    console.log(`[CancellableAgentExecutor] Task ${taskId} completed.`);
   }
 }
