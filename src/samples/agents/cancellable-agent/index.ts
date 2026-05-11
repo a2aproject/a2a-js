@@ -16,7 +16,8 @@ const cancellableAgentCard: AgentCard = {
   name: 'Sample Cancellable Agent',
   description:
     'A sample agent that runs a multi-step task and supports user-initiated ' +
-    'cancellation via tasks/cancel.',
+    'cancellation via the A2A Cancel Task operation ' +
+    '(`CancelTask` over JSON-RPC, `POST /tasks/{id}:cancel` over HTTP+JSON/REST).',
   supportedInterfaces: [
     {
       url: `http://localhost:${PORT}/`,

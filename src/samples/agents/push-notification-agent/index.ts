@@ -71,9 +71,10 @@ async function main() {
 
   // 3. Configure push notification components.
   //    The InMemoryPushNotificationStore stores per-task webhook configs sent
-  //    by clients. The DefaultPushNotificationSender POSTs each Task /
-  //    StatusUpdate / ArtifactUpdate event to the configured URL, optionally
-  //    setting an `X-A2A-Notification-Token` header from `pushConfig.token`.
+  //    by clients. The DefaultPushNotificationSender POSTs every published
+  //    AgentExecutionEvent (Task, Message, TaskStatusUpdateEvent, or
+  //    TaskArtifactUpdateEvent) to the configured URL, optionally setting an
+  //    `X-A2A-Notification-Token` header from `pushConfig.token`.
   const pushNotificationStore = new InMemoryPushNotificationStore();
   const pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore, {
     timeout: 5000,

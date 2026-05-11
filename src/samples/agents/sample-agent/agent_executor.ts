@@ -22,8 +22,11 @@ import {
  * Cancellation is supported via the standard SDK pattern: `cancelTask` records
  * the taskId in an in-memory Set, and `execute` checks the flag at every
  * yield point. A `try/finally` block guarantees the entry is removed from
- * the Set regardless of how `execute` returns. Without this, `tasks/cancel`
- * issued against a streaming request would block the request handler in
+ * the Set regardless of how `execute` returns. Without this, a client call to
+ * `client.cancelTask({ id })` (the SDK's invocation of the A2A "Cancel Task"
+ * operation, exposed as `CancelTask` over JSON-RPC and
+ * `POST /tasks/{id}:cancel` over HTTP+JSON/REST) issued against a streaming
+ * request would block the request handler in
  * `DefaultRequestHandler.cancelTask` until a terminal event is published —
  * see `src/server/request_handler/default_request_handler.ts`.
  */

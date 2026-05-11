@@ -3,11 +3,18 @@ import express from 'express';
 /**
  * Standalone webhook endpoint that receives A2A push notifications.
  *
- * The A2A server POSTs the JSON-encoded `StreamResponse` envelope (containing
- * a `task`, `statusUpdate`, or `artifactUpdate` payload) to the URL the client
- * provided in `taskPushNotificationConfig.url`. When `pushConfig.token` is
- * set, the value is forwarded in the `X-A2A-Notification-Token` header (or
- * whatever header name was configured on `DefaultPushNotificationSender`).
+ * The A2A server POSTs the JSON wire form of `StreamResponse` (see
+ * `StreamResponse.toJSON` in `src/types/pb/a2a.ts`) to the URL the client
+ * provided in `taskPushNotificationConfig.url`. The body has exactly one of
+ * `task`, `message`, `statusUpdate`, or `artifactUpdate` set at the top
+ * level. When `pushConfig.token` is set, the value is forwarded in the
+ * `X-A2A-Notification-Token` header (or whatever header name was configured
+ * on `DefaultPushNotificationSender`).
+ *
+ * The Content-Type is `application/a2a+json` (per A2A Specification §14.1.1
+ * https://a2a-protocol.org/latest/specification/#1411-applicationa2ajson),
+ * which the default `express.json()` middleware does not parse — see the
+ * `buildApp` body for the workaround.
  *
  * This sample webhook:
  *   1. Verifies the token header.

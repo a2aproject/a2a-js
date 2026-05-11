@@ -28,9 +28,12 @@ import {
  * Cancellation is supported by recording the taskId in an in-memory Set when
  * `cancelTask` is invoked and checking the flag at every yield point in
  * `execute`. A `try/finally` block guarantees that the entry is always
- * removed once `execute` returns. Without working cancellation here, a
- * `tasks/cancel` issued mid-stream would block the request handler in
- * `DefaultRequestHandler.cancelTask` until a terminal event is published.
+ * removed once `execute` returns. Without working cancellation here, a client
+ * call to `client.cancelTask({ id })` (the SDK's invocation of the A2A
+ * "Cancel Task" operation, exposed as `CancelTask` over JSON-RPC and
+ * `POST /tasks/{id}:cancel` over HTTP+JSON/REST) issued mid-stream would
+ * block the request handler in `DefaultRequestHandler.cancelTask` until a
+ * terminal event is published.
  */
 export class PushNotificationAgentExecutor implements AgentExecutor {
   private readonly cancelledTasks = new Set<string>();

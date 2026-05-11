@@ -32,9 +32,16 @@ const AGENT_URL = process.env.AGENT_URL || 'http://localhost:41241';
 // --- Interceptors ----------------------------------------------------------
 
 /**
- * Injects a unique `X-Request-ID` header into every request so that server
- * logs can be correlated to client invocations. Headers are passed through
- * `RequestOptions.serviceParameters`, which works for every transport.
+ * Injects a unique `X-Request-ID` value into every request so that server
+ * logs can be correlated to client invocations. Values are passed through
+ * `RequestOptions.serviceParameters`, the transport-agnostic abstraction
+ * defined in A2A Specification §3.2.6
+ * (https://a2a-protocol.org/latest/specification/#326-service-parameters).
+ * Each SDK transport maps `serviceParameters` onto its native channel: the
+ * JSON-RPC and HTTP+JSON/REST transports send them as HTTP request headers
+ * (per §9.2 and §11.2), while the gRPC transport sends them as request
+ * metadata (per §10.2). Either way the value reaches the server, but the
+ * exact wire delivery depends on the transport selected by `ClientFactory`.
  */
 class RequestIdInterceptor implements CallInterceptor {
   async before(args: BeforeArgs): Promise<void> {
@@ -58,8 +65,7 @@ class RequestIdInterceptor implements CallInterceptor {
 /**
  * Times every client call. The timer is stashed in the request's
  * `serviceParameters` map (which both `before` and `after` see) by encoding
- * the start time as a header value. In real code you would use OpenTelemetry
- * or a similar library; this keeps the example dependency-free.
+ * the start time under a custom key.
  */
 const TIMING_HEADER = 'X-Demo-Start-Ms';
 

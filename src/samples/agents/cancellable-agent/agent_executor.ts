@@ -15,15 +15,22 @@ import {
  * The pattern is:
  *
  *   1. `cancelTask(taskId, eventBus)` is invoked by the runtime when the
- *      client calls `client.cancelTask({ id: taskId })`. We record the taskId
- *      in an in-memory Set.
+ *      client calls `client.cancelTask({ id: taskId })` (the SDK's invocation
+ *      of the A2A "Cancel Task" operation, exposed as `CancelTask` over
+ *      JSON-RPC and `POST /tasks/{id}:cancel` over HTTP+JSON/REST). We record
+ *      the taskId in an in-memory Set.
  *   2. `execute(...)` runs a multi-step loop. Before each step it checks
  *      whether the taskId has been marked for cancellation.
  *   3. On cancellation, the executor publishes a final
  *      `TaskState.TASK_STATE_CANCELED` status update and returns.
+ *   4. A `try/finally` block in `execute(...)` always removes the taskId
+ *      from the Set on return — completion, cancellation, or thrown error —
+ *      so the Set does not grow unbounded.
  *
- * See https://a2a-protocol.org/latest/specification/#317-canceltask for the
- * spec details.
+ * See A2A Specification §3.1.5 (Cancel Task) for the operation contract:
+ * https://a2a-protocol.org/latest/specification/#315-cancel-task
+ * and §9.4.5 (`CancelTask`) for the JSON-RPC binding:
+ * https://a2a-protocol.org/latest/specification/#945-canceltask.
  */
 export class CancellableAgentExecutor implements AgentExecutor {
   private readonly cancelledTasks = new Set<string>();

@@ -5,13 +5,20 @@ import {
   ClientFactoryOptions,
   JsonRpcTransportFactory,
 } from '../../../client/index.js';
-import { Role } from '../../../index.js';
+import { Role, taskStateToJSON } from '../../../index.js';
 import { SendMessageRequest } from '../../../types/pb/a2a.js';
 
 /**
  * Sends a single message to the push-notification agent and configures a
- * webhook URL for task updates. The agent will then POST status / artifact
- * updates to the webhook URL while it processes the task.
+ * webhook URL for task updates. The agent will then POST every Task,
+ * `TaskStatusUpdateEvent`, and `TaskArtifactUpdateEvent` it publishes to
+ * the webhook URL while it processes the task — see A2A Specification
+ * §3.5.3 (Push Notification Delivery):
+ * https://a2a-protocol.org/latest/specification/#353-push-notification-delivery.
+ *
+ * `WEBHOOK_URL` defaults to `http://localhost:${WEBHOOK_PORT}/webhook/task-updates`,
+ * so setting `WEBHOOK_PORT` consistently in the webhook and client terminals
+ * is enough to override the port without each having to set `WEBHOOK_URL`.
  */
 
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:41241';
@@ -69,7 +76,8 @@ async function main() {
   const result = await client.sendMessage(params);
 
   if ('id' in result) {
-    console.log(`[Client] Task created: id=${result.id} state=${result.status?.state}`);
+    const stateStr = result.status ? taskStateToJSON(result.status.state) : '(unset)';
+    console.log(`[Client] Task created: id=${result.id} state=${stateStr}`);
     console.log('[Client] Watch the webhook process for incoming notifications.');
   } else {
     console.log(`[Client] Received direct message: ${JSON.stringify(result, null, 2)}`);
