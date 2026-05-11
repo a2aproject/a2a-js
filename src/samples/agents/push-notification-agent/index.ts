@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { AGENT_CARD_PATH, AgentCard } from '../../../index.js';
+import { A2A_PROTOCOL_VERSION, AGENT_CARD_PATH, AgentCard } from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -26,7 +26,7 @@ const pushNotificationAgentCard: AgentCard = {
       url: `http://localhost:${PORT}/`,
       protocolBinding: 'JSONRPC',
       tenant: '',
-      protocolVersion: '1.0',
+      protocolVersion: A2A_PROTOCOL_VERSION,
     },
   ],
   provider: {

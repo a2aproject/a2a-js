@@ -1,7 +1,7 @@
 import express from 'express';
 import { Server, ServerCredentials } from '@grpc/grpc-js';
 
-import { AGENT_CARD_PATH, AgentCard } from '../../../index.js';
+import { A2A_PROTOCOL_VERSION, AGENT_CARD_PATH, AgentCard } from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -39,19 +39,19 @@ const multiTransportAgentCard: AgentCard = {
       url: `http://localhost:${HTTP_PORT}/a2a/jsonrpc`,
       protocolBinding: 'JSONRPC',
       tenant: '',
-      protocolVersion: '1.0',
+      protocolVersion: A2A_PROTOCOL_VERSION,
     },
     {
       url: `http://localhost:${HTTP_PORT}/a2a/rest`,
       protocolBinding: 'HTTP+JSON',
       tenant: '',
-      protocolVersion: '1.0',
+      protocolVersion: A2A_PROTOCOL_VERSION,
     },
     {
       url: `localhost:${GRPC_PORT}`,
       protocolBinding: 'GRPC',
       tenant: '',
-      protocolVersion: '1.0',
+      protocolVersion: A2A_PROTOCOL_VERSION,
     },
   ],
   provider: {

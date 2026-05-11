@@ -397,7 +397,7 @@ async function main() {
             printAgentEvent(AgentEvent.artifactUpdate(typedEvent));
             break;
           }
-          case 'msg': {
+          case 'message': {
             const msg = payload.value as Message;
             console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
             printMessageContent(msg);

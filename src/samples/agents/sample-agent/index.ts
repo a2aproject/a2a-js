@@ -1,5 +1,5 @@
 import express from 'express';
-import { AgentCard, AGENT_CARD_PATH } from '../../../index.js';
+import { A2A_PROTOCOL_VERSION, AgentCard, AGENT_CARD_PATH } from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -20,7 +20,7 @@ const sampleAgentCard: AgentCard = {
       url: 'http://localhost:41241/',
       protocolBinding: 'JSONRPC',
       tenant: '',
-      protocolVersion: '1.0',
+      protocolVersion: A2A_PROTOCOL_VERSION,
     },
   ],
   provider: {
