@@ -41,7 +41,7 @@ npm install @grpc/grpc-js @bufbuild/protobuf
 
 ## Compatibility
 
-This SDK implements the A2A Protocol Specification [`v0.3.0`](https://a2a-protocol.org/v0.3.0/specification).
+This SDK implements the A2A Protocol Specification [`v1.0.0`](https://a2a-protocol.org/v1.0.0/specification).
 
 | Transport               | Client | Server |
 | :---------------------- | :----: | :----: |
