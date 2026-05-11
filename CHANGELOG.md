@@ -2,7 +2,7 @@
 
 ## 1.0.0-alpha.0 (2026-05-11)
 
-See the [v0.3 -> v1.0-alpha.0 migration guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0-alpha.0/docs/migration-guide.md) and changelog entries for alpha version below.
+See the [v0.3 -> v1.0-alpha.0 migration guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0-alpha.0/docs/migration-guide.md).
 
 **Note**: Enabling backward compatibility with v0.3 is tracked in [#452](https://github.com/a2aproject/a2a-js/issues/452).
 
