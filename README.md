@@ -51,7 +51,7 @@ This SDK implements the A2A Protocol Specification [`v1.0.0`](https://a2a-protoc
 
 ## Documentation
 
-**A2A Protocol Specification (latest):** <https://a2a-protocol.org/latest/specification/>
+**A2A Protocol Specification (v1.0.0):** <https://a2a-protocol.org/v1.0.0/specification/>
 
 The protocol specification is the source of truth for message formats, task
 lifecycle states, transport bindings, push notifications, extensions, and
@@ -144,7 +144,7 @@ Long-running tasks publish a stream of `task`, `status-update`, and
 `client.sendMessageStream(...)` (an `AsyncGenerator`).
 
 See the spec section
-[Streaming](https://a2a-protocol.org/latest/specification/#314-sendstreamingmessage)
+[Streaming](https://a2a-protocol.org/v1.0.0/specification/#312-send-streaming-message)
 and the [`sample-agent`](src/samples/agents/sample-agent/) /
 [`movie-agent`](src/samples/agents/movie-agent/) samples.
 
@@ -155,7 +155,7 @@ Implement `cancelTask(taskId, eventBus)` on your `AgentExecutor` and have your
 final `TaskState.TASK_STATE_CANCELED` status update when aborting.
 
 See the spec section
-[`tasks/cancel`](https://a2a-protocol.org/latest/specification/#317-canceltask)
+[`cancelTask`](https://a2a-protocol.org/v1.0.0/specification/#315-cancel-task)
 and the [`cancellable-agent`](src/samples/agents/cancellable-agent/) sample.
 
 ### Push notifications
@@ -171,7 +171,7 @@ A2A supports webhook-based push notifications:
    event to that URL.
 
 See the spec section
-[Push Notifications](https://a2a-protocol.org/latest/specification/#43-push-notifications)
+[Push Notifications](https://a2a-protocol.org/v1.0.0/specification/#43-push-notification-objects)
 and the [`push-notification-agent`](src/samples/agents/push-notification-agent/)
 sample (which includes a runnable webhook receiver).
 
