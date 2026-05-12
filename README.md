@@ -43,7 +43,10 @@ You can also find some samples [here](https://github.com/a2aproject/a2a-js/tree/
 
 ## Compatibility
 
-This SDK implements the A2A Protocol Specification [`v0.3.0`](https://a2a-protocol.org/v0.3.0/specification).
+This SDK implements the A2A Protocol Specification [`0.3`](https://a2a-protocol.org/v0.3.0/specification).
+
+> [!IMPORTANT]
+> There is an [**alpha version**](https://github.com/a2aproject/a2a-js/releases?q=%22v1.0.0-alpha%22&expanded=true) available with support for [`1.0`](https://a2a-protocol.org/v1.0.0/specification/) version. Development for this version is taking place in the [`epic/1.0_breaking_changes`](https://github.com/a2aproject/a2a-js/tree/epic/1.0_breaking_changes) branch. While this branch currently lacks backward compatibility with the [`v0.3.0`](https://a2a-protocol.org/v0.3.0/specification) version, the work for it is tracked in [#452](https://github.com/a2aproject/a2a-js/issues/452).
 
 | Transport | Client | Server |
 | :--- | :---: | :---: |
