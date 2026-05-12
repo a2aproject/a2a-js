@@ -4,8 +4,6 @@
   "prerelease": true,
   "prerelease-type": "alpha",
   "versioning": "prerelease",
-  "last-release-sha": "82d36c7",
-  "release-as": "1.0.0-alpha.0",
   "packages": {
     ".": {}
   }
