@@ -15,11 +15,13 @@
 
 ## Installation
 
-You can install the A2A SDK using `npm`.
+You can install the latest `next` release of the A2A SDK using `npm`.
 
 ```bash
-npm install @a2a-js/sdk
+npm install @a2a-js/sdk@next
 ```
+
+Note that this is a `next` release, to install the latest stable release, use `npm install @a2a-js/sdk`.
 
 ### For Server Usage
 
