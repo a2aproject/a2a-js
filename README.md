@@ -21,7 +21,7 @@ You can install the latest `next` release of the A2A SDK using `npm`.
 npm install @a2a-js/sdk@next
 ```
 
-Note that this is a `next` release, to install the latest stable release, use `npm install @a2a-js/sdk`.
+Note that this is a `next` release. To install the latest stable release, use `npm install @a2a-js/sdk`.
 
 ### For Server Usage
 
