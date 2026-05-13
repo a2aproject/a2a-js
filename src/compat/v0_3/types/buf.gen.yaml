@@ -1,0 +1,20 @@
+version: v2
+inputs:
+  - git_repo: https://github.com/a2aproject/A2A.git
+    ref: b3b266d127dde3d1000ec103b252d1de81289e83
+    subdir: specification/grpc
+plugins:
+  - remote: buf.build/community/stephenh-ts-proto:v2.11.0
+    out: ./pb
+    opt: 
+      - oneof=unions-value
+      - importSuffix=.js
+      - outputServices=false
+      - env=node
+      - esModuleInterop=true
+      - outputJsonMethods=true
+      - outputPartialMethods=false
+      - outputEncodeMethods=false
+      - snakeToCamel=keys
+      - emitImportedFiles=false
+      - useDate=string
