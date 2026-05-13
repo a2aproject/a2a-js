@@ -1,7 +1,7 @@
 version: v2
 inputs:
   - git_repo: https://github.com/a2aproject/A2A.git
-    ref: b3b266d127dde3d1000ec103b252d1de81289e83
+    ref: v0.3.0
     subdir: specification/grpc
 plugins:
   - remote: buf.build/community/stephenh-ts-proto:v2.11.0

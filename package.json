@@ -104,7 +104,7 @@
     "format:readme": "prettier --write ./README.md",
     "coverage": "vitest run --coverage",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
-    "generate:compat": "curl https://raw.githubusercontent.com/a2aproject/A2A/b3b266d127dde3d1000ec103b252d1de81289e83/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
+    "generate:compat": "curl https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
     "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
     "itk-agent": "tsx itk/itk_agent.ts"
   },
