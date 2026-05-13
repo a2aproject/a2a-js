@@ -70,11 +70,12 @@ export interface RestMessage {
 }
 
 /**
- * REST PushNotificationConfig (same as internal, no snake_case fields).
+ * REST PushNotificationConfig (mirrors PushNotificationConfig exactly).
  */
 export interface RestPushNotificationConfig {
-  id: string;
+  id?: string;
   url: string;
+  token?: string;
   authentication?: {
     schemes: string[];
     credentials?: string;
