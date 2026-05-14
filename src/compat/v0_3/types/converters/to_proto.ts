@@ -392,7 +392,7 @@ export class ToProto {
     };
   }
 
-  static messageSendResult(params: types.Message | types.Task): SendMessageResponse {
+  static messageSendResult(params: types.Message | types.Task): SendMessageResponse | undefined {
     if (!params.kind) {
       return undefined;
     }
