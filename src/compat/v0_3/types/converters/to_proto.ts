@@ -393,14 +393,18 @@ export class ToProto {
   }
 
   static messageSendResult(params: types.Message | types.Task): SendMessageResponse {
+    if (!params.kind) {
+      return undefined;
+    }
+
     if (params.kind === 'message') {
       return {
         payload: {
           $case: 'msg',
-          value: ToProto.message(params)!,
+          value: ToProto.message(params),
         },
       };
-    } else {
+    } else if (params.kind === 'task') {
       return {
         payload: {
           $case: 'task',
@@ -454,7 +458,7 @@ export class ToProto {
     return {
       state: ToProto.taskState(status.state),
       update: ToProto.message(status.message),
-      timestamp: status.timestamp,
+      timestamp: status.timestamp!,
     };
   }
 
