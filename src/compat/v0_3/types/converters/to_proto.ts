@@ -401,7 +401,7 @@ export class ToProto {
       return {
         payload: {
           $case: 'msg',
-          value: ToProto.message(params),
+          value: ToProto.message(params)!,
         },
       };
     } else if (params.kind === 'task') {
