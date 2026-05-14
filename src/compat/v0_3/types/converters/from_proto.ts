@@ -208,6 +208,10 @@ export class FromProto {
   }
 
   static messageSendParams(request: SendMessageRequest): types.MessageSendParams {
+    if (!request.request) {
+      throw A2AError.invalidParams('SendMessageRequest missing message');
+    }
+
     return {
       message: FromProto.message(request.request)!,
       configuration: FromProto.messageSendConfiguration(request.configuration),
@@ -225,10 +229,14 @@ export class FromProto {
   }
 
   static task(task: Task): types.Task {
+    if (!task.status) {
+      throw A2AError.internalError('Task missing status');
+    }
+
     return {
       kind: 'task',
       id: task.id,
-      status: FromProto.taskStatus(task.status!),
+      status: FromProto.taskStatus(task.status),
       contextId: task.contextId,
       artifacts: task.artifacts?.map((a) => FromProto.artifact(a)),
       history: task.history?.map((h) => FromProto.message(h)!),
@@ -282,6 +290,10 @@ export class FromProto {
   static taskPushNotificationConfig(
     request: TaskPushNotificationConfig
   ): types.TaskPushNotificationConfig {
+    if (!request.pushNotificationConfig) {
+      throw A2AError.invalidParams('TaskPushNotificationConfig missing pushNotificationConfig');
+    }
+
     return {
       taskId: extractTaskId(request.name),
       pushNotificationConfig: FromProto.pushNotificationConfig(request.pushNotificationConfig)!,
@@ -384,10 +396,14 @@ export class FromProto {
           description: securitySchemes.scheme.value.description || undefined,
         };
       case 'oauth2SecurityScheme':
+        if (!securitySchemes.scheme.value.flows) {
+          throw A2AError.internalError('OAuth2 security scheme missing flows');
+        }
+
         return {
           type: 'oauth2',
           description: securitySchemes.scheme.value.description || undefined,
-          flows: FromProto.oauthFlows(securitySchemes.scheme.value.flows!),
+          flows: FromProto.oauthFlows(securitySchemes.scheme.value.flows),
           oauth2MetadataUrl: securitySchemes.scheme.value.oauth2MetadataUrl || undefined,
         };
       case 'openIdConnectSecurityScheme':
@@ -463,10 +479,14 @@ export class FromProto {
   }
 
   static taskStatusUpdateEvent(event: TaskStatusUpdateEvent): types.TaskStatusUpdateEvent {
+    if (!event.status) {
+      throw A2AError.invalidParams('Invalid TaskStatusUpdateEvent: missing status');
+    }
+
     return {
       kind: 'status-update',
       taskId: event.taskId,
-      status: FromProto.taskStatus(event.status!),
+      status: FromProto.taskStatus(event.status),
       contextId: event.contextId,
       metadata: event.metadata,
       final: event.final,
@@ -474,10 +494,14 @@ export class FromProto {
   }
 
   static taskArtifactUpdateEvent(event: TaskArtifactUpdateEvent): types.TaskArtifactUpdateEvent {
+    if (!event.artifact) {
+      throw A2AError.invalidParams('Invalid TaskArtifactUpdateEvent: missing artifact');
+    }
+
     return {
       kind: 'artifact-update',
       taskId: event.taskId,
-      artifact: FromProto.artifact(event.artifact!),
+      artifact: FromProto.artifact(event.artifact),
       contextId: event.contextId,
       metadata: event.metadata,
       lastChunk: event.lastChunk,

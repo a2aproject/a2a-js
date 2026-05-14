@@ -449,7 +449,10 @@ export class ToProto {
       contextId: task.contextId,
       status: ToProto.taskStatus(task.status),
       artifacts: task.artifacts?.map((a) => ToProto.artifact(a)) ?? [],
-      history: task.history?.map((m) => ToProto.message(m as types.Message)!) ?? [],
+      history:
+        task.history
+          ?.map((m) => ToProto.message(m as types.Message))
+          .filter((m): m is Message => !!m) ?? [],
       metadata: task.metadata,
     };
   }

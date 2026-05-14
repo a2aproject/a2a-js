@@ -7,13 +7,15 @@ import { A2AError } from '../../../../../src/compat/v0_3/server/error.js';
 
 vi.mock('../../../../../src/compat/v0_3/types/converters/id_decoding.js', () => ({
   generatePushNotificationConfigName: vi.fn(),
+  generateTaskName: vi.fn(),
 }));
 
 describe('ToProto', () => {
   beforeEach(() => {
-    vi.mocked(idDecoding.generatePushNotificationConfigName).mockReturnValue(
-      'tasks/task-123/pushNotificationConfigs/pnc-456'
+    vi.mocked(idDecoding.generatePushNotificationConfigName).mockImplementation(
+      (taskId, configId) => `tasks/${taskId}/pushNotificationConfigs/${configId}`
     );
+    vi.mocked(idDecoding.generateTaskName).mockImplementation((id) => `tasks/${id}`);
   });
 
   it('should convert internal Task to proto Task', () => {
@@ -341,6 +343,35 @@ describe('ToProto', () => {
     expect(result.configs[0].name).toBe('tasks/task-123/pushNotificationConfigs/pnc-456');
   });
 
+  it('should convert getTaskPushNotificationConfigParams', () => {
+    const res = ToProto.getTaskPushNotificationConfigParams({
+      id: 'task-1',
+      pushNotificationConfigId: 'pnc-1',
+    });
+    expect(res.name).toBe('tasks/task-1/pushNotificationConfigs/pnc-1');
+  });
+
+  it('should convert listTaskPushNotificationConfigParams', () => {
+    const res = ToProto.listTaskPushNotificationConfigParams({ id: 'task-1' });
+    expect(res.parent).toBe('tasks/task-1');
+  });
+
+  it('should convert deleteTaskPushNotificationConfigParams', () => {
+    const res = ToProto.deleteTaskPushNotificationConfigParams({
+      id: 'task-1',
+      pushNotificationConfigId: 'pnc-1',
+    });
+    expect(res.name).toBe('tasks/task-1/pushNotificationConfigs/pnc-1');
+  });
+
+  it('should convert taskPushNotificationConfigCreate', () => {
+    const res = ToProto.taskPushNotificationConfigCreate({
+      taskId: 'task-1',
+      pushNotificationConfig: { id: 'pnc-1', url: 'http://url' },
+    });
+    expect(res.config?.pushNotificationConfig?.id).toBe('pnc-1');
+  });
+
   describe('securityScheme', () => {
     it('should convert apiKey scheme', () => {
       const scheme: types.SecurityScheme = {
@@ -363,6 +394,18 @@ describe('ToProto', () => {
       expect(result.scheme?.$case).toBe('httpAuthSecurityScheme');
     });
 
+    it('should convert mutualTLS, oauth2, openIdConnect schemes', () => {
+      const s3: types.SecurityScheme = { type: 'mutualTLS' };
+      const s4: types.SecurityScheme = {
+        type: 'oauth2',
+        flows: { implicit: { authorizationUrl: 'url', scopes: {} } },
+      };
+      const s5: types.SecurityScheme = { type: 'openIdConnect', openIdConnectUrl: 'url' };
+      expect(ToProto.securityScheme(s3).scheme?.$case).toBe('mtlsSecurityScheme');
+      expect(ToProto.securityScheme(s4).scheme?.$case).toBe('oauth2SecurityScheme');
+      expect(ToProto.securityScheme(s5).scheme?.$case).toBe('openIdConnectSecurityScheme');
+    });
+
     it('should throw on unsupported security scheme', () => {
       const scheme: types.SecurityScheme = { type: 'unsupported' } as any;
       expect(() => ToProto.securityScheme(scheme)).toThrow(
@@ -380,11 +423,176 @@ describe('ToProto', () => {
       expect(result.flow?.$case).toBe('implicit');
     });
 
+    it('should convert password, clientCredentials, authorizationCode flows', () => {
+      const f1: types.OAuthFlows = { password: { tokenUrl: 't', scopes: {} } };
+      const f2: types.OAuthFlows = { clientCredentials: { tokenUrl: 't', scopes: {} } };
+      const f3: types.OAuthFlows = {
+        authorizationCode: { authorizationUrl: 'a', tokenUrl: 't', scopes: {} },
+      };
+      expect(ToProto.oauthFlows(f1).flow?.$case).toBe('password');
+      expect(ToProto.oauthFlows(f2).flow?.$case).toBe('clientCredentials');
+      expect(ToProto.oauthFlows(f3).flow?.$case).toBe('authorizationCode');
+    });
+
     it('should throw on unsupported flow', () => {
       const flows: types.OAuthFlows = {};
       expect(() => ToProto.oauthFlows(flows)).toThrow(
         A2AError.internalError('Unsupported OAuth flows')
       );
+    });
+  });
+
+  describe('agentCard', () => {
+    it('should convert agentCard with all optional fields', () => {
+      const card: types.AgentCard = {
+        name: 'n',
+        description: 'd',
+        documentationUrl: 'url',
+        url: 'url',
+        version: '1',
+        protocolVersion: '1',
+        preferredTransport: 'http',
+        additionalInterfaces: [{ transport: 'http', url: 'url' }],
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          extensions: [{ uri: 'ext', description: 'd', required: true, params: {} }],
+        },
+        provider: { organization: 'org', url: 'url' },
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+        security: [{ s1: [] }],
+        securitySchemes: {
+          s1: { type: 'apiKey', name: 'k', in: 'header', description: 'd' },
+          s2: { type: 'http', scheme: 'bearer', bearerFormat: 'jwt' },
+          s3: { type: 'mutualTLS' },
+          s4: {
+            type: 'oauth2',
+            flows: { implicit: { authorizationUrl: 'url', scopes: {} } },
+            oauth2MetadataUrl: 'url',
+          },
+          s5: { type: 'openIdConnect', openIdConnectUrl: 'url' },
+        },
+        skills: [
+          {
+            id: 's1',
+            name: 'sk',
+            description: 'd',
+            tags: [],
+            examples: [],
+            inputModes: [],
+            outputModes: [],
+            security: [],
+          },
+        ],
+        signatures: [{ protected: 'p', signature: 's', header: {} }],
+        supportsAuthenticatedExtendedCard: true,
+      };
+      const res = ToProto.agentCard(card);
+      expect(res.name).toBe('n');
+      expect(res.capabilities?.streaming).toBe(true);
+      expect(res.provider?.organization).toBe('org');
+      expect(Object.keys(res.securitySchemes).length).toBe(5);
+    });
+
+    it('should convert agentCard with minimal fields', () => {
+      const card: types.AgentCard = {
+        name: 'n',
+        description: 'd',
+        documentationUrl: 'url',
+        url: 'url',
+        version: '1',
+        protocolVersion: '1',
+        preferredTransport: 'http',
+        additionalInterfaces: [],
+        capabilities: undefined,
+        provider: undefined,
+        defaultInputModes: [],
+        defaultOutputModes: [],
+        security: [],
+        securitySchemes: {},
+        skills: [],
+        signatures: [],
+        supportsAuthenticatedExtendedCard: false,
+      };
+      const res = ToProto.agentCard(card);
+      expect(res.name).toBe('n');
+    });
+  });
+
+  describe('taskEvents', () => {
+    it('should convert taskStatusUpdateEvent', () => {
+      const res = ToProto.taskStatusUpdateEvent({
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: { state: 'working' },
+        metadata: {},
+        final: false,
+      });
+      expect(res.taskId).toBe('task-1');
+    });
+
+    it('should convert taskArtifactUpdateEvent', () => {
+      const res = ToProto.taskArtifactUpdateEvent({
+        kind: 'artifact-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        artifact: { artifactId: 'art-1', parts: [] },
+        metadata: {},
+      });
+      expect(res.taskId).toBe('task-1');
+    });
+  });
+
+  describe('role', () => {
+    it('should throw on invalid role', () => {
+      expect(() => ToProto.role('invalid' as any)).toThrow(A2AError.internalError('Invalid role'));
+    });
+  });
+
+  describe('messageSendParams', () => {
+    it('should convert messageSendParams', () => {
+      const res = ToProto.messageSendParams({
+        message: { kind: 'message', messageId: '1', parts: [], role: 'user' },
+        configuration: { blocking: true, acceptedOutputModes: [] },
+        metadata: {},
+      });
+      expect(res.request?.messageId).toBe('1');
+    });
+
+    it('should convert configuration with pushNotificationConfig', () => {
+      const res = ToProto.configuration({
+        blocking: true,
+        acceptedOutputModes: [],
+        pushNotificationConfig: { id: 'pnc-1', url: 'http://url' },
+      });
+      expect(res.pushNotification?.id).toBe('pnc-1');
+    });
+  });
+
+  describe('taskRequests', () => {
+    it('should convert taskQueryParams', () => {
+      const res = ToProto.taskQueryParams({ id: 'task-1', historyLength: 5 });
+      expect(res.name).toBe('tasks/task-1');
+      expect(res.historyLength).toBe(5);
+    });
+
+    it('should convert cancelTaskRequest', () => {
+      const res = ToProto.cancelTaskRequest({ id: 'task-1' });
+      expect(res.name).toBe('tasks/task-1');
+    });
+
+    it('should convert taskIdParams', () => {
+      const res = ToProto.taskIdParams({ id: 'task-1' });
+      expect(res.name).toBe('tasks/task-1');
+    });
+  });
+
+  describe('getAgentCardRequest', () => {
+    it('should convert getAgentCardRequest', () => {
+      const res = ToProto.getAgentCardRequest();
+      expect(res).toEqual({});
     });
   });
 });

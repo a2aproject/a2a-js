@@ -256,4 +256,391 @@ describe('FromProto', () => {
     });
     expect(result.message.role).toBe('user');
   });
+
+  describe('sendMessageResult', () => {
+    it('should convert sendMessageResult with task', () => {
+      const response: proto.SendMessageResponse = {
+        payload: {
+          $case: 'task',
+          value: {
+            id: 'task-123',
+            contextId: 'ctx-1',
+            status: {
+              state: proto.TaskState.TASK_STATE_SUBMITTED,
+              timestamp: '2023',
+              update: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          },
+        },
+      };
+      const result = FromProto.sendMessageResult(response);
+      expect(result.kind).toBe('task');
+    });
+
+    it('should convert sendMessageResult with msg', () => {
+      const response: proto.SendMessageResponse = {
+        payload: {
+          $case: 'msg',
+          value: {
+            messageId: 'msg-1',
+            content: [],
+            contextId: 'ctx-1',
+            taskId: 'task-1',
+            role: proto.Role.ROLE_AGENT,
+            metadata: {},
+            extensions: [],
+          },
+        },
+      };
+      const result = FromProto.sendMessageResult(response);
+      expect(result.kind).toBe('message');
+    });
+
+    it('should throw on invalid sendMessageResult', () => {
+      const response: proto.SendMessageResponse = {
+        payload: undefined,
+      };
+      expect(() => FromProto.sendMessageResult(response)).toThrow(
+        new A2AError(-32602, 'Invalid SendMessageResponse: missing result')
+      );
+    });
+  });
+
+  describe('task', () => {
+    it('should convert task with history and artifacts', () => {
+      const protoTask: proto.Task = {
+        id: 'task-123',
+        contextId: 'ctx-1',
+        status: {
+          state: proto.TaskState.TASK_STATE_COMPLETED,
+          timestamp: '2023',
+          update: undefined,
+        },
+        artifacts: [
+          {
+            artifactId: 'art-1',
+            name: 'name',
+            description: 'desc',
+            parts: [{ part: { $case: 'text', value: 'foo' } }],
+            metadata: {},
+            extensions: [],
+          },
+        ],
+        history: [
+          {
+            messageId: 'msg-1',
+            content: [{ part: { $case: 'text', value: 'bar' } }],
+            contextId: 'ctx-1',
+            taskId: 'task-123',
+            role: proto.Role.ROLE_USER,
+            metadata: {},
+            extensions: [],
+          },
+        ],
+        metadata: { k: 'v' },
+      };
+      const result = FromProto.task(protoTask);
+      expect(result.id).toBe('task-123');
+      expect(result.artifacts?.length).toBe(1);
+      expect(result.history?.length).toBe(1);
+    });
+  });
+
+  describe('taskState', () => {
+    it('should convert all task states', () => {
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_SUBMITTED)).toBe('submitted');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_WORKING)).toBe('working');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_INPUT_REQUIRED)).toBe('input-required');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_COMPLETED)).toBe('completed');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_CANCELLED)).toBe('canceled');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_FAILED)).toBe('failed');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_REJECTED)).toBe('rejected');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_AUTH_REQUIRED)).toBe('auth-required');
+      expect(FromProto.taskState(proto.TaskState.TASK_STATE_UNSPECIFIED)).toBe('unknown');
+      expect(() => FromProto.taskState(proto.TaskState.UNRECOGNIZED)).toThrow();
+    });
+  });
+
+  it('should convert TaskPushNotificationConfig', () => {
+    const req: proto.TaskPushNotificationConfig = {
+      name: 'tasks/task-123',
+      pushNotificationConfig: {
+        id: 'pnc-1',
+        url: 'http://url',
+        token: 't',
+        authentication: undefined,
+      },
+    };
+    const res = FromProto.taskPushNotificationConfig(req);
+    expect(res.taskId).toBe('task-123');
+  });
+
+  it('should convert ListTaskPushNotificationConfigResponse', () => {
+    const req: proto.ListTaskPushNotificationConfigResponse = {
+      configs: [
+        {
+          name: 'tasks/task-123',
+          pushNotificationConfig: {
+            id: 'pnc-1',
+            url: 'http://url',
+            token: 't',
+            authentication: undefined,
+          },
+        },
+      ],
+      nextPageToken: '',
+    };
+    const res = FromProto.listTaskPushNotificationConfig(req);
+    expect(res.length).toBe(1);
+  });
+
+  describe('agentCard', () => {
+    it('should convert agentCard with all optional fields', () => {
+      const card: proto.AgentCard = {
+        additionalInterfaces: [{ transport: 'http', url: 'http://url' }],
+        capabilities: {
+          extensions: [{ uri: 'ext', description: 'desc', required: true, params: {} }],
+          pushNotifications: true,
+          streaming: true,
+        },
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+        description: 'desc',
+        documentationUrl: 'http://docs',
+        name: 'name',
+        preferredTransport: 'http',
+        provider: { organization: 'org', url: 'http://org' },
+        protocolVersion: '1.0',
+        security: [{ schemes: { k: { list: ['v'] } } }],
+        securitySchemes: {
+          s1: {
+            scheme: {
+              $case: 'apiKeySecurityScheme',
+              value: { name: 'k', location: 'header', description: 'd' },
+            },
+          },
+          s2: {
+            scheme: {
+              $case: 'httpAuthSecurityScheme',
+              value: { scheme: 'bearer', bearerFormat: 'jwt', description: 'd' },
+            },
+          },
+          s3: {
+            scheme: {
+              $case: 'mtlsSecurityScheme',
+              value: { description: 'd' },
+            },
+          },
+          s4: {
+            scheme: {
+              $case: 'oauth2SecurityScheme',
+              value: {
+                description: 'd',
+                flows: {
+                  flow: {
+                    $case: 'implicit',
+                    value: { authorizationUrl: 'url', scopes: {}, refreshUrl: 'r' },
+                  },
+                },
+                oauth2MetadataUrl: 'url',
+              },
+            },
+          },
+          s5: {
+            scheme: {
+              $case: 'openIdConnectSecurityScheme',
+              value: { description: 'd', openIdConnectUrl: 'url' },
+            },
+          },
+        },
+        skills: [
+          {
+            id: 's1',
+            name: 'skill',
+            description: 'desc',
+            tags: [],
+            examples: [],
+            inputModes: [],
+            outputModes: [],
+            security: [],
+          },
+        ],
+        signatures: [{ protected: 'p', signature: 's', header: {} }],
+        supportsAuthenticatedExtendedCard: true,
+        url: 'http://card',
+        version: '1.0',
+      };
+      const res = FromProto.agentCard(card);
+      expect(res.name).toBe('name');
+      expect(res.capabilities?.streaming).toBe(true);
+      expect(res.provider?.organization).toBe('org');
+      expect(Object.keys(res.securitySchemes ?? {}).length).toBe(5);
+    });
+
+    it('should convert agentCard with minimal fields', () => {
+      const card: proto.AgentCard = {
+        additionalInterfaces: [],
+        capabilities: undefined,
+        defaultInputModes: [],
+        defaultOutputModes: [],
+        description: 'desc',
+        documentationUrl: '',
+        name: 'name',
+        preferredTransport: '',
+        provider: undefined,
+        protocolVersion: '1',
+        security: [],
+        securitySchemes: {},
+        skills: [],
+        signatures: [],
+        supportsAuthenticatedExtendedCard: false,
+        url: 'http://url',
+        version: '1',
+      };
+      const res = FromProto.agentCard(card);
+      expect(res.name).toBe('name');
+    });
+
+    it('should throw on unsupported security scheme in agentCard', () => {
+      const scheme = { scheme: { $case: 'invalid', value: {} } as any };
+      expect(() => FromProto.securityScheme(scheme)).toThrow();
+    });
+  });
+
+  describe('oauthFlows', () => {
+    it('should convert all oauthFlows cases', () => {
+      const f1: proto.OAuthFlows = {
+        flow: { $case: 'password', value: { tokenUrl: 't', scopes: {}, refreshUrl: 'r' } },
+      };
+      const f2: proto.OAuthFlows = {
+        flow: {
+          $case: 'authorizationCode',
+          value: { authorizationUrl: 'a', tokenUrl: 't', scopes: {}, refreshUrl: 'r' },
+        },
+      };
+      const f3: proto.OAuthFlows = {
+        flow: { $case: 'clientCredentials', value: { tokenUrl: 't', scopes: {}, refreshUrl: 'r' } },
+      };
+      expect(FromProto.oauthFlows(f1).password?.tokenUrl).toBe('t');
+      expect(FromProto.oauthFlows(f2).authorizationCode?.authorizationUrl).toBe('a');
+      expect(FromProto.oauthFlows(f3).clientCredentials?.tokenUrl).toBe('t');
+      expect(() =>
+        FromProto.oauthFlows({ flow: { $case: 'invalid', value: {} } as any })
+      ).toThrow();
+    });
+  });
+
+  describe('taskEvents', () => {
+    it('should convert taskStatusUpdateEvent', () => {
+      const event: proto.TaskStatusUpdateEvent = {
+        taskId: 'task-1',
+        status: { state: proto.TaskState.TASK_STATE_WORKING, timestamp: '1', update: undefined },
+        contextId: 'ctx-1',
+        metadata: {},
+        final: false,
+      };
+      const res = FromProto.taskStatusUpdateEvent(event);
+      expect(res.kind).toBe('status-update');
+    });
+
+    it('should convert taskArtifactUpdateEvent', () => {
+      const event: proto.TaskArtifactUpdateEvent = {
+        taskId: 'task-1',
+        artifact: {
+          artifactId: 'art-1',
+          name: 'n',
+          description: 'd',
+          parts: [],
+          metadata: {},
+          extensions: [],
+        },
+        contextId: 'ctx-1',
+        metadata: {},
+        lastChunk: false,
+        append: false,
+      };
+      const res = FromProto.taskArtifactUpdateEvent(event);
+      expect(res.kind).toBe('artifact-update');
+    });
+  });
+
+  describe('messageStreamResult', () => {
+    it('should convert messageStreamResult for all cases', () => {
+      const e1: proto.StreamResponse = {
+        payload: {
+          $case: 'msg',
+          value: {
+            messageId: '1',
+            content: [],
+            contextId: 'ctx-1',
+            taskId: 'task-1',
+            role: proto.Role.ROLE_USER,
+            metadata: {},
+            extensions: [],
+          },
+        },
+      };
+      const e2: proto.StreamResponse = {
+        payload: {
+          $case: 'task',
+          value: {
+            id: '1',
+            contextId: 'ctx-1',
+            status: {
+              state: proto.TaskState.TASK_STATE_WORKING,
+              timestamp: '1',
+              update: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          },
+        },
+      };
+      const e3: proto.StreamResponse = {
+        payload: {
+          $case: 'statusUpdate',
+          value: {
+            taskId: '1',
+            contextId: 'ctx-1',
+            status: {
+              state: proto.TaskState.TASK_STATE_WORKING,
+              timestamp: '1',
+              update: undefined,
+            },
+            metadata: {},
+            final: false,
+          },
+        },
+      };
+      const e4: proto.StreamResponse = {
+        payload: {
+          $case: 'artifactUpdate',
+          value: {
+            taskId: '1',
+            contextId: 'ctx-1',
+            artifact: {
+              artifactId: '1',
+              name: 'n',
+              description: 'd',
+              parts: [],
+              metadata: {},
+              extensions: [],
+            },
+            metadata: {},
+            lastChunk: false,
+            append: false,
+          },
+        },
+      };
+      expect(FromProto.messageStreamResult(e1).kind).toBe('message');
+      expect(FromProto.messageStreamResult(e2).kind).toBe('task');
+      expect(FromProto.messageStreamResult(e3).kind).toBe('status-update');
+      expect(FromProto.messageStreamResult(e4).kind).toBe('artifact-update');
+      expect(() => FromProto.messageStreamResult({ payload: undefined })).toThrow();
+    });
+  });
 });
