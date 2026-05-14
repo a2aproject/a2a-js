@@ -66,7 +66,7 @@ export class ToProto {
       defaultInputModes: agentCard.defaultInputModes,
       defaultOutputModes: agentCard.defaultOutputModes,
       skills: agentCard.skills.map((s) => ToProto.agentSkill(s)),
-      supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard,
+      supportsAuthenticatedExtendedCard: agentCard.supportsAuthenticatedExtendedCard ?? false,
       signatures: agentCard.signatures?.map((s) => ToProto.agentCardSignature(s)) ?? [],
     };
   }
@@ -219,7 +219,7 @@ export class ToProto {
     };
   }
 
-  static agentProvider(agentProvider: types.AgentProvider): AgentProvider {
+  static agentProvider(agentProvider: types.AgentProvider | undefined): AgentProvider | undefined {
     if (!agentProvider) {
       return undefined;
     }
@@ -229,10 +229,13 @@ export class ToProto {
     };
   }
 
-  static agentCapabilities(capabilities: types.AgentCapabilities): AgentCapabilities {
+  static agentCapabilities(capabilities: types.AgentCapabilities | undefined): AgentCapabilities {
+    if (!capabilities) {
+      return { streaming: false, pushNotifications: false, extensions: [] };
+    }
     return {
-      streaming: capabilities.streaming,
-      pushNotifications: capabilities.pushNotifications,
+      streaming: capabilities.streaming ?? false,
+      pushNotifications: capabilities.pushNotifications ?? false,
       extensions: capabilities.extensions
         ? capabilities.extensions.map((e) => ToProto.agentExtension(e))
         : [],
@@ -261,7 +264,7 @@ export class ToProto {
     config: types.GetTaskPushNotificationConfigParams
   ): GetTaskPushNotificationConfigRequest {
     return {
-      name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId),
+      name: generatePushNotificationConfigName(config.id, config.pushNotificationConfigId ?? ''),
     };
   }
 
@@ -301,11 +304,13 @@ export class ToProto {
     return {
       parent: generateTaskName(config.taskId),
       config: ToProto.taskPushNotificationConfig(config),
-      configId: config.pushNotificationConfig.id,
+      configId: config.pushNotificationConfig.id ?? '',
     };
   }
 
-  static pushNotificationConfig(config: types.PushNotificationConfig): PushNotificationConfig {
+  static pushNotificationConfig(
+    config: types.PushNotificationConfig | types.PushNotificationConfig1 | undefined
+  ): PushNotificationConfig | undefined {
     if (!config) {
       return undefined;
     }
@@ -319,7 +324,7 @@ export class ToProto {
   }
 
   static pushNotificationAuthenticationInfo(
-    authInfo: types.PushNotificationAuthenticationInfo
+    authInfo: types.PushNotificationAuthenticationInfo | undefined
   ): AuthenticationInfo | undefined {
     if (!authInfo) {
       return undefined;
@@ -337,7 +342,7 @@ export class ToProto {
       return {
         payload: {
           $case: 'msg',
-          value: ToProto.message(event),
+          value: ToProto.message(event)!,
         },
       };
     } else if (event.kind === 'task') {
@@ -382,8 +387,8 @@ export class ToProto {
       artifact: ToProto.artifact(event.artifact),
       contextId: event.contextId,
       metadata: event.metadata,
-      append: event.append,
-      lastChunk: event.lastChunk,
+      append: event.append ?? false,
+      lastChunk: event.lastChunk ?? false,
     };
   }
 
@@ -392,10 +397,10 @@ export class ToProto {
       return {
         payload: {
           $case: 'msg',
-          value: ToProto.message(params),
+          value: ToProto.message(params)!,
         },
       };
-    } else if (params.kind === 'task') {
+    } else {
       return {
         payload: {
           $case: 'task',
@@ -405,7 +410,9 @@ export class ToProto {
     }
   }
 
-  static message(message: types.Message): Message | undefined {
+  static message(
+    message: types.Message | types.Message1 | types.Message2 | undefined
+  ): Message | undefined {
     if (!message) {
       return undefined;
     }
@@ -438,7 +445,7 @@ export class ToProto {
       contextId: task.contextId,
       status: ToProto.taskStatus(task.status),
       artifacts: task.artifacts?.map((a) => ToProto.artifact(a)) ?? [],
-      history: task.history?.map((m) => ToProto.message(m)) ?? [],
+      history: task.history?.map((m) => ToProto.message(m as types.Message)!) ?? [],
       metadata: task.metadata,
     };
   }
@@ -499,12 +506,12 @@ export class ToProto {
       if ('uri' in part.file) {
         filePart = {
           file: { $case: 'fileWithUri', value: part.file.uri },
-          mimeType: part.file.mimeType,
+          mimeType: part.file.mimeType ?? '',
         };
       } else if ('bytes' in part.file) {
         filePart = {
           file: { $case: 'fileWithBytes', value: Buffer.from(part.file.bytes, 'base64') },
-          mimeType: part.file.mimeType,
+          mimeType: part.file.mimeType ?? '',
         };
       } else {
         throw A2AError.internalError('Invalid file part');
@@ -530,13 +537,15 @@ export class ToProto {
     };
   }
 
-  static configuration(configuration: types.MessageSendConfiguration): SendMessageConfiguration {
+  static configuration(
+    configuration: types.MessageSendConfiguration | undefined
+  ): SendMessageConfiguration | undefined {
     if (!configuration) {
       return undefined;
     }
 
     return {
-      blocking: configuration.blocking,
+      blocking: configuration.blocking ?? false,
       acceptedOutputModes: configuration.acceptedOutputModes ?? [],
       pushNotification: ToProto.pushNotificationConfig(configuration.pushNotificationConfig),
       historyLength: configuration.historyLength ?? 0,

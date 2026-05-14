@@ -84,7 +84,7 @@ export class FromProto {
       taskId: extractTaskId(request.parent),
       pushNotificationConfig: FromProto.pushNotificationConfig(
         request.config.pushNotificationConfig
-      ),
+      )!,
     };
   }
 
@@ -98,7 +98,7 @@ export class FromProto {
     };
   }
 
-  static message(message: Message): types.Message | undefined {
+  static message(message: Message | undefined): types.Message | undefined {
     if (!message) {
       return undefined;
     }
@@ -127,7 +127,7 @@ export class FromProto {
   }
 
   static messageSendConfiguration(
-    configuration: SendMessageConfiguration
+    configuration: SendMessageConfiguration | undefined
   ): types.MessageSendConfiguration | undefined {
     if (!configuration) {
       return undefined;
@@ -141,7 +141,7 @@ export class FromProto {
   }
 
   static pushNotificationConfig(
-    config: PushNotificationConfig
+    config: PushNotificationConfig | undefined
   ): types.PushNotificationConfig | undefined {
     if (!config) {
       return undefined;
@@ -156,7 +156,7 @@ export class FromProto {
   }
 
   static pushNotificationAuthenticationInfo(
-    authInfo: AuthenticationInfo
+    authInfo: AuthenticationInfo | undefined
   ): types.PushNotificationAuthenticationInfo | undefined {
     if (!authInfo) {
       return undefined;
@@ -201,7 +201,7 @@ export class FromProto {
     if (part.part?.$case === 'data') {
       return {
         kind: 'data',
-        data: part.part.value.data,
+        data: part.part.value.data ?? {},
       };
     }
     throw A2AError.invalidParams('Invalid part type');
@@ -209,7 +209,7 @@ export class FromProto {
 
   static messageSendParams(request: SendMessageRequest): types.MessageSendParams {
     return {
-      message: FromProto.message(request.request),
+      message: FromProto.message(request.request)!,
       configuration: FromProto.messageSendConfiguration(request.configuration),
       metadata: request.metadata,
     };
@@ -219,7 +219,7 @@ export class FromProto {
     if (response.payload?.$case === 'task') {
       return FromProto.task(response.payload.value);
     } else if (response.payload?.$case === 'msg') {
-      return FromProto.message(response.payload.value);
+      return FromProto.message(response.payload.value)!;
     }
     throw A2AError.invalidParams('Invalid SendMessageResponse: missing result');
   }
@@ -228,10 +228,10 @@ export class FromProto {
     return {
       kind: 'task',
       id: task.id,
-      status: FromProto.taskStatus(task.status),
+      status: FromProto.taskStatus(task.status!),
       contextId: task.contextId,
       artifacts: task.artifacts?.map((a) => FromProto.artifact(a)),
-      history: task.history?.map((h) => FromProto.message(h)),
+      history: task.history?.map((h) => FromProto.message(h)!),
       metadata: task.metadata,
     };
   }
@@ -284,7 +284,7 @@ export class FromProto {
   ): types.TaskPushNotificationConfig {
     return {
       taskId: extractTaskId(request.name),
-      pushNotificationConfig: FromProto.pushNotificationConfig(request.pushNotificationConfig),
+      pushNotificationConfig: FromProto.pushNotificationConfig(request.pushNotificationConfig)!,
     };
   }
 
@@ -387,7 +387,7 @@ export class FromProto {
         return {
           type: 'oauth2',
           description: securitySchemes.scheme.value.description || undefined,
-          flows: FromProto.oauthFlows(securitySchemes.scheme.value.flows),
+          flows: FromProto.oauthFlows(securitySchemes.scheme.value.flows!),
           oauth2MetadataUrl: securitySchemes.scheme.value.oauth2MetadataUrl || undefined,
         };
       case 'openIdConnectSecurityScheme':
@@ -466,7 +466,7 @@ export class FromProto {
     return {
       kind: 'status-update',
       taskId: event.taskId,
-      status: FromProto.taskStatus(event.status),
+      status: FromProto.taskStatus(event.status!),
       contextId: event.contextId,
       metadata: event.metadata,
       final: event.final,
@@ -477,7 +477,7 @@ export class FromProto {
     return {
       kind: 'artifact-update',
       taskId: event.taskId,
-      artifact: FromProto.artifact(event.artifact),
+      artifact: FromProto.artifact(event.artifact!),
       contextId: event.contextId,
       metadata: event.metadata,
       lastChunk: event.lastChunk,
@@ -489,7 +489,7 @@ export class FromProto {
   ): types.Message | types.Task | types.TaskStatusUpdateEvent | types.TaskArtifactUpdateEvent {
     switch (event.payload?.$case) {
       case 'msg':
-        return FromProto.message(event.payload.value);
+        return FromProto.message(event.payload.value)!;
       case 'task':
         return FromProto.task(event.payload.value);
       case 'statusUpdate':
