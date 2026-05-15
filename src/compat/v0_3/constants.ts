@@ -54,9 +54,23 @@ export const LEGACY_JSONRPC_TO_V1: Readonly<Record<string, string>> = Object.fre
 });
 
 /**
+ * v1.0 PascalCase method names that exist in v1.0 but have NO equivalent in
+ * v0.3 (neither JSON-RPC nor gRPC). Translating one of these names into the
+ * v0.3 coordinate system yields a "method not implemented in v0.3" error
+ * (JSON-RPC code -32004 / `A2AError.unsupportedOperation`) instead of the
+ * generic invalid-request error.
+ *
+ * Per §3.5.6 of the v0.3 spec, `tasks/list` was gRPC/REST-only in v0.3 (no
+ * JSON-RPC binding), and the v0.3 protobuf shipped in this repo has no
+ * `ListTasks` RPC at all -- so for compat purposes the v1.0 `ListTasks`
+ * method is treated as fully absent.
+ */
+export const V1_METHODS_WITHOUT_LEGACY_EQUIVALENT: ReadonlySet<string> = new Set(['ListTasks']);
+
+/**
  * v1.0 PascalCase method name -> v0.3 JSON-RPC method string.
  *
- * `ListTasks` is omitted: v0.3 has no equivalent JSON-RPC method.
+ * Methods listed in {@link V1_METHODS_WITHOUT_LEGACY_EQUIVALENT} are omitted.
  */
 export const V1_TO_LEGACY_JSONRPC: Readonly<Record<string, string>> = Object.freeze(
   Object.fromEntries(Object.entries(LEGACY_JSONRPC_TO_V1).map(([k, v]) => [v, k]))
@@ -94,7 +108,7 @@ export const LEGACY_GRPC_TO_V1: Readonly<Record<string, string>> = Object.freeze
 /**
  * v1.0 PascalCase method name -> v0.3 gRPC PascalCase method name.
  *
- * `ListTasks` is omitted: v0.3 has no equivalent gRPC method.
+ * Methods listed in {@link V1_METHODS_WITHOUT_LEGACY_EQUIVALENT} are omitted.
  */
 export const V1_TO_LEGACY_GRPC: Readonly<Record<string, string>> = Object.freeze(
   Object.fromEntries(Object.entries(LEGACY_GRPC_TO_V1).map(([k, v]) => [v, k]))
@@ -112,14 +126,44 @@ const lookup = (
   return mapped;
 };
 
+/**
+ * Looks up `method` in `table`. If the lookup fails AND `method` is a known
+ * v1.0 method that has no v0.3 equivalent (per
+ * {@link V1_METHODS_WITHOUT_LEGACY_EQUIVALENT}), throws
+ * `A2AError.unsupportedOperation` (-32004) so callers can distinguish "this
+ * is a real v1.0 method but v0.3 simply does not implement it" from "this
+ * name is gibberish". Otherwise behaves like {@link lookup}.
+ */
+const lookupFromV1 = (
+  table: Readonly<Record<string, string>>,
+  method: string,
+  legacyTransport: string
+): string => {
+  const mapped = table[method];
+  if (mapped !== undefined) return mapped;
+  if (V1_METHODS_WITHOUT_LEGACY_EQUIVALENT.has(method)) {
+    throw A2AError.unsupportedOperation(
+      `v1.0 method "${method}" has no equivalent in v0.3 ${legacyTransport}`
+    );
+  }
+  throw A2AError.invalidRequest(`Unknown v1.0 method: "${method}"`);
+};
+
 /** Translate a v0.3 JSON-RPC method name to its v1.0 PascalCase equivalent. */
 export function legacyJsonRpcToV1Method(method: string): string {
   return lookup(LEGACY_JSONRPC_TO_V1, method, 'legacy JSON-RPC');
 }
 
-/** Translate a v1.0 PascalCase method name to its v0.3 JSON-RPC equivalent. */
+/**
+ * Translate a v1.0 PascalCase method name to its v0.3 JSON-RPC equivalent.
+ *
+ * Throws `A2AError.unsupportedOperation` (-32004) if `method` is a v1.0 name
+ * that has no v0.3 equivalent (e.g. `ListTasks`); throws
+ * `A2AError.invalidRequest` (-32600) if `method` is not a known v1.0 method
+ * at all.
+ */
 export function v1MethodToLegacyJsonRpc(method: string): string {
-  return lookup(V1_TO_LEGACY_JSONRPC, method, 'v1.0');
+  return lookupFromV1(V1_TO_LEGACY_JSONRPC, method, 'JSON-RPC');
 }
 
 /** Translate a v0.3 JSON-RPC method name to its v0.3 gRPC equivalent. */
@@ -130,4 +174,21 @@ export function legacyJsonRpcToLegacyGrpcMethod(method: string): string {
 /** Translate a v0.3 gRPC method name to its v0.3 JSON-RPC equivalent. */
 export function legacyGrpcToLegacyJsonRpcMethod(method: string): string {
   return lookup(LEGACY_GRPC_TO_LEGACY_JSONRPC, method, 'legacy gRPC');
+}
+
+/** Translate a v0.3 gRPC method name to its v1.0 PascalCase equivalent. */
+export function legacyGrpcToV1Method(method: string): string {
+  return lookup(LEGACY_GRPC_TO_V1, method, 'legacy gRPC');
+}
+
+/**
+ * Translate a v1.0 PascalCase method name to its v0.3 gRPC equivalent.
+ *
+ * Throws `A2AError.unsupportedOperation` (-32004) if `method` is a v1.0 name
+ * that has no v0.3 equivalent (e.g. `ListTasks`); throws
+ * `A2AError.invalidRequest` (-32600) if `method` is not a known v1.0 method
+ * at all.
+ */
+export function v1MethodToLegacyGrpc(method: string): string {
+  return lookupFromV1(V1_TO_LEGACY_GRPC, method, 'gRPC');
 }

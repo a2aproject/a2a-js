@@ -17,11 +17,14 @@ import {
   LEGACY_GRPC_TO_V1,
   LEGACY_JSONRPC_TO_LEGACY_GRPC,
   LEGACY_JSONRPC_TO_V1,
+  V1_METHODS_WITHOUT_LEGACY_EQUIVALENT,
   V1_TO_LEGACY_GRPC,
   V1_TO_LEGACY_JSONRPC,
   legacyGrpcToLegacyJsonRpcMethod,
+  legacyGrpcToV1Method,
   legacyJsonRpcToLegacyGrpcMethod,
   legacyJsonRpcToV1Method,
+  v1MethodToLegacyGrpc,
   v1MethodToLegacyJsonRpc,
 } from '../../../src/compat/v0_3/constants.js';
 import { A2AError } from '../../../src/compat/v0_3/server/error.js';
@@ -106,16 +109,39 @@ describe('compat/v0_3/constants - round-trip invariants', () => {
 });
 
 describe('compat/v0_3/constants - asymmetric v1.0 methods', () => {
-  it('V1_TO_LEGACY_JSONRPC has no entry for ListTasks (no v0.3 equivalent)', () => {
-    expect(V1_TO_LEGACY_JSONRPC).not.toHaveProperty('ListTasks');
+  it('V1_METHODS_WITHOUT_LEGACY_EQUIVALENT contains ListTasks', () => {
+    expect(V1_METHODS_WITHOUT_LEGACY_EQUIVALENT.has('ListTasks')).toBe(true);
   });
 
-  it('V1_TO_LEGACY_GRPC has no entry for ListTasks', () => {
-    expect(V1_TO_LEGACY_GRPC).not.toHaveProperty('ListTasks');
+  it('every entry in V1_METHODS_WITHOUT_LEGACY_EQUIVALENT is absent from both V1 -> legacy maps', () => {
+    for (const method of V1_METHODS_WITHOUT_LEGACY_EQUIVALENT) {
+      expect(V1_TO_LEGACY_JSONRPC, `JSON-RPC has unexpected ${method}`).not.toHaveProperty(method);
+      expect(V1_TO_LEGACY_GRPC, `gRPC has unexpected ${method}`).not.toHaveProperty(method);
+    }
   });
 
-  it('v1MethodToLegacyJsonRpc throws for ListTasks', () => {
-    expect(() => v1MethodToLegacyJsonRpc('ListTasks')).toThrow(A2AError);
+  it('v1MethodToLegacyJsonRpc throws unsupportedOperation (-32004) for ListTasks', () => {
+    try {
+      v1MethodToLegacyJsonRpc('ListTasks');
+      expect.fail('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(A2AError);
+      expect((err as A2AError).code).toBe(-32004);
+      expect((err as A2AError).message).toContain('ListTasks');
+      expect((err as A2AError).message).toContain('JSON-RPC');
+    }
+  });
+
+  it('v1MethodToLegacyGrpc throws unsupportedOperation (-32004) for ListTasks', () => {
+    try {
+      v1MethodToLegacyGrpc('ListTasks');
+      expect.fail('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(A2AError);
+      expect((err as A2AError).code).toBe(-32004);
+      expect((err as A2AError).message).toContain('ListTasks');
+      expect((err as A2AError).message).toContain('gRPC');
+    }
   });
 });
 
@@ -154,6 +180,26 @@ describe('compat/v0_3/constants - helper error behaviour', () => {
   it('legacyGrpcToLegacyJsonRpcMethod throws A2AError(invalidRequest) on unknown input', () => {
     try {
       legacyGrpcToLegacyJsonRpcMethod('NopeNope');
+      expect.fail('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(A2AError);
+      expect((err as A2AError).code).toBe(-32600);
+    }
+  });
+
+  it('v1MethodToLegacyGrpc throws A2AError(invalidRequest) on gibberish input', () => {
+    try {
+      v1MethodToLegacyGrpc('NotARealMethodAtAll');
+      expect.fail('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(A2AError);
+      expect((err as A2AError).code).toBe(-32600);
+    }
+  });
+
+  it('legacyGrpcToV1Method throws A2AError(invalidRequest) on unknown input', () => {
+    try {
+      legacyGrpcToV1Method('AlsoFake');
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
@@ -205,6 +251,19 @@ describe('compat/v0_3/constants - divergent-name spot checks', () => {
     );
     expect(legacyGrpcToLegacyJsonRpcMethod('ListTaskPushNotificationConfig')).toBe(
       'tasks/pushNotificationConfig/list'
+    );
+  });
+
+  it('v1 <-> legacy gRPC helpers translate the divergent names', () => {
+    expect(v1MethodToLegacyGrpc('SubscribeToTask')).toBe('TaskSubscription');
+    expect(v1MethodToLegacyGrpc('GetExtendedAgentCard')).toBe('GetAgentCard');
+    expect(v1MethodToLegacyGrpc('ListTaskPushNotificationConfigs')).toBe(
+      'ListTaskPushNotificationConfig'
+    );
+    expect(legacyGrpcToV1Method('TaskSubscription')).toBe('SubscribeToTask');
+    expect(legacyGrpcToV1Method('GetAgentCard')).toBe('GetExtendedAgentCard');
+    expect(legacyGrpcToV1Method('ListTaskPushNotificationConfig')).toBe(
+      'ListTaskPushNotificationConfigs'
     );
   });
 });
