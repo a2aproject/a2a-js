@@ -1,7 +1,7 @@
 import * as schema from '../types/types.js';
 
 /**
- * Custom error class for A2A server operations, incorporating JSON-RPC error codes.
+ * Custom error class for A2A server operations, incorporating JSON-RPC error codes, used by the v0.3 compat layer.
  */
 export class A2AError extends Error {
   public code: number;
