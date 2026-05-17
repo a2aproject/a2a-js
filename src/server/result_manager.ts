@@ -32,7 +32,9 @@ export class ResultManager {
       // The ExecutionEventQueue will stop after a message event.
     } else if (event.kind === 'task') {
       const taskEvent = event as Task;
-      this.currentTask = { ...taskEvent }; // Make a copy
+      // Deep clone so that subsequent copy-on-write updates never alias the
+      // caller's event object (including its history/artifacts arrays).
+      this.currentTask = structuredClone(taskEvent);
 
       // Ensure the latest user message is in history if not already present
       if (this.latestUserMessage) {
@@ -47,107 +49,75 @@ export class ResultManager {
       await this.saveCurrentTask();
     } else if (event.kind === 'status-update') {
       const updateEvent = event as TaskStatusUpdateEvent;
+      let base: Task | undefined;
       if (this.currentTask && this.currentTask.id === updateEvent.taskId) {
-        this.currentTask.status = updateEvent.status;
-        if (updateEvent.status.message) {
-          // Add message to history if not already present
-          if (
-            !this.currentTask.history?.find(
-              (msg) => msg.messageId === updateEvent.status.message!.messageId
-            )
-          ) {
-            this.currentTask.history = [
-              ...(this.currentTask.history || []),
-              updateEvent.status.message,
-            ];
-          }
-        }
-        await this.saveCurrentTask();
+        base = this.currentTask;
       } else if (!this.currentTask && updateEvent.taskId) {
         // Potentially an update for a task we haven't seen the 'task' event for yet,
         // or we are rehydrating. Attempt to load.
-        const loaded = await this.taskStore.load(updateEvent.taskId, this.serverCallContext);
-        if (loaded) {
-          this.currentTask = loaded;
-          this.currentTask.status = updateEvent.status;
-          if (updateEvent.status.message) {
-            if (
-              !this.currentTask.history?.find(
-                (msg) => msg.messageId === updateEvent.status.message!.messageId
-              )
-            ) {
-              this.currentTask.history = [
-                ...(this.currentTask.history || []),
-                updateEvent.status.message,
-              ];
-            }
-          }
-          await this.saveCurrentTask();
-        } else {
+        base = await this.taskStore.load(updateEvent.taskId, this.serverCallContext);
+        if (base === undefined) {
           console.warn(
             `ResultManager: Received status update for unknown task ${updateEvent.taskId}`
           );
         }
       }
+      if (base !== undefined) {
+        // Copy-on-write: build a new Task so any prior reference handed out
+        // (e.g. via getCurrentTask()) keeps showing its snapshot.
+        const next: Task = { ...base, status: updateEvent.status };
+        if (updateEvent.status.message !== undefined) {
+          const exists = next.history?.some(
+            (msg) => msg.messageId === updateEvent.status.message?.messageId
+          );
+          if (!exists) {
+            next.history = [...(next.history || []), updateEvent.status.message];
+          }
+        }
+        this.currentTask = next;
+        await this.saveCurrentTask();
+      }
       // If it's a final status update, the ExecutionEventQueue will stop.
       // The final result will be the currentTask.
     } else if (event.kind === 'artifact-update') {
       const artifactEvent = event as TaskArtifactUpdateEvent;
+      let base: Task | undefined;
       if (this.currentTask && this.currentTask.id === artifactEvent.taskId) {
-        if (!this.currentTask.artifacts) {
-          this.currentTask.artifacts = [];
-        }
-        const existingArtifactIndex = this.currentTask.artifacts.findIndex(
-          (art) => art.artifactId === artifactEvent.artifact.artifactId
-        );
-        if (existingArtifactIndex !== -1) {
-          if (artifactEvent.append) {
-            // Basic append logic, assuming parts are compatible
-            // More sophisticated merging might be needed for specific part types
-            const existingArtifact = this.currentTask.artifacts[existingArtifactIndex];
-            existingArtifact.parts.push(...artifactEvent.artifact.parts);
-            if (artifactEvent.artifact.description)
-              existingArtifact.description = artifactEvent.artifact.description;
-            if (artifactEvent.artifact.name) existingArtifact.name = artifactEvent.artifact.name;
-            if (artifactEvent.artifact.metadata)
-              existingArtifact.metadata = {
-                ...existingArtifact.metadata,
-                ...artifactEvent.artifact.metadata,
-              };
-          } else {
-            this.currentTask.artifacts[existingArtifactIndex] = artifactEvent.artifact;
-          }
-        } else {
-          this.currentTask.artifacts.push(artifactEvent.artifact);
-        }
-        await this.saveCurrentTask();
+        base = this.currentTask;
       } else if (!this.currentTask && artifactEvent.taskId) {
-        // Similar to status update, try to load if task not in memory
-        const loaded = await this.taskStore.load(artifactEvent.taskId, this.serverCallContext);
-        if (loaded) {
-          this.currentTask = loaded;
-          if (!this.currentTask.artifacts) this.currentTask.artifacts = [];
-          // Apply artifact update logic (as above)
-          const existingArtifactIndex = this.currentTask.artifacts.findIndex(
-            (art) => art.artifactId === artifactEvent.artifact.artifactId
-          );
-          if (existingArtifactIndex !== -1) {
-            if (artifactEvent.append) {
-              this.currentTask.artifacts[existingArtifactIndex].parts.push(
-                ...artifactEvent.artifact.parts
-              );
-            } else {
-              this.currentTask.artifacts[existingArtifactIndex] = artifactEvent.artifact;
-            }
-          } else {
-            this.currentTask.artifacts.push(artifactEvent.artifact);
-          }
-          await this.saveCurrentTask();
-        } else {
+        // No task in memory — try to rehydrate from the store.
+        base = await this.taskStore.load(artifactEvent.taskId, this.serverCallContext);
+        if (base === undefined) {
           console.warn(
             `ResultManager: Received artifact update for unknown task ${artifactEvent.taskId}`
           );
         }
+      }
+      if (base !== undefined) {
+        // Copy-on-write: rebuild the artifacts array so any prior reference
+        // handed out (e.g. via getCurrentTask()) keeps showing its snapshot.
+        const artifacts = [...(base.artifacts || [])];
+        const idx = artifacts.findIndex(
+          (art) => art.artifactId === artifactEvent.artifact.artifactId
+        );
+        if (idx === -1) {
+          artifacts.push(artifactEvent.artifact);
+        } else if (artifactEvent.append) {
+          const existing = artifacts[idx];
+          artifacts[idx] = {
+            ...existing,
+            parts: [...existing.parts, ...artifactEvent.artifact.parts],
+            description: artifactEvent.artifact.description ?? existing.description,
+            name: artifactEvent.artifact.name ?? existing.name,
+            metadata: artifactEvent.artifact.metadata
+              ? { ...existing.metadata, ...artifactEvent.artifact.metadata }
+              : existing.metadata,
+          };
+        } else {
+          artifacts[idx] = artifactEvent.artifact;
+        }
+        this.currentTask = { ...base, artifacts };
+        await this.saveCurrentTask();
       }
     }
   }

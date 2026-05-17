@@ -177,7 +177,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           if (event.kind === 'message') {
             firstResult = event;
           } else {
-            firstResult = resultManager.getCurrentTask();
+            // Defense-in-depth: hand the caller a snapshot, not a live reference
+            // to ResultManager's internal state.
+            const current = resultManager.getCurrentTask();
+            firstResult = current ? structuredClone(current) : undefined;
           }
           if (firstResult) {
             options.firstResultResolver(firstResult);
