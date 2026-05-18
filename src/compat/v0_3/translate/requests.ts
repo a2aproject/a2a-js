@@ -48,16 +48,10 @@ import type {
   TaskPushNotificationConfig as V1TaskPushNotificationConfig,
 } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
+import { deepCloneMetadata } from './_clone.js';
 
 type RequestId = string | number;
 type ResponseId = string | number | null;
-
-function cloneMetadata(
-  metadata: { [k: string]: unknown } | undefined
-): { [k: string]: unknown } | undefined {
-  if (metadata === undefined) return undefined;
-  return { ...metadata };
-}
 
 /* --------------------------------- SendMessageConfiguration --------------------------------- */
 
@@ -107,7 +101,7 @@ export function toCoreSendMessageRequest(
     configuration: compat.params.configuration
       ? toCoreSendMessageConfiguration(compat.params.configuration)
       : undefined,
-    metadata: cloneMetadata(compat.params.metadata),
+    metadata: deepCloneMetadata(compat.params.metadata),
   };
 }
 
@@ -129,7 +123,7 @@ export function toCompatSendMessageRequest(
   if (core.configuration) {
     params.configuration = toCompatSendMessageConfiguration(core.configuration);
   }
-  const metadata = cloneMetadata(core.metadata);
+  const metadata = deepCloneMetadata(core.metadata);
   if (metadata !== undefined) params.metadata = metadata;
   return { id: requestId, jsonrpc: '2.0', method: 'message/send', params };
 }
@@ -292,7 +286,7 @@ export function toCoreCancelTaskRequest(compat: legacy.CancelTaskRequest): V1Can
   return {
     tenant: '',
     id: compat.params.id,
-    metadata: cloneMetadata(compat.params.metadata),
+    metadata: deepCloneMetadata(compat.params.metadata),
   };
 }
 
@@ -302,7 +296,7 @@ export function toCompatCancelTaskRequest(
   requestId: RequestId
 ): legacy.CancelTaskRequest {
   const params: legacy.TaskIdParams = { id: core.id };
-  const metadata = cloneMetadata(core.metadata);
+  const metadata = deepCloneMetadata(core.metadata);
   if (metadata !== undefined) params.metadata = metadata;
   return { id: requestId, jsonrpc: '2.0', method: 'tasks/cancel', params };
 }

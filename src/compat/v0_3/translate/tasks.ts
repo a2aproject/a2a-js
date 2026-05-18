@@ -18,6 +18,7 @@ import type {
   TaskStatusUpdateEvent as V1TaskStatusUpdateEvent,
 } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
+import { deepCloneMetadata } from './_clone.js';
 
 /**
  * Terminal v0.3 task states for which a `status-update` event should be
@@ -32,13 +33,6 @@ const FINAL_LEGACY_STATES: ReadonlySet<legacy.TaskStatus['state']> = new Set([
   'failed',
   'rejected',
 ]);
-
-function cloneMetadata(
-  metadata: { [k: string]: unknown } | undefined
-): { [k: string]: unknown } | undefined {
-  if (metadata === undefined) return undefined;
-  return { ...metadata };
-}
 
 /**
  * Converts a v0.3 JSON `TaskStatus` into a v1.0 proto `TaskStatus`.
@@ -82,7 +76,7 @@ export function toCoreTask(compatTask: legacy.Task): V1Task {
     status: toCoreTaskStatus(compatTask.status),
     artifacts: compatTask.artifacts ? compatTask.artifacts.map(toCoreArtifact) : [],
     history: compatTask.history ? compatTask.history.map(toCoreMessage) : [],
-    metadata: cloneMetadata(compatTask.metadata),
+    metadata: deepCloneMetadata(compatTask.metadata),
   };
 }
 
@@ -108,7 +102,7 @@ export function toCompatTask(coreTask: V1Task): legacy.Task {
   if (coreTask.artifacts.length > 0) {
     result.artifacts = coreTask.artifacts.map(toCompatArtifact);
   }
-  const metadata = cloneMetadata(coreTask.metadata);
+  const metadata = deepCloneMetadata(coreTask.metadata);
   if (metadata !== undefined) result.metadata = metadata;
 
   return result;
@@ -128,7 +122,7 @@ export function toCoreTaskStatusUpdateEvent(
     taskId: compatEvent.taskId,
     contextId: compatEvent.contextId,
     status: toCoreTaskStatus(compatEvent.status),
-    metadata: cloneMetadata(compatEvent.metadata),
+    metadata: deepCloneMetadata(compatEvent.metadata),
   };
 }
 
@@ -154,7 +148,7 @@ export function toCompatTaskStatusUpdateEvent(
     status,
     final: FINAL_LEGACY_STATES.has(status.state),
   };
-  const metadata = cloneMetadata(coreEvent.metadata);
+  const metadata = deepCloneMetadata(coreEvent.metadata);
   if (metadata !== undefined) result.metadata = metadata;
   return result;
 }
@@ -174,7 +168,7 @@ export function toCoreTaskArtifactUpdateEvent(
     artifact: toCoreArtifact(compatEvent.artifact),
     append: compatEvent.append ?? false,
     lastChunk: compatEvent.lastChunk ?? false,
-    metadata: cloneMetadata(compatEvent.metadata),
+    metadata: deepCloneMetadata(compatEvent.metadata),
   };
 }
 
@@ -203,7 +197,7 @@ export function toCompatTaskArtifactUpdateEvent(
     append: coreEvent.append,
     lastChunk: coreEvent.lastChunk,
   };
-  const metadata = cloneMetadata(coreEvent.metadata);
+  const metadata = deepCloneMetadata(coreEvent.metadata);
   if (metadata !== undefined) result.metadata = metadata;
   return result;
 }

@@ -19,13 +19,7 @@ import { toCompatRole, toCoreRole } from './enums.js';
 import { toCompatPart, toCorePart } from './parts.js';
 import type { Artifact as V1Artifact, Message as V1Message } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
-
-function cloneMetadata(
-  metadata: { [k: string]: unknown } | undefined
-): { [k: string]: unknown } | undefined {
-  if (metadata === undefined) return undefined;
-  return { ...metadata };
-}
+import { deepCloneMetadata } from './_clone.js';
 
 function nonEmptyString(value: string): string | undefined {
   return value === '' ? undefined : value;
@@ -49,7 +43,7 @@ export function toCoreMessage(compatMsg: legacy.Message): V1Message {
     taskId: compatMsg.taskId ?? '',
     role: toCoreRole(compatMsg.role),
     parts: compatMsg.parts.map(toCorePart),
-    metadata: cloneMetadata(compatMsg.metadata),
+    metadata: deepCloneMetadata(compatMsg.metadata),
     extensions: compatMsg.extensions ? [...compatMsg.extensions] : [],
     referenceTaskIds: compatMsg.referenceTaskIds ? [...compatMsg.referenceTaskIds] : [],
   };
@@ -77,7 +71,7 @@ export function toCompatMessage(coreMsg: V1Message): legacy.Message {
   const taskId = nonEmptyString(coreMsg.taskId);
   if (taskId !== undefined) result.taskId = taskId;
 
-  const metadata = cloneMetadata(coreMsg.metadata);
+  const metadata = deepCloneMetadata(coreMsg.metadata);
   if (metadata !== undefined) result.metadata = metadata;
 
   const extensions = nonEmptyArray(coreMsg.extensions);
@@ -101,7 +95,7 @@ export function toCoreArtifact(compatArtifact: legacy.Artifact): V1Artifact {
     name: compatArtifact.name ?? '',
     description: compatArtifact.description ?? '',
     parts: compatArtifact.parts.map(toCorePart),
-    metadata: cloneMetadata(compatArtifact.metadata),
+    metadata: deepCloneMetadata(compatArtifact.metadata),
     extensions: compatArtifact.extensions ? [...compatArtifact.extensions] : [],
   };
 }
@@ -124,7 +118,7 @@ export function toCompatArtifact(coreArtifact: V1Artifact): legacy.Artifact {
   const description = nonEmptyString(coreArtifact.description);
   if (description !== undefined) result.description = description;
 
-  const metadata = cloneMetadata(coreArtifact.metadata);
+  const metadata = deepCloneMetadata(coreArtifact.metadata);
   if (metadata !== undefined) result.metadata = metadata;
 
   const extensions = nonEmptyArray(coreArtifact.extensions);

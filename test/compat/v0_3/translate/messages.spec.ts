@@ -210,4 +210,37 @@ describe('messages', () => {
       expect(toCompatArtifact(toCoreArtifact(compat))).toEqual(compat);
     });
   });
+
+  describe('metadata deep-cloning', () => {
+    it('toCoreMessage isolates nested metadata from the source', () => {
+      const nested = { tags: ['a', 'b'] };
+      const compat: legacy.Message = {
+        kind: 'message',
+        messageId: 'm1',
+        role: 'user',
+        parts: [],
+        metadata: { nested },
+      };
+      const core = toCoreMessage(compat);
+      (core.metadata!.nested as { tags: string[] }).tags.push('c');
+      expect(nested.tags).toEqual(['a', 'b']);
+    });
+
+    it('toCompatMessage isolates nested metadata from the source', () => {
+      const nested = { tags: ['a', 'b'] };
+      const core: V1Message = {
+        messageId: 'm1',
+        contextId: '',
+        taskId: '',
+        role: Role.ROLE_USER,
+        parts: [],
+        metadata: { nested },
+        extensions: [],
+        referenceTaskIds: [],
+      };
+      const compat = toCompatMessage(core);
+      (compat.metadata!.nested as { tags: string[] }).tags.push('c');
+      expect(nested.tags).toEqual(['a', 'b']);
+    });
+  });
 });

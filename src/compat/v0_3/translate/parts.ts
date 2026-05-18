@@ -17,15 +17,9 @@
 import { A2AError } from '../server/error.js';
 import type * as legacy from '../types/types.js';
 import type { Part as V1Part } from '../../../types/pb/a2a.js';
+import { deepCloneMetadata } from './_clone.js';
 
 const DATA_PART_COMPAT_KEY = 'data_part_compat';
-
-function cloneMetadata(
-  metadata: { [k: string]: unknown } | undefined
-): { [k: string]: unknown } | undefined {
-  if (metadata === undefined) return undefined;
-  return { ...metadata };
-}
 
 function isPlainObject(value: unknown): value is { [k: string]: unknown } {
   return (
@@ -49,7 +43,7 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
   if (compatPart.kind === 'text') {
     return {
       content: { $case: 'text', value: compatPart.text },
-      metadata: cloneMetadata(compatPart.metadata),
+      metadata: deepCloneMetadata(compatPart.metadata),
       filename: '',
       mediaType: '',
     };
@@ -59,7 +53,7 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
     const file = compatPart.file;
     const mediaType = file.mimeType ?? '';
     const filename = file.name ?? '';
-    const metadata = cloneMetadata(compatPart.metadata);
+    const metadata = deepCloneMetadata(compatPart.metadata);
 
     if ('bytes' in file) {
       return {
@@ -81,7 +75,7 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
   }
 
   if (compatPart.kind === 'data') {
-    const metadata = cloneMetadata(compatPart.metadata);
+    const metadata = deepCloneMetadata(compatPart.metadata);
     const dataPartCompat = metadata?.[DATA_PART_COMPAT_KEY] === true;
     let strippedMetadata: { [k: string]: unknown } | undefined = metadata;
     if (metadata && DATA_PART_COMPAT_KEY in metadata) {
@@ -120,7 +114,7 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
  */
 export function toCompatPart(corePart: V1Part): legacy.Part {
   const content = corePart.content;
-  const metadata = cloneMetadata(corePart.metadata);
+  const metadata = deepCloneMetadata(corePart.metadata);
 
   if (!content) {
     throw A2AError.invalidParams('Invalid v1.0 part: missing content');

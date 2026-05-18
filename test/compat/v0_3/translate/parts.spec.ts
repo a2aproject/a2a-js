@@ -223,4 +223,18 @@ describe('parts', () => {
       expect(back.metadata).toBeUndefined();
     });
   });
+
+  describe('metadata deep-cloning', () => {
+    it('toCorePart deep-clones metadata even when stripping data_part_compat', () => {
+      const nested = { list: [1, 2] };
+      const compat: legacy.Part = {
+        kind: 'data',
+        data: { value: 'wrapped' },
+        metadata: { data_part_compat: true, nested },
+      };
+      const core = toCorePart(compat);
+      (core.metadata!.nested as { list: number[] }).list.push(3);
+      expect(nested.list).toEqual([1, 2]);
+    });
+  });
 });

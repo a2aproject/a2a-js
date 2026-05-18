@@ -45,19 +45,13 @@ import type {
   AgentSkill as V1AgentSkill,
 } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
+import { deepCloneMetadata } from './_clone.js';
 
 /** Default transport advertised when the v0.3 card omits `preferredTransport`. */
 const DEFAULT_PREFERRED_TRANSPORT = 'JSONRPC';
 
 function nonEmpty(value: string | undefined): string | undefined {
   return value !== undefined && value !== '' ? value : undefined;
-}
-
-function cloneMetadata(
-  metadata: { [k: string]: unknown } | undefined
-): { [k: string]: unknown } | undefined {
-  if (metadata === undefined) return undefined;
-  return { ...metadata };
 }
 
 /** v0.3 `AgentInterface` → v1.0 proto `AgentInterface`. */
@@ -91,7 +85,7 @@ export function toCoreAgentExtension(compat: legacy.AgentExtension): V1AgentExte
     uri: compat.uri,
     description: compat.description ?? '',
     required: compat.required ?? false,
-    params: cloneMetadata(compat.params),
+    params: deepCloneMetadata(compat.params),
   };
 }
 
@@ -103,7 +97,7 @@ export function toCompatAgentExtension(core: V1AgentExtension): legacy.AgentExte
   // Always emit `required` so the v0.3 consumer sees the agent's explicit
   // declaration (even when it's the default `false`).
   result.required = core.required;
-  const params = cloneMetadata(core.params);
+  const params = deepCloneMetadata(core.params);
   if (params !== undefined) result.params = params;
   return result;
 }
@@ -175,7 +169,7 @@ export function toCoreAgentCardSignature(compat: legacy.AgentCardSignature): V1A
   return {
     protected: compat.protected,
     signature: compat.signature,
-    header: cloneMetadata(compat.header),
+    header: deepCloneMetadata(compat.header),
   };
 }
 
@@ -185,7 +179,7 @@ export function toCompatAgentCardSignature(core: V1AgentCardSignature): legacy.A
     protected: core.protected,
     signature: core.signature,
   };
-  const header = cloneMetadata(core.header);
+  const header = deepCloneMetadata(core.header);
   if (header !== undefined) result.header = header;
   return result;
 }
