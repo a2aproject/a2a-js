@@ -19,6 +19,7 @@ import type {
 } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
+import { A2AError } from '../server/error.js';
 
 /**
  * Terminal v0.3 task states for which a `status-update` event should be
@@ -184,9 +185,7 @@ export function toCompatTaskArtifactUpdateEvent(
   coreEvent: V1TaskArtifactUpdateEvent
 ): legacy.TaskArtifactUpdateEvent {
   if (!coreEvent.artifact) {
-    // The v0.3 schema requires the `artifact` field; without one we can't
-    // construct a valid legacy event.
-    throw new Error('Invalid TaskArtifactUpdateEvent: missing artifact');
+    throw A2AError.invalidParams('Invalid TaskArtifactUpdateEvent: missing artifact');
   }
 
   const result: legacy.TaskArtifactUpdateEvent = {
