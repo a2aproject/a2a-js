@@ -90,6 +90,44 @@ describe('security', () => {
       const compat = { type: 'magic' } as unknown as legacy.SecurityScheme;
       expect(() => toCoreSecurityScheme(compat)).toThrow(A2AError);
     });
+
+    describe('APIKey location handling (v1 → v0.3)', () => {
+      it.each(['cookie', 'header', 'query'] as const)(
+        'preserves valid APIKey location: %s',
+        (loc) => {
+          const core: V1SecurityScheme = {
+            scheme: {
+              $case: 'apiKeySecurityScheme',
+              value: { description: '', location: loc, name: 'X-API-Key' },
+            },
+          };
+          const compat = toCompatSecurityScheme(core) as legacy.APIKeySecurityScheme;
+          expect(compat.in).toBe(loc);
+        }
+      );
+
+      it('coerces an unknown APIKey location to "header"', () => {
+        const core: V1SecurityScheme = {
+          scheme: {
+            $case: 'apiKeySecurityScheme',
+            value: { description: '', location: 'headerz', name: 'X-API-Key' },
+          },
+        };
+        const compat = toCompatSecurityScheme(core) as legacy.APIKeySecurityScheme;
+        expect(compat.in).toBe('header');
+      });
+
+      it('coerces an empty APIKey location to "header"', () => {
+        const core: V1SecurityScheme = {
+          scheme: {
+            $case: 'apiKeySecurityScheme',
+            value: { description: '', location: '', name: 'X-API-Key' },
+          },
+        };
+        const compat = toCompatSecurityScheme(core) as legacy.APIKeySecurityScheme;
+        expect(compat.in).toBe('header');
+      });
+    });
   });
 
   describe('OAuthFlows', () => {

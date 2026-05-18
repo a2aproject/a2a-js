@@ -138,7 +138,11 @@ function buildCompatApiKey(core: V1APIKeySecurityScheme): legacy.APIKeySecurityS
   const result: legacy.APIKeySecurityScheme = {
     type: 'apiKey',
     name: core.name,
-    in: (core.location as legacy.APIKeySecurityScheme['in']) ?? 'header',
+    // v1 proto widens `location` to a free-form `string`; v0.3 narrows it to a
+    // literal union. Unknown / empty values silently map to `'header'` (the most
+    // common API-key location and the effective OpenAPI default) so a
+    // misconfigured v1 server doesn't break the entire v0.3 translation path.
+    in: core.location === 'cookie' || core.location === 'query' ? core.location : 'header',
   };
   const description = nonEmpty(core.description);
   if (description !== undefined) result.description = description;
