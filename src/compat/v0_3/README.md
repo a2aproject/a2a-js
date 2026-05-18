@@ -26,14 +26,14 @@ This module contains the native TypeScript Protobuf bindings generated for the l
 
 ## Translation Layer (`translate/`)
 
-The `translate/` subdirectory contains bidirectional payload translators between the modern v1.0 protobuf types (in `src/types/pb/a2a.ts`) and the legacy v0.3 JSON types (in `types/types.ts`).
+The `translate/` subdirectory contains bidirectional payload translators between the modern v1.0 protobuf types (in `src/types/pb/a2a.ts`) and the legacy v0.3 JSON types (in `src/compat/v0_3/types/types.ts`).
 
 The naming convention is direction-anchored:
 
 - `toCore<Entity>` converts a v0.3 value into the equivalent v1.0 proto value.
 - `toCompat<Entity>` converts a v1.0 proto value into the equivalent v0.3 JSON value.
 
-Translators are split per entity group (`parts.ts`, `messages.ts`, `tasks.ts`, `push_notifications.ts`, `security.ts`, `agent_card.ts`, `requests.ts`, `enums.ts`, `versions.ts`) for clarity and tree-shaking. The full surface is re-exported from `translate/index.ts`.
+Translators are split per entity group (`parts.ts`, `messages.ts`, `tasks.ts`, `push_notifications.ts`, `security.ts`, `agent_card.ts`, `requests.ts`, `enums.ts`, `versions.ts`) for clarity and tree-shaking. The full surface is re-exported from `src/compat/v0_3/translate/index.ts`.
 
 Notable policy decisions:
 
