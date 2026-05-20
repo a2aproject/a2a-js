@@ -9,24 +9,23 @@ import type { TaskStatus as LegacyTaskStatus } from '../types/types.js';
  * The v0.3 JSON `TaskStatus.state` string-literal union, kept around as a
  * narrowed alias so call sites don't have to spell it out repeatedly.
  */
-export type LegacyTaskState = LegacyTaskStatus['state'];
+type LegacyTaskState = LegacyTaskStatus['state'];
 
 /** v0.3 JSON `TaskState` literal → v1.0 proto `TaskState` enum. */
-export const TASK_STATE_COMPAT_TO_CORE: Readonly<Record<LegacyTaskState, V1TaskState>> =
-  Object.freeze({
-    unknown: V1TaskState.TASK_STATE_UNSPECIFIED,
-    submitted: V1TaskState.TASK_STATE_SUBMITTED,
-    working: V1TaskState.TASK_STATE_WORKING,
-    completed: V1TaskState.TASK_STATE_COMPLETED,
-    failed: V1TaskState.TASK_STATE_FAILED,
-    canceled: V1TaskState.TASK_STATE_CANCELED,
-    'input-required': V1TaskState.TASK_STATE_INPUT_REQUIRED,
-    rejected: V1TaskState.TASK_STATE_REJECTED,
-    'auth-required': V1TaskState.TASK_STATE_AUTH_REQUIRED,
-  });
+const TASK_STATE_COMPAT_TO_CORE: Readonly<Record<LegacyTaskState, V1TaskState>> = Object.freeze({
+  unknown: V1TaskState.TASK_STATE_UNSPECIFIED,
+  submitted: V1TaskState.TASK_STATE_SUBMITTED,
+  working: V1TaskState.TASK_STATE_WORKING,
+  completed: V1TaskState.TASK_STATE_COMPLETED,
+  failed: V1TaskState.TASK_STATE_FAILED,
+  canceled: V1TaskState.TASK_STATE_CANCELED,
+  'input-required': V1TaskState.TASK_STATE_INPUT_REQUIRED,
+  rejected: V1TaskState.TASK_STATE_REJECTED,
+  'auth-required': V1TaskState.TASK_STATE_AUTH_REQUIRED,
+});
 
 /** v1.0 proto `TaskState` enum → v0.3 JSON `TaskState` literal. */
-export const TASK_STATE_CORE_TO_COMPAT: ReadonlyMap<V1TaskState, LegacyTaskState> = new Map(
+const TASK_STATE_CORE_TO_COMPAT: ReadonlyMap<V1TaskState, LegacyTaskState> = new Map(
   (Object.entries(TASK_STATE_COMPAT_TO_CORE) as [LegacyTaskState, V1TaskState][]).map(
     ([literal, enumValue]) => [enumValue, literal]
   )

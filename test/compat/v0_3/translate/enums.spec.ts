@@ -4,8 +4,6 @@ import {
   toCoreTaskState,
   toCompatRole,
   toCompatTaskState,
-  TASK_STATE_COMPAT_TO_CORE,
-  TASK_STATE_CORE_TO_COMPAT,
 } from '../../../../src/compat/v0_3/translate/enums.js';
 import { Role, TaskState } from '../../../../src/types/pb/a2a.js';
 import type { TaskStatus } from '../../../../src/compat/v0_3/types/types.js';
@@ -23,6 +21,24 @@ const ALL_LEGACY_STATES: LegacyTaskState[] = [
   'rejected',
   'auth-required',
 ];
+
+const TASK_STATE_COMPAT_TO_CORE: Record<LegacyTaskState, TaskState> = {
+  unknown: 0,
+  submitted: 1,
+  working: 2,
+  completed: 3,
+  failed: 4,
+  canceled: 5,
+  'input-required': 6,
+  rejected: 7,
+  'auth-required': 8,
+};
+
+const TASK_STATE_CORE_TO_COMPAT: ReadonlyMap<TaskState, LegacyTaskState> = new Map(
+  (Object.entries(TASK_STATE_COMPAT_TO_CORE) as [LegacyTaskState, TaskState][]).map(
+    ([literal, enumValue]) => [enumValue, literal]
+  )
+);
 
 describe('enums', () => {
   describe('TASK_STATE_COMPAT_TO_CORE', () => {
