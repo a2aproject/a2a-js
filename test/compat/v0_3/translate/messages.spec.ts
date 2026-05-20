@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  toCompatArtifact,
-  toCompatMessage,
-  toCoreArtifact,
-  toCoreMessage,
-} from '../../../../src/compat/v0_3/translate/messages.js';
+import { toCompatMessage, toCoreMessage } from '../../../../src/compat/v0_3/translate/messages.js';
 import { Role } from '../../../../src/types/pb/a2a.js';
-import type { Artifact as V1Artifact, Message as V1Message } from '../../../../src/types/pb/a2a.js';
+import type { Message as V1Message } from '../../../../src/types/pb/a2a.js';
 import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
 
 describe('messages', () => {
@@ -117,71 +112,6 @@ describe('messages', () => {
     });
   });
 
-  describe('toCoreArtifact', () => {
-    it('coerces missing optional fields to proto3 defaults', () => {
-      const compat: legacy.Artifact = {
-        artifactId: 'art-1',
-        parts: [{ kind: 'text', text: 'x' }],
-      };
-      const core = toCoreArtifact(compat);
-      expect(core.artifactId).toBe('art-1');
-      expect(core.name).toBe('');
-      expect(core.description).toBe('');
-      expect(core.metadata).toBeUndefined();
-      expect(core.extensions).toEqual([]);
-      expect(core.parts).toHaveLength(1);
-    });
-
-    it('preserves optional fields', () => {
-      const compat: legacy.Artifact = {
-        artifactId: 'art-1',
-        name: 'name',
-        description: 'desc',
-        parts: [],
-        metadata: { k: 'v' },
-        extensions: ['ext-uri'],
-      };
-      const core = toCoreArtifact(compat);
-      expect(core.name).toBe('name');
-      expect(core.description).toBe('desc');
-      expect(core.metadata).toEqual({ k: 'v' });
-      expect(core.extensions).toEqual(['ext-uri']);
-    });
-  });
-
-  describe('toCompatArtifact', () => {
-    it('prunes empty proto3 defaults', () => {
-      const core: V1Artifact = {
-        artifactId: 'art-1',
-        name: '',
-        description: '',
-        parts: [],
-        metadata: undefined,
-        extensions: [],
-      };
-      expect(toCompatArtifact(core)).toEqual({ artifactId: 'art-1', parts: [] });
-    });
-
-    it('keeps non-empty optionals', () => {
-      const core: V1Artifact = {
-        artifactId: 'art-1',
-        name: 'name',
-        description: 'desc',
-        parts: [],
-        metadata: { k: 'v' },
-        extensions: ['ext'],
-      };
-      expect(toCompatArtifact(core)).toEqual({
-        artifactId: 'art-1',
-        parts: [],
-        name: 'name',
-        description: 'desc',
-        metadata: { k: 'v' },
-        extensions: ['ext'],
-      });
-    });
-  });
-
   describe('round-tripping', () => {
     it('round-trips a fully-populated message', () => {
       const compat: legacy.Message = {
@@ -196,18 +126,6 @@ describe('messages', () => {
         referenceTaskIds: ['t2'],
       };
       expect(toCompatMessage(toCoreMessage(compat))).toEqual(compat);
-    });
-
-    it('round-trips a fully-populated artifact', () => {
-      const compat: legacy.Artifact = {
-        artifactId: 'art-1',
-        name: 'name',
-        description: 'desc',
-        parts: [{ kind: 'text', text: 'hi' }],
-        metadata: { k: 'v' },
-        extensions: ['ext'],
-      };
-      expect(toCompatArtifact(toCoreArtifact(compat))).toEqual(compat);
     });
   });
 

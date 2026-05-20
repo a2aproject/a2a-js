@@ -1,5 +1,5 @@
 /**
- * `Message` and `Artifact` translators between v1.0 proto and v0.3 JSON.
+ * `Message` translator between v1.0 proto and v0.3 JSON.
  *
  * The wire-level differences handled here:
  *
@@ -17,7 +17,7 @@
 
 import { toCompatRole, toCoreRole } from './enums.js';
 import { toCompatPart, toCorePart } from './parts.js';
-import type { Artifact as V1Artifact, Message as V1Message } from '../../../types/pb/a2a.js';
+import type { Message as V1Message } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
 
@@ -79,50 +79,6 @@ export function toCompatMessage(coreMsg: V1Message): legacy.Message {
 
   const referenceTaskIds = nonEmptyArray(coreMsg.referenceTaskIds);
   if (referenceTaskIds !== undefined) result.referenceTaskIds = referenceTaskIds;
-
-  return result;
-}
-
-/**
- * Converts a v0.3 JSON `Artifact` into a v1.0 proto `Artifact`.
- *
- * Optional string fields collapse to the proto3 empty-string default;
- * optional arrays collapse to empty arrays.
- */
-export function toCoreArtifact(compatArtifact: legacy.Artifact): V1Artifact {
-  return {
-    artifactId: compatArtifact.artifactId,
-    name: compatArtifact.name ?? '',
-    description: compatArtifact.description ?? '',
-    parts: compatArtifact.parts.map(toCorePart),
-    metadata: deepCloneMetadata(compatArtifact.metadata),
-    extensions: compatArtifact.extensions ? [...compatArtifact.extensions] : [],
-  };
-}
-
-/**
- * Converts a v1.0 proto `Artifact` into a v0.3 JSON `Artifact`.
- *
- * Empty proto3 strings and arrays are pruned to keep v0.3 JSON payloads
- * minimal and round-trip-stable.
- */
-export function toCompatArtifact(coreArtifact: V1Artifact): legacy.Artifact {
-  const result: legacy.Artifact = {
-    artifactId: coreArtifact.artifactId,
-    parts: coreArtifact.parts.map(toCompatPart),
-  };
-
-  const name = nonEmptyString(coreArtifact.name);
-  if (name !== undefined) result.name = name;
-
-  const description = nonEmptyString(coreArtifact.description);
-  if (description !== undefined) result.description = description;
-
-  const metadata = deepCloneMetadata(coreArtifact.metadata);
-  if (metadata !== undefined) result.metadata = metadata;
-
-  const extensions = nonEmptyArray(coreArtifact.extensions);
-  if (extensions !== undefined) result.extensions = extensions;
 
   return result;
 }

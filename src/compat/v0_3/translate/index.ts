@@ -6,6 +6,7 @@
  */
 
 export * from './agent_card.js';
+export * from './artifacts.js';
 export * from './enums.js';
 export * from './messages.js';
 export * from './parts.js';

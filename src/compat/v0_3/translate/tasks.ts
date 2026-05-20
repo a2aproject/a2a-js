@@ -10,7 +10,8 @@
  */
 
 import { toCompatTaskState, toCoreTaskState } from './enums.js';
-import { toCompatArtifact, toCompatMessage, toCoreArtifact, toCoreMessage } from './messages.js';
+import { toCompatMessage, toCoreMessage } from './messages.js';
+import { toCompatArtifact, toCoreArtifact } from './artifacts.js';
 import type {
   Task as V1Task,
   TaskArtifactUpdateEvent as V1TaskArtifactUpdateEvent,
