@@ -37,6 +37,11 @@ function nonEmpty(value: string | undefined): string | undefined {
 export function toCoreAuthenticationInfo(
   compat: legacy.PushNotificationAuthenticationInfo
 ): V1AuthenticationInfo {
+  if (compat.schemes && compat.schemes.length > 1) {
+    console.warn(
+      `toCoreAuthenticationInfo: Lossy conversion from v0.3 PushNotificationAuthenticationInfo to v1.0 AuthenticationInfo. Multiple schemes declared (${compat.schemes.join(', ')}), but only the first one ('${compat.schemes[0]}') will be kept.`
+    );
+  }
   return {
     scheme: compat.schemes && compat.schemes.length > 0 ? compat.schemes[0]! : '',
     credentials: compat.credentials ?? '',

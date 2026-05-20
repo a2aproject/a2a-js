@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   toCompatAuthenticationInfo,
   toCompatPushNotificationConfig,
@@ -12,17 +12,34 @@ import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
 
 describe('push_notifications', () => {
   describe('AuthenticationInfo', () => {
-    it('keeps only the first scheme going to core', () => {
+    it('keeps only the first scheme going to core and logs a warning', () => {
       const compat: legacy.PushNotificationAuthenticationInfo = {
         schemes: ['Bearer', 'Basic'],
         credentials: 'token',
       };
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
       expect(toCoreAuthenticationInfo(compat)).toEqual({ scheme: 'Bearer', credentials: 'token' });
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenLastCalledWith(
+        expect.stringContaining(
+          'toCoreAuthenticationInfo: Lossy conversion from v0.3 PushNotificationAuthenticationInfo to v1.0 AuthenticationInfo'
+        )
+      );
+
+      warnSpy.mockRestore();
     });
 
-    it('uses empty string when no schemes are provided', () => {
+    it('uses empty string when no schemes are provided and does not warn', () => {
       const compat: legacy.PushNotificationAuthenticationInfo = { schemes: [] };
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
       expect(toCoreAuthenticationInfo(compat)).toEqual({ scheme: '', credentials: '' });
+
+      expect(warnSpy).not.toHaveBeenCalled();
+
+      warnSpy.mockRestore();
     });
 
     it('wraps the single core scheme into a one-element array going to compat', () => {
