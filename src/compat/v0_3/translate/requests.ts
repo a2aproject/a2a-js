@@ -76,9 +76,16 @@ export function toCompatSendMessageConfiguration(
   const result: legacy.MessageSendConfiguration = {
     blocking: !core.returnImmediately,
   };
-  if (core.acceptedOutputModes.length > 0) {
-    result.acceptedOutputModes = [...core.acceptedOutputModes];
-  }
+  // Always emit `acceptedOutputModes`, even when empty. v1.0 proto types
+  // it as a required `string[]` (no `undefined` representation), and both
+  // the v1.0 JSON serializer (`SendMessageConfiguration.toJSON`) and gRPC
+  // `encode` treat `[]` and "absent" as wire-identical. Preserving the
+  // empty array here keeps an explicit v0.3 `acceptedOutputModes: []`
+  // round-trip-stable; the only observable cost is that a v0.3 caller
+  // who originally omitted the field will see `[]` on the return path
+  // rather than `undefined`, which carries no semantic change because
+  // the v1.0 layer has already collapsed the distinction.
+  result.acceptedOutputModes = [...core.acceptedOutputModes];
   if (core.historyLength !== undefined) result.historyLength = core.historyLength;
   if (core.taskPushNotificationConfig) {
     result.pushNotificationConfig = toCompatPushNotificationConfig(core.taskPushNotificationConfig);
@@ -185,9 +192,9 @@ export function toCompatSendMessageResponse(
   }
   let result: legacy.Task2 | legacy.Message1;
   if (payload.$case === 'task') {
-    result = toCompatTask(payload.value) as unknown as legacy.Task2;
+    result = toCompatTask(payload.value);
   } else if (payload.$case === 'message') {
-    result = toCompatMessage(payload.value) as unknown as legacy.Message1;
+    result = toCompatMessage(payload.value);
   } else {
     throw A2AError.internalError('SendMessageResponse has unknown payload case');
   }
@@ -197,15 +204,22 @@ export function toCompatSendMessageResponse(
 /* --------------------------------- StreamResponse --------------------------------- */
 
 /**
- * v0.3 `SendStreamingMessageSuccessResponse` → v1.0 proto
- * `StreamResponse`.
+ * v0.3 `SendStreamingMessageResponse` → v1.0 proto `StreamResponse`.
  *
- * The four cases mirror the v1.0 oneof:
+ * The four success cases mirror the v1.0 oneof:
  * `Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent`.
+ *
+ * Throws if the v0.3 response is an error envelope (callers should
+ * surface errors via the v1.0 typed error classes instead).
  */
 export function toCoreStreamResponse(
-  compat: legacy.SendStreamingMessageSuccessResponse
+  compat: legacy.SendStreamingMessageResponse
 ): V1StreamResponse {
+  if ('error' in compat) {
+    throw A2AError.internalError(
+      'Cannot translate a v0.3 error response into a v1.0 StreamResponse'
+    );
+  }
   const result = compat.result;
   switch (result.kind) {
     case 'message':
@@ -241,10 +255,10 @@ export function toCompatStreamResponse(
   let result: legacy.SendStreamingMessageSuccessResponse['result'];
   switch (payload.$case) {
     case 'message':
-      result = toCompatMessage(payload.value) as unknown as legacy.Message1;
+      result = toCompatMessage(payload.value);
       break;
     case 'task':
-      result = toCompatTask(payload.value) as unknown as legacy.Task2;
+      result = toCompatTask(payload.value);
       break;
     case 'statusUpdate':
       result = toCompatTaskStatusUpdateEvent(payload.value);
@@ -430,9 +444,7 @@ export function toCoreListTaskPushNotificationConfigsResponse(
   compat: legacy.ListTaskPushNotificationConfigSuccessResponse
 ): V1ListTaskPushNotificationConfigsResponse {
   return {
-    configs: compat.result.map((entry) =>
-      toCoreTaskPushNotificationConfig(entry as unknown as legacy.TaskPushNotificationConfig)
-    ),
+    configs: compat.result.map((entry) => toCoreTaskPushNotificationConfig(entry)),
     nextPageToken: '',
   };
 }
@@ -445,10 +457,7 @@ export function toCompatListTaskPushNotificationConfigSuccessResponse(
   return {
     id: requestId,
     jsonrpc: '2.0',
-    result: core.configs.map(
-      (cfg) =>
-        toCompatTaskPushNotificationConfig(cfg) as unknown as legacy.TaskPushNotificationConfig3
-    ),
+    result: core.configs.map((cfg) => toCompatTaskPushNotificationConfig(cfg)),
   };
 }
 

@@ -75,14 +75,23 @@ describe('requests', () => {
       expect(compat.blocking).toBe(true);
     });
 
-    it('drops empty acceptedOutputModes going core → compat', () => {
+    it('preserves empty acceptedOutputModes going core → compat', () => {
       const compat = toCompatSendMessageConfiguration({
         acceptedOutputModes: [],
         taskPushNotificationConfig: undefined,
         historyLength: undefined,
         returnImmediately: false,
       });
-      expect(compat.acceptedOutputModes).toBeUndefined();
+      expect(compat.acceptedOutputModes).toEqual([]);
+    });
+
+    it('round-trips an explicit empty acceptedOutputModes through v1', () => {
+      const compat: legacy.MessageSendConfiguration = {
+        blocking: true,
+        acceptedOutputModes: [],
+      };
+      const back = toCompatSendMessageConfiguration(toCoreSendMessageConfiguration(compat));
+      expect(back.acceptedOutputModes).toEqual([]);
     });
   });
 
@@ -288,6 +297,15 @@ describe('requests', () => {
       const compat = toCompatStreamResponse(core, 'req-1');
       const back = toCoreStreamResponse(compat);
       expect(back).toEqual(core);
+    });
+
+    it('throws when translating an error envelope to core', () => {
+      const compatError: legacy.SendStreamingMessageResponse = {
+        jsonrpc: '2.0',
+        id: 'r-1',
+        error: { code: -32603, message: 'boom' } as unknown as legacy.JSONRPCError,
+      };
+      expect(() => toCoreStreamResponse(compatError)).toThrow(A2AError);
     });
   });
 
