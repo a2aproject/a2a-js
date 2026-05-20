@@ -57,28 +57,6 @@ describe('parts', () => {
       expect(core.content).toEqual({ $case: 'data', value: { x: 1 } });
     });
 
-    it('unwraps a `data_part_compat`-flagged data part to the original primitive', () => {
-      const compat: legacy.Part = {
-        kind: 'data',
-        data: { value: 42 },
-        metadata: { data_part_compat: true, extra: 'preserved' },
-      };
-      const core = toCorePart(compat);
-      expect(core.content).toEqual({ $case: 'data', value: 42 });
-      // The compat flag is stripped, other metadata remains.
-      expect(core.metadata).toEqual({ extra: 'preserved' });
-    });
-
-    it('drops metadata entirely when the only key was the compat flag', () => {
-      const compat: legacy.Part = {
-        kind: 'data',
-        data: { value: 'hi' },
-        metadata: { data_part_compat: true },
-      };
-      const core = toCorePart(compat);
-      expect(core.metadata).toBeUndefined();
-    });
-
     it('throws for an unknown kind', () => {
       const compat = { kind: 'unknown' } as unknown as legacy.Part;
       expect(() => toCorePart(compat)).toThrow(A2AError);
@@ -155,17 +133,17 @@ describe('parts', () => {
       expect(toCompatPart(core)).toEqual({ kind: 'data', data: { x: 1 } });
     });
 
-    it('wraps a non-object data value and sets the compat flag in metadata', () => {
-      const core: V1Part = {
-        content: { $case: 'data', value: 'hello' },
-        metadata: undefined,
-        filename: '',
-        mediaType: '',
-      };
-      const compat = toCompatPart(core) as legacy.DataPart;
-      expect(compat.kind).toBe('data');
-      expect(compat.data).toEqual({ value: 'hello' });
-      expect(compat.metadata?.data_part_compat).toBe(true);
+    it('throws when v1 data part value is not a plain object', () => {
+      const nonObjectValues: unknown[] = ['hello', 42, true, null, [1, 2, 3]];
+      for (const value of nonObjectValues) {
+        const core: V1Part = {
+          content: { $case: 'data', value },
+          metadata: undefined,
+          filename: '',
+          mediaType: '',
+        };
+        expect(() => toCompatPart(core)).toThrow(A2AError);
+      }
     });
 
     it('throws when content is missing', () => {
@@ -209,28 +187,15 @@ describe('parts', () => {
       const compat: legacy.Part = { kind: 'data', data: { x: 1, y: [2, 3] } };
       expect(toCompatPart(toCorePart(compat))).toEqual(compat);
     });
-
-    it('round-trips a non-object data value via data_part_compat', () => {
-      const original: V1Part = {
-        content: { $case: 'data', value: 'hello' },
-        metadata: undefined,
-        filename: '',
-        mediaType: '',
-      };
-      const intermediate = toCompatPart(original);
-      const back = toCorePart(intermediate);
-      expect(back.content).toEqual({ $case: 'data', value: 'hello' });
-      expect(back.metadata).toBeUndefined();
-    });
   });
 
   describe('metadata deep-cloning', () => {
-    it('toCorePart deep-clones metadata even when stripping data_part_compat', () => {
+    it('toCorePart deep-clones metadata on data parts', () => {
       const nested = { list: [1, 2] };
       const compat: legacy.Part = {
         kind: 'data',
-        data: { value: 'wrapped' },
-        metadata: { data_part_compat: true, nested },
+        data: { x: 1 },
+        metadata: { nested },
       };
       const core = toCorePart(compat);
       (core.metadata!.nested as { list: number[] }).list.push(3);
