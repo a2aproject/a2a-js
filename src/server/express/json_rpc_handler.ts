@@ -16,10 +16,25 @@ import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_util
 import { Extensions } from '../../extensions.js';
 import { RequestMalformedError } from '../../errors.js';
 import { validateVersion } from '../version.js';
+import { LegacyJsonRpcTransportHandler, isLegacyJsonRpcMethod } from '../../compat/v0_3/index.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+}
+
+/**
+ * Returns `true` if the request body looks like a v0.3 JSON-RPC request
+ * (i.e. its `method` field is one of the known v0.3 method names).
+ *
+ * Detection is based on the method name alone; v1.0 method names are
+ * PascalCase identifiers (`SendMessage`, `GetTask`) and v0.3 method
+ * names are `namespace/verb` strings (`message/send`, `tasks/get`), so
+ * the two grammars are disjoint.
+ */
+function isLegacyRequest(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null) return false;
+  return isLegacyJsonRpcMethod((body as { method?: unknown }).method);
 }
 
 /**
@@ -35,12 +50,17 @@ export interface JsonRpcHandlerOptions {
  */
 export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   const jsonRpcTransportHandler = new JsonRpcTransportHandler(options.requestHandler);
+  const legacyJsonRpcTransportHandler = new LegacyJsonRpcTransportHandler(options.requestHandler);
 
   const router = express.Router();
 
   router.use(express.json(), jsonErrorHandler);
 
   router.post('/', async (req: Request, res: Response) => {
+    const useLegacy = isLegacyRequest(req.body);
+    const mapToError = useLegacy
+      ? LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError
+      : JsonRpcTransportHandler.mapToJSONRPCError;
     try {
       const user = await options.userBuilder(req);
       const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
@@ -50,8 +70,14 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         requestedVersion,
       });
       const agentCard = await options.requestHandler.getAgentCard();
+      // The agent card is the single source of truth for which protocol
+      // versions this transport accepts. `requestedVersion` defaults to
+      // '0.3' when the A2A-Version header is absent (§3.6.2), so a
+      // header-less legacy client will only succeed if the card declares
+      // a v0.3 JSONRPC interface.
       validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
-      const rpcResponseOrStream = await jsonRpcTransportHandler.handle(req.body, context);
+      const transportHandler = useLegacy ? legacyJsonRpcTransportHandler : jsonRpcTransportHandler;
+      const rpcResponseOrStream = await transportHandler.handle(req.body, context);
 
       if (context.activatedExtensions) {
         res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
@@ -78,7 +104,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
             id: req.body?.id || null, // Use original request ID if available
-            error: JsonRpcTransportHandler.mapToJSONRPCError(streamError),
+            error: mapToError(streamError),
           };
           if (!res.headersSent) {
             // Should not happen if flushHeaders worked
@@ -104,7 +130,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       const errorResponse: JSONRPCErrorResponse = {
         jsonrpc: '2.0',
         id: req.body?.id || null,
-        error: JsonRpcTransportHandler.mapToJSONRPCError(error),
+        error: mapToError(error),
       };
       if (!res.headersSent) {
         res.status(500).json(errorResponse);

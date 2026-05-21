@@ -155,6 +155,17 @@ export function legacyJsonRpcToV1Method(method: string): string {
 }
 
 /**
+ * Returns `true` if `method` is a known v0.3 JSON-RPC method name.
+ *
+ * Used by the Express JSON-RPC handler to route incoming requests to either
+ * the v1.0 dispatcher (`JsonRpcTransportHandler`) or the v0.3 compat
+ * dispatcher (`LegacyJsonRpcTransportHandler`).
+ */
+export function isLegacyJsonRpcMethod(method: unknown): boolean {
+  return typeof method === 'string' && method in LEGACY_JSONRPC_TO_V1;
+}
+
+/**
  * Translate a v1.0 PascalCase method name to its v0.3 JSON-RPC equivalent.
  *
  * Throws `A2AError.unsupportedOperation` (-32004) if `method` is a v1.0 name

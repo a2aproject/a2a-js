@@ -1,0 +1,355 @@
+/**
+ * v0.3 JSON-RPC transport handler.
+ *
+ * Mirrors `JsonRpcTransportHandler` (the v1.0 handler) but accepts v0.3
+ * method names (e.g. `message/send`, `tasks/get`) and v0.3-shaped params.
+ * Inbound params are translated to v1.0 proto values via the `toCore*`
+ * helpers in `../../../translate/requests.js`, dispatched to the v1.0
+ * `A2ARequestHandler`, and translated back to v0.3 JSON via the
+ * `toCompat*` helpers before being wrapped in a JSON-RPC envelope.
+ *
+ * Designed to share a transport with the v1.0 handler: the Express
+ * dispatcher selects between the two based on the method name (see
+ * `isLegacyJsonRpcMethod`).
+ */
+import {
+  A2A_ERROR_CODE,
+  ContentTypeNotSupportedError,
+  ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
+  GenericError,
+  InvalidAgentResponseError,
+  PushNotificationNotSupportedError,
+  RequestMalformedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+  VersionNotSupportedError,
+} from '../../../../../errors.js';
+import type { ServerCallContext } from '../../../../../server/context.js';
+import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
+import { toCompatAgentCard } from '../../../translate/agent_card.js';
+import { toCompatMessage } from '../../../translate/messages.js';
+import { toCompatTaskPushNotificationConfig } from '../../../translate/push_notifications.js';
+import {
+  toCompatListTaskPushNotificationConfigSuccessResponse,
+  toCompatStreamResponse,
+  toCoreCancelTaskRequest,
+  toCoreCreateTaskPushNotificationConfigRequest,
+  toCoreDeleteTaskPushNotificationConfigRequest,
+  toCoreGetExtendedAgentCardRequest,
+  toCoreGetTaskPushNotificationConfigRequest,
+  toCoreGetTaskRequest,
+  toCoreListTaskPushNotificationConfigsRequest,
+  toCoreSendMessageRequest,
+  toCoreSubscribeToTaskRequest,
+} from '../../../translate/requests.js';
+import { toCompatTask } from '../../../translate/tasks.js';
+import type * as legacy from '../../../types/types.js';
+import type { Message as V1Message, Task as V1Task } from '../../../../../types/pb/a2a.js';
+import { A2AError } from '../../error.js';
+
+/**
+ * Minimal v0.3 JSON-RPC request envelope shape used by the handler.
+ */
+type LegacyA2ARequest = {
+  jsonrpc: '2.0';
+  method: string;
+  params?: unknown;
+  id?: string | number | null;
+};
+
+/**
+ * Minimal v0.3 JSON-RPC response envelope shape used by the handler.
+ *
+ * Both success and error responses use this shape; `result` and `error`
+ * are mutually exclusive.
+ */
+type LegacyJSONRPCResponse = {
+  jsonrpc: '2.0';
+  id: string | number | null;
+  result?: unknown;
+  error?: legacy.JSONRPCError;
+};
+
+/**
+ * Handles incoming v0.3 JSON-RPC requests by translating them to v1.0
+ * proto, dispatching to a v1.0 `A2ARequestHandler`, and translating
+ * responses back to the v0.3 JSON wire shape.
+ */
+export class LegacyJsonRpcTransportHandler {
+  private requestHandler: A2ARequestHandler;
+
+  constructor(requestHandler: A2ARequestHandler) {
+    this.requestHandler = requestHandler;
+  }
+
+  /**
+   * Handles an incoming v0.3 JSON-RPC request.
+   *
+   * For streaming methods (`message/stream`, `tasks/resubscribe`),
+   * returns an `AsyncGenerator` of v0.3-shaped JSON-RPC envelopes.
+   * For non-streaming methods, returns a single envelope (either a
+   * success response or a v0.3 error response).
+   */
+  public async handle(
+    requestBody: string | Record<string, unknown>,
+    context: ServerCallContext
+  ): Promise<LegacyJSONRPCResponse | AsyncGenerator<LegacyJSONRPCResponse, void, undefined>> {
+    let rpcRequest: LegacyA2ARequest = { jsonrpc: '2.0', method: '' };
+    try {
+      if (typeof requestBody === 'string') {
+        rpcRequest = JSON.parse(requestBody);
+      } else if (typeof requestBody === 'object' && requestBody !== null) {
+        rpcRequest = requestBody as LegacyA2ARequest;
+      } else {
+        throw A2AError.invalidRequest('Invalid request body type.');
+      }
+
+      if (!this.isRequestValid(rpcRequest)) {
+        throw A2AError.invalidRequest('Invalid JSON-RPC Request.');
+      }
+    } catch (error) {
+      const mappedError = LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError(
+        error instanceof SyntaxError
+          ? A2AError.invalidRequest(error.message || 'Failed to parse JSON request.')
+          : error
+      );
+      return {
+        jsonrpc: '2.0',
+        id: rpcRequest.id ?? null,
+        error: mappedError,
+      };
+    }
+
+    const { method, id: requestId = null } = rpcRequest;
+    try {
+      // `agent/getAuthenticatedExtendedCard` carries no params; every other
+      // legacy method requires a params object.
+      if (
+        method !== 'agent/getAuthenticatedExtendedCard' &&
+        !this.paramsAreValid(rpcRequest.params)
+      ) {
+        throw A2AError.invalidParams('Invalid method parameters.');
+      }
+
+      if (method === 'message/stream' || method === 'tasks/resubscribe') {
+        const agentCard = await this.requestHandler.getAgentCard();
+        if (!agentCard.capabilities?.streaming) {
+          throw A2AError.unsupportedOperation(`Method ${method} requires streaming capability.`);
+        }
+        const agentEventStream =
+          method === 'message/stream'
+            ? this.requestHandler.sendMessageStream(
+                toCoreSendMessageRequest(rpcRequest as legacy.SendStreamingMessageRequest),
+                context
+              )
+            : this.requestHandler.resubscribe(
+                toCoreSubscribeToTaskRequest(rpcRequest as legacy.TaskResubscriptionRequest),
+                context
+              );
+
+        return (async function* legacyJsonRpcEventStream(): AsyncGenerator<
+          LegacyJSONRPCResponse,
+          void,
+          undefined
+        > {
+          try {
+            for await (const event of agentEventStream) {
+              const compat = toCompatStreamResponse(event, requestId);
+              yield {
+                jsonrpc: '2.0',
+                id: requestId,
+                result: compat.result,
+              };
+            }
+          } catch (streamError) {
+            console.error(
+              `Error in agent event stream for ${method} (request ${requestId}):`,
+              streamError
+            );
+            throw streamError;
+          }
+        })();
+      }
+
+      let result: unknown;
+      switch (method) {
+        case 'message/send': {
+          const messageOrTask = await this.requestHandler.sendMessage(
+            toCoreSendMessageRequest(rpcRequest as legacy.SendMessageRequest),
+            context
+          );
+          result =
+            'messageId' in messageOrTask
+              ? toCompatMessage(messageOrTask as V1Message)
+              : toCompatTask(messageOrTask as V1Task);
+          break;
+        }
+        case 'tasks/get':
+          result = toCompatTask(
+            await this.requestHandler.getTask(
+              toCoreGetTaskRequest(rpcRequest as legacy.GetTaskRequest),
+              context
+            )
+          );
+          break;
+        case 'tasks/cancel':
+          result = toCompatTask(
+            await this.requestHandler.cancelTask(
+              toCoreCancelTaskRequest(rpcRequest as legacy.CancelTaskRequest),
+              context
+            )
+          );
+          break;
+        case 'tasks/pushNotificationConfig/set':
+          result = toCompatTaskPushNotificationConfig(
+            await this.requestHandler.createTaskPushNotificationConfig(
+              toCoreCreateTaskPushNotificationConfigRequest(
+                rpcRequest as legacy.SetTaskPushNotificationConfigRequest
+              ),
+              context
+            )
+          );
+          break;
+        case 'tasks/pushNotificationConfig/get':
+          result = toCompatTaskPushNotificationConfig(
+            await this.requestHandler.getTaskPushNotificationConfig(
+              toCoreGetTaskPushNotificationConfigRequest(
+                rpcRequest as legacy.GetTaskPushNotificationConfigRequest
+              ),
+              context
+            )
+          );
+          break;
+        case 'tasks/pushNotificationConfig/list': {
+          const listResponse = toCompatListTaskPushNotificationConfigSuccessResponse(
+            await this.requestHandler.listTaskPushNotificationConfigs(
+              toCoreListTaskPushNotificationConfigsRequest(
+                rpcRequest as legacy.ListTaskPushNotificationConfigRequest
+              ),
+              context
+            ),
+            requestId
+          );
+          result = listResponse.result;
+          break;
+        }
+        case 'tasks/pushNotificationConfig/delete':
+          await this.requestHandler.deleteTaskPushNotificationConfig(
+            toCoreDeleteTaskPushNotificationConfigRequest(
+              rpcRequest as legacy.DeleteTaskPushNotificationConfigRequest
+            ),
+            context
+          );
+          result = null;
+          break;
+        case 'agent/getAuthenticatedExtendedCard':
+          result = toCompatAgentCard(
+            await this.requestHandler.getAuthenticatedExtendedAgentCard(
+              toCoreGetExtendedAgentCardRequest(
+                rpcRequest as legacy.GetAuthenticatedExtendedCardRequest
+              ),
+              context
+            )
+          );
+          break;
+        default:
+          throw A2AError.methodNotFound(method);
+      }
+
+      return {
+        jsonrpc: '2.0',
+        id: requestId,
+        result,
+      };
+    } catch (error) {
+      return {
+        jsonrpc: '2.0',
+        id: requestId,
+        error: LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError(error),
+      };
+    }
+  }
+
+  /** Validates the basic structure of a JSON-RPC request. */
+  private isRequestValid(rpcRequest: LegacyA2ARequest): boolean {
+    if (rpcRequest.jsonrpc !== '2.0') {
+      return false;
+    }
+    if ('id' in rpcRequest) {
+      const id = rpcRequest.id;
+      const isString = typeof id === 'string';
+      const isInteger = typeof id === 'number' && Number.isInteger(id);
+      const isNull = id === null;
+
+      if (!isString && !isInteger && !isNull) {
+        return false;
+      }
+    }
+    if (!rpcRequest.method || typeof rpcRequest.method !== 'string') {
+      return false;
+    }
+
+    return true;
+  }
+
+  /** Validates that `params` is a non-null, non-array object with no empty keys. */
+  private paramsAreValid(params: unknown): boolean {
+    if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+      return false;
+    }
+
+    for (const key of Object.keys(params)) {
+      if (key === '') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Maps an error to a v0.3-shaped `JSONRPCError`.
+   *
+   * Unlike the v1.0 handler, v0.3 typed `JSONRPCError.data` as a plain
+   * `Record<string, unknown>` rather than the structured `ErrorDetail[]`
+   * array introduced in v1.0. To keep the response wire-compatible with
+   * v0.3 clients, this mapper deliberately omits the `data` field even
+   * when the source error would have carried structured details on the
+   * v1.0 path.
+   *
+   * `LegacyA2AError` instances are passed through unchanged via
+   * `toJSONRPCError()`. v1.0 SDK error classes
+   * (`TaskNotFoundError`, …) are mapped to their corresponding numeric
+   * codes (which are identical between v0.3 and v1.0 for the codes that
+   * exist in both). Unknown errors fall through to `INTERNAL_ERROR`.
+   */
+  public static mapToLegacyJSONRPCError(error: unknown): legacy.JSONRPCError {
+    if (error instanceof A2AError) {
+      return error.toJSONRPCError();
+    }
+
+    const codeMap: Array<[abstract new (...args: never[]) => Error, number]> = [
+      [TaskNotFoundError, A2A_ERROR_CODE.TASK_NOT_FOUND],
+      [TaskNotCancelableError, A2A_ERROR_CODE.TASK_NOT_CANCELABLE],
+      [PushNotificationNotSupportedError, A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED],
+      [UnsupportedOperationError, A2A_ERROR_CODE.UNSUPPORTED_OPERATION],
+      [ContentTypeNotSupportedError, A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED],
+      [InvalidAgentResponseError, A2A_ERROR_CODE.INVALID_AGENT_RESPONSE],
+      [ExtendedAgentCardNotConfiguredError, A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED],
+      [ExtensionSupportRequiredError, A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED],
+      [VersionNotSupportedError, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED],
+      [RequestMalformedError, A2A_ERROR_CODE.INVALID_PARAMS],
+      [GenericError, A2A_ERROR_CODE.INTERNAL_ERROR],
+    ];
+
+    for (const [ErrorClass, code] of codeMap) {
+      if (error instanceof ErrorClass) {
+        return { code, message: error.message };
+      }
+    }
+
+    const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
+    return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
+  }
+}

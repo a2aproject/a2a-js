@@ -5,4 +5,4 @@
 
 export * from './constants.js';
 export * from './translate/index.js';
-export { A2AError as LegacyA2AError } from './server/error.js';
+export * from './server/index.js';

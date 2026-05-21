@@ -24,6 +24,7 @@ import { agentCardHandler } from '../../../src/server/express/agent_card_handler
 import { UserBuilder } from '../../../src/server/express/common.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
+import { LegacyJsonRpcTransportHandler } from '../../../src/compat/v0_3/index.js';
 import { AgentCard } from '../../../src/index.js';
 import { JSONRPCErrorResponse } from '../../../src/core.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
@@ -56,7 +57,7 @@ describe('A2AExpressApp', () => {
   };
 
   // Helper function to create JSON-RPC request bodies
-  const createRpcRequest = (id: string | null, method = 'message/send', params: object = {}) => ({
+  const createRpcRequest = (id: string | null, method = 'SendMessage', params: object = {}) => ({
     jsonrpc: '2.0',
     method,
     id,
@@ -185,7 +186,7 @@ describe('A2AExpressApp', () => {
 
       handleStub.mockResolvedValue(mockStreamResponse);
 
-      const requestBody = createRpcRequest('stream-test', 'message/stream');
+      const requestBody = createRpcRequest('stream-test', 'SendStreamingMessage');
 
       const response = await request(expressApp)
         .post('/')
@@ -212,7 +213,7 @@ describe('A2AExpressApp', () => {
 
       handleStub.mockResolvedValue(mockErrorStream);
 
-      const requestBody = createRpcRequest('stream-error-test', 'message/stream');
+      const requestBody = createRpcRequest('stream-error-test', 'SendStreamingMessage');
 
       const response = await request(expressApp)
         .post('/')
@@ -235,7 +236,7 @@ describe('A2AExpressApp', () => {
 
       handleStub.mockResolvedValue(mockImmediateErrorStream);
 
-      const requestBody = createRpcRequest('immediate-stream-error-test', 'message/stream');
+      const requestBody = createRpcRequest('immediate-stream-error-test', 'SendStreamingMessage');
 
       const response = await request(expressApp)
         .post('/')
@@ -588,7 +589,7 @@ describe('A2AExpressApp', () => {
       const jsonApp = express();
       setupA2ARoutes(jsonApp, mockRequestHandler);
 
-      const requestBody = createRpcRequest('test-id', 'message/send', {
+      const requestBody = createRpcRequest('test-id', 'SendMessage', {
         test: 'data',
       });
 
@@ -666,6 +667,139 @@ describe('A2AExpressApp', () => {
       assert.property(response.body, 'error');
       assert.equal(response.body.error.code, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
       assert.include(response.body.error.message, '9.9');
+    });
+  });
+
+  describe('legacy v0.3 JSON-RPC dispatch', () => {
+    let legacyHandleStub: MockInstance;
+
+    // An agent card that advertises both v1.0 and v0.3 JSONRPC interfaces,
+    // so version validation accepts both.
+    const dualVersionAgentCard: AgentCard = {
+      ...testAgentCard,
+      supportedInterfaces: [
+        {
+          url: 'http://localhost:8080/jsonrpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+        {
+          url: 'http://localhost:8080/jsonrpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      legacyHandleStub = vi.spyOn(LegacyJsonRpcTransportHandler.prototype, 'handle');
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(dualVersionAgentCard);
+      setupA2ARoutes(expressApp, mockRequestHandler);
+    });
+
+    it('routes a v0.3 method to the legacy handler', async () => {
+      legacyHandleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-1',
+        result: { kind: 'task' },
+      });
+
+      await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .send(createRpcRequest('req-1', 'message/send'))
+        .expect(200);
+
+      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+      expect(handleStub).not.toHaveBeenCalled();
+    });
+
+    it('routes a v1.0 method to the v1 handler', async () => {
+      handleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-2',
+        result: { task: { id: 't' } },
+      });
+
+      await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(createRpcRequest('req-2', 'SendMessage'))
+        .expect(200);
+
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      expect(legacyHandleStub).not.toHaveBeenCalled();
+    });
+
+    it('accepts header-less legacy requests when the card advertises v0.3', async () => {
+      legacyHandleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-3',
+        result: { kind: 'task' },
+      });
+
+      // No A2A-Version header → requestedVersion defaults to '0.3' per §3.6.2.
+      // Card declares v0.3 so validateVersion passes.
+      await request(expressApp)
+        .post('/')
+        .send(createRpcRequest('req-3', 'message/send'))
+        .expect(200);
+
+      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects legacy requests when the card declares no v0.3 interface', async () => {
+      // testAgentCard only declares the v1.0 interface; no compat opt-in.
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+
+      const response = await request(expressApp)
+        .post('/')
+        .send(createRpcRequest('req-4', 'message/send'))
+        .expect(500);
+
+      expect(response.body.error.code).to.equal(A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
+      expect(legacyHandleStub).not.toHaveBeenCalled();
+    });
+
+    it('streams SSE responses on the legacy path', async () => {
+      const legacyStream = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            jsonrpc: '2.0',
+            id: 'stream-1',
+            result: { kind: 'task', id: 't-1', contextId: 'ctx', status: { state: 'working' } },
+          };
+        },
+      };
+      legacyHandleStub.mockResolvedValue(legacyStream);
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .send(createRpcRequest('stream-legacy', 'message/stream'))
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'text/event-stream');
+      assert.include(response.text, '"kind":"task"');
+      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses the legacy error mapper (omits data field) on legacy-path errors', async () => {
+      legacyHandleStub.mockRejectedValue(new GenericError('legacy boom'));
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .send(createRpcRequest('err-1', 'message/send'))
+        .expect(500);
+
+      expect(response.body.error.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
+      expect(response.body.error.message).to.equal('legacy boom');
+      // v0.3 JSONRPCError.data is `Record<string,unknown>` not the v1.0
+      // ErrorDetail[] array. The legacy mapper omits the field entirely.
+      expect(response.body.error).to.not.have.property('data');
     });
   });
 });
