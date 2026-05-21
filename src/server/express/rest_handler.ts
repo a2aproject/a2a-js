@@ -13,7 +13,11 @@ import {
   mapErrorToStatus,
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
-import { ServerCallContext } from '../context.js';
+import {
+  ServerCallContext,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../context.js';
 import {
   JSON_CONTENT_TYPE,
   A2A_CONTENT_TYPE,
@@ -53,6 +57,7 @@ export interface RestHandlerOptions {
    * Default: omitted (disabled).
    */
   legacyCompat?: { enabled: boolean };
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /** Catches JSON parse errors from `express.json()` and maps them to A2A. */
@@ -140,10 +145,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const user = await options.userBuilder(req);
     const tenant = (req.params.tenant as string) || undefined;
     const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
-
-    const context = new ServerCallContext({
-      requestedExtensions: Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
+    const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
+    const context = ctxBuilder({
+      extensions: Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
       user,
+      headers: req.headers,
       requestedVersion,
       tenant,
     });
@@ -422,7 +428,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('get', '/tasks/:taskId', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getTask(
-      req.params.taskId,
+      req.params.taskId as string,
       context,
       req.query.historyLength,
       (req.query.tenant as string) || ''
@@ -480,7 +486,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('get', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTaskPushNotificationConfigs(
-      req.params.taskId,
+      req.params.taskId as string,
       context,
       (req.query.tenant as string) || ''
     );
@@ -506,8 +512,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('get', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getTaskPushNotificationConfig(
-      req.params.taskId,
-      req.params.configId,
+      req.params.taskId as string,
+      req.params.configId as string,
       context,
       (req.query.tenant as string) || ''
     );
@@ -533,8 +539,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('delete', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
     const context = await buildContext(req);
     await restTransportHandler.deleteTaskPushNotificationConfig(
-      req.params.taskId,
-      req.params.configId,
+      req.params.taskId as string,
+      req.params.configId as string,
       context,
       (req.query.tenant as string) || ''
     );

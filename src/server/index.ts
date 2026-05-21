@@ -30,8 +30,17 @@ export type { TaskStore } from './store.js';
 export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
-export { ServerCallContext } from './context.js';
-export type { ServerCallContextOptions } from './context.js';
+export {
+  ServerCallContext,
+  defaultServerCallContextBuilder,
+  STATE_HEADERS_KEY,
+} from './context.js';
+export type {
+  ServerCallContextOptions,
+  ServerCallContextBuilder,
+  ServerCallContextBuilderOptions,
+  RequestHeaders,
+} from './context.js';
 export { validateVersion, getSupportedVersions } from './version.js';
 export {
   RequestMalformedError,

@@ -9,7 +9,7 @@ import { JSONRPCErrorResponse } from '../../core.js';
 import { JSONRPCResponse } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
-import { ServerCallContext } from '../context.js';
+import { ServerCallContextBuilder, defaultServerCallContextBuilder } from '../context.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '../../constants.js';
 import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
@@ -38,6 +38,7 @@ export interface JsonRpcHandlerOptions {
    * as JSON-RPC `method not found` (-32601).
    */
   legacyCompat?: { enabled: boolean };
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /**
@@ -101,9 +102,11 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       const requestedExtensionsHeader = useLegacy
         ? (req.header(LEGACY_HTTP_EXTENSION_HEADER) ?? req.header(HTTP_EXTENSION_HEADER))
         : req.header(HTTP_EXTENSION_HEADER);
-      const context = new ServerCallContext({
-        requestedExtensions: Extensions.parseServiceParameter(requestedExtensionsHeader),
+      const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
+      const context = ctxBuilder({
+        extensions: Extensions.parseServiceParameter(requestedExtensionsHeader),
         user,
+        headers: req.headers,
         requestedVersion,
       });
       const agentCard = await options.requestHandler.getAgentCard();
