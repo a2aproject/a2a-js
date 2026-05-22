@@ -14,7 +14,7 @@
  * versions side-by-side.
  */
 
-import { A2A_ERROR_CODE } from '../../../../../errors.js';
+import { A2A_ERROR_CLASS_TO_CODE, A2A_ERROR_CODE } from '../../../../../errors.js';
 import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
 import {
@@ -64,34 +64,17 @@ export interface LegacyRestErrorBody {
 }
 
 /**
- * Maps v1.0 SDK error class names (`error.name`) to v0.3 numeric error
- * codes used in the HTTP error body. Keyed on `error.name` rather than
- * `instanceof` so we don't have to import every v1.0 error class here;
- * the mapping is identical to `A2A_ERROR_CLASS_TO_CODE` from the core
- * `errors.ts`, copied locally to keep the compat layer self-contained.
- */
-const LEGACY_HTTP_ERROR_CODE_BY_NAME: Record<string, number> = {
-  TaskNotFoundError: A2A_ERROR_CODE.TASK_NOT_FOUND,
-  TaskNotCancelableError: A2A_ERROR_CODE.TASK_NOT_CANCELABLE,
-  PushNotificationNotSupportedError: A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED,
-  UnsupportedOperationError: A2A_ERROR_CODE.UNSUPPORTED_OPERATION,
-  ContentTypeNotSupportedError: A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED,
-  InvalidAgentResponseError: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE,
-  ExtendedAgentCardNotConfiguredError: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
-  ExtensionSupportRequiredError: A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED,
-  VersionNotSupportedError: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED,
-  RequestMalformedError: A2A_ERROR_CODE.INVALID_PARAMS,
-  GenericError: A2A_ERROR_CODE.INTERNAL_ERROR,
-};
-
-/**
  * Converts any error to a v0.3-shaped HTTP error body.
  *
  * `LegacyA2AError` instances pass through with their `code`, `message`,
  * and `data` carried over. v1.0 SDK error classes
  * (`TaskNotFoundError`, …) are mapped to their corresponding numeric
- * codes (which are identical between v0.3 and v1.0 for the codes that
- * exist in both). Unknown errors fall through to `INTERNAL_ERROR`.
+ * codes via {@link A2A_ERROR_CLASS_TO_CODE} (these codes are identical
+ * between v0.3 and v1.0 for the codes that exist in both). Unknown
+ * errors fall through to `INTERNAL_ERROR`.
+ *
+ * Mirrors `LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError` in
+ * shape and uses the same centralized lookup table.
  */
 export function toLegacyHTTPError(error: unknown): LegacyRestErrorBody {
   if (error instanceof LegacyA2AError) {
@@ -100,7 +83,7 @@ export function toLegacyHTTPError(error: unknown): LegacyRestErrorBody {
     return body;
   }
   if (error instanceof Error) {
-    const code = LEGACY_HTTP_ERROR_CODE_BY_NAME[error.name];
+    const code = A2A_ERROR_CLASS_TO_CODE[error.name];
     if (code !== undefined) {
       return { code, message: error.message };
     }
