@@ -23,6 +23,7 @@ import {
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 import { validateVersion } from '../version.js';
+import { legacyRestRouter } from '../../compat/v0_3/server/express/rest_handler.js';
 
 import {
   AgentCard,
@@ -107,6 +108,13 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
 export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
+
+  // Mount the v0.3 compat router first. It owns every `/v1/...` path and
+  // brings its own middleware (body parser, content-type setter, error
+  // handler). The two route sets are disjoint by path prefix so the v1.0
+  // middleware below never runs for legacy requests, and `/v1/...`
+  // requests never reach the v1.0 routes.
+  router.use(legacyRestRouter(options));
 
   router.use(
     (_req: Request, res: Response, next: NextFunction) => {

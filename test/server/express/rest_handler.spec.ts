@@ -1,11 +1,22 @@
-import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  beforeEach,
+  afterEach,
+  assert,
+  expect,
+  vi,
+  type Mock,
+  type MockInstance,
+} from 'vitest';
 import express, { Express } from 'express';
 import request from 'supertest';
 
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
-import { AgentCard, Task, Message, TaskState } from '../../../src/index.js';
+import { AgentCard, Task, Message, TaskState, Role } from '../../../src/index.js';
 import {
+  GenericError,
   RequestMalformedError,
   TaskNotFoundError,
   TaskNotCancelableError,
@@ -17,6 +28,7 @@ import {
   TaskPushNotificationConfig,
 } from '../../../src/types/pb/a2a.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
+import { LegacyRestTransportHandler } from '../../../src/compat/v0_3/server/transports/rest/rest_transport_handler.js';
 
 /**
  * Test suite for restHandler - HTTP+JSON/REST transport implementation
@@ -918,6 +930,233 @@ describe('restHandler', () => {
         .expect(200);
 
       assert.include(response.headers['content-type'], 'text/event-stream');
+    });
+  });
+
+  describe('legacy v0.3 REST dispatch', () => {
+    // Agent card declaring both v1.0 and v0.3 HTTP+JSON interfaces so
+    // version validation accepts requests from either path.
+    const dualVersionAgentCard: AgentCard = {
+      ...testAgentCard,
+      supportedInterfaces: [
+        {
+          url: 'http://localhost:8080/v1',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+        {
+          url: 'http://localhost:8080/v1',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    };
+
+    // v0.3 message payload (camelCase JSON, with the `kind` discriminator).
+    const legacyMessageBody = {
+      message: {
+        kind: 'message',
+        messageId: 'msg-legacy-1',
+        role: 'user',
+        parts: [{ kind: 'text', text: 'hello' }],
+      },
+    };
+
+    let legacySendMessageStub: MockInstance;
+    let v1SendMessageStub: MockInstance;
+    let dualApp: Express;
+
+    beforeEach(() => {
+      legacySendMessageStub = vi.spyOn(LegacyRestTransportHandler.prototype, 'sendMessage');
+      v1SendMessageStub = mockRequestHandler.sendMessage as Mock as MockInstance;
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(dualVersionAgentCard);
+
+      dualApp = express();
+      dualApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+        })
+      );
+    });
+
+    it('routes POST /v1/message:send to the legacy handler', async () => {
+      legacySendMessageStub.mockResolvedValue({
+        kind: 'task',
+        id: 'legacy-task-1',
+        contextId: 'ctx',
+        status: { state: 'working' },
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '0.3')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
+      expect(v1SendMessageStub).not.toHaveBeenCalled();
+      assert.equal(response.body.kind, 'task');
+      assert.equal(response.body.id, 'legacy-task-1');
+    });
+
+    it('routes POST /message:send to the v1.0 handler', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue({
+        ...testTask,
+        id: 'v1-task-1',
+      });
+
+      const message = ProtoMessage.toJSON({
+        ...testMessage,
+        messageId: 'msg-v1-1',
+        role: Role.ROLE_USER,
+      });
+
+      await request(dualApp)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(200);
+
+      expect(v1SendMessageStub).toHaveBeenCalledTimes(1);
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('accepts header-less requests on the legacy path (defaults to 0.3)', async () => {
+      legacySendMessageStub.mockResolvedValue({
+        kind: 'task',
+        id: 'legacy-task-2',
+        contextId: 'ctx',
+        status: { state: 'working' },
+      });
+
+      // No A2A-Version header → defaults to A2A_LEGACY_PROTOCOL_VERSION
+      // ('0.3'). The dual-version card declares v0.3 so validateVersion passes.
+      await request(dualApp).post('/v1/message:send').send(legacyMessageBody).expect(201);
+
+      expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects legacy requests when the card declares no v0.3 interface', async () => {
+      // Restore the v1.0-only card.
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.equal(response.body.code, -32009); // VERSION_NOT_SUPPORTED
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('streams SSE responses on the legacy path', async () => {
+      const legacyStream = (async function* () {
+        yield {
+          kind: 'task',
+          id: 'legacy-stream-task',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      })();
+      vi.spyOn(LegacyRestTransportHandler.prototype, 'sendMessageStream').mockResolvedValue(
+        legacyStream as any
+      );
+
+      const response = await request(dualApp)
+        .post('/v1/message:stream')
+        .send(legacyMessageBody)
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'text/event-stream');
+      assert.include(response.text, '"kind":"task"');
+    });
+
+    it('uses the legacy error mapper (bare body, no details[]) on legacy-path errors', async () => {
+      legacySendMessageStub.mockRejectedValue(new GenericError('legacy boom'));
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(500);
+
+      assert.equal(response.body.code, -32603); // INTERNAL_ERROR
+      assert.equal(response.body.message, 'legacy boom');
+      // v0.3 body shape: bare {code, message, data?} — no details[], no
+      // outer {error: {...}} wrapper, no status field.
+      assert.notProperty(response.body, 'error');
+      assert.notProperty(response.body, 'details');
+      assert.notProperty(response.body, 'status');
+    });
+
+    it('does not register GET /v1/tasks on the legacy router (ListTasks not in v0.3 REST)', async () => {
+      // ListTasks has no v0.3 equivalent (see V1_METHODS_WITHOUT_LEGACY_EQUIVALENT).
+      // The legacy router intentionally does not register /v1/tasks. To
+      // confirm the legacy transport handler is not invoked for that path
+      // we spy on its (non-existent) list method indirectly via the agent
+      // request handler.
+      const legacyListSpy = vi.spyOn(LegacyRestTransportHandler.prototype, 'getTask');
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [], nextPageToken: '' });
+
+      // Request falls through to the v1.0 router. Whether v1.0 matches it
+      // (under `/:tenant/tasks` with tenant='v1') or returns 404 is an
+      // implementation detail of the v1.0 router; what matters here is
+      // that the legacy router did NOT handle it.
+      await request(dualApp).get('/v1/tasks').set('A2A-Version', '1.0');
+
+      expect(legacyListSpy).not.toHaveBeenCalled();
+    });
+
+    it('sets Content-Type application/json on legacy responses', async () => {
+      legacySendMessageStub.mockResolvedValue({
+        kind: 'task',
+        id: 'legacy-task-ct',
+        contextId: 'ctx',
+        status: { state: 'working' },
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      assert.include(response.headers['content-type'], 'application/json');
+      assert.notInclude(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('keeps Content-Type application/a2a+json on v1.0 responses', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      const response = await request(dualApp)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('reads and writes back the legacy X-A2A-Extensions header', async () => {
+      // Spy on sendMessage and have it record the activated extension
+      // via the ServerCallContext, so we can assert the response header.
+      legacySendMessageStub.mockImplementation(async (_params, context) => {
+        context.addActivatedExtension('ext-1');
+        return {
+          kind: 'task',
+          id: 'legacy-task-ext',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('X-A2A-Extensions', 'ext-1')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      assert.equal(response.headers['x-a2a-extensions'], 'ext-1');
     });
   });
 });
