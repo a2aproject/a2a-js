@@ -143,12 +143,7 @@ export class LegacyJsonRpcTransportHandler {
         > {
           try {
             for await (const event of agentEventStream) {
-              const compat = toCompatStreamResponse(event, requestId);
-              yield {
-                jsonrpc: '2.0',
-                id: requestId,
-                result: compat.result,
-              };
+              yield toCompatStreamResponse(event, requestId);
             }
           } catch (streamError) {
             console.error(
