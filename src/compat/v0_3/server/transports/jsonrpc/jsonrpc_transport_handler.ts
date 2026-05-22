@@ -12,20 +12,7 @@
  * dispatcher selects between the two based on the method name (see
  * `isLegacyJsonRpcMethod`).
  */
-import {
-  A2A_ERROR_CODE,
-  ContentTypeNotSupportedError,
-  ExtendedAgentCardNotConfiguredError,
-  ExtensionSupportRequiredError,
-  GenericError,
-  InvalidAgentResponseError,
-  PushNotificationNotSupportedError,
-  RequestMalformedError,
-  TaskNotCancelableError,
-  TaskNotFoundError,
-  UnsupportedOperationError,
-  VersionNotSupportedError,
-} from '../../../../../errors.js';
+import { A2A_ERROR_CLASS_TO_CODE, A2A_ERROR_CODE } from '../../../../../errors.js';
 import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
 import { toCompatAgentCard } from '../../../translate/agent_card.js';
@@ -328,23 +315,9 @@ export class LegacyJsonRpcTransportHandler {
     if (error instanceof A2AError) {
       return error.toJSONRPCError();
     }
-
-    const codeMap: Array<[abstract new (...args: never[]) => Error, number]> = [
-      [TaskNotFoundError, A2A_ERROR_CODE.TASK_NOT_FOUND],
-      [TaskNotCancelableError, A2A_ERROR_CODE.TASK_NOT_CANCELABLE],
-      [PushNotificationNotSupportedError, A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED],
-      [UnsupportedOperationError, A2A_ERROR_CODE.UNSUPPORTED_OPERATION],
-      [ContentTypeNotSupportedError, A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED],
-      [InvalidAgentResponseError, A2A_ERROR_CODE.INVALID_AGENT_RESPONSE],
-      [ExtendedAgentCardNotConfiguredError, A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED],
-      [ExtensionSupportRequiredError, A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED],
-      [VersionNotSupportedError, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED],
-      [RequestMalformedError, A2A_ERROR_CODE.INVALID_PARAMS],
-      [GenericError, A2A_ERROR_CODE.INTERNAL_ERROR],
-    ];
-
-    for (const [ErrorClass, code] of codeMap) {
-      if (error instanceof ErrorClass) {
+    if (error instanceof Error) {
+      const code = A2A_ERROR_CLASS_TO_CODE[error.name];
+      if (code !== undefined) {
         return { code, message: error.message };
       }
     }

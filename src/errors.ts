@@ -105,6 +105,19 @@ export const A2A_ERROR_CODE_TO_CLASS: Record<number, string> = {
 };
 
 /**
+ * Maps error class names to their JSON-RPC error codes.
+ *
+ * Inverse of {@link A2A_ERROR_CODE_TO_CLASS}. Used by JSON-RPC transport
+ * handlers (v1.0 and v0.3 compat) to resolve an error instance to the
+ * numeric code carried in the response envelope's `error.code` field.
+ * The lookup is keyed on `error.name`, consistent with how
+ * `buildErrorInfo` resolves errors to `ErrorInfo.reason`.
+ */
+export const A2A_ERROR_CLASS_TO_CODE: Record<string, number> = Object.fromEntries(
+  Object.entries(A2A_ERROR_CODE_TO_CLASS).map(([code, cls]) => [cls, Number(code)])
+);
+
+/**
  * Builds a `google.rpc.ErrorInfo` detail object from an error instance.
  *
  * @param error - The error to build ErrorInfo from.
