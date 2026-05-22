@@ -109,12 +109,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
-  // Mount the v0.3 compat router first. It owns every `/v1/...` path and
-  // brings its own middleware (body parser, content-type setter, error
-  // handler). The two route sets are disjoint by path prefix so the v1.0
-  // middleware below never runs for legacy requests, and `/v1/...`
-  // requests never reach the v1.0 routes.
-  router.use(legacyRestRouter(options));
+  // Mount the v0.3 compat router under `/v1`. This is the path-prefix
+  // dispatch point between v0.3 and v1.0: anything under `/v1/*` is
+  // handled by the legacy router with its own middleware (body parser,
+  // content-type setter, error handler); anything else falls through to
+  // the v1.0 middleware and routes below. The two route sets are
+  // disjoint by mount point, so neither version's middleware ever runs
+  // for the other version's requests.
+  router.use('/v1', legacyRestRouter(options));
 
   router.use(
     (_req: Request, res: Response, next: NextFunction) => {

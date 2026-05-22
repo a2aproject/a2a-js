@@ -1158,5 +1158,40 @@ describe('restHandler', () => {
 
       assert.equal(response.headers['x-a2a-extensions'], 'ext-1');
     });
+
+    it('returns v1.0-shaped error for malformed JSON on v1.0 paths', async () => {
+      // The legacy router is mounted under `/v1`, so its body parser and
+      // error handler do not run for requests that hit v1.0 paths. A
+      // malformed-JSON request to /message:send (no /v1 prefix) must
+      // therefore yield the v1.0 error envelope, not the bare v0.3 shape.
+      const response = await request(dualApp)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .set('Content-Type', 'application/json')
+        .send('{not valid json')
+        .expect(400);
+
+      // v1.0 envelope shape: { error: { code, status, message, details } }.
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 400);
+      assert.property(response.body.error, 'details');
+      // v0.3 bare body fields must NOT appear at the top level.
+      assert.notProperty(response.body, 'code');
+      assert.notProperty(response.body, 'message');
+    });
+
+    it('returns v0.3-shaped error for malformed JSON on /v1/... paths', async () => {
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('Content-Type', 'application/json')
+        .send('{not valid json')
+        .expect(400);
+
+      // v0.3 bare body shape: { code, message }.
+      assert.equal(response.body.code, -32700); // PARSE_ERROR
+      assert.property(response.body, 'message');
+      assert.notProperty(response.body, 'error');
+      assert.notProperty(response.body, 'details');
+    });
   });
 });

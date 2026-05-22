@@ -81,10 +81,11 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
 /**
  * Creates an Express router exposing the v0.3 HTTP+JSON/REST endpoints.
  *
- * All endpoints are mounted under the `/v1/...` prefix used by the v0.3
- * reference implementation, so the router can be safely composed with
- * the v1.0 `restHandler` on the same mount point without path
- * collisions.
+ * The routes are mount-relative (no `/v1` prefix on the route literals
+ * themselves). The caller is expected to mount the router under `/v1`,
+ * which is the path prefix used by the v0.3 reference implementation.
+ * The core `restHandler` does this automatically; standalone callers
+ * must do it explicitly.
  *
  * The router:
  *   - Parses `application/json` bodies via {@link LEGACY_JSON_CONTENT_TYPE}.
@@ -99,7 +100,7 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  * @example
  * ```ts
  * import { legacyRestRouter } from '@a2a-js/sdk/compat/v0_3';
- * app.use('/api', legacyRestRouter({ requestHandler, userBuilder }));
+ * app.use('/api/v1', legacyRestRouter({ requestHandler, userBuilder }));
  * // → POST /api/v1/message:send
  * // → GET  /api/v1/tasks/:taskId
  * // …
@@ -256,13 +257,19 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   // Route Handlers
   // ==========================================================================
 
+  // The routes below are mount-relative: they assume the router is mounted
+  // by the caller under the v0.3 `/v1` prefix (the core `restHandler` does
+  // this; standalone callers must `app.use('/v1', legacyRestRouter(...))`).
+  // Keeping the routes prefix-free makes the legacy router path-agnostic
+  // and ensures the parent owns the path-prefix dispatch decision.
+
   /**
-   * GET /v1/card
+   * GET /card
    *
    * Retrieves the authenticated extended agent card.
    */
   router.get(
-    '/v1/card',
+    '/card',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.getAuthenticatedExtendedAgentCard(context);
@@ -271,13 +278,13 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /v1/message:send
+   * POST /message:send
    *
    * Sends a message synchronously. Returns either a v0.3 `Task` or `Message`.
    * The colon is escaped to satisfy Express's path-to-regexp parser.
    */
   router.post(
-    '/v1/message\\:send',
+    '/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = req.body as legacy.MessageSendParams;
@@ -288,12 +295,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /v1/message:stream
+   * POST /message:stream
    *
    * Sends a message with a streaming SSE response.
    */
   router.post(
-    '/v1/message\\:stream',
+    '/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = req.body as legacy.MessageSendParams;
@@ -303,14 +310,14 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * GET /v1/tasks/:taskId
+   * GET /tasks/:taskId
    *
    * Retrieves a task. Accepts both `?historyLength=` and `?history_length=`
    * for compatibility with the v0.3 reference (which used snake_case query
    * parameters in places).
    */
   router.get(
-    '/v1/tasks/:taskId',
+    '/tasks/:taskId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const historyLength = req.query.historyLength ?? req.query.history_length;
@@ -320,12 +327,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /v1/tasks/:taskId:cancel
+   * POST /tasks/:taskId:cancel
    *
    * Attempts to cancel a task. Returns 202 Accepted on success.
    */
   router.post(
-    '/v1/tasks/:taskId\\:cancel',
+    '/tasks/:taskId\\:cancel',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.cancelTask(req.params.taskId!, context);
@@ -334,12 +341,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /v1/tasks/:taskId:subscribe
+   * POST /tasks/:taskId:subscribe
    *
    * Resubscribes to a task's update stream via SSE.
    */
   router.post(
-    '/v1/tasks/:taskId\\:subscribe',
+    '/tasks/:taskId\\:subscribe',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const stream = await transportHandler.resubscribe(req.params.taskId!, context);
@@ -348,12 +355,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /v1/tasks/:taskId/pushNotificationConfigs
+   * POST /tasks/:taskId/pushNotificationConfigs
    *
    * Creates a push notification configuration. Returns 201 Created.
    */
   router.post(
-    '/v1/tasks/:taskId/pushNotificationConfigs',
+    '/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = req.body as legacy.TaskPushNotificationConfig;
@@ -363,12 +370,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * GET /v1/tasks/:taskId/pushNotificationConfigs
+   * GET /tasks/:taskId/pushNotificationConfigs
    *
    * Lists all push notification configurations for a task.
    */
   router.get(
-    '/v1/tasks/:taskId/pushNotificationConfigs',
+    '/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.listTaskPushNotificationConfigs(
@@ -380,12 +387,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * GET /v1/tasks/:taskId/pushNotificationConfigs/:configId
+   * GET /tasks/:taskId/pushNotificationConfigs/:configId
    *
    * Retrieves a specific push notification configuration.
    */
   router.get(
-    '/v1/tasks/:taskId/pushNotificationConfigs/:configId',
+    '/tasks/:taskId/pushNotificationConfigs/:configId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.getTaskPushNotificationConfig(
@@ -398,12 +405,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * DELETE /v1/tasks/:taskId/pushNotificationConfigs/:configId
+   * DELETE /tasks/:taskId/pushNotificationConfigs/:configId
    *
    * Deletes a push notification configuration. Returns 204 No Content.
    */
   router.delete(
-    '/v1/tasks/:taskId/pushNotificationConfigs/:configId',
+    '/tasks/:taskId/pushNotificationConfigs/:configId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       await transportHandler.deleteTaskPushNotificationConfig(
@@ -415,10 +422,11 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
     })
   );
 
-  // Note: `/v1/tasks` (ListTasks) is intentionally NOT registered.
+  // Note: `/tasks` (ListTasks) is intentionally NOT registered.
   // Per `V1_METHODS_WITHOUT_LEGACY_EQUIVALENT` (in `compat/v0_3/constants.ts`),
   // the v0.3 protocol has no REST endpoint for listing tasks, so an
-  // attempt to GET `/v1/tasks` falls through to Express's default 404.
+  // attempt to GET `/tasks` under the legacy mount falls through to the
+  // parent router (or, ultimately, Express's default 404).
 
   return router;
 }

@@ -382,23 +382,18 @@ export class LegacyRestTransportHandler {
  * Wraps a v0.3 `MessageSendParams` in a minimal v0.3 JSON-RPC request
  * envelope so it can be fed through `toCoreSendMessageRequest` (which
  * was originally written for the JSON-RPC path and expects the
- * `{ params: { … } }` wrapping). The `id` and `method` fields are
- * placeholders; only `params` is consumed by the translator.
+ * `{ params: { … } }` wrapping).
+ *
+ * The `jsonrpc`, `id`, and `method` fields are placeholders: only
+ * `params` is consumed by the translator, but they're required by the
+ * envelope's TypeScript shape. The return type is the union
+ * `SendMessageRequest | SendStreamingMessageRequest` because the
+ * translator accepts either; the caller picks one via the `method`
+ * argument purely to satisfy the discriminated-union envelope.
  */
-function buildLegacySendRequest(
-  params: legacy.MessageSendParams,
-  method: 'message/send'
-): legacy.SendMessageRequest;
-function buildLegacySendRequest(
-  params: legacy.MessageSendParams,
-  method: 'message/stream'
-): legacy.SendStreamingMessageRequest;
 function buildLegacySendRequest(
   params: legacy.MessageSendParams,
   method: 'message/send' | 'message/stream'
 ): legacy.SendMessageRequest | legacy.SendStreamingMessageRequest {
-  if (method === 'message/send') {
-    return { jsonrpc: '2.0', id: 0, method, params };
-  }
   return { jsonrpc: '2.0', id: 0, method, params };
 }
