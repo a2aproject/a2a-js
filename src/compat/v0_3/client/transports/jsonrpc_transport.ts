@@ -1,0 +1,483 @@
+/**
+ * v0.3 JSON-RPC client transport (compat layer).
+ *
+ * Implements the v1.0 {@link Transport} interface but speaks the v0.3 JSON-RPC
+ * wire format. Each method translates the v1.0 proto request to v0.3 JSON via
+ * the `toCompat*Request` helpers in `../../translate/requests.js`, sends a
+ * v0.3 JSON-RPC envelope (with the v0.3 lowercase method name such as
+ * `message/send`), then translates the v0.3 response back to v1.0 proto via
+ * the corresponding `toCore*` helpers.
+ *
+ * Shares `protocolName === 'JSONRPC'` with the v1.0 transport. The
+ * core-side {@link JsonRpcTransportFactory} inspects the matched
+ * `AgentInterface.protocolVersion` and lazy-loads this class when it falls
+ * in `[0.3, 1.0)`, so installing the default `JsonRpcTransportFactory`
+ * transparently covers both protocol versions.
+ *
+ * `listTasks` has no equivalent in v0.3 JSON-RPC (per §3.5.6 of the v0.3
+ * spec, `tasks/list` was gRPC/REST-only). Calling it throws
+ * {@link JSONRPCTransportError} with `code: -32601` ("Method not found")
+ * synchronously, without issuing any HTTP request.
+ */
+
+import { JSON_CONTENT_TYPE } from '../../../../constants.js';
+import type { JSONRPCErrorResponse, TransportProtocolName } from '../../../../core.js';
+import {
+  A2A_ERROR_CODE,
+  ContentTypeNotSupportedError,
+  ExtendedAgentCardNotConfiguredError,
+  InvalidAgentResponseError,
+  PushNotificationNotSupportedError,
+  RequestMalformedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+} from '../../../../errors.js';
+import type { SendMessageResult } from '../../../../index.js';
+import type { RequestOptions } from '../../../../client/multitransport-client.js';
+import { JSONRPCTransportError } from '../../../../client/transports/json_rpc_transport.js';
+import { Transport } from '../../../../client/transports/transport.js';
+import { parseSseStream } from '../../../../sse_utils.js';
+import type {
+  AgentCard as V1AgentCard,
+  CancelTaskRequest as V1CancelTaskRequest,
+  DeleteTaskPushNotificationConfigRequest as V1DeleteTaskPushNotificationConfigRequest,
+  GetExtendedAgentCardRequest as V1GetExtendedAgentCardRequest,
+  GetTaskPushNotificationConfigRequest as V1GetTaskPushNotificationConfigRequest,
+  GetTaskRequest as V1GetTaskRequest,
+  ListTaskPushNotificationConfigsRequest as V1ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse as V1ListTaskPushNotificationConfigsResponse,
+  ListTasksRequest as V1ListTasksRequest,
+  ListTasksResponse as V1ListTasksResponse,
+  SendMessageRequest as V1SendMessageRequest,
+  StreamResponse as V1StreamResponse,
+  SubscribeToTaskRequest as V1SubscribeToTaskRequest,
+  Task as V1Task,
+  TaskPushNotificationConfig as V1TaskPushNotificationConfig,
+} from '../../../../types/pb/a2a.js';
+import { A2A_LEGACY_PROTOCOL_VERSION } from '../../constants.js';
+import { toCoreAgentCard } from '../../translate/agent_card.js';
+import { toCoreMessage } from '../../translate/messages.js';
+import { toCoreTaskPushNotificationConfig } from '../../translate/push_notifications.js';
+import {
+  toCompatCancelTaskRequest,
+  toCompatDeleteTaskPushNotificationConfigRequest,
+  toCompatGetAuthenticatedExtendedCardRequest,
+  toCompatGetTaskPushNotificationConfigRequest,
+  toCompatGetTaskRequest,
+  toCompatListTaskPushNotificationConfigRequest,
+  toCompatSendMessageRequest,
+  toCompatSendStreamingMessageRequest,
+  toCompatSetTaskPushNotificationConfigRequest,
+  toCompatTaskResubscriptionRequest,
+  toCoreListTaskPushNotificationConfigsResponse,
+  toCoreStreamResponse,
+} from '../../translate/requests.js';
+import { toCoreTask } from '../../translate/tasks.js';
+import type * as legacy from '../../types/types.js';
+
+const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
+
+export interface LegacyJsonRpcTransportOptions {
+  endpoint: string;
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * Minimal v0.3 JSON-RPC envelopes used internally. Kept private (and
+ * intentionally narrower than the public `JSONRPCError` interface) because
+ * the v0.3 wire shape is the only thing this transport ever (de)serializes.
+ */
+interface LegacyJsonRpcRequest {
+  jsonrpc: '2.0';
+  method: string;
+  params?: unknown;
+  id: string | number | null;
+}
+
+interface LegacyJsonRpcSuccessResponse<T> {
+  jsonrpc: '2.0';
+  result: T;
+  id: string | number | null;
+}
+
+type LegacyJsonRpcResponse<T> = LegacyJsonRpcSuccessResponse<T> | JSONRPCErrorResponse;
+
+/**
+ * v0.3 JSON-RPC client transport. See the file-level comment for the
+ * overall design.
+ */
+export class LegacyJsonRpcTransport implements Transport {
+  private readonly customFetchImpl?: typeof fetch;
+  private readonly endpoint: string;
+  private requestIdCounter: number = 1;
+
+  constructor(options: LegacyJsonRpcTransportOptions) {
+    this.endpoint = options.endpoint;
+    this.customFetchImpl = options.fetchImpl;
+  }
+
+  get protocolName(): string {
+    return PROTOCOL_NAME;
+  }
+
+  get protocolVersion(): string {
+    return A2A_LEGACY_PROTOCOL_VERSION;
+  }
+
+  async getExtendedAgentCard(
+    _params: V1GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<V1AgentCard> {
+    const requestId = this.requestIdCounter++;
+    // v0.3 `agent/getAuthenticatedExtendedCard` carries no params.
+    const envelope = toCompatGetAuthenticatedExtendedCardRequest(
+      { tenant: '' },
+      requestId
+    ) as LegacyJsonRpcRequest;
+    const response = await this._sendRpcRequest<legacy.AgentCard>(envelope, options);
+    return toCoreAgentCard(response.result);
+  }
+
+  async sendMessage(
+    params: V1SendMessageRequest,
+    options?: RequestOptions
+  ): Promise<SendMessageResult> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatSendMessageRequest(params, requestId) as LegacyJsonRpcRequest;
+    const response = await this._sendRpcRequest<legacy.Task | legacy.Message>(envelope, options);
+    return LegacyJsonRpcTransport._parseSendMessageResult(response.result);
+  }
+
+  async *sendMessageStream(
+    params: V1SendMessageRequest,
+    options?: RequestOptions
+  ): AsyncGenerator<V1StreamResponse, void, undefined> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatSendStreamingMessageRequest(params, requestId) as LegacyJsonRpcRequest;
+    yield* this._sendStreamingRequest(envelope, options);
+  }
+
+  async createTaskPushNotificationConfig(
+    params: V1TaskPushNotificationConfig,
+    options?: RequestOptions
+  ): Promise<V1TaskPushNotificationConfig> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatSetTaskPushNotificationConfigRequest(
+      params,
+      requestId
+    ) as LegacyJsonRpcRequest;
+    const response = await this._sendRpcRequest<legacy.TaskPushNotificationConfig>(
+      envelope,
+      options
+    );
+    return toCoreTaskPushNotificationConfig(response.result);
+  }
+
+  async getTaskPushNotificationConfig(
+    params: V1GetTaskPushNotificationConfigRequest,
+    options?: RequestOptions
+  ): Promise<V1TaskPushNotificationConfig> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatGetTaskPushNotificationConfigRequest(
+      params,
+      requestId
+    ) as LegacyJsonRpcRequest;
+    const response = await this._sendRpcRequest<legacy.TaskPushNotificationConfig>(
+      envelope,
+      options
+    );
+    return toCoreTaskPushNotificationConfig(response.result);
+  }
+
+  async listTaskPushNotificationConfig(
+    params: V1ListTaskPushNotificationConfigsRequest,
+    options?: RequestOptions
+  ): Promise<V1ListTaskPushNotificationConfigsResponse> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatListTaskPushNotificationConfigRequest(
+      params,
+      requestId
+    ) as LegacyJsonRpcRequest;
+    const response = await this._sendRpcRequest<legacy.TaskPushNotificationConfig[]>(
+      envelope,
+      options
+    );
+    // Wrap the list result back into the v0.3 success-response shape that
+    // `toCoreListTaskPushNotificationConfigsResponse` expects.
+    return toCoreListTaskPushNotificationConfigsResponse({
+      id: response.id,
+      jsonrpc: '2.0',
+      result: response.result,
+    });
+  }
+
+  async deleteTaskPushNotificationConfig(
+    params: V1DeleteTaskPushNotificationConfigRequest,
+    options?: RequestOptions
+  ): Promise<void> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatDeleteTaskPushNotificationConfigRequest(
+      params,
+      requestId
+    ) as LegacyJsonRpcRequest;
+    await this._sendRpcRequest<null>(envelope, options);
+  }
+
+  async getTask(params: V1GetTaskRequest, options?: RequestOptions): Promise<V1Task> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatGetTaskRequest(params, requestId) as LegacyJsonRpcRequest;
+    const response = await this._sendRpcRequest<legacy.Task>(envelope, options);
+    return toCoreTask(response.result);
+  }
+
+  async cancelTask(params: V1CancelTaskRequest, options?: RequestOptions): Promise<V1Task> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatCancelTaskRequest(params, requestId) as LegacyJsonRpcRequest;
+    const response = await this._sendRpcRequest<legacy.Task>(envelope, options);
+    return toCoreTask(response.result);
+  }
+
+  /**
+   * `tasks/list` has no JSON-RPC binding in v0.3 (§3.5.6). Throws
+   * synchronously without issuing an HTTP request.
+   */
+  async listTasks(
+    _params: V1ListTasksRequest,
+    _options?: RequestOptions
+  ): Promise<V1ListTasksResponse> {
+    throw new JSONRPCTransportError({
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: A2A_ERROR_CODE.METHOD_NOT_FOUND,
+        message: 'Method not found: tasks/list',
+      },
+    });
+  }
+
+  async *resubscribeTask(
+    params: V1SubscribeToTaskRequest,
+    options?: RequestOptions
+  ): AsyncGenerator<V1StreamResponse, void, undefined> {
+    const requestId = this.requestIdCounter++;
+    const envelope = toCompatTaskResubscriptionRequest(params, requestId) as LegacyJsonRpcRequest;
+    yield* this._sendStreamingRequest(envelope, options);
+  }
+
+  private _fetch(...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
+    if (this.customFetchImpl) {
+      return this.customFetchImpl(...args);
+    }
+    if (typeof fetch === 'function') {
+      return fetch(...args);
+    }
+    throw new Error(
+      'A `fetch` implementation was not provided and is not available in the global scope. ' +
+        'Please provide a `fetchImpl` in the LegacyJsonRpcTransportOptions.'
+    );
+  }
+
+  private async _sendRpcRequest<TResponsePayload>(
+    rpcRequest: LegacyJsonRpcRequest,
+    options: RequestOptions | undefined
+  ): Promise<LegacyJsonRpcSuccessResponse<TResponsePayload>> {
+    const httpResponse = await this._fetchRpc(rpcRequest, JSON_CONTENT_TYPE, options);
+
+    if (!httpResponse.ok) {
+      let errorBodyText = '(empty or non-JSON response)';
+      let errorJson: JSONRPCErrorResponse;
+      try {
+        errorBodyText = await httpResponse.text();
+        errorJson = JSON.parse(errorBodyText);
+      } catch (e) {
+        throw new Error(
+          `HTTP error for ${rpcRequest.method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`,
+          { cause: e }
+        );
+      }
+      if (errorJson.jsonrpc && errorJson.error) {
+        throw LegacyJsonRpcTransport.mapToError(errorJson);
+      }
+      throw new Error(
+        `HTTP error for ${rpcRequest.method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`
+      );
+    }
+
+    const json = (await httpResponse.json()) as LegacyJsonRpcResponse<TResponsePayload>;
+    if ('error' in json) {
+      throw LegacyJsonRpcTransport.mapToError(json);
+    }
+
+    if (json.id !== rpcRequest.id) {
+      throw new Error(
+        `JSON-RPC response ID mismatch for method ${rpcRequest.method}. Expected ${rpcRequest.id}, got ${json.id}.`
+      );
+    }
+
+    return json;
+  }
+
+  private async _fetchRpc(
+    rpcRequest: LegacyJsonRpcRequest,
+    acceptHeader: string,
+    options?: RequestOptions
+  ): Promise<Response> {
+    const requestInit: RequestInit = {
+      method: 'POST',
+      headers: {
+        ...options?.serviceParameters,
+        'Content-Type': JSON_CONTENT_TYPE,
+        Accept: acceptHeader,
+      },
+      body: JSON.stringify(rpcRequest),
+      signal: options?.signal,
+    };
+    return this._fetch(this.endpoint, requestInit);
+  }
+
+  private async *_sendStreamingRequest(
+    rpcRequest: LegacyJsonRpcRequest,
+    options: RequestOptions | undefined
+  ): AsyncGenerator<V1StreamResponse, void, undefined> {
+    const response = await this._fetchRpc(rpcRequest, 'text/event-stream', options);
+
+    if (!response.ok) {
+      let errorBody = '';
+      try {
+        errorBody = await response.text();
+        const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
+        if (errorJson.error) {
+          throw LegacyJsonRpcTransport.mapToError(errorJson);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name !== 'SyntaxError') {
+          throw e;
+        }
+      }
+      throw new Error(
+        `HTTP error establishing stream for ${rpcRequest.method}: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`
+      );
+    }
+    if (!response.headers.get('Content-Type')?.startsWith('text/event-stream')) {
+      try {
+        const body = await response.text();
+        const errorJson: JSONRPCErrorResponse = JSON.parse(body);
+        if (errorJson.error) {
+          throw LegacyJsonRpcTransport.mapToError(errorJson);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name !== 'SyntaxError') {
+          throw e;
+        }
+      }
+      throw new Error(
+        `Invalid response Content-Type for SSE stream for ${rpcRequest.method}. Expected 'text/event-stream'.`
+      );
+    }
+
+    for await (const event of parseSseStream(response)) {
+      yield LegacyJsonRpcTransport._processSseEventData(event.data, rpcRequest.id);
+    }
+  }
+
+  private static _processSseEventData(
+    jsonData: string,
+    originalRequestId: number | string | null
+  ): V1StreamResponse {
+    if (!jsonData.trim()) {
+      throw new Error('Attempted to process empty SSE event data.');
+    }
+
+    type LegacyStreamResult = legacy.SendStreamingMessageSuccessResponse['result'];
+    let legacyStreamResponse: LegacyJsonRpcResponse<LegacyStreamResult>;
+    try {
+      legacyStreamResponse = JSON.parse(jsonData) as LegacyJsonRpcResponse<LegacyStreamResult>;
+    } catch (e) {
+      throw new Error(
+        `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof Error && e.message) || 'Unknown error'}`,
+        { cause: e }
+      );
+    }
+
+    if (legacyStreamResponse.id !== originalRequestId) {
+      throw new Error(
+        `JSON-RPC response ID mismatch in SSE event. Expected ${originalRequestId}, got ${legacyStreamResponse.id}.`
+      );
+    }
+
+    if ('error' in legacyStreamResponse) {
+      const err = legacyStreamResponse.error;
+      throw new Error(
+        `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
+        { cause: LegacyJsonRpcTransport.mapToError(legacyStreamResponse) }
+      );
+    }
+
+    if (!('result' in legacyStreamResponse) || typeof legacyStreamResponse.result === 'undefined') {
+      throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
+    }
+
+    // Translate the v0.3 streaming result into the v1.0 `StreamResponse`
+    // shape by wrapping it in a v0.3 success-response envelope and reusing
+    // `toCoreStreamResponse`.
+    return toCoreStreamResponse({
+      id: legacyStreamResponse.id,
+      jsonrpc: '2.0',
+      result: legacyStreamResponse.result,
+    });
+  }
+
+  /**
+   * Parses the `result` field of a v0.3 `message/send` success response into
+   * a v1.0 {@link SendMessageResult}. v0.3 used a discriminated union with a
+   * `kind: 'task' | 'message'` field; we use that to pick the right
+   * translator.
+   */
+  private static _parseSendMessageResult(result: legacy.Task | legacy.Message): SendMessageResult {
+    if (result.kind === 'task') {
+      return toCoreTask(result);
+    }
+    if (result.kind === 'message') {
+      return toCoreMessage(result);
+    }
+    throw new InvalidAgentResponseError(
+      `Unexpected v0.3 message/send result kind: ${String((result as { kind?: string }).kind)}`
+    );
+  }
+
+  /**
+   * Maps a v0.3 JSON-RPC error envelope into an SDK error class.
+   *
+   * Mirrors {@link JsonRpcTransport}'s private `mapToError` so users can
+   * catch the same typed errors regardless of which transport variant
+   * produced them.
+   */
+  private static mapToError(response: JSONRPCErrorResponse): Error {
+    const errorMessage = response.error.message;
+    switch (response.error.code) {
+      case A2A_ERROR_CODE.PARSE_ERROR:
+      case A2A_ERROR_CODE.INVALID_REQUEST:
+      case A2A_ERROR_CODE.METHOD_NOT_FOUND:
+      case A2A_ERROR_CODE.INVALID_PARAMS:
+      case A2A_ERROR_CODE.INTERNAL_ERROR:
+        return new RequestMalformedError(errorMessage);
+      case A2A_ERROR_CODE.TASK_NOT_FOUND:
+        return new TaskNotFoundError(errorMessage);
+      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
+        return new TaskNotCancelableError(errorMessage);
+      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
+        return new PushNotificationNotSupportedError(errorMessage);
+      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
+        return new UnsupportedOperationError(errorMessage);
+      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
+        return new ContentTypeNotSupportedError(errorMessage);
+      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
+        return new InvalidAgentResponseError(errorMessage);
+      case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
+        return new ExtendedAgentCardNotConfiguredError(errorMessage);
+      default:
+        return new JSONRPCTransportError(response);
+    }
+  }
+}

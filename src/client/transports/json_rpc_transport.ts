@@ -21,8 +21,10 @@ import {
 } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
+import { isLegacyVersion } from '../../version_utils.js';
 import { Transport, TransportFactory } from './transport.js';
 import {
+  AgentInterface,
   CancelTaskRequest,
   DeleteTaskPushNotificationConfigRequest,
   GetExtendedAgentCardRequest,
@@ -422,6 +424,47 @@ export class JsonRpcTransportFactoryOptions {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * Picks the `AgentInterface` for the given protocol binding that best
+ * matches the endpoint URL.
+ *
+ * Mirrors Python's `_find_best_interface(..., url=...)`: filters by
+ * `protocolBinding` (case-insensitive), narrows to entries whose `url`
+ * matches if any such entry exists, then prefers `protocolVersion === '1.0'`
+ * among the survivors. Returns `undefined` when nothing matches so the
+ * caller can fall back to a default policy (today: assume v1.0).
+ */
+function pickMatchingInterface(
+  agentCard: AgentCard,
+  protocolBinding: string,
+  url: string
+): AgentInterface | undefined {
+  const target = protocolBinding.toUpperCase();
+  const candidates = (agentCard.supportedInterfaces ?? []).filter(
+    (i) => i.protocolBinding?.toUpperCase() === target
+  );
+  if (candidates.length === 0) return undefined;
+
+  const byUrl = candidates.filter((i) => i.url === url);
+  const pool = byUrl.length > 0 ? byUrl : candidates;
+
+  return pool.find((i) => i.protocolVersion === '1.0') ?? pool[0];
+}
+
+/**
+ * Factory that produces a JSON-RPC `Transport` for the matched agent
+ * interface.
+ *
+ * Transparently dispatches between the v1.0 transport (`JsonRpcTransport`)
+ * and the v0.3 compat transport (`LegacyJsonRpcTransport`) based on the
+ * matched `AgentInterface.protocolVersion`: when the matched interface
+ * declares `protocolVersion` in `[0.3, 1.0)`, the v0.3 transport is used;
+ * otherwise (1.0 / empty / missing), the v1.0 transport is used.
+ *
+ * The v0.3 transport module is loaded lazily on demand, so callers that
+ * only ever talk to v1.0 agents never pull compat code into their runtime
+ * graph.
+ */
 export class JsonRpcTransportFactory implements TransportFactory {
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
 
@@ -429,7 +472,16 @@ export class JsonRpcTransportFactory implements TransportFactory {
     return PROTOCOL_NAME;
   }
 
-  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
+  async create(url: string, agentCard: AgentCard): Promise<Transport> {
+    const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
+    if (iface && isLegacyVersion(iface.protocolVersion)) {
+      const { LegacyJsonRpcTransport } =
+        await import('../../compat/v0_3/client/transports/jsonrpc_transport.js');
+      return new LegacyJsonRpcTransport({
+        endpoint: url,
+        fetchImpl: this.options?.fetchImpl,
+      });
+    }
     return new JsonRpcTransport({
       endpoint: url,
       fetchImpl: this.options?.fetchImpl,
