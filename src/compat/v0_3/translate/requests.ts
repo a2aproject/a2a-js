@@ -98,12 +98,18 @@ export function toCompatSendMessageConfiguration(
 /**
  * v0.3 `SendMessageRequest` (or `SendStreamingMessageRequest`) →
  * v1.0 proto `SendMessageRequest`.
+ *
+ * v0.3 has no concept of tenants, so the caller may supply the v1.0
+ * `tenant` value out-of-band (e.g. from a URL path parameter resolved
+ * by the Express layer). Defaults to `''` for the global tenant when
+ * unspecified, matching the original v0.3 semantics.
  */
 export function toCoreSendMessageRequest(
-  compat: legacy.SendMessageRequest | legacy.SendStreamingMessageRequest
+  compat: legacy.SendMessageRequest | legacy.SendStreamingMessageRequest,
+  tenant: string = ''
 ): V1SendMessageRequest {
   return {
-    tenant: '',
+    tenant,
     message: toCoreMessage(compat.params.message),
     configuration: compat.params.configuration
       ? toCoreSendMessageConfiguration(compat.params.configuration)
@@ -274,10 +280,18 @@ export function toCompatStreamResponse(
 
 /* --------------------------------- GetTask --------------------------------- */
 
-/** v0.3 `GetTaskRequest` → v1.0 proto `GetTaskRequest`. */
-export function toCoreGetTaskRequest(compat: legacy.GetTaskRequest): V1GetTaskRequest {
+/**
+ * v0.3 `GetTaskRequest` → v1.0 proto `GetTaskRequest`.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
+ */
+export function toCoreGetTaskRequest(
+  compat: legacy.GetTaskRequest,
+  tenant: string = ''
+): V1GetTaskRequest {
   return {
-    tenant: '',
+    tenant,
     id: compat.params.id,
     historyLength: compat.params.historyLength,
   };
@@ -295,10 +309,18 @@ export function toCompatGetTaskRequest(
 
 /* --------------------------------- CancelTask --------------------------------- */
 
-/** v0.3 `CancelTaskRequest` → v1.0 proto `CancelTaskRequest`. */
-export function toCoreCancelTaskRequest(compat: legacy.CancelTaskRequest): V1CancelTaskRequest {
+/**
+ * v0.3 `CancelTaskRequest` → v1.0 proto `CancelTaskRequest`.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
+ */
+export function toCoreCancelTaskRequest(
+  compat: legacy.CancelTaskRequest,
+  tenant: string = ''
+): V1CancelTaskRequest {
   return {
-    tenant: '',
+    tenant,
     id: compat.params.id,
     metadata: deepCloneMetadata(compat.params.metadata),
   };
@@ -317,11 +339,17 @@ export function toCompatCancelTaskRequest(
 
 /* --------------------------------- SubscribeToTask --------------------------------- */
 
-/** v0.3 `TaskResubscriptionRequest` → v1.0 proto `SubscribeToTaskRequest`. */
+/**
+ * v0.3 `TaskResubscriptionRequest` → v1.0 proto `SubscribeToTaskRequest`.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
+ */
 export function toCoreSubscribeToTaskRequest(
-  compat: legacy.TaskResubscriptionRequest
+  compat: legacy.TaskResubscriptionRequest,
+  tenant: string = ''
 ): V1SubscribeToTaskRequest {
-  return { tenant: '', id: compat.params.id };
+  return { tenant, id: compat.params.id };
 }
 
 /** v1.0 proto `SubscribeToTaskRequest` → v0.3 `TaskResubscriptionRequest`. */
@@ -343,11 +371,15 @@ export function toCompatTaskResubscriptionRequest(
  * v0.3 `SetTaskPushNotificationConfigRequest` → v1.0 proto
  * `TaskPushNotificationConfig` (used as the request body for
  * `CreateTaskPushNotificationConfig`).
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
  */
 export function toCoreCreateTaskPushNotificationConfigRequest(
-  compat: legacy.SetTaskPushNotificationConfigRequest
+  compat: legacy.SetTaskPushNotificationConfigRequest,
+  tenant: string = ''
 ): V1TaskPushNotificationConfig {
-  return toCoreTaskPushNotificationConfig(compat.params);
+  return toCoreTaskPushNotificationConfig(compat.params, tenant);
 }
 
 /**
@@ -366,16 +398,22 @@ export function toCompatSetTaskPushNotificationConfigRequest(
   };
 }
 
-/** v0.3 `GetTaskPushNotificationConfigRequest` → v1.0 proto request. */
+/**
+ * v0.3 `GetTaskPushNotificationConfigRequest` → v1.0 proto request.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
+ */
 export function toCoreGetTaskPushNotificationConfigRequest(
-  compat: legacy.GetTaskPushNotificationConfigRequest
+  compat: legacy.GetTaskPushNotificationConfigRequest,
+  tenant: string = ''
 ): V1GetTaskPushNotificationConfigRequest {
   const params = compat.params;
   // Both `GetTaskPushNotificationConfigParams` and `TaskIdParams1` carry `id`.
   // The former additionally carries `pushNotificationConfigId`.
   const configId =
     'pushNotificationConfigId' in params ? params.pushNotificationConfigId : undefined;
-  return { tenant: '', taskId: params.id, id: configId ?? '' };
+  return { tenant, taskId: params.id, id: configId ?? '' };
 }
 
 /** v1.0 proto request → v0.3 `GetTaskPushNotificationConfigRequest`. */
@@ -393,12 +431,18 @@ export function toCompatGetTaskPushNotificationConfigRequest(
   };
 }
 
-/** v0.3 `DeleteTaskPushNotificationConfigRequest` → v1.0 proto request. */
+/**
+ * v0.3 `DeleteTaskPushNotificationConfigRequest` → v1.0 proto request.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
+ */
 export function toCoreDeleteTaskPushNotificationConfigRequest(
-  compat: legacy.DeleteTaskPushNotificationConfigRequest
+  compat: legacy.DeleteTaskPushNotificationConfigRequest,
+  tenant: string = ''
 ): V1DeleteTaskPushNotificationConfigRequest {
   return {
-    tenant: '',
+    tenant,
     taskId: compat.params.id,
     id: compat.params.pushNotificationConfigId,
   };
@@ -417,11 +461,17 @@ export function toCompatDeleteTaskPushNotificationConfigRequest(
   };
 }
 
-/** v0.3 `ListTaskPushNotificationConfigRequest` → v1.0 proto request. */
+/**
+ * v0.3 `ListTaskPushNotificationConfigRequest` → v1.0 proto request.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
+ */
 export function toCoreListTaskPushNotificationConfigsRequest(
-  compat: legacy.ListTaskPushNotificationConfigRequest
+  compat: legacy.ListTaskPushNotificationConfigRequest,
+  tenant: string = ''
 ): V1ListTaskPushNotificationConfigsRequest {
-  return { tenant: '', taskId: compat.params.id, pageSize: 0, pageToken: '' };
+  return { tenant, taskId: compat.params.id, pageSize: 0, pageToken: '' };
 }
 
 /** v1.0 proto request → v0.3 `ListTaskPushNotificationConfigRequest`. */
@@ -463,11 +513,17 @@ export function toCompatListTaskPushNotificationConfigSuccessResponse(
 
 /* --------------------------------- GetExtendedAgentCard --------------------------------- */
 
-/** v0.3 `GetAuthenticatedExtendedCardRequest` → v1.0 proto `GetExtendedAgentCardRequest`. */
+/**
+ * v0.3 `GetAuthenticatedExtendedCardRequest` → v1.0 proto `GetExtendedAgentCardRequest`.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
+ */
 export function toCoreGetExtendedAgentCardRequest(
-  _compat: legacy.GetAuthenticatedExtendedCardRequest
+  _compat: legacy.GetAuthenticatedExtendedCardRequest,
+  tenant: string = ''
 ): V1GetExtendedAgentCardRequest {
-  return { tenant: '' };
+  return { tenant };
 }
 
 /** v1.0 proto `GetExtendedAgentCardRequest` → v0.3 `GetAuthenticatedExtendedCardRequest`. */

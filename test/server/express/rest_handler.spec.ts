@@ -978,6 +978,7 @@ describe('restHandler', () => {
         restHandler({
           requestHandler: mockRequestHandler,
           userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
         })
       );
     });
@@ -1091,22 +1092,20 @@ describe('restHandler', () => {
       assert.notProperty(response.body, 'status');
     });
 
-    it('does not register GET /v1/tasks on the legacy router (ListTasks not in v0.3 REST)', async () => {
-      // ListTasks has no v0.3 equivalent (see V1_METHODS_WITHOUT_LEGACY_EQUIVALENT).
-      // The legacy router intentionally does not register /v1/tasks. To
-      // confirm the legacy transport handler is not invoked for that path
-      // we spy on its (non-existent) list method indirectly via the agent
-      // request handler.
+    it('does not invoke the legacy handler for GET /v1/tasks with A2A-Version: 1.0', async () => {
+      // `/v1/tasks` has no exact match in the legacy router (only
+      // `/v1/tasks/:taskId` is registered). With `A2A-Version: 1.0` the
+      // version-dispatch middleware short-circuits BEFORE any legacy
+      // route can match, falling through to the v1.0 router which then
+      // matches `/:tenant/tasks` with `tenant='v1'` — exercising the
+      // tenant-name reservation fix.
       const legacyListSpy = vi.spyOn(LegacyRestTransportHandler.prototype, 'getTask');
       (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [], nextPageToken: '' });
 
-      // Request falls through to the v1.0 router. Whether v1.0 matches it
-      // (under `/:tenant/tasks` with tenant='v1') or returns 404 is an
-      // implementation detail of the v1.0 router; what matters here is
-      // that the legacy router did NOT handle it.
       await request(dualApp).get('/v1/tasks').set('A2A-Version', '1.0');
 
       expect(legacyListSpy).not.toHaveBeenCalled();
+      expect(mockRequestHandler.listTasks).toHaveBeenCalled();
     });
 
     it('sets Content-Type application/json on legacy responses', async () => {
@@ -1160,10 +1159,11 @@ describe('restHandler', () => {
     });
 
     it('returns v1.0-shaped error for malformed JSON on v1.0 paths', async () => {
-      // The legacy router is mounted under `/v1`, so its body parser and
-      // error handler do not run for requests that hit v1.0 paths. A
-      // malformed-JSON request to /message:send (no /v1 prefix) must
-      // therefore yield the v1.0 error envelope, not the bare v0.3 shape.
+      // The legacy router's version-dispatch middleware short-circuits
+      // requests with `A2A-Version: 1.0` (via `next('router')`) BEFORE
+      // the legacy body parser runs. A malformed-JSON request to
+      // `/message:send` with v1.0 must therefore yield the v1.0 error
+      // envelope, not the bare v0.3 shape.
       const response = await request(dualApp)
         .post('/message:send')
         .set('A2A-Version', '1.0')
@@ -1192,6 +1192,181 @@ describe('restHandler', () => {
       assert.property(response.body, 'message');
       assert.notProperty(response.body, 'error');
       assert.notProperty(response.body, 'details');
+    });
+
+    // ========================================================================
+    // Opt-in flag matrix
+    // ========================================================================
+
+    it('rejects /v1/message:send when legacyCompat is omitted (flag default)', async () => {
+      // Use a v1.0-only card so the v1.0 version validator cleanly rejects
+      // header-less / 0.3-defaulted requests with a 400.
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+      const optOutApp = express();
+      optOutApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          // legacyCompat omitted => disabled
+        })
+      );
+
+      const response = await request(optOutApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      // v1.0 envelope: the legacy compat layer is not instantiated, so
+      // the request is rejected by the v1.0 version validator.
+      assert.property(response.body, 'error');
+      // Legacy code path is never invoked.
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('rejects /v1/message:send when legacyCompat.enabled is false', async () => {
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+      const optOutApp = express();
+      optOutApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: false },
+        })
+      );
+
+      const response = await request(optOutApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    // ========================================================================
+    // Tenant-collision regression
+    // ========================================================================
+
+    it("POST /v1/message:send with A2A-Version: 1.0 routes to v1.0 with tenant='v1'", async () => {
+      // The headline win of the version-based dispatch: with the
+      // legacy router mounted path-less, `/v1/...` is no longer a
+      // reserved namespace. A v1.0 request to `/v1/message:send` is
+      // matched by the v1.0 router's `/:tenant/message:send` route
+      // with `tenant='v1'` (per v1.0 tenant semantics).
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue({
+        ...testTask,
+        id: 'v1-task-with-tenant',
+      });
+
+      const message = ProtoMessage.toJSON({
+        ...testMessage,
+        messageId: 'msg-tenant',
+        role: Role.ROLE_USER,
+      });
+
+      await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message, tenant: 'v1' })
+        .expect(200);
+
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+      expect(mockRequestHandler.sendMessage).toHaveBeenCalledTimes(1);
+      const call = (mockRequestHandler.sendMessage as Mock).mock.calls[0][0];
+      assert.equal(call.tenant, 'v1');
+    });
+
+    // ========================================================================
+    // Version-range dispatch ([0.3, 1.0))
+    // ========================================================================
+
+    it('routes A2A-Version: 0.5 (in legacy range) to the legacy handler', async () => {
+      // Card carries v0.3 but not v0.5; legacy router accepts the
+      // dispatch by range but the version validator then rejects.
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '0.5')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      // v0.3 bare body shape: the legacy router handled it.
+      assert.equal(response.body.code, -32009); // VERSION_NOT_SUPPORTED
+      assert.notProperty(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('routes A2A-Version: 2.0 (outside legacy range) to the v1.0 handler', async () => {
+      // v1.0 router will reject because the card has no (HTTP+JSON, 2.0).
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '2.0')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      // v1.0 envelope: the v1.0 router handled the rejection.
+      assert.property(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('routes A2A-Version: foo (unparseable) to the v1.0 handler', async () => {
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', 'foo')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    // ========================================================================
+    // Extension-header tolerance on the legacy path
+    // ========================================================================
+
+    it('accepts the v1.0 A2A-Extensions header on the legacy path', async () => {
+      // A v1.0-shaped client hitting a /v1 endpoint with the v1.0
+      // header should still get its requested extension activated.
+      legacySendMessageStub.mockImplementation(async (_params, context) => {
+        context.addActivatedExtension('ext-modern');
+        return {
+          kind: 'task',
+          id: 'legacy-task-modern-hdr',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Extensions', 'ext-modern')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      // Response always uses the v0.3 spelling on the legacy path.
+      assert.equal(response.headers['x-a2a-extensions'], 'ext-modern');
+    });
+
+    it('prefers X-A2A-Extensions when both spellings are present', async () => {
+      legacySendMessageStub.mockImplementation(async (_params, context) => {
+        for (const ext of context.requestedExtensions ?? []) {
+          context.addActivatedExtension(ext);
+        }
+        return {
+          kind: 'task',
+          id: 'legacy-task-both',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('X-A2A-Extensions', 'legacy-ext')
+        .set('A2A-Extensions', 'modern-ext')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      assert.equal(response.headers['x-a2a-extensions'], 'legacy-ext');
     });
   });
 });

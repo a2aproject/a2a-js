@@ -358,11 +358,35 @@ describe('LegacyRestTransportHandler', () => {
       expect(result.id).toBe('t-99');
     });
 
-    it('omits historyLength when not provided', async () => {
+    it('leaves historyLength absent when not provided (full-history semantics per §3.2.4)', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(sampleV1Task('t-2'));
       await transportHandler.getTask('t-2', defaultContext);
       const call = (mockRequestHandler.getTask as Mock).mock.calls[0][0];
+      // undefined means "no client limit, return full history"; coercing
+      // the default to 0 would silently flip semantics to "no history".
+      expect(call.historyLength).toBeUndefined();
+    });
+
+    it('passes historyLength = 0 through when the client explicitly requests no history', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(sampleV1Task('t-3'));
+      await transportHandler.getTask('t-3', defaultContext, '0');
+      const call = (mockRequestHandler.getTask as Mock).mock.calls[0][0];
       expect(call.historyLength).toBe(0);
+    });
+
+    it('passes historyLength = N through for N > 0', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(sampleV1Task('t-4'));
+      await transportHandler.getTask('t-4', defaultContext, '7');
+      const call = (mockRequestHandler.getTask as Mock).mock.calls[0][0];
+      expect(call.historyLength).toBe(7);
+    });
+
+    it('forwards context.tenant when supplied', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(sampleV1Task('t-5'));
+      const tenantContext = new ServerCallContext({ tenant: 'tenant-x' });
+      await transportHandler.getTask('t-5', tenantContext);
+      const call = (mockRequestHandler.getTask as Mock).mock.calls[0][0];
+      expect(call.tenant).toBe('tenant-x');
     });
 
     it('rejects an invalid historyLength (non-numeric)', async () => {

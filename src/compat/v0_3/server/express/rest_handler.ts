@@ -22,7 +22,7 @@ import express, {
   type Response,
 } from 'express';
 
-import { A2A_VERSION_HEADER } from '../../../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
 import { Extensions } from '../../../../extensions.js';
 import { ServerCallContext } from '../../../../server/context.js';
 import { UserBuilder } from '../../../../server/express/common.js';
@@ -34,6 +34,7 @@ import {
   LEGACY_HTTP_EXTENSION_HEADER,
   LEGACY_JSON_CONTENT_TYPE,
 } from '../../constants.js';
+import { isLegacyVersion } from '../../translate/versions.js';
 import type * as legacy from '../../types/types.js';
 import { A2AError as LegacyA2AError } from '../error.js';
 import {
@@ -81,18 +82,26 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
 /**
  * Creates an Express router exposing the v0.3 HTTP+JSON/REST endpoints.
  *
- * The routes are mount-relative (no `/v1` prefix on the route literals
- * themselves). The caller is expected to mount the router under `/v1`,
- * which is the path prefix used by the v0.3 reference implementation.
- * The core `restHandler` does this automatically; standalone callers
- * must do it explicitly.
+ * The router uses **header-based dispatch**, not path-based: a
+ * middleware at the top of the chain parses `A2A-Version` (defaulting
+ * to `'0.3'` per §3.6.2 when absent) and short-circuits any request
+ * whose version is not in the legacy range `[0.3, 1.0)` by calling
+ * `next('router')`, falling through to the parent's v1.0 middleware.
+ *
+ * The routes are registered at the canonical v0.3 reference URLs
+ * (`/v1/card`, `/v1/message:send`, `/v1/tasks/:taskId`, …). The router
+ * is mounted path-less by the core `restHandler` so the v1.0 spec's
+ * tenant routes (`/:tenant/...`) remain free to use `v1` (or any other
+ * label) as a tenant identifier.
  *
  * The router:
  *   - Parses `application/json` bodies via {@link LEGACY_JSON_CONTENT_TYPE}.
- *   - Reads protocol extensions from the {@link LEGACY_HTTP_EXTENSION_HEADER}
- *     (`X-A2A-Extensions`) header (v0.3 used the `X-` prefix; v1.0 dropped it).
- *   - Defaults a missing `A2A-Version` header to {@link A2A_LEGACY_PROTOCOL_VERSION}
- *     (`'0.3'`).
+ *   - Reads protocol extensions from `X-A2A-Extensions` (the v0.3
+ *     header) OR `A2A-Extensions` (the v1.0 header) for tolerance with
+ *     v1.0-shaped clients hitting the legacy endpoints; if both are
+ *     present the legacy header wins. Responses use the v0.3 spelling.
+ *   - Defaults a missing `A2A-Version` header to
+ *     {@link A2A_LEGACY_PROTOCOL_VERSION} (`'0.3'`).
  *   - Sets the response `Content-Type` to {@link LEGACY_JSON_CONTENT_TYPE}
  *     (`application/json`, not `application/a2a+json`).
  *   - Returns errors in the bare v0.3 `{ code, message, data? }` shape.
@@ -100,15 +109,30 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  * @example
  * ```ts
  * import { legacyRestRouter } from '@a2a-js/sdk/compat/v0_3';
- * app.use('/api/v1', legacyRestRouter({ requestHandler, userBuilder }));
- * // → POST /api/v1/message:send
- * // → GET  /api/v1/tasks/:taskId
+ * app.use(legacyRestRouter({ requestHandler, userBuilder }));
+ * // → POST /v1/message:send
+ * // → GET  /v1/tasks/:taskId
  * // …
  * ```
  */
 export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHandler {
   const router = express.Router();
   const transportHandler = new LegacyRestTransportHandler(options.requestHandler);
+
+  // Version-based dispatch: short-circuit anything that isn't in the
+  // legacy range `[0.3, 1.0)` (per `isLegacyVersion`) by handing off to
+  // the parent router via `next('router')`. Header-less requests
+  // default to `'0.3'` per §3.6.2 and stay in this router. This ensures
+  // body parser, content-type setter and error handler below NEVER run
+  // for non-legacy requests, preserving wire-shape isolation.
+  router.use((req: Request, _res: Response, next: NextFunction) => {
+    const requestedVersion = req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION;
+    if (isLegacyVersion(requestedVersion)) {
+      next();
+    } else {
+      next('router');
+    }
+  });
 
   router.use(
     (_req: Request, res: Response, next: NextFunction) => {
@@ -125,12 +149,18 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
 
   /**
    * Builds a {@link ServerCallContext} from the Express request.
-   * - Extracts protocol extensions from the legacy `X-A2A-Extensions`
-   *   header.
+   * - Extracts protocol extensions from `X-A2A-Extensions` (v0.3
+   *   spelling, preferred) OR `A2A-Extensions` (v1.0 spelling,
+   *   fallback) — server-side tolerance for v1.0-shaped clients
+   *   hitting the legacy endpoints.
    * - Resolves the authenticated user.
    * - Defaults the A2A version to {@link A2A_LEGACY_PROTOCOL_VERSION}
    *   when the `A2A-Version` header is absent or empty (matches the
    *   v0.3 default specified in §3.6.2).
+   * - Propagates the URL tenant (if any) via `context.tenant`. The
+   *   legacy router doesn't currently register `:tenant` parameter
+   *   routes, so this is a no-op today but stays forward-compatible
+   *   for future tenant-aware route registrations.
    * - Validates the requested version against the agent card's
    *   `HTTP+JSON` interface list.
    */
@@ -139,10 +169,11 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
     const requestedVersion = req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION;
     const context = new ServerCallContext({
       requestedExtensions: Extensions.parseServiceParameter(
-        req.header(LEGACY_HTTP_EXTENSION_HEADER)
+        req.header(LEGACY_HTTP_EXTENSION_HEADER) ?? req.header(HTTP_EXTENSION_HEADER)
       ),
       user,
       requestedVersion,
+      tenant: (req.params.tenant as string) || undefined,
     });
     const agentCard = await transportHandler.getAgentCard();
     validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
@@ -257,19 +288,21 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   // Route Handlers
   // ==========================================================================
 
-  // The routes below are mount-relative: they assume the router is mounted
-  // by the caller under the v0.3 `/v1` prefix (the core `restHandler` does
-  // this; standalone callers must `app.use('/v1', legacyRestRouter(...))`).
-  // Keeping the routes prefix-free makes the legacy router path-agnostic
-  // and ensures the parent owns the path-prefix dispatch decision.
+  // The routes below use the canonical v0.3 reference URLs (`/v1/...`).
+  // The router is mounted path-less by the core `restHandler`; the
+  // version-dispatch middleware above ensures only legacy-range requests
+  // reach these routes. Requests with `A2A-Version: 1.0` (or any other
+  // non-legacy version) targeting the same paths fall through to the
+  // v1.0 router, where `/v1/...` is interpreted as `/:tenant/...` with
+  // `tenant='v1'` per v1.0 tenant semantics.
 
   /**
-   * GET /card
+   * GET /v1/card
    *
    * Retrieves the authenticated extended agent card.
    */
   router.get(
-    '/card',
+    '/v1/card',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.getAuthenticatedExtendedAgentCard(context);
@@ -278,13 +311,13 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /message:send
+   * POST /v1/message:send
    *
    * Sends a message synchronously. Returns either a v0.3 `Task` or `Message`.
    * The colon is escaped to satisfy Express's path-to-regexp parser.
    */
   router.post(
-    '/message\\:send',
+    '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = req.body as legacy.MessageSendParams;
@@ -295,12 +328,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /message:stream
+   * POST /v1/message:stream
    *
    * Sends a message with a streaming SSE response.
    */
   router.post(
-    '/message\\:stream',
+    '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = req.body as legacy.MessageSendParams;
@@ -310,14 +343,14 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * GET /tasks/:taskId
+   * GET /v1/tasks/:taskId
    *
    * Retrieves a task. Accepts both `?historyLength=` and `?history_length=`
    * for compatibility with the v0.3 reference (which used snake_case query
    * parameters in places).
    */
   router.get(
-    '/tasks/:taskId',
+    '/v1/tasks/:taskId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const historyLength = req.query.historyLength ?? req.query.history_length;
@@ -327,12 +360,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /tasks/:taskId:cancel
+   * POST /v1/tasks/:taskId:cancel
    *
    * Attempts to cancel a task. Returns 202 Accepted on success.
    */
   router.post(
-    '/tasks/:taskId\\:cancel',
+    '/v1/tasks/:taskId\\:cancel',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.cancelTask(req.params.taskId!, context);
@@ -341,12 +374,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /tasks/:taskId:subscribe
+   * POST /v1/tasks/:taskId:subscribe
    *
    * Resubscribes to a task's update stream via SSE.
    */
   router.post(
-    '/tasks/:taskId\\:subscribe',
+    '/v1/tasks/:taskId\\:subscribe',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const stream = await transportHandler.resubscribe(req.params.taskId!, context);
@@ -355,12 +388,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * POST /tasks/:taskId/pushNotificationConfigs
+   * POST /v1/tasks/:taskId/pushNotificationConfigs
    *
    * Creates a push notification configuration. Returns 201 Created.
    */
   router.post(
-    '/tasks/:taskId/pushNotificationConfigs',
+    '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = req.body as legacy.TaskPushNotificationConfig;
@@ -370,12 +403,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * GET /tasks/:taskId/pushNotificationConfigs
+   * GET /v1/tasks/:taskId/pushNotificationConfigs
    *
    * Lists all push notification configurations for a task.
    */
   router.get(
-    '/tasks/:taskId/pushNotificationConfigs',
+    '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.listTaskPushNotificationConfigs(
@@ -387,12 +420,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * GET /tasks/:taskId/pushNotificationConfigs/:configId
+   * GET /v1/tasks/:taskId/pushNotificationConfigs/:configId
    *
    * Retrieves a specific push notification configuration.
    */
   router.get(
-    '/tasks/:taskId/pushNotificationConfigs/:configId',
+    '/v1/tasks/:taskId/pushNotificationConfigs/:configId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.getTaskPushNotificationConfig(
@@ -405,12 +438,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   );
 
   /**
-   * DELETE /tasks/:taskId/pushNotificationConfigs/:configId
+   * DELETE /v1/tasks/:taskId/pushNotificationConfigs/:configId
    *
    * Deletes a push notification configuration. Returns 204 No Content.
    */
   router.delete(
-    '/tasks/:taskId/pushNotificationConfigs/:configId',
+    '/v1/tasks/:taskId/pushNotificationConfigs/:configId',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       await transportHandler.deleteTaskPushNotificationConfig(
@@ -422,11 +455,14 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
     })
   );
 
-  // Note: `/tasks` (ListTasks) is intentionally NOT registered.
+  // Note: `/v1/tasks` (ListTasks) is intentionally NOT registered.
   // Per `V1_METHODS_WITHOUT_LEGACY_EQUIVALENT` (in `compat/v0_3/constants.ts`),
-  // the v0.3 protocol has no REST endpoint for listing tasks, so an
-  // attempt to GET `/tasks` under the legacy mount falls through to the
-  // parent router (or, ultimately, Express's default 404).
+  // the v0.3 protocol has no REST endpoint for listing tasks. A
+  // request to `GET /v1/tasks` with `A2A-Version: 0.3` therefore
+  // matches no legacy route and falls through to the parent router
+  // (where v1.0 may handle it as `/:tenant/tasks` with `tenant='v1'`,
+  // and version validation against the agent card will reject it
+  // unless the operator explicitly opted into a hybrid configuration).
 
   return router;
 }

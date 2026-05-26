@@ -70,15 +70,17 @@ export function toCompatAuthenticationInfo(
  * Converts a v0.3 JSON `PushNotificationConfig` (the inner record) into a
  * v1.0 proto `TaskPushNotificationConfig` minus its `taskId` (the caller
  * supplies that when stitching together a full
- * `TaskPushNotificationConfig`). The result has `taskId` and `tenant` set
- * to the proto3 empty-string default — typically overridden by
- * `toCoreTaskPushNotificationConfig`.
+ * `TaskPushNotificationConfig`). `taskId` is set to the proto3
+ * empty-string default; `tenant` defaults to `''` (global tenant) and
+ * may be overridden by the caller — typically by
+ * `toCoreTaskPushNotificationConfig` plumbing the URL tenant.
  */
 export function toCorePushNotificationConfig(
-  compat: legacy.PushNotificationConfig | legacy.PushNotificationConfig1
+  compat: legacy.PushNotificationConfig | legacy.PushNotificationConfig1,
+  tenant: string = ''
 ): V1TaskPushNotificationConfig {
   return {
-    tenant: '',
+    tenant,
     taskId: '',
     id: compat.id ?? '',
     url: compat.url,
@@ -116,12 +118,16 @@ export function toCompatPushNotificationConfig(
  * Converts a v0.3 JSON `TaskPushNotificationConfig` (with the nested
  * `pushNotificationConfig`) into a v1.0 proto flat
  * `TaskPushNotificationConfig`.
+ *
+ * v0.3 has no concept of tenants; the caller may supply the v1.0
+ * `tenant` value out-of-band. Defaults to `''` (global tenant).
  */
 export function toCoreTaskPushNotificationConfig(
-  compat: legacy.TaskPushNotificationConfig
+  compat: legacy.TaskPushNotificationConfig,
+  tenant: string = ''
 ): V1TaskPushNotificationConfig {
   return {
-    tenant: '',
+    tenant,
     taskId: compat.taskId,
     id: compat.pushNotificationConfig.id ?? '',
     url: compat.pushNotificationConfig.url,

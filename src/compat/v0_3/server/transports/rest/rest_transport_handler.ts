@@ -136,7 +136,7 @@ export class LegacyRestTransportHandler {
    */
   async getAuthenticatedExtendedAgentCard(context: ServerCallContext): Promise<legacy.AgentCard> {
     const core = await this.requestHandler.getAuthenticatedExtendedAgentCard(
-      { tenant: '' },
+      { tenant: context.tenant ?? '' },
       context
     );
     return toCompatAgentCard(core);
@@ -163,7 +163,10 @@ export class LegacyRestTransportHandler {
     context: ServerCallContext
   ): Promise<legacy.Task | legacy.Message> {
     this.validateMessageSendParams(params);
-    const coreReq = toCoreSendMessageRequest(buildLegacySendRequest(params, 'message/send'));
+    const coreReq = toCoreSendMessageRequest(
+      buildLegacySendRequest(params, 'message/send'),
+      context.tenant ?? ''
+    );
     const result = await this.requestHandler.sendMessage(coreReq, context);
     return 'messageId' in result
       ? toCompatMessage(result as V1Message)
@@ -186,7 +189,10 @@ export class LegacyRestTransportHandler {
   > {
     await this.requireCapability('streaming');
     this.validateMessageSendParams(params);
-    const coreReq = toCoreSendMessageRequest(buildLegacySendRequest(params, 'message/stream'));
+    const coreReq = toCoreSendMessageRequest(
+      buildLegacySendRequest(params, 'message/stream'),
+      context.tenant ?? ''
+    );
     const stream = this.requestHandler.sendMessageStream(coreReq, context);
     return LegacyRestTransportHandler.translateStream(stream);
   }
@@ -194,6 +200,12 @@ export class LegacyRestTransportHandler {
   /**
    * Fetches a task by id, translated to v0.3 JSON.
    * Accepts optional `historyLength` (parsed/validated locally).
+   *
+   * `historyLength` is deliberately left absent on the params object
+   * when the caller did not supply it: per §3.2.4, `undefined` means
+   * "no client limit, return full history". Coercing the default to
+   * `0` here would silently change the semantics to "return no
+   * history".
    */
   async getTask(
     taskId: string,
@@ -202,8 +214,7 @@ export class LegacyRestTransportHandler {
   ): Promise<legacy.Task> {
     const params: Parameters<A2ARequestHandler['getTask']>[0] = {
       id: taskId,
-      historyLength: 0,
-      tenant: '',
+      tenant: context.tenant ?? '',
     };
     if (historyLength !== undefined) {
       params.historyLength = this.parseHistoryLength(historyLength);
@@ -217,7 +228,7 @@ export class LegacyRestTransportHandler {
    */
   async cancelTask(taskId: string, context: ServerCallContext): Promise<legacy.Task> {
     const core = await this.requestHandler.cancelTask(
-      { id: taskId, tenant: '', metadata: {} },
+      { id: taskId, tenant: context.tenant ?? '', metadata: {} },
       context
     );
     return toCompatTask(core);
@@ -237,7 +248,10 @@ export class LegacyRestTransportHandler {
     AsyncGenerator<legacy.SendStreamingMessageSuccessResponse['result'], void, undefined>
   > {
     await this.requireCapability('streaming');
-    const stream = this.requestHandler.resubscribe({ id: taskId, tenant: '' }, context);
+    const stream = this.requestHandler.resubscribe(
+      { id: taskId, tenant: context.tenant ?? '' },
+      context
+    );
     return LegacyRestTransportHandler.translateStream(stream);
   }
 
@@ -258,7 +272,7 @@ export class LegacyRestTransportHandler {
     if (!config.pushNotificationConfig) {
       throw LegacyA2AError.invalidParams('pushNotificationConfig is required');
     }
-    const core = toCoreTaskPushNotificationConfig(config);
+    const core = toCoreTaskPushNotificationConfig(config, context.tenant ?? '');
     const result = await this.requestHandler.createTaskPushNotificationConfig(core, context);
     return toCompatTaskPushNotificationConfig(result);
   }
@@ -272,7 +286,7 @@ export class LegacyRestTransportHandler {
     context: ServerCallContext
   ): Promise<legacy.TaskPushNotificationConfig[]> {
     const result = await this.requestHandler.listTaskPushNotificationConfigs(
-      { taskId, pageSize: 0, pageToken: '', tenant: '' },
+      { taskId, pageSize: 0, pageToken: '', tenant: context.tenant ?? '' },
       context
     );
     return result.configs.map((cfg) => toCompatTaskPushNotificationConfig(cfg));
@@ -287,7 +301,7 @@ export class LegacyRestTransportHandler {
     context: ServerCallContext
   ): Promise<legacy.TaskPushNotificationConfig> {
     const result = await this.requestHandler.getTaskPushNotificationConfig(
-      { taskId, id: configId, tenant: '' },
+      { taskId, id: configId, tenant: context.tenant ?? '' },
       context
     );
     return toCompatTaskPushNotificationConfig(result);
@@ -302,7 +316,7 @@ export class LegacyRestTransportHandler {
     context: ServerCallContext
   ): Promise<void> {
     await this.requestHandler.deleteTaskPushNotificationConfig(
-      { taskId, id: configId, tenant: '' },
+      { taskId, id: configId, tenant: context.tenant ?? '' },
       context
     );
   }

@@ -45,6 +45,22 @@ import { RequestMalformedError } from '../../errors.js';
 export interface RestHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+  /**
+   * Enables the v0.3 protocol compatibility layer.
+   *
+   * When enabled, the handler accepts v0.3-shaped requests
+   * (`A2A-Version: 0.3`, or no header per §3.6.2) on the v0.3
+   * reference URL paths (`/v1/...`) and routes them through the
+   * compat module mounted at the top of the router.
+   *
+   * Default: omitted (treated as disabled). To accept v0.3 clients,
+   * the agent card MUST also declare a v0.3 `HTTP+JSON` interface in
+   * `supportedInterfaces`; see §3.6.2.
+   *
+   * When disabled, the v0.3 compatibility code is not instantiated and
+   * v0.3-shaped requests are rejected by the v1.0 version validator.
+   */
+  legacyCompat?: { enabled: boolean };
 }
 
 /**
@@ -109,14 +125,20 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
-  // Mount the v0.3 compat router under `/v1`. This is the path-prefix
-  // dispatch point between v0.3 and v1.0: anything under `/v1/*` is
-  // handled by the legacy router with its own middleware (body parser,
-  // content-type setter, error handler); anything else falls through to
-  // the v1.0 middleware and routes below. The two route sets are
-  // disjoint by mount point, so neither version's middleware ever runs
-  // for the other version's requests.
-  router.use('/v1', legacyRestRouter(options));
+  // Opt-in v0.3 compatibility. When enabled, the legacy router is
+  // mounted at the top of the chain (path-less). Dispatch between the
+  // v0.3 and v1.0 layers happens INSIDE the legacy router via a
+  // header-based middleware that parses `A2A-Version` and short-circuits
+  // non-legacy requests via `next('router')`. Path-based dispatch is
+  // intentionally avoided so the v1.0 spec's tenant routes
+  // (`/:tenant/...`) remain free to use `v1` (or any other label) as a
+  // tenant identifier without colliding with the v0.3 reference URLs.
+  // When `legacyCompat` is omitted or disabled, the compat module is
+  // never instantiated and v0.3-shaped requests are rejected by the
+  // v1.0 version validator.
+  if (options.legacyCompat?.enabled) {
+    router.use(legacyRestRouter(options));
+  }
 
   router.use(
     (_req: Request, res: Response, next: NextFunction) => {
