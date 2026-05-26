@@ -110,10 +110,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       // header-less legacy client will only succeed if the card declares
       // a v0.3 JSONRPC interface.
       validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
-      const transportHandler =
-        useLegacy && legacyJsonRpcTransportHandler !== undefined
-          ? legacyJsonRpcTransportHandler
-          : jsonRpcTransportHandler;
+      const transportHandler = useLegacy ? legacyJsonRpcTransportHandler : jsonRpcTransportHandler;
       const rpcResponseOrStream = await transportHandler.handle(req.body, context);
 
       if (context.activatedExtensions) {
