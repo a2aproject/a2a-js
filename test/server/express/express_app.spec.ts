@@ -19,7 +19,11 @@ import express, {
 } from 'express';
 import request from 'supertest';
 
-import { jsonErrorHandler, jsonRpcHandler } from '../../../src/server/express/json_rpc_handler.js';
+import {
+  jsonErrorHandler,
+  jsonRpcHandler,
+  type JsonRpcHandlerOptions,
+} from '../../../src/server/express/json_rpc_handler.js';
 import { agentCardHandler } from '../../../src/server/express/agent_card_handler.js';
 import { UserBuilder } from '../../../src/server/express/common.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
@@ -43,18 +47,32 @@ describe('A2AExpressApp', () => {
     userBuilder: UserBuilder = UserBuilder.noAuthentication,
     baseUrl: string = '',
     middlewares: Array<RequestHandler | ErrorRequestHandler> = [],
-    agentCardPath: string = AGENT_CARD_PATH
+    agentCardPath: string = AGENT_CARD_PATH,
+    jsonRpcOptions: Partial<Omit<JsonRpcHandlerOptions, 'requestHandler' | 'userBuilder'>> = {}
   ): Express => {
     const router = express.Router();
     router.use(express.json(), jsonErrorHandler);
     if (middlewares.length > 0) {
       router.use(middlewares);
     }
-    router.use(jsonRpcHandler({ requestHandler, userBuilder }));
+    router.use(jsonRpcHandler({ requestHandler, userBuilder, ...jsonRpcOptions }));
     router.use(`/${agentCardPath}`, agentCardHandler({ agentCardProvider: requestHandler }));
     expressApp.use(baseUrl, router);
     return expressApp;
   };
+
+  /**
+   * Convenience wrapper around {@link setupA2ARoutes} that enables the
+   * v0.3 compatibility layer. Used by the `legacy v0.3 JSON-RPC
+   * dispatch` test block to opt the handler into v0.3 method routing.
+   */
+  const setupA2ARoutesWithLegacyCompat = (
+    expressApp: Express,
+    requestHandler: A2ARequestHandler
+  ): Express =>
+    setupA2ARoutes(expressApp, requestHandler, undefined, undefined, undefined, undefined, {
+      legacyCompat: { enabled: true },
+    });
 
   // Helper function to create JSON-RPC request bodies
   const createRpcRequest = (id: string | null, method = 'SendMessage', params: object = {}) => ({
@@ -696,7 +714,7 @@ describe('A2AExpressApp', () => {
     beforeEach(() => {
       legacyHandleStub = vi.spyOn(LegacyJsonRpcTransportHandler.prototype, 'handle');
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(dualVersionAgentCard);
-      setupA2ARoutes(expressApp, mockRequestHandler);
+      setupA2ARoutesWithLegacyCompat(expressApp, mockRequestHandler);
     });
 
     it('routes a v0.3 method to the legacy handler', async () => {
@@ -800,6 +818,140 @@ describe('A2AExpressApp', () => {
       // v0.3 JSONRPCError.data is `Record<string,unknown>` not the v1.0
       // ErrorDetail[] array. The legacy mapper omits the field entirely.
       expect(response.body.error).to.not.have.property('data');
+    });
+
+    it('returns method-not-found for v0.3 methods when legacyCompat is omitted', async () => {
+      // Build a fresh app WITHOUT the compat opt-in. The v0.3 method
+      // name is unknown to the v1.0 dispatcher, which returns -32601.
+      const optOutApp = express();
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(dualVersionAgentCard);
+      setupA2ARoutes(optOutApp, mockRequestHandler);
+
+      const response = await request(optOutApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .send(createRpcRequest('req-no-compat', 'message/send'))
+        .expect(200);
+
+      // JSON-RPC convention: HTTP 200 carries the JSON-RPC error body.
+      expect(response.body.error.code).to.equal(A2A_ERROR_CODE.METHOD_NOT_FOUND);
+      // Legacy code path is never instantiated nor invoked.
+      expect(legacyHandleStub).not.toHaveBeenCalled();
+    });
+
+    it('returns method-not-found for v0.3 methods when legacyCompat.enabled is false', async () => {
+      const optOutApp = express();
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(dualVersionAgentCard);
+      setupA2ARoutes(optOutApp, mockRequestHandler, undefined, undefined, undefined, undefined, {
+        legacyCompat: { enabled: false },
+      });
+
+      const response = await request(optOutApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .send(createRpcRequest('req-disabled', 'message/send'))
+        .expect(200);
+
+      expect(response.body.error.code).to.equal(A2A_ERROR_CODE.METHOD_NOT_FOUND);
+      expect(legacyHandleStub).not.toHaveBeenCalled();
+    });
+
+    // ========================================================================
+    // Extension-header tolerance on the legacy JSON-RPC path
+    // ========================================================================
+
+    it('accepts X-A2A-Extensions on the legacy JSON-RPC path', async () => {
+      legacyHandleStub.mockImplementation(async (_body, context) => {
+        context.addActivatedExtension('ext-legacy');
+        return { jsonrpc: '2.0', id: 'ext-1', result: { kind: 'task' } };
+      });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .set('X-A2A-Extensions', 'ext-legacy')
+        .send(createRpcRequest('ext-1', 'message/send'))
+        .expect(200);
+
+      // Legacy response carries the v0.3 spelling.
+      assert.equal(response.headers['x-a2a-extensions'], 'ext-legacy');
+      assert.notProperty(response.headers, 'a2a-extensions');
+    });
+
+    it('accepts A2A-Extensions as fallback on the legacy JSON-RPC path', async () => {
+      legacyHandleStub.mockImplementation(async (_body, context) => {
+        context.addActivatedExtension('ext-modern');
+        return { jsonrpc: '2.0', id: 'ext-2', result: { kind: 'task' } };
+      });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .set('A2A-Extensions', 'ext-modern')
+        .send(createRpcRequest('ext-2', 'message/send'))
+        .expect(200);
+
+      // Legacy response always uses the X- spelling regardless of input.
+      assert.equal(response.headers['x-a2a-extensions'], 'ext-modern');
+    });
+
+    it('prefers X-A2A-Extensions when both spellings are present on the legacy path', async () => {
+      legacyHandleStub.mockImplementation(async (_body, context) => {
+        for (const ext of context.requestedExtensions ?? []) {
+          context.addActivatedExtension(ext);
+        }
+        return { jsonrpc: '2.0', id: 'ext-3', result: { kind: 'task' } };
+      });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .set('X-A2A-Extensions', 'legacy-ext')
+        .set('A2A-Extensions', 'modern-ext')
+        .send(createRpcRequest('ext-3', 'message/send'))
+        .expect(200);
+
+      // Legacy spelling wins on input; legacy spelling on output.
+      assert.equal(response.headers['x-a2a-extensions'], 'legacy-ext');
+    });
+
+    it('v1.0 JSON-RPC path writes A2A-Extensions (not X-) on responses', async () => {
+      handleStub.mockImplementation(async (_body, context) => {
+        context.addActivatedExtension('ext-v1');
+        return { jsonrpc: '2.0', id: 'ext-4', result: { task: { id: 't' } } };
+      });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .set('A2A-Extensions', 'ext-v1')
+        .send(createRpcRequest('ext-4', 'SendMessage'))
+        .expect(200);
+
+      assert.equal(response.headers['a2a-extensions'], 'ext-v1');
+      assert.notProperty(response.headers, 'x-a2a-extensions');
+    });
+
+    it('v1.0 JSON-RPC path does NOT read X-A2A-Extensions (stays strict)', async () => {
+      // Non-regression: matches the REST handler's behaviour where the
+      // v1.0 layer ignores the legacy header spelling.
+      handleStub.mockImplementation(async (_body, context) => {
+        for (const ext of context.requestedExtensions ?? []) {
+          context.addActivatedExtension(ext);
+        }
+        return { jsonrpc: '2.0', id: 'ext-5', result: { task: { id: 't' } } };
+      });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .set('X-A2A-Extensions', 'ignored-by-v1')
+        .send(createRpcRequest('ext-5', 'SendMessage'))
+        .expect(200);
+
+      // No extensions activated; no header in response.
+      assert.notProperty(response.headers, 'a2a-extensions');
+      assert.notProperty(response.headers, 'x-a2a-extensions');
     });
   });
 });
