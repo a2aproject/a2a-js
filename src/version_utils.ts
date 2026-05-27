@@ -7,8 +7,7 @@
  * without core having to statically import from the compat layer.
  */
 
-import { A2A_PROTOCOL_VERSION } from './constants.js';
-import { A2A_LEGACY_PROTOCOL_VERSION } from './compat/v0_3/constants.js';
+import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from './constants.js';
 
 /** The legacy A2A protocol version string targeted by the compat layer. */
 export const PROTOCOL_VERSION_0_3 = A2A_LEGACY_PROTOCOL_VERSION;

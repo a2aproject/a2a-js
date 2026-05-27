@@ -27,6 +27,17 @@ export const A2A_VERSION_HEADER = 'A2A-Version';
 export const A2A_PROTOCOL_VERSION = '1.0';
 
 /**
+ * The legacy A2A protocol version recognized by the v0.3 compat layer.
+ *
+ * Mirrors the `protocolVersion` field on legacy v0.3 AgentCards. Defined in
+ * core (rather than in `src/compat/v0_3/constants.ts`) so core modules such
+ * as `src/version_utils.ts` can reference it without statically importing
+ * from the compat layer. The compat layer re-exports this constant for
+ * backward compatibility.
+ */
+export const A2A_LEGACY_PROTOCOL_VERSION = '0.3';
+
+/**
  * The JSON content type per §9.1.
  * JSON-RPC requests MUST use this content type.
  */

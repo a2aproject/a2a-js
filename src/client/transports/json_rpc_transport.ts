@@ -422,6 +422,22 @@ export class JsonRpcTransport implements Transport {
 
 export class JsonRpcTransportFactoryOptions {
   fetchImpl?: typeof fetch;
+  /**
+   * Enables the v0.3 protocol compatibility layer.
+   *
+   * When enabled, the factory inspects the matched
+   * `AgentInterface.protocolVersion` on every `create()` call; if it
+   * falls in `[0.3, 1.0)`, the v0.3 `LegacyJsonRpcTransport` is
+   * instantiated instead of the v1.0 `JsonRpcTransport`.
+   *
+   * Default: omitted (treated as disabled). To talk to v0.3 JSON-RPC
+   * agents, the agent card MUST declare a v0.3 `JSONRPC` interface in
+   * `supportedInterfaces`; see §3.6.2.
+   *
+   * When disabled, the v0.3 compat module is never loaded and v0.3
+   * agents are not contacted via the compat transport.
+   */
+  legacyCompat?: { enabled: boolean };
 }
 
 /**
@@ -455,11 +471,18 @@ function pickMatchingInterface(
  * Factory that produces a JSON-RPC `Transport` for the matched agent
  * interface.
  *
- * Transparently dispatches between the v1.0 transport (`JsonRpcTransport`)
- * and the v0.3 compat transport (`LegacyJsonRpcTransport`) based on the
- * matched `AgentInterface.protocolVersion`: when the matched interface
- * declares `protocolVersion` in `[0.3, 1.0)`, the v0.3 transport is used;
+ * When the factory is constructed with `legacyCompat: { enabled: true }`,
+ * it transparently dispatches between the v1.0 transport
+ * (`JsonRpcTransport`) and the v0.3 compat transport
+ * (`LegacyJsonRpcTransport`) based on the matched
+ * `AgentInterface.protocolVersion`: when the matched interface declares
+ * `protocolVersion` in `[0.3, 1.0)`, the v0.3 transport is used;
  * otherwise (1.0 / empty / missing), the v1.0 transport is used.
+ *
+ * When `legacyCompat` is omitted or `{ enabled: false }`, the factory
+ * always produces the v1.0 `JsonRpcTransport` and never loads the compat
+ * module. This mirrors the server-side opt-in convention shared with the
+ * Express JSON-RPC and REST handlers.
  *
  * The v0.3 transport module is loaded lazily on demand, so callers that
  * only ever talk to v1.0 agents never pull compat code into their runtime
@@ -473,14 +496,16 @@ export class JsonRpcTransportFactory implements TransportFactory {
   }
 
   async create(url: string, agentCard: AgentCard): Promise<Transport> {
-    const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
-    if (iface && isLegacyVersion(iface.protocolVersion)) {
-      const { LegacyJsonRpcTransport } =
-        await import('../../compat/v0_3/client/transports/jsonrpc_transport.js');
-      return new LegacyJsonRpcTransport({
-        endpoint: url,
-        fetchImpl: this.options?.fetchImpl,
-      });
+    if (this.options?.legacyCompat?.enabled) {
+      const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
+      if (iface && isLegacyVersion(iface.protocolVersion)) {
+        const { LegacyJsonRpcTransport } =
+          await import('../../compat/v0_3/client/transports/jsonrpc_transport.js');
+        return new LegacyJsonRpcTransport({
+          endpoint: url,
+          fetchImpl: this.options?.fetchImpl,
+        });
+      }
     }
     return new JsonRpcTransport({
       endpoint: url,

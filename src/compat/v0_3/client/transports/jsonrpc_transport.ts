@@ -414,7 +414,7 @@ export class LegacyJsonRpcTransport implements Transport {
       );
     }
 
-    if (!('result' in legacyStreamResponse) || typeof legacyStreamResponse.result === 'undefined') {
+    if (!('result' in legacyStreamResponse) || legacyStreamResponse.result === null) {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
@@ -435,6 +435,9 @@ export class LegacyJsonRpcTransport implements Transport {
    * translator.
    */
   private static _parseSendMessageResult(result: legacy.Task | legacy.Message): SendMessageResult {
+    if (!result) {
+      throw new InvalidAgentResponseError('Invalid response: v0.3 message/send result is missing.');
+    }
     if (result.kind === 'task') {
       return toCoreTask(result);
     }

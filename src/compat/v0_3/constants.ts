@@ -8,9 +8,12 @@ import { A2AError } from './server/error.js';
 /**
  * The legacy A2A protocol version this compat layer targets.
  *
- * Mirrors the `protocolVersion` field on legacy v0.3 AgentCards.
+ * The canonical definition lives in `src/constants.ts` so core modules can
+ * reference it without statically importing from the compat layer. This
+ * re-export keeps the symbol reachable via the compat-layer import path for
+ * backward compatibility.
  */
-export const A2A_LEGACY_PROTOCOL_VERSION = '0.3';
+export { A2A_LEGACY_PROTOCOL_VERSION } from '../../constants.js';
 
 /**
  * The HTTP extension header used by legacy v0.3.
