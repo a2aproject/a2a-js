@@ -9,7 +9,7 @@ import {
   JsonRpcTransport,
   JsonRpcTransportFactory,
 } from '../../src/client/transports/json_rpc_transport.js';
-import { LegacyJsonRpcTransport } from '../../src/compat/v0_3/client/transports/jsonrpc_transport.js';
+import { LegacyJsonRpcTransport } from '../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };

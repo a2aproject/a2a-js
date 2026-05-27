@@ -1,8 +1,11 @@
 import { describe, it, beforeEach, expect, vi, type Mock } from 'vitest';
 import { formatSSEEvent } from '../../../../../src/sse_utils.js';
-import { A2A_ERROR_CODE, TaskNotFoundError } from '../../../../../src/errors.js';
-import { JSONRPCTransportError } from '../../../../../src/client/transports/json_rpc_transport.js';
-import { LegacyJsonRpcTransport } from '../../../../../src/compat/v0_3/client/transports/jsonrpc_transport.js';
+import {
+  A2A_ERROR_CODE,
+  JSONRPCTransportError,
+  TaskNotFoundError,
+} from '../../../../../src/errors.js';
+import { LegacyJsonRpcTransport } from '../../../../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 import {
   Role,
   TaskState,

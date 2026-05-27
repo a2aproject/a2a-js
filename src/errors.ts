@@ -1,3 +1,5 @@
+import type { JSONRPCErrorResponse } from './core.js';
+
 // Legacy JSON-RPC error codes.
 export const A2A_ERROR_CODE = {
   PARSE_ERROR: -32700,
@@ -292,3 +294,56 @@ export const A2A_NAME_TO_ERROR_CLASS: Record<string, new (message?: string) => E
       A2A_REASON_TO_ERROR_CLASS[reason],
     ])
   );
+
+/**
+ * Generic JSON-RPC transport error returned when a JSON-RPC error envelope
+ * carries a code that doesn't map to a known A2A SDK error class.
+ */
+export class JSONRPCTransportError extends Error {
+  constructor(public errorResponse: JSONRPCErrorResponse) {
+    super(
+      `JSON-RPC error: ${errorResponse.error.message} (Code: ${errorResponse.error.code}) Data: ${JSON.stringify(errorResponse.error.data || {})}`
+    );
+    this.name = 'JSONRPCTransportError';
+  }
+}
+
+/**
+ * Maps a JSON-RPC error envelope to a typed SDK error instance.
+ *
+ * Shared by both the v1.0 `JsonRpcTransport` and the v0.3 compat
+ * `LegacyJsonRpcTransport`. v0.3 servers will never emit the
+ * `EXTENSION_SUPPORT_REQUIRED` / `VERSION_NOT_SUPPORTED` codes in practice,
+ * so handling them here is a no-op for the legacy transport.
+ */
+export function mapJsonRpcErrorToSdkError(response: JSONRPCErrorResponse): Error {
+  const errorMessage = response.error.message;
+  switch (response.error.code) {
+    case A2A_ERROR_CODE.PARSE_ERROR:
+    case A2A_ERROR_CODE.INVALID_REQUEST:
+    case A2A_ERROR_CODE.METHOD_NOT_FOUND:
+    case A2A_ERROR_CODE.INVALID_PARAMS:
+    case A2A_ERROR_CODE.INTERNAL_ERROR:
+      return new RequestMalformedError(errorMessage);
+    case A2A_ERROR_CODE.TASK_NOT_FOUND:
+      return new TaskNotFoundError(errorMessage);
+    case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
+      return new TaskNotCancelableError(errorMessage);
+    case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
+      return new PushNotificationNotSupportedError(errorMessage);
+    case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
+      return new UnsupportedOperationError(errorMessage);
+    case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
+      return new ContentTypeNotSupportedError(errorMessage);
+    case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
+      return new InvalidAgentResponseError(errorMessage);
+    case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
+      return new ExtendedAgentCardNotConfiguredError(errorMessage);
+    case A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED:
+      return new ExtensionSupportRequiredError(errorMessage);
+    case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
+      return new VersionNotSupportedError(errorMessage);
+    default:
+      return new JSONRPCTransportError(response);
+  }
+}

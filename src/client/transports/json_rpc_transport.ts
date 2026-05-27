@@ -1,17 +1,5 @@
 import { JSONRPCErrorResponse, TransportProtocolName } from '../../core.js';
-import {
-  A2A_ERROR_CODE,
-  ContentTypeNotSupportedError,
-  InvalidAgentResponseError,
-  PushNotificationNotSupportedError,
-  TaskNotCancelableError,
-  TaskNotFoundError,
-  UnsupportedOperationError,
-  RequestMalformedError,
-  ExtendedAgentCardNotConfiguredError,
-  VersionNotSupportedError,
-  ExtensionSupportRequiredError,
-} from '../../errors.js';
+import { mapJsonRpcErrorToSdkError } from '../../errors.js';
 import {
   Task,
   AgentCard,
@@ -41,6 +29,7 @@ import {
   ListTasksResponse,
 } from '../../types/pb/a2a.js';
 import { JSON_CONTENT_TYPE } from '../../constants.js';
+import { LegacyJsonRpcTransport } from '../../compat/v0_3/index.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
 
@@ -252,7 +241,7 @@ export class JsonRpcTransport implements Transport {
         );
       }
       if (errorJson.jsonrpc && errorJson.error) {
-        throw JsonRpcTransport.mapToError(errorJson);
+        throw mapJsonRpcErrorToSdkError(errorJson);
       } else {
         throw new Error(
           `HTTP error for ${method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`
@@ -262,7 +251,7 @@ export class JsonRpcTransport implements Transport {
 
     const json = await httpResponse.json();
     if ('error' in json) {
-      throw JsonRpcTransport.mapToError(json as JSONRPCErrorResponse);
+      throw mapJsonRpcErrorToSdkError(json as JSONRPCErrorResponse);
     }
 
     const rpcResponse = json as JSONRPCSuccessResponse<TResponsePayload>;
@@ -315,7 +304,7 @@ export class JsonRpcTransport implements Transport {
         errorBody = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
         if (errorJson.error) {
-          throw JsonRpcTransport.mapToError(errorJson);
+          throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
         if (e instanceof Error && e.name !== 'SyntaxError') {
@@ -331,7 +320,7 @@ export class JsonRpcTransport implements Transport {
         const body = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(body);
         if (errorJson.error) {
-          throw JsonRpcTransport.mapToError(errorJson);
+          throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
         if (e instanceof Error && e.name !== 'SyntaxError') {
@@ -376,7 +365,7 @@ export class JsonRpcTransport implements Transport {
       const err = a2aStreamResponse.error;
       throw new Error(
         `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
-        { cause: JsonRpcTransport.mapToError(a2aStreamResponse) }
+        { cause: mapJsonRpcErrorToSdkError(a2aStreamResponse) }
       );
     }
 
@@ -385,38 +374,6 @@ export class JsonRpcTransport implements Transport {
     }
 
     return StreamResponse.fromJSON(a2aStreamResponse.result);
-  }
-
-  private static mapToError(response: JSONRPCErrorResponse): Error {
-    const errorMessage = response.error.message;
-    switch (response.error.code) {
-      case A2A_ERROR_CODE.PARSE_ERROR:
-      case A2A_ERROR_CODE.INVALID_REQUEST:
-      case A2A_ERROR_CODE.METHOD_NOT_FOUND:
-      case A2A_ERROR_CODE.INVALID_PARAMS:
-      case A2A_ERROR_CODE.INTERNAL_ERROR:
-        return new RequestMalformedError(errorMessage);
-      case A2A_ERROR_CODE.TASK_NOT_FOUND:
-        return new TaskNotFoundError(errorMessage);
-      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-        return new TaskNotCancelableError(errorMessage);
-      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-        return new PushNotificationNotSupportedError(errorMessage);
-      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-        return new UnsupportedOperationError(errorMessage);
-      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-        return new ContentTypeNotSupportedError(errorMessage);
-      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-        return new InvalidAgentResponseError(errorMessage);
-      case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
-        return new ExtendedAgentCardNotConfiguredError(errorMessage);
-      case A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED:
-        return new ExtensionSupportRequiredError(errorMessage);
-      case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
-        return new VersionNotSupportedError(errorMessage);
-      default:
-        return new JSONRPCTransportError(response);
-    }
   }
 }
 
@@ -499,8 +456,6 @@ export class JsonRpcTransportFactory implements TransportFactory {
     if (this.options?.legacyCompat?.enabled) {
       const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
       if (iface && isLegacyVersion(iface.protocolVersion)) {
-        const { LegacyJsonRpcTransport } =
-          await import('../../compat/v0_3/client/transports/jsonrpc_transport.js');
         return new LegacyJsonRpcTransport({
           endpoint: url,
           fetchImpl: this.options?.fetchImpl,
@@ -528,11 +483,3 @@ interface JSONRPCSuccessResponse<T> {
 }
 
 type JSONRPCResponse<T> = JSONRPCSuccessResponse<T> | JSONRPCErrorResponse;
-
-export class JSONRPCTransportError extends Error {
-  constructor(public errorResponse: JSONRPCErrorResponse) {
-    super(
-      `JSON-RPC error: ${errorResponse.error.message} (Code: ${errorResponse.error.code}) Data: ${JSON.stringify(errorResponse.error.data || {})}`
-    );
-  }
-}

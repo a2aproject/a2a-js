@@ -24,18 +24,12 @@ import { JSON_CONTENT_TYPE } from '../../../../constants.js';
 import type { JSONRPCErrorResponse, TransportProtocolName } from '../../../../core.js';
 import {
   A2A_ERROR_CODE,
-  ContentTypeNotSupportedError,
-  ExtendedAgentCardNotConfiguredError,
   InvalidAgentResponseError,
-  PushNotificationNotSupportedError,
-  RequestMalformedError,
-  TaskNotCancelableError,
-  TaskNotFoundError,
-  UnsupportedOperationError,
+  JSONRPCTransportError,
+  mapJsonRpcErrorToSdkError,
 } from '../../../../errors.js';
 import type { SendMessageResult } from '../../../../index.js';
 import type { RequestOptions } from '../../../../client/multitransport-client.js';
-import { JSONRPCTransportError } from '../../../../client/transports/json_rpc_transport.js';
 import { Transport } from '../../../../client/transports/transport.js';
 import { parseSseStream } from '../../../../sse_utils.js';
 import type {
@@ -297,7 +291,7 @@ export class LegacyJsonRpcTransport implements Transport {
         );
       }
       if (errorJson.jsonrpc && errorJson.error) {
-        throw LegacyJsonRpcTransport.mapToError(errorJson);
+        throw mapJsonRpcErrorToSdkError(errorJson);
       }
       throw new Error(
         `HTTP error for ${rpcRequest.method}! Status: ${httpResponse.status} ${httpResponse.statusText}. Response: ${errorBodyText}`
@@ -306,7 +300,7 @@ export class LegacyJsonRpcTransport implements Transport {
 
     const json = (await httpResponse.json()) as LegacyJsonRpcResponse<TResponsePayload>;
     if ('error' in json) {
-      throw LegacyJsonRpcTransport.mapToError(json);
+      throw mapJsonRpcErrorToSdkError(json);
     }
 
     if (json.id !== rpcRequest.id) {
@@ -348,7 +342,7 @@ export class LegacyJsonRpcTransport implements Transport {
         errorBody = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
         if (errorJson.error) {
-          throw LegacyJsonRpcTransport.mapToError(errorJson);
+          throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
         if (e instanceof Error && e.name !== 'SyntaxError') {
@@ -364,7 +358,7 @@ export class LegacyJsonRpcTransport implements Transport {
         const body = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(body);
         if (errorJson.error) {
-          throw LegacyJsonRpcTransport.mapToError(errorJson);
+          throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
         if (e instanceof Error && e.name !== 'SyntaxError') {
@@ -410,7 +404,7 @@ export class LegacyJsonRpcTransport implements Transport {
       const err = legacyStreamResponse.error;
       throw new Error(
         `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
-        { cause: LegacyJsonRpcTransport.mapToError(legacyStreamResponse) }
+        { cause: mapJsonRpcErrorToSdkError(legacyStreamResponse) }
       );
     }
 
@@ -447,40 +441,5 @@ export class LegacyJsonRpcTransport implements Transport {
     throw new InvalidAgentResponseError(
       `Unexpected v0.3 message/send result kind: ${String((result as { kind?: string }).kind)}`
     );
-  }
-
-  /**
-   * Maps a v0.3 JSON-RPC error envelope into an SDK error class.
-   *
-   * Mirrors {@link JsonRpcTransport}'s private `mapToError` so users can
-   * catch the same typed errors regardless of which transport variant
-   * produced them.
-   */
-  private static mapToError(response: JSONRPCErrorResponse): Error {
-    const errorMessage = response.error.message;
-    switch (response.error.code) {
-      case A2A_ERROR_CODE.PARSE_ERROR:
-      case A2A_ERROR_CODE.INVALID_REQUEST:
-      case A2A_ERROR_CODE.METHOD_NOT_FOUND:
-      case A2A_ERROR_CODE.INVALID_PARAMS:
-      case A2A_ERROR_CODE.INTERNAL_ERROR:
-        return new RequestMalformedError(errorMessage);
-      case A2A_ERROR_CODE.TASK_NOT_FOUND:
-        return new TaskNotFoundError(errorMessage);
-      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-        return new TaskNotCancelableError(errorMessage);
-      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-        return new PushNotificationNotSupportedError(errorMessage);
-      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-        return new UnsupportedOperationError(errorMessage);
-      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-        return new ContentTypeNotSupportedError(errorMessage);
-      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-        return new InvalidAgentResponseError(errorMessage);
-      case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
-        return new ExtendedAgentCardNotConfiguredError(errorMessage);
-      default:
-        return new JSONRPCTransportError(response);
-    }
   }
 }

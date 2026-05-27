@@ -5,4 +5,4 @@
 export {
   LegacyJsonRpcTransport,
   type LegacyJsonRpcTransportOptions,
-} from './transports/jsonrpc_transport.js';
+} from './transports/json_rpc_transport.js';

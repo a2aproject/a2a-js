@@ -14,7 +14,7 @@ import {
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
-import { LegacyJsonRpcTransport } from '../../../src/compat/v0_3/client/transports/jsonrpc_transport.js';
+import { LegacyJsonRpcTransport } from '../../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 
 describe('JsonRpcTransport', () => {
   let transport: JsonRpcTransport;
