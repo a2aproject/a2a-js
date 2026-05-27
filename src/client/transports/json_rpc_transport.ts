@@ -29,7 +29,7 @@ import {
   ListTasksResponse,
 } from '../../types/pb/a2a.js';
 import { JSON_CONTENT_TYPE } from '../../constants.js';
-import { LegacyJsonRpcTransport } from '../../compat/v0_3/index.js';
+import { LegacyJsonRpcTransport } from '../../compat/v0_3/client/index.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
 
