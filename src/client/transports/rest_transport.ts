@@ -5,6 +5,8 @@ import { SendMessageResult, A2A_PROTOCOL_VERSION, A2A_CONTENT_TYPE } from '../..
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
+import { isLegacyVersion } from '../../version_utils.js';
+import { pickMatchingInterface } from './pick_interface.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import {
   AgentCard,
@@ -27,6 +29,7 @@ import {
   TaskState,
   taskStateToJSON,
 } from '../../types/pb/a2a.js';
+import { LegacyRestTransport } from '../../compat/v0_3/client/index.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
 
@@ -408,10 +411,48 @@ export class RestTransport implements Transport {
   }
 }
 
-export interface RestTransportFactoryOptions {
+export class RestTransportFactoryOptions {
   fetchImpl?: typeof fetch;
+  /**
+   * Enables the v0.3 protocol compatibility layer.
+   *
+   * When enabled, the factory inspects the matched
+   * `AgentInterface.protocolVersion` on every `create()` call; if it
+   * falls in `[0.3, 1.0)`, the v0.3 `LegacyRestTransport` is
+   * instantiated instead of the v1.0 `RestTransport`.
+   *
+   * Default: omitted (treated as disabled). To talk to v0.3 REST
+   * agents, the agent card MUST declare a v0.3 `HTTP+JSON` interface
+   * in `supportedInterfaces`; see §3.6.2.
+   *
+   * When disabled, the v0.3 compat module is never loaded and v0.3
+   * agents are not contacted via the compat transport.
+   */
+  legacyCompat?: { enabled: boolean };
 }
 
+/**
+ * Factory that produces an HTTP+JSON `Transport` for the matched agent
+ * interface.
+ *
+ * When the factory is constructed with `legacyCompat: { enabled: true }`,
+ * it transparently dispatches between the v1.0 transport
+ * (`RestTransport`) and the v0.3 compat transport
+ * (`LegacyRestTransport`) based on the matched
+ * `AgentInterface.protocolVersion`: when the matched interface declares
+ * `protocolVersion` in `[0.3, 1.0)`, the v0.3 transport is used;
+ * otherwise (1.0 / empty / missing), the v1.0 transport is used.
+ *
+ * When `legacyCompat` is omitted or `{ enabled: false }`, the factory
+ * always produces the v1.0 `RestTransport` and never loads the compat
+ * module. This mirrors the server-side opt-in convention shared with the
+ * Express JSON-RPC and REST handlers and the symmetric
+ * `JsonRpcTransportFactory.legacyCompat` flag.
+ *
+ * The v0.3 transport module is loaded lazily on demand, so callers that
+ * only ever talk to v1.0 agents never pull compat code into their
+ * runtime graph.
+ */
 export class RestTransportFactory implements TransportFactory {
   constructor(private readonly options?: RestTransportFactoryOptions) {}
 
@@ -419,7 +460,16 @@ export class RestTransportFactory implements TransportFactory {
     return PROTOCOL_NAME;
   }
 
-  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
+  async create(url: string, agentCard: AgentCard): Promise<Transport> {
+    if (this.options?.legacyCompat?.enabled) {
+      const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
+      if (iface && isLegacyVersion(iface.protocolVersion)) {
+        return new LegacyRestTransport({
+          endpoint: url,
+          fetchImpl: this.options?.fetchImpl,
+        });
+      }
+    }
     return new RestTransport({
       endpoint: url,
       fetchImpl: this.options?.fetchImpl,
