@@ -6,3 +6,7 @@ export {
   LegacyJsonRpcTransport,
   type LegacyJsonRpcTransportOptions,
 } from './transports/jsonrpc_transport.js';
+export {
+  LegacyRestTransport,
+  type LegacyRestTransportOptions,
+} from './transports/rest_transport.js';
