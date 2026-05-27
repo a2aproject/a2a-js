@@ -4,6 +4,7 @@ import {
 } from '../../../src/client/transports/rest_transport.js';
 import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
+import { LegacyRestTransport } from '../../../src/compat/v0_3/client/transports/rest_transport.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
 import {
@@ -508,5 +509,137 @@ describe('RestTransportFactory', () => {
     });
     const transport = await factory.create('https://example.com/api', agentCard);
     expect(transport).to.be.instanceOf(RestTransport);
+  });
+
+  describe('legacyCompat enabled', () => {
+    it('produces LegacyRestTransport when matched interface has protocolVersion 0.3', async () => {
+      const card = createMockAgentCard({
+        supportedInterfaces: [
+          {
+            url: 'https://a.example/rest',
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '0.3',
+          },
+        ],
+      });
+      const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rest', card);
+      expect(transport).toBeInstanceOf(LegacyRestTransport);
+    });
+
+    it('produces RestTransport when matched interface has protocolVersion 1.0', async () => {
+      const card = createMockAgentCard({
+        supportedInterfaces: [
+          {
+            url: 'https://a.example/rest',
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+        ],
+      });
+      const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rest', card);
+      expect(transport).toBeInstanceOf(RestTransport);
+      expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+    });
+
+    it('produces RestTransport when matched interface has empty protocolVersion', async () => {
+      const card = createMockAgentCard({
+        supportedInterfaces: [
+          {
+            url: 'https://a.example/rest',
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '',
+          },
+        ],
+      });
+      const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rest', card);
+      expect(transport).toBeInstanceOf(RestTransport);
+      expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+    });
+
+    it('disambiguates by URL when multiple HTTP+JSON interfaces are present', async () => {
+      const card = createMockAgentCard({
+        supportedInterfaces: [
+          {
+            url: 'https://v1.example/rest',
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+          {
+            url: 'https://v03.example/rest',
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '0.3',
+          },
+        ],
+      });
+      const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+
+      const v03 = await factory.create('https://v03.example/rest', card);
+      expect(v03).toBeInstanceOf(LegacyRestTransport);
+
+      const v1 = await factory.create('https://v1.example/rest', card);
+      expect(v1).toBeInstanceOf(RestTransport);
+      expect(v1).not.toBeInstanceOf(LegacyRestTransport);
+    });
+
+    it('falls back to v1.0 RestTransport when no HTTP+JSON interface is found', async () => {
+      const card = createMockAgentCard({
+        supportedInterfaces: [
+          {
+            url: 'https://a.example/rpc',
+            protocolBinding: 'JSONRPC',
+            tenant: '',
+            protocolVersion: '0.3',
+          },
+        ],
+      });
+      const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rest', card);
+      expect(transport).toBeInstanceOf(RestTransport);
+      expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+    });
+  });
+
+  describe('legacyCompat disabled (default)', () => {
+    it('produces RestTransport for v0.3 interface when legacyCompat option is omitted', async () => {
+      const card = createMockAgentCard({
+        supportedInterfaces: [
+          {
+            url: 'https://a.example/rest',
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '0.3',
+          },
+        ],
+      });
+      const factory = new RestTransportFactory();
+      const transport = await factory.create('https://a.example/rest', card);
+      expect(transport).toBeInstanceOf(RestTransport);
+      expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+    });
+
+    it('produces RestTransport for v0.3 interface when legacyCompat.enabled is false', async () => {
+      const card = createMockAgentCard({
+        supportedInterfaces: [
+          {
+            url: 'https://a.example/rest',
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '0.3',
+          },
+        ],
+      });
+      const factory = new RestTransportFactory({ legacyCompat: { enabled: false } });
+      const transport = await factory.create('https://a.example/rest', card);
+      expect(transport).toBeInstanceOf(RestTransport);
+      expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+    });
   });
 });
