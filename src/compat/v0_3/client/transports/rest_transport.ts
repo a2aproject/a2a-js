@@ -203,7 +203,7 @@ export class LegacyRestTransport implements Transport {
     return toCoreListTaskPushNotificationConfigsResponse({
       id: this._nextResponseId(),
       jsonrpc: '2.0',
-      result,
+      result: result ?? [],
     });
   }
 
@@ -345,7 +345,8 @@ export class LegacyRestTransport implements Transport {
       return undefined as TResponse;
     }
 
-    return (await response.json()) as TResponse;
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as TResponse;
   }
 
   private async *_sendStreamingRequest(
