@@ -230,88 +230,129 @@ describe('JsonRpcTransportFactory', () => {
     expect(new JsonRpcTransportFactory().protocolName).toBe('JSONRPC');
   });
 
-  it('produces LegacyJsonRpcTransport when matched interface has protocolVersion 0.3', async () => {
-    const card = baseAgentCard();
-    card.supportedInterfaces = [
-      {
-        url: 'https://a.example/rpc',
-        protocolBinding: 'JSONRPC',
-        tenant: '',
-        protocolVersion: '0.3',
-      },
-    ];
-    const factory = new JsonRpcTransportFactory();
-    const transport = await factory.create('https://a.example/rpc', card);
-    expect(transport).toBeInstanceOf(LegacyJsonRpcTransport);
+  describe('legacyCompat enabled', () => {
+    it('produces LegacyJsonRpcTransport when matched interface has protocolVersion 0.3', async () => {
+      const card = baseAgentCard();
+      card.supportedInterfaces = [
+        {
+          url: 'https://a.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ];
+      const factory = new JsonRpcTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rpc', card);
+      expect(transport).toBeInstanceOf(LegacyJsonRpcTransport);
+    });
+
+    it('produces JsonRpcTransport when matched interface has protocolVersion 1.0', async () => {
+      const card = baseAgentCard();
+      card.supportedInterfaces = [
+        {
+          url: 'https://a.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+      ];
+      const factory = new JsonRpcTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rpc', card);
+      expect(transport).toBeInstanceOf(JsonRpcTransport);
+      expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
+    });
+
+    it('produces JsonRpcTransport when matched interface has empty protocolVersion', async () => {
+      const card = baseAgentCard();
+      card.supportedInterfaces = [
+        {
+          url: 'https://a.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '',
+        },
+      ];
+      const factory = new JsonRpcTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rpc', card);
+      expect(transport).toBeInstanceOf(JsonRpcTransport);
+      expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
+    });
+
+    it('disambiguates by URL when multiple JSON-RPC interfaces are present', async () => {
+      const card = baseAgentCard();
+      card.supportedInterfaces = [
+        {
+          url: 'https://v1.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+        {
+          url: 'https://v03.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ];
+      const factory = new JsonRpcTransportFactory({ legacyCompat: { enabled: true } });
+
+      const v03 = await factory.create('https://v03.example/rpc', card);
+      expect(v03).toBeInstanceOf(LegacyJsonRpcTransport);
+
+      const v1 = await factory.create('https://v1.example/rpc', card);
+      expect(v1).toBeInstanceOf(JsonRpcTransport);
+      expect(v1).not.toBeInstanceOf(LegacyJsonRpcTransport);
+    });
+
+    it('falls back to v1.0 JsonRpcTransport when no JSON-RPC interface is found', async () => {
+      const card = baseAgentCard();
+      card.supportedInterfaces = [
+        {
+          url: 'https://a.example/grpc',
+          protocolBinding: 'GRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ];
+      const factory = new JsonRpcTransportFactory({ legacyCompat: { enabled: true } });
+      const transport = await factory.create('https://a.example/rpc', card);
+      expect(transport).toBeInstanceOf(JsonRpcTransport);
+      expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
+    });
   });
 
-  it('produces JsonRpcTransport when matched interface has protocolVersion 1.0', async () => {
-    const card = baseAgentCard();
-    card.supportedInterfaces = [
-      {
-        url: 'https://a.example/rpc',
-        protocolBinding: 'JSONRPC',
-        tenant: '',
-        protocolVersion: '1.0',
-      },
-    ];
-    const factory = new JsonRpcTransportFactory();
-    const transport = await factory.create('https://a.example/rpc', card);
-    expect(transport).toBeInstanceOf(JsonRpcTransport);
-    expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
-  });
+  describe('legacyCompat disabled (default)', () => {
+    it('produces JsonRpcTransport for v0.3 interface when legacyCompat option is omitted', async () => {
+      const card = baseAgentCard();
+      card.supportedInterfaces = [
+        {
+          url: 'https://a.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ];
+      const factory = new JsonRpcTransportFactory();
+      const transport = await factory.create('https://a.example/rpc', card);
+      expect(transport).toBeInstanceOf(JsonRpcTransport);
+      expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
+    });
 
-  it('produces JsonRpcTransport when matched interface has empty protocolVersion', async () => {
-    const card = baseAgentCard();
-    card.supportedInterfaces = [
-      { url: 'https://a.example/rpc', protocolBinding: 'JSONRPC', tenant: '', protocolVersion: '' },
-    ];
-    const factory = new JsonRpcTransportFactory();
-    const transport = await factory.create('https://a.example/rpc', card);
-    expect(transport).toBeInstanceOf(JsonRpcTransport);
-    expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
-  });
-
-  it('disambiguates by URL when multiple JSON-RPC interfaces are present', async () => {
-    const card = baseAgentCard();
-    card.supportedInterfaces = [
-      {
-        url: 'https://v1.example/rpc',
-        protocolBinding: 'JSONRPC',
-        tenant: '',
-        protocolVersion: '1.0',
-      },
-      {
-        url: 'https://v03.example/rpc',
-        protocolBinding: 'JSONRPC',
-        tenant: '',
-        protocolVersion: '0.3',
-      },
-    ];
-    const factory = new JsonRpcTransportFactory();
-
-    const v03 = await factory.create('https://v03.example/rpc', card);
-    expect(v03).toBeInstanceOf(LegacyJsonRpcTransport);
-
-    const v1 = await factory.create('https://v1.example/rpc', card);
-    expect(v1).toBeInstanceOf(JsonRpcTransport);
-    expect(v1).not.toBeInstanceOf(LegacyJsonRpcTransport);
-  });
-
-  it('falls back to v1.0 JsonRpcTransport when no JSON-RPC interface is found', async () => {
-    const card = baseAgentCard();
-    card.supportedInterfaces = [
-      {
-        url: 'https://a.example/grpc',
-        protocolBinding: 'GRPC',
-        tenant: '',
-        protocolVersion: '0.3',
-      },
-    ];
-    const factory = new JsonRpcTransportFactory();
-    const transport = await factory.create('https://a.example/rpc', card);
-    expect(transport).toBeInstanceOf(JsonRpcTransport);
-    expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
+    it('produces JsonRpcTransport for v0.3 interface when legacyCompat.enabled is false', async () => {
+      const card = baseAgentCard();
+      card.supportedInterfaces = [
+        {
+          url: 'https://a.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ];
+      const factory = new JsonRpcTransportFactory({ legacyCompat: { enabled: false } });
+      const transport = await factory.create('https://a.example/rpc', card);
+      expect(transport).toBeInstanceOf(JsonRpcTransport);
+      expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
+    });
   });
 
   describe('legacyCompat enabled', () => {
