@@ -9,4 +9,8 @@ export {
   toLegacyHTTPError,
   type LegacyRestErrorBody,
 } from './transports/rest/rest_transport_handler.js';
+export {
+  legacyAgentCardRouter,
+  type LegacyAgentCardHandlerOptions,
+} from './express/agent_card_handler.js';
 export { legacyRestRouter, type LegacyRestHandlerOptions } from './express/rest_handler.js';

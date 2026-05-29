@@ -1,9 +1,28 @@
 import { AGENT_CARD_PATH } from '../constants.js';
 import { AgentCard } from '../index.js';
+import { isLegacyAgentCard, parseLegacyAgentCard } from '../compat/v0_3/client/index.js';
 
 export interface AgentCardResolverOptions {
   path?: string;
   fetchImpl?: typeof fetch;
+  /**
+   * Enables the v0.3 protocol compatibility layer.
+   *
+   * When enabled, the resolver inspects each fetched agent-card
+   * payload; if its shape matches v0.3 (top-level `url` without
+   * `supportedInterfaces`, `preferredTransport`,
+   * `additionalInterfaces`, `supportsAuthenticatedExtendedCard`, or
+   * a `protocolVersion` in `[0.3, 1.0)`), it is translated to the
+   * v1.0 proto shape via `toCoreAgentCard`. Each synthesized
+   * `AgentInterface` is stamped with `protocolVersion: '0.3'` so
+   * that a {@link JsonRpcTransportFactory} configured with
+   * `legacyCompat: { enabled: true }` selects the compat transport
+   * automatically.
+   *
+   * Default: omitted (treated as disabled). When disabled, the v0.3
+   * compat module is never loaded.
+   */
+  legacyCompat?: { enabled: boolean };
 }
 
 export interface AgentCardResolver {
@@ -51,8 +70,19 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
    * allows us to parse cards served by endpoints returning the Protobuf JSON structure by
    * identifying the lack of the "type" field in security schemes or the presence of the
    * "schemes" wrapper in security entries, and normalizing it before use.
+   *
+   * When `legacyCompat: { enabled: true }`, this method also detects
+   * v0.3-shaped cards and translates them via the lazy-loaded compat
+   * module so the rest of the client stack sees a uniform v1.0
+   * representation with `protocolVersion: '0.3'` stamped on every
+   * synthesized interface.
    */
   private normalizeAgentCard(card: unknown): AgentCard {
+    if (this.options?.legacyCompat?.enabled) {
+      if (isLegacyAgentCard(card)) {
+        return parseLegacyAgentCard(card);
+      }
+    }
     if (this.isProtoAgentCard(card)) {
       const parsedProto = AgentCard.fromJSON(card);
       return parsedProto;
