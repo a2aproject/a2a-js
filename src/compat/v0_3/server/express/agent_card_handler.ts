@@ -113,10 +113,10 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
         compatCard = toCompatAgentCard(coreCard);
       } catch (error) {
         if (error instanceof VersionNotSupportedError) {
+          res.append('Vary', A2A_VERSION_HEADER);
           res
             .status(HTTP_STATUS.BAD_REQUEST)
             .setHeader('Content-Type', LEGACY_JSON_CONTENT_TYPE)
-            .setHeader('Vary', A2A_VERSION_HEADER)
             .json(toLegacyHTTPError(error));
           return;
         }
@@ -130,7 +130,7 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       // `Vary: A2A-Version` partitions the cache per protocol version
       // so a v1.0 client doesn't get a cached v0.3 body (and vice
       // versa) when sitting behind a shared HTTP cache.
-      res.setHeader('Vary', A2A_VERSION_HEADER);
+      res.append('Vary', A2A_VERSION_HEADER);
       if (maxAge > 0) {
         res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
       } else {

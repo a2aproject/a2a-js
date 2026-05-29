@@ -72,7 +72,7 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
    * "schemes" wrapper in security entries, and normalizing it before use.
    *
    * When `legacyCompat: { enabled: true }`, this method also detects
-   * v0.3-shaped cards and translates them via the lazy-loaded compat
+   * v0.3-shaped cards and translates them via the compat
    * module so the rest of the client stack sees a uniform v1.0
    * representation with `protocolVersion: '0.3'` stamped on every
    * synthesized interface.

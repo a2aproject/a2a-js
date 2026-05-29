@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 import { assert, describe, it } from 'vitest';
 
@@ -120,6 +120,28 @@ function createApp(card: AgentCard, legacyCompat?: { enabled: boolean }) {
   return app;
 }
 
+/**
+ * Mounts a tiny pre-middleware that stamps `Vary: Accept-Encoding` so
+ * tests can assert that the handlers' `Vary` write merges into (rather
+ * than overwrites) upstream values — emulating what compression/CORS
+ * middleware would do in a real deployment.
+ */
+function createAppWithUpstreamVary(card: AgentCard, legacyCompat?: { enabled: boolean }) {
+  const app = express();
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Vary', 'Accept-Encoding');
+    next();
+  });
+  app.use(
+    '/.well-known/agent-card.json',
+    agentCardHandler({
+      agentCardProvider: async () => card,
+      legacyCompat,
+    })
+  );
+  return app;
+}
+
 function createLegacyOnlyApp(card: AgentCard) {
   // Mount only the legacy router for tests that need to exercise the
   // legacy code path in isolation.
@@ -210,6 +232,39 @@ describe('agentCardHandler with legacyCompat', () => {
       const response = await request(app).get('/.well-known/agent-card.json').expect(200);
 
       assert.isUndefined(response.headers['vary']);
+    });
+
+    it('preserves an upstream Vary value on the compat (v0.3) success path', async () => {
+      const app = createAppWithUpstreamVary(dualVersionCard(), { enabled: true });
+      const response = await request(app)
+        .get('/.well-known/agent-card.json')
+        .set('A2A-Version', '0.3')
+        .expect(200);
+
+      // `res.append` merges into the existing comma-separated value
+      // instead of overwriting `Accept-Encoding` set by upstream
+      // (e.g. compression) middleware.
+      assert.equal(response.headers['vary'], 'Accept-Encoding, A2A-Version');
+    });
+
+    it('preserves an upstream Vary value on the v1.0 success path', async () => {
+      const app = createAppWithUpstreamVary(dualVersionCard(), { enabled: true });
+      const response = await request(app)
+        .get('/.well-known/agent-card.json')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      assert.equal(response.headers['vary'], 'Accept-Encoding, A2A-Version');
+    });
+
+    it('preserves an upstream Vary value on the VersionNotSupportedError (400) path', async () => {
+      const app = createAppWithUpstreamVary(modernOnlyCard(), { enabled: true });
+      const response = await request(app)
+        .get('/.well-known/agent-card.json')
+        .set('A2A-Version', '0.3')
+        .expect(400);
+
+      assert.equal(response.headers['vary'], 'Accept-Encoding, A2A-Version');
     });
 
     it('emits different ETags for the v0.3 and v1.0 bodies', async () => {

@@ -102,7 +102,7 @@ export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandl
       // `A2A-Version` so a v1.0 client doesn't receive a cached v0.3
       // body (and vice versa) when sitting behind a shared HTTP cache.
       if (options.legacyCompat?.enabled) {
-        res.setHeader('Vary', A2A_VERSION_HEADER);
+        res.append('Vary', A2A_VERSION_HEADER);
       }
       if (maxAge > 0) {
         res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
