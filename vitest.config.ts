@@ -14,6 +14,7 @@ export default defineConfig({
         'src/types/pb/**/*',
         'src/grpc/pb/**/*',
         'src/compat/v0_3/types/pb/**/*',
+        'src/compat/v0_3/grpc/pb/**/*',
         'src/compat/v0_3/types/types.ts',
         'src/compat/v0_3/types/rest_types.ts',
       ],
