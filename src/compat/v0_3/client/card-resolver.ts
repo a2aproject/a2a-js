@@ -17,7 +17,7 @@
  *
  * Kept in the compat layer (rather than in the core
  * `src/client/card-resolver.ts`) so the v0.3 types and translators are
- * only loaded when an operator has explicitly opted into compat.
+ * only called when an operator has explicitly opted into compat.
  */
 import type { AgentCard as V1AgentCard } from '../../../types/pb/a2a.js';
 import { toCoreAgentCard } from '../translate/agent_card.js';

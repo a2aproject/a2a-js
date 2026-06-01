@@ -3,7 +3,7 @@ import { DefaultAgentCardResolver } from '../../../../src/client/card-resolver.j
 import {
   isLegacyAgentCard,
   parseLegacyAgentCard,
-} from '../../../../src/compat/v0_3/client/card_resolver.js';
+} from '../../../../src/compat/v0_3/client/card-resolver.js';
 import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
 
 function minimalLegacyCard(): legacy.AgentCard {

@@ -267,6 +267,34 @@ describe('agentCardHandler with legacyCompat', () => {
       assert.equal(response.headers['vary'], 'Accept-Encoding, A2A-Version');
     });
 
+    it('preserves an upstream Vary value on the generic 500 error path', async () => {
+      // Provider throws a plain Error (not VersionNotSupportedError) so the
+      // outer catch in the legacy router is exercised. The Vary header must
+      // still be appended so shared HTTP caches don't serve this 500 to a
+      // v1.0 client that should have hit the v1.0 handler instead.
+      const app = express();
+      app.use((_req: Request, res: Response, next: NextFunction) => {
+        res.setHeader('Vary', 'Accept-Encoding');
+        next();
+      });
+      app.use(
+        '/.well-known/agent-card.json',
+        agentCardHandler({
+          agentCardProvider: async () => {
+            throw new Error('boom');
+          },
+          legacyCompat: { enabled: true },
+        })
+      );
+
+      const response = await request(app)
+        .get('/.well-known/agent-card.json')
+        .set('A2A-Version', '0.3')
+        .expect(500);
+
+      assert.equal(response.headers['vary'], 'Accept-Encoding, A2A-Version');
+    });
+
     it('emits different ETags for the v0.3 and v1.0 bodies', async () => {
       const app = createApp(dualVersionCard(), { enabled: true });
       const compat = await request(app)

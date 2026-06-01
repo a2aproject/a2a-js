@@ -148,6 +148,7 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       res.status(HTTP_STATUS.OK).send(body);
     } catch (error) {
       console.error('Error fetching legacy agent card:', error);
+      res.append('Vary', A2A_VERSION_HEADER);
       res
         .status(500)
         .setHeader('Content-Type', LEGACY_JSON_CONTENT_TYPE)

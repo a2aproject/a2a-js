@@ -1,6 +1,6 @@
 import { AGENT_CARD_PATH } from '../constants.js';
 import { AgentCard } from '../index.js';
-import { isLegacyAgentCard, parseLegacyAgentCard } from '../compat/v0_3/client/index.js';
+import { isLegacyAgentCard, parseLegacyAgentCard } from '../compat/v0_3/client/card-resolver.js';
 
 export interface AgentCardResolverOptions {
   path?: string;
