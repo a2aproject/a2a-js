@@ -422,6 +422,9 @@ function _serializeSendMessageResult(result: V1Message | V1Task): SendMessageRes
   // `requestHandler.sendMessage` returns either a Message or a Task (v1.0
   // proto). Translate via the v0.3 message/task translators and then run
   // `ToProto.messageSendResult` to put the result back into v0.3 pb shape.
+  if (!result) {
+    throw new InvalidAgentResponseError('Invalid SendMessage result from request handler');
+  }
   const compat: legacy.Message | legacy.Task =
     'messageId' in result ? toCompatMessage(result as V1Message) : toCompatTask(result as V1Task);
   const response = ToProto.messageSendResult(compat);
@@ -437,10 +440,10 @@ function _serializeStreamResponse(event: V1StreamResponse): StreamResponse {
   // For each case, translate the v1.0 proto value to v0.3 JSON via the
   // `toCompat*` translators, then re-encode into the v0.3 pb wire
   // representation via `ToProto.messageStreamResult`.
-  const payload = event.payload;
-  if (!payload) {
+  if (!event || !event.payload) {
     throw new InvalidAgentResponseError('StreamResponse missing payload');
   }
+  const payload = event.payload;
   switch (payload.$case) {
     case 'message':
       return ToProto.messageStreamResult(toCompatMessage(payload.value));
@@ -471,6 +474,11 @@ function _serializeListTaskPushNotificationConfigResponse(
   // v0.3 has no pagination on this endpoint, so `nextPageToken` is dropped
   // on the way out. v1.0 callers that need it should use the v1.0
   // transport.
+  if (!response || !response.configs) {
+    throw new InvalidAgentResponseError(
+      'Invalid ListTaskPushNotificationConfigs result from request handler'
+    );
+  }
   return ToProto.listTaskPushNotificationConfig(
     response.configs.map((cfg) => toCompatTaskPushNotificationConfig(cfg))
   );
