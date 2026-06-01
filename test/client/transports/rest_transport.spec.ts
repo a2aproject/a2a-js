@@ -546,6 +546,8 @@ describe('legacyCompat enabled', () => {
     expect(transport).not.toBeInstanceOf(LegacyRestTransport);
   });
 
+  // TODO: It should default to v0.3 when protocolVersion is missing and legacyCompat is enabled
+  // after https://github.com/a2aproject/a2a-js/issues/474
   it('produces RestTransport when matched interface has empty protocolVersion', async () => {
     const card = createMockAgentCard({
       supportedInterfaces: [

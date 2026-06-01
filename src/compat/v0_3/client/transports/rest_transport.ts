@@ -34,14 +34,8 @@
  */
 
 import {
-  A2A_ERROR_CODE,
-  ContentTypeNotSupportedError,
-  ExtendedAgentCardNotConfiguredError,
   InvalidAgentResponseError,
-  PushNotificationNotSupportedError,
-  RequestMalformedError,
-  TaskNotCancelableError,
-  TaskNotFoundError,
+  mapA2aErrorToSdkError,
   UnsupportedOperationError,
 } from '../../../../errors.js';
 import type { TransportProtocolName } from '../../../../core.js';
@@ -315,8 +309,8 @@ export class LegacyRestTransport implements Transport {
    *   caller's translator). Skipped for `GET`/`DELETE`.
    * - 204 No Content (e.g. `DELETE`) resolves to `undefined`.
    * - Non-2xx responses with a parseable v0.3 error body are mapped to a
-   *   typed SDK error via {@link mapToError}; everything else falls
-   *   through to a generic `Error`.
+   *   typed SDK error via {@link mapA2aErrorToSdkError}; everything else
+   *   falls through to a generic `Error`.
    */
   private async _sendRequest<TResponse>(
     method: 'GET' | 'POST' | 'DELETE',
@@ -423,7 +417,10 @@ export class LegacyRestTransport implements Transport {
     try {
       const parsed = JSON.parse(jsonData) as unknown;
       if (LegacyRestTransport._isLegacyRestErrorBody(parsed)) {
-        return LegacyRestTransport.mapToError(parsed);
+        return mapA2aErrorToSdkError(parsed, () => {
+          const dataSuffix = parsed.data ? ` Data: ${JSON.stringify(parsed.data)}` : '';
+          return new Error(`REST error: ${parsed.message} (Code: ${parsed.code})${dataSuffix}`);
+        });
       }
       return new Error(`SSE error event: ${jsonData}`);
     } catch {
@@ -435,7 +432,7 @@ export class LegacyRestTransport implements Transport {
    * Reads an error response body and throws a typed SDK error.
    *
    * v0.3 wire shape is a bare `{ code, message, data? }` JSON object. If
-   * the body parses to that shape, we map via {@link mapToError};
+   * the body parses to that shape, we map via {@link mapA2aErrorToSdkError};
    * otherwise we throw a generic `Error` with the HTTP status and the
    * raw body text for debuggability. Mirrors `RestTransport`'s v1.0
    * equivalent but uses the bare body shape rather than
@@ -458,7 +455,11 @@ export class LegacyRestTransport implements Transport {
     }
 
     if (errorBody) {
-      throw LegacyRestTransport.mapToError(errorBody);
+      const body = errorBody;
+      throw mapA2aErrorToSdkError(body, () => {
+        const dataSuffix = body.data ? ` Data: ${JSON.stringify(body.data)}` : '';
+        return new Error(`REST error: ${body.message} (Code: ${body.code})${dataSuffix}`);
+      });
     }
 
     throw new Error(
@@ -495,44 +496,5 @@ export class LegacyRestTransport implements Transport {
     throw new InvalidAgentResponseError(
       `Unexpected v0.3 message:send result kind: ${String((result as { kind?: string }).kind)}`
     );
-  }
-
-  /**
-   * Maps a v0.3 REST error body into an SDK error class.
-   *
-   * Numeric A2A error codes are identical between v0.3 and v1.0 for
-   * every code that exists in both. Mirrors
-   * `LegacyJsonRpcTransport.mapToError` so users can catch the same
-   * typed errors regardless of which compat transport produced them.
-   * Unknown codes fall through to a generic `Error`.
-   */
-  private static mapToError(body: LegacyRestErrorBody): Error {
-    const message = body.message;
-    switch (body.code) {
-      case A2A_ERROR_CODE.PARSE_ERROR:
-      case A2A_ERROR_CODE.INVALID_REQUEST:
-      case A2A_ERROR_CODE.METHOD_NOT_FOUND:
-      case A2A_ERROR_CODE.INVALID_PARAMS:
-      case A2A_ERROR_CODE.INTERNAL_ERROR:
-        return new RequestMalformedError(message);
-      case A2A_ERROR_CODE.TASK_NOT_FOUND:
-        return new TaskNotFoundError(message);
-      case A2A_ERROR_CODE.TASK_NOT_CANCELABLE:
-        return new TaskNotCancelableError(message);
-      case A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED:
-        return new PushNotificationNotSupportedError(message);
-      case A2A_ERROR_CODE.UNSUPPORTED_OPERATION:
-        return new UnsupportedOperationError(message);
-      case A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED:
-        return new ContentTypeNotSupportedError(message);
-      case A2A_ERROR_CODE.INVALID_AGENT_RESPONSE:
-        return new InvalidAgentResponseError(message);
-      case A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED:
-        return new ExtendedAgentCardNotConfiguredError(message);
-      default: {
-        const dataSuffix = body.data ? ` Data: ${JSON.stringify(body.data)}` : '';
-        return new Error(`REST error: ${message} (Code: ${body.code})${dataSuffix}`);
-      }
-    }
   }
 }

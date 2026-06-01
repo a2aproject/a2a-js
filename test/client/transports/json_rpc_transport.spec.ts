@@ -262,6 +262,8 @@ describe('JsonRpcTransportFactory', () => {
       expect(transport).not.toBeInstanceOf(LegacyJsonRpcTransport);
     });
 
+    // TODO: It should default to v0.3 when protocolVersion is missing and legacyCompat is enabled
+    // after https://github.com/a2aproject/a2a-js/issues/474
     it('produces JsonRpcTransport when matched interface has empty protocolVersion', async () => {
       const card = baseAgentCard();
       card.supportedInterfaces = [

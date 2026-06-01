@@ -309,16 +309,24 @@ export class JSONRPCTransportError extends Error {
 }
 
 /**
- * Maps a JSON-RPC error envelope to a typed SDK error instance.
+ * Maps an A2A numeric error code + message to a typed SDK error class.
  *
- * Shared by both the v1.0 `JsonRpcTransport` and the v0.3 compat
- * `LegacyJsonRpcTransport`. v0.3 servers will never emit the
- * `EXTENSION_SUPPORT_REQUIRED` / `VERSION_NOT_SUPPORTED` codes in practice,
- * so handling them here is a no-op for the legacy transport.
+ * Envelope-agnostic core of the A2A code → SDK error switch. Used by both
+ * JSON-RPC transports (via {@link mapJsonRpcErrorToSdkError}) and the v0.3
+ * REST compat transport, which carry the same numeric `A2A_ERROR_CODE`
+ * values in different wire envelopes (JSON-RPC envelope vs. bare v0.3
+ * REST error body).
+ *
+ * Unknown codes return `fallback()`, allowing each transport to surface a
+ * shape-appropriate generic error (e.g. `JSONRPCTransportError` carrying
+ * the full envelope, or a plain `Error` with the REST body fields).
  */
-export function mapJsonRpcErrorToSdkError(response: JSONRPCErrorResponse): Error {
-  const errorMessage = response.error.message;
-  switch (response.error.code) {
+export function mapA2aErrorToSdkError(
+  err: { code: number; message: string },
+  fallback: () => Error
+): Error {
+  const errorMessage = err.message;
+  switch (err.code) {
     case A2A_ERROR_CODE.PARSE_ERROR:
     case A2A_ERROR_CODE.INVALID_REQUEST:
     case A2A_ERROR_CODE.METHOD_NOT_FOUND:
@@ -344,6 +352,22 @@ export function mapJsonRpcErrorToSdkError(response: JSONRPCErrorResponse): Error
     case A2A_ERROR_CODE.VERSION_NOT_SUPPORTED:
       return new VersionNotSupportedError(errorMessage);
     default:
-      return new JSONRPCTransportError(response);
+      return fallback();
   }
+}
+
+/**
+ * Maps a JSON-RPC error envelope to a typed SDK error instance.
+ *
+ * Shared by both the v1.0 `JsonRpcTransport` and the v0.3 compat
+ * `LegacyJsonRpcTransport`. v0.3 servers will never emit the
+ * `EXTENSION_SUPPORT_REQUIRED` / `VERSION_NOT_SUPPORTED` codes in practice,
+ * so handling them here is a no-op for the legacy transport.
+ *
+ * Thin wrapper over {@link mapA2aErrorToSdkError} that supplies a
+ * JSON-RPC-appropriate fallback ({@link JSONRPCTransportError}) carrying
+ * the full envelope for debuggability.
+ */
+export function mapJsonRpcErrorToSdkError(response: JSONRPCErrorResponse): Error {
+  return mapA2aErrorToSdkError(response.error, () => new JSONRPCTransportError(response));
 }
