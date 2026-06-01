@@ -163,6 +163,120 @@ export const A2A_ERROR_GRPC_STATUS: Record<string, string> = {
 };
 
 /**
+ * Canonical numeric gRPC status codes for each gRPC status name.
+ *
+ * Mirrors the runtime values from `@grpc/grpc-js`'s `status` enum but kept
+ * as plain numeric literals here so this module does not need a static
+ * import of `@grpc/grpc-js`. The values are part of the gRPC wire
+ * specification and are stable across implementations.
+ */
+export const GRPC_STATUS_CODE = {
+  OK: 0,
+  CANCELLED: 1,
+  UNKNOWN: 2,
+  INVALID_ARGUMENT: 3,
+  DEADLINE_EXCEEDED: 4,
+  NOT_FOUND: 5,
+  ALREADY_EXISTS: 6,
+  PERMISSION_DENIED: 7,
+  RESOURCE_EXHAUSTED: 8,
+  FAILED_PRECONDITION: 9,
+  ABORTED: 10,
+  OUT_OF_RANGE: 11,
+  UNIMPLEMENTED: 12,
+  INTERNAL: 13,
+  UNAVAILABLE: 14,
+  DATA_LOSS: 15,
+  UNAUTHENTICATED: 16,
+} as const;
+
+/**
+ * Per-error numeric gRPC status code mapping per §10.6.
+ *
+ * Derived from {@link A2A_ERROR_GRPC_STATUS} (which keeps status *names* for
+ * the REST `error.status` field) by resolving each name through
+ * {@link GRPC_STATUS_CODE}. Used by all A2A gRPC server transports (v1.0 and
+ * v0.3 compat) to translate a thrown SDK error class into the gRPC status
+ * code carried on the wire. Keeping a single canonical table here avoids
+ * duplicating per-error switches in every transport module.
+ */
+export const A2A_ERROR_GRPC_STATUS_CODE: Record<string, number> = Object.fromEntries(
+  Object.entries(A2A_ERROR_GRPC_STATUS).map(([cls, name]) => [
+    cls,
+    GRPC_STATUS_CODE[name as keyof typeof GRPC_STATUS_CODE],
+  ])
+);
+
+/**
+ * Maps an error class name (e.g. `TaskNotFoundError`) to its canonical gRPC
+ * status code. Returns `grpc.status.UNKNOWN` (2) for class names that have
+ * no entry in {@link A2A_ERROR_GRPC_STATUS_CODE}.
+ *
+ * Shared by the v1.0 `grpcService` and the v0.3 compat `legacyGrpcService`
+ * so both transports map SDK errors to the same gRPC status codes.
+ */
+export function errorClassNameToGrpcStatusCode(errorName: string): number {
+  return A2A_ERROR_GRPC_STATUS_CODE[errorName] ?? GRPC_STATUS_CODE.UNKNOWN;
+}
+
+/**
+ * Method-aware fallback mapping from gRPC status codes back to an SDK error
+ * class constructor, used by client transports when the server did not
+ * include `google.rpc.ErrorInfo` in `grpc-status-details-bin` (the enriched
+ * error model from §10.6).
+ *
+ * The same status code can correspond to different SDK errors depending on
+ * the RPC that produced it: for example `FAILED_PRECONDITION` from
+ * `cancelTask` is a {@link TaskNotCancelableError}, but the same status
+ * from `getAgentCard`/`getExtendedAgentCard` is an
+ * {@link ExtendedAgentCardNotConfiguredError}. The `method` argument names
+ * the gRPC method that produced the error; both v1.0 names
+ * (`subscribeToTask`, `getExtendedAgentCard`) and v0.3 names
+ * (`taskSubscription`, `getAgentCard`) are recognized so this helper can
+ * be reused by both the v1.0 and v0.3 compat gRPC clients.
+ *
+ * Returns `undefined` when no typed SDK error can be inferred from the
+ * `(code, method)` pair; callers should then surface a generic transport
+ * error preserving the raw gRPC status.
+ */
+export function grpcStatusCodeToErrorClass(
+  code: number,
+  method?: string
+): (new (message?: string) => Error) | undefined {
+  switch (code) {
+    case GRPC_STATUS_CODE.NOT_FOUND:
+      return TaskNotFoundError;
+    case GRPC_STATUS_CODE.FAILED_PRECONDITION:
+      if (method === 'cancelTask') return TaskNotCancelableError;
+      if (method === 'getAgentCard' || method === 'getExtendedAgentCard') {
+        return ExtendedAgentCardNotConfiguredError;
+      }
+      return undefined;
+    case GRPC_STATUS_CODE.UNIMPLEMENTED:
+      if (
+        method === 'getTaskPushNotificationConfig' ||
+        method === 'createTaskPushNotificationConfig' ||
+        method === 'deleteTaskPushNotificationConfig' ||
+        method === 'listTaskPushNotificationConfig' ||
+        method === 'listTaskPushNotificationConfigs'
+      ) {
+        return PushNotificationNotSupportedError;
+      }
+      if (
+        method === 'getAgentCard' ||
+        method === 'getExtendedAgentCard' ||
+        method === 'taskSubscription' ||
+        method === 'subscribeToTask'
+      ) {
+        return UnsupportedOperationError;
+      }
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Returns the gRPC status name for an error instance.
  * Falls back to HTTP-status-based inference for unknown errors.
  */

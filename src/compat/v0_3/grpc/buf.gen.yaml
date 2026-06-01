@@ -9,10 +9,10 @@ plugins:
     opt:
       - oneof=unions-value
       - importSuffix=.js
-      - outputServices=false
+      - outputServices=grpc-js
       - env=node
       - esModuleInterop=true
-      - outputJsonMethods=true
+      - outputJsonMethods=false
       - outputPartialMethods=false
       - snakeToCamel=keys
       - useDate=string

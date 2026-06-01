@@ -2,9 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import type { JSONRPCErrorResponse } from '../src/core.js';
 import {
   A2A_ERROR_CODE,
+  A2A_ERROR_GRPC_STATUS_CODE,
   ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
+  GenericError,
+  GRPC_STATUS_CODE,
   InvalidAgentResponseError,
   JSONRPCTransportError,
   PushNotificationNotSupportedError,
@@ -13,6 +16,8 @@ import {
   TaskNotFoundError,
   UnsupportedOperationError,
   VersionNotSupportedError,
+  errorClassNameToGrpcStatusCode,
+  grpcStatusCodeToErrorClass,
   mapA2aErrorToSdkError,
   mapJsonRpcErrorToSdkError,
 } from '../src/errors.js';
@@ -101,5 +106,121 @@ describe('mapA2aErrorToSdkError', () => {
     const result = mapA2aErrorToSdkError({ code: -99999, message: 'mystery' }, fallback);
     expect(fallback).toHaveBeenCalledTimes(1);
     expect(result).toBe(fallbackError);
+  });
+});
+
+describe('errorClassNameToGrpcStatusCode', () => {
+  it.each([
+    ['TaskNotFoundError', GRPC_STATUS_CODE.NOT_FOUND],
+    ['TaskNotCancelableError', GRPC_STATUS_CODE.FAILED_PRECONDITION],
+    ['PushNotificationNotSupportedError', GRPC_STATUS_CODE.FAILED_PRECONDITION],
+    ['UnsupportedOperationError', GRPC_STATUS_CODE.FAILED_PRECONDITION],
+    ['ContentTypeNotSupportedError', GRPC_STATUS_CODE.INVALID_ARGUMENT],
+    ['InvalidAgentResponseError', GRPC_STATUS_CODE.INTERNAL],
+    ['ExtendedAgentCardNotConfiguredError', GRPC_STATUS_CODE.FAILED_PRECONDITION],
+    ['ExtensionSupportRequiredError', GRPC_STATUS_CODE.FAILED_PRECONDITION],
+    ['VersionNotSupportedError', GRPC_STATUS_CODE.FAILED_PRECONDITION],
+    ['RequestMalformedError', GRPC_STATUS_CODE.INVALID_ARGUMENT],
+    ['GenericError', GRPC_STATUS_CODE.INTERNAL],
+  ])('maps %s to the canonical gRPC status code (%i)', (name, expected) => {
+    expect(errorClassNameToGrpcStatusCode(name)).toBe(expected);
+    // Sanity-check: the same value is reachable via the public table.
+    expect(A2A_ERROR_GRPC_STATUS_CODE[name]).toBe(expected);
+  });
+
+  it('falls back to UNKNOWN for unrecognized error class names', () => {
+    expect(errorClassNameToGrpcStatusCode('SomeUnknownError')).toBe(GRPC_STATUS_CODE.UNKNOWN);
+  });
+
+  it('agrees with `new ErrorClass().name` for every known A2A error class', () => {
+    const classes: Array<new (msg?: string) => Error> = [
+      TaskNotFoundError,
+      TaskNotCancelableError,
+      PushNotificationNotSupportedError,
+      UnsupportedOperationError,
+      ContentTypeNotSupportedError,
+      InvalidAgentResponseError,
+      ExtendedAgentCardNotConfiguredError,
+      ExtensionSupportRequiredError,
+      VersionNotSupportedError,
+      RequestMalformedError,
+      GenericError,
+    ];
+    for (const Cls of classes) {
+      const code = errorClassNameToGrpcStatusCode(new Cls().name);
+      expect(code).not.toBe(GRPC_STATUS_CODE.UNKNOWN);
+    }
+  });
+});
+
+describe('grpcStatusCodeToErrorClass', () => {
+  it('maps NOT_FOUND to TaskNotFoundError regardless of method', () => {
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.NOT_FOUND)).toBe(TaskNotFoundError);
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.NOT_FOUND, 'getTask')).toBe(
+      TaskNotFoundError
+    );
+  });
+
+  it('maps FAILED_PRECONDITION on cancelTask to TaskNotCancelableError', () => {
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.FAILED_PRECONDITION, 'cancelTask')).toBe(
+      TaskNotCancelableError
+    );
+  });
+
+  it('maps FAILED_PRECONDITION on getAgentCard/getExtendedAgentCard to ExtendedAgentCardNotConfiguredError', () => {
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.FAILED_PRECONDITION, 'getAgentCard')).toBe(
+      ExtendedAgentCardNotConfiguredError
+    );
+    expect(
+      grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.FAILED_PRECONDITION, 'getExtendedAgentCard')
+    ).toBe(ExtendedAgentCardNotConfiguredError);
+  });
+
+  it('returns undefined for FAILED_PRECONDITION on unrelated methods', () => {
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.FAILED_PRECONDITION, 'getTask')).toBe(
+      undefined
+    );
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.FAILED_PRECONDITION)).toBe(undefined);
+  });
+
+  it('maps UNIMPLEMENTED on push notification methods to PushNotificationNotSupportedError', () => {
+    for (const method of [
+      'getTaskPushNotificationConfig',
+      'createTaskPushNotificationConfig',
+      'deleteTaskPushNotificationConfig',
+      'listTaskPushNotificationConfig',
+      'listTaskPushNotificationConfigs',
+    ]) {
+      expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.UNIMPLEMENTED, method)).toBe(
+        PushNotificationNotSupportedError
+      );
+    }
+  });
+
+  it('maps UNIMPLEMENTED on agent-card/subscribe methods to UnsupportedOperationError', () => {
+    for (const method of [
+      'getAgentCard',
+      'getExtendedAgentCard',
+      'taskSubscription',
+      'subscribeToTask',
+    ]) {
+      expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.UNIMPLEMENTED, method)).toBe(
+        UnsupportedOperationError
+      );
+    }
+  });
+
+  it('returns undefined for UNIMPLEMENTED on unrelated methods', () => {
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.UNIMPLEMENTED, 'sendMessage')).toBe(
+      undefined
+    );
+  });
+
+  it('returns undefined for status codes with no SDK error mapping', () => {
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.UNKNOWN)).toBe(undefined);
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.INVALID_ARGUMENT, 'sendMessage')).toBe(
+      undefined
+    );
+    expect(grpcStatusCodeToErrorClass(GRPC_STATUS_CODE.INTERNAL)).toBe(undefined);
   });
 });

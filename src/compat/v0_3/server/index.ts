@@ -14,3 +14,8 @@ export {
   type LegacyAgentCardHandlerOptions,
 } from './express/agent_card_handler.js';
 export { legacyRestRouter, type LegacyRestHandlerOptions } from './express/rest_handler.js';
+export {
+  legacyGrpcService,
+  LegacyA2AService,
+  type LegacyGrpcServiceOptions,
+} from './grpc/index.js';

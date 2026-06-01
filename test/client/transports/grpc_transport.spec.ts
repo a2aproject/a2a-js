@@ -406,4 +406,66 @@ describe('GrpcTransportFactory', () => {
 
     expect(transport).toBeInstanceOf(GrpcTransport);
   });
+
+  describe('legacyCompat dispatch', () => {
+    it('produces the v1.0 GrpcTransport when legacyCompat is omitted (default)', async () => {
+      const factory = new GrpcTransportFactory();
+      const agentCard = createMockAgentCard({
+        supportedInterfaces: [
+          { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '0.3' },
+        ],
+      });
+      const transport = await factory.create('localhost:50051', agentCard);
+      // Even though the matched interface declares v0.3, the flag is off
+      // so we still get the v1.0 transport.
+      expect(transport).toBeInstanceOf(GrpcTransport);
+    });
+
+    it('produces the v1.0 GrpcTransport when legacyCompat is { enabled: false }', async () => {
+      const factory = new GrpcTransportFactory({ legacyCompat: { enabled: false } });
+      const agentCard = createMockAgentCard({
+        supportedInterfaces: [
+          { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '0.3' },
+        ],
+      });
+      const transport = await factory.create('localhost:50051', agentCard);
+      expect(transport).toBeInstanceOf(GrpcTransport);
+    });
+
+    it('produces the LegacyGrpcTransport when legacyCompat is enabled and the interface is v0.3', async () => {
+      const factory = new GrpcTransportFactory({ legacyCompat: { enabled: true } });
+      const agentCard = createMockAgentCard({
+        supportedInterfaces: [
+          { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '0.3' },
+        ],
+      });
+      const transport = await factory.create('localhost:50051', agentCard);
+      expect(transport.protocolName).toBe('GRPC');
+      expect(transport.protocolVersion).toBe('0.3');
+    });
+
+    it('still produces the v1.0 GrpcTransport for v1.0 interfaces even with legacyCompat enabled', async () => {
+      const factory = new GrpcTransportFactory({ legacyCompat: { enabled: true } });
+      const agentCard = createMockAgentCard({
+        supportedInterfaces: [
+          { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '1.0' },
+        ],
+      });
+      const transport = await factory.create('localhost:50051', agentCard);
+      expect(transport).toBeInstanceOf(GrpcTransport);
+    });
+
+    it('prefers v1.0 over v0.3 when both interfaces are present on the same URL', async () => {
+      const factory = new GrpcTransportFactory({ legacyCompat: { enabled: true } });
+      const agentCard = createMockAgentCard({
+        supportedInterfaces: [
+          { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '0.3' },
+          { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '1.0' },
+        ],
+      });
+      const transport = await factory.create('localhost:50051', agentCard);
+      // `pickMatchingInterface` prefers protocolVersion === '1.0'.
+      expect(transport).toBeInstanceOf(GrpcTransport);
+    });
+  });
 });

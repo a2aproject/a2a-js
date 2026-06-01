@@ -5,6 +5,9 @@
 // source: a2a.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { Struct } from "./google/protobuf/struct.js";
+import { Timestamp } from "./google/protobuf/timestamp.js";
 
 export const protobufPackage = "a2a.v1";
 
@@ -877,15 +880,81 @@ export interface ListTaskPushNotificationConfigResponse {
   nextPageToken: string;
 }
 
+function createBaseSendMessageConfiguration(): SendMessageConfiguration {
+  return { acceptedOutputModes: [], pushNotification: undefined, historyLength: 0, blocking: false };
+}
+
 export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
+  encode(message: SendMessageConfiguration, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.acceptedOutputModes) {
+      writer.uint32(10).string(v!);
+    }
+    if (message.pushNotification !== undefined) {
+      PushNotificationConfig.encode(message.pushNotification, writer.uint32(18).fork()).join();
+    }
+    if (message.historyLength !== 0) {
+      writer.uint32(24).int32(message.historyLength);
+    }
+    if (message.blocking !== false) {
+      writer.uint32(32).bool(message.blocking);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SendMessageConfiguration {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSendMessageConfiguration();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.acceptedOutputModes.push(reader.string());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pushNotification = PushNotificationConfig.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.historyLength = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.blocking = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): SendMessageConfiguration {
     return {
       acceptedOutputModes: globalThis.Array.isArray(object?.acceptedOutputModes)
         ? object.acceptedOutputModes.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.accepted_output_modes)
-        ? object.accepted_output_modes.map((e: any) =>
-          globalThis.String(e)
-        )
+        ? object.accepted_output_modes.map((e: any) => globalThis.String(e))
         : [],
       pushNotification: isSet(object.pushNotification)
         ? PushNotificationConfig.fromJSON(object.pushNotification)
@@ -919,7 +988,97 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
   },
 };
 
+function createBaseTask(): Task {
+  return { id: "", contextId: "", status: undefined, artifacts: [], history: [], metadata: undefined };
+}
+
 export const Task: MessageFns<Task> = {
+  encode(message: Task, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.contextId !== "") {
+      writer.uint32(18).string(message.contextId);
+    }
+    if (message.status !== undefined) {
+      TaskStatus.encode(message.status, writer.uint32(26).fork()).join();
+    }
+    for (const v of message.artifacts) {
+      Artifact.encode(v!, writer.uint32(34).fork()).join();
+    }
+    for (const v of message.history) {
+      Message.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.metadata !== undefined) {
+      Struct.encode(Struct.wrap(message.metadata), writer.uint32(50).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Task {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTask();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.contextId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.status = TaskStatus.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.artifacts.push(Artifact.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.history.push(Message.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.metadata = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): Task {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
@@ -932,9 +1091,7 @@ export const Task: MessageFns<Task> = {
       artifacts: globalThis.Array.isArray(object?.artifacts)
         ? object.artifacts.map((e: any) => Artifact.fromJSON(e))
         : [],
-      history: globalThis.Array.isArray(object?.history)
-        ? object.history.map((e: any) => Message.fromJSON(e))
-        : [],
+      history: globalThis.Array.isArray(object?.history) ? object.history.map((e: any) => Message.fromJSON(e)) : [],
       metadata: isObject(object.metadata) ? object.metadata : undefined,
     };
   },
@@ -963,7 +1120,64 @@ export const Task: MessageFns<Task> = {
   },
 };
 
+function createBaseTaskStatus(): TaskStatus {
+  return { state: 0, update: undefined, timestamp: undefined };
+}
+
 export const TaskStatus: MessageFns<TaskStatus> = {
+  encode(message: TaskStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.state !== 0) {
+      writer.uint32(8).int32(message.state);
+    }
+    if (message.update !== undefined) {
+      Message.encode(message.update, writer.uint32(18).fork()).join();
+    }
+    if (message.timestamp !== undefined) {
+      Timestamp.encode(toTimestamp(message.timestamp), writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TaskStatus {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTaskStatus();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.state = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.update = Message.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.timestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): TaskStatus {
     return {
       state: isSet(object.state) ? taskStateFromJSON(object.state) : 0,
@@ -991,7 +1205,66 @@ export const TaskStatus: MessageFns<TaskStatus> = {
   },
 };
 
+function createBasePart(): Part {
+  return { part: undefined };
+}
+
 export const Part: MessageFns<Part> = {
+  encode(message: Part, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    switch (message.part?.$case) {
+      case "text":
+        writer.uint32(10).string(message.part.value);
+        break;
+      case "file":
+        FilePart.encode(message.part.value, writer.uint32(18).fork()).join();
+        break;
+      case "data":
+        DataPart.encode(message.part.value, writer.uint32(26).fork()).join();
+        break;
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Part {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePart();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.part = { $case: "text", value: reader.string() };
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.part = { $case: "file", value: FilePart.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.part = { $case: "data", value: DataPart.decode(reader, reader.uint32()) };
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): Part {
     return {
       part: isSet(object.text)
@@ -1017,7 +1290,66 @@ export const Part: MessageFns<Part> = {
   },
 };
 
+function createBaseFilePart(): FilePart {
+  return { file: undefined, mimeType: "" };
+}
+
 export const FilePart: MessageFns<FilePart> = {
+  encode(message: FilePart, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    switch (message.file?.$case) {
+      case "fileWithUri":
+        writer.uint32(10).string(message.file.value);
+        break;
+      case "fileWithBytes":
+        writer.uint32(18).bytes(message.file.value);
+        break;
+    }
+    if (message.mimeType !== "") {
+      writer.uint32(26).string(message.mimeType);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FilePart {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFilePart();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.file = { $case: "fileWithUri", value: reader.string() };
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.file = { $case: "fileWithBytes", value: Buffer.from(reader.bytes()) };
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.mimeType = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): FilePart {
     return {
       file: isSet(object.fileWithUri)
@@ -1051,7 +1383,42 @@ export const FilePart: MessageFns<FilePart> = {
   },
 };
 
+function createBaseDataPart(): DataPart {
+  return { data: undefined };
+}
+
 export const DataPart: MessageFns<DataPart> = {
+  encode(message: DataPart, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.data !== undefined) {
+      Struct.encode(Struct.wrap(message.data), writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DataPart {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDataPart();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.data = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): DataPart {
     return { data: isObject(object.data) ? object.data : undefined };
   },
@@ -1065,7 +1432,108 @@ export const DataPart: MessageFns<DataPart> = {
   },
 };
 
+function createBaseMessage(): Message {
+  return { messageId: "", contextId: "", taskId: "", role: 0, content: [], metadata: undefined, extensions: [] };
+}
+
 export const Message: MessageFns<Message> = {
+  encode(message: Message, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.messageId !== "") {
+      writer.uint32(10).string(message.messageId);
+    }
+    if (message.contextId !== "") {
+      writer.uint32(18).string(message.contextId);
+    }
+    if (message.taskId !== "") {
+      writer.uint32(26).string(message.taskId);
+    }
+    if (message.role !== 0) {
+      writer.uint32(32).int32(message.role);
+    }
+    for (const v of message.content) {
+      Part.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.metadata !== undefined) {
+      Struct.encode(Struct.wrap(message.metadata), writer.uint32(50).fork()).join();
+    }
+    for (const v of message.extensions) {
+      writer.uint32(58).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Message {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMessage();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.messageId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.contextId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.taskId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.role = reader.int32() as any;
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.content.push(Part.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.metadata = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.extensions.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): Message {
     return {
       messageId: isSet(object.messageId)
@@ -1084,9 +1552,7 @@ export const Message: MessageFns<Message> = {
         ? globalThis.String(object.task_id)
         : "",
       role: isSet(object.role) ? roleFromJSON(object.role) : 0,
-      content: globalThis.Array.isArray(object?.content)
-        ? object.content.map((e: any) => Part.fromJSON(e))
-        : [],
+      content: globalThis.Array.isArray(object?.content) ? object.content.map((e: any) => Part.fromJSON(e)) : [],
       metadata: isObject(object.metadata) ? object.metadata : undefined,
       extensions: globalThis.Array.isArray(object?.extensions)
         ? object.extensions.map((e: any) => globalThis.String(e))
@@ -1121,7 +1587,97 @@ export const Message: MessageFns<Message> = {
   },
 };
 
+function createBaseArtifact(): Artifact {
+  return { artifactId: "", name: "", description: "", parts: [], metadata: undefined, extensions: [] };
+}
+
 export const Artifact: MessageFns<Artifact> = {
+  encode(message: Artifact, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.artifactId !== "") {
+      writer.uint32(10).string(message.artifactId);
+    }
+    if (message.name !== "") {
+      writer.uint32(26).string(message.name);
+    }
+    if (message.description !== "") {
+      writer.uint32(34).string(message.description);
+    }
+    for (const v of message.parts) {
+      Part.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.metadata !== undefined) {
+      Struct.encode(Struct.wrap(message.metadata), writer.uint32(50).fork()).join();
+    }
+    for (const v of message.extensions) {
+      writer.uint32(58).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Artifact {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArtifact();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.artifactId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.parts.push(Part.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.metadata = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.extensions.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): Artifact {
     return {
       artifactId: isSet(object.artifactId)
@@ -1131,9 +1687,7 @@ export const Artifact: MessageFns<Artifact> = {
         : "",
       name: isSet(object.name) ? globalThis.String(object.name) : "",
       description: isSet(object.description) ? globalThis.String(object.description) : "",
-      parts: globalThis.Array.isArray(object?.parts)
-        ? object.parts.map((e: any) => Part.fromJSON(e))
-        : [],
+      parts: globalThis.Array.isArray(object?.parts) ? object.parts.map((e: any) => Part.fromJSON(e)) : [],
       metadata: isObject(object.metadata) ? object.metadata : undefined,
       extensions: globalThis.Array.isArray(object?.extensions)
         ? object.extensions.map((e: any) => globalThis.String(e))
@@ -1165,7 +1719,86 @@ export const Artifact: MessageFns<Artifact> = {
   },
 };
 
+function createBaseTaskStatusUpdateEvent(): TaskStatusUpdateEvent {
+  return { taskId: "", contextId: "", status: undefined, final: false, metadata: undefined };
+}
+
 export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
+  encode(message: TaskStatusUpdateEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.taskId !== "") {
+      writer.uint32(10).string(message.taskId);
+    }
+    if (message.contextId !== "") {
+      writer.uint32(18).string(message.contextId);
+    }
+    if (message.status !== undefined) {
+      TaskStatus.encode(message.status, writer.uint32(26).fork()).join();
+    }
+    if (message.final !== false) {
+      writer.uint32(32).bool(message.final);
+    }
+    if (message.metadata !== undefined) {
+      Struct.encode(Struct.wrap(message.metadata), writer.uint32(42).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TaskStatusUpdateEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTaskStatusUpdateEvent();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.taskId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.contextId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.status = TaskStatus.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.final = reader.bool();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.metadata = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): TaskStatusUpdateEvent {
     return {
       taskId: isSet(object.taskId)
@@ -1205,7 +1838,97 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
   },
 };
 
+function createBaseTaskArtifactUpdateEvent(): TaskArtifactUpdateEvent {
+  return { taskId: "", contextId: "", artifact: undefined, append: false, lastChunk: false, metadata: undefined };
+}
+
 export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
+  encode(message: TaskArtifactUpdateEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.taskId !== "") {
+      writer.uint32(10).string(message.taskId);
+    }
+    if (message.contextId !== "") {
+      writer.uint32(18).string(message.contextId);
+    }
+    if (message.artifact !== undefined) {
+      Artifact.encode(message.artifact, writer.uint32(26).fork()).join();
+    }
+    if (message.append !== false) {
+      writer.uint32(32).bool(message.append);
+    }
+    if (message.lastChunk !== false) {
+      writer.uint32(40).bool(message.lastChunk);
+    }
+    if (message.metadata !== undefined) {
+      Struct.encode(Struct.wrap(message.metadata), writer.uint32(50).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TaskArtifactUpdateEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTaskArtifactUpdateEvent();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.taskId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.contextId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.artifact = Artifact.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.append = reader.bool();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.lastChunk = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.metadata = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): TaskArtifactUpdateEvent {
     return {
       taskId: isSet(object.taskId)
@@ -1253,7 +1976,75 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
   },
 };
 
+function createBasePushNotificationConfig(): PushNotificationConfig {
+  return { id: "", url: "", token: "", authentication: undefined };
+}
+
 export const PushNotificationConfig: MessageFns<PushNotificationConfig> = {
+  encode(message: PushNotificationConfig, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.url !== "") {
+      writer.uint32(18).string(message.url);
+    }
+    if (message.token !== "") {
+      writer.uint32(26).string(message.token);
+    }
+    if (message.authentication !== undefined) {
+      AuthenticationInfo.encode(message.authentication, writer.uint32(34).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PushNotificationConfig {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePushNotificationConfig();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.url = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.token = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.authentication = AuthenticationInfo.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): PushNotificationConfig {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
@@ -1281,7 +2072,53 @@ export const PushNotificationConfig: MessageFns<PushNotificationConfig> = {
   },
 };
 
+function createBaseAuthenticationInfo(): AuthenticationInfo {
+  return { schemes: [], credentials: "" };
+}
+
 export const AuthenticationInfo: MessageFns<AuthenticationInfo> = {
+  encode(message: AuthenticationInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.schemes) {
+      writer.uint32(10).string(v!);
+    }
+    if (message.credentials !== "") {
+      writer.uint32(18).string(message.credentials);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuthenticationInfo {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuthenticationInfo();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.schemes.push(reader.string());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.credentials = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AuthenticationInfo {
     return {
       schemes: globalThis.Array.isArray(object?.schemes) ? object.schemes.map((e: any) => globalThis.String(e)) : [],
@@ -1301,7 +2138,53 @@ export const AuthenticationInfo: MessageFns<AuthenticationInfo> = {
   },
 };
 
+function createBaseAgentInterface(): AgentInterface {
+  return { url: "", transport: "" };
+}
+
 export const AgentInterface: MessageFns<AgentInterface> = {
+  encode(message: AgentInterface, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.url !== "") {
+      writer.uint32(10).string(message.url);
+    }
+    if (message.transport !== "") {
+      writer.uint32(18).string(message.transport);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentInterface {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentInterface();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.url = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.transport = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentInterface {
     return {
       url: isSet(object.url) ? globalThis.String(object.url) : "",
@@ -1321,7 +2204,239 @@ export const AgentInterface: MessageFns<AgentInterface> = {
   },
 };
 
+function createBaseAgentCard(): AgentCard {
+  return {
+    protocolVersion: "",
+    name: "",
+    description: "",
+    url: "",
+    preferredTransport: "",
+    additionalInterfaces: [],
+    provider: undefined,
+    version: "",
+    documentationUrl: "",
+    capabilities: undefined,
+    securitySchemes: {},
+    security: [],
+    defaultInputModes: [],
+    defaultOutputModes: [],
+    skills: [],
+    supportsAuthenticatedExtendedCard: false,
+    signatures: [],
+  };
+}
+
 export const AgentCard: MessageFns<AgentCard> = {
+  encode(message: AgentCard, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.protocolVersion !== "") {
+      writer.uint32(130).string(message.protocolVersion);
+    }
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.description !== "") {
+      writer.uint32(18).string(message.description);
+    }
+    if (message.url !== "") {
+      writer.uint32(26).string(message.url);
+    }
+    if (message.preferredTransport !== "") {
+      writer.uint32(114).string(message.preferredTransport);
+    }
+    for (const v of message.additionalInterfaces) {
+      AgentInterface.encode(v!, writer.uint32(122).fork()).join();
+    }
+    if (message.provider !== undefined) {
+      AgentProvider.encode(message.provider, writer.uint32(34).fork()).join();
+    }
+    if (message.version !== "") {
+      writer.uint32(42).string(message.version);
+    }
+    if (message.documentationUrl !== "") {
+      writer.uint32(50).string(message.documentationUrl);
+    }
+    if (message.capabilities !== undefined) {
+      AgentCapabilities.encode(message.capabilities, writer.uint32(58).fork()).join();
+    }
+    globalThis.Object.entries(message.securitySchemes).forEach(([key, value]: [string, SecurityScheme]) => {
+      AgentCard_SecuritySchemesEntry.encode({ key: key as any, value }, writer.uint32(66).fork()).join();
+    });
+    for (const v of message.security) {
+      Security.encode(v!, writer.uint32(74).fork()).join();
+    }
+    for (const v of message.defaultInputModes) {
+      writer.uint32(82).string(v!);
+    }
+    for (const v of message.defaultOutputModes) {
+      writer.uint32(90).string(v!);
+    }
+    for (const v of message.skills) {
+      AgentSkill.encode(v!, writer.uint32(98).fork()).join();
+    }
+    if (message.supportsAuthenticatedExtendedCard !== false) {
+      writer.uint32(104).bool(message.supportsAuthenticatedExtendedCard);
+    }
+    for (const v of message.signatures) {
+      AgentCardSignature.encode(v!, writer.uint32(138).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentCard {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentCard();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.protocolVersion = reader.string();
+          continue;
+        }
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.url = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.preferredTransport = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.additionalInterfaces.push(AgentInterface.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.provider = AgentProvider.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.version = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.documentationUrl = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.capabilities = AgentCapabilities.decode(reader, reader.uint32());
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          const entry8 = AgentCard_SecuritySchemesEntry.decode(reader, reader.uint32());
+          if (entry8.value !== undefined) {
+            message.securitySchemes[entry8.key] = entry8.value;
+          }
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.security.push(Security.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.defaultInputModes.push(reader.string());
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.defaultOutputModes.push(reader.string());
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.skills.push(AgentSkill.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.supportsAuthenticatedExtendedCard = reader.bool();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.signatures.push(AgentCardSignature.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentCard {
     return {
       protocolVersion: isSet(object.protocolVersion)
@@ -1380,9 +2495,7 @@ export const AgentCard: MessageFns<AgentCard> = {
         : globalThis.Array.isArray(object?.default_output_modes)
         ? object.default_output_modes.map((e: any) => globalThis.String(e))
         : [],
-      skills: globalThis.Array.isArray(object?.skills)
-        ? object.skills.map((e: any) => AgentSkill.fromJSON(e))
-        : [],
+      skills: globalThis.Array.isArray(object?.skills) ? object.skills.map((e: any) => AgentSkill.fromJSON(e)) : [],
       supportsAuthenticatedExtendedCard: isSet(object.supportsAuthenticatedExtendedCard)
         ? globalThis.Boolean(object.supportsAuthenticatedExtendedCard)
         : isSet(object.supports_authenticated_extended_card)
@@ -1457,7 +2570,53 @@ export const AgentCard: MessageFns<AgentCard> = {
   },
 };
 
+function createBaseAgentCard_SecuritySchemesEntry(): AgentCard_SecuritySchemesEntry {
+  return { key: "", value: undefined };
+}
+
 export const AgentCard_SecuritySchemesEntry: MessageFns<AgentCard_SecuritySchemesEntry> = {
+  encode(message: AgentCard_SecuritySchemesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== undefined) {
+      SecurityScheme.encode(message.value, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentCard_SecuritySchemesEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentCard_SecuritySchemesEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = SecurityScheme.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentCard_SecuritySchemesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
@@ -1477,7 +2636,53 @@ export const AgentCard_SecuritySchemesEntry: MessageFns<AgentCard_SecurityScheme
   },
 };
 
+function createBaseAgentProvider(): AgentProvider {
+  return { url: "", organization: "" };
+}
+
 export const AgentProvider: MessageFns<AgentProvider> = {
+  encode(message: AgentProvider, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.url !== "") {
+      writer.uint32(10).string(message.url);
+    }
+    if (message.organization !== "") {
+      writer.uint32(18).string(message.organization);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentProvider {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentProvider();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.url = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.organization = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentProvider {
     return {
       url: isSet(object.url) ? globalThis.String(object.url) : "",
@@ -1497,7 +2702,64 @@ export const AgentProvider: MessageFns<AgentProvider> = {
   },
 };
 
+function createBaseAgentCapabilities(): AgentCapabilities {
+  return { streaming: false, pushNotifications: false, extensions: [] };
+}
+
 export const AgentCapabilities: MessageFns<AgentCapabilities> = {
+  encode(message: AgentCapabilities, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.streaming !== false) {
+      writer.uint32(8).bool(message.streaming);
+    }
+    if (message.pushNotifications !== false) {
+      writer.uint32(16).bool(message.pushNotifications);
+    }
+    for (const v of message.extensions) {
+      AgentExtension.encode(v!, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentCapabilities {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentCapabilities();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.streaming = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pushNotifications = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.extensions.push(AgentExtension.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentCapabilities {
     return {
       streaming: isSet(object.streaming) ? globalThis.Boolean(object.streaming) : false,
@@ -1527,7 +2789,75 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
   },
 };
 
+function createBaseAgentExtension(): AgentExtension {
+  return { uri: "", description: "", required: false, params: undefined };
+}
+
 export const AgentExtension: MessageFns<AgentExtension> = {
+  encode(message: AgentExtension, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uri !== "") {
+      writer.uint32(10).string(message.uri);
+    }
+    if (message.description !== "") {
+      writer.uint32(18).string(message.description);
+    }
+    if (message.required !== false) {
+      writer.uint32(24).bool(message.required);
+    }
+    if (message.params !== undefined) {
+      Struct.encode(Struct.wrap(message.params), writer.uint32(34).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentExtension {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentExtension();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.uri = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.required = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.params = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentExtension {
     return {
       uri: isSet(object.uri) ? globalThis.String(object.uri) : "",
@@ -1555,7 +2885,119 @@ export const AgentExtension: MessageFns<AgentExtension> = {
   },
 };
 
+function createBaseAgentSkill(): AgentSkill {
+  return { id: "", name: "", description: "", tags: [], examples: [], inputModes: [], outputModes: [], security: [] };
+}
+
 export const AgentSkill: MessageFns<AgentSkill> = {
+  encode(message: AgentSkill, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.description !== "") {
+      writer.uint32(26).string(message.description);
+    }
+    for (const v of message.tags) {
+      writer.uint32(34).string(v!);
+    }
+    for (const v of message.examples) {
+      writer.uint32(42).string(v!);
+    }
+    for (const v of message.inputModes) {
+      writer.uint32(50).string(v!);
+    }
+    for (const v of message.outputModes) {
+      writer.uint32(58).string(v!);
+    }
+    for (const v of message.security) {
+      Security.encode(v!, writer.uint32(66).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentSkill {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentSkill();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.tags.push(reader.string());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.examples.push(reader.string());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.inputModes.push(reader.string());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.outputModes.push(reader.string());
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.security.push(Security.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentSkill {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
@@ -1607,7 +3049,64 @@ export const AgentSkill: MessageFns<AgentSkill> = {
   },
 };
 
+function createBaseAgentCardSignature(): AgentCardSignature {
+  return { protected: "", signature: "", header: undefined };
+}
+
 export const AgentCardSignature: MessageFns<AgentCardSignature> = {
+  encode(message: AgentCardSignature, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.protected !== "") {
+      writer.uint32(10).string(message.protected);
+    }
+    if (message.signature !== "") {
+      writer.uint32(18).string(message.signature);
+    }
+    if (message.header !== undefined) {
+      Struct.encode(Struct.wrap(message.header), writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentCardSignature {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentCardSignature();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.protected = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.signature = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.header = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AgentCardSignature {
     return {
       protected: isSet(object.protected) ? globalThis.String(object.protected) : "",
@@ -1631,7 +3130,53 @@ export const AgentCardSignature: MessageFns<AgentCardSignature> = {
   },
 };
 
+function createBaseTaskPushNotificationConfig(): TaskPushNotificationConfig {
+  return { name: "", pushNotificationConfig: undefined };
+}
+
 export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> = {
+  encode(message: TaskPushNotificationConfig, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.pushNotificationConfig !== undefined) {
+      PushNotificationConfig.encode(message.pushNotificationConfig, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TaskPushNotificationConfig {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTaskPushNotificationConfig();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pushNotificationConfig = PushNotificationConfig.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): TaskPushNotificationConfig {
     return {
       name: isSet(object.name) ? globalThis.String(object.name) : "",
@@ -1655,7 +3200,42 @@ export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> 
   },
 };
 
+function createBaseStringList(): StringList {
+  return { list: [] };
+}
+
 export const StringList: MessageFns<StringList> = {
+  encode(message: StringList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.list) {
+      writer.uint32(10).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StringList {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseStringList();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.list.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): StringList {
     return { list: globalThis.Array.isArray(object?.list) ? object.list.map((e: any) => globalThis.String(e)) : [] };
   },
@@ -1669,7 +3249,45 @@ export const StringList: MessageFns<StringList> = {
   },
 };
 
+function createBaseSecurity(): Security {
+  return { schemes: {} };
+}
+
 export const Security: MessageFns<Security> = {
+  encode(message: Security, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    globalThis.Object.entries(message.schemes).forEach(([key, value]: [string, StringList]) => {
+      Security_SchemesEntry.encode({ key: key as any, value }, writer.uint32(10).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Security {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSecurity();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          const entry1 = Security_SchemesEntry.decode(reader, reader.uint32());
+          if (entry1.value !== undefined) {
+            message.schemes[entry1.key] = entry1.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): Security {
     return {
       schemes: isObject(object.schemes)
@@ -1699,7 +3317,53 @@ export const Security: MessageFns<Security> = {
   },
 };
 
+function createBaseSecurity_SchemesEntry(): Security_SchemesEntry {
+  return { key: "", value: undefined };
+}
+
 export const Security_SchemesEntry: MessageFns<Security_SchemesEntry> = {
+  encode(message: Security_SchemesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== undefined) {
+      StringList.encode(message.value, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Security_SchemesEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSecurity_SchemesEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = StringList.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): Security_SchemesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
@@ -1719,7 +3383,103 @@ export const Security_SchemesEntry: MessageFns<Security_SchemesEntry> = {
   },
 };
 
+function createBaseSecurityScheme(): SecurityScheme {
+  return { scheme: undefined };
+}
+
 export const SecurityScheme: MessageFns<SecurityScheme> = {
+  encode(message: SecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    switch (message.scheme?.$case) {
+      case "apiKeySecurityScheme":
+        APIKeySecurityScheme.encode(message.scheme.value, writer.uint32(10).fork()).join();
+        break;
+      case "httpAuthSecurityScheme":
+        HTTPAuthSecurityScheme.encode(message.scheme.value, writer.uint32(18).fork()).join();
+        break;
+      case "oauth2SecurityScheme":
+        OAuth2SecurityScheme.encode(message.scheme.value, writer.uint32(26).fork()).join();
+        break;
+      case "openIdConnectSecurityScheme":
+        OpenIdConnectSecurityScheme.encode(message.scheme.value, writer.uint32(34).fork()).join();
+        break;
+      case "mtlsSecurityScheme":
+        MutualTlsSecurityScheme.encode(message.scheme.value, writer.uint32(42).fork()).join();
+        break;
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SecurityScheme {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSecurityScheme();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.scheme = {
+            $case: "apiKeySecurityScheme",
+            value: APIKeySecurityScheme.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.scheme = {
+            $case: "httpAuthSecurityScheme",
+            value: HTTPAuthSecurityScheme.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.scheme = {
+            $case: "oauth2SecurityScheme",
+            value: OAuth2SecurityScheme.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.scheme = {
+            $case: "openIdConnectSecurityScheme",
+            value: OpenIdConnectSecurityScheme.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.scheme = {
+            $case: "mtlsSecurityScheme",
+            value: MutualTlsSecurityScheme.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): SecurityScheme {
     return {
       scheme: isSet(object.apiKeySecurityScheme)
@@ -1769,7 +3529,64 @@ export const SecurityScheme: MessageFns<SecurityScheme> = {
   },
 };
 
+function createBaseAPIKeySecurityScheme(): APIKeySecurityScheme {
+  return { description: "", location: "", name: "" };
+}
+
 export const APIKeySecurityScheme: MessageFns<APIKeySecurityScheme> = {
+  encode(message: APIKeySecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.description !== "") {
+      writer.uint32(10).string(message.description);
+    }
+    if (message.location !== "") {
+      writer.uint32(18).string(message.location);
+    }
+    if (message.name !== "") {
+      writer.uint32(26).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): APIKeySecurityScheme {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAPIKeySecurityScheme();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.location = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): APIKeySecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : "",
@@ -1793,7 +3610,64 @@ export const APIKeySecurityScheme: MessageFns<APIKeySecurityScheme> = {
   },
 };
 
+function createBaseHTTPAuthSecurityScheme(): HTTPAuthSecurityScheme {
+  return { description: "", scheme: "", bearerFormat: "" };
+}
+
 export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
+  encode(message: HTTPAuthSecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.description !== "") {
+      writer.uint32(10).string(message.description);
+    }
+    if (message.scheme !== "") {
+      writer.uint32(18).string(message.scheme);
+    }
+    if (message.bearerFormat !== "") {
+      writer.uint32(26).string(message.bearerFormat);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HTTPAuthSecurityScheme {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseHTTPAuthSecurityScheme();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.scheme = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.bearerFormat = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): HTTPAuthSecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : "",
@@ -1821,7 +3695,64 @@ export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
   },
 };
 
+function createBaseOAuth2SecurityScheme(): OAuth2SecurityScheme {
+  return { description: "", flows: undefined, oauth2MetadataUrl: "" };
+}
+
 export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
+  encode(message: OAuth2SecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.description !== "") {
+      writer.uint32(10).string(message.description);
+    }
+    if (message.flows !== undefined) {
+      OAuthFlows.encode(message.flows, writer.uint32(18).fork()).join();
+    }
+    if (message.oauth2MetadataUrl !== "") {
+      writer.uint32(26).string(message.oauth2MetadataUrl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): OAuth2SecurityScheme {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseOAuth2SecurityScheme();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.flows = OAuthFlows.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.oauth2MetadataUrl = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): OAuth2SecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : "",
@@ -1849,7 +3780,53 @@ export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
   },
 };
 
+function createBaseOpenIdConnectSecurityScheme(): OpenIdConnectSecurityScheme {
+  return { description: "", openIdConnectUrl: "" };
+}
+
 export const OpenIdConnectSecurityScheme: MessageFns<OpenIdConnectSecurityScheme> = {
+  encode(message: OpenIdConnectSecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.description !== "") {
+      writer.uint32(10).string(message.description);
+    }
+    if (message.openIdConnectUrl !== "") {
+      writer.uint32(18).string(message.openIdConnectUrl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): OpenIdConnectSecurityScheme {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseOpenIdConnectSecurityScheme();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.openIdConnectUrl = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): OpenIdConnectSecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : "",
@@ -1873,7 +3850,42 @@ export const OpenIdConnectSecurityScheme: MessageFns<OpenIdConnectSecurityScheme
   },
 };
 
+function createBaseMutualTlsSecurityScheme(): MutualTlsSecurityScheme {
+  return { description: "" };
+}
+
 export const MutualTlsSecurityScheme: MessageFns<MutualTlsSecurityScheme> = {
+  encode(message: MutualTlsSecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.description !== "") {
+      writer.uint32(10).string(message.description);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MutualTlsSecurityScheme {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMutualTlsSecurityScheme();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.description = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): MutualTlsSecurityScheme {
     return { description: isSet(object.description) ? globalThis.String(object.description) : "" };
   },
@@ -1887,7 +3899,83 @@ export const MutualTlsSecurityScheme: MessageFns<MutualTlsSecurityScheme> = {
   },
 };
 
+function createBaseOAuthFlows(): OAuthFlows {
+  return { flow: undefined };
+}
+
 export const OAuthFlows: MessageFns<OAuthFlows> = {
+  encode(message: OAuthFlows, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    switch (message.flow?.$case) {
+      case "authorizationCode":
+        AuthorizationCodeOAuthFlow.encode(message.flow.value, writer.uint32(10).fork()).join();
+        break;
+      case "clientCredentials":
+        ClientCredentialsOAuthFlow.encode(message.flow.value, writer.uint32(18).fork()).join();
+        break;
+      case "implicit":
+        ImplicitOAuthFlow.encode(message.flow.value, writer.uint32(26).fork()).join();
+        break;
+      case "password":
+        PasswordOAuthFlow.encode(message.flow.value, writer.uint32(34).fork()).join();
+        break;
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): OAuthFlows {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseOAuthFlows();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.flow = {
+            $case: "authorizationCode",
+            value: AuthorizationCodeOAuthFlow.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.flow = {
+            $case: "clientCredentials",
+            value: ClientCredentialsOAuthFlow.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.flow = { $case: "implicit", value: ImplicitOAuthFlow.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.flow = { $case: "password", value: PasswordOAuthFlow.decode(reader, reader.uint32()) };
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): OAuthFlows {
     return {
       flow: isSet(object.authorizationCode)
@@ -1921,7 +4009,78 @@ export const OAuthFlows: MessageFns<OAuthFlows> = {
   },
 };
 
+function createBaseAuthorizationCodeOAuthFlow(): AuthorizationCodeOAuthFlow {
+  return { authorizationUrl: "", tokenUrl: "", refreshUrl: "", scopes: {} };
+}
+
 export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> = {
+  encode(message: AuthorizationCodeOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.authorizationUrl !== "") {
+      writer.uint32(10).string(message.authorizationUrl);
+    }
+    if (message.tokenUrl !== "") {
+      writer.uint32(18).string(message.tokenUrl);
+    }
+    if (message.refreshUrl !== "") {
+      writer.uint32(26).string(message.refreshUrl);
+    }
+    globalThis.Object.entries(message.scopes).forEach(([key, value]: [string, string]) => {
+      AuthorizationCodeOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(34).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuthorizationCodeOAuthFlow {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuthorizationCodeOAuthFlow();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.authorizationUrl = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.tokenUrl = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.refreshUrl = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          const entry4 = AuthorizationCodeOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
+          if (entry4.value !== undefined) {
+            message.scopes[entry4.key] = entry4.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AuthorizationCodeOAuthFlow {
     return {
       authorizationUrl: isSet(object.authorizationUrl)
@@ -1975,7 +4134,53 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
   },
 };
 
+function createBaseAuthorizationCodeOAuthFlow_ScopesEntry(): AuthorizationCodeOAuthFlow_ScopesEntry {
+  return { key: "", value: "" };
+}
+
 export const AuthorizationCodeOAuthFlow_ScopesEntry: MessageFns<AuthorizationCodeOAuthFlow_ScopesEntry> = {
+  encode(message: AuthorizationCodeOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuthorizationCodeOAuthFlow_ScopesEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuthorizationCodeOAuthFlow_ScopesEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): AuthorizationCodeOAuthFlow_ScopesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
@@ -1995,7 +4200,67 @@ export const AuthorizationCodeOAuthFlow_ScopesEntry: MessageFns<AuthorizationCod
   },
 };
 
+function createBaseClientCredentialsOAuthFlow(): ClientCredentialsOAuthFlow {
+  return { tokenUrl: "", refreshUrl: "", scopes: {} };
+}
+
 export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> = {
+  encode(message: ClientCredentialsOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.tokenUrl !== "") {
+      writer.uint32(10).string(message.tokenUrl);
+    }
+    if (message.refreshUrl !== "") {
+      writer.uint32(18).string(message.refreshUrl);
+    }
+    globalThis.Object.entries(message.scopes).forEach(([key, value]: [string, string]) => {
+      ClientCredentialsOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(26).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientCredentialsOAuthFlow {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseClientCredentialsOAuthFlow();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.tokenUrl = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.refreshUrl = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          const entry3 = ClientCredentialsOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
+          if (entry3.value !== undefined) {
+            message.scopes[entry3.key] = entry3.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): ClientCredentialsOAuthFlow {
     return {
       tokenUrl: isSet(object.tokenUrl)
@@ -2041,7 +4306,53 @@ export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> 
   },
 };
 
+function createBaseClientCredentialsOAuthFlow_ScopesEntry(): ClientCredentialsOAuthFlow_ScopesEntry {
+  return { key: "", value: "" };
+}
+
 export const ClientCredentialsOAuthFlow_ScopesEntry: MessageFns<ClientCredentialsOAuthFlow_ScopesEntry> = {
+  encode(message: ClientCredentialsOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientCredentialsOAuthFlow_ScopesEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseClientCredentialsOAuthFlow_ScopesEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): ClientCredentialsOAuthFlow_ScopesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
@@ -2061,7 +4372,67 @@ export const ClientCredentialsOAuthFlow_ScopesEntry: MessageFns<ClientCredential
   },
 };
 
+function createBaseImplicitOAuthFlow(): ImplicitOAuthFlow {
+  return { authorizationUrl: "", refreshUrl: "", scopes: {} };
+}
+
 export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
+  encode(message: ImplicitOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.authorizationUrl !== "") {
+      writer.uint32(10).string(message.authorizationUrl);
+    }
+    if (message.refreshUrl !== "") {
+      writer.uint32(18).string(message.refreshUrl);
+    }
+    globalThis.Object.entries(message.scopes).forEach(([key, value]: [string, string]) => {
+      ImplicitOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(26).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ImplicitOAuthFlow {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseImplicitOAuthFlow();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.authorizationUrl = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.refreshUrl = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          const entry3 = ImplicitOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
+          if (entry3.value !== undefined) {
+            message.scopes[entry3.key] = entry3.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): ImplicitOAuthFlow {
     return {
       authorizationUrl: isSet(object.authorizationUrl)
@@ -2107,7 +4478,53 @@ export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
   },
 };
 
+function createBaseImplicitOAuthFlow_ScopesEntry(): ImplicitOAuthFlow_ScopesEntry {
+  return { key: "", value: "" };
+}
+
 export const ImplicitOAuthFlow_ScopesEntry: MessageFns<ImplicitOAuthFlow_ScopesEntry> = {
+  encode(message: ImplicitOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ImplicitOAuthFlow_ScopesEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseImplicitOAuthFlow_ScopesEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): ImplicitOAuthFlow_ScopesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
@@ -2127,7 +4544,67 @@ export const ImplicitOAuthFlow_ScopesEntry: MessageFns<ImplicitOAuthFlow_ScopesE
   },
 };
 
+function createBasePasswordOAuthFlow(): PasswordOAuthFlow {
+  return { tokenUrl: "", refreshUrl: "", scopes: {} };
+}
+
 export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
+  encode(message: PasswordOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.tokenUrl !== "") {
+      writer.uint32(10).string(message.tokenUrl);
+    }
+    if (message.refreshUrl !== "") {
+      writer.uint32(18).string(message.refreshUrl);
+    }
+    globalThis.Object.entries(message.scopes).forEach(([key, value]: [string, string]) => {
+      PasswordOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(26).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PasswordOAuthFlow {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePasswordOAuthFlow();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.tokenUrl = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.refreshUrl = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          const entry3 = PasswordOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
+          if (entry3.value !== undefined) {
+            message.scopes[entry3.key] = entry3.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): PasswordOAuthFlow {
     return {
       tokenUrl: isSet(object.tokenUrl)
@@ -2173,7 +4650,53 @@ export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
   },
 };
 
+function createBasePasswordOAuthFlow_ScopesEntry(): PasswordOAuthFlow_ScopesEntry {
+  return { key: "", value: "" };
+}
+
 export const PasswordOAuthFlow_ScopesEntry: MessageFns<PasswordOAuthFlow_ScopesEntry> = {
+  encode(message: PasswordOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PasswordOAuthFlow_ScopesEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePasswordOAuthFlow_ScopesEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): PasswordOAuthFlow_ScopesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
@@ -2193,7 +4716,64 @@ export const PasswordOAuthFlow_ScopesEntry: MessageFns<PasswordOAuthFlow_ScopesE
   },
 };
 
+function createBaseSendMessageRequest(): SendMessageRequest {
+  return { request: undefined, configuration: undefined, metadata: undefined };
+}
+
 export const SendMessageRequest: MessageFns<SendMessageRequest> = {
+  encode(message: SendMessageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.request !== undefined) {
+      Message.encode(message.request, writer.uint32(10).fork()).join();
+    }
+    if (message.configuration !== undefined) {
+      SendMessageConfiguration.encode(message.configuration, writer.uint32(18).fork()).join();
+    }
+    if (message.metadata !== undefined) {
+      Struct.encode(Struct.wrap(message.metadata), writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SendMessageRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSendMessageRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.request = Message.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.configuration = SendMessageConfiguration.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.metadata = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): SendMessageRequest {
     return {
       request: isSet(object.message)
@@ -2221,7 +4801,53 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
   },
 };
 
+function createBaseGetTaskRequest(): GetTaskRequest {
+  return { name: "", historyLength: 0 };
+}
+
 export const GetTaskRequest: MessageFns<GetTaskRequest> = {
+  encode(message: GetTaskRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.historyLength !== 0) {
+      writer.uint32(16).int32(message.historyLength);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetTaskRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetTaskRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.historyLength = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): GetTaskRequest {
     return {
       name: isSet(object.name) ? globalThis.String(object.name) : "",
@@ -2245,7 +4871,42 @@ export const GetTaskRequest: MessageFns<GetTaskRequest> = {
   },
 };
 
+function createBaseCancelTaskRequest(): CancelTaskRequest {
+  return { name: "" };
+}
+
 export const CancelTaskRequest: MessageFns<CancelTaskRequest> = {
+  encode(message: CancelTaskRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CancelTaskRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCancelTaskRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): CancelTaskRequest {
     return { name: isSet(object.name) ? globalThis.String(object.name) : "" };
   },
@@ -2259,7 +4920,42 @@ export const CancelTaskRequest: MessageFns<CancelTaskRequest> = {
   },
 };
 
+function createBaseGetTaskPushNotificationConfigRequest(): GetTaskPushNotificationConfigRequest {
+  return { name: "" };
+}
+
 export const GetTaskPushNotificationConfigRequest: MessageFns<GetTaskPushNotificationConfigRequest> = {
+  encode(message: GetTaskPushNotificationConfigRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetTaskPushNotificationConfigRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetTaskPushNotificationConfigRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): GetTaskPushNotificationConfigRequest {
     return { name: isSet(object.name) ? globalThis.String(object.name) : "" };
   },
@@ -2273,7 +4969,42 @@ export const GetTaskPushNotificationConfigRequest: MessageFns<GetTaskPushNotific
   },
 };
 
+function createBaseDeleteTaskPushNotificationConfigRequest(): DeleteTaskPushNotificationConfigRequest {
+  return { name: "" };
+}
+
 export const DeleteTaskPushNotificationConfigRequest: MessageFns<DeleteTaskPushNotificationConfigRequest> = {
+  encode(message: DeleteTaskPushNotificationConfigRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DeleteTaskPushNotificationConfigRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDeleteTaskPushNotificationConfigRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): DeleteTaskPushNotificationConfigRequest {
     return { name: isSet(object.name) ? globalThis.String(object.name) : "" };
   },
@@ -2287,7 +5018,64 @@ export const DeleteTaskPushNotificationConfigRequest: MessageFns<DeleteTaskPushN
   },
 };
 
+function createBaseCreateTaskPushNotificationConfigRequest(): CreateTaskPushNotificationConfigRequest {
+  return { parent: "", configId: "", config: undefined };
+}
+
 export const CreateTaskPushNotificationConfigRequest: MessageFns<CreateTaskPushNotificationConfigRequest> = {
+  encode(message: CreateTaskPushNotificationConfigRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.parent !== "") {
+      writer.uint32(10).string(message.parent);
+    }
+    if (message.configId !== "") {
+      writer.uint32(18).string(message.configId);
+    }
+    if (message.config !== undefined) {
+      TaskPushNotificationConfig.encode(message.config, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CreateTaskPushNotificationConfigRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCreateTaskPushNotificationConfigRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.parent = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.configId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.config = TaskPushNotificationConfig.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): CreateTaskPushNotificationConfigRequest {
     return {
       parent: isSet(object.parent) ? globalThis.String(object.parent) : "",
@@ -2315,7 +5103,42 @@ export const CreateTaskPushNotificationConfigRequest: MessageFns<CreateTaskPushN
   },
 };
 
+function createBaseTaskSubscriptionRequest(): TaskSubscriptionRequest {
+  return { name: "" };
+}
+
 export const TaskSubscriptionRequest: MessageFns<TaskSubscriptionRequest> = {
+  encode(message: TaskSubscriptionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TaskSubscriptionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTaskSubscriptionRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): TaskSubscriptionRequest {
     return { name: isSet(object.name) ? globalThis.String(object.name) : "" };
   },
@@ -2329,7 +5152,64 @@ export const TaskSubscriptionRequest: MessageFns<TaskSubscriptionRequest> = {
   },
 };
 
+function createBaseListTaskPushNotificationConfigRequest(): ListTaskPushNotificationConfigRequest {
+  return { parent: "", pageSize: 0, pageToken: "" };
+}
+
 export const ListTaskPushNotificationConfigRequest: MessageFns<ListTaskPushNotificationConfigRequest> = {
+  encode(message: ListTaskPushNotificationConfigRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.parent !== "") {
+      writer.uint32(10).string(message.parent);
+    }
+    if (message.pageSize !== 0) {
+      writer.uint32(16).int32(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      writer.uint32(26).string(message.pageToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ListTaskPushNotificationConfigRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseListTaskPushNotificationConfigRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.parent = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pageSize = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): ListTaskPushNotificationConfigRequest {
     return {
       parent: isSet(object.parent) ? globalThis.String(object.parent) : "",
@@ -2361,7 +5241,31 @@ export const ListTaskPushNotificationConfigRequest: MessageFns<ListTaskPushNotif
   },
 };
 
+function createBaseGetAgentCardRequest(): GetAgentCardRequest {
+  return {};
+}
+
 export const GetAgentCardRequest: MessageFns<GetAgentCardRequest> = {
+  encode(_: GetAgentCardRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetAgentCardRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetAgentCardRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(_: any): GetAgentCardRequest {
     return {};
   },
@@ -2372,7 +5276,55 @@ export const GetAgentCardRequest: MessageFns<GetAgentCardRequest> = {
   },
 };
 
+function createBaseSendMessageResponse(): SendMessageResponse {
+  return { payload: undefined };
+}
+
 export const SendMessageResponse: MessageFns<SendMessageResponse> = {
+  encode(message: SendMessageResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    switch (message.payload?.$case) {
+      case "task":
+        Task.encode(message.payload.value, writer.uint32(10).fork()).join();
+        break;
+      case "msg":
+        Message.encode(message.payload.value, writer.uint32(18).fork()).join();
+        break;
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SendMessageResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSendMessageResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.payload = { $case: "task", value: Task.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.payload = { $case: "msg", value: Message.decode(reader, reader.uint32()) };
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): SendMessageResponse {
     return {
       payload: isSet(object.task)
@@ -2396,7 +5348,77 @@ export const SendMessageResponse: MessageFns<SendMessageResponse> = {
   },
 };
 
+function createBaseStreamResponse(): StreamResponse {
+  return { payload: undefined };
+}
+
 export const StreamResponse: MessageFns<StreamResponse> = {
+  encode(message: StreamResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    switch (message.payload?.$case) {
+      case "task":
+        Task.encode(message.payload.value, writer.uint32(10).fork()).join();
+        break;
+      case "msg":
+        Message.encode(message.payload.value, writer.uint32(18).fork()).join();
+        break;
+      case "statusUpdate":
+        TaskStatusUpdateEvent.encode(message.payload.value, writer.uint32(26).fork()).join();
+        break;
+      case "artifactUpdate":
+        TaskArtifactUpdateEvent.encode(message.payload.value, writer.uint32(34).fork()).join();
+        break;
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseStreamResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.payload = { $case: "task", value: Task.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.payload = { $case: "msg", value: Message.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.payload = { $case: "statusUpdate", value: TaskStatusUpdateEvent.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.payload = { $case: "artifactUpdate", value: TaskArtifactUpdateEvent.decode(reader, reader.uint32()) };
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): StreamResponse {
     return {
       payload: isSet(object.task)
@@ -2432,7 +5454,53 @@ export const StreamResponse: MessageFns<StreamResponse> = {
   },
 };
 
+function createBaseListTaskPushNotificationConfigResponse(): ListTaskPushNotificationConfigResponse {
+  return { configs: [], nextPageToken: "" };
+}
+
 export const ListTaskPushNotificationConfigResponse: MessageFns<ListTaskPushNotificationConfigResponse> = {
+  encode(message: ListTaskPushNotificationConfigResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.configs) {
+      TaskPushNotificationConfig.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.nextPageToken !== "") {
+      writer.uint32(18).string(message.nextPageToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ListTaskPushNotificationConfigResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseListTaskPushNotificationConfigResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.configs.push(TaskPushNotificationConfig.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
   fromJSON(object: any): ListTaskPushNotificationConfigResponse {
     return {
       configs: globalThis.Array.isArray(object?.configs)
@@ -2466,6 +5534,19 @@ function base64FromBytes(arr: Uint8Array): string {
   return globalThis.Buffer.from(arr).toString("base64");
 }
 
+function toTimestamp(dateStr: string): Timestamp {
+  const date = new globalThis.Date(dateStr);
+  const seconds = Math.trunc(date.getTime() / 1_000);
+  const nanos = (date.getTime() % 1_000) * 1_000_000;
+  return { seconds, nanos };
+}
+
+function fromTimestamp(t: Timestamp): string {
+  let millis = (t.seconds || 0) * 1_000;
+  millis += (t.nanos || 0) / 1_000_000;
+  return new globalThis.Date(millis).toISOString();
+}
+
 function isObject(value: any): boolean {
   return typeof value === "object" && value !== null;
 }
@@ -2475,6 +5556,8 @@ function isSet(value: any): boolean {
 }
 
 export interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
 }
