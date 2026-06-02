@@ -19,3 +19,7 @@ export {
   LegacyA2AService,
   type LegacyGrpcServiceOptions,
 } from './grpc/index.js';
+export {
+  createLegacyAwarePushNotificationSender,
+  V03PushNotificationSerializer,
+} from './push_notification/index.js';

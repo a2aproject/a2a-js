@@ -47,8 +47,16 @@ export {
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';
 export { DefaultPushNotificationSender } from './push_notification/default_push_notification_sender.js';
 export type { DefaultPushNotificationSenderOptions } from './push_notification/default_push_notification_sender.js';
-export type { PushNotificationStore } from './push_notification/push_notification_store.js';
+export type {
+  PushNotificationStore,
+  StoredPushNotificationConfig,
+} from './push_notification/push_notification_store.js';
 export { InMemoryPushNotificationStore } from './push_notification/push_notification_store.js';
+export type {
+  PushNotificationSerializer,
+  SerializedPushNotification,
+} from './push_notification/push_notification_serializer.js';
+export { V1PushNotificationSerializer } from './push_notification/push_notification_serializer.js';
 
 export type { User } from './authentication/user.js';
 export { UnauthenticatedUser } from './authentication/user.js';

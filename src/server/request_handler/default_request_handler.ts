@@ -647,19 +647,19 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    const configs = (await this.pushNotificationStore?.load(taskId, context)) || [];
-    if (configs.length === 0) {
+    const entries = (await this.pushNotificationStore?.load(taskId, context)) || [];
+    if (entries.length === 0) {
       throw new GenericError(`Push notification config not found for task ${taskId}.`);
     }
 
-    const config = configs.find((c) => c.id === params.id);
+    const entry = entries.find((e) => e.config.id === params.id);
 
-    if (!config) {
+    if (!entry) {
       throw new GenericError(
         `Push notification config with id '${params.id}' not found for task ${taskId}.`
       );
     }
-    return config;
+    return entry.config;
   }
 
   async listTaskPushNotificationConfigs(
@@ -675,8 +675,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
+    const entries = (await this.pushNotificationStore?.load(taskId, context)) || [];
     return {
-      configs: (await this.pushNotificationStore?.load(taskId, context)) || [],
+      configs: entries.map((entry) => entry.config),
       nextPageToken: '',
     };
   }

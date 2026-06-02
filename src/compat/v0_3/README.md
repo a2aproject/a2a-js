@@ -45,3 +45,29 @@ Notable policy decisions:
 - `TaskStatusUpdateEvent.final` is computed from the status state going v1.0 → v0.3 (`true` for `completed`, `canceled`, `failed`, `rejected`).
 - `SendMessageConfiguration.returnImmediately` ↔ `MessageSendConfiguration.blocking` with inverted polarity.
 - `toCompatAgentCard` filters `supportedInterfaces` to those whose `protocolVersion` is empty or in `[0.3, 1.0)` and throws `VersionNotSupportedError` if none qualify.
+
+## Push Notifications
+
+Webhooks registered over v0.3 transports must receive the v0.3-shaped HTTP body, not the v1.0 `StreamResponse` wrapper. Per the v0.3 spec example (§9.5), the body is the **bare event object** (a v0.3 JSON `Task`, `TaskStatusUpdateEvent`, or `TaskArtifactUpdateEvent` discriminated by its `kind` field) with `Content-Type: application/json` — no `StreamResponse` discriminator and no JSON-RPC envelope.
+
+This is implemented by two pieces working together:
+
+1. **`PushNotificationStore` captures the wire version.** The `InMemoryPushNotificationStore` (and any conforming implementation) reads `context.requestedVersion` on `save()` and persists it alongside the config as a `StoredPushNotificationConfig { config, wireVersion }`. When the same task later emits events, `load()` returns the wire version next to each config.
+
+2. **`DefaultPushNotificationSender` routes per wire version.** The sender resolves a `PushNotificationSerializer` per stored entry using the persisted wire version. It always registers `V1PushNotificationSerializer` under `'1.0'` and falls back to it (with a one-time warning per unknown version) when no serializer is registered for the entry's version.
+
+### Enabling v0.3 push delivery
+
+Use `createLegacyAwarePushNotificationSender` from `src/compat/v0_3/server/index.ts` (re-exported as `createLegacyAwarePushNotificationSender` from `@a2a-js/sdk/server`'s compat barrel) instead of constructing the sender directly. It pre-registers `V03PushNotificationSerializer` under the `'0.3'` key:
+
+```ts
+import { InMemoryPushNotificationStore } from '@a2a-js/sdk/server';
+import { createLegacyAwarePushNotificationSender } from '@a2a-js/sdk/compat/v0_3/server';
+
+const store = new InMemoryPushNotificationStore();
+const sender = createLegacyAwarePushNotificationSender(store);
+
+// Hand both to your DefaultRequestHandler as usual.
+```
+
+v1.0-registered webhooks continue to receive the canonical `StreamResponse` body with `application/a2a+json`; v0.3-registered webhooks receive the bare-event JSON with `application/json`. Custom serializers (or overrides for the built-in `'0.3'` / `'1.0'` entries) can be supplied via the `serializers` option; user-supplied entries take precedence.

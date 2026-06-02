@@ -201,7 +201,7 @@ describe('InMemoryPushNotificationStore tenant isolation', () => {
     // Tenant A can load the config
     const loadedA = await store.load('task-1', ctxA);
     expect(loadedA).toHaveLength(1);
-    expect(loadedA[0].id).to.equal('config-1');
+    expect(loadedA[0].config.id).to.equal('config-1');
 
     // Tenant B cannot load tenant A's configs
     const loadedB = await store.load('task-1', ctxB);
@@ -219,9 +219,9 @@ describe('InMemoryPushNotificationStore tenant isolation', () => {
     const loadedB = await store.load('task-1', ctxB);
 
     expect(loadedA).toHaveLength(1);
-    expect(loadedA[0].id).to.equal('config-a');
+    expect(loadedA[0].config.id).to.equal('config-a');
     expect(loadedB).toHaveLength(1);
-    expect(loadedB[0].id).to.equal('config-b');
+    expect(loadedB[0].config.id).to.equal('config-b');
   });
 
   it('should delete configs only within the tenant scope', async () => {
@@ -419,7 +419,7 @@ describe('InMemoryPushNotificationStore owner isolation', () => {
     // Alice can load her config
     const loadedAlice = await store.load('task-1', ctxAlice);
     expect(loadedAlice).toHaveLength(1);
-    expect(loadedAlice[0].id).toBe('config-1');
+    expect(loadedAlice[0].config.id).toBe('config-1');
 
     // Bob cannot load Alice's config
     const loadedBob = await store.load('task-1', ctxBob);
@@ -437,9 +437,9 @@ describe('InMemoryPushNotificationStore owner isolation', () => {
     const loadedBob = await store.load('task-1', ctxBob);
 
     expect(loadedAlice).toHaveLength(1);
-    expect(loadedAlice[0].id).toBe('config-a');
+    expect(loadedAlice[0].config.id).toBe('config-a');
     expect(loadedBob).toHaveLength(1);
-    expect(loadedBob[0].id).toBe('config-b');
+    expect(loadedBob[0].config.id).toBe('config-b');
   });
 
   it('should not allow cross-owner deletion', async () => {
@@ -455,12 +455,12 @@ describe('InMemoryPushNotificationStore owner isolation', () => {
     // Alice's config still exists
     const loadedAlice = await store.load('task-1', ctxAlice);
     expect(loadedAlice).toHaveLength(1);
-    expect(loadedAlice[0].id).toBe('config-1');
+    expect(loadedAlice[0].config.id).toBe('config-1');
 
     // Bob's config still exists
     const loadedBob = await store.load('task-1', ctxBob);
     expect(loadedBob).toHaveLength(1);
-    expect(loadedBob[0].id).toBe('config-2');
+    expect(loadedBob[0].config.id).toBe('config-2');
   });
 
   it('should isolate owners within the same tenant', async () => {
