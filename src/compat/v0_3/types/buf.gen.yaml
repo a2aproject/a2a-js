@@ -6,6 +6,17 @@ inputs:
 plugins:
   - remote: buf.build/community/stephenh-ts-proto:v2.11.0
     out: ./pb
+    # Mirrors v1.0's `src/types/buf.gen.yaml` exactly: emits message types
+    # and JSON helpers only — no gRPC services, no encode/decode runtime,
+    # no imported `.proto` files. The encode/decode code lives in the
+    # sibling `src/compat/v0_3/grpc/pb/a2a.ts` (post-processed to import
+    # the message types back from this file as `export type X = pb.X`),
+    # and the well-known-type files (`google/protobuf/{struct,timestamp,
+    # empty,...}.ts`) live exclusively in `src/compat/v0_3/grpc/pb/google/`.
+    # This keeps `from_proto.ts` / `to_proto.ts` (and anything that imports
+    # them) free of any `@grpc/grpc-js` or wire-encoding code, which is
+    # required so the v1.0 JSON-RPC / REST factories stay Cloudflare
+    # Workers-compatible.
     opt:
       - oneof=unions-value
       - importSuffix=.js
@@ -14,5 +25,7 @@ plugins:
       - esModuleInterop=true
       - outputJsonMethods=true
       - outputPartialMethods=false
+      - outputEncodeMethods=false
       - snakeToCamel=keys
+      - emitImportedFiles=false
       - useDate=string
