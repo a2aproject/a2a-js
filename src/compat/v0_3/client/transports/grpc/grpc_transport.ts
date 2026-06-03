@@ -33,10 +33,11 @@
  *   - `listTasks` has no v0.3 equivalent at all — calling it throws
  *     {@link UnsupportedOperationError} synchronously without issuing any
  *     RPC.
- *   - Error mapping prefers `google.rpc.ErrorInfo` (if a v0.3 server
- *     happens to ship it) and falls back to a method-aware `grpc.status`
- *     table shared with the v1.0 client via
- *     {@link grpcStatusCodeToErrorClass}.
+ *   - Error mapping uses the §10.6 enriched error model: it parses
+ *     `google.rpc.ErrorInfo` from `grpc-status-details-bin` if present
+ *     (the v0.3 `legacyGrpcService` in this SDK emits it), and otherwise
+ *     returns a generic `Error` preserving the original gRPC code and
+ *     details.
  */
 
 import * as grpc from '@grpc/grpc-js';
@@ -45,7 +46,6 @@ import {
   A2A_REASON_TO_ERROR_CLASS,
   ERROR_INFO_TYPE,
   UnsupportedOperationError,
-  grpcStatusCodeToErrorClass,
 } from '../../../../../errors.js';
 import { A2A_LEGACY_PROTOCOL_VERSION } from '../../../../../constants.js';
 import type { SendMessageResult } from '../../../../../index.js';
@@ -479,25 +479,18 @@ export class LegacyGrpcTransport implements Transport {
   /**
    * Maps a gRPC `ServiceError` to a typed SDK error.
    *
-   * Resolution order:
-   * 1. Preferred: parse `google.rpc.ErrorInfo` from
-   *    `grpc-status-details-bin` metadata (in case the v0.3 server
-   *    happens to ship the v1.0-style enriched error model — the v0.3
-   *    `legacyGrpcService` does emit it).
-   * 2. Fallback: the method-aware
-   *    {@link grpcStatusCodeToErrorClass} table shared with the v1.0
-   *    client. Recognizes both v1.0 and v0.3 gRPC method names
-   *    (`getAgentCard` / `getExtendedAgentCard`, `taskSubscription` /
-   *    `subscribeToTask`, …).
-   * 3. Final fallback: a generic `Error` preserving the raw gRPC status
-   *    code and details.
+   * Uses the §10.6 enriched error model: parses `google.rpc.ErrorInfo`
+   * from `grpc-status-details-bin` metadata and looks the `reason` code
+   * up in {@link A2A_REASON_TO_ERROR_CLASS} to produce a typed SDK error.
+   * The v0.3 `legacyGrpcService` (in this SDK) emits ErrorInfo, so
+   * v0.3-on-v0.3 SDK paths still get typed errors. For servers that
+   * don't include ErrorInfo (e.g. third-party non-A2A v0.3 servers),
+   * returns a generic `Error` preserving the original gRPC code and
+   * details.
    */
   private static _mapToError(error: grpc.ServiceError, method?: string): Error {
     const fromErrorInfo = LegacyGrpcTransport._mapFromErrorInfo(error);
     if (fromErrorInfo) return fromErrorInfo;
-
-    const ErrorClass = grpcStatusCodeToErrorClass(error.code, method);
-    if (ErrorClass) return new ErrorClass(error.details);
 
     const methodContext = method ? ' for ' + method : '';
     return new Error('gRPC error' + methodContext + ': ' + error.code + ' ' + error.details, {

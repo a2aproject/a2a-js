@@ -467,8 +467,8 @@ describe('legacyGrpcService', () => {
       await handler.getTask(call, callback);
 
       const [err] = callback.mock.calls[0];
-      // VersionNotSupportedError maps to FAILED_PRECONDITION per the
-      // shared `errorClassNameToGrpcStatusCode` table.
+      // `VersionNotSupportedError` maps to `FAILED_PRECONDITION` per the
+      // `instanceof` chain in `mapToError`.
       expect(err.code).toBe(grpc.status.FAILED_PRECONDITION);
     });
   });

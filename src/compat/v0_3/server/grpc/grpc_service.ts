@@ -19,8 +19,8 @@
  *     server.addService(A2AService,       grpcService(...));        // v1.0
  *     server.addService(LegacyA2AService, legacyGrpcService(...));  // v0.3
  *
- * Errors are mapped via {@link errorClassNameToGrpcStatusCode} (shared
- * with the v1.0 service) and enriched with `google.rpc.ErrorInfo` in
+ * Errors are mapped via an `instanceof` chain (matching the v1.0
+ * `grpcService`) and enriched with `google.rpc.ErrorInfo` in
  * `grpc-status-details-bin` so v1.0-aware clients connecting to a v0.3
  * server still benefit from §10.6's enriched error model; v0.3 clients
  * that don't decode the binary status simply ignore it.
@@ -53,7 +53,19 @@ import { buildGrpcErrorMetadata } from '../../../../server/grpc/error_details.js
 import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
 import { LEGACY_HTTP_EXTENSION_HEADER } from '../../constants.js';
-import { errorClassNameToGrpcStatusCode, InvalidAgentResponseError } from '../../../../errors.js';
+import {
+  ContentTypeNotSupportedError,
+  ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
+  GenericError,
+  InvalidAgentResponseError,
+  PushNotificationNotSupportedError,
+  RequestMalformedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+  UnsupportedOperationError,
+  VersionNotSupportedError,
+} from '../../../../errors.js';
 import { validateVersion } from '../../../../server/version.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
@@ -489,9 +501,10 @@ function _serializeListTaskPushNotificationConfigResponse(
 /**
  * Maps an error to a gRPC error with v1.0-style status details.
  *
- * Uses the canonical {@link errorClassNameToGrpcStatusCode} table shared
- * with the v1.0 `grpcService` so both transports produce the same gRPC
- * status code for the same SDK error class.
+ * Uses an `instanceof` chain (matching the v1.0 `grpcService`) so that
+ * user-defined subclasses of A2A error types — e.g.
+ * `class MyTaskNotFound extends TaskNotFoundError {}` — resolve to the
+ * correct gRPC status of the nearest base class.
  *
  * Also attaches a `google.rpc.ErrorInfo` detail in
  * `grpc-status-details-bin`: v0.3 clients that don't decode binary status
@@ -499,8 +512,20 @@ function _serializeListTaskPushNotificationConfigResponse(
  * a v0.3 server still get the enriched §10.6 error model.
  */
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
-  const code =
-    error instanceof Error ? errorClassNameToGrpcStatusCode(error.name) : grpc.status.UNKNOWN;
+  let code = grpc.status.UNKNOWN;
+  if (error instanceof TaskNotFoundError) code = grpc.status.NOT_FOUND;
+  else if (error instanceof TaskNotCancelableError) code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof PushNotificationNotSupportedError)
+    code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof UnsupportedOperationError) code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof ContentTypeNotSupportedError) code = grpc.status.INVALID_ARGUMENT;
+  else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
+  else if (error instanceof ExtendedAgentCardNotConfiguredError)
+    code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof ExtensionSupportRequiredError) code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof VersionNotSupportedError) code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
+  else if (error instanceof GenericError) code = grpc.status.INTERNAL;
 
   const message = error instanceof Error ? error.message : 'Internal server error';
 

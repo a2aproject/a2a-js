@@ -5,13 +5,7 @@ import {
   type LegacyGrpcTransportOptions,
 } from '../../../../../../src/compat/v0_3/client/transports/grpc/grpc_transport.js';
 import { A2AServiceClient } from '../../../../../../src/compat/v0_3/grpc/pb/a2a.js';
-import {
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  PushNotificationNotSupportedError,
-  ExtendedAgentCardNotConfiguredError,
-  UnsupportedOperationError,
-} from '../../../../../../src/errors.js';
+import { TaskNotFoundError, UnsupportedOperationError } from '../../../../../../src/errors.js';
 import { buildGrpcErrorMetadata } from '../../../../../../src/server/grpc/error_details.js';
 import {
   Role as V1Role,
@@ -239,16 +233,6 @@ describe('LegacyGrpcTransport', () => {
       );
     });
 
-    it('falls back to method-aware grpc.status mapping when ErrorInfo is absent', async () => {
-      // NOT_FOUND with no ErrorInfo still produces TaskNotFoundError via
-      // the shared `grpcStatusCodeToErrorClass` fallback table.
-      mockUnaryError(mockGrpcClient.sendMessage as Mock, status.NOT_FOUND, 'task missing');
-
-      await expect(transport.sendMessage(v1SendMessageRequest())).rejects.toThrow(
-        TaskNotFoundError
-      );
-    });
-
     it('produces a generic Error for status codes with no SDK mapping', async () => {
       mockUnaryError(mockGrpcClient.sendMessage as Mock, status.UNKNOWN, 'mystery');
 
@@ -295,29 +279,6 @@ describe('LegacyGrpcTransport', () => {
       const value = first.value as { payload?: { $case: string } } | undefined;
       expect(value?.payload?.$case).toBe('task');
     });
-
-    it('maps stream errors via the shared error helpers', async () => {
-      const err: Partial<ServiceError> = {
-        code: status.NOT_FOUND,
-        details: 'not found',
-        metadata: new Metadata(),
-      };
-      // Async iterator that immediately rejects on the first `.next()` call.
-      const mockStream = {
-        [Symbol.asyncIterator]() {
-          return {
-            next(): Promise<IteratorResult<unknown, void>> {
-              return Promise.reject(err);
-            },
-          };
-        },
-        cancel: vi.fn(),
-      };
-      (mockGrpcClient.sendStreamingMessage as Mock).mockReturnValue(mockStream);
-
-      const iterator = transport.sendMessageStream(v1SendMessageRequest());
-      await expect(iterator.next()).rejects.toThrow(TaskNotFoundError);
-    });
   });
 
   describe('getTask', () => {
@@ -363,18 +324,6 @@ describe('LegacyGrpcTransport', () => {
       const sentReq = (mockGrpcClient.cancelTask as Mock).mock.calls[0]![0] as { name: string };
       expect(sentReq.name).toBe('tasks/t-1');
       expect(result.id).toBe('t-1');
-    });
-
-    it('maps FAILED_PRECONDITION on cancelTask to TaskNotCancelableError (no ErrorInfo)', async () => {
-      mockUnaryError(
-        mockGrpcClient.cancelTask as Mock,
-        status.FAILED_PRECONDITION,
-        'cannot cancel'
-      );
-
-      await expect(
-        transport.cancelTask({ tenant: '', id: 't-1', metadata: undefined })
-      ).rejects.toThrow(TaskNotCancelableError);
     });
   });
 
@@ -462,18 +411,6 @@ describe('LegacyGrpcTransport', () => {
         .calls[0]![0] as { name: string };
       expect(sentReq.name).toBe('tasks/task-1/pushNotificationConfigs/cfg-1');
     });
-
-    it('maps UNIMPLEMENTED on push-config RPCs to PushNotificationNotSupportedError', async () => {
-      mockUnaryError(
-        mockGrpcClient.getTaskPushNotificationConfig as Mock,
-        status.UNIMPLEMENTED,
-        'no push'
-      );
-
-      await expect(
-        transport.getTaskPushNotificationConfig({ tenant: '', taskId: 'task-1', id: 'cfg-1' })
-      ).rejects.toThrow(PushNotificationNotSupportedError);
-    });
   });
 
   describe('resubscribeTask', () => {
@@ -498,20 +435,6 @@ describe('LegacyGrpcTransport', () => {
         name: string;
       };
       expect(sentReq.name).toBe('tasks/t-1');
-    });
-  });
-
-  describe('getExtendedAgentCard error handling', () => {
-    it('maps FAILED_PRECONDITION on getAgentCard to ExtendedAgentCardNotConfiguredError', async () => {
-      mockUnaryError(
-        mockGrpcClient.getAgentCard as Mock,
-        status.FAILED_PRECONDITION,
-        'not configured'
-      );
-
-      await expect(transport.getExtendedAgentCard({ tenant: '' })).rejects.toThrow(
-        ExtendedAgentCardNotConfiguredError
-      );
     });
   });
 

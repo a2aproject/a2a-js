@@ -24,11 +24,7 @@ import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
 import { FromProto } from '../../../types/converters/from_proto.js';
 
-import {
-  A2A_REASON_TO_ERROR_CLASS,
-  ERROR_INFO_TYPE,
-  grpcStatusCodeToErrorClass,
-} from '../../../errors.js';
+import { A2A_REASON_TO_ERROR_CLASS, ERROR_INFO_TYPE } from '../../../errors.js';
 import { decodeStatus, decodeErrorInfo } from '../../../server/grpc/error_details.js';
 import { LegacyGrpcTransport } from '../../../compat/v0_3/client/transports/grpc/index.js';
 import { isLegacyVersion } from '../../../version_utils.js';
@@ -340,25 +336,15 @@ export class GrpcTransport implements Transport {
   /**
    * Maps a gRPC ServiceError to an SDK error class.
    *
-   * Resolution order:
-   * 1. Preferred: parse `google.rpc.ErrorInfo` from
-   *    `grpc-status-details-bin` metadata (the enriched error model from
-   *    §10.6) and look the `reason` code up in
-   *    {@link A2A_REASON_TO_ERROR_CLASS}.
-   * 2. Fallback for servers that did not include ErrorInfo (e.g. v0.3
-   *    servers, which predate §10.6): use the method-aware
-   *    {@link grpcStatusCodeToErrorClass} table shared with the v0.3
-   *    compat client so the same `(code, method)` pair produces the same
-   *    typed SDK error on both transports.
-   * 3. Final fallback: a generic `Error` preserving the raw gRPC status
-   *    code and details.
+   * Uses the enriched error model (§10.6): parses `google.rpc.ErrorInfo`
+   * from `grpc-status-details-bin` metadata to precisely identify the A2A
+   * error type via its `reason` code. For servers that do not include
+   * ErrorInfo (e.g., non-A2A gRPC services), returns a generic Error
+   * preserving the original gRPC code and details.
    */
   private static mapToError(error: grpc.ServiceError, method?: keyof A2AServiceClient): Error {
     const fromErrorInfo = GrpcTransport.mapFromErrorInfo(error);
     if (fromErrorInfo) return fromErrorInfo;
-
-    const ErrorClass = grpcStatusCodeToErrorClass(error.code, method ? String(method) : undefined);
-    if (ErrorClass) return new ErrorClass(error.details);
 
     const methodContext = method ? ' for ' + String(method) : '';
     return new Error('gRPC error' + methodContext + ': ' + error.code + ' ' + error.details, {
