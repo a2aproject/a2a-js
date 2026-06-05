@@ -114,7 +114,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   });
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
     vi.restoreAllMocks();
   });
 

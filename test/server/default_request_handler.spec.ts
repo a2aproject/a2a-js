@@ -1542,6 +1542,72 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isTrue(afterClose.done, 'Stream should be closed after message-only response');
   });
 
+  it('sendMessageStream: should NOT invoke push notification sender for message payloads', async () => {
+    // Wire up a fresh handler with explicit push-notification components so
+    // we can spy on the sender. The agent card already has
+    // `capabilities.pushNotifications: true`, so without the message-payload
+    // guard the handler would invoke the sender on every event — which
+    // throws for `message` payloads and produces a misleading
+    // `Failed to send push notification` console.error.
+    const pushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const handlerWithPush = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      pushNotificationStore,
+      mockPushNotificationSender
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-no-push', 'message-only push-skip test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'msg-response-no-push',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'response' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    const generator = handlerWithPush.sendMessageStream(params, serverCallContext);
+    for await (const event of generator) {
+      events.push(event);
+    }
+
+    // Stream produced the message as expected.
+    assert.lengthOf(events, 1);
+    assert.equal(events[0].payload?.$case, 'message');
+
+    // The sender must NOT have been invoked for the message event.
+    expect(mockPushNotificationSender.send).not.toHaveBeenCalled();
+
+    // No `Failed to send push notification` error should have been logged.
+    const offendingCalls = errorSpy.mock.calls.filter((args) =>
+      String(args[0]).includes('Failed to send push notification')
+    );
+    expect(offendingCalls).toHaveLength(0);
+  });
+
   it('sendMessageStream: should throw when statusUpdate arrives before task', async () => {
     const taskId = 'task-order-1';
     const contextId = 'ctx-order-1';
@@ -2742,7 +2808,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(thirdCallResponse, expectedThirdResponse);
   });
 
-  it('should send push notification when message event is received', async () => {
+  it('should NOT send push notification when message event is received (§4.3.3)', async () => {
+    // Per §4.3.3 push notifications are defined for task / status /
+    // artifact events only. Message events (§3.1.2 message-only pattern)
+    // must NOT trigger sender invocation: invoking the sender with a
+    // message payload throws and would emit a misleading
+    // `Failed to send push notification` error log on every message turn.
+    // Direct `PushNotificationSender.send` callers continue to receive the
+    // explicit error per the sender's documented contract.
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -2794,13 +2867,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       bus.finished();
     });
 
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await handler.sendMessage(params, serverCallContext);
 
-    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
-    const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][0] as StreamResponse;
-    expect(callResponse.payload.$case).toBe('message');
-    expect((callResponse.payload as { value: Message }).value.messageId).toBe('msg-reply-1');
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).not.toHaveBeenCalled();
+    const offendingCalls = errorSpy.mock.calls.filter((args) =>
+      String(args[0]).includes('Failed to send push notification')
+    );
+    expect(offendingCalls).toHaveLength(0);
   });
 
   it('should send push notification when statusUpdate event is received', async () => {

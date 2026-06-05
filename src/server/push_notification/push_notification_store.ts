@@ -102,7 +102,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
 
   async load(taskId: string, context: ServerCallContext): Promise<StoredPushNotificationConfig[]> {
     const entries = this._scopedStore.getBucket(context)?.get(taskId);
-    return entries || [];
+    return entries ? [...entries] : [];
   }
 
   async delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void> {

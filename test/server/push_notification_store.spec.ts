@@ -113,4 +113,24 @@ describe('InMemoryPushNotificationStore wire-version capture', () => {
     expect(loaded).toHaveLength(1);
     expect(loaded[0].config.id).toBe('task-id-default');
   });
+
+  it('load() returns a shallow copy that cannot mutate the stored bucket', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save('task-iso', context, makeConfig({ id: 'cfg-iso' }));
+
+    const first = await store.load('task-iso', context);
+    expect(first).toHaveLength(1);
+
+    // Caller-side mutations of the returned array must not affect the
+    // store's internal bucket.
+    first.pop();
+    first.push({
+      config: makeConfig({ id: 'attacker' }),
+      wireVersion: A2A_PROTOCOL_VERSION,
+    });
+
+    const second = await store.load('task-iso', context);
+    expect(second).toHaveLength(1);
+    expect(second[0].config.id).toBe('cfg-iso');
+  });
 });

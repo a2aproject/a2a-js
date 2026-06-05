@@ -802,12 +802,24 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * Sends a push notification if configured.
    * Fire-and-forget: push notification delivery should not block the stream or response.
    * Errors are logged but do not propagate to the caller.
+   *
+   * Message payloads are skipped: per §4.3.3 push notifications are defined
+   * for task / status / artifact events only. Message events are valid
+   * stream responses (§3.1.2 message-only pattern) but invoking the sender
+   * with one would throw and produce a misleading
+   * `Failed to send push notification` log on every message event. Direct
+   * `PushNotificationSender.send` callers continue to get the explicit
+   * error per the sender's documented contract.
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
     streamResponse: StreamResponse
   ): Promise<void> {
-    if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
+    if (
+      this.agentCard.capabilities?.pushNotifications &&
+      this.pushNotificationSender &&
+      streamResponse.payload?.$case !== 'message'
+    ) {
       this.pushNotificationSender.send(streamResponse, context).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
