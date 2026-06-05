@@ -18,6 +18,10 @@ export default defineWorkersConfig(
         'test/compat/v0_3/client/transports/grpc/**',
         'test/e2e.spec.ts',
         'test/server/push_notification_integration.spec.ts',
+        // Push-notification senders are exercised against a real Express webhook
+        // (sibling pure-unit serializer tests stay in the edge suite).
+        'test/server/push_notification_sender_serializer.spec.ts',
+        'test/compat/v0_3/server/push_notification/create_legacy_aware_sender.spec.ts',
         // Node modules should always be excluded
         '**/node_modules/**',
       ],
