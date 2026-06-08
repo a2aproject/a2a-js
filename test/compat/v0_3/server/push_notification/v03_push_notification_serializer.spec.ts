@@ -154,14 +154,24 @@ describe('V03PushNotificationSerializer', () => {
     expect(parsed).not.toHaveProperty('artifactUpdate');
   });
 
-  it('rejects message payloads (push notifications are for task/status/artifact only)', () => {
+  it('serializes a Message payload as bare v0.3 Message with kind="message"', () => {
+    // Per spec §4.3.3 messages are valid push-notification payloads. The
+    // v0.3 wire shape is the bare Message object discriminated by the
+    // `kind` field.
     const event: StreamResponse = {
       payload: {
         $case: 'message',
         value: {
           messageId: 'm-1',
           role: Role.ROLE_AGENT,
-          parts: [],
+          parts: [
+            {
+              content: { $case: 'text', value: 'hello' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
           contextId: 'ctx-msg',
           taskId: 'task-msg',
           extensions: [],
@@ -170,9 +180,19 @@ describe('V03PushNotificationSerializer', () => {
         },
       },
     };
-    expect(() => serializer.serialize(event)).toThrow(
-      /Push notification should not be sent for message payload/
-    );
+
+    const { body, contentType } = serializer.serialize(event);
+    const parsed = JSON.parse(body);
+
+    expect(contentType).toBe('application/json');
+    expect(parsed.kind).toBe('message');
+    expect(parsed.messageId).toBe('m-1');
+    expect(parsed.contextId).toBe('ctx-msg');
+    expect(parsed.taskId).toBe('task-msg');
+    // Per v0.3 spec §9.5 the body MUST be the bare event object.
+    expect(parsed).not.toHaveProperty('jsonrpc');
+    expect(parsed).not.toHaveProperty('result');
+    expect(parsed).not.toHaveProperty('message');
   });
 
   it('throws when the StreamResponse has no payload', () => {

@@ -18,7 +18,76 @@ function makeConfig(
   };
 }
 
-describe('InMemoryPushNotificationStore wire-version capture', () => {
+describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read)', () => {
+  let store: InMemoryPushNotificationStore;
+
+  beforeEach(() => {
+    store = new InMemoryPushNotificationStore();
+  });
+
+  it('returns the stored configs without wire-version wrappers', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const config = makeConfig({ id: 'cfg-1', url: 'http://example.test/wh1' });
+
+    await store.save('task-1', context, config);
+    const loaded = await store.load('task-1', context);
+
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]).toEqual(config);
+  });
+
+  it('returns an empty array when no configs are stored for the task', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const loaded = await store.load('missing-task', context);
+    expect(loaded).toEqual([]);
+  });
+
+  it('defaults a missing config id to the taskId on save', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const config = makeConfig({ id: '' });
+
+    await store.save('task-id-default', context, config);
+    const loaded = await store.load('task-id-default', context);
+
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].id).toBe('task-id-default');
+  });
+
+  it('delete() matches against the config id', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save('task-del', context, makeConfig({ id: 'keep' }));
+    await store.save('task-del', context, makeConfig({ id: 'remove' }));
+
+    await store.delete('task-del', context, 'remove');
+
+    const remaining = await store.load('task-del', context);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe('keep');
+  });
+
+  it('returns deep-cloned configs so caller mutations cannot reach internal state', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save('task-iso', context, makeConfig({ id: 'cfg-iso', url: 'http://orig/' }));
+
+    const first = await store.load('task-iso', context);
+    expect(first).toHaveLength(1);
+
+    // Caller-side mutations of both the array spine AND the inner config
+    // object must not affect subsequent reads.
+    first.pop();
+    first.push(makeConfig({ id: 'attacker' }));
+    const second = await store.load('task-iso', context);
+    expect(second).toHaveLength(1);
+    expect(second[0].id).toBe('cfg-iso');
+
+    // Inner-object mutation (validates the deep clone, not just shallow):
+    second[0].url = 'http://evil/';
+    const third = await store.load('task-iso', context);
+    expect(third[0].url).toBe('http://orig/');
+  });
+});
+
+describe('InMemoryPushNotificationStore.loadWithMetadata() wire-version capture', () => {
   let store: InMemoryPushNotificationStore;
 
   beforeEach(() => {
@@ -30,7 +99,7 @@ describe('InMemoryPushNotificationStore wire-version capture', () => {
     const config = makeConfig({ id: 'cfg-1', url: 'http://example.test/wh1' });
 
     await store.save('task-1', context, config);
-    const loaded = await store.load('task-1', context);
+    const loaded = await store.loadWithMetadata('task-1', context);
 
     expect(loaded).toHaveLength(1);
     expect(loaded[0].config).toEqual(config);
@@ -44,7 +113,21 @@ describe('InMemoryPushNotificationStore wire-version capture', () => {
     const config = makeConfig({ id: 'cfg-default', url: 'http://example.test/wh-default' });
 
     await store.save('task-default', context, config);
-    const loaded = await store.load('task-default', context);
+    const loaded = await store.loadWithMetadata('task-default', context);
+
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].wireVersion).toBe(A2A_LEGACY_PROTOCOL_VERSION);
+  });
+
+  it("defaults to '0.3' when context.requestedVersion is explicitly empty (§3.6.2)", async () => {
+    // Defensive: caller constructs a context with explicit empty version.
+    // The store's fallback should still resolve to '0.3' (NOT '1.0') per
+    // §3.6.2's absent-header rule.
+    const context = new ServerCallContext({ requestedVersion: '' });
+    const config = makeConfig({ id: 'cfg-empty' });
+
+    await store.save('task-empty', context, config);
+    const loaded = await store.loadWithMetadata('task-empty', context);
 
     expect(loaded).toHaveLength(1);
     expect(loaded[0].wireVersion).toBe(A2A_LEGACY_PROTOCOL_VERSION);
@@ -60,7 +143,7 @@ describe('InMemoryPushNotificationStore wire-version capture', () => {
     // The two saves use different ServerCallContext instances but with the
     // same (default) user/tenant scope, so they share the same bucket and we
     // can load them via either context.
-    const loaded = await store.load('task-mixed', ctxV1);
+    const loaded = await store.loadWithMetadata('task-mixed', ctxV1);
 
     expect(loaded).toHaveLength(2);
     const byId = Object.fromEntries(loaded.map((e) => [e.config.id, e.wireVersion]));
@@ -79,58 +162,42 @@ describe('InMemoryPushNotificationStore wire-version capture', () => {
       makeConfig({ id: 'cfg-overwrite', url: 'http://example.test/changed' })
     );
 
-    const loaded = await store.load('task-overwrite', ctxV1);
+    const loaded = await store.loadWithMetadata('task-overwrite', ctxV1);
     expect(loaded).toHaveLength(1);
     expect(loaded[0].wireVersion).toBe(A2A_PROTOCOL_VERSION);
     expect(loaded[0].config.url).toBe('http://example.test/changed');
   });
 
-  it('delete() matches against the inner config id, not the wrapper', async () => {
+  it('returns deep-cloned wrappers so caller mutations cannot reach internal state', async () => {
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
-    await store.save('task-del', context, makeConfig({ id: 'keep' }));
-    await store.save('task-del', context, makeConfig({ id: 'remove' }));
+    await store.save(
+      'task-iso-meta',
+      context,
+      makeConfig({ id: 'cfg-iso-meta', url: 'http://orig/' })
+    );
 
-    await store.delete('task-del', context, 'remove');
-
-    const remaining = await store.load('task-del', context);
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].config.id).toBe('keep');
-  });
-
-  it('load() returns an empty array when no configs are stored for the task', async () => {
-    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
-    const loaded = await store.load('missing-task', context);
-    expect(loaded).toEqual([]);
-  });
-
-  it('defaults a missing config id to the taskId on save', async () => {
-    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
-    const config = makeConfig({ id: '' });
-
-    await store.save('task-id-default', context, config);
-    const loaded = await store.load('task-id-default', context);
-
-    expect(loaded).toHaveLength(1);
-    expect(loaded[0].config.id).toBe('task-id-default');
-  });
-
-  it('load() returns a shallow copy that cannot mutate the stored bucket', async () => {
-    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
-    await store.save('task-iso', context, makeConfig({ id: 'cfg-iso' }));
-
-    const first = await store.load('task-iso', context);
+    const first = await store.loadWithMetadata('task-iso-meta', context);
     expect(first).toHaveLength(1);
 
-    // Caller-side mutations of the returned array must not affect the
-    // store's internal bucket.
+    // Array-spine mutation:
     first.pop();
     first.push({
       config: makeConfig({ id: 'attacker' }),
       wireVersion: A2A_PROTOCOL_VERSION,
     });
-
-    const second = await store.load('task-iso', context);
+    const second = await store.loadWithMetadata('task-iso-meta', context);
     expect(second).toHaveLength(1);
-    expect(second[0].config.id).toBe('cfg-iso');
+    expect(second[0].config.id).toBe('cfg-iso-meta');
+
+    // Inner-object mutation:
+    second[0].config.url = 'http://evil/';
+    const third = await store.loadWithMetadata('task-iso-meta', context);
+    expect(third[0].config.url).toBe('http://orig/');
+  });
+
+  it('loadWithMetadata() returns empty array when no configs stored', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const loaded = await store.loadWithMetadata('missing-task', context);
+    expect(loaded).toEqual([]);
   });
 });

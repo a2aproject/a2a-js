@@ -1156,7 +1156,10 @@ describe('Push Notification Integration Tests', () => {
   });
 
   describe('StreamResponse payload types', () => {
-    it('should throw if tried to send message payload', async () => {
+    it('should send message payload correctly (§4.3.3)', async () => {
+      // Per spec §4.3.3 messages are valid push-notification payloads. When
+      // bound to a task with a registered config the webhook receives the
+      // canonical StreamResponse JSON containing the message.
       const taskId = 'test-message-payload';
       const pushConfig: TaskPushNotificationConfig = {
         tenant: '',
@@ -1191,16 +1194,33 @@ describe('Push Notification Integration Tests', () => {
         },
       };
 
-      let threw = false;
-      try {
-        await pushNotificationSender.send(streamResponse, defaultContext);
-      } catch (error: any) {
-        threw = true;
-        assert.include(error.message, 'Push notification should not be sent for message payload');
-      }
-      assert.isTrue(threw, 'Should have thrown an error');
+      await pushNotificationSender.send(streamResponse, defaultContext);
 
-      // Verify no notifications were sent
+      assert.equal(receivedNotifications.length, 1);
+      assert.deepEqual(receivedNotifications[0].body, StreamResponse.toJSON(streamResponse));
+    });
+
+    it('should silently skip dispatch for stand-alone messages (no task association)', async () => {
+      // Message-only stream pattern (§3.1.2) has no taskId — no config can
+      // be registered for it, so the sender returns silently without
+      // hitting the store or webhook.
+      const streamResponse: StreamResponse = {
+        payload: {
+          $case: 'message',
+          value: {
+            messageId: 'msg-standalone',
+            taskId: '',
+            role: Role.ROLE_AGENT,
+            parts: [],
+            contextId: 'ctx-standalone',
+            extensions: [],
+            metadata: {},
+            referenceTaskIds: [],
+          },
+        },
+      };
+
+      await pushNotificationSender.send(streamResponse, defaultContext);
       assert.equal(receivedNotifications.length, 0);
     });
 

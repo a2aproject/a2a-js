@@ -52,9 +52,9 @@ Webhooks registered over v0.3 transports must receive the v0.3-shaped HTTP body,
 
 This is implemented by two pieces working together:
 
-1. **`PushNotificationStore` captures the wire version.** The `InMemoryPushNotificationStore` (and any conforming implementation) reads `context.requestedVersion` on `save()` and persists it alongside the config as a `StoredPushNotificationConfig { config, wireVersion }`. When the same task later emits events, `load()` returns the wire version next to each config.
+1. **`PushNotificationStore` captures the wire version.** The `InMemoryPushNotificationStore` (and any conforming implementation) reads `context.requestedVersion` on `save()` and persists it alongside the config as a `StoredPushNotificationConfig { config, wireVersion }`. The wire version is surfaced via the optional `loadWithMetadata` read method.
 
-2. **`DefaultPushNotificationSender` routes per wire version.** The sender resolves a `PushNotificationSerializer` per stored entry using the persisted wire version. It always registers `V1PushNotificationSerializer` under `'1.0'` and falls back to it (with a one-time warning per unknown version) when no serializer is registered for the entry's version.
+2. **`DefaultPushNotificationSender` routes per wire version.** The sender prefers `loadWithMetadata` when the store implements it, otherwise falls back to `load` and defaults every entry to wire version `'0.3'` per spec §3.6.2's absent-header rule. It always registers `V1PushNotificationSerializer` under `'1.0'` and falls back to it (with a one-time warning per unknown version) when no serializer is registered for the entry's version.
 
 ### Enabling v0.3 push delivery
 
@@ -71,3 +71,13 @@ const sender = createLegacyAwarePushNotificationSender(store);
 ```
 
 v1.0-registered webhooks continue to receive the canonical `StreamResponse` body with `application/a2a+json`; v0.3-registered webhooks receive the bare-event JSON with `application/json`. Custom serializers (or overrides for the built-in `'0.3'` / `'1.0'` entries) can be supplied via the `serializers` option; user-supplied entries take precedence.
+
+### Caveat for custom `PushNotificationStore` implementations
+
+The `PushNotificationStore.loadWithMetadata` method is optional. The SDK's `InMemoryPushNotificationStore` implements it; **custom store implementations that omit it cause the sender to default every stored config to wire version `'0.3'`** (per spec §3.6.2). The implications:
+
+- **v0.3-only deployments**: no concern — the default matches your transports.
+- **v1.0-only deployments**: also no concern unless you also opt into this compat layer (which you have no reason to do).
+- **Mixed v0.3 + v1.0 deployments backed by a custom store + the compat layer**: v1.0-registered webhooks will silently receive v0.3 bodies. Implement `loadWithMetadata` on your custom store (mirror `InMemoryPushNotificationStore`'s 3-line implementation) to preserve the originating wire version per config.
+
+This compat layer (and therefore the caveat above) is opt-in and will be retired once the ecosystem has migrated to v1.0.

@@ -1,5 +1,9 @@
 import { TaskPushNotificationConfig, StreamResponse } from '../../index.js';
-import { A2A_PROTOCOL_VERSION } from '../../constants.js';
+import {
+  A2A_LEGACY_PROTOCOL_VERSION,
+  A2A_PROTOCOL_VERSION,
+  ProtocolVersion,
+} from '../../constants.js';
 import { ServerCallContext } from '../context.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore, StoredPushNotificationConfig } from './push_notification_store.js';
@@ -20,10 +24,12 @@ export interface DefaultPushNotificationSenderOptions {
    */
   tokenHeaderName?: string;
   /**
-   * Per-wire-version serializers. Keys are A2A wire versions (e.g. `'1.0'`,
-   * `'0.3'`); values are the {@link PushNotificationSerializer}
-   * implementations that produce the HTTP body and content type for
-   * notifications going out to webhooks registered over that wire version.
+   * Per-wire-version push-notification serializers. Keys are A2A wire
+   * versions ({@link ProtocolVersion.V1_0} = `'1.0'`,
+   * {@link ProtocolVersion.V0_3} = `'0.3'`); values are the
+   * {@link PushNotificationSerializer} implementations that produce the
+   * HTTP body and content type for notifications going out to webhooks
+   * registered over that wire version.
    *
    * The sender always registers a built-in `'1.0'` serializer
    * ({@link V1PushNotificationSerializer}) at construction time; entries
@@ -34,8 +40,12 @@ export interface DefaultPushNotificationSenderOptions {
    * When a stored config carries a wire version with no registered
    * serializer, the sender logs a warning and falls back to the `'1.0'`
    * serializer for that dispatch.
+   *
+   * The typed key set (`ProtocolVersion`) is a developer affordance; the
+   * underlying registry accepts any string at runtime to remain forward
+   * compatible with future or custom wire versions.
    */
-  serializers?: Record<string, PushNotificationSerializer>;
+  serializers?: Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
 }
 
 export class DefaultPushNotificationSender implements PushNotificationSender {
@@ -65,22 +75,33 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     // serializer for testing or alternative encodings).
     const builtinV1 = new V1PushNotificationSerializer();
     this.serializers = new Map<string, PushNotificationSerializer>([
-      [A2A_PROTOCOL_VERSION, builtinV1],
+      [ProtocolVersion.V1_0, builtinV1],
     ]);
     if (options.serializers) {
       for (const [version, serializer] of Object.entries(options.serializers)) {
-        this.serializers.set(version, serializer);
+        if (serializer) {
+          this.serializers.set(version, serializer);
+        }
       }
     }
     // Cache the v1.0 serializer for unknown-version fallback. We resolve
     // this from the registry (not the local `builtinV1`) so a user who
     // overrode '1.0' has their custom serializer used for fallback too.
-    this.fallbackSerializer = this.serializers.get(A2A_PROTOCOL_VERSION) ?? builtinV1;
+    this.fallbackSerializer = this.serializers.get(ProtocolVersion.V1_0) ?? builtinV1;
   }
 
   async send(streamResponse: StreamResponse, context: ServerCallContext): Promise<void> {
     const taskId = this._getTaskId(streamResponse);
-    const storedConfigs = await this.pushNotificationStore.load(taskId, context);
+    // Stand-alone Messages (the message-only stream pattern in §3.1.2 with
+    // no task association) cannot have a registered push config — skip the
+    // store round-trip. This also keeps the dispatch silent when the
+    // request handler forwards a bare Message event for which no task
+    // exists.
+    if (!taskId) {
+      return;
+    }
+
+    const storedConfigs = await this._loadStoredConfigs(taskId, context);
     if (!storedConfigs || storedConfigs.length === 0) {
       return;
     }
@@ -114,6 +135,17 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     });
   }
 
+  /**
+   * Returns the task id associated with a {@link StreamResponse}.
+   *
+   * Per spec §4.3.3 all four payload variants (`task`, `message`,
+   * `statusUpdate`, `artifactUpdate`) are valid push-notification payloads.
+   * For task / status / artifact events the task id is always present.
+   * For message events the task id is present iff the message is bound to
+   * an existing task (§3.4.2); stand-alone messages from the message-only
+   * stream pattern carry an empty `taskId`, in which case there can be no
+   * registered push config and the sender simply skips dispatch.
+   */
   private _getTaskId(streamResponse: StreamResponse): string {
     const payload = streamResponse.payload;
     if (!payload) {
@@ -124,9 +156,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         return payload.value.id;
       case 'statusUpdate':
       case 'artifactUpdate':
-        return payload.value.taskId;
       case 'message':
-        throw new Error('Push notification should not be sent for message payload.');
+        return payload.value.taskId;
       default: {
         // Exhaustive check: if a new $case is added to the StreamResponse union
         // without updating this switch, TypeScript will report a compile error here.
@@ -134,6 +165,28 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         throw new Error(`Unknown payload case: ${(_exhaustive as { $case: string }).$case}`);
       }
     }
+  }
+
+  /**
+   * Resolves stored configs from the {@link PushNotificationStore},
+   * preferring the wire-version-aware {@link PushNotificationStore.loadWithMetadata}
+   * when available.
+   *
+   * Stores that only implement the canonical {@link PushNotificationStore.load}
+   * method are silently lifted into the wrapped shape by tagging every
+   * entry with {@link A2A_LEGACY_PROTOCOL_VERSION} (`'0.3'`) per spec
+   * §3.6.2's absent-header default. See `src/compat/v0_3/README.md` for
+   * the implication on mixed-version deployments backed by custom stores.
+   */
+  private async _loadStoredConfigs(
+    taskId: string,
+    context: ServerCallContext
+  ): Promise<StoredPushNotificationConfig[]> {
+    if (this.pushNotificationStore.loadWithMetadata) {
+      return await this.pushNotificationStore.loadWithMetadata(taskId, context);
+    }
+    const plain = await this.pushNotificationStore.load(taskId, context);
+    return plain.map((config) => ({ config, wireVersion: A2A_LEGACY_PROTOCOL_VERSION }));
   }
 
   /**

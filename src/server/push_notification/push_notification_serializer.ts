@@ -28,10 +28,10 @@ export interface PushNotificationSerializer {
    * Serializes a {@link StreamResponse} into the HTTP body + content type
    * for one push-notification dispatch.
    *
-   * Implementations MUST reject `message` payloads (push notifications are
-   * defined for `task` / `statusUpdate` / `artifactUpdate` only, per
-   * §4.3.3). Throwing from this method aborts the dispatch and is logged
-   * by the sender; it does NOT propagate to the event loop or the caller.
+   * Implementations MUST handle all four `StreamResponse` payload variants
+   * (`task`, `message`, `statusUpdate`, `artifactUpdate`) per spec §4.3.3.
+   * Any error thrown from this method aborts the dispatch and is logged by
+   * the sender; it does NOT propagate to the event loop or the caller.
    */
   serialize(streamResponse: StreamResponse): SerializedPushNotification;
 }

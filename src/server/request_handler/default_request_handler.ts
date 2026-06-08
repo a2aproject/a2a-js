@@ -647,19 +647,19 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    const entries = (await this.pushNotificationStore?.load(taskId, context)) || [];
-    if (entries.length === 0) {
+    const configs = (await this.pushNotificationStore?.load(taskId, context)) || [];
+    if (configs.length === 0) {
       throw new GenericError(`Push notification config not found for task ${taskId}.`);
     }
 
-    const entry = entries.find((e) => e.config.id === params.id);
+    const config = configs.find((c) => c.id === params.id);
 
-    if (!entry) {
+    if (!config) {
       throw new GenericError(
         `Push notification config with id '${params.id}' not found for task ${taskId}.`
       );
     }
-    return entry.config;
+    return config;
   }
 
   async listTaskPushNotificationConfigs(
@@ -675,9 +675,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    const entries = (await this.pushNotificationStore?.load(taskId, context)) || [];
     return {
-      configs: entries.map((entry) => entry.config),
+      configs: (await this.pushNotificationStore?.load(taskId, context)) || [],
       nextPageToken: '',
     };
   }
@@ -803,23 +802,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * Fire-and-forget: push notification delivery should not block the stream or response.
    * Errors are logged but do not propagate to the caller.
    *
-   * Message payloads are skipped: per §4.3.3 push notifications are defined
-   * for task / status / artifact events only. Message events are valid
-   * stream responses (§3.1.2 message-only pattern) but invoking the sender
-   * with one would throw and produce a misleading
-   * `Failed to send push notification` log on every message event. Direct
-   * `PushNotificationSender.send` callers continue to get the explicit
-   * error per the sender's documented contract.
+   * Per §4.3.3 all four `StreamResponse` payload variants (`task`,
+   * `message`, `statusUpdate`, `artifactUpdate`) are valid push-notification
+   * payloads. The sender silently skips stand-alone Messages that carry no
+   * task association (message-only stream pattern in §3.1.2) since no
+   * push config can be registered for them.
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
     streamResponse: StreamResponse
   ): Promise<void> {
-    if (
-      this.agentCard.capabilities?.pushNotifications &&
-      this.pushNotificationSender &&
-      streamResponse.payload?.$case !== 'message'
-    ) {
+    if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
       this.pushNotificationSender.send(streamResponse, context).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });

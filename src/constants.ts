@@ -38,6 +38,26 @@ export const A2A_PROTOCOL_VERSION = '1.0';
 export const A2A_LEGACY_PROTOCOL_VERSION = '0.3';
 
 /**
+ * Known A2A protocol wire versions.
+ *
+ * The string values match the canonical `Major.Minor` form transmitted in
+ * the `A2A-Version` HTTP header (§3.6.1) and stored on
+ * `ServerCallContext.requestedVersion`. Used as typed keys in version-keyed
+ * registries such as `DefaultPushNotificationSenderOptions.serializers`.
+ *
+ * Enum values are hard-coded string literals (TypeScript requires enum
+ * initializers to be constants); the matching exported string constants
+ * {@link A2A_PROTOCOL_VERSION} and {@link A2A_LEGACY_PROTOCOL_VERSION}
+ * remain the canonical sources of truth. The enum is interchangeable with
+ * those constants and with free-form `string` versions arriving over the
+ * wire.
+ */
+export enum ProtocolVersion {
+  V0_3 = '0.3',
+  V1_0 = '1.0',
+}
+
+/**
  * The JSON content type per §9.1.
  * JSON-RPC requests MUST use this content type.
  */

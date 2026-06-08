@@ -4,7 +4,10 @@ import { AddressInfo } from 'net';
 import express, { Request, Response } from 'express';
 
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
-import { InMemoryPushNotificationStore } from '../../src/server/push_notification/push_notification_store.js';
+import {
+  InMemoryPushNotificationStore,
+  PushNotificationStore,
+} from '../../src/server/push_notification/push_notification_store.js';
 import {
   PushNotificationSerializer,
   SerializedPushNotification,
@@ -21,6 +24,7 @@ import {
   A2A_CONTENT_TYPE,
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
+  ProtocolVersion,
 } from '../../src/constants.js';
 
 type Captured = {
@@ -236,14 +240,89 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
 
-  it('rejects message payloads (built-in v1.0 serializer behavior)', async () => {
+  it('delivers message payloads with task association per §4.3.3', async () => {
+    // Per spec §4.3.3 push notifications accept all four StreamResponse
+    // payload variants. The built-in v1.0 serializer encodes the message as
+    // part of the canonical StreamResponse JSON wrapper.
     const sender = new DefaultPushNotificationSender(store);
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-msg', ctxV1, makeConfig(`${baseUrl}/notify`));
 
-    await expect(sender.send(makeMessage('task-msg'), ctxV1)).rejects.toThrow(
-      /Push notification should not be sent for message payload/
+    await sender.send(makeMessage('task-msg'), ctxV1);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
+    expect(received[0].body).toEqual(StreamResponse.toJSON(makeMessage('task-msg')));
+  });
+
+  it('silently skips dispatch for stand-alone messages (no task association)', async () => {
+    // Message-only stream pattern (§3.1.2): no taskId means no config can
+    // ever match. Sender returns silently without hitting the store.
+    const sender = new DefaultPushNotificationSender(store);
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    await sender.send(makeMessage(''), ctxV1);
+
+    expect(received).toHaveLength(0);
+  });
+
+  it('falls back to load() with default 0.3 wire version when the store omits loadWithMetadata', async () => {
+    // Stub a custom store implementing only the required interface methods.
+    // The sender's silent-fallback path tags every entry as wire version
+    // '0.3' per spec §3.6.2's absent-header rule.
+    const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-legacy' });
+    const customStore: PushNotificationStore = {
+      save: vi.fn(async () => {}),
+      load: vi.fn(async () => [customConfig]),
+      delete: vi.fn(async () => {}),
+    };
+
+    const v03Serializer: PushNotificationSerializer = {
+      serialize(): SerializedPushNotification {
+        return { body: '{"v":"0.3-fallback"}', contentType: 'application/json' };
+      },
+    };
+    const sender = new DefaultPushNotificationSender(customStore, {
+      serializers: { [ProtocolVersion.V0_3]: v03Serializer },
+    });
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    await sender.send(makeStatusUpdate('task-legacy-store'), ctxV1);
+
+    // Even though the dispatch context is v1.0, the custom store has no
+    // loadWithMetadata so the sender defaults to '0.3' → v0.3 serializer
+    // wins.
+    expect(received).toHaveLength(1);
+    expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].rawBody).toBe('{"v":"0.3-fallback"}');
+    expect(customStore.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('fallback path routes to v1.0 serializer when no v0.3 serializer is registered', async () => {
+    // Same custom-store fallback path, but with the default sender config
+    // (only v1.0 serializer registered). The '0.3' default wire version
+    // hits the unknown-serializer fallback and resolves to v1.0 with a
+    // one-time warning.
+    const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-legacy-v1' });
+    const customStore: PushNotificationStore = {
+      save: vi.fn(async () => {}),
+      load: vi.fn(async () => [customConfig]),
+      delete: vi.fn(async () => {}),
+    };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const sender = new DefaultPushNotificationSender(customStore);
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    await sender.send(makeStatusUpdate('task-legacy-v1'), ctxV1);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
+    // Warning surfaced because '0.3' wasn't registered.
+    const matching = warn.mock.calls.filter((args) =>
+      String(args[0]).includes(`wire version '${ProtocolVersion.V0_3}'`)
     );
+    expect(matching).toHaveLength(1);
   });
 });
 

@@ -1542,13 +1542,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isTrue(afterClose.done, 'Stream should be closed after message-only response');
   });
 
-  it('sendMessageStream: should NOT invoke push notification sender for message payloads', async () => {
-    // Wire up a fresh handler with explicit push-notification components so
-    // we can spy on the sender. The agent card already has
-    // `capabilities.pushNotifications: true`, so without the message-payload
-    // guard the handler would invoke the sender on every event — which
-    // throws for `message` payloads and produces a misleading
-    // `Failed to send push notification` console.error.
+  it('sendMessageStream: handler invokes sender for stand-alone messages without error', async () => {
+    // The handler ALWAYS invokes the sender per §4.3.3 (which lists all
+    // four payload variants as valid). For stand-alone messages (no
+    // taskId), the sender's own _getTaskId-empty guard short-circuits
+    // dispatch silently — no webhook call, no error log.
     const pushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
     const handlerWithPush = new DefaultRequestHandler(
@@ -1598,8 +1596,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.lengthOf(events, 1);
     assert.equal(events[0].payload?.$case, 'message');
 
-    // The sender must NOT have been invoked for the message event.
-    expect(mockPushNotificationSender.send).not.toHaveBeenCalled();
+    // The handler hands the event to the sender (mock resolves to undefined
+    // without hitting the real send path).
+    expect(mockPushNotificationSender.send).toHaveBeenCalled();
 
     // No `Failed to send push notification` error should have been logged.
     const offendingCalls = errorSpy.mock.calls.filter((args) =>
@@ -2808,14 +2807,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(thirdCallResponse, expectedThirdResponse);
   });
 
-  it('should NOT send push notification when message event is received (§4.3.3)', async () => {
-    // Per §4.3.3 push notifications are defined for task / status /
-    // artifact events only. Message events (§3.1.2 message-only pattern)
-    // must NOT trigger sender invocation: invoking the sender with a
-    // message payload throws and would emit a misleading
-    // `Failed to send push notification` error log on every message turn.
-    // Direct `PushNotificationSender.send` callers continue to receive the
-    // explicit error per the sender's documented contract.
+  it('should send push notification when message event is received (§4.3.3)', async () => {
+    // Per §4.3.3 all four StreamResponse payload variants (`task`,
+    // `message`, `statusUpdate`, `artifactUpdate`) are valid
+    // push-notification payloads. A message event bound to a task MUST
+    // reach the sender; the sender then routes to the right serializer.
+    // No `Failed to send push notification` error should be logged.
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -2870,7 +2867,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await handler.sendMessage(params, serverCallContext);
 
-    expect((mockPushNotificationSender as MockPushNotificationSender).send).not.toHaveBeenCalled();
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
+    const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[0][0] as StreamResponse;
+    expect(callResponse.payload?.$case).toBe('message');
+    expect((callResponse.payload as { value: Message }).value.messageId).toBe('msg-reply-1');
+    // No misleading error log.
     const offendingCalls = errorSpy.mock.calls.filter((args) =>
       String(args[0]).includes('Failed to send push notification')
     );
