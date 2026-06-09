@@ -74,10 +74,12 @@ v1.0-registered webhooks continue to receive the canonical `StreamResponse` body
 
 ### Caveat for custom `PushNotificationStore` implementations
 
-The `PushNotificationStore.loadWithMetadata` method is optional. The SDK's `InMemoryPushNotificationStore` implements it; **custom store implementations that omit it cause the sender to default every stored config to wire version `'0.3'`** (per spec §3.6.2). The implications:
+The `PushNotificationStore.loadWithMetadata` method is optional. The SDK's `InMemoryPushNotificationStore` implements it. **Custom store implementations that omit it cause the sender to default each dispatch to the wire version of the request that _triggered_ the dispatch (`context.requestedVersion`),** falling back to `'0.3'` per spec §3.6.2 only when the triggering context carries no version.
 
-- **v0.3-only deployments**: no concern — the default matches your transports.
-- **v1.0-only deployments**: also no concern unless you also opt into this compat layer (which you have no reason to do).
-- **Mixed v0.3 + v1.0 deployments backed by a custom store + the compat layer**: v1.0-registered webhooks will silently receive v0.3 bodies. Implement `loadWithMetadata` on your custom store (mirror `InMemoryPushNotificationStore`'s 3-line implementation) to preserve the originating wire version per config.
+What this means for the two deployment shapes a v1.0 server can take:
 
-This compat layer (and therefore the caveat above) is opt-in and will be retired once the ecosystem has migrated to v1.0.
+- **Pure v1.0 deployment** (no compat layer opted in): no concern. Every triggering context carries `'1.0'`, the built-in V1 serializer handles every dispatch, and no warnings are emitted — even with a custom store implementation.
+
+- **v1.0 deployment with v0.3 compat opted in** (`createLegacyAwarePushNotificationSender`): each webhook receives the body shape of whichever client _triggered_ the dispatch, not necessarily of the client that originally registered the webhook. If a v1.0 client triggers an event for a task with a webhook registered by a legacy v0.3 client, that v0.3 webhook will receive a v1.0 body (and vice versa). Implement `loadWithMetadata` on your custom store (mirror `InMemoryPushNotificationStore`'s 3-line implementation) to preserve the originating wire version per config.
+
+The compat layer (and therefore the caveat above) is opt-in and will be retired once the legacy v0.3 client base has migrated to v1.0.

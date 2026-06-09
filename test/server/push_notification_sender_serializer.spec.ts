@@ -266,17 +266,16 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received).toHaveLength(0);
   });
 
-  it('falls back to load() with default 0.3 wire version when the store omits loadWithMetadata', async () => {
-    // Stub a custom store implementing only the required interface methods.
-    // The sender's silent-fallback path tags every entry as wire version
-    // '0.3' per spec §3.6.2's absent-header rule.
-    const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-legacy' });
+  it('fallback path: uses context.requestedVersion when the store omits loadWithMetadata', async () => {
+    // Custom store path: when loadWithMetadata is absent, the sender tags
+    // each entry with the wire version of the triggering request. A v0.3
+    // trigger picks up the registered V03 serializer.
+    const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-leg' });
     const customStore: PushNotificationStore = {
       save: vi.fn(async () => {}),
       load: vi.fn(async () => [customConfig]),
       delete: vi.fn(async () => {}),
     };
-
     const v03Serializer: PushNotificationSerializer = {
       serialize(): SerializedPushNotification {
         return { body: '{"v":"0.3-fallback"}', contentType: 'application/json' };
@@ -285,44 +284,69 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     const sender = new DefaultPushNotificationSender(customStore, {
       serializers: { [ProtocolVersion.V0_3]: v03Serializer },
     });
-    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
 
-    await sender.send(makeStatusUpdate('task-legacy-store'), ctxV1);
+    await sender.send(makeStatusUpdate('task-leg'), ctxV03);
 
-    // Even though the dispatch context is v1.0, the custom store has no
-    // loadWithMetadata so the sender defaults to '0.3' → v0.3 serializer
-    // wins.
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
     expect(received[0].rawBody).toBe('{"v":"0.3-fallback"}');
     expect(customStore.load).toHaveBeenCalledTimes(1);
   });
 
-  it('fallback path routes to v1.0 serializer when no v0.3 serializer is registered', async () => {
-    // Same custom-store fallback path, but with the default sender config
-    // (only v1.0 serializer registered). The '0.3' default wire version
-    // hits the unknown-serializer fallback and resolves to v1.0 with a
-    // one-time warning.
-    const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-legacy-v1' });
+  it("fallback path: defaults to '0.3' per §3.6.2 when context has no version", async () => {
+    // Defensive: a context constructed without requestedVersion (e.g. by a
+    // caller bypassing the transport layer) must still fall back to '0.3'
+    // per spec §3.6.2's absent-header rule.
+    const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-defensive' });
     const customStore: PushNotificationStore = {
       save: vi.fn(async () => {}),
       load: vi.fn(async () => [customConfig]),
       delete: vi.fn(async () => {}),
     };
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const v03Serializer: PushNotificationSerializer = {
+      serialize(): SerializedPushNotification {
+        return { body: '{"v":"defensive-0.3"}', contentType: 'application/json' };
+      },
+    };
+    const sender = new DefaultPushNotificationSender(customStore, {
+      serializers: { [ProtocolVersion.V0_3]: v03Serializer },
+    });
+    const ctxEmpty = new ServerCallContext({ requestedVersion: '' });
 
+    await sender.send(makeStatusUpdate('task-defensive'), ctxEmpty);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].rawBody).toBe('{"v":"defensive-0.3"}');
+  });
+
+  it('bare-minimum v1.0 setup: custom store without loadWithMetadata sends v1.0 bodies and emits no warning', async () => {
+    // Mirrors the README claim: a pure-v1.0 user with NO compat opt-in must
+    // not see any compat-layer noise (no warnings, no body shape mismatch)
+    // even when using a custom PushNotificationStore that does not
+    // implement loadWithMetadata.
+    const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-bare-v1' });
+    const customStore: PushNotificationStore = {
+      save: vi.fn(async () => {}),
+      load: vi.fn(async () => [customConfig]),
+      delete: vi.fn(async () => {}),
+      // Intentionally omits loadWithMetadata.
+    };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Default sender — only the built-in V1 serializer. No compat opt-in.
     const sender = new DefaultPushNotificationSender(customStore);
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
 
-    await sender.send(makeStatusUpdate('task-legacy-v1'), ctxV1);
+    await sender.send(makeStatusUpdate('task-bare-v1'), ctxV1);
 
+    // Webhook receives the canonical v1.0 body and content-type.
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
-    // Warning surfaced because '0.3' wasn't registered.
-    const matching = warn.mock.calls.filter((args) =>
-      String(args[0]).includes(`wire version '${ProtocolVersion.V0_3}'`)
-    );
-    expect(matching).toHaveLength(1);
+    expect(received[0].body).toEqual(StreamResponse.toJSON(makeStatusUpdate('task-bare-v1')));
+    // No warnings of any kind — pure v1.0 users have no reason to see
+    // compat-layer logs.
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

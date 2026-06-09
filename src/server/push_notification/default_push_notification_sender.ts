@@ -174,9 +174,14 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    *
    * Stores that only implement the canonical {@link PushNotificationStore.load}
    * method are silently lifted into the wrapped shape by tagging every
-   * entry with {@link A2A_LEGACY_PROTOCOL_VERSION} (`'0.3'`) per spec
-   * §3.6.2's absent-header default. See `src/compat/v0_3/README.md` for
-   * the implication on mixed-version deployments backed by custom stores.
+   * entry with the wire version of the request *triggering* this dispatch
+   * ({@link ServerCallContext.requestedVersion}). This keeps pure-v1.0
+   * deployments with custom stores warning-free — no implicit dependency
+   * on a `'0.3'` serializer they never opted into. Spec §3.6.2 ('0.3' on
+   * absent header) applies as the final defensive default when the
+   * triggering context itself carries no version. See
+   * `src/compat/v0_3/README.md` for the implication on v1.0 deployments
+   * with v0.3 compat opted in.
    */
   private async _loadStoredConfigs(
     taskId: string,
@@ -186,7 +191,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       return await this.pushNotificationStore.loadWithMetadata(taskId, context);
     }
     const plain = await this.pushNotificationStore.load(taskId, context);
-    return plain.map((config) => ({ config, wireVersion: A2A_LEGACY_PROTOCOL_VERSION }));
+    const fallbackVersion = context.requestedVersion || A2A_LEGACY_PROTOCOL_VERSION;
+    return plain.map((config) => ({ config, wireVersion: fallbackVersion }));
   }
 
   /**

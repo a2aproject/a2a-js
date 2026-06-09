@@ -54,14 +54,18 @@ export interface PushNotificationStore {
    *
    * Implementations that don't capture the originating wire version may
    * omit this method; the sender will fall back to {@link load} and treat
-   * every entry as wire version {@link A2A_LEGACY_PROTOCOL_VERSION}
-   * (`'0.3'`) per spec §3.6.2.
+   * every entry as the wire version of the request *triggering* the
+   * dispatch ({@link ServerCallContext.requestedVersion}), defaulting to
+   * {@link A2A_LEGACY_PROTOCOL_VERSION} (`'0.3'`) per spec §3.6.2 only
+   * when the triggering context carries no version.
    *
-   * Note for v0.3 compat layer users: the silent v0.3 default is fine for
-   * v0.3-only deployments, but in mixed v0.3 + v1.0 deployments backed by
-   * a custom store you SHOULD implement this method so v1.0-registered
-   * webhooks keep receiving v1.0-shaped bodies. See
-   * `src/compat/v0_3/README.md` for the broader caveat.
+   * Note for v0.3 compat layer users: this fallback is best-effort and
+   * matches the *triggering* request's wire version, not the wire version
+   * the webhook was originally registered over. In v1.0 deployments with
+   * v0.3 compat opted in and backed by a custom store you SHOULD
+   * implement this method so each webhook keeps receiving the body shape
+   * that matches its registration. See `src/compat/v0_3/README.md` for
+   * the broader caveat.
    */
   loadWithMetadata?(
     taskId: string,
