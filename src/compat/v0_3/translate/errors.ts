@@ -1,0 +1,134 @@
+/**
+ * Error translator between v1.0 SDK errors and v0.3 wire shapes.
+ *
+ * v1.0 introduced an enriched error model — a `google.rpc.Status`-style
+ * envelope with a `details[]` array carrying typed `ErrorInfo` payloads
+ * (`@type`, `reason`, `domain`, `metadata`). v0.3 predates that model
+ * and uses simpler shapes:
+ *
+ *   - JSON-RPC:   `{ code, message, data? }`     — `data` is a plain
+ *                                                   `Record<string, unknown>`,
+ *                                                   not an array of typed
+ *                                                   details.
+ *   - REST:       `{ code, message, data? }`     — a bare object, no
+ *                                                   outer `{ error: … }`
+ *                                                   wrapper, no `status`
+ *                                                   field, no `details[]`.
+ *
+ * This module provides the demotion path used by the v0.3 JSON-RPC and
+ * REST compat handlers so they all share a single source of truth. See
+ * issue a2aproject/a2a-js#488 for the motivation.
+ *
+ * The v0.3 gRPC handler intentionally does NOT use this module: it still
+ * attaches `google.rpc.ErrorInfo` in the `grpc-status-details-bin`
+ * trailer because the binary trailer is invisible to v0.3 clients
+ * (which do not decode it) yet still useful to v1.0-aware clients
+ * talking to a v0.3 server. See
+ * `src/compat/v0_3/server/grpc/grpc_service.ts` for the rationale.
+ *
+ * Codes introduced in v1.0 (`-32005`, `-32006`, `-32008`, `-32009`) that
+ * have no v0.3 spec equivalent are passed through with their numeric
+ * code unchanged. v0.3 clients seeing an unknown `-32xxx` should treat
+ * it as an opaque internal error. This is a deliberate decision over
+ * collapsing them to `INTERNAL_ERROR` — it preserves debuggability for
+ * v0.3 clients that happen to recognise the new codes.
+ */
+
+import { A2A_ERROR_CLASS_TO_CODE, A2A_ERROR_CODE } from '../../../errors.js';
+import { A2AError as LegacyA2AError } from '../server/error.js';
+import type * as legacy from '../types/types.js';
+
+/**
+ * v0.3-shaped HTTP error body.
+ *
+ * The v0.3 reference implementation returned errors as a bare
+ * `{ code, message, data? }` object (no `details[]` array, no `status`
+ * field, no outer `{ error: {...} }` wrapper). v1.0 introduced the
+ * structured `google.rpc.Status` JSON envelope, so this shape is kept
+ * separate to preserve wire-compatibility with v0.3 clients.
+ */
+export interface LegacyRestErrorBody {
+  code: number;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Internal helper: resolves any value thrown by user code into the
+ * `{ code, message, data? }` triple that both v0.3 wire shapes need.
+ *
+ *  1. {@link LegacyA2AError} instances are honoured verbatim — their
+ *     `code`, `message`, and `data` are surfaced as-is. This is the
+ *     escape hatch for code that wants full control of the v0.3
+ *     envelope (e.g. setting a custom `data` payload that v0.3 clients
+ *     can read).
+ *  2. v1.0 SDK error classes (`TaskNotFoundError`, …) are mapped to
+ *     their corresponding numeric codes via
+ *     {@link A2A_ERROR_CLASS_TO_CODE}. **The `data` field is omitted**
+ *     even when the v1.0 path would have attached an `ErrorInfo`
+ *     payload — this is the wire-shape stripping that issue #488 is
+ *     about.
+ *  3. Anything else (unknown `Error` subclass, non-`Error` throw)
+ *     becomes a generic `INTERNAL_ERROR` with a best-effort message.
+ */
+function demoteToLegacyShape(error: unknown): {
+  code: number;
+  message: string;
+  data?: Record<string, unknown>;
+} {
+  if (error instanceof LegacyA2AError) {
+    return {
+      code: error.code,
+      message: error.message,
+      ...(error.data !== undefined ? { data: error.data } : {}),
+    };
+  }
+  if (error instanceof Error) {
+    const code = A2A_ERROR_CLASS_TO_CODE[error.name];
+    if (code !== undefined) {
+      return { code, message: error.message };
+    }
+  }
+  const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
+  return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
+}
+
+/**
+ * Converts any error to a v0.3 JSON-RPC error object suitable for use
+ * as the `error` field of a {@link legacy.JSONRPCErrorResponse}.
+ *
+ * Crucially, the returned object never carries the v1.0 enriched
+ * `details[]` array or any `ErrorInfo` payload — only `code`,
+ * `message`, and (when honouring a {@link LegacyA2AError}) `data`.
+ *
+ * @see toCompatRestErrorBody — the same demotion logic shaped for the
+ * REST transport.
+ */
+export function toCompatJsonRpcError(error: unknown): legacy.JSONRPCError {
+  const { code, message, data } = demoteToLegacyShape(error);
+  const body: legacy.JSONRPCError = { code, message };
+  if (data !== undefined) {
+    body.data = data;
+  }
+  return body;
+}
+
+/**
+ * Converts any error to a v0.3 HTTP+JSON REST error body.
+ *
+ * The result is a bare `{ code, message, data? }` object with no outer
+ * `{ error: … }` wrapper, no `status` field, and no `details[]` array
+ * — the wire shape v0.3 clients expect (and which v1.0 §11.6
+ * deliberately departs from).
+ *
+ * @see toCompatJsonRpcError — the same demotion logic shaped for the
+ * JSON-RPC transport.
+ */
+export function toCompatRestErrorBody(error: unknown): LegacyRestErrorBody {
+  const { code, message, data } = demoteToLegacyShape(error);
+  const body: LegacyRestErrorBody = { code, message };
+  if (data !== undefined) {
+    body.data = data;
+  }
+  return body;
+}

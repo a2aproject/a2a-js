@@ -12,10 +12,10 @@
  * dispatcher selects between the two based on the method name (see
  * `isLegacyJsonRpcMethod`).
  */
-import { A2A_ERROR_CLASS_TO_CODE, A2A_ERROR_CODE } from '../../../../../errors.js';
 import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
 import { toCompatAgentCard } from '../../../translate/agent_card.js';
+import { toCompatJsonRpcError } from '../../../translate/errors.js';
 import { toCompatMessage } from '../../../translate/messages.js';
 import { toCompatTaskPushNotificationConfig } from '../../../translate/push_notifications.js';
 import {
@@ -291,33 +291,17 @@ export class LegacyJsonRpcTransportHandler {
   }
 
   /**
-   * Maps an error to a v0.3-shaped `JSONRPCError`.
+   * Maps an error to a v0.3-shaped {@link legacy.JSONRPCError}.
    *
-   * Unlike the v1.0 handler, v0.3 typed `JSONRPCError.data` as a plain
-   * `Record<string, unknown>` rather than the structured `ErrorDetail[]`
-   * array introduced in v1.0. To keep the response wire-compatible with
-   * v0.3 clients, this mapper deliberately omits the `data` field even
-   * when the source error would have carried structured details on the
-   * v1.0 path.
-   *
-   * `LegacyA2AError` instances are passed through unchanged via
-   * `toJSONRPCError()`. v1.0 SDK error classes
-   * (`TaskNotFoundError`, …) are mapped to their corresponding numeric
-   * codes (which are identical between v0.3 and v1.0 for the codes that
-   * exist in both). Unknown errors fall through to `INTERNAL_ERROR`.
+   * Thin wrapper around {@link toCompatJsonRpcError} kept on the
+   * transport handler for backward compatibility with existing call
+   * sites (including the handler's own `catch` blocks). The actual
+   * v1.0 → v0.3 demotion logic — pass `LegacyA2AError` through, map
+   * known v1.0 SDK error classes to their numeric codes, strip the
+   * enriched `details[]`/`ErrorInfo` payload — lives in the translate
+   * unit and is shared with the REST handler. See issue #488.
    */
   public static mapToLegacyJSONRPCError(error: unknown): legacy.JSONRPCError {
-    if (error instanceof A2AError) {
-      return error.toJSONRPCError();
-    }
-    if (error instanceof Error) {
-      const code = A2A_ERROR_CLASS_TO_CODE[error.name];
-      if (code !== undefined) {
-        return { code, message: error.message };
-      }
-    }
-
-    const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
-    return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
+    return toCompatJsonRpcError(error);
   }
 }

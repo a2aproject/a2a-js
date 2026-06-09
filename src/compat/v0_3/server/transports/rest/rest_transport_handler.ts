@@ -14,7 +14,6 @@
  * versions side-by-side.
  */
 
-import { A2A_ERROR_CLASS_TO_CODE, A2A_ERROR_CODE } from '../../../../../errors.js';
 import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
 import {
@@ -28,6 +27,7 @@ import type {
   Task as V1Task,
 } from '../../../../../types/pb/a2a.js';
 import { toCompatAgentCard } from '../../../translate/agent_card.js';
+import { type LegacyRestErrorBody, toCompatRestErrorBody } from '../../../translate/errors.js';
 import { toCompatMessage } from '../../../translate/messages.js';
 import {
   toCompatTaskPushNotificationConfig,
@@ -48,48 +48,26 @@ export { HTTP_STATUS, mapErrorToStatus };
 // HTTP Error Conversion (v0.3 wire shape)
 // ============================================================================
 
-/**
- * v0.3-shaped HTTP error body.
- *
- * The v0.3 reference implementation returned errors as a bare
- * `{ code, message, data? }` object (no `details[]` array, no `status`
- * field, no outer `{ error: {...} }` wrapper). v1.0 introduced the
- * structured `google.rpc.Status` JSON envelope, so this shape is kept
- * separate to preserve wire-compatibility with v0.3 clients.
- */
-export interface LegacyRestErrorBody {
-  code: number;
-  message: string;
-  data?: Record<string, unknown>;
-}
+// Re-export the v0.3 REST error body type and converter from the
+// translate unit so existing consumers (including the public
+// `LegacyRestErrorBody` / `toLegacyHTTPError` exports) keep working.
+// The actual v1.0 → v0.3 demotion logic — pass `LegacyA2AError`
+// through, map known v1.0 SDK error classes to their numeric codes,
+// strip the enriched `details[]`/`ErrorInfo` payload — lives in
+// `../../../translate/errors.ts` and is shared with the JSON-RPC
+// handler. See issue #488.
+export type { LegacyRestErrorBody };
 
 /**
  * Converts any error to a v0.3-shaped HTTP error body.
  *
- * `LegacyA2AError` instances pass through with their `code`, `message`,
- * and `data` carried over. v1.0 SDK error classes
- * (`TaskNotFoundError`, …) are mapped to their corresponding numeric
- * codes via {@link A2A_ERROR_CLASS_TO_CODE} (these codes are identical
- * between v0.3 and v1.0 for the codes that exist in both). Unknown
- * errors fall through to `INTERNAL_ERROR`.
- *
- * Mirrors `LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError` in
- * shape and uses the same centralized lookup table.
+ * Thin wrapper around {@link toCompatRestErrorBody} kept on this
+ * module for backward compatibility with existing call sites
+ * (including {@link LegacyRestTransportHandler.mapToLegacyHTTPError}
+ * and the Express layer in `../../express/rest_handler.ts`).
  */
 export function toLegacyHTTPError(error: unknown): LegacyRestErrorBody {
-  if (error instanceof LegacyA2AError) {
-    const body: LegacyRestErrorBody = { code: error.code, message: error.message };
-    if (error.data !== undefined) body.data = error.data;
-    return body;
-  }
-  if (error instanceof Error) {
-    const code = A2A_ERROR_CLASS_TO_CODE[error.name];
-    if (code !== undefined) {
-      return { code, message: error.message };
-    }
-  }
-  const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
-  return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
+  return toCompatRestErrorBody(error);
 }
 
 // ============================================================================

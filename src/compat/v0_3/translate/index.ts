@@ -8,6 +8,7 @@
 export * from './agent_card.js';
 export * from './artifacts.js';
 export * from './enums.js';
+export * from './errors.js';
 export * from './messages.js';
 export * from './parts.js';
 export * from './push_notifications.js';
