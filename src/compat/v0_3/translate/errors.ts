@@ -36,7 +36,7 @@
 
 import { A2A_ERROR_CLASS_TO_CODE, A2A_ERROR_CODE } from '../../../errors.js';
 import { A2AError as LegacyA2AError } from '../server/error.js';
-import type * as legacy from '../types/types.js';
+import type { JSONRPCError } from '../types/types.js';
 
 /**
  * v0.3-shaped HTTP error body.
@@ -95,7 +95,8 @@ function demoteToLegacyShape(error: unknown): {
 
 /**
  * Converts any error to a v0.3 JSON-RPC error object suitable for use
- * as the `error` field of a {@link legacy.JSONRPCErrorResponse}.
+ * as the `error` field of a
+ * {@link import('../types/types.js').JSONRPCErrorResponse}.
  *
  * Crucially, the returned object never carries the v1.0 enriched
  * `details[]` array or any `ErrorInfo` payload — only `code`,
@@ -104,13 +105,13 @@ function demoteToLegacyShape(error: unknown): {
  * @see toCompatRestErrorBody — the same demotion logic shaped for the
  * REST transport.
  */
-export function toCompatJsonRpcError(error: unknown): legacy.JSONRPCError {
+export function toCompatJsonRpcError(error: unknown): JSONRPCError {
   const { code, message, data } = demoteToLegacyShape(error);
-  const body: legacy.JSONRPCError = { code, message };
-  if (data !== undefined) {
-    body.data = data;
-  }
-  return body;
+  return {
+    code,
+    message,
+    ...(data !== undefined ? { data } : {}),
+  };
 }
 
 /**
@@ -126,9 +127,9 @@ export function toCompatJsonRpcError(error: unknown): legacy.JSONRPCError {
  */
 export function toCompatRestErrorBody(error: unknown): LegacyRestErrorBody {
   const { code, message, data } = demoteToLegacyShape(error);
-  const body: LegacyRestErrorBody = { code, message };
-  if (data !== undefined) {
-    body.data = data;
-  }
-  return body;
+  return {
+    code,
+    message,
+    ...(data !== undefined ? { data } : {}),
+  };
 }
