@@ -354,6 +354,17 @@ describe('agent_card', () => {
         );
       });
 
+      it('does not crash when supportedInterfaces is undefined (defensive)', () => {
+        const core = v1OnlyCore();
+        // Cast through unknown to satisfy the non-nullable proto type
+        // while modelling a real-world malformed input.
+        (core as unknown as { supportedInterfaces?: unknown }).supportedInterfaces = undefined;
+        expect(() => toCompatAgentCard(core, { synthesize: true })).toThrow(
+          VersionNotSupportedError
+        );
+        expect(() => toCompatAgentCard(core)).toThrow(VersionNotSupportedError);
+      });
+
       it('forces protocolVersion to 0.3 even when a v1.0 entry is the primary', () => {
         // Belt-and-braces: even if the source primary interface declares
         // a non-legacy version explicitly, the synthesized card must

@@ -280,7 +280,8 @@ export function toCompatAgentCard(
   core: V1AgentCard,
   options?: ToCompatAgentCardOptions
 ): legacy.AgentCard {
-  const legacyInterfaces = core.supportedInterfaces.filter(
+  const allInterfaces = core.supportedInterfaces ?? [];
+  const legacyInterfaces = allInterfaces.filter(
     (intf) => !intf.protocolVersion || isLegacyVersion(intf.protocolVersion)
   );
   // Under synthesis mode, fall back to *every* interface when none in
@@ -290,9 +291,7 @@ export function toCompatAgentCard(
   // deployments keep emitting the same v0.3 primary URL they did
   // before the synthesize option was introduced.
   const compatInterfaces =
-    options?.synthesize && legacyInterfaces.length === 0
-      ? core.supportedInterfaces
-      : legacyInterfaces;
+    options?.synthesize && legacyInterfaces.length === 0 ? allInterfaces : legacyInterfaces;
   if (compatInterfaces.length === 0) {
     throw new VersionNotSupportedError(
       'AgentCard must have at least one interface with a protocol version in [0.3, 1.0).'
