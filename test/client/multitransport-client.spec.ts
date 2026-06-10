@@ -792,7 +792,7 @@ describe('Client', () => {
                 args.input.value = { ...args.input.value, historyLength: 99 };
               }
             },
-            after: async () => { },
+            after: async () => {},
           },
         ],
       };
@@ -821,7 +821,7 @@ describe('Client', () => {
       const config: ClientConfig = {
         interceptors: [
           {
-            before: async () => { },
+            before: async () => {},
             after: async (args) => {
               if (args.result.method === 'getTask') {
                 args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
@@ -855,7 +855,7 @@ describe('Client', () => {
             before: async (args) => {
               args.options = { context: { [Symbol.for('foo')]: 'bar' } };
             },
-            after: async () => { },
+            after: async () => {},
           },
         ],
       };
@@ -887,7 +887,7 @@ describe('Client', () => {
             before: async (args) => {
               caughtAgentCard = args.agentCard;
             },
-            after: async () => { },
+            after: async () => {},
           },
         ],
       };
@@ -925,7 +925,7 @@ describe('Client', () => {
                 value: task,
               };
             },
-            after: async () => { },
+            after: async () => {},
           },
           {
             before: async (args) => {
@@ -933,7 +933,7 @@ describe('Client', () => {
                 args.input.value = { ...args.input.value };
               }
             },
-            after: async () => { },
+            after: async () => {},
           },
         ],
       };
@@ -959,7 +959,7 @@ describe('Client', () => {
       const config: ClientConfig = {
         interceptors: [
           {
-            before: async () => { },
+            before: async () => {},
             after: async (args) => {
               if (args.result.method === 'getTask') {
                 args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
@@ -967,7 +967,7 @@ describe('Client', () => {
             },
           },
           {
-            before: async () => { },
+            before: async () => {},
             after: async (args) => {
               args.earlyReturn = true;
             },
@@ -999,7 +999,7 @@ describe('Client', () => {
       const config: ClientConfig = {
         interceptors: [
           {
-            before: async () => { },
+            before: async () => {},
             after: async () => {
               firstAfterCalled = true;
             },
@@ -1018,7 +1018,7 @@ describe('Client', () => {
             },
           },
           {
-            before: async () => { },
+            before: async () => {},
             after: async () => {
               thirdAfterCalled = true;
             },
@@ -1093,7 +1093,7 @@ describe('Client', () => {
       const config: ClientConfig = {
         interceptors: [
           {
-            before: async () => { },
+            before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
                 const val = args.result.value;
@@ -1177,7 +1177,7 @@ describe('Client', () => {
       const config: ClientConfig = {
         interceptors: [
           {
-            before: async () => { },
+            before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
                 const val = args.result.value;
@@ -1292,7 +1292,7 @@ describe('Client', () => {
           const config: ClientConfig = {
             interceptors: [
               {
-                before: async () => { },
+                before: async () => {},
                 after: async () => {
                   firstAfterCalled = true;
                 },
@@ -1311,7 +1311,7 @@ describe('Client', () => {
                 },
               },
               {
-                before: async () => { },
+                before: async () => {},
                 after: async () => {
                   thirdAfterCalled = true;
                 },
@@ -1374,7 +1374,7 @@ describe('Client', () => {
           const config: ClientConfig = {
             interceptors: [
               {
-                before: async () => { },
+                before: async () => {},
                 after: async (args) => {
                   if (args.result.method === test.name) {
                     const event = args.result.value as StreamResponse;
@@ -1583,6 +1583,108 @@ describe('Client', () => {
 
         expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
           serviceParameters: { [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION },
+        });
+      });
+    });
+
+    describe('with case variants', () => {
+      describe('on a v1.0 transport', () => {
+        beforeEach(() => {
+          transport.protocolVersion = A2A_PROTOCOL_VERSION;
+          client = new Client(transport, agentCard);
+          transport.getTask.mockResolvedValue(makeTask());
+        });
+
+        it('matches a lowercase canonical key case-insensitively', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
+        });
+
+        it('matches a lowercase legacy alias case-insensitively', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'x-a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
+        });
+
+        it('prefers the exact canonical spelling when a lowercase variant is also present', async () => {
+          await client.getTask(params, {
+            serviceParameters: {
+              [HTTP_EXTENSION_HEADER]: 'exact',
+              'a2a-extensions': 'variant',
+            },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'exact',
+            },
+          });
+        });
+
+        it('prefers the exact alias spelling when only alias variants are present', async () => {
+          await client.getTask(params, {
+            serviceParameters: {
+              [LEGACY_HTTP_EXTENSION_HEADER]: 'exact',
+              'x-a2a-extensions': 'variant',
+            },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'exact',
+            },
+          });
+        });
+      });
+
+      describe('on a legacy v0.3 transport', () => {
+        beforeEach(() => {
+          transport.protocolVersion = A2A_LEGACY_PROTOCOL_VERSION;
+          client = new Client(transport, agentCard);
+          transport.getTask.mockResolvedValue(makeTask());
+        });
+
+        it('matches a lowercase v1.0 key and rewrites to the legacy spelling', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION,
+              [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
+        });
+
+        it('matches a lowercase legacy key case-insensitively', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'x-a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION,
+              [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
         });
       });
     });

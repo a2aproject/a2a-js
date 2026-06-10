@@ -387,9 +387,17 @@ export class Client {
    *    `X-` prefix and uses `A2A-Extensions`. Callers can use the
    *    {@link withA2AExtensions} helper (which always writes the v1.0
    *    spelling) without having to know which transport they ended up on; the
-   *    orchestrator translates as needed. If both spellings are present, the
-   *    canonical spelling for the wire version wins and the other is dropped,
-   *    mirroring the precedence the server applies on read.
+   *    orchestrator translates as needed.
+   *
+   *    Header names are matched case-insensitively per RFC 7230 §3.2, mirroring
+   *    the case-insensitive lookup the server performs on read. If multiple
+   *    case variants of the same logical header are supplied, the exact
+   *    canonical-cased key wins within its group; otherwise the last variant
+   *    seen wins. When both the canonical and the legacy spellings are present
+   *    (across groups), the canonical spelling wins and the alias is dropped,
+   *    again mirroring server-side precedence. The value emitted on the wire
+   *    is always under the exact canonical spelling for the negotiated wire
+   *    version.
    */
   private withNormalizedHeaders(options: RequestOptions | undefined): RequestOptions {
     const serviceParameters = ServiceParameters.createFrom(
@@ -400,12 +408,45 @@ export class Client {
     const legacy = isLegacyVersion(this.protocolVersion);
     const canonical = legacy ? LEGACY_HTTP_EXTENSION_HEADER : HTTP_EXTENSION_HEADER;
     const alias = legacy ? HTTP_EXTENSION_HEADER : LEGACY_HTTP_EXTENSION_HEADER;
+    const canonicalLower = canonical.toLowerCase();
+    const aliasLower = alias.toLowerCase();
 
-    if (canonical in serviceParameters) {
-      delete serviceParameters[alias];
-    } else if (alias in serviceParameters) {
-      serviceParameters[canonical] = serviceParameters[alias]!;
-      delete serviceParameters[alias];
+    // Collect values from any case variant of either header, then rebuild
+    // the entry under the exact canonical spelling at the end. We snapshot
+    // the key list with `Object.keys(...)` before mutating so the iteration
+    // is well-defined even though we delete entries inside the loop.
+    let canonicalValue: string | undefined;
+    let exactCanonicalSeen = false;
+    let aliasValue: string | undefined;
+    let exactAliasSeen = false;
+
+    for (const key of Object.keys(serviceParameters)) {
+      const keyLower = key.toLowerCase();
+      if (keyLower === canonicalLower) {
+        // Within the canonical group: exact spelling wins; otherwise last wins.
+        if (key === canonical) {
+          canonicalValue = serviceParameters[key];
+          exactCanonicalSeen = true;
+        } else if (!exactCanonicalSeen) {
+          canonicalValue = serviceParameters[key];
+        }
+        delete serviceParameters[key];
+      } else if (keyLower === aliasLower) {
+        // Within the alias group: exact alias spelling wins; otherwise last wins.
+        if (key === alias) {
+          aliasValue = serviceParameters[key];
+          exactAliasSeen = true;
+        } else if (!exactAliasSeen) {
+          aliasValue = serviceParameters[key];
+        }
+        delete serviceParameters[key];
+      }
+    }
+
+    if (canonicalValue !== undefined) {
+      serviceParameters[canonical] = canonicalValue;
+    } else if (aliasValue !== undefined) {
+      serviceParameters[canonical] = aliasValue;
     }
 
     return {
