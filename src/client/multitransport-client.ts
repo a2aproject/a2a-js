@@ -1,6 +1,9 @@
 import { withA2AVersion } from './service-parameters.js';
 import { AgentCardSignatureVerifier } from '../signature.js';
+import { LEGACY_HTTP_EXTENSION_HEADER } from '../compat/v0_3/constants.js';
+import { HTTP_EXTENSION_HEADER } from '../constants.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
+import { isLegacyVersion } from '../version_utils.js';
 import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
   CancelTaskRequest,
@@ -141,7 +144,7 @@ export class Client {
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options: this.withVersionHeader(options),
+      options: this.withNormalizedHeaders(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -310,7 +313,7 @@ export class Client {
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options: this.withVersionHeader(options),
+      options: this.withNormalizedHeaders(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -370,16 +373,44 @@ export class Client {
   }
 
   /**
-   * Ensures the A2A-Version header is present in the request's service parameters.
-   * Per §3.6.1: "Clients MUST send the A2A-Version header with each request."
+   * Normalizes outgoing service parameters so they match the wire version
+   * negotiated by the underlying transport.
+   *
+   * Two things happen here:
+   *
+   * 1. The `A2A-Version` header is injected (overriding any caller-supplied
+   *    value) from `this.protocolVersion`. Per §3.6.1: "Clients MUST send the
+   *    A2A-Version header with each request."
+   *
+   * 2. The extension header is rewritten to the spelling expected by the
+   *    negotiated wire version. v0.3 used `X-A2A-Extensions`; v1.0 dropped the
+   *    `X-` prefix and uses `A2A-Extensions`. Callers can use the
+   *    {@link withA2AExtensions} helper (which always writes the v1.0
+   *    spelling) without having to know which transport they ended up on; the
+   *    orchestrator translates as needed. If both spellings are present, the
+   *    canonical spelling for the wire version wins and the other is dropped,
+   *    mirroring the precedence the server applies on read.
    */
-  private withVersionHeader(options: RequestOptions | undefined): RequestOptions {
+  private withNormalizedHeaders(options: RequestOptions | undefined): RequestOptions {
+    const serviceParameters = ServiceParameters.createFrom(
+      options?.serviceParameters,
+      withA2AVersion(this.protocolVersion)
+    );
+
+    const legacy = isLegacyVersion(this.protocolVersion);
+    const canonical = legacy ? LEGACY_HTTP_EXTENSION_HEADER : HTTP_EXTENSION_HEADER;
+    const alias = legacy ? HTTP_EXTENSION_HEADER : LEGACY_HTTP_EXTENSION_HEADER;
+
+    if (canonical in serviceParameters) {
+      delete serviceParameters[alias];
+    } else if (alias in serviceParameters) {
+      serviceParameters[canonical] = serviceParameters[alias]!;
+      delete serviceParameters[alias];
+    }
+
     return {
       ...options,
-      serviceParameters: ServiceParameters.createFrom(
-        options?.serviceParameters,
-        withA2AVersion(this.protocolVersion)
-      ),
+      serviceParameters,
     };
   }
 
@@ -394,7 +425,7 @@ export class Client {
     const beforeArgs: BeforeArgs<K> = {
       input: input,
       agentCard: this.agentCard,
-      options: this.withVersionHeader(options),
+      options: this.withNormalizedHeaders(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
