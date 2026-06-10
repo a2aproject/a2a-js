@@ -110,7 +110,14 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       const coreCard = await provider();
       let compatCard: legacy.AgentCard;
       try {
-        compatCard = toCompatAgentCard(coreCard);
+        // `synthesize: true` lets the legacy endpoint serve a
+        // discoverable v0.3 card even when the operator only declared
+        // v1.0 interfaces in `supportedInterfaces` — symmetric with
+        // the request handlers' implicit-v0.3 acceptance under
+        // `legacyCompat`. Strict filtering would force operators to
+        // duplicate every v1.0 entry with a v0.3 stub just to get a
+        // discoverable v0.3 surface; this avoids that.
+        compatCard = toCompatAgentCard(coreCard, { synthesize: true });
       } catch (error) {
         if (error instanceof VersionNotSupportedError) {
           res.append('Vary', A2A_VERSION_HEADER);

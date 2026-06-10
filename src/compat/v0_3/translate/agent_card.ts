@@ -236,21 +236,63 @@ export function toCoreAgentCard(compat: legacy.AgentCard): V1AgentCard {
 }
 
 /**
+ * Options for {@link toCompatAgentCard}.
+ */
+export interface ToCompatAgentCardOptions {
+  /**
+   * When `true`, accept every entry in `supportedInterfaces` regardless
+   * of its `protocolVersion` (skipping the `[0.3, 1.0)` filter) and
+   * stamp the emitted card's `protocolVersion` as
+   * {@link PROTOCOL_VERSION_0_3} regardless of the source value.
+   *
+   * Designed for the SDK's opt-in compat layer: when a server is
+   * configured with `legacyCompat: { enabled: true }` but only declares
+   * v1.0 interfaces on its agent card, the well-known endpoint can
+   * still serve a discoverable v0.3 card to legacy clients. The
+   * resulting card advertises the same interface URLs as the v1.0
+   * card but presents them under the v0.3 protocol version, mirroring
+   * the validator's implicit-v0.3 acceptance for request handling.
+   *
+   * Default: `false` (strict behavior: filter to legacy-range
+   * interfaces and throw `VersionNotSupportedError` if none qualify).
+   */
+  synthesize?: boolean;
+}
+
+/**
  * Converts a v1.0 proto `AgentCard` into a v0.3 JSON `AgentCard`.
  *
- * Filters `supportedInterfaces` to those whose `protocolVersion` is
- * empty or in `[0.3, 1.0)`; the first surviving entry becomes the v0.3
- * primary `(url, preferredTransport)`, and the rest become
- * `additionalInterfaces`. Throws `VersionNotSupportedError` if no
- * interface qualifies.
+ * In the default (strict) mode, filters `supportedInterfaces` to those
+ * whose `protocolVersion` is empty or in `[0.3, 1.0)`; the first
+ * surviving entry becomes the v0.3 primary `(url, preferredTransport)`,
+ * and the rest become `additionalInterfaces`. Throws
+ * `VersionNotSupportedError` if no interface qualifies.
+ *
+ * When called with `{ synthesize: true }`, accepts every interface
+ * unconditionally and emits `protocolVersion: '0.3'` on the result —
+ * used by the well-known agent-card endpoint when the operator has
+ * opted into the v0.3 compat layer but declared only v1.0 interfaces.
  *
  * `capabilities.extendedAgentCard` is pulled back out to the card-level
  * `supportsAuthenticatedExtendedCard` field.
  */
-export function toCompatAgentCard(core: V1AgentCard): legacy.AgentCard {
-  const compatInterfaces = core.supportedInterfaces.filter(
+export function toCompatAgentCard(
+  core: V1AgentCard,
+  options?: ToCompatAgentCardOptions
+): legacy.AgentCard {
+  const legacyInterfaces = core.supportedInterfaces.filter(
     (intf) => !intf.protocolVersion || isLegacyVersion(intf.protocolVersion)
   );
+  // Under synthesis mode, fall back to *every* interface when none in
+  // the legacy range exist — this is the discoverable-card path for
+  // v1.0-only deployments that opted into `legacyCompat`. When legacy
+  // interfaces ARE declared, prefer them so existing dual-version
+  // deployments keep emitting the same v0.3 primary URL they did
+  // before the synthesize option was introduced.
+  const compatInterfaces =
+    options?.synthesize && legacyInterfaces.length === 0
+      ? core.supportedInterfaces
+      : legacyInterfaces;
   if (compatInterfaces.length === 0) {
     throw new VersionNotSupportedError(
       'AgentCard must have at least one interface with a protocol version in [0.3, 1.0).'
@@ -278,13 +320,24 @@ export function toCompatAgentCard(core: V1AgentCard): legacy.AgentCard {
         )
       : undefined;
 
+  // Under synthesize-fallback (no legacy-range interfaces, so we
+  // accepted non-legacy entries) the primary interface may be v1.0
+  // (or any other non-legacy version); the emitted v0.3 card always
+  // presents itself as v0.3 regardless of the underlying interface's
+  // declared version. Under strict / dual-version modes, fall back to
+  // `PROTOCOL_VERSION_0_3` only when the source field is empty.
+  const synthesizedFallback = options?.synthesize && legacyInterfaces.length === 0;
+  const emittedProtocolVersion = synthesizedFallback
+    ? PROTOCOL_VERSION_0_3
+    : primary.protocolVersion || PROTOCOL_VERSION_0_3;
+
   const result: legacy.AgentCard = {
     name: core.name,
     description: core.description,
     version: core.version,
     url: primary.url,
     preferredTransport: primary.protocolBinding,
-    protocolVersion: primary.protocolVersion || PROTOCOL_VERSION_0_3,
+    protocolVersion: emittedProtocolVersion,
     capabilities,
     defaultInputModes: [...core.defaultInputModes],
     defaultOutputModes: [...core.defaultOutputModes],

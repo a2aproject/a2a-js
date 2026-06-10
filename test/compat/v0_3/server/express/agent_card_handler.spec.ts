@@ -160,7 +160,10 @@ describe('agentCardHandler with legacyCompat', () => {
       const response = await request(app).get('/.well-known/agent-card.json').expect(200);
 
       // v0.3 cards have a top-level `url`/`preferredTransport` shape and
-      // no `supportedInterfaces` array.
+      // no `supportedInterfaces` array. The dual-version card declares
+      // a v0.3 interface explicitly, so synthesis prefers it (the
+      // synthesize fallback only fires when NO legacy interface
+      // qualifies).
       assert.equal(response.body.name, 'Test Agent');
       assert.equal(response.body.url, 'https://api.example/legacy');
       assert.equal(response.body.preferredTransport, 'JSONRPC');
@@ -258,7 +261,11 @@ describe('agentCardHandler with legacyCompat', () => {
     });
 
     it('preserves an upstream Vary value on the VersionNotSupportedError (400) path', async () => {
-      const app = createAppWithUpstreamVary(modernOnlyCard(), { enabled: true });
+      // The only way the legacy router still throws
+      // VersionNotSupportedError under synthesis is when the v1.0 card
+      // has NO interfaces at all (so there's nothing to synthesize).
+      const emptyCard: AgentCard = { ...modernOnlyCard(), supportedInterfaces: [] };
+      const app = createAppWithUpstreamVary(emptyCard, { enabled: true });
       const response = await request(app)
         .get('/.well-known/agent-card.json')
         .set('A2A-Version', '0.3')
@@ -338,8 +345,14 @@ describe('agentCardHandler with legacyCompat', () => {
   });
 
   describe('error handling', () => {
-    it('returns 400 with a v0.3-shaped error when no legacy interface is advertised', async () => {
-      const app = createApp(modernOnlyCard(), { enabled: true });
+    it('returns 400 with a v0.3-shaped error when the v1.0 card has no interfaces at all', async () => {
+      // With synthesis enabled, a v1.0-only card normally produces a
+      // discoverable v0.3 card from the v1.0 interfaces. The only way
+      // to still trigger VersionNotSupportedError on the legacy path is
+      // a card with NO interfaces at all — there's nothing to
+      // synthesize from.
+      const emptyCard: AgentCard = { ...modernOnlyCard(), supportedInterfaces: [] };
+      const app = createApp(emptyCard, { enabled: true });
       const response = await request(app)
         .get('/.well-known/agent-card.json')
         .set('A2A-Version', '0.3')
@@ -364,6 +377,92 @@ describe('agentCardHandler with legacyCompat', () => {
     });
   });
 
+  describe('synthesized v0.3 card from a v1.0-only card', () => {
+    it('serves a synthesized v0.3 card on header-less requests against a v1.0-only card', async () => {
+      // With legacyCompat enabled, the legacy agent-card router now
+      // synthesizes a v0.3 card from the v1.0 interfaces instead of
+      // throwing VersionNotSupportedError. This mirrors the validator's
+      // implicit-v0.3 acceptance for request handling.
+      const app = createApp(modernOnlyCard(), { enabled: true });
+
+      const response = await request(app).get('/.well-known/agent-card.json').expect(200);
+
+      // v0.3 card shape: top-level url/preferredTransport, no
+      // supportedInterfaces array, protocolVersion === '0.3'.
+      assert.equal(response.body.url, 'https://api.example/v1');
+      assert.equal(response.body.preferredTransport, 'JSONRPC');
+      assert.equal(response.body.protocolVersion, '0.3');
+      assert.isUndefined(response.body.supportedInterfaces);
+    });
+
+    it('serves a synthesized v0.3 card on explicit A2A-Version: 0.3 against a v1.0-only card', async () => {
+      const app = createApp(modernOnlyCard(), { enabled: true });
+
+      const response = await request(app)
+        .get('/.well-known/agent-card.json')
+        .set('A2A-Version', '0.3')
+        .expect(200);
+
+      assert.equal(response.body.url, 'https://api.example/v1');
+      assert.equal(response.body.protocolVersion, '0.3');
+    });
+
+    it('still serves the modern v1.0 card on explicit A2A-Version: 1.0', async () => {
+      const app = createApp(modernOnlyCard(), { enabled: true });
+
+      const response = await request(app)
+        .get('/.well-known/agent-card.json')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      // v1.0 shape preserved for v1.0 clients.
+      assert.isArray(response.body.supportedInterfaces);
+      assert.isUndefined(response.body.url);
+    });
+
+    it('emits Vary and ETag for synthesized cards too', async () => {
+      const app = createApp(modernOnlyCard(), { enabled: true });
+
+      const response = await request(app).get('/.well-known/agent-card.json').expect(200);
+
+      assert.equal(response.headers['vary'], 'A2A-Version');
+      assert.isDefined(response.headers['etag']);
+    });
+
+    it('passes through all v1.0 interfaces as additionalInterfaces in the synthesized card', async () => {
+      const multiBindingCard: AgentCard = {
+        ...modernOnlyCard(),
+        supportedInterfaces: [
+          {
+            url: 'https://api.example/v1/jsonrpc',
+            protocolBinding: 'JSONRPC',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+          {
+            url: 'https://api.example/v1/grpc',
+            protocolBinding: 'GRPC',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+        ],
+      };
+      const app = createApp(multiBindingCard, { enabled: true });
+
+      const response = await request(app).get('/.well-known/agent-card.json').expect(200);
+
+      // Primary is the first v1.0 interface; the rest become
+      // additionalInterfaces in v0.3 shape.
+      assert.equal(response.body.url, 'https://api.example/v1/jsonrpc');
+      assert.equal(response.body.preferredTransport, 'JSONRPC');
+      assert.equal(response.body.protocolVersion, '0.3');
+      assert.isArray(response.body.additionalInterfaces);
+      assert.equal(response.body.additionalInterfaces.length, 1);
+      assert.equal(response.body.additionalInterfaces[0].url, 'https://api.example/v1/grpc');
+      assert.equal(response.body.additionalInterfaces[0].transport, 'GRPC');
+    });
+  });
+
   describe('back-compat (legacyCompat omitted)', () => {
     it('serves the v1.0 card regardless of A2A-Version header', async () => {
       const app = createApp(legacyOnlyCard());
@@ -385,6 +484,18 @@ describe('legacyAgentCardRouter (standalone)', () => {
     const response = await request(app).get('/.well-known/agent-card.json').expect(200);
 
     assert.equal(response.body.url, 'https://api.example/a2a');
+    assert.equal(response.body.preferredTransport, 'JSONRPC');
+    assert.equal(response.body.protocolVersion, '0.3');
+  });
+
+  it('synthesizes a v0.3 card from a v1.0-only card when mounted directly', async () => {
+    // The standalone router uses the same `synthesize: true` mode as
+    // when it's mounted by the core agentCardHandler under
+    // `legacyCompat: { enabled: true }`.
+    const app = createLegacyOnlyApp(modernOnlyCard());
+    const response = await request(app).get('/.well-known/agent-card.json').expect(200);
+
+    assert.equal(response.body.url, 'https://api.example/v1');
     assert.equal(response.body.preferredTransport, 'JSONRPC');
     assert.equal(response.body.protocolVersion, '0.3');
   });

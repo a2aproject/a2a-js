@@ -175,7 +175,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       tenant,
     });
     const agentCard = await restTransportHandler.getAgentCard();
-    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
+    // When `legacyCompat` is enabled, the validator implicitly accepts
+    // '0.3' for any binding the card already exposes (per §3.6.2),
+    // so v0.3 clients (and header-less clients) succeed without
+    // requiring operators to duplicate every v1.0 `supportedInterfaces`
+    // entry with a v0.3 stub.
+    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON', {
+      legacyCompat: options.legacyCompat,
+    });
     return context;
   };
 

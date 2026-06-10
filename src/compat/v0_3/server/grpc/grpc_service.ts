@@ -573,7 +573,15 @@ const _buildContext = async (
   });
 
   const agentCard = await requestHandler.getAgentCard();
-  validateVersion(context.requestedVersion, agentCard, 'GRPC');
+  // `legacyGrpcService` is only registered alongside the v1.0
+  // `grpcService` when the operator opts into the v0.3 compat layer,
+  // so the validator implicitly accepts '0.3' for any binding the
+  // card already exposes (per §3.6.2). A v1.0-only card therefore
+  // serves legacy gRPC clients without forcing operators to declare a
+  // duplicate v0.3 `supportedInterfaces` entry.
+  validateVersion(context.requestedVersion, agentCard, 'GRPC', {
+    legacyCompat: { enabled: true },
+  });
 
   return context;
 };

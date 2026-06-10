@@ -844,7 +844,12 @@ describe('restHandler', () => {
   });
 
   describe('A2A-Version header validation', () => {
-    it('should reject requests without A2A-Version header (defaults to 0.3, not supported)', async () => {
+    it('should reject header-less requests against a v1.0-only card when legacyCompat is omitted', async () => {
+      // Without legacyCompat, the v1.0-only `testAgentCard` rejects
+      // the §3.6.2 default-to-'0.3' because '0.3' is not declared in
+      // `supportedInterfaces`. This is the strict-mode behavior; the
+      // implicit-v0.3 acceptance is gated on opting into the compat
+      // layer (see the `legacy v0.3 REST dispatch` block below).
       const response = await request(app).get('/tasks/task-1').expect(400);
 
       assert.property(response.body, 'error');
@@ -866,6 +871,60 @@ describe('restHandler', () => {
       assert.property(response.body, 'error');
       assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
       assert.include(response.body.error.message, '9.9');
+    });
+
+    it('should accept header-less requests against a v1.0-only card when legacyCompat is enabled', async () => {
+      // With legacyCompat enabled, the validator implicitly accepts
+      // the §3.6.2 default-to-'0.3' for any binding the card already
+      // exposes, so a v0.3 client sending no header against a
+      // v1.0-only `testAgentCard` is now accepted.
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+      const compatApp = express();
+      compatApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
+        })
+      );
+
+      await request(compatApp).get('/tasks/task-1').expect(200);
+    });
+
+    it('should accept explicit A2A-Version: 0.3 against a v1.0-only card when legacyCompat is enabled', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+      const compatApp = express();
+      compatApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
+        })
+      );
+
+      // /tasks/:taskId is a v1.0 path; the legacy router only owns
+      // `/v1/...`, so the v1.0 router handles this request — but its
+      // validator now accepts '0.3' under legacyCompat.
+      await request(compatApp).get('/tasks/task-1').set('A2A-Version', '0.3').expect(200);
+    });
+
+    it('should still reject unsupported versions (e.g. 9.9) when legacyCompat is enabled', async () => {
+      const compatApp = express();
+      compatApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
+        })
+      );
+
+      const response = await request(compatApp)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '9.9')
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
     });
   });
 
@@ -1040,17 +1099,29 @@ describe('restHandler', () => {
       expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
     });
 
-    it('rejects legacy requests when the card declares no v0.3 interface', async () => {
-      // Restore the v1.0-only card.
+    it('accepts legacy requests against a v1.0-only card when legacyCompat is enabled', async () => {
+      // Restore the v1.0-only card; with legacyCompat enabled, the
+      // validator implicitly accepts the §3.6.2 default-to-'0.3' for
+      // any binding the card already exposes — so the legacy router
+      // handles the request even though the card declares no v0.3
+      // HTTP+JSON interface.
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+      legacySendMessageStub.mockResolvedValue({
+        kind: 'task',
+        id: 'legacy-task-v1card',
+        contextId: 'ctx',
+        status: { state: 'working' },
+      });
 
       const response = await request(dualApp)
         .post('/v1/message:send')
         .send(legacyMessageBody)
-        .expect(400);
+        .expect(201);
 
-      assert.equal(response.body.code, -32009); // VERSION_NOT_SUPPORTED
-      expect(legacySendMessageStub).not.toHaveBeenCalled();
+      assert.equal(response.body.kind, 'task');
+      assert.equal(response.body.id, 'legacy-task-v1card');
+      expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
+      expect(v1SendMessageStub).not.toHaveBeenCalled();
     });
 
     it('streams SSE responses on the legacy path', async () => {

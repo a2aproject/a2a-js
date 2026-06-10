@@ -169,6 +169,67 @@ describe('protocolBinding filtering', () => {
   });
 });
 
+describe('validateVersion with legacyCompat option', () => {
+  it('accepts 0.3 against a v1.0-only card for the requested binding', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
+    expect(() =>
+      validateVersion('0.3', card, 'JSONRPC', { legacyCompat: { enabled: true } })
+    ).not.toThrow();
+  });
+
+  it('still rejects 0.3 when the card has no interface for the binding at all', () => {
+    // Card only declares HTTP+JSON; a JSONRPC request must not slip
+    // through the legacyCompat door because the agent doesn't serve
+    // JSONRPC.
+    const card = createAgentCard([{ protocolBinding: 'HTTP+JSON', protocolVersion: '1.0' }]);
+    expect(() =>
+      validateVersion('0.3', card, 'JSONRPC', { legacyCompat: { enabled: true } })
+    ).toThrow(VersionNotSupportedError);
+  });
+
+  it('still rejects 0.3 when the card has no interfaces at all', () => {
+    const card = createAgentCard([]);
+    expect(() =>
+      validateVersion('0.3', card, 'JSONRPC', { legacyCompat: { enabled: true } })
+    ).toThrow(VersionNotSupportedError);
+  });
+
+  it('still rejects unsupported versions (e.g. 9.9) with legacyCompat enabled', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
+    expect(() =>
+      validateVersion('9.9', card, 'JSONRPC', { legacyCompat: { enabled: true } })
+    ).toThrow(VersionNotSupportedError);
+  });
+
+  it('accepts 0.3 even when protocolBinding is omitted, as long as some interface exists', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
+    expect(() =>
+      validateVersion('0.3', card, undefined, { legacyCompat: { enabled: true } })
+    ).not.toThrow();
+  });
+
+  it('continues to accept declared v1.0 versions when legacyCompat is enabled', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
+    expect(() =>
+      validateVersion('1.0', card, 'JSONRPC', { legacyCompat: { enabled: true } })
+    ).not.toThrow();
+  });
+
+  it('legacyCompat: { enabled: false } behaves identically to omitted option', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
+    expect(() =>
+      validateVersion('0.3', card, 'JSONRPC', { legacyCompat: { enabled: false } })
+    ).toThrow(VersionNotSupportedError);
+  });
+
+  it('does not modify the agent card when synthesizing the v0.3 entry', () => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '1.0' }]);
+    validateVersion('0.3', card, 'JSONRPC', { legacyCompat: { enabled: true } });
+    // getSupportedVersions should still report only the explicitly declared versions.
+    expect(getSupportedVersions(card).has('0.3')).toBe(false);
+  });
+});
+
 describe('ServerCallContext version', () => {
   it('should default requestedVersion to 0.3 when not provided', () => {
     const context = new ServerCallContext();

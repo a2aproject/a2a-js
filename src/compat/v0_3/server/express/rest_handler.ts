@@ -176,7 +176,15 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
       tenant: (req.params.tenant as string) || undefined,
     });
     const agentCard = await transportHandler.getAgentCard();
-    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
+    // This router is only mounted when the operator opted into
+    // `legacyCompat`, so the validator implicitly accepts '0.3' for
+    // any binding the card already exposes (per §3.6.2). This lets a
+    // v1.0-only card serve legacy clients without forcing operators
+    // to duplicate every v1.0 `supportedInterfaces` entry with a v0.3
+    // stub.
+    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON', {
+      legacyCompat: { enabled: true },
+    });
     return context;
   };
 

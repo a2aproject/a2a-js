@@ -44,7 +44,18 @@ Notable policy decisions:
 - The v1.0 `OAuthFlows.deviceCode` flow is silently dropped going v1.0 → v0.3 (v0.3 has no equivalent).
 - `TaskStatusUpdateEvent.final` is computed from the status state going v1.0 → v0.3 (`true` for `completed`, `canceled`, `failed`, `rejected`).
 - `SendMessageConfiguration.returnImmediately` ↔ `MessageSendConfiguration.blocking` with inverted polarity.
-- `toCompatAgentCard` filters `supportedInterfaces` to those whose `protocolVersion` is empty or in `[0.3, 1.0)` and throws `VersionNotSupportedError` if none qualify.
+- `toCompatAgentCard(card)` (strict mode, default) filters `supportedInterfaces` to those whose `protocolVersion` is empty or in `[0.3, 1.0)` and throws `VersionNotSupportedError` if none qualify.
+- `toCompatAgentCard(card, { synthesize: true })` (synthesis mode) accepts every interface in `supportedInterfaces` regardless of `protocolVersion` and emits `protocolVersion: '0.3'` on the result. Used by `legacyAgentCardRouter` to serve a discoverable v0.3 card when the operator has opted into `legacyCompat` but only declared v1.0 interfaces; the same v1.0 interface URLs are presented under the v0.3 protocol version.
+
+## Version negotiation under `legacyCompat`
+
+Per A2A spec §3.6.2, clients that omit the `A2A-Version` header are treated as v0.3 requests. Without an opt-in, the SDK's strict validator rejects header-less requests against a v1.0-only agent card with `VersionNotSupportedError`. When `legacyCompat: { enabled: true }` is passed to a handler, two pieces work together to honor §3.6.2 without requiring operators to duplicate every v1.0 `supportedInterfaces` entry with a v0.3 stub:
+
+1. **Implicit v0.3 in `validateVersion`.** When called with `{ legacyCompat: true }`, the validator adds the legacy `'0.3'` version to the supported set for any binding the agent card already exposes at least one interface for. A header-less or `A2A-Version: 0.3` request therefore routes through the legacy handler chain (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`, `legacyGrpcService`) even when the card declares only v1.0 interfaces. Requests for bindings the card doesn't expose at all are still rejected.
+
+2. **Synthesized v0.3 card.** The `legacyAgentCardRouter` calls `toCompatAgentCard(card, { synthesize: true })` so the well-known endpoint returns a discoverable v0.3-shaped card whose `(url, preferredTransport, additionalInterfaces)` reflect the v1.0 `supportedInterfaces` entries but whose `protocolVersion` is stamped as `'0.3'`. v0.3 clients can therefore both discover and use a v1.0-only server when the operator has opted into the compat layer.
+
+The v1.0 gRPC service factory (`src/server/grpc/grpc_service.ts`) intentionally does **not** carry a `legacyCompat` option; v0.3 gRPC clients are served by registering `legacyGrpcService` alongside the v1.0 `grpcService` on the same `Server`.
 
 ## Push Notifications
 

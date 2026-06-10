@@ -651,7 +651,12 @@ describe('A2AExpressApp', () => {
       setupA2ARoutes(expressApp, mockRequestHandler);
     });
 
-    it('should accept requests without A2A-Version header (defaults to 0.3)', async () => {
+    it('should reject header-less requests against a v1.0-only card when legacyCompat is omitted', async () => {
+      // Without legacyCompat, the v1.0-only `testAgentCard` rejects
+      // the §3.6.2 default-to-'0.3' because '0.3' is not declared in
+      // `supportedInterfaces`. This is the strict-mode behavior; the
+      // implicit-v0.3 acceptance is gated on opting into the compat
+      // layer (see the `legacy v0.3 JSON-RPC dispatch` block).
       const response = await request(expressApp)
         .post('/')
         .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
@@ -768,17 +773,47 @@ describe('A2AExpressApp', () => {
       expect(legacyHandleStub).toHaveBeenCalledTimes(1);
     });
 
-    it('rejects legacy requests when the card declares no v0.3 interface', async () => {
-      // testAgentCard only declares the v1.0 interface; no compat opt-in.
+    it('accepts header-less legacy requests against a v1.0-only card when legacyCompat is enabled', async () => {
+      // testAgentCard only declares the v1.0 interface. With
+      // legacyCompat enabled, the validator implicitly accepts the
+      // §3.6.2 default-to-'0.3' for any binding the card already
+      // exposes — so a header-less v0.3-shaped request still routes
+      // to the legacy handler without forcing operators to duplicate
+      // every v1.0 entry with a v0.3 stub.
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+      legacyHandleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-4',
+        result: { kind: 'task' },
+      });
 
-      const response = await request(expressApp)
+      await request(expressApp)
         .post('/')
         .send(createRpcRequest('req-4', 'message/send'))
-        .expect(500);
+        .expect(200);
 
-      expect(response.body.error.code).to.equal(A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
-      expect(legacyHandleStub).not.toHaveBeenCalled();
+      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+      expect(handleStub).not.toHaveBeenCalled();
+    });
+
+    it('accepts explicit A2A-Version: 0.3 against a v1.0-only card when legacyCompat is enabled', async () => {
+      // Same as above but with the header explicitly set rather than
+      // relying on the §3.6.2 missing-header default.
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+      legacyHandleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-explicit-03',
+        result: { kind: 'task' },
+      });
+
+      await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '0.3')
+        .send(createRpcRequest('req-explicit-03', 'message/send'))
+        .expect(200);
+
+      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+      expect(handleStub).not.toHaveBeenCalled();
     });
 
     it('streams SSE responses on the legacy path', async () => {

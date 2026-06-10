@@ -280,5 +280,157 @@ describe('agent_card', () => {
       const core = toCoreAgentCard(compat);
       expect(core.supportedInterfaces[0]!.protocolBinding).toBe('JSONRPC');
     });
+
+    describe('synthesize option', () => {
+      function v1OnlyCore(): V1AgentCard {
+        return {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/v1',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '1.0',
+            },
+          ],
+          provider: undefined,
+          capabilities: {
+            streaming: undefined,
+            pushNotifications: undefined,
+            extensions: [],
+            extendedAgentCard: undefined,
+          },
+          securitySchemes: {},
+          securityRequirements: [],
+          defaultInputModes: [],
+          defaultOutputModes: [],
+          skills: [],
+          signatures: [],
+        };
+      }
+
+      it('accepts a v1.0-only card without throwing', () => {
+        const core = v1OnlyCore();
+        expect(() => toCompatAgentCard(core, { synthesize: true })).not.toThrow();
+      });
+
+      it('emits protocolVersion 0.3 regardless of the source version', () => {
+        const core = v1OnlyCore();
+        const compat = toCompatAgentCard(core, { synthesize: true });
+        expect(compat.protocolVersion).toBe('0.3');
+      });
+
+      it('keeps the underlying v1.0 interface URL and binding', () => {
+        const core = v1OnlyCore();
+        const compat = toCompatAgentCard(core, { synthesize: true });
+        expect(compat.url).toBe('https://api.example/v1');
+        expect(compat.preferredTransport).toBe('JSONRPC');
+      });
+
+      it('passes through additional v1.0 interfaces as additionalInterfaces', () => {
+        const core = v1OnlyCore();
+        core.supportedInterfaces.push({
+          url: 'https://api.example/grpc',
+          protocolBinding: 'GRPC',
+          tenant: '',
+          protocolVersion: '1.0',
+        });
+        const compat = toCompatAgentCard(core, { synthesize: true });
+        expect(compat.url).toBe('https://api.example/v1');
+        expect(compat.additionalInterfaces).toHaveLength(1);
+        expect(compat.additionalInterfaces?.[0]).toEqual({
+          url: 'https://api.example/grpc',
+          transport: 'GRPC',
+        });
+      });
+
+      it('still throws when there are no interfaces at all', () => {
+        const core = v1OnlyCore();
+        core.supportedInterfaces = [];
+        expect(() => toCompatAgentCard(core, { synthesize: true })).toThrow(
+          VersionNotSupportedError
+        );
+      });
+
+      it('forces protocolVersion to 0.3 even when a v1.0 entry is the primary', () => {
+        // Belt-and-braces: even if the source primary interface declares
+        // a non-legacy version explicitly, the synthesized card must
+        // present itself as v0.3 to legacy clients.
+        const core = v1OnlyCore();
+        const compat = toCompatAgentCard(core, { synthesize: true });
+        // primary core interface is v1.0 but emitted version is v0.3.
+        expect(core.supportedInterfaces[0]!.protocolVersion).toBe('1.0');
+        expect(compat.protocolVersion).toBe('0.3');
+      });
+
+      it('default (no options) preserves strict filter and throws on v1.0-only', () => {
+        const core = v1OnlyCore();
+        expect(() => toCompatAgentCard(core)).toThrow(VersionNotSupportedError);
+      });
+
+      it('default (synthesize: false) preserves strict filter and throws on v1.0-only', () => {
+        const core = v1OnlyCore();
+        expect(() => toCompatAgentCard(core, { synthesize: false })).toThrow(
+          VersionNotSupportedError
+        );
+      });
+
+      it('synthesize: true still prefers a declared v0.3 interface when present (dual card)', () => {
+        // Synthesis is a fallback for cards with NO legacy interface.
+        // When a v0.3 entry is declared explicitly it MUST still be
+        // picked as the primary, so dual-version deployments don't
+        // observe a URL change after the synthesize option is added.
+        const core: V1AgentCard = {
+          ...v1OnlyCore(),
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/v1',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '1.0',
+            },
+            {
+              url: 'https://api.example/legacy',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '0.3',
+            },
+          ],
+        };
+        const compat = toCompatAgentCard(core, { synthesize: true });
+        expect(compat.url).toBe('https://api.example/legacy');
+        expect(compat.protocolVersion).toBe('0.3');
+      });
+
+      it('synthesize: true with mixed versions (no legacy entry) falls back to the first interface', () => {
+        // No legacy-range entry -> the fallback kicks in and the
+        // first non-legacy entry becomes the primary, with emitted
+        // protocolVersion stamped as 0.3.
+        const core: V1AgentCard = {
+          ...v1OnlyCore(),
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/v1',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '1.0',
+            },
+            {
+              url: 'https://api.example/v2',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '2.0',
+            },
+          ],
+        };
+        const compat = toCompatAgentCard(core, { synthesize: true });
+        expect(compat.url).toBe('https://api.example/v1');
+        expect(compat.protocolVersion).toBe('0.3');
+        expect(compat.additionalInterfaces).toHaveLength(1);
+        expect(compat.additionalInterfaces?.[0]?.url).toBe('https://api.example/v2');
+      });
+    });
   });
 });

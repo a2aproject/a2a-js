@@ -106,10 +106,15 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       const agentCard = await options.requestHandler.getAgentCard();
       // The agent card is the single source of truth for which protocol
       // versions this transport accepts. `requestedVersion` defaults to
-      // '0.3' when the A2A-Version header is absent (§3.6.2), so a
-      // header-less legacy client will only succeed if the card declares
-      // a v0.3 JSONRPC interface.
-      validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
+      // '0.3' when the A2A-Version header is absent (§3.6.2). When
+      // `legacyCompat` is enabled, the validator implicitly accepts
+      // '0.3' for any binding the card already exposes, so v0.3
+      // clients (and header-less clients) succeed without requiring
+      // operators to duplicate every v1.0 `supportedInterfaces` entry
+      // with a v0.3 stub.
+      validateVersion(context.requestedVersion, agentCard, 'JSONRPC', {
+        legacyCompat: options.legacyCompat,
+      });
       const transportHandler = useLegacy ? legacyJsonRpcTransportHandler : jsonRpcTransportHandler;
       const rpcResponseOrStream = await transportHandler.handle(req.body, context);
 
