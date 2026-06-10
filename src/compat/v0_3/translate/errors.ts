@@ -15,9 +15,8 @@
  *                                                   wrapper, no `status`
  *                                                   field, no `details[]`.
  *
- * This module provides the demotion path used by the v0.3 JSON-RPC and
- * REST compat handlers so they all share a single source of truth. See
- * issue a2aproject/a2a-js#488 for the motivation.
+ * Both shapes are structurally identical, so a single converter
+ * ({@link toCompatErrorBody}) serves both transports.
  *
  * The v0.3 gRPC handler intentionally does NOT use this module: it still
  * attaches `google.rpc.ErrorInfo` in the `grpc-status-details-bin`
@@ -66,8 +65,7 @@ export interface LegacyRestErrorBody {
  *     their corresponding numeric codes via
  *     {@link A2A_ERROR_CLASS_TO_CODE}. **The `data` field is omitted**
  *     even when the v1.0 path would have attached an `ErrorInfo`
- *     payload — this is the wire-shape stripping that issue #488 is
- *     about.
+ *     payload — this is the v1.0 → v0.3 wire-shape demotion.
  *  3. Anything else (unknown `Error` subclass, non-`Error` throw)
  *     becomes a generic `INTERNAL_ERROR` with a best-effort message.
  */
@@ -94,38 +92,21 @@ function demoteToLegacyShape(error: unknown): {
 }
 
 /**
- * Converts any error to a v0.3 JSON-RPC error object suitable for use
- * as the `error` field of a
- * {@link import('../types/types.js').JSONRPCErrorResponse}.
+ * Converts any error to a v0.3-shaped error body.
+ *
+ * The returned object satisfies both the v0.3 JSON-RPC `JSONRPCError`
+ * shape (used as the `error` field of
+ * {@link import('../types/types.js').JSONRPCErrorResponse}) and the
+ * v0.3 REST {@link LegacyRestErrorBody} shape. The two were
+ * historically separate types but are structurally identical
+ * (`{ code, message, data? }`), so a single converter serves both
+ * transports.
  *
  * Crucially, the returned object never carries the v1.0 enriched
  * `details[]` array or any `ErrorInfo` payload — only `code`,
  * `message`, and (when honouring a {@link LegacyA2AError}) `data`.
- *
- * @see toCompatRestErrorBody — the same demotion logic shaped for the
- * REST transport.
  */
-export function toCompatJsonRpcError(error: unknown): JSONRPCError {
-  const { code, message, data } = demoteToLegacyShape(error);
-  return {
-    code,
-    message,
-    ...(data !== undefined ? { data } : {}),
-  };
-}
-
-/**
- * Converts any error to a v0.3 HTTP+JSON REST error body.
- *
- * The result is a bare `{ code, message, data? }` object with no outer
- * `{ error: … }` wrapper, no `status` field, and no `details[]` array
- * — the wire shape v0.3 clients expect (and which v1.0 §11.6
- * deliberately departs from).
- *
- * @see toCompatJsonRpcError — the same demotion logic shaped for the
- * JSON-RPC transport.
- */
-export function toCompatRestErrorBody(error: unknown): LegacyRestErrorBody {
+export function toCompatErrorBody(error: unknown): JSONRPCError | LegacyRestErrorBody {
   const { code, message, data } = demoteToLegacyShape(error);
   return {
     code,

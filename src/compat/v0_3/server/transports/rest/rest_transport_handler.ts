@@ -27,7 +27,7 @@ import type {
   Task as V1Task,
 } from '../../../../../types/pb/a2a.js';
 import { toCompatAgentCard } from '../../../translate/agent_card.js';
-import { type LegacyRestErrorBody, toCompatRestErrorBody } from '../../../translate/errors.js';
+import { type LegacyRestErrorBody, toCompatErrorBody } from '../../../translate/errors.js';
 import { toCompatMessage } from '../../../translate/messages.js';
 import {
   toCompatTaskPushNotificationConfig,
@@ -55,19 +55,22 @@ export { HTTP_STATUS, mapErrorToStatus };
 // through, map known v1.0 SDK error classes to their numeric codes,
 // strip the enriched `details[]`/`ErrorInfo` payload — lives in
 // `../../../translate/errors.ts` and is shared with the JSON-RPC
-// handler. See issue #488.
+// handler.
 export type { LegacyRestErrorBody };
 
 /**
  * Converts any error to a v0.3-shaped HTTP error body.
  *
- * Thin wrapper around {@link toCompatRestErrorBody} kept on this
- * module for backward compatibility with existing call sites
- * (including {@link LegacyRestTransportHandler.mapToLegacyHTTPError}
- * and the Express layer in `../../express/rest_handler.ts`).
+ * Thin wrapper around {@link toCompatErrorBody} kept on this module
+ * for backward compatibility with existing call sites (including
+ * {@link LegacyRestTransportHandler.mapToLegacyHTTPError} and the
+ * Express layer in `../../express/rest_handler.ts`).
+ *
+ * The cast is safe because the underlying converter returns a body
+ * that is structurally identical to {@link LegacyRestErrorBody}.
  */
 export function toLegacyHTTPError(error: unknown): LegacyRestErrorBody {
-  return toCompatRestErrorBody(error);
+  return toCompatErrorBody(error) as LegacyRestErrorBody;
 }
 
 // ============================================================================

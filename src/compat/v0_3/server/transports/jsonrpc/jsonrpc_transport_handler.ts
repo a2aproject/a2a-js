@@ -15,7 +15,7 @@
 import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
 import { toCompatAgentCard } from '../../../translate/agent_card.js';
-import { toCompatJsonRpcError } from '../../../translate/errors.js';
+import { toCompatErrorBody } from '../../../translate/errors.js';
 import { toCompatMessage } from '../../../translate/messages.js';
 import { toCompatTaskPushNotificationConfig } from '../../../translate/push_notifications.js';
 import {
@@ -293,15 +293,18 @@ export class LegacyJsonRpcTransportHandler {
   /**
    * Maps an error to a v0.3-shaped {@link legacy.JSONRPCError}.
    *
-   * Thin wrapper around {@link toCompatJsonRpcError} kept on the
+   * Thin wrapper around {@link toCompatErrorBody} kept on the
    * transport handler for backward compatibility with existing call
    * sites (including the handler's own `catch` blocks). The actual
    * v1.0 → v0.3 demotion logic — pass `LegacyA2AError` through, map
    * known v1.0 SDK error classes to their numeric codes, strip the
    * enriched `details[]`/`ErrorInfo` payload — lives in the translate
-   * unit and is shared with the REST handler. See issue #488.
+   * unit and is shared with the REST handler.
+   *
+   * The cast is safe because the underlying converter returns a body
+   * that is structurally identical to {@link legacy.JSONRPCError}.
    */
   public static mapToLegacyJSONRPCError(error: unknown): legacy.JSONRPCError {
-    return toCompatJsonRpcError(error);
+    return toCompatErrorBody(error) as legacy.JSONRPCError;
   }
 }
