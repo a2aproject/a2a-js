@@ -378,11 +378,7 @@ describe('agentCardHandler with legacyCompat', () => {
   });
 
   describe('synthesized v0.3 card from a v1.0-only card', () => {
-    it('serves a synthesized v0.3 card on header-less requests against a v1.0-only card', async () => {
-      // With legacyCompat enabled, the legacy agent-card router now
-      // synthesizes a v0.3 card from the v1.0 interfaces instead of
-      // throwing VersionNotSupportedError. This mirrors the validator's
-      // implicit-v0.3 acceptance for request handling.
+    it('serves a synthesized v0.3 card on header-less requests (server-side §3.6.2 default-to-0.3 fallback)', async () => {
       const app = createApp(modernOnlyCard(), { enabled: true });
 
       const response = await request(app).get('/.well-known/agent-card.json').expect(200);

@@ -1,4 +1,4 @@
-import { AGENT_CARD_PATH } from '../constants.js';
+import { A2A_PROTOCOL_VERSION, A2A_VERSION_HEADER, AGENT_CARD_PATH } from '../constants.js';
 import { AgentCard } from '../index.js';
 import { isLegacyAgentCard, parseLegacyAgentCard } from '../compat/v0_3/client/card-resolver.js';
 
@@ -11,13 +11,20 @@ export interface AgentCardResolverOptions {
    * When enabled, the resolver inspects each fetched agent-card
    * payload; if its shape matches v0.3 (top-level `url` without
    * `supportedInterfaces`, `preferredTransport`,
-   * `additionalInterfaces`, `supportsAuthenticatedExtendedCard`, or
-   * a `protocolVersion` in `[0.3, 1.0)`), it is translated to the
-   * v1.0 proto shape via `toCoreAgentCard`. Each synthesized
-   * `AgentInterface` is stamped with `protocolVersion: '0.3'` so
-   * that a {@link JsonRpcTransportFactory} configured with
+   * `additionalInterfaces`, `supportsAuthenticatedExtendedCard`, or a
+   * `protocolVersion` in `[0.3, 1.0)`), it is translated to the v1.0
+   * proto shape via `toCoreAgentCard`. Each synthesized
+   * `AgentInterface` is stamped with `protocolVersion: '0.3'` so that
+   * a `JsonRpcTransportFactory` configured with
    * `legacyCompat: { enabled: true }` selects the compat transport
    * automatically.
+   *
+   * The discovery request itself always announces the SDK's native
+   * v1.0 in the `A2A-Version` header — detection of v0.3 servers is
+   * based on the response shape (see {@link resolve}), not on the
+   * request value. This avoids a downgrade dance when both client
+   * and server speak v1.0 natively but both have legacyCompat
+   * enabled.
    *
    * Default: omitted (treated as disabled). When disabled, the v0.3
    * compat module is never loaded.
@@ -44,7 +51,9 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
    */
   async resolve(baseUrl: string, path?: string): Promise<AgentCard> {
     const agentCardUrl = new URL(path ?? this.options?.path ?? AGENT_CARD_PATH, baseUrl);
-    const response = await this.fetchImpl(agentCardUrl);
+    const response = await this.fetchImpl(agentCardUrl, {
+      headers: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION },
+    });
     if (!response.ok) {
       throw new Error(`Failed to fetch Agent Card from ${agentCardUrl}: ${response.status}`);
     }

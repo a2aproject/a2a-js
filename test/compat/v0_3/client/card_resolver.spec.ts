@@ -223,4 +223,17 @@ describe('DefaultAgentCardResolver with legacyCompat', () => {
 
     expect(card.supportedInterfaces).toBeUndefined();
   });
+
+  it('sends A2A-Version: 1.0 on discovery even when legacyCompat.enabled is true', async () => {
+    const mockFetch = makeMockFetch(minimalLegacyCard());
+    const resolver = new DefaultAgentCardResolver({
+      fetchImpl: mockFetch,
+      legacyCompat: { enabled: true },
+    });
+
+    await resolver.resolve('https://example.com');
+
+    const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect((init?.headers as Record<string, string> | undefined)?.['A2A-Version']).toBe('1.0');
+  });
 });
