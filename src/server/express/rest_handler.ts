@@ -421,7 +421,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('post', '/message\\:send', async (req, res) => {
     const context = await buildContext(req);
-    const params = SendMessageRequest.fromJSON(req.body);
+    const params = SendMessageRequest.fromJSON(req.body ?? {});
     const result = await restTransportHandler.sendMessage(params, context);
     const protoResult = ToProto.messageSendResult(result);
     sendResponse<SendMessageResponse>(
@@ -447,7 +447,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('post', '/message\\:stream', async (req, res) => {
     const context = await buildContext(req);
-    const params = SendMessageRequest.fromJSON(req.body);
+    const params = SendMessageRequest.fromJSON(req.body ?? {});
     const stream = await restTransportHandler.sendMessageStream(params, context);
     await sendStreamResponse(res, stream, context);
   });
@@ -543,7 +543,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
-    const params = TaskPushNotificationConfig.fromJSON(req.body);
+    const params = TaskPushNotificationConfig.fromJSON(req.body ?? {});
     const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
     sendResponse<TaskPushNotificationConfig>(
       res,

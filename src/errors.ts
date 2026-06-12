@@ -371,3 +371,35 @@ export function mapA2aErrorToSdkError(
 export function mapJsonRpcErrorToSdkError(response: JSONRPCErrorResponse): Error {
   return mapA2aErrorToSdkError(response.error, () => new JSONRPCTransportError(response));
 }
+
+/**
+ * Coerces an arbitrary rejected-promise reason into a printable message.
+ *
+ * Promise rejections are not required to be `Error` instances — agents
+ * (or libraries they call) may `throw "boom"`, `Promise.reject(null)`,
+ * `throw { code: ... }`, etc. Accessing `.message` on those would throw
+ * a fresh `TypeError` from inside the catch handler and mask the
+ * original failure, so unwrap defensively before formatting:
+ *
+ *  - `Error` instances → their `.message`
+ *  - `null` / `undefined` → the literal `"null"` / `"undefined"`
+ *  - strings → as-is
+ *  - everything else → `JSON.stringify`, with a `String(err)` fallback
+ *    for values that can't be serialised (cyclic, BigInt, etc.).
+ */
+export function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (err === null || err === undefined) {
+    return String(err);
+  }
+  if (typeof err === 'string') {
+    return err;
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}

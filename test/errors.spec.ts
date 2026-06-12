@@ -15,6 +15,7 @@ import {
   VersionNotSupportedError,
   mapA2aErrorToSdkError,
   mapJsonRpcErrorToSdkError,
+  extractErrorMessage,
 } from '../src/errors.js';
 
 function makeEnvelope(code: number, message = 'boom'): JSONRPCErrorResponse {
@@ -101,5 +102,50 @@ describe('mapA2aErrorToSdkError', () => {
     const result = mapA2aErrorToSdkError({ code: -99999, message: 'mystery' }, fallback);
     expect(fallback).toHaveBeenCalledTimes(1);
     expect(result).toBe(fallbackError);
+  });
+});
+
+describe('extractErrorMessage', () => {
+  it("returns an Error's message verbatim", () => {
+    expect(extractErrorMessage(new Error('boom'))).toBe('boom');
+  });
+
+  it('returns subclass error messages', () => {
+    expect(extractErrorMessage(new TaskNotFoundError('task-42'))).toContain('task-42');
+  });
+
+  it('returns strings as-is', () => {
+    expect(extractErrorMessage('plain string')).toBe('plain string');
+  });
+
+  it('stringifies null and undefined', () => {
+    expect(extractErrorMessage(null)).toBe('null');
+    expect(extractErrorMessage(undefined)).toBe('undefined');
+  });
+
+  it('JSON-stringifies plain objects', () => {
+    expect(extractErrorMessage({ code: 'E_FOO', detail: 'bar' })).toBe(
+      '{"code":"E_FOO","detail":"bar"}'
+    );
+  });
+
+  it('JSON-stringifies arrays and numbers', () => {
+    expect(extractErrorMessage([1, 2, 3])).toBe('[1,2,3]');
+    expect(extractErrorMessage(42)).toBe('42');
+  });
+
+  it('falls back to String(err) when JSON.stringify throws (e.g. BigInt)', () => {
+    // `JSON.stringify` throws TypeError on BigInt values; the helper
+    // must not propagate that, otherwise the catch handlers that use it
+    // would themselves re-throw and mask the original failure.
+    expect(extractErrorMessage(10n)).toBe('10');
+  });
+
+  it('falls back to String(err) for cyclic objects', () => {
+    const cyclic: Record<string, unknown> = { a: 1 };
+    cyclic.self = cyclic;
+    // `JSON.stringify` on a cycle throws TypeError → fallback to
+    // `String(cyclic)` which yields `"[object Object]"`.
+    expect(extractErrorMessage(cyclic)).toBe('[object Object]');
   });
 });

@@ -58,6 +58,7 @@ import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
 import { TERMINAL_STATE_LIST, isTask, StreamPattern } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
+import { extractErrorMessage } from '../../errors.js';
 
 /**
  * Default implementation of the A2A request handler.
@@ -324,7 +325,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   ): void {
     this.agentExecutor
       .execute(requestContext, eventBus)
-      .catch((err: Error) => {
+      .catch((err: unknown) => {
+        // Promises can reject with any value (Error, string, plain
+        // object, `null`, `undefined`, etc.), so coerce defensively
+        // before reading `.message` — accessing `.message` on a
+        // non-Error rejection would throw a fresh TypeError here and
+        // swallow the original failure, leaving the consumer to hang.
+        const errorMessage = extractErrorMessage(err);
         console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
         // Publish a synthetic error event so the consumer's event loop
         // can settle the first-result promise and so any concurrent
@@ -341,7 +348,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               contextId: finalMessageForAgent.contextId!,
               parts: [
                 {
-                  content: { $case: 'text', value: `Agent execution error: ${err.message}` },
+                  content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
                   mediaType: 'text/plain',
                   filename: '',
                   metadata: {},
@@ -398,7 +405,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const finalMessageForAgent = requestContext.userMessage;
     this.agentExecutor
       .execute(requestContext, eventBus)
-      .catch((err: Error) => {
+      .catch((err: unknown) => {
+        // See the `_runExecutor` catch block for why `err` is typed as
+        // `unknown` and coerced via `extractErrorMessage` instead of
+        // touching `.message` directly.
+        const errorMessage = extractErrorMessage(err);
         console.error(
           `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
           err
@@ -423,7 +434,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               contextId: finalMessageForAgent.contextId!,
               parts: [
                 {
-                  content: { $case: 'text', value: `Agent execution error: ${err.message}` },
+                  content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
                   mediaType: 'text/plain',
                   filename: '',
                   metadata: {},
