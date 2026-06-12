@@ -190,7 +190,7 @@ export class FromProto {
         return {
           kind: 'file',
           file: {
-            bytes: filePart.file.value.toString('base64'),
+            bytes: filePart.file.value.toString('utf8'),
             mimeType: filePart.mimeType,
           },
         };

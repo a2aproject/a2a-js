@@ -443,5 +443,131 @@ describe('agent_card', () => {
         expect(compat.additionalInterfaces?.[0]?.url).toBe('https://api.example/v2');
       });
     });
+
+    describe('embedV1Interfaces option', () => {
+      function v1OnlyCoreLocal(): V1AgentCard {
+        return {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/v1',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '1.0',
+            },
+            {
+              url: 'https://api.example/grpc',
+              protocolBinding: 'GRPC',
+              tenant: '',
+              protocolVersion: '1.0',
+            },
+          ],
+          provider: undefined,
+          capabilities: {
+            streaming: undefined,
+            pushNotifications: undefined,
+            extensions: [],
+            extendedAgentCard: undefined,
+          },
+          securitySchemes: {},
+          securityRequirements: [],
+          defaultInputModes: [],
+          defaultOutputModes: [],
+          skills: [],
+          signatures: [],
+        };
+      }
+
+      it('omits supportedInterfaces by default (back-compat with pure v0.3 output)', () => {
+        const core = v1OnlyCoreLocal();
+        const compat = toCompatAgentCard(core, { synthesize: true });
+        expect((compat as { supportedInterfaces?: unknown[] }).supportedInterfaces).toBeUndefined();
+      });
+
+      it('embeds the source supportedInterfaces verbatim when enabled', () => {
+        const core = v1OnlyCoreLocal();
+        const compat = toCompatAgentCard(core, {
+          synthesize: true,
+          embedV1Interfaces: true,
+        });
+        // The emitted hybrid card carries BOTH the v0.3 top-level
+        // surface AND the original v1.0 supportedInterfaces array, so
+        // both card resolvers can read it from the same JSON document.
+        expect(compat.url).toBe('https://api.example/v1');
+        expect(compat.preferredTransport).toBe('JSONRPC');
+        expect(compat.protocolVersion).toBe('0.3');
+        expect(compat.supportedInterfaces).toEqual(core.supportedInterfaces);
+      });
+
+      it('emits a defensive copy (does not alias the source array)', () => {
+        // Mutating the emitted card MUST NOT mutate the input card the
+        // caller passed in.
+        const core = v1OnlyCoreLocal();
+        const compat = toCompatAgentCard(core, {
+          synthesize: true,
+          embedV1Interfaces: true,
+        });
+        expect(compat.supportedInterfaces).not.toBe(core.supportedInterfaces);
+        expect(compat.supportedInterfaces![0]).not.toBe(core.supportedInterfaces[0]);
+        compat.supportedInterfaces![0]!.url = 'https://mutated';
+        expect(core.supportedInterfaces[0]!.url).toBe('https://api.example/v1');
+      });
+
+      it('works without synthesize when at least one legacy interface qualifies', () => {
+        // embedV1Interfaces is orthogonal to synthesize: it just copies
+        // the source supportedInterfaces onto the emitted card.
+        const core: V1AgentCard = {
+          ...v1OnlyCoreLocal(),
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/legacy',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '0.3',
+            },
+            {
+              url: 'https://api.example/v1',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '1.0',
+            },
+          ],
+        };
+        const compat = toCompatAgentCard(core, { embedV1Interfaces: true });
+        // Strict filtering picked the v0.3 entry as primary; the
+        // v1.0 entry survives only because embedV1Interfaces carries
+        // the full source array through.
+        expect(compat.url).toBe('https://api.example/legacy');
+        expect(compat.supportedInterfaces).toEqual(core.supportedInterfaces);
+      });
+
+      it('omits supportedInterfaces when the source array is empty', () => {
+        // Defensive guard: never emit an empty `supportedInterfaces`
+        // field that would confuse downstream parsers expecting it to
+        // either be absent or non-empty.
+        const core: V1AgentCard = {
+          ...v1OnlyCoreLocal(),
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/legacy',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '0.3',
+            },
+          ],
+        };
+        // Build a card with the property explicitly set to [] without
+        // breaking the existing primary-interface lookup.
+        const empty: V1AgentCard = { ...core, supportedInterfaces: [] };
+        // Strict filter throws on empty supportedInterfaces (no
+        // primary), but with embedV1Interfaces we should still not
+        // crash before that point.
+        expect(() =>
+          toCompatAgentCard(empty, { synthesize: true, embedV1Interfaces: true })
+        ).toThrow(VersionNotSupportedError);
+      });
+    });
   });
 });

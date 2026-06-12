@@ -117,7 +117,24 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
         // `legacyCompat`. Strict filtering would force operators to
         // duplicate every v1.0 entry with a v0.3 stub just to get a
         // discoverable v0.3 surface; this avoids that.
-        compatCard = toCompatAgentCard(coreCard, { synthesize: true });
+        //
+        // `embedV1Interfaces: true` produces a "superset" card whose
+        // JSON document satisfies BOTH shapes: v0.3 fields at the top
+        // level (`url`, `preferredTransport`, `additionalInterfaces`,
+        // `protocolVersion`) AND the original v1.0
+        // `supportedInterfaces[]`. Without this, a v1.0 peer that
+        // didn't send `A2A-Version: 1.0` on the card fetch — for
+        // example a v1.0 SDK that registered v0.3 compat for one
+        // transport but not for others — would only see legacy-stamped
+        // interfaces and fail to dial bindings it has no v0.3 compat
+        // for. The two top-level field sets are disjoint, so the
+        // hybrid representation is unambiguous: v0.3 resolvers read
+        // the v0.3 fields and v1.0 resolvers read `supportedInterfaces`
+        // (per the `isLegacyAgentCard` hybrid override).
+        compatCard = toCompatAgentCard(coreCard, {
+          synthesize: true,
+          embedV1Interfaces: true,
+        });
       } catch (error) {
         if (error instanceof VersionNotSupportedError) {
           res.append('Vary', A2A_VERSION_HEADER);

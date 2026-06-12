@@ -1,0 +1,73 @@
+name: Run ITK (Nightly)
+
+on:
+  schedule:
+    # 02:00 UTC daily, matching a2a-python's and a2a-go's nightly windows
+    # so the cross-SDK nightly artifacts upload roughly in parallel.
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual execution from the Actions tab
+
+permissions:
+  # Required for `softprops/action-gh-release` to publish the rolling
+  # `nightly-metrics` prerelease asset.
+  contents: write
+
+# Serialize nightly runs so a manual `workflow_dispatch` while the
+# scheduled run is still uploading doesn't race on the release asset.
+concurrency:
+  group: itk-nightly
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    name: Nightly ITK Run
+    runs-on: ubuntu-latest
+
+    env:
+      # Same pin as the PR workflow — see `.github/workflows/run-itk.yaml`.
+      A2A_ITK_REVISION: main
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Run Error Handling Tests
+        run: bash itk/run_error_tests.sh
+
+      - name: Run Nightly ITK Tests
+        run: bash run_itk.sh
+        working-directory: itk
+        env:
+          A2A_ITK_REVISION: ${{ env.A2A_ITK_REVISION }}
+          # `ITK_NIGHTLY_RUN=True` selects `scenarios_full.json` (PR set
+          # + tri/quad-SDK star topologies) and routes results through
+          # `a2a-itk/scripts/process_results.py` to produce the rolling
+          # `itk_js.json` history file consumed by the release asset.
+          ITK_NIGHTLY_RUN: "True"
+
+      - name: Upload Results to Rolling Release
+        uses: softprops/action-gh-release@v3
+        with:
+          # Reuses a single, permanent prerelease tag so the asset URL
+          # (`.../releases/download/nightly-metrics/itk_js.json`) is
+          # stable for dashboards and for `process_results.py`'s
+          # next-run history fetch. Matches a2a-python (`itk_python.json`)
+          # and a2a-go (`itk_go.json`) — one file per SDK on the same tag.
+          tag_name: nightly-metrics
+          prerelease: true
+          files: |
+            itk/itk_js.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

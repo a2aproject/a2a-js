@@ -257,7 +257,49 @@ export interface ToCompatAgentCardOptions {
    * interfaces and throw `VersionNotSupportedError` if none qualify).
    */
   synthesize?: boolean;
+  /**
+   * When `true`, copy the source v1.0 `supportedInterfaces[]` onto the
+   * emitted v0.3 card as a top-level field. The result is a "superset"
+   * card document that satisfies both the v0.3 JSON shape (top-level
+   * `url` / `preferredTransport` / `additionalInterfaces[]` /
+   * `protocolVersion`) AND the v1.0 proto-JSON shape
+   * (`supportedInterfaces[]`); the two field sets are disjoint so a
+   * single document is unambiguously parseable by both shapes' card
+   * resolvers.
+   *
+   * Designed for the SDK's opt-in compat layer at the well-known
+   * agent-card endpoint: when a v1.0 server has `legacyCompat: {
+   * enabled: true }` and the client did NOT send `A2A-Version: 1.0`
+   * (so the legacy router takes the request), embedding the v1.0
+   * interfaces means a v1.0 peer that lacks per-binding v0.3 compat
+   * (e.g. an SDK that registered v0.3 compat for JSONRPC but not for
+   * gRPC / HTTP+JSON) can still discover the native v1.0 endpoints
+   * for those bindings. Without it, the legacy-shaped card would
+   * stamp every interface as v0.3, forcing the v1.0 peer through a
+   * compat path it may not have registered.
+   *
+   * The {@link parseLegacyAgentCard} / {@link isLegacyAgentCard}
+   * detection on the JS SDK's own card resolver prefers the embedded
+   * v1.0 shape when it is present, so a JS-SDK-to-JS-SDK fetch sees
+   * the v1.0 card directly.
+   *
+   * Default: `false`.
+   */
+  embedV1Interfaces?: boolean;
 }
+
+/**
+ * Result of {@link toCompatAgentCard}.
+ *
+ * In strict and `synthesize`-only modes this is just a `legacy.AgentCard`.
+ * When called with `{ embedV1Interfaces: true }`, the result also carries
+ * the original v1.0 `supportedInterfaces[]` as a top-level field; the
+ * two schemas share no field names, so a single JSON document satisfies
+ * both card resolvers.
+ */
+export type CompatAgentCardResult = legacy.AgentCard & {
+  supportedInterfaces?: V1AgentInterface[];
+};
 
 /**
  * Converts a v1.0 proto `AgentCard` into a v0.3 JSON `AgentCard`.
@@ -273,13 +315,20 @@ export interface ToCompatAgentCardOptions {
  * used by the well-known agent-card endpoint when the operator has
  * opted into the v0.3 compat layer but declared only v1.0 interfaces.
  *
+ * When called with `{ embedV1Interfaces: true }`, the source v1.0
+ * `supportedInterfaces[]` array is also copied onto the returned card
+ * as a top-level field. The resulting JSON document satisfies both the
+ * v0.3 and v1.0 card schemas (their top-level field sets are disjoint)
+ * so a v1.0 client that bypassed `A2A-Version` negotiation can still
+ * discover the native v1.0 endpoints without going through compat.
+ *
  * `capabilities.extendedAgentCard` is pulled back out to the card-level
  * `supportsAuthenticatedExtendedCard` field.
  */
 export function toCompatAgentCard(
   core: V1AgentCard,
   options?: ToCompatAgentCardOptions
-): legacy.AgentCard {
+): CompatAgentCardResult {
   const allInterfaces = core.supportedInterfaces ?? [];
   const legacyInterfaces = allInterfaces.filter(
     (intf) => !intf.protocolVersion || isLegacyVersion(intf.protocolVersion)
@@ -330,7 +379,7 @@ export function toCompatAgentCard(
     ? PROTOCOL_VERSION_0_3
     : primary.protocolVersion || PROTOCOL_VERSION_0_3;
 
-  const result: legacy.AgentCard = {
+  const result: CompatAgentCardResult = {
     name: core.name,
     description: core.description,
     version: core.version,
@@ -360,6 +409,16 @@ export function toCompatAgentCard(
   }
   if (core.signatures.length > 0) {
     result.signatures = core.signatures.map(toCompatAgentCardSignature);
+  }
+
+  // Hybrid-card embedding: when the caller wants the emitted document to
+  // also be parseable as a v1.0 card (so v1.0-only peers that didn't
+  // send `A2A-Version: 1.0` can still discover native endpoints), copy
+  // the source `supportedInterfaces[]` through verbatim. The v0.3 and
+  // v1.0 `AgentCard` shapes share no top-level field names, so a single
+  // document can carry both representations simultaneously.
+  if (options?.embedV1Interfaces && allInterfaces.length > 0) {
+    result.supportedInterfaces = allInterfaces.map((intf) => ({ ...intf }));
   }
 
   return result;

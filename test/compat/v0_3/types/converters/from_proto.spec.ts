@@ -186,18 +186,27 @@ describe('FromProto', () => {
       });
     });
 
-    it('should convert a file part with bytes', () => {
-      const bytes = Buffer.from('file content');
+    it('should convert a file part with bytes (v0.3 wire convention)', () => {
+      // Per v0.3 SDK interop: `file_with_bytes` over gRPC carries the
+      // base64 string's UTF-8 bytes, not raw decoded bytes. Decoding
+      // the buffer as UTF-8 yields back the base64 string the caller
+      // originally produced — matching what a2a-go v0.3's
+      // `string([]byte)` cast and a2a-python v0.3's str(bytes, 'utf-8')
+      // produce. This is the de-facto wire format across the v0.3
+      // reference SDKs, even though the proto file declares the field
+      // as `bytes`.
+      const base64Bytes = Buffer.from('file content').toString('base64');
+      const wireBytes = Buffer.from(base64Bytes, 'utf8');
       const part: proto.Part = {
         part: {
           $case: 'file',
-          value: { file: { $case: 'fileWithBytes', value: bytes }, mimeType: 'text/plain' },
+          value: { file: { $case: 'fileWithBytes', value: wireBytes }, mimeType: 'text/plain' },
         },
       };
       const result = FromProto.part(part);
       expect(result).toEqual({
         kind: 'file',
-        file: { bytes: bytes.toString('base64'), mimeType: 'text/plain' },
+        file: { bytes: base64Bytes, mimeType: 'text/plain' },
       });
     });
 

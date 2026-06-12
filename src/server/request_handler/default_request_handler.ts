@@ -42,6 +42,7 @@ import {
   AgentExecutionEvent,
   AgentEvent,
   assertUnreachableEvent,
+  ExecutionEventBus,
 } from '../events/execution_event_bus.js';
 import { ExecutionEventQueue } from '../events/execution_event_queue.js';
 import { ResultManager } from '../result_manager.js';
@@ -295,8 +296,153 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         options?.firstResultRejector
       );
     } finally {
-      this.eventBusManager.cleanupByTaskId(taskId);
+      // Detach this queue from the bus; the bus itself is cleaned up
+      // when the executor settles (see `_runExecutor` / `_runStreamExecutor`).
+      eventQueue.stop();
     }
+  }
+
+  /**
+   * Runs the executor for a blocking `sendMessage` call and ties the
+   * event bus lifecycle to the executor's settlement.
+   *
+   * On rejection, publishes a synthetic Task + statusUpdate(FAILED) so
+   * the consumer's event loop terminates with a usable final result and
+   * any concurrent resubscribers see the failure on the same wire.
+   *
+   * The bus is cleaned up after the executor settles AND `bus.finished()`
+   * has been signalled, so:
+   *   - resubscribers attaching mid-execution still find a live bus,
+   *   - the executor's own publish calls after the consumer disconnects
+   *     don't go into a removed bus.
+   */
+  private _runExecutor(
+    taskId: string,
+    eventBus: ExecutionEventBus,
+    requestContext: RequestContext,
+    finalMessageForAgent: Message
+  ): void {
+    this.agentExecutor
+      .execute(requestContext, eventBus)
+      .catch((err: Error) => {
+        console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
+        // Publish a synthetic error event so the consumer's event loop
+        // can settle the first-result promise and so any concurrent
+        // resubscribers see the failure on the wire.
+        const errorTask: Task = {
+          id: requestContext.task?.id || uuidv4(),
+          contextId: finalMessageForAgent.contextId!,
+          status: {
+            state: TaskState.TASK_STATE_FAILED,
+            message: {
+              role: Role.ROLE_AGENT,
+              messageId: uuidv4(),
+              taskId: requestContext.taskId,
+              contextId: finalMessageForAgent.contextId!,
+              parts: [
+                {
+                  content: { $case: 'text', value: `Agent execution error: ${err.message}` },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: {},
+                },
+              ],
+              metadata: {},
+              extensions: [],
+              referenceTaskIds: [],
+            },
+            timestamp: new Date().toISOString(),
+          },
+          artifacts: [],
+          history: requestContext.task?.history ? [...requestContext.task.history] : [],
+          metadata: {},
+        };
+        if (
+          finalMessageForAgent &&
+          !errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)
+        ) {
+          errorTask.history?.push(finalMessageForAgent);
+        }
+        eventBus.publish(AgentEvent.task(errorTask));
+        eventBus.publish(
+          AgentEvent.statusUpdate({
+            taskId: errorTask.id,
+            contextId: errorTask.contextId,
+            status: errorTask.status,
+            metadata: {},
+          })
+        );
+      })
+      .finally(() => {
+        eventBus.finished();
+        this.eventBusManager.cleanupByTaskId(taskId);
+      });
+  }
+
+  /**
+   * Streaming variant of {@link _runExecutor}.
+   *
+   * Differs in error handling: only publishes a synthetic statusUpdate
+   * (not a fresh Task event) when the executor rejects, because the
+   * stream is required to start with the executor's own Task event per
+   * §3.1.2. If the executor failed BEFORE publishing any Task event
+   * (e.g. argument validation), the consumer would otherwise hang
+   * forever — `eventBus.finished()` in the finally block unblocks it.
+   */
+  private _runStreamExecutor(
+    taskId: string,
+    eventBus: ExecutionEventBus,
+    requestContext: RequestContext,
+    resultManager: ResultManager
+  ): void {
+    const finalMessageForAgent = requestContext.userMessage;
+    this.agentExecutor
+      .execute(requestContext, eventBus)
+      .catch((err: Error) => {
+        console.error(
+          `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
+          err
+        );
+        // Only publish a synthetic error status update if the task already
+        // exists in the store. If the agent failed before creating a task,
+        // the `finished()` signal below unblocks the consumer without
+        // producing a stream-pattern violation.
+        const currentTask = resultManager.getCurrentTask();
+        if (!currentTask) {
+          return;
+        }
+        const errorTaskStatus: TaskStatusUpdateEvent = {
+          taskId: requestContext.taskId,
+          contextId: finalMessageForAgent.contextId!,
+          status: {
+            state: TaskState.TASK_STATE_FAILED,
+            message: {
+              role: Role.ROLE_AGENT,
+              messageId: uuidv4(),
+              taskId: requestContext.taskId,
+              contextId: finalMessageForAgent.contextId!,
+              parts: [
+                {
+                  content: { $case: 'text', value: `Agent execution error: ${err.message}` },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: {},
+                },
+              ],
+              metadata: {},
+              extensions: [],
+              referenceTaskIds: [],
+            },
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        };
+        eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
+      })
+      .finally(() => {
+        eventBus.finished();
+        this.eventBusManager.cleanupByTaskId(taskId);
+      });
   }
 
   async sendMessage(
@@ -338,55 +484,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Start agent execution (non-blocking).
     // It runs in the background and publishes events to the eventBus.
-    this.agentExecutor.execute(requestContext, eventBus).catch((err) => {
-      console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
-      // Publish a synthetic error event, which will be handled by the ResultManager
-      // and will also settle the firstResultPromise for non-blocking calls.
-      const errorTask: Task = {
-        id: requestContext.task?.id || uuidv4(), // Use existing task ID or generate new
-        contextId: finalMessageForAgent.contextId!,
-        status: {
-          state: TaskState.TASK_STATE_FAILED,
-          message: {
-            role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
-            taskId: requestContext.taskId,
-            contextId: finalMessageForAgent.contextId!,
-            parts: [
-              {
-                content: { $case: 'text', value: `Agent execution error: ${err.message}` },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: {},
-              },
-            ],
-            metadata: {},
-            extensions: [],
-            referenceTaskIds: [],
-          },
-          timestamp: new Date().toISOString(),
-        },
-        artifacts: [],
-        history: requestContext.task?.history ? [...requestContext.task.history] : [],
-        metadata: {},
-      };
-      if (finalMessageForAgent) {
-        // Add incoming message to history
-        if (!errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)) {
-          errorTask.history?.push(finalMessageForAgent);
-        }
-      }
-      eventBus.publish(AgentEvent.task(errorTask));
-      eventBus.publish(
-        AgentEvent.statusUpdate({
-          taskId: errorTask.id,
-          contextId: errorTask.contextId,
-          status: errorTask.status,
-          metadata: {},
-        })
-      );
-      eventBus.finished();
-    });
+    // Bus cleanup is tied to the EXECUTOR's lifecycle, not the consumer's,
+    // so a `tasks/resubscribe` arriving after the consumer settles (e.g.
+    // blocking sendMessage's first-result resolution) can still find the
+    // bus via `getByTaskId` while the executor is still publishing.
+    this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
 
     const historyLengthConfig = params.configuration;
 
@@ -437,7 +539,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const requestContext = await this._createRequestContext(incomingMessage, context);
     const taskId = requestContext.taskId;
-    const finalMessageForAgent = requestContext.userMessage;
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
     const eventQueue = new ExecutionEventQueue(eventBus);
@@ -454,48 +555,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       );
     }
 
-    // Start agent execution (non-blocking)
-    this.agentExecutor.execute(requestContext, eventBus).catch((err) => {
-      console.error(
-        `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
-        err
-      );
-      // Only publish a synthetic error event if the task already exists in the store.
-      // If the agent failed before creating a task, signal the event bus to finish
-      // so the stream consumer doesn't hang indefinitely.
-      const currentTask = resultManager.getCurrentTask();
-      if (!currentTask) {
-        eventBus.finished();
-        return;
-      }
-      const errorTaskStatus: TaskStatusUpdateEvent = {
-        taskId: requestContext.taskId,
-        contextId: finalMessageForAgent.contextId!,
-        status: {
-          state: TaskState.TASK_STATE_FAILED,
-          message: {
-            role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
-            taskId: requestContext.taskId,
-            contextId: finalMessageForAgent.contextId!,
-            parts: [
-              {
-                content: { $case: 'text', value: `Agent execution error: ${err.message}` },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: {},
-              },
-            ],
-            metadata: {},
-            extensions: [],
-            referenceTaskIds: [],
-          },
-          timestamp: new Date().toISOString(),
-        },
-        metadata: {},
-      };
-      eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
-    });
+    // Start agent execution (non-blocking). Bus cleanup is tied to the
+    // EXECUTOR's lifecycle (see `_runStreamExecutor`), not the consumer's:
+    // a client that disconnects this stream early (e.g. the
+    // send-disconnect-resubscribe pattern in §3.1.6) must still be able
+    // to attach via `tasks/resubscribe` while the executor keeps
+    // running, so we cannot tear down the bus here when this generator
+    // settles.
+    this._runStreamExecutor(taskId, eventBus, requestContext, resultManager);
 
     let streamPattern = StreamPattern.UNDETERMINED;
     try {
@@ -515,8 +582,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         yield streamResponse;
       }
     } finally {
-      // Cleanup when the stream is fully consumed or breaks
-      this.eventBusManager.cleanupByTaskId(taskId);
+      // Detach THIS consumer's queue from the bus, but leave the bus
+      // alive until the executor (and any other live subscribers) is
+      // done — see comment above and `_runExecutor` / `_runStreamExecutor`.
+      eventQueue.stop();
     }
   }
 

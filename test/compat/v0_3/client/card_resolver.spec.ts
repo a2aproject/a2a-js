@@ -112,6 +112,52 @@ describe('isLegacyAgentCard', () => {
       })
     ).toBe(false);
   });
+
+  it('returns false for a hybrid card (v0.3 fields + non-empty v1.0 supportedInterfaces)', () => {
+    // The legacy router can emit a "superset" card via
+    // `toCompatAgentCard({ embedV1Interfaces: true })`: it carries
+    // BOTH a v0.3 top-level surface AND the original v1.0
+    // `supportedInterfaces[]`. When both shapes coexist, the v1.0
+    // shape MUST be authoritative — otherwise the resolver would
+    // route through `parseLegacyAgentCard` and downgrade every
+    // interface to `protocolVersion: '0.3'`, losing the native v1.0
+    // stamps that downstream factories rely on.
+    expect(
+      isLegacyAgentCard({
+        name: 'Hybrid',
+        url: 'https://api.example/v1',
+        preferredTransport: 'JSONRPC',
+        protocolVersion: '0.3',
+        additionalInterfaces: [{ url: 'https://api.example/grpc', transport: 'GRPC' }],
+        supportedInterfaces: [
+          {
+            url: 'https://api.example/v1',
+            protocolBinding: 'JSONRPC',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+          {
+            url: 'https://api.example/grpc',
+            protocolBinding: 'GRPC',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+        ],
+      })
+    ).toBe(false);
+  });
+
+  it('returns true for a card with an EMPTY `supportedInterfaces` and legacy fields', () => {
+    // An empty `supportedInterfaces` array is not a valid v1.0
+    // representation; legacy detection should fall through to the
+    // v0.3 indicators (here: `preferredTransport`).
+    expect(
+      isLegacyAgentCard({
+        preferredTransport: 'JSONRPC',
+        supportedInterfaces: [],
+      })
+    ).toBe(true);
+  });
 });
 
 describe('parseLegacyAgentCard', () => {

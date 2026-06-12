@@ -517,7 +517,7 @@ export class ToProto {
         };
       } else if ('bytes' in part.file) {
         filePart = {
-          file: { $case: 'fileWithBytes', value: Buffer.from(part.file.bytes, 'base64') },
+          file: { $case: 'fileWithBytes', value: Buffer.from(part.file.bytes, 'utf8') },
           mimeType: part.file.mimeType ?? '',
         };
       } else {

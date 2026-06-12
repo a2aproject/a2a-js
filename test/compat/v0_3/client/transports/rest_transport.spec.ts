@@ -106,10 +106,11 @@ describe('LegacyRestTransport', () => {
       });
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
-          id: 't-1',
-          contextId: 'ctx-1',
-          status: { state: 'working' },
+          task: {
+            id: 't-1',
+            contextId: 'ctx-1',
+            status: { state: 'TASK_STATE_WORKING' },
+          },
         })
       );
 
@@ -126,10 +127,11 @@ describe('LegacyRestTransport', () => {
       });
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
-          id: 't-1',
-          contextId: 'ctx-1',
-          status: { state: 'working' },
+          task: {
+            id: 't-1',
+            contextId: 'ctx-1',
+            status: { state: 'TASK_STATE_WORKING' },
+          },
         })
       );
 
@@ -177,13 +179,18 @@ describe('LegacyRestTransport', () => {
   });
 
   describe('sendMessage', () => {
-    it('emits POST /v1/message:send with v0.3 MessageSendParams body', async () => {
+    it('emits POST /v1/message:send with proto-JSON body (no `kind` discriminators)', async () => {
+      // Proto-JSON `SendMessageResponse` envelope: top-level
+      // `task` / `message` oneof case key (no `kind` discriminator),
+      // `Task.status.state` as the proto-JSON enum string
+      // (`TASK_STATE_WORKING`), no `kind: 'task'` on the inner Task.
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
-          id: 't-1',
-          contextId: 'ctx-1',
-          status: { state: 'working' },
+          task: {
+            id: 't-1',
+            contextId: 'ctx-1',
+            status: { state: 'TASK_STATE_WORKING' },
+          },
         })
       );
 
@@ -200,24 +207,30 @@ describe('LegacyRestTransport', () => {
       expect(headers['Accept']).toBe('application/json');
 
       const body = JSON.parse(init2.body as string);
-      // REST body is bare params (no JSON-RPC envelope).
+      // Proto-JSON `SendMessageRequest`: no JSON-RPC envelope, no `kind`
+      // on the inner message, the field name is `message` (per the
+      // proto's `json_name = "message"` on the `request` field).
       expect(body.jsonrpc).toBeUndefined();
       expect(body.method).toBeUndefined();
-      expect(body.message.kind).toBe('message');
-      expect(body.message.role).toBe('user');
+      expect(body.message).toBeDefined();
+      expect(body.message.kind).toBeUndefined();
+      expect(body.message.role).toBe('ROLE_USER');
+      // Inner parts use proto-JSON Part oneof shape (no `kind`).
+      expect(body.message.content[0].text).toBe('hi');
 
       // task result has no messageId; should be translated to v1 Task.
       expect('messageId' in result).toBe(false);
       expect('id' in result && (result as { id: string }).id).toBe('t-1');
     });
 
-    it('translates a v0.3 message-shaped result into a v1 Message', async () => {
+    it('translates a proto-JSON message-shaped result into a v1 Message', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'message',
-          messageId: 'msg-resp',
-          role: 'agent',
-          parts: [],
+          message: {
+            messageId: 'msg-resp',
+            role: 'ROLE_AGENT',
+            content: [],
+          },
         })
       );
 
@@ -227,13 +240,12 @@ describe('LegacyRestTransport', () => {
   });
 
   describe('getTask', () => {
-    it('emits GET /v1/tasks/:id and translates the v0.3 Task to v1 proto', async () => {
+    it('emits GET /v1/tasks/:id and translates the proto-JSON Task to v1 proto', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
           id: 't-1',
           contextId: 'ctx-1',
-          status: { state: 'completed' },
+          status: { state: 'TASK_STATE_COMPLETED' },
         })
       );
 
@@ -250,10 +262,9 @@ describe('LegacyRestTransport', () => {
     it('omits the historyLength query parameter when undefined', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
           id: 't-1',
           contextId: 'ctx-1',
-          status: { state: 'working' },
+          status: { state: 'TASK_STATE_WORKING' },
         })
       );
 
@@ -267,10 +278,9 @@ describe('LegacyRestTransport', () => {
     it('percent-encodes the task id in the URL', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
           id: 'a b/c',
           contextId: 'ctx-1',
-          status: { state: 'working' },
+          status: { state: 'TASK_STATE_WORKING' },
         })
       );
 
@@ -282,13 +292,12 @@ describe('LegacyRestTransport', () => {
   });
 
   describe('cancelTask', () => {
-    it('emits POST /v1/tasks/:id:cancel with no body and translates the v0.3 Task', async () => {
+    it('emits POST /v1/tasks/:id:cancel with no body and translates the proto-JSON Task', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
           id: 't-1',
           contextId: 'ctx-1',
-          status: { state: 'canceled' },
+          status: { state: 'TASK_STATE_CANCELLED' },
         })
       );
 
@@ -368,10 +377,10 @@ describe('LegacyRestTransport', () => {
       };
     }
 
-    it('createTaskPushNotificationConfig POSTs to the v0.3 path with a v0.3 body', async () => {
+    it('createTaskPushNotificationConfig POSTs to the v0.3 path with proto-JSON body', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          taskId: 'task-1',
+          name: 'tasks/task-1/pushNotificationConfigs/cfg-1',
           pushNotificationConfig: {
             id: 'cfg-1',
             url: 'https://webhook.example/notify',
@@ -387,8 +396,11 @@ describe('LegacyRestTransport', () => {
       const init2 = init as RequestInit;
       expect(init2.method).toBe('POST');
       const body = JSON.parse(init2.body as string);
+      // Proto-JSON `TaskPushNotificationConfig` has `name`
+      // (Google API resource name) + `pushNotificationConfig`, not a
+      // bare `{taskId, pushNotificationConfig}` envelope.
       expect(body).toEqual({
-        taskId: 'task-1',
+        name: 'tasks/task-1/pushNotificationConfigs/cfg-1',
         pushNotificationConfig: {
           id: 'cfg-1',
           url: 'https://webhook.example/notify',
@@ -415,7 +427,7 @@ describe('LegacyRestTransport', () => {
     it('getTaskPushNotificationConfig GETs the v0.3 nested path', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          taskId: 'task-1',
+          name: 'tasks/task-1/pushNotificationConfigs/cfg-1',
           pushNotificationConfig: {
             id: 'cfg-1',
             url: 'https://webhook.example/notify',
@@ -437,18 +449,24 @@ describe('LegacyRestTransport', () => {
       expect(result.id).toBe('cfg-1');
     });
 
-    it('listTaskPushNotificationConfig GETs the collection and wraps the array response', async () => {
+    it('listTaskPushNotificationConfig GETs the collection and unwraps the proto-JSON response', async () => {
+      // Proto-JSON `ListTaskPushNotificationConfigResponse` wraps the
+      // items in a `configs[]` field (per the v0.3 proto), not a bare
+      // JSON array. Each config carries the Google API resource
+      // `name` rather than a bare `taskId`.
       mockFetch.mockResolvedValue(
-        makeJsonResponse([
-          {
-            taskId: 'task-1',
-            pushNotificationConfig: {
-              id: 'cfg-1',
-              url: 'https://webhook.example/notify',
-              token: 'tok',
+        makeJsonResponse({
+          configs: [
+            {
+              name: 'tasks/task-1/pushNotificationConfigs/cfg-1',
+              pushNotificationConfig: {
+                id: 'cfg-1',
+                url: 'https://webhook.example/notify',
+                token: 'tok',
+              },
             },
-          },
-        ])
+          ],
+        })
       );
 
       const req: V1ListTaskPushNotificationConfigsRequest = {
@@ -530,32 +548,41 @@ describe('LegacyRestTransport', () => {
   });
 
   describe('streaming', () => {
-    it('sendMessageStream POSTs to /v1/message:stream and translates bare v0.3 SSE events', async () => {
+    it('sendMessageStream POSTs to /v1/message:stream and decodes proto-JSON SSE events', async () => {
+      // Proto-JSON `StreamResponse` envelope per SSE event: top-level
+      // oneof key chooses the branch (`task`, `message`, `statusUpdate`,
+      // `artifactUpdate`); no `kind` discriminator anywhere. Inner
+      // proto-JSON Task / Message / TaskStatusUpdateEvent /
+      // TaskArtifactUpdateEvent shapes.
       const events: Record<string, unknown>[] = [
         {
-          kind: 'task',
-          id: 't-1',
-          contextId: 'ctx-1',
-          status: { state: 'submitted' },
+          task: {
+            id: 't-1',
+            contextId: 'ctx-1',
+            status: { state: 'TASK_STATE_SUBMITTED' },
+          },
         },
         {
-          kind: 'status-update',
-          taskId: 't-1',
-          contextId: 'ctx-1',
-          final: false,
-          status: { state: 'working' },
+          statusUpdate: {
+            taskId: 't-1',
+            contextId: 'ctx-1',
+            final: false,
+            status: { state: 'TASK_STATE_WORKING' },
+          },
         },
         {
-          kind: 'artifact-update',
-          taskId: 't-1',
-          contextId: 'ctx-1',
-          artifact: { artifactId: 'a-1', parts: [] },
+          artifactUpdate: {
+            taskId: 't-1',
+            contextId: 'ctx-1',
+            artifact: { artifactId: 'a-1', parts: [] },
+          },
         },
         {
-          kind: 'message',
-          messageId: 'm-1',
-          role: 'agent',
-          parts: [],
+          message: {
+            messageId: 'm-1',
+            role: 'ROLE_AGENT',
+            content: [],
+          },
         },
       ];
       mockFetch.mockResolvedValue(makeSseResponse(events));
@@ -577,13 +604,21 @@ describe('LegacyRestTransport', () => {
       const headers = init2.headers as Record<string, string>;
       expect(headers['Accept']).toBe('text/event-stream');
 
-      // Body shape: bare v0.3 params (no JSON-RPC envelope).
+      // Body is proto-JSON SendMessageRequest (no JSON-RPC envelope,
+      // no `kind` discriminator on the inner message).
       const body = JSON.parse(init2.body as string);
       expect(body.jsonrpc).toBeUndefined();
-      expect(body.message.kind).toBe('message');
+      expect(body.message).toBeDefined();
+      expect(body.message.kind).toBeUndefined();
+      expect(body.message.role).toBe('ROLE_USER');
     });
 
-    it('resubscribeTask POSTs to /v1/tasks/:id:subscribe with no body', async () => {
+    it('resubscribeTask GETs /v1/tasks/:id:subscribe with no body', async () => {
+      // The v0.3 proto's `google.api.http` annotation for `SubscribeToTask`
+      // maps to `get: "/v1/tasks/{id}:subscribe"` (no request body), and
+      // the canonical v0.3 reference (a2a-python's
+      // `A2ARESTFastAPIApplication` in <=0.3.24) only registers the GET
+      // method — sending POST yields 405 Method Not Allowed.
       mockFetch.mockResolvedValue(makeSseResponse([]));
 
       const req: V1SubscribeToTaskRequest = { tenant: '', id: 't-1' };
@@ -596,7 +631,7 @@ describe('LegacyRestTransport', () => {
       const [url, init] = mockFetch.mock.calls[0]!;
       expect(url).toBe(`${ENDPOINT}/v1/tasks/t-1:subscribe`);
       const init2 = init as RequestInit;
-      expect(init2.method).toBe('POST');
+      expect(init2.method).toBe('GET');
       expect(init2.body).toBeUndefined();
     });
 
@@ -616,10 +651,9 @@ describe('LegacyRestTransport', () => {
     it('forwards serviceParameters headers to fetch', async () => {
       mockFetch.mockResolvedValue(
         makeJsonResponse({
-          kind: 'task',
           id: 't-1',
           contextId: 'ctx-1',
-          status: { state: 'working' },
+          status: { state: 'TASK_STATE_WORKING' },
         })
       );
 

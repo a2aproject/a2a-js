@@ -284,5 +284,53 @@ describe('DefaultAgentCardResolver', () => {
       expect(card.supportedInterfaces[0]!.protocolVersion).to.equal('0.3');
       expect(card.supportedInterfaces[0]!.url).to.equal('https://example.com/legacy');
     });
+
+    it('hybrid card (v0.3 surface + embedded v1.0 supportedInterfaces) → v1.0 transport', async () => {
+      // A v1.0+legacyCompat server can answer a header-less card fetch
+      // (which would normally be routed to the legacy v0.3 handler)
+      // with a "superset" card whose JSON document carries BOTH v0.3
+      // top-level fields AND the source v1.0 `supportedInterfaces[]`.
+      // The resolver MUST treat the v1.0 shape as authoritative and
+      // pass the v1.0 card through unchanged — otherwise it would
+      // downgrade every interface to `protocolVersion: '0.3'` and
+      // route requests through the compat path for transports the
+      // peer may not have v0.3 compat for.
+      const hybridCard = {
+        ...v03ServerCard,
+        url: 'https://example.com/v1',
+        preferredTransport: 'JSONRPC',
+        additionalInterfaces: [{ url: 'https://example.com/grpc', transport: 'GRPC' }],
+        supportedInterfaces: [
+          {
+            url: 'https://example.com/v1',
+            protocolBinding: 'JSONRPC',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+          {
+            url: 'https://example.com/grpc',
+            protocolBinding: 'GRPC',
+            tenant: '',
+            protocolVersion: '1.0',
+          },
+        ],
+      };
+
+      const resolver = new DefaultAgentCardResolver({
+        fetchImpl: mockFetch,
+        legacyCompat: { enabled: true },
+      });
+      mockFetch.mockResolvedValue(new Response(JSON.stringify(hybridCard), { status: 200 }));
+
+      const card = await resolver.resolve('https://example.com');
+
+      // The v1.0 entries flow through with their native '1.0' stamp;
+      // no v0.3 translation happens.
+      expect(card.supportedInterfaces).to.have.length(2);
+      expect(card.supportedInterfaces[0]!.protocolVersion).to.equal('1.0');
+      expect(card.supportedInterfaces[0]!.url).to.equal('https://example.com/v1');
+      expect(card.supportedInterfaces[1]!.protocolVersion).to.equal('1.0');
+      expect(card.supportedInterfaces[1]!.protocolBinding).to.equal('GRPC');
+    });
   });
 });

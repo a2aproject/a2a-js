@@ -138,6 +138,57 @@ describe('SSE Utils', () => {
       expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
       expect(JSON.parse(events[1].data)).toEqual({ id: 2 });
     });
+
+    it('joins multiple consecutive data: lines per the SSE spec', async () => {
+      // Per the HTML SSE spec: when an event has more than one `data:`
+      // field, the user-agent concatenates them with `\n`. This is what
+      // pretty-printing JSON via sse_starlette (a2a-python) produces.
+      const sseData = 'data: {\ndata:   "id": 1\ndata: }\n\n';
+      const response = createResponse(sseData);
+
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(1);
+      // Joined with `\n`; the JSON.parse round-trip is what matters.
+      expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
+    });
+
+    it('ignores SSE comment lines (lines starting with `:`)', async () => {
+      // Per SSE: lines starting with `:` are comments / heartbeats and
+      // must be ignored. Common with proxies (nginx) and Python ASGI
+      // servers (sse_starlette) emitting `: ping\n\n` to keep
+      // connections warm.
+      const sseData = ': ping\ndata: {"id":1}\n\n: another\ndata: {"id":2}\n\n';
+      const response = createResponse(sseData);
+
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(2);
+      expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
+      expect(JSON.parse(events[1].data)).toEqual({ id: 2 });
+    });
+
+    it('handles \\r\\n line endings', async () => {
+      // Per the SSE spec, lines may end with `\r\n`, `\r`, or `\n`. Our
+      // tokenizer splits on `\n` and strips an optional trailing `\r`
+      // — this exercises the `\r`-stripping branch.
+      const sseData = 'data: {"id":1}\r\n\r\n';
+      const response = createResponse(sseData);
+
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(1);
+      expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
+    });
   });
 
   describe('Symmetry: parser understands formatter output', () => {

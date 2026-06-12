@@ -345,7 +345,12 @@ describe('restHandler', () => {
   });
 
   describe('POST /tasks/:taskId:cancel', () => {
-    it('should cancel task and return 202 Accepted', async () => {
+    it('should cancel task and return 200 OK', async () => {
+      // Returns 200 OK, not 202 Accepted: the response body is the
+      // fully-materialized post-cancellation Task. a2a-go's v1.0 REST
+      // client treats any non-200 status as a hard error (the body
+      // is also discarded), so 202 would surface as `ErrServerError`
+      // in cross-SDK calls even when the cancel actually succeeded.
       const cancelledTask = {
         ...testTask,
         status: { state: TaskState.TASK_STATE_CANCELED },
@@ -355,7 +360,7 @@ describe('restHandler', () => {
       const response = await request(app)
         .post('/tasks/task-1:cancel')
         .set('A2A-Version', '1.0')
-        .expect(202);
+        .expect(200);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
       assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELED');
@@ -1013,13 +1018,16 @@ describe('restHandler', () => {
       ],
     };
 
-    // v0.3 message payload (camelCase JSON, with the `kind` discriminator).
+    // Proto-JSON `SendMessageRequest` body — the wire shape the
+    // v0.3 REST endpoint expects, per the v0.3 a2a.proto's
+    // `google.api.http` annotation and matching what a2a-python's
+    // REST handler accepts (NOT the legacy v0.3 JSON-RPC shape with
+    // `kind` discriminators).
     const legacyMessageBody = {
       message: {
-        kind: 'message',
         messageId: 'msg-legacy-1',
-        role: 'user',
-        parts: [{ kind: 'text', text: 'hello' }],
+        role: 'ROLE_USER',
+        content: [{ text: 'hello' }],
       },
     };
 
@@ -1058,8 +1066,9 @@ describe('restHandler', () => {
 
       expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
       expect(v1SendMessageStub).not.toHaveBeenCalled();
-      assert.equal(response.body.kind, 'task');
-      assert.equal(response.body.id, 'legacy-task-1');
+      // Proto-JSON `SendMessageResponse`: oneof `payload` flattens to
+      // a top-level `task` (or `message`) field, no `kind` discriminator.
+      assert.equal(response.body.task.id, 'legacy-task-1');
     });
 
     it('routes POST /message:send to the v1.0 handler', async () => {
@@ -1118,8 +1127,8 @@ describe('restHandler', () => {
         .send(legacyMessageBody)
         .expect(201);
 
-      assert.equal(response.body.kind, 'task');
-      assert.equal(response.body.id, 'legacy-task-v1card');
+      // Proto-JSON response: task is nested under top-level `task` key.
+      assert.equal(response.body.task.id, 'legacy-task-v1card');
       expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
       expect(v1SendMessageStub).not.toHaveBeenCalled();
     });
@@ -1143,7 +1152,11 @@ describe('restHandler', () => {
         .expect(200);
 
       assert.include(response.headers['content-type'], 'text/event-stream');
-      assert.include(response.text, '"kind":"task"');
+      // SSE event body is proto-JSON of `StreamResponse`: the `task`
+      // payload is nested under the oneof field name, with the inner
+      // `Task` itself NOT carrying a `kind` discriminator.
+      assert.include(response.text, '"task":{');
+      assert.include(response.text, '"id":"legacy-stream-task"');
     });
 
     it('uses the legacy error mapper (bare body, no details[]) on legacy-path errors', async () => {

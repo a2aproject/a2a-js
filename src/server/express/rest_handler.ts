@@ -145,7 +145,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       res.setHeader('Content-Type', A2A_CONTENT_TYPE);
       next();
     },
-    express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE] }),
+    express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE], strict: false }),
     restErrorHandler
   );
 
@@ -481,9 +481,9 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * The task may not be immediately canceled depending on its current state.
    *
    * @param req.params.taskId - Task identifier
-   * @returns 202 Accepted with RestTask (task is being canceled)
+   * @returns 200 OK with RestTask (task in its post-cancel state)
    * @returns 404 Not Found if task doesn't exist
-   * @returns 409 Conflict if task cannot be canceled
+   * @returns 400 Bad Request if task cannot be canceled
    */
   registerRoute('post', '/tasks/:taskId\\:cancel', async (req, res) => {
     const context = await buildContext(req);
@@ -492,7 +492,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       context,
       (req.query.tenant as string) || ''
     );
-    sendResponse<Task>(res, HTTP_STATUS.ACCEPTED, context, result, Task);
+    sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
 
   /**

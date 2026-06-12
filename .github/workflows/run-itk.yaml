@@ -2,26 +2,36 @@ name: Run ITK
 
 on:
   push:
-    branches: [ "main", "epic" ]
+    branches: ["main", "epic"]
   pull_request:
     paths:
       - 'src/**'
       - 'itk/**'
+      - 'package.json'
+      - 'package-lock.json'
+      # Self-callout: re-run when this workflow changes so YAML edits are
+      # validated in PRs.
+      - '.github/workflows/run-itk.yaml'
 
 permissions:
   contents: read
 
 env:
-  # Tag of the a2a-samples
-  A2A_SAMPLES_REVISION: itk-v.02-alpha
+  # Revision of the a2a-itk repo (https://github.com/a2aproject/a2a-itk)
+  # whose `protos/instruction.proto`, `agents/{go,python}/v{03,v10}/`
+  # baselines, and `Dockerfile` drive the cross-SDK compatibility harness.
+  # Pinned to `main` (matching a2a-python's `itk.yaml` and a2a-go's
+  # `itk.yaml`) so all SDKs run against the same source of truth.
+  A2A_ITK_REVISION: main
 
-# Only run the latest job
+# Only run the latest job for a given ref
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
   cancel-in-progress: true
 
 jobs:
   itk-test:
+    name: ITK
     runs-on: ubuntu-latest
 
     steps:
@@ -43,8 +53,8 @@ jobs:
       - name: Run Error Handling Tests
         run: bash itk/run_error_tests.sh
 
-      - name: Run ITK Tests
+      - name: Run ITK Tests (PR scenarios)
         run: bash run_itk.sh
         working-directory: itk
         env:
-          A2A_SAMPLES_REVISION: ${{ env.A2A_SAMPLES_REVISION }}
+          A2A_ITK_REVISION: ${{ env.A2A_ITK_REVISION }}

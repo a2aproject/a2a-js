@@ -51,10 +51,24 @@ const LEGACY_ONLY_TOP_LEVEL_FIELDS = [
  *
  * Returns `false` for non-objects, null, and anything that lacks the
  * above indicators (which includes well-formed v1.0 cards).
+ *
+ * **Hybrid-card override.** A "superset" card emitted by
+ * `toCompatAgentCard({ embedV1Interfaces: true })` carries BOTH a v0.3
+ * top-level surface AND a v1.0 `supportedInterfaces[]`. When the
+ * payload contains a non-empty `supportedInterfaces` array, this
+ * function treats the v1.0 representation as authoritative and
+ * returns `false` — the caller's v1.0 parser will read
+ * `supportedInterfaces` directly, skipping the lossy legacy
+ * translation that would otherwise stamp every entry with
+ * `protocolVersion: '0.3'`.
  */
 export function isLegacyAgentCard(raw: unknown): boolean {
   if (!raw || typeof raw !== 'object') return false;
   const card = raw as Record<string, unknown>;
+
+  if (Array.isArray(card.supportedInterfaces) && card.supportedInterfaces.length > 0) {
+    return false;
+  }
 
   if (typeof card.url === 'string' && !('supportedInterfaces' in card)) {
     return true;

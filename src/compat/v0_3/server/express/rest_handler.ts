@@ -36,6 +36,17 @@ import {
 } from '../../constants.js';
 import { isLegacyVersion } from '../../translate/versions.js';
 import type * as legacy from '../../types/types.js';
+import {
+  ListTaskPushNotificationConfigResponse as LegacyProtoListTaskPushNotificationConfigResponse,
+  SendMessageRequest as LegacyProtoSendMessageRequest,
+  SendMessageResponse as LegacyProtoSendMessageResponse,
+  StreamResponse as LegacyProtoStreamResponse,
+  Task as LegacyProtoTask,
+  TaskPushNotificationConfig as LegacyProtoTaskPushNotificationConfig,
+  AgentCard as LegacyProtoAgentCard,
+} from '../../types/pb/a2a.js';
+import { FromProto } from '../../types/converters/from_proto.js';
+import { ToProto } from '../../types/converters/to_proto.js';
 import { A2AError as LegacyA2AError } from '../error.js';
 import {
   HTTP_STATUS,
@@ -139,7 +150,13 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
       res.setHeader('Content-Type', LEGACY_JSON_CONTENT_TYPE);
       next();
     },
-    express.json({ type: LEGACY_JSON_CONTENT_TYPE }),
+    // `strict: false` so the parser accepts JSON primitives at the top
+    // level. The v0.3 reference clients (a2a-go's `aclient/rest.go` and
+    // a2a-python's REST client) issue empty-payload POSTs by marshaling
+    // `nil` to the literal `null` — with strict mode body-parser would
+    // reject that 4-byte body with a 400 SyntaxError before any route
+    // handler runs. See the parallel fix in `server/express/rest_handler.ts`.
+    express.json({ type: LEGACY_JSON_CONTENT_TYPE, strict: false }),
     legacyRestErrorHandler
   );
 
@@ -198,15 +215,22 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   };
 
   /**
-   * Sends a JSON response with the given status code. Bodies are
-   * already v0.3-shaped (no proto serializer roundtrip needed). For
-   * 204 responses the body is omitted.
+   * Sends a JSON response with the given status code. The body is
+   * pre-serialized proto-JSON (already passed through the matching
+   * proto type's `toJSON` by the route handler). For 204 responses the
+   * body is omitted.
+   *
+   * v0.3 REST emits proto-JSON of the v0.3 proto types — per the v0.3
+   * a2a.proto's `google.api.http` annotations + `body: "*"` mapping
+   * (matching what a2a-python's `A2ARESTFastAPIApplication` and
+   * a2a-go's REST router emit). This is NOT the v0.3 JSON-RPC body
+   * shape with `kind` discriminators on parts.
    */
-  const sendResponse = <T>(
+  const sendResponse = (
     res: Response,
     statusCode: number,
     context: ServerCallContext,
-    body?: T
+    body?: unknown
   ): void => {
     setExtensionsHeader(res, context);
     res.status(statusCode);
@@ -218,7 +242,90 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   };
 
   /**
-   * Streams v0.3-shaped events back as Server-Sent Events.
+   * Encodes a legacy `Task | Message` (the v0.3 result of
+   * `message/send`) as proto-JSON of `SendMessageResponse`. This is
+   * the wire-shape v0.3 REST clients expect (a2a-python's REST handler
+   * runs the response through `proto_utils.ToProto.message_send_result`
+   * and serializes via `json_format`).
+   */
+  const encodeSendMessageResult = (result: legacy.Task | legacy.Message): unknown => {
+    const protoResult = ToProto.messageSendResult(result);
+    if (!protoResult) {
+      throw LegacyA2AError.internalError('sendMessage produced no result.');
+    }
+    return LegacyProtoSendMessageResponse.toJSON(protoResult);
+  };
+
+  /** Legacy `Task` → proto-JSON of `Task`. */
+  const encodeTask = (task: legacy.Task): unknown => {
+    return LegacyProtoTask.toJSON(ToProto.task(task));
+  };
+
+  /** Legacy `TaskPushNotificationConfig` → proto-JSON. */
+  const encodeTaskPushNotificationConfig = (cfg: legacy.TaskPushNotificationConfig): unknown => {
+    return LegacyProtoTaskPushNotificationConfig.toJSON(ToProto.taskPushNotificationConfig(cfg));
+  };
+
+  /**
+   * Legacy `AgentCard` → proto-JSON. Used for the
+   * `GET /v1/card` (authenticated extended card) response.
+   */
+  const encodeAgentCard = (card: legacy.AgentCard): unknown => {
+    return LegacyProtoAgentCard.toJSON(ToProto.agentCard(card));
+  };
+
+  /**
+   * Legacy `TaskPushNotificationConfig[]` → proto-JSON of
+   * `ListTaskPushNotificationConfigResponse` (wraps the list in a
+   * `configs[]` field per the v0.3 proto).
+   */
+  const encodeListTaskPushNotificationConfigs = (
+    configs: legacy.TaskPushNotificationConfig[]
+  ): unknown => {
+    return LegacyProtoListTaskPushNotificationConfigResponse.toJSON({
+      configs: configs.map((c) => ToProto.taskPushNotificationConfig(c)),
+      nextPageToken: '',
+    });
+  };
+
+  /**
+   * Decodes a proto-JSON `SendMessageRequest` body into the legacy
+   * `MessageSendParams` shape the rest of the transport handler
+   * consumes. Mirrors the inverse of `encodeSendMessageResult`.
+   */
+  const decodeSendMessageRequest = (rawBody: unknown): legacy.MessageSendParams => {
+    const proto = LegacyProtoSendMessageRequest.fromJSON(rawBody ?? {});
+    const legacyParams = FromProto.messageSendParams(proto);
+    return legacyParams;
+  };
+
+  /** Decodes proto-JSON `TaskPushNotificationConfig` into the legacy shape. */
+  const decodeTaskPushNotificationConfig = (
+    rawBody: unknown
+  ): legacy.TaskPushNotificationConfig => {
+    const proto = LegacyProtoTaskPushNotificationConfig.fromJSON(rawBody ?? {});
+    return FromProto.taskPushNotificationConfig(proto);
+  };
+
+  /**
+   * Encodes a single legacy stream result (`Task | Message |
+   * TaskStatusUpdateEvent | TaskArtifactUpdateEvent`) as proto-JSON of
+   * `StreamResponse` (a `oneof payload` envelope). This is the
+   * SSE event-data wire shape v0.3 REST clients expect.
+   */
+  const encodeStreamEvent = (
+    event: legacy.SendStreamingMessageSuccessResponse['result']
+  ): unknown => {
+    const proto = ToProto.messageStreamResult(event);
+    if (!proto) {
+      throw LegacyA2AError.internalError('Stream produced an unrepresentable event.');
+    }
+    return LegacyProtoStreamResponse.toJSON(proto);
+  };
+
+  /**
+   * Streams events back as Server-Sent Events. Each event's `data:`
+   * field is the proto-JSON serialization of `StreamResponse`.
    *
    * Pulls the first event before flushing headers so an early error
    * (e.g. `TaskNotFoundError`) is returned as a proper HTTP error code
@@ -248,10 +355,10 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
 
     try {
       if (!firstResult.done) {
-        res.write(formatSSEEvent(firstResult.value));
+        res.write(formatSSEEvent(encodeStreamEvent(firstResult.value)));
       }
       for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
-        res.write(formatSSEEvent(event));
+        res.write(formatSSEEvent(encodeStreamEvent(event)));
       }
     } catch (streamError: unknown) {
       console.error('Legacy SSE streaming error:', streamError);
@@ -314,24 +421,25 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const result = await transportHandler.getAuthenticatedExtendedAgentCard(context);
-      sendResponse<legacy.AgentCard>(res, HTTP_STATUS.OK, context, result);
+      sendResponse(res, HTTP_STATUS.OK, context, encodeAgentCard(result));
     })
   );
 
   /**
    * POST /v1/message:send
    *
-   * Sends a message synchronously. Returns either a v0.3 `Task` or `Message`.
+   * Sends a message synchronously. Returns proto-JSON of
+   * `SendMessageResponse` (a `oneof payload { task | msg }` envelope).
    * The colon is escaped to satisfy Express's path-to-regexp parser.
    */
   router.post(
     '/v1/message\\:send',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const params = req.body as legacy.MessageSendParams;
+      const params = decodeSendMessageRequest(req.body);
       const result = await transportHandler.sendMessage(params, context);
       // Match the v0.3 reference status: 201 Created for successful sends.
-      sendResponse(res, HTTP_STATUS.CREATED, context, result);
+      sendResponse(res, HTTP_STATUS.CREATED, context, encodeSendMessageResult(result));
     })
   );
 
@@ -344,18 +452,71 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
     '/v1/message\\:stream',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const params = req.body as legacy.MessageSendParams;
+      const params = decodeSendMessageRequest(req.body);
       const stream = await transportHandler.sendMessageStream(params, context);
       await sendStreamResponse(res, stream, context);
     })
   );
+
+  // Route registration order matters: Express 5's path-to-regexp v8
+  // matches `:param` GREEDILY — it captures everything up to the next
+  // `/`, including a literal `:`. So `GET /v1/tasks/:taskId` would
+  // swallow `GET /v1/tasks/{id}:subscribe` (capturing `taskId =
+  // "{id}:subscribe"`) if registered first. The same goes for `:cancel`.
+  // We therefore register the more specific `:cancel` / `:subscribe`
+  // routes BEFORE the generic `:taskId` route. (Express 4's
+  // path-to-regexp v0 anchored on the literal `:`, so this ordering
+  // was a no-op there.)
+
+  /**
+   * POST /v1/tasks/:taskId:cancel
+   *
+   * Attempts to cancel a task. Returns 200 OK with the
+   * post-cancellation Task. (Not 202 Accepted: the response body is
+   * the fully-materialized Task, and v0.3 reference clients — both
+   * a2a-go's and a2a-python's REST transports — treat anything other
+   * than 200 as a hard error.)
+   */
+  router.post(
+    '/v1/tasks/:taskId\\:cancel',
+    asyncHandler(async (req, res) => {
+      const context = await buildContext(req);
+      const result = await transportHandler.cancelTask(req.params.taskId!, context);
+      sendResponse(res, HTTP_STATUS.OK, context, encodeTask(result));
+    })
+  );
+
+  /**
+   * GET or POST /v1/tasks/:taskId:subscribe
+   *
+   * Resubscribes to a task's update stream via SSE.
+   *
+   * The v0.3 proto's `google.api.http` annotation for `SubscribeToTask`
+   * maps to `get: "/v1/tasks/{id}:subscribe"` (no request body), and
+   * the canonical v0.3 reference (`A2ARESTFastAPIApplication` in
+   * a2a-python <= 0.3.24) only registers GET. A subset of v0.3
+   * compatibility adapters (e.g. a2a-python's `src/a2a/compat/v0_3/`)
+   * additionally accept POST for tolerance. We register both: GET so
+   * we can be called by the v0.3 reference (this is required for
+   * interop with the python_v03 / go_v03 baselines), and POST so
+   * existing v1.0-shaped clients that send POST keep working.
+   */
+  const resubscribeHandler = asyncHandler(async (req, res) => {
+    const context = await buildContext(req);
+    const stream = await transportHandler.resubscribe(req.params.taskId!, context);
+    await sendStreamResponse(res, stream, context);
+  });
+  router.get('/v1/tasks/:taskId\\:subscribe', resubscribeHandler);
+  router.post('/v1/tasks/:taskId\\:subscribe', resubscribeHandler);
 
   /**
    * GET /v1/tasks/:taskId
    *
    * Retrieves a task. Accepts both `?historyLength=` and `?history_length=`
    * for compatibility with the v0.3 reference (which used snake_case query
-   * parameters in places).
+   * parameters in places). Registered AFTER `:cancel` / `:subscribe` so
+   * the param doesn't greedily swallow the literal-colon suffixes — see
+   * note above.
    */
   router.get(
     '/v1/tasks/:taskId',
@@ -363,35 +524,7 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
       const context = await buildContext(req);
       const historyLength = req.query.historyLength ?? req.query.history_length;
       const result = await transportHandler.getTask(req.params.taskId!, context, historyLength);
-      sendResponse<legacy.Task>(res, HTTP_STATUS.OK, context, result);
-    })
-  );
-
-  /**
-   * POST /v1/tasks/:taskId:cancel
-   *
-   * Attempts to cancel a task. Returns 202 Accepted on success.
-   */
-  router.post(
-    '/v1/tasks/:taskId\\:cancel',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const result = await transportHandler.cancelTask(req.params.taskId!, context);
-      sendResponse<legacy.Task>(res, HTTP_STATUS.ACCEPTED, context, result);
-    })
-  );
-
-  /**
-   * POST /v1/tasks/:taskId:subscribe
-   *
-   * Resubscribes to a task's update stream via SSE.
-   */
-  router.post(
-    '/v1/tasks/:taskId\\:subscribe',
-    asyncHandler(async (req, res) => {
-      const context = await buildContext(req);
-      const stream = await transportHandler.resubscribe(req.params.taskId!, context);
-      await sendStreamResponse(res, stream, context);
+      sendResponse(res, HTTP_STATUS.OK, context, encodeTask(result));
     })
   );
 
@@ -404,9 +537,9 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
     '/v1/tasks/:taskId/pushNotificationConfigs',
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
-      const params = req.body as legacy.TaskPushNotificationConfig;
+      const params = decodeTaskPushNotificationConfig(req.body);
       const result = await transportHandler.setTaskPushNotificationConfig(params, context);
-      sendResponse<legacy.TaskPushNotificationConfig>(res, HTTP_STATUS.CREATED, context, result);
+      sendResponse(res, HTTP_STATUS.CREATED, context, encodeTaskPushNotificationConfig(result));
     })
   );
 
@@ -423,7 +556,7 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
         req.params.taskId!,
         context
       );
-      sendResponse<legacy.TaskPushNotificationConfig[]>(res, HTTP_STATUS.OK, context, result);
+      sendResponse(res, HTTP_STATUS.OK, context, encodeListTaskPushNotificationConfigs(result));
     })
   );
 
@@ -441,7 +574,7 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
         req.params.configId!,
         context
       );
-      sendResponse<legacy.TaskPushNotificationConfig>(res, HTTP_STATUS.OK, context, result);
+      sendResponse(res, HTTP_STATUS.OK, context, encodeTaskPushNotificationConfig(result));
     })
   );
 

@@ -115,7 +115,16 @@ export async function* parseSseStream(
     let lineEndIndex: number;
 
     while ((lineEndIndex = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.substring(0, lineEndIndex).trim();
+      // Per SSE spec a single trailing `\r` on the line is also a
+      // line terminator (lines may end with `\r\n`, `\r`, or `\n`).
+      // Strip the trailing `\r` here rather than calling `.trim()`,
+      // which would also eat leading/trailing whitespace inside the
+      // field value (e.g. a JSON-formatted `data:` line whose
+      // content starts with a space). The `data:` parser below
+      // already handles the spec-required optional single space
+      // after the colon.
+      let line = buffer.substring(0, lineEndIndex);
+      if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
       buffer = buffer.substring(lineEndIndex + 1);
 
       if (line === '') {
@@ -125,11 +134,18 @@ export async function* parseSseStream(
           eventData = '';
           eventType = 'message';
         }
+      } else if (line.startsWith(':')) {
+        // Comment line per the SSE spec — ignored.
       } else if (line.startsWith('event:')) {
-        eventType = line.substring('event:'.length).trim();
+        eventType = stripOptionalLeadingSpace(line.substring('event:'.length));
       } else if (line.startsWith('data:')) {
-        // Expect well-formed JSON on a single data line
-        eventData = line.substring('data:'.length).trim();
+        // Per the SSE spec, multiple consecutive `data:` lines within
+        // a single event are joined by `\n`. Server implementations
+        // (e.g. sse_starlette in a2a-python) take advantage of this
+        // to pretty-print JSON payloads across multiple lines. Append
+        // instead of overwriting to preserve the full payload.
+        const fieldValue = stripOptionalLeadingSpace(line.substring('data:'.length));
+        eventData = eventData === '' ? fieldValue : `${eventData}\n${fieldValue}`;
       }
     }
   }
@@ -138,6 +154,15 @@ export async function* parseSseStream(
   if (eventData) {
     yield { type: eventType, data: eventData };
   }
+}
+
+/**
+ * Per the SSE spec (HTML Living Standard, §9.2.6), the optional single
+ * leading space after the field-name colon is consumed by the parser.
+ * Trailing whitespace and embedded whitespace are preserved.
+ */
+function stripOptionalLeadingSpace(value: string): string {
+  return value.startsWith(' ') ? value.substring(1) : value;
 }
 
 /**
