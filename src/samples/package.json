@@ -17,7 +17,7 @@
     "genkit": "^1.8.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "tsx": "^4.19.3"
+    "tsx": "^4.22.4"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.10.2",
