@@ -29,12 +29,18 @@ permissions:
   # `nightly-metrics` prerelease asset.
   contents: write
 
-# Serialize nightly runs so a manual `workflow_dispatch`, a `push` to
-# main/epic, and the scheduled cron don't race on the release asset
-# upload (they all target the same `nightly-metrics` tag's
-# `itk_js.json` file).
+# Only cancel earlier in-flight runs for the SAME git ref. Without the
+# `github.head_ref || github.ref` scoping, a manual `workflow_dispatch`
+# on a feature branch would cancel a concurrently running scheduled
+# cron (or vice-versa). The release-asset upload step targets the same
+# `nightly-metrics` tag's `itk_js.json` across all triggers, but
+# `softprops/action-gh-release` does an idempotent per-file overwrite
+# (last writer wins), so concurrent uploads from different refs cannot
+# corrupt the artifact — they can at worst lose one run's history
+# append, which is acceptable. Matches the PR workflow's pattern in
+# `.github/workflows/run-itk.yaml`.
 concurrency:
-  group: itk-nightly
+  group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
   cancel-in-progress: true
 
 jobs:
