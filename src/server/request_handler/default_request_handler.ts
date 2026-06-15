@@ -176,7 +176,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       ) {
         throw new RequestMalformedError(
           `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
-            `does not match task '${task.id}' contextId '${task.contextId}'`
+          `does not match task '${task.id}' contextId '${task.contextId}'`
         );
       }
       // Add incomingMessage to history and save the task.
@@ -1063,12 +1063,16 @@ export type ExtendedAgentCardProvider = (context: ServerCallContext) => Promise<
  */
 function trackLatestTaskState(bus: ExecutionEventBus): () => TaskState | undefined {
   let lastState: TaskState | undefined;
-  bus.on('event', (event) => {
+  const listener = (event: AgentExecutionEvent) => {
     if (event.kind === 'task' && event.data.status?.state !== undefined) {
       lastState = event.data.status.state;
     } else if (event.kind === 'statusUpdate' && event.data.status?.state !== undefined) {
       lastState = event.data.status.state;
     }
-  });
-  return () => lastState;
+  };
+  bus.on('event', listener);
+  return () => {
+    bus.off('event', listener);
+    return lastState;
+  };
 }
