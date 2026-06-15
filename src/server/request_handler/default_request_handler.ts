@@ -176,7 +176,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       ) {
         throw new RequestMalformedError(
           `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
-          `does not match task '${task.id}' contextId '${task.contextId}'`
+            `does not match task '${task.id}' contextId '${task.contextId}'`
         );
       }
       // Add incomingMessage to history and save the task.
