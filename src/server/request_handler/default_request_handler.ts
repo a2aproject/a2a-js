@@ -56,7 +56,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-import { TERMINAL_STATE_LIST, isTask, StreamPattern } from '../utils.js';
+import { INTERRUPTED_STATE_LIST, TERMINAL_STATE_LIST, isTask, StreamPattern } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors.js';
 
@@ -162,7 +162,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
       }
       if (task.status?.state !== undefined && TERMINAL_STATE_LIST.includes(task.status.state)) {
-        // Throw UnsupportedOperationError as required by TCK for terminal tasks.
+        // Terminal tasks are immutable per §3.5 — refinements must
+        // start a new task in the same context.
         throw new UnsupportedOperationError(
           `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
         );
@@ -323,6 +324,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     requestContext: RequestContext,
     finalMessageForAgent: Message
   ): void {
+    // Subscribe a lightweight listener that tracks the last task state
+    // published on the bus. We can't rely on `resultManager.getCurrentTask()`
+    // in the `.finally` block because the consumer loop that drains the
+    // queue into `ResultManager` runs in a separate microtask: by the
+    // time `.finally()` runs, the consumer has not necessarily processed
+    // the events yet.
+    const stateTracker = trackLatestTaskState(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -381,9 +389,38 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       })
       .finally(() => {
-        eventBus.finished();
-        this.eventBusManager.cleanupByTaskId(taskId);
+        this._tearDownOrKeepBus(taskId, eventBus, stateTracker());
       });
+  }
+
+  /**
+   * Decides whether to fully tear down the event bus or keep it alive
+   * for a future resubscribe / follow-up message.
+   *
+   * The bus is torn down when the task reached a terminal state
+   * (COMPLETED / FAILED / CANCELED / REJECTED) — no further events can
+   * arrive — and also when no Task was ever produced (the bare-Message
+   * pattern in §3.1.2). For an interrupted state
+   * (INPUT_REQUIRED / AUTH_REQUIRED) the bus is retained so that
+   * `tasks/resubscribe` can attach and a follow-up `message/send` with
+   * the same `taskId` resumes execution through `createOrGetByTaskId`.
+   */
+  private _tearDownOrKeepBus(
+    taskId: string,
+    eventBus: ExecutionEventBus,
+    lastState: TaskState | undefined
+  ): void {
+    const isInterrupted = lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState);
+    if (isInterrupted) {
+      // Bus stays alive AND unsignalled. Active consumers have already
+      // unblocked via the interrupted-state check inside
+      // `ExecutionEventQueue.events()`, and resubscribers can attach
+      // via `getByTaskId(taskId)` until the next send_message resumes
+      // execution and ultimately drives the task to a terminal state.
+      return;
+    }
+    eventBus.finished();
+    this.eventBusManager.cleanupByTaskId(taskId);
   }
 
   /**
@@ -403,6 +440,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     resultManager: ResultManager
   ): void {
     const finalMessageForAgent = requestContext.userMessage;
+    // See `_runExecutor` for why we snoop the bus directly instead of
+    // re-reading state from `resultManager` in the `.finally` block.
+    const stateTracker = trackLatestTaskState(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -451,8 +491,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        eventBus.finished();
-        this.eventBusManager.cleanupByTaskId(taskId);
+        this._tearDownOrKeepBus(taskId, eventBus, stateTracker());
       });
   }
 
@@ -1008,3 +1047,28 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 }
 
 export type ExtendedAgentCardProvider = (context: ServerCallContext) => Promise<AgentCard>;
+
+/**
+ * Subscribes a lightweight listener on `bus` that records the most
+ * recent task state published — either via a `Task` event or a
+ * `TaskStatusUpdateEvent`. Returns a thunk that the caller invokes in
+ * the executor's `.finally` block to read the last seen state.
+ *
+ * Used by `_runExecutor` / `_runStreamExecutor` to decide whether to
+ * tear down the bus after `execute()` returns. Reading state from the
+ * `ResultManager` directly is unsafe at that point: the consumer loop
+ * that drains the bus into the `ResultManager` runs in a separate
+ * microtask, so the `ResultManager`'s view of the task may still lag
+ * the publish call.
+ */
+function trackLatestTaskState(bus: ExecutionEventBus): () => TaskState | undefined {
+  let lastState: TaskState | undefined;
+  bus.on('event', (event) => {
+    if (event.kind === 'task' && event.data.status?.state !== undefined) {
+      lastState = event.data.status.state;
+    } else if (event.kind === 'statusUpdate' && event.data.status?.state !== undefined) {
+      lastState = event.data.status.state;
+    }
+  });
+  return () => lastState;
+}

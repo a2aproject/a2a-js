@@ -37,7 +37,7 @@ import {
   TaskPushNotificationConfig,
 } from '../../types/pb/a2a.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { RequestMalformedError } from '../../errors.js';
+import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -84,6 +84,33 @@ const restErrorHandler: ErrorRequestHandler = (
       .json(toHTTPError(new RequestMalformedError('Invalid JSON payload.'), 400));
   }
   next(err);
+};
+
+/**
+ * Express middleware that rejects body-bearing REST requests whose
+ * Content-Type is neither `application/json` nor `application/a2a+json`,
+ * surfacing a `ContentTypeNotSupportedError` mapped to HTTP 415.
+ */
+const restContentTypeGuard: RequestHandler = (req, res, next) => {
+  const rawContentType = req.header('content-type');
+  // Only enforce on requests that actually carry a body. GET / DELETE
+  // without a Content-Type header are routine; CORS preflights live on
+  // OPTIONS and must keep working.
+  if (!rawContentType) {
+    next();
+    return;
+  }
+  const mediaType = rawContentType.split(';', 1)[0].trim().toLowerCase();
+  if (mediaType === JSON_CONTENT_TYPE || mediaType === A2A_CONTENT_TYPE) {
+    next();
+    return;
+  }
+  const error = new ContentTypeNotSupportedError(
+    `Unsupported Content-Type "${rawContentType}"; expected application/json or application/a2a+json.`
+  );
+  res
+    .status(HTTP_STATUS.UNSUPPORTED_MEDIA_TYPE)
+    .json(toHTTPError(error, HTTP_STATUS.UNSUPPORTED_MEDIA_TYPE));
 };
 
 // Route patterns removed - using explicit route definitions instead
@@ -142,9 +169,18 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
 
   router.use(
     (_req: Request, res: Response, next: NextFunction) => {
-      res.setHeader('Content-Type', A2A_CONTENT_TYPE);
+      // §11.1 SHOULD use `application/a2a+json`, but we emit the
+      // broader `application/json` so every standard HTTP+JSON client
+      // (including those without A2A-specific media-type handling) can
+      // interoperate. Both content types are still accepted on input.
+      res.setHeader('Content-Type', JSON_CONTENT_TYPE);
       next();
     },
+    // A body-bearing request (POST / PUT / DELETE) with an unsupported
+    // Content-Type must surface as `ContentTypeNotSupportedError`
+    // mapped to HTTP 415, not as a generic 400 once `express.json()`
+    // silently skips parsing. Bodyless requests pass through.
+    restContentTypeGuard,
     express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE], strict: false }),
     restErrorHandler
   );

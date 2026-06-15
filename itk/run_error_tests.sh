@@ -139,7 +139,10 @@ else
   FAILED=$((FAILED + 1))
 fi
 
-check_json "$BODY" "error.status" "FAILED_PRECONDITION" "error.status is FAILED_PRECONDITION"
+# VersionNotSupported is a capability-gated rejection — UNIMPLEMENTED
+# distinguishes "agent does not implement this version" from "current
+# state forbids this request" (FAILED_PRECONDITION).
+check_json "$BODY" "error.status" "UNIMPLEMENTED" "error.status is UNIMPLEMENTED"
 check_json "$BODY" "error.details.0.reason" "VERSION_NOT_SUPPORTED" "ErrorInfo reason"
 
 # --- REST: Content-Type on error response ---
@@ -149,11 +152,13 @@ CT=$(curl -s -o /dev/null -w "%{content_type}" \
   -H "A2A-Version: 1.0" \
   "${BASE_REST}/tasks/nonexistent-task-id")
 
-if echo "$CT" | grep -q "application/a2a+json"; then
-  echo "  ✓ Content-Type is application/a2a+json"
+# The REST binding emits plain `application/json` for both success
+# and error responses so generic HTTP+JSON clients can interoperate.
+if echo "$CT" | grep -q "application/json"; then
+  echo "  ✓ Content-Type is application/json"
   PASSED=$((PASSED + 1))
 else
-  echo "  ✗ Content-Type (expected application/a2a+json, got ${CT})"
+  echo "  ✗ Content-Type (expected application/json, got ${CT})"
   FAILED=$((FAILED + 1))
 fi
 

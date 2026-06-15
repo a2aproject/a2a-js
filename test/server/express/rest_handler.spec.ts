@@ -933,8 +933,8 @@ describe('restHandler', () => {
     });
   });
 
-  describe('Content-Type: application/a2a+json (§11.1)', () => {
-    it('should return application/a2a+json for successful JSON responses', async () => {
+  describe('Content-Type: application/json', () => {
+    it('should return application/json for successful JSON responses', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
       const response = await request(app)
@@ -942,16 +942,18 @@ describe('restHandler', () => {
         .set('A2A-Version', '1.0')
         .expect(200);
 
-      assert.include(response.headers['content-type'], 'application/a2a+json');
+      assert.include(response.headers['content-type'], 'application/json');
+      assert.notInclude(response.headers['content-type'], 'application/a2a+json');
     });
 
-    it('should return application/a2a+json for error responses', async () => {
+    it('should return application/json for error responses', async () => {
       const response = await request(app)
         .get('/tasks/task-1')
         .set('A2A-Version', '9.9')
         .expect(400);
 
-      assert.include(response.headers['content-type'], 'application/a2a+json');
+      assert.include(response.headers['content-type'], 'application/json');
+      assert.notInclude(response.headers['content-type'], 'application/a2a+json');
     });
 
     it('should accept requests with Content-Type application/a2a+json', async () => {
@@ -964,7 +966,7 @@ describe('restHandler', () => {
         .send(JSON.stringify({ message: testMessage }))
         .expect(200);
 
-      assert.include(response.headers['content-type'], 'application/a2a+json');
+      assert.include(response.headers['content-type'], 'application/json');
     });
 
     it('should accept requests with Content-Type application/json', async () => {
@@ -976,10 +978,10 @@ describe('restHandler', () => {
         .set('Content-Type', 'application/json')
         .expect(200);
 
-      assert.include(response.headers['content-type'], 'application/a2a+json');
+      assert.include(response.headers['content-type'], 'application/json');
     });
 
-    it('should return text/event-stream for SSE responses, not application/a2a+json', async () => {
+    it('should return text/event-stream for SSE responses, not application/json', async () => {
       const streamResponse = (async function* () {
         yield { payload: { $case: 'task' as const, value: testTask } };
       })();
@@ -1209,7 +1211,7 @@ describe('restHandler', () => {
       assert.notInclude(response.headers['content-type'], 'application/a2a+json');
     });
 
-    it('keeps Content-Type application/a2a+json on v1.0 responses', async () => {
+    it('keeps Content-Type application/json on v1.0 responses', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
       const response = await request(dualApp)
@@ -1217,7 +1219,10 @@ describe('restHandler', () => {
         .set('A2A-Version', '1.0')
         .expect(200);
 
-      assert.include(response.headers['content-type'], 'application/a2a+json');
+      // Both v1.0 and the legacy v0.3 path emit plain application/json,
+      // so make the assertion specific.
+      assert.include(response.headers['content-type'], 'application/json');
+      assert.notInclude(response.headers['content-type'], 'application/a2a+json');
     });
 
     it('reads and writes back the legacy X-A2A-Extensions header', async () => {

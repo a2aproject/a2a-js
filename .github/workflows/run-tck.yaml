@@ -2,9 +2,9 @@ name: Run TCK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main", "epic/**"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main", "epic/**"]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
@@ -12,18 +12,18 @@ on:
       - 'test/**'
       - 'src/samples/**'
 
-
 env:
-  # Tag of the TCK
-  TCK_VERSION: 0.3.0.beta3
+  # Tag of the TCK to check out from a2aproject/a2a-tck. Pinned so that
+  # a new TCK release that introduces failing requirements does not
+  # silently break this workflow.
+  TCK_VERSION: 1.0.0.alpha2
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
-  # Base URL for the SUT agent
+  # Base URL for the SUT agent. The TCK probes
+  # `${SUT_BASE_URL}/.well-known/agent-card.json` and uses the
+  # `supportedInterfaces` entries from the returned card to dispatch
+  # per-transport tests.
   SUT_BASE_URL: http://localhost:41241
-  # Base URL for the SUT agent JSON-RPC transport
-  SUT_JSONRPC_URL: http://localhost:41241/a2a/jsonrpc
-  # Slow system on CI
-  TCK_STREAMING_TIMEOUT: 5.0
 
 # Only run the latest job
 concurrency:
@@ -65,8 +65,8 @@ jobs:
         working-directory: tck/a2a-tck
       - name: Start SUT
         run: |
-          cd tck
-          npm run tck:sut-agent &
+          npm --prefix tck run tck:sut-agent > sut.log 2>&1 &
+          echo $! > sut.pid
       - name: Wait for SUT to start
         run: |
           URL="${{ env.SUT_BASE_URL }}/.well-known/agent-card.json"
@@ -76,46 +76,59 @@ jobs:
           START_TIME=$(date +%s)
 
           while true; do
-            # Calculate elapsed time
             CURRENT_TIME=$(date +%s)
             ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
-
-            # Check for timeout
             if [ "$ELAPSED_TIME" -ge "$TIMEOUT" ]; then
                 echo "❌ Timeout: Server did not respond with status $EXPECTED_STATUS within $TIMEOUT seconds."
+                echo "----- SUT log -----"
+                cat sut.log || true
                 exit 1
             fi
 
-            # Get HTTP status code. || true is to reporting a failure to connect as an error
             HTTP_STATUS=$(curl --output /dev/null --silent --write-out "%{http_code}" "$URL") || true
-            echo "STATUS: ${HTTP_STATUS}"
-
-            # Check if we got the correct status code
             if [ "$HTTP_STATUS" -eq "$EXPECTED_STATUS" ]; then
                 echo "✅ Server is up! Received status $HTTP_STATUS after $ELAPSED_TIME seconds."
-                break;
+                break
             fi
 
-            # Wait before retrying
             echo "⏳ Server not ready (status: $HTTP_STATUS). Retrying in $RETRY_INTERVAL seconds..."
             sleep "$RETRY_INTERVAL"
           done
-          
-      - name: Run TCK (mandatory)
-        id: run-tck-mandatory
-        timeout-minutes: 5
+
+      - name: Run TCK (MUST)
+        id: run-tck-must
+        timeout-minutes: 10
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc,rest,grpc
+          ./run_tck.py --sut-host ${{ env.SUT_BASE_URL }} --level must -v
         working-directory: tck/a2a-tck
-      - name: Run TCK (capabilities)
-        id: run-tck-capabilities
-        timeout-minutes: 5
+
+      - name: Run TCK (SHOULD)
+        id: run-tck-should
+        if: always() && steps.run-tck-must.outcome != 'cancelled'
+        timeout-minutes: 10
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports jsonrpc,rest,grpc
+          ./run_tck.py --sut-host ${{ env.SUT_BASE_URL }} --level should -v
         working-directory: tck/a2a-tck
+
+      - name: Upload compatibility reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tck-reports-node-${{ matrix.node-version }}
+          path: tck/a2a-tck/reports/
+          if-no-files-found: warn
+
+      - name: Print SUT log
+        if: always()
+        run: |
+          echo "----- SUT log -----"
+          cat sut.log || true
+
       - name: Stop SUT
         if: always()
         run: |
-          # Find and kill the SUT process
-          pkill -f "npm run tck:sut-agent" || true
-          sleep 2
+          if [ -f sut.pid ]; then
+            kill "$(cat sut.pid)" 2>/dev/null || true
+          fi
+          pkill -f "tsx agent/index.ts" 2>/dev/null || true
+          sleep 1
