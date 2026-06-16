@@ -262,14 +262,18 @@ describe('A2AExpressApp', () => {
         .send(requestBody)
         .expect(200);
 
-      // Assert SSE headers and error event content
-      assert.include(response.headers['content-type'], 'text/event-stream');
-      assert.equal(response.headers['cache-control'], 'no-cache');
-      assert.equal(response.headers['connection'], 'keep-alive');
+      // When the streaming generator throws BEFORE yielding its first
+      // event (e.g. resubscribe on a terminal task) the handler must
+      // surface a plain JSON-RPC error response rather than a 200 SSE
+      // stream carrying a single error event: the latter looks like a
+      // successful subscription to most clients.
+      assert.include(response.headers['content-type'], 'application/json');
+      assert.notInclude(response.headers['content-type'], 'text/event-stream');
 
-      const responseText = response.text;
-      assert.include(responseText, 'event: error');
-      assert.include(responseText, 'Immediate streaming error');
+      assert.equal(response.body.jsonrpc, '2.0');
+      assert.equal(response.body.id, 'immediate-stream-error-test');
+      assert.exists(response.body.error);
+      assert.include(response.body.error.message, 'Immediate streaming error');
     });
 
     it('should handle general processing error', async () => {

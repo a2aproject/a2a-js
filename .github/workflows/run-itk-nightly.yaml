@@ -16,7 +16,7 @@ on:
   # PR workflow's `branches: ["main", "epic"]` configuration. Drop the
   # `epic` entry once this is merged to `main` and the cron takes over.
   push:
-    branches: ["main", "epic"]
+    branches: ["main", "epic/**"]
     paths:
       - 'src/**'
       - 'itk/**'

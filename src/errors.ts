@@ -151,13 +151,13 @@ export function buildErrorInfo(
 export const A2A_ERROR_GRPC_STATUS: Record<string, string> = {
   TaskNotFoundError: 'NOT_FOUND',
   TaskNotCancelableError: 'FAILED_PRECONDITION',
-  PushNotificationNotSupportedError: 'FAILED_PRECONDITION',
-  UnsupportedOperationError: 'FAILED_PRECONDITION',
+  PushNotificationNotSupportedError: 'UNIMPLEMENTED',
+  UnsupportedOperationError: 'UNIMPLEMENTED',
   ContentTypeNotSupportedError: 'INVALID_ARGUMENT',
   InvalidAgentResponseError: 'INTERNAL',
   ExtendedAgentCardNotConfiguredError: 'FAILED_PRECONDITION',
   ExtensionSupportRequiredError: 'FAILED_PRECONDITION',
-  VersionNotSupportedError: 'FAILED_PRECONDITION',
+  VersionNotSupportedError: 'UNIMPLEMENTED',
   RequestMalformedError: 'INVALID_ARGUMENT',
   GenericError: 'INTERNAL',
 };

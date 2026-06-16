@@ -56,6 +56,7 @@ export const HTTP_STATUS = {
   UNAUTHORIZED: 401,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  UNSUPPORTED_MEDIA_TYPE: 415,
   INTERNAL_SERVER_ERROR: 500,
   NOT_IMPLEMENTED: 501,
 } as const;
@@ -71,7 +72,7 @@ export function mapErrorToStatus(error: unknown): number {
   if (error instanceof TaskNotCancelableError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof ContentTypeNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
+  if (error instanceof ContentTypeNotSupportedError) return HTTP_STATUS.UNSUPPORTED_MEDIA_TYPE;
   if (error instanceof InvalidAgentResponseError) return HTTP_STATUS.INTERNAL_SERVER_ERROR;
   if (error instanceof ExtendedAgentCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
   if (error instanceof ExtensionSupportRequiredError) return HTTP_STATUS.BAD_REQUEST;

@@ -237,15 +237,19 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   let code = grpc.status.UNKNOWN;
   if (error instanceof TaskNotFoundError) code = grpc.status.NOT_FOUND;
   else if (error instanceof TaskNotCancelableError) code = grpc.status.FAILED_PRECONDITION;
-  else if (error instanceof PushNotificationNotSupportedError)
-    code = grpc.status.FAILED_PRECONDITION;
-  else if (error instanceof UnsupportedOperationError) code = grpc.status.FAILED_PRECONDITION;
+  // Capability-gated rejections (push notifications, version negotiation,
+  // any other unsupported operation) map to UNIMPLEMENTED.
+  // FAILED_PRECONDITION is reserved for the cancel / extended-card /
+  // extension preconditions, so clients can distinguish "agent does
+  // not implement this" from "current state forbids this operation".
+  else if (error instanceof PushNotificationNotSupportedError) code = grpc.status.UNIMPLEMENTED;
+  else if (error instanceof UnsupportedOperationError) code = grpc.status.UNIMPLEMENTED;
   else if (error instanceof ContentTypeNotSupportedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof InvalidAgentResponseError) code = grpc.status.INTERNAL;
   else if (error instanceof ExtendedAgentCardNotConfiguredError)
     code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof ExtensionSupportRequiredError) code = grpc.status.FAILED_PRECONDITION;
-  else if (error instanceof VersionNotSupportedError) code = grpc.status.FAILED_PRECONDITION;
+  else if (error instanceof VersionNotSupportedError) code = grpc.status.UNIMPLEMENTED;
   else if (error instanceof RequestMalformedError) code = grpc.status.INVALID_ARGUMENT;
   else if (error instanceof GenericError) code = grpc.status.INTERNAL;
 
