@@ -389,34 +389,28 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       })
       .finally(() => {
-        this._tearDownOrKeepBus(taskId, eventBus, stateTracker());
+        // Closes the bus for terminal tasks; kept alive for
+        // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
+        // resubscribers can still attach.
+        this._settleBus(taskId, eventBus, stateTracker());
       });
   }
 
   /**
-   * Decides whether to fully tear down the event bus or keep it alive
-   * for a future resubscribe / follow-up message.
+   * Settles the event bus once the executor returns.
    *
-   * The bus is torn down when the task reached a terminal state
-   * (COMPLETED / FAILED / CANCELED / REJECTED) — no further events can
-   * arrive — and also when no Task was ever produced (the bare-Message
-   * pattern in §3.1.2). For an interrupted state
-   * (INPUT_REQUIRED / AUTH_REQUIRED) the bus is retained so that
-   * `tasks/resubscribe` can attach and a follow-up `message/send` with
-   * the same `taskId` resumes execution through `createOrGetByTaskId`.
+   * Terminal states (and the bare-Message pattern in §3.1.2) close the
+   * bus immediately. Interrupted states (INPUT_REQUIRED / AUTH_REQUIRED)
+   * keep it alive so a follow-up `message/send` can resume the same
+   * execution via `createOrGetByTaskId`, and `tasks/resubscribe` can
+   * attach in the meantime (§3.4.3).
    */
-  private _tearDownOrKeepBus(
+  private _settleBus(
     taskId: string,
     eventBus: ExecutionEventBus,
     lastState: TaskState | undefined
   ): void {
-    const isInterrupted = lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState);
-    if (isInterrupted) {
-      // Bus stays alive AND unsignalled. Active consumers have already
-      // unblocked via the interrupted-state check inside
-      // `ExecutionEventQueue.events()`, and resubscribers can attach
-      // via `getByTaskId(taskId)` until the next send_message resumes
-      // execution and ultimately drives the task to a terminal state.
+    if (lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState)) {
       return;
     }
     eventBus.finished();
@@ -491,7 +485,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        this._tearDownOrKeepBus(taskId, eventBus, stateTracker());
+        // Closes the bus for terminal tasks; kept alive for
+        // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
+        // resubscribers can still attach.
+        this._settleBus(taskId, eventBus, stateTracker());
       });
   }
 
