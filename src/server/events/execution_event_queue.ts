@@ -1,5 +1,5 @@
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
-import { TERMINAL_STATE_LIST } from '../utils.js';
+import { INTERRUPTED_STATE_LIST, TERMINAL_STATE_LIST } from '../utils.js';
 
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
@@ -39,11 +39,21 @@ export class ExecutionEventQueue {
       if (this.eventQueue.length > 0) {
         const event = this.eventQueue.shift()!;
         yield event;
+        // A consumer's event loop terminates on:
+        //   * a Message (the only event a stateless agent ever produces);
+        //   * a terminal Task status (COMPLETED / FAILED / CANCELED /
+        //     REJECTED) — the task can never produce further events;
+        //   * an interrupted Task status (INPUT_REQUIRED / AUTH_REQUIRED)
+        //     — the executor has returned and is awaiting a fresh
+        //     message, so blocking consumers must stop iterating; the
+        //     underlying bus stays alive in `DefaultRequestHandler` so
+        //     resubscribers and follow-up sends can still attach.
         if (
           event.kind === 'message' ||
           (event.kind === 'statusUpdate' &&
             event.data.status &&
-            TERMINAL_STATE_LIST.includes(event.data.status.state))
+            (TERMINAL_STATE_LIST.includes(event.data.status.state) ||
+              INTERRUPTED_STATE_LIST.includes(event.data.status.state)))
         ) {
           this.handleFinished();
           break;

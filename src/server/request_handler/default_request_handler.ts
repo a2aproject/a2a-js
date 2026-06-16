@@ -56,7 +56,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-import { TERMINAL_STATE_LIST, isTask, StreamPattern } from '../utils.js';
+import { INTERRUPTED_STATE_LIST, TERMINAL_STATE_LIST, isTask, StreamPattern } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors.js';
 
@@ -323,6 +323,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     requestContext: RequestContext,
     finalMessageForAgent: Message
   ): void {
+    // Subscribe a lightweight listener that tracks the last task state
+    // published on the bus. We can't rely on `resultManager.getCurrentTask()`
+    // in the `.finally` block because the consumer loop that drains the
+    // queue into `ResultManager` runs in a separate microtask: by the
+    // time `.finally()` runs, the consumer has not necessarily processed
+    // the events yet.
+    const stateTracker = trackLatestTaskState(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -381,9 +388,32 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       })
       .finally(() => {
-        eventBus.finished();
-        this.eventBusManager.cleanupByTaskId(taskId);
+        // Closes the bus for terminal tasks; kept alive for
+        // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
+        // resubscribers can still attach.
+        this._settleBus(taskId, eventBus, stateTracker());
       });
+  }
+
+  /**
+   * Settles the event bus once the executor returns.
+   *
+   * Terminal states (and the bare-Message pattern in §3.1.2) close the
+   * bus immediately. Interrupted states (INPUT_REQUIRED / AUTH_REQUIRED)
+   * keep it alive so a follow-up `message/send` can resume the same
+   * execution via `createOrGetByTaskId`, and `tasks/resubscribe` can
+   * attach in the meantime (§3.4.3).
+   */
+  private _settleBus(
+    taskId: string,
+    eventBus: ExecutionEventBus,
+    lastState: TaskState | undefined
+  ): void {
+    if (lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState)) {
+      return;
+    }
+    eventBus.finished();
+    this.eventBusManager.cleanupByTaskId(taskId);
   }
 
   /**
@@ -403,6 +433,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     resultManager: ResultManager
   ): void {
     const finalMessageForAgent = requestContext.userMessage;
+    // See `_runExecutor` for why we snoop the bus directly instead of
+    // re-reading state from `resultManager` in the `.finally` block.
+    const stateTracker = trackLatestTaskState(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -451,8 +484,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        eventBus.finished();
-        this.eventBusManager.cleanupByTaskId(taskId);
+        // Closes the bus for terminal tasks; kept alive for
+        // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
+        // resubscribers can still attach.
+        this._settleBus(taskId, eventBus, stateTracker());
       });
   }
 
@@ -1008,3 +1043,37 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 }
 
 export type ExtendedAgentCardProvider = (context: ServerCallContext) => Promise<AgentCard>;
+
+/**
+ * Subscribes a lightweight listener on `bus` that records the most
+ * recent task state published — either via a `Task` event or a
+ * `TaskStatusUpdateEvent`. Returns a thunk that the caller invokes in
+ * the executor's `.finally` block to detach the listener and read the
+ * last seen state.
+ *
+ * Used by `_runExecutor` / `_runStreamExecutor` to decide whether to
+ * tear down the bus after `execute()` returns. Reading state from the
+ * `ResultManager` directly is unsafe at that point: the consumer loop
+ * that drains the bus into the `ResultManager` runs in a separate
+ * microtask, so the `ResultManager`'s view of the task may still lag
+ * the publish call.
+ */
+function trackLatestTaskState(bus: ExecutionEventBus): () => TaskState | undefined {
+  let lastState: TaskState | undefined;
+  const listener = (event: AgentExecutionEvent) => {
+    if (event.kind === 'task' && event.data.status?.state !== undefined) {
+      lastState = event.data.status.state;
+    } else if (event.kind === 'statusUpdate' && event.data.status?.state !== undefined) {
+      lastState = event.data.status.state;
+    }
+  };
+  bus.on('event', listener);
+  // Detach the listener when the caller reads the state in `.finally()`.
+  // Without this, every executor turn on a long-lived bus (kept alive
+  // for INPUT_REQUIRED / AUTH_REQUIRED) would accumulate another
+  // listener on the same bus.
+  return () => {
+    bus.off('event', listener);
+    return lastState;
+  };
+}

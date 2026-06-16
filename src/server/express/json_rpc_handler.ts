@@ -10,11 +10,11 @@ import { JSONRPCResponse } from '../transports/jsonrpc/jsonrpc_transport_handler
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
-import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '../../constants.js';
 import { UserBuilder } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
-import { RequestMalformedError } from '../../errors.js';
+import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
 import { validateVersion } from '../version.js';
 import { LegacyJsonRpcTransportHandler, isLegacyJsonRpcMethod } from '../../compat/v0_3/index.js';
 import { LEGACY_HTTP_EXTENSION_HEADER } from '../../compat/v0_3/constants.js';
@@ -79,6 +79,11 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
   const router = express.Router();
 
+  // §9.1 JSON-RPC requests MUST use `application/json`. Reject any
+  // other content type with `ContentTypeNotSupportedError` (-32005)
+  // rather than letting `express.json()` ignore the body and the
+  // dispatcher fall back to a misleading `InvalidParamsError` (-32602).
+  router.use(contentTypeGuard);
   router.use(express.json(), jsonErrorHandler);
 
   router.post('/', async (req: Request, res: Response) => {
@@ -131,17 +136,38 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
         const stream = rpcResponseOrStream as AsyncGenerator<JSONRPCResponse, void, undefined>;
 
-        // Set SSE headers using shared utility
+        // Peek the first event BEFORE flushing SSE headers so that an
+        // early failure (e.g. `resubscribe` on a terminal task, which
+        // throws `UnsupportedOperationError`) surfaces as a proper
+        // JSON-RPC error response with the right HTTP status rather
+        // than a 200 SSE stream carrying a single error event — the
+        // latter looks like a successful subscription to most clients.
+        const iterator = stream[Symbol.asyncIterator]();
+        let firstResult: IteratorResult<JSONRPCResponse>;
+        try {
+          firstResult = await iterator.next();
+        } catch (streamError) {
+          console.error(`Pre-stream error for request ${req.body?.id}:`, streamError);
+          const errorResponse: JSONRPCErrorResponse = {
+            jsonrpc: '2.0',
+            id: req.body?.id || null,
+            error: mapToError(streamError),
+          };
+          res.status(200).json(errorResponse);
+          return;
+        }
+
+        // First event succeeded — now switch to SSE.
         Object.entries(SSE_HEADERS).forEach(([key, value]) => {
           res.setHeader(key, value);
         });
-
         res.flushHeaders();
 
         try {
-          for await (const event of stream) {
-            // Each event from the stream is already a JSONRPCResult
-            // Use shared formatSSEEvent utility
+          if (!firstResult.done) {
+            res.write(formatSSEEvent(firstResult.value));
+          }
+          for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
             res.write(formatSSEEvent(event));
           }
         } catch (streamError) {
@@ -188,6 +214,38 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
 
   return router;
 }
+
+/**
+ * Express middleware that rejects requests whose Content-Type is not
+ * `application/json` (§9.1) with `ContentTypeNotSupportedError`
+ * (-32005). Bodyless requests (GET, OPTIONS, …) and requests without a
+ * Content-Type header pass through; only POSTs that explicitly declare
+ * a non-JSON content type are rejected.
+ */
+const contentTypeGuard: RequestHandler = (req, res, next) => {
+  const rawContentType = req.header('content-type');
+  if (!rawContentType) {
+    next();
+    return;
+  }
+  // Strip charset and other params before comparing.
+  const mediaType = rawContentType.split(';', 1)[0].trim().toLowerCase();
+  if (mediaType === JSON_CONTENT_TYPE) {
+    next();
+    return;
+  }
+  const errorResponse: JSONRPCErrorResponse = {
+    jsonrpc: '2.0',
+    id: null,
+    error: JsonRpcTransportHandler.mapToJSONRPCError(
+      new ContentTypeNotSupportedError(
+        `Unsupported Content-Type "${rawContentType}"; expected application/json.`
+      )
+    ),
+  };
+  // Per §5.4 ContentTypeNotSupportedError maps to HTTP 400.
+  res.status(400).json(errorResponse);
+};
 
 export const jsonErrorHandler: ErrorRequestHandler = (
   err: unknown,

@@ -11,6 +11,20 @@ const TERMINAL_STATE_LIST: TaskState[] = [
 export { TERMINAL_STATE_LIST };
 
 /**
+ * Non-terminal states that pause the executor and require a follow-up
+ * message before progress can resume. The agent's `execute()` is
+ * expected to return after publishing one of these states, but the
+ * underlying task remains live so a client can resubscribe — or send a
+ * fresh message with the same `taskId` — to continue the flow. See
+ * §3.4.3 (Input Required State) of the A2A specification.
+ */
+const INTERRUPTED_STATE_LIST: TaskState[] = [
+  TaskState.TASK_STATE_INPUT_REQUIRED,
+  TaskState.TASK_STATE_AUTH_REQUIRED,
+];
+export { INTERRUPTED_STATE_LIST };
+
+/**
  * Generates a timestamp in ISO 8601 format.
  * @returns The current timestamp as a string.
  */

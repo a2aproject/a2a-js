@@ -37,7 +37,7 @@ import {
   TaskPushNotificationConfig,
 } from '../../types/pb/a2a.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { RequestMalformedError } from '../../errors.js';
+import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
 
 /**
  * Options for configuring the HTTP+JSON/REST handler.
@@ -84,6 +84,31 @@ const restErrorHandler: ErrorRequestHandler = (
       .json(toHTTPError(new RequestMalformedError('Invalid JSON payload.'), 400));
   }
   next(err);
+};
+
+/**
+ * Express middleware that rejects body-bearing REST requests whose
+ * Content-Type is neither `application/json` nor `application/a2a+json`,
+ * surfacing a `ContentTypeNotSupportedError` mapped to HTTP 400 per §5.4.
+ */
+const restContentTypeGuard: RequestHandler = (req, res, next) => {
+  const rawContentType = req.header('content-type');
+  // Only enforce on requests that actually carry a body. GET / DELETE
+  // without a Content-Type header are routine; CORS preflights live on
+  // OPTIONS and must keep working.
+  if (!rawContentType) {
+    next();
+    return;
+  }
+  const mediaType = rawContentType.split(';', 1)[0].trim().toLowerCase();
+  if (mediaType === JSON_CONTENT_TYPE || mediaType === A2A_CONTENT_TYPE) {
+    next();
+    return;
+  }
+  const error = new ContentTypeNotSupportedError(
+    `Unsupported Content-Type "${rawContentType}"; expected application/json or application/a2a+json.`
+  );
+  res.status(HTTP_STATUS.BAD_REQUEST).json(toHTTPError(error, HTTP_STATUS.BAD_REQUEST));
 };
 
 // Route patterns removed - using explicit route definitions instead
@@ -145,6 +170,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       res.setHeader('Content-Type', A2A_CONTENT_TYPE);
       next();
     },
+    // A body-bearing request (POST / PUT / DELETE) with an unsupported
+    // Content-Type must surface as `ContentTypeNotSupportedError`
+    // mapped to HTTP 400 (§5.4), not as a generic 400 once
+    // `express.json()` silently skips parsing. Bodyless requests
+    // (GET / OPTIONS / HEAD) pass through.
+    restContentTypeGuard,
     express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE], strict: false }),
     restErrorHandler
   );
