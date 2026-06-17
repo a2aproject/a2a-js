@@ -14,6 +14,8 @@
     "agents:multi-transport-agent": "tsx agents/multi-transport-agent/index.ts",
     "agents:cancellable-agent": "tsx agents/cancellable-agent/index.ts",
     "agents:cancellable-client": "tsx agents/cancellable-agent/client.ts",
+    "agents:compat-v1-server": "tsx agents/compat-v1-server/index.ts",
+    "agents:compat-v1-client": "tsx agents/compat-v1-client/index.ts",
     "client:interceptors": "tsx client/interceptors/index.ts"
   },
   "devDependencies": {
