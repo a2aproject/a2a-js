@@ -213,10 +213,12 @@ async function main() {
     })
   );
 
-  app.listen(HTTP_PORT, (err) => {
-    if (err) {
-      throw err;
-    }
+  // Express's `app.listen` does NOT pass an error to its callback —
+  // the callback is registered for the `'listening'` event and takes no
+  // arguments. Startup errors (e.g. `EADDRINUSE`) are emitted on the
+  // returned server instance via the `'error'` event, so we listen for
+  // both explicitly.
+  const httpServer = app.listen(HTTP_PORT, () => {
     console.log(`[CompatServer] HTTP server started on http://localhost:${HTTP_PORT}`);
     console.log(`  JSON-RPC : http://localhost:${HTTP_PORT}/a2a/jsonrpc  (v1.0 + v0.3)`);
     console.log(
@@ -233,6 +235,10 @@ async function main() {
     );
     console.log(`  Push     : v1.0 webhooks receive application/a2a+json StreamResponse envelopes`);
     console.log(`             v0.3 webhooks receive application/json     bare-event bodies`);
+  });
+  httpServer.on('error', (err) => {
+    console.error('[CompatServer] HTTP server failed to start:', err);
+    process.exit(1);
   });
 
   // 3. gRPC server: register BOTH the v1.0 and v0.3 services on the

@@ -212,12 +212,12 @@ function* handleMessageStream(params: {
  * so this method is included for completeness but not strictly
  * exercised.)
  */
-function handlePushNotificationConfigSet(params: {
+function handlePushNotificationConfigSet(params?: {
   taskId?: string;
   pushNotificationConfig?: { url?: string; token?: string };
 }) {
-  const taskId = params.taskId ?? '';
-  if (!taskId || !params.pushNotificationConfig?.url) {
+  const taskId = params?.taskId ?? '';
+  if (!taskId || !params?.pushNotificationConfig?.url) {
     return null;
   }
   const list = pushConfigsByTask.get(taskId) ?? [];
@@ -356,13 +356,14 @@ export async function startMockV03Server(options: MockV03ServerOptions): Promise
   });
 
   await new Promise<void>((resolve, reject) => {
-    app.listen(options.port, (err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
+    // Express's `app.listen` does NOT pass an error to its callback —
+    // the callback is registered for the `'listening'` event and takes
+    // no arguments. Startup errors (e.g. `EADDRINUSE`) are emitted on
+    // the returned server instance via the `'error'` event.
+    const server = app.listen(options.port, () => {
       console.log(`[MockV03Server] In-process mock v0.3 server on ${baseUrl}`);
       resolve();
     });
+    server.on('error', reject);
   });
 }

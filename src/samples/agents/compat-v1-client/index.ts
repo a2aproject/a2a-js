@@ -126,14 +126,15 @@ async function startWebhookReceiver(): Promise<void> {
     res.status(200).json({ received: true });
   });
   await new Promise<void>((resolve, reject) => {
-    app.listen(WEBHOOK_PORT, (err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
+    // Express's `app.listen` does NOT pass an error to its callback —
+    // the callback is registered for the `'listening'` event and takes
+    // no arguments. Startup errors (e.g. `EADDRINUSE`) are emitted on
+    // the returned server instance via the `'error'` event.
+    const server = app.listen(WEBHOOK_PORT, () => {
       console.log(`[Webhook] In-process receiver on ${WEBHOOK_URL}`);
       resolve();
     });
+    server.on('error', reject);
   });
 }
 
@@ -251,21 +252,21 @@ function printStreamEvent(event: StreamResponse): void {
   const payload = event.payload;
   if (!payload) return;
   switch (payload.$case) {
-    case 'task':
-      console.log(
-        `[Client] task           id=${payload.value.id} state=${taskStateToJSON(payload.value.status!.state)}`
-      );
+    case 'task': {
+      // `status` is optional on the proto `Task`; guard against a peer
+      // that emits a task without one.
+      const state = payload.value.status ? taskStateToJSON(payload.value.status.state) : 'UNKNOWN';
+      console.log(`[Client] task           id=${payload.value.id} state=${state}`);
       break;
-    case 'statusUpdate':
-      console.log(
-        `[Client] statusUpdate   task=${payload.value.taskId} state=${taskStateToJSON(
-          payload.value.status!.state
-        )}`
-      );
+    }
+    case 'statusUpdate': {
+      const state = payload.value.status ? taskStateToJSON(payload.value.status.state) : 'UNKNOWN';
+      console.log(`[Client] statusUpdate   task=${payload.value.taskId} state=${state}`);
       if (payload.value.status?.message) {
         printMessage(payload.value.status.message);
       }
       break;
+    }
     case 'artifactUpdate':
       console.log(
         `[Client] artifactUpdate task=${payload.value.taskId} artifact=${payload.value.artifact?.name ?? '(unnamed)'}`
@@ -316,9 +317,8 @@ async function sendWithPushAndWait(client: Client): Promise<string> {
     throw new Error('Expected a Task in the sendMessage response');
   }
   const taskId = result.id;
-  console.log(
-    `[Client] sendMessage returned task id=${taskId} state=${taskStateToJSON(result.status!.state)}`
-  );
+  const state = result.status ? taskStateToJSON(result.status.state) : 'UNKNOWN';
+  console.log(`[Client] sendMessage returned task id=${taskId} state=${state}`);
   // `sendMessage` returns once the task reaches a terminal state, but
   // the server-side push dispatch is fire-and-forget. Small grace
   // window so all webhooks land before we print.

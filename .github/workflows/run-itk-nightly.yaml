@@ -19,6 +19,7 @@ on:
     branches: ["main", "epic/**"]
     paths:
       - 'src/**'
+      - '!src/samples/**'
       - 'itk/**'
       - 'package.json'
       - 'package-lock.json'
