@@ -229,16 +229,16 @@ See the [`agents/verify-signing`](src/samples/agents/verify-signing/) sample.
 A v1.0 server can transparently accept v0.3 clients (and a v1.0 client can
 transparently talk to v0.3 servers) by opting into the compat layer with
 `legacyCompat: { enabled: true }` on the relevant transport / handler. The
-compat surface is shipped as five subpath exports off `@a2a-js/sdk`:
+compat surface is shipped as six subpath exports off `@a2a-js/sdk`:
 
-| Subpath                                 | Use it for                                                                                                                                                                                                       |
-| :-------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@a2a-js/sdk/compat/v0_3`               | v0.3 protocol constants and method-name translators. Workers-safe — no Node-only peer deps.                                                                                                                       |
-| `@a2a-js/sdk/compat/v0_3/server`        | Framework-agnostic transport handlers (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`), push-notification factory (`createLegacyAwarePushNotificationSender`), serializer, and `LegacyA2AError`. Workers-safe. |
-| `@a2a-js/sdk/compat/v0_3/server/express`| Express routers (`legacyAgentCardRouter`, `legacyRestRouter`) that wrap the handlers above with the v0.3 well-known agent-card and REST endpoint paths.                                                          |
-| `@a2a-js/sdk/compat/v0_3/server/grpc`   | `legacyGrpcService` + `LegacyA2AService`. Register alongside the v1.0 `grpcService` on the same gRPC `Server`.                                                                                                  |
-| `@a2a-js/sdk/compat/v0_3/client`        | `LegacyJsonRpcTransport`, `LegacyRestTransport`, and the `isLegacyAgentCard` / `parseLegacyAgentCard` helpers. Workers-safe.                                                                                     |
-| `@a2a-js/sdk/compat/v0_3/client/grpc`   | `LegacyGrpcTransport`, lazy-loaded by the v1.0 `GrpcTransportFactory` when the matched `AgentInterface.protocolVersion` falls in `[0.3, 1.0)`.                                                                   |
+| Subpath                                  | Use it for                                                                                                                                                                                                                    |
+| :--------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@a2a-js/sdk/compat/v0_3`                | v0.3 protocol constants and method-name translators. Workers-safe — no Node-only peer deps.                                                                                                                                   |
+| `@a2a-js/sdk/compat/v0_3/server`         | Framework-agnostic transport handlers (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`), push-notification factory (`createLegacyAwarePushNotificationSender`), serializer, and `LegacyA2AError`. Workers-safe. |
+| `@a2a-js/sdk/compat/v0_3/server/express` | Express routers (`legacyAgentCardRouter`, `legacyRestRouter`) that wrap the handlers above with the v0.3 well-known agent-card and REST endpoint paths.                                                                       |
+| `@a2a-js/sdk/compat/v0_3/server/grpc`    | `legacyGrpcService` + `LegacyA2AService`. Register alongside the v1.0 `grpcService` on the same gRPC `Server`.                                                                                                                |
+| `@a2a-js/sdk/compat/v0_3/client`         | `LegacyJsonRpcTransport`, `LegacyRestTransport`, and the `isLegacyAgentCard` / `parseLegacyAgentCard` helpers. Workers-safe.                                                                                                  |
+| `@a2a-js/sdk/compat/v0_3/client/grpc`    | `LegacyGrpcTransport`, lazy-loaded by the v1.0 `GrpcTransportFactory` when the matched `AgentInterface.protocolVersion` falls in `[0.3, 1.0)`.                                                                                |
 
 See [`src/compat/v0_3/README.md`](src/compat/v0_3/README.md) for the full
 compat-layer architecture (version negotiation under §3.6.2, push-notification
