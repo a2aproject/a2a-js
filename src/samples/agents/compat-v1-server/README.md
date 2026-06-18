@@ -118,8 +118,27 @@ curl -sS -X POST http://localhost:41251/a2a/jsonrpc \
 The v0.3 reference REST surface (`/v1/...`) and the v1.0 REST surface
 (`/<operation>` per spec §11.3) coexist under the same mount point.
 
+**Both** REST surfaces speak **proto-JSON** of their respective proto types
+(per each version's `google.api.http` annotations), NOT the JSON-Schema-style
+bodies with `kind:` discriminators that you'd send over v0.3 JSON-RPC. This
+matches the cross-SDK convention. The v0.3 and v1.0 REST bodies look very similar
+on the wire — the differences are field renames and the response `Content-Type` header:
+
+| Aspect              | v0.3 REST                     | v1.0 REST                     |
+| ------------------- | ----------------------------- | ----------------------------- |
+| Path prefix         | `/v1/<operation>`             | `/<operation>` (no `/v1/`)    |
+| Request field name  | `request` (a `Message`)       | `message` (a `Message`)       |
+| `Message` payload   | `content[]`                   | `parts[]`                     |
+| `role` encoding     | proto enum (`ROLE_USER`)      | proto enum (`ROLE_USER`)      |
+| Response shape      | proto-JSON `SendMessageResponse` (`{task: {...}}` or `{msg: {...}}` oneof) | proto-JSON `SendMessageResponse` (same shape) |
+| Response `Content-Type` | `application/json`        | `application/a2a+json`        |
+| Response `state` enum | `TASK_STATE_COMPLETED`      | `TASK_STATE_COMPLETED`        |
+
 ```bash
 # v0.3 REST: per the v0.3 a2a.proto google.api.http annotations.
+# Body is proto-JSON `SendMessageRequest` (the v0.3 proto's Message has
+# `content[]` instead of v1.0's `parts[]`, and the outer field is
+# `request` instead of `message`).
 curl -sS -X POST http://localhost:41251/a2a/rest/v1/message:send \
   -H 'Content-Type: application/json' \
   -H 'A2A-Version: 0.3' \
@@ -131,6 +150,25 @@ curl -sS -X POST http://localhost:41251/a2a/rest/v1/message:send \
     }
   }'
 ```
+
+```bash
+# v1.0 REST: bare proto-JSON `SendMessageRequest`, no JSON-RPC envelope.
+curl -sS -X POST http://localhost:41251/a2a/rest/message:send \
+  -H 'Content-Type: application/json' \
+  -H 'A2A-Version: 1.0' \
+  -d '{
+    "message": {
+      "messageId": "demo-rest-v10",
+      "role": "ROLE_USER",
+      "parts": [{ "text": "hello", "mediaType": "text/plain" }]
+    }
+  }'
+```
+
+If you want a v0.3 wire shape with JSON-Schema-style `{kind: 'task', state:
+'completed', parts: [{kind: 'text', ...}]}` envelopes, use the v0.3 JSON-RPC
+endpoint (`/a2a/jsonrpc` above) — that's the surface that emits and accepts
+the JSON-Schema spec types verbatim.
 
 ```bash
 # v1.0 REST: bare proto-JSON `SendMessageRequest`, no JSON-RPC envelope.
