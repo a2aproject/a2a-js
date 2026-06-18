@@ -13,7 +13,7 @@
  * Shares `protocolName === 'GRPC'` with the v1.0 transport. The core-side
  * {@link GrpcTransportFactory} inspects the matched
  * `AgentInterface.protocolVersion` when `legacyCompat: { enabled: true }`
- * is set and lazy-loads this class when the version falls in
+ * is set and instantiates this class when the version falls in
  * `[0.3, 1.0)`, so installing the default `GrpcTransportFactory` with the
  * flag transparently covers both protocol versions.
  *

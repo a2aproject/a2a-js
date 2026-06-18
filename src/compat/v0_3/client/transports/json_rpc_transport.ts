@@ -10,8 +10,8 @@
  *
  * Shares `protocolName === 'JSONRPC'` with the v1.0 transport. The
  * core-side {@link JsonRpcTransportFactory} inspects the matched
- * `AgentInterface.protocolVersion` and lazy-loads this class when it falls
- * in `[0.3, 1.0)`, so installing the default `JsonRpcTransportFactory`
+ * `AgentInterface.protocolVersion` and instantiates this class when it
+ * falls in `[0.3, 1.0)`, so installing the default `JsonRpcTransportFactory`
  * transparently covers both protocol versions.
  *
  * `listTasks` has no equivalent in v0.3 JSON-RPC (per §3.5.6 of the v0.3

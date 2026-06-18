@@ -106,8 +106,8 @@ const factory = new ClientFactory(
     cardResolver: new DefaultAgentCardResolver({ legacyCompat: { enabled: true } }),
     transports: [
       new JsonRpcTransportFactory({ legacyCompat: { enabled: true } }),
-      new RestTransportFactory({   legacyCompat: { enabled: true } }),
-      new GrpcTransportFactory({   legacyCompat: { enabled: true } }),
+      new RestTransportFactory({ legacyCompat: { enabled: true } }),
+      new GrpcTransportFactory({ legacyCompat: { enabled: true } }),
     ],
   })
 );
@@ -137,8 +137,10 @@ When `legacyCompat: { enabled: true }` is set:
    factory produces the v0.3 compat transport instead of the native v1.0
    transport.
 
-3. The v0.3 compat module is lazy-loaded — it's never reached on the
-   dispatch path when `legacyCompat` is not enabled.
+3. The v0.3 compat transport class is only instantiated when
+   `legacyCompat: { enabled: true }` is set on the factory and the matched
+   interface speaks v0.3 — so factories with the flag off never construct
+   a legacy transport at runtime.
 
 For push notifications, the v1.0+compat server uses
 `createLegacyAwarePushNotificationSender`, which pre-registers BOTH the
@@ -149,9 +151,9 @@ bodies — same server, same store, same sender.
 
 ## Configuration
 
-| Variable           | Default | Description                                  |
-| ------------------ | ------- | -------------------------------------------- |
-| `COMPAT_HTTP_PORT` | `41251` | HTTP port of the v1.0+compat server          |
-| `COMPAT_GRPC_PORT` | `41252` | gRPC port of the v1.0+compat server          |
-| `MOCK_V03_PORT`    | `41253` | Port for the in-process mock v0.3 server     |
-| `WEBHOOK_PORT`     | `42424` | Port for the in-process webhook receiver     |
+| Variable           | Default | Description                              |
+| ------------------ | ------- | ---------------------------------------- |
+| `COMPAT_HTTP_PORT` | `41251` | HTTP port of the v1.0+compat server      |
+| `COMPAT_GRPC_PORT` | `41252` | gRPC port of the v1.0+compat server      |
+| `MOCK_V03_PORT`    | `41253` | Port for the in-process mock v0.3 server |
+| `WEBHOOK_PORT`     | `42424` | Port for the in-process webhook receiver |

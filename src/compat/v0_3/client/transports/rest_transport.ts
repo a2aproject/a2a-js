@@ -19,10 +19,10 @@
  *
  * Shares `protocolName === 'HTTP+JSON'` with the v1.0 transport. The
  * core-side {@link RestTransportFactory} inspects the matched
- * `AgentInterface.protocolVersion` and lazy-loads this class when it falls
- * in `[0.3, 1.0)`, so installing the default `RestTransportFactory` with
- * `legacyCompat: { enabled: true }` transparently covers both protocol
- * versions.
+ * `AgentInterface.protocolVersion` and instantiates this class when it
+ * falls in `[0.3, 1.0)`, so installing the default `RestTransportFactory`
+ * with `legacyCompat: { enabled: true }` transparently covers both
+ * protocol versions.
  *
  * v0.3 wire-format differences from v1.0:
  *   - Content-Type / Accept are `application/json` (v0.3 did not introduce

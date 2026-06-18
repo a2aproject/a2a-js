@@ -238,7 +238,7 @@ compat surface is shipped as six subpath exports off `@a2a-js/sdk`:
 | `@a2a-js/sdk/compat/v0_3/server/express` | Express routers (`legacyAgentCardRouter`, `legacyRestRouter`) that wrap the handlers above with the v0.3 well-known agent-card and REST endpoint paths.                                                                       |
 | `@a2a-js/sdk/compat/v0_3/server/grpc`    | `legacyGrpcService` + `LegacyA2AService`. Register alongside the v1.0 `grpcService` on the same gRPC `Server`.                                                                                                                |
 | `@a2a-js/sdk/compat/v0_3/client`         | `LegacyJsonRpcTransport`, `LegacyRestTransport`, and the `isLegacyAgentCard` / `parseLegacyAgentCard` helpers. Workers-safe.                                                                                                  |
-| `@a2a-js/sdk/compat/v0_3/client/grpc`    | `LegacyGrpcTransport`, lazy-loaded by the v1.0 `GrpcTransportFactory` when the matched `AgentInterface.protocolVersion` falls in `[0.3, 1.0)`.                                                                                |
+| `@a2a-js/sdk/compat/v0_3/client/grpc`    | `LegacyGrpcTransport`, instantiated by the v1.0 `GrpcTransportFactory` when the matched `AgentInterface.protocolVersion` falls in `[0.3, 1.0)`.                                                                               |
 
 See [`src/compat/v0_3/README.md`](src/compat/v0_3/README.md) for the full
 compat-layer architecture (version negotiation under §3.6.2, push-notification

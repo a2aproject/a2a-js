@@ -410,13 +410,9 @@ export class JsonRpcTransportFactoryOptions {
  * otherwise (1.0 / empty / missing), the v1.0 transport is used.
  *
  * When `legacyCompat` is omitted or `{ enabled: false }`, the factory
- * always produces the v1.0 `JsonRpcTransport` and never loads the compat
- * module. This mirrors the server-side opt-in convention shared with the
- * Express JSON-RPC and REST handlers.
- *
- * The v0.3 transport module is loaded lazily on demand, so callers that
- * only ever talk to v1.0 agents never pull compat code into their runtime
- * graph.
+ * always produces the v1.0 `JsonRpcTransport` and never constructs a
+ * legacy transport. This mirrors the server-side opt-in convention shared
+ * with the Express JSON-RPC and REST handlers.
  */
 export class JsonRpcTransportFactory implements TransportFactory {
   constructor(private readonly options?: JsonRpcTransportFactoryOptions) {}
