@@ -1,6 +1,6 @@
 import { A2A_PROTOCOL_VERSION, A2A_VERSION_HEADER, AGENT_CARD_PATH } from '../constants.js';
 import { AgentCard } from '../index.js';
-import { isLegacyAgentCard, parseLegacyAgentCard } from '../compat/v0_3/client/card-resolver.js';
+import { isLegacyAgentCard, parseLegacyAgentCard } from '../compat/v0_3/client/index.js';
 
 export interface AgentCardResolverOptions {
   path?: string;

@@ -7,7 +7,8 @@
 1.  **A2A Clients**: Applications that can discover, connect to, and interact with A2A agents.
 2.  **A2A Servers**: Agents that expose their capabilities via the A2A protocol (JSON-RPC or HTTP+JSON/REST).
 
-The SDK implements the **A2A Protocol Specification v0.3.0**.
+The SDK implements the **A2A Protocol Specification v1.0** with an opt-in
+compatibility layer for v0.3 peers (see section 5 below).
 
 ## Tech Stack
 
@@ -46,6 +47,18 @@ The project is structured into modular entry points to allow tree-shaking and se
 *   **Handlers**: `agentCardHandler`, `jsonRpcHandler`, `restHandler` to easily mount A2A endpoints in an Express app.
 *   **`UserBuilder`**: Middleware for extracting user identity from requests.
 
+### 5. v0.3 Backward Compatibility (`src/compat/v0_3/`)
+The compat layer is shipped as six subpath exports off `@a2a-js/sdk`, mirroring the v1.0 layout (`server` is framework-agnostic; `server/express` and `server/grpc` carry the runtime-specific bits):
+
+*   **`@a2a-js/sdk/compat/v0_3`** — v0.3 protocol constants and method-name translators. Workers-safe (no Node-only peer deps).
+*   **`@a2a-js/sdk/compat/v0_3/server`** — Framework-agnostic transport handlers (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`) and the push-notification factory (`createLegacyAwarePushNotificationSender`). Workers-safe.
+*   **`@a2a-js/sdk/compat/v0_3/server/express`** — Express routers (`legacyAgentCardRouter`, `legacyRestRouter`); mount alongside or under the v1.0 `agentCardHandler` / `restHandler` to negotiate v0.3 by `A2A-Version` header.
+*   **`@a2a-js/sdk/compat/v0_3/server/grpc`** — v0.3 gRPC service (`legacyGrpcService`, `LegacyA2AService`); register alongside the v1.0 `grpcService` on the same `Server`.
+*   **`@a2a-js/sdk/compat/v0_3/client`** — v0.3 JSON-RPC + REST client transports (`LegacyJsonRpcTransport`, `LegacyRestTransport`) and card-resolver helpers. Workers-safe.
+*   **`@a2a-js/sdk/compat/v0_3/client/grpc`** — v0.3 gRPC client transport (`LegacyGrpcTransport`), lazy-loaded by the v1.0 `GrpcTransportFactory`.
+
+The bidirectional v0.3 ↔ v1.0 translators in `./translate/` are intentionally internal. See `src/compat/v0_3/README.md` for the full architecture.
+
 ## Building and Running
 
 ### Key Commands
@@ -71,4 +84,4 @@ The `src/samples` directory contains practical examples:
 ## Development Conventions
 
 *   **Testing**: All new features should have accompanying unit tests in `test/` or alongside source files.
-*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./server`, `./server/express`). Ensure new components are exported from the correct entry point.
+*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./client/grpc`, `./server`, `./server/express`, `./server/grpc`, `./compat/v0_3`, `./compat/v0_3/server`, `./compat/v0_3/server/express`, `./compat/v0_3/server/grpc`, `./compat/v0_3/client`, `./compat/v0_3/client/grpc`). Ensure new components are exported from the correct entry point.

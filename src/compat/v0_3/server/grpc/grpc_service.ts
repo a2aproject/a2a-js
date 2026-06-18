@@ -125,13 +125,12 @@ export interface LegacyGrpcServiceOptions {
  * @example
  * ```ts
  * import * as grpc from '@grpc/grpc-js';
- * import { DefaultRequestHandler, UserBuilder } from '@a2a-js/sdk/server';
+ * import { DefaultRequestHandler } from '@a2a-js/sdk/server';
+ * import { A2AService, grpcService, UserBuilder } from '@a2a-js/sdk/server/grpc';
  * import {
- *   A2AService,
- *   grpcService,
  *   LegacyA2AService,
  *   legacyGrpcService,
- * } from '@a2a-js/sdk/server/grpc';
+ * } from '@a2a-js/sdk/compat/v0_3/server/grpc';
  *
  * const requestHandler = new DefaultRequestHandler(...);
  * const server = new grpc.Server();

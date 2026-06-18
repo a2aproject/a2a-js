@@ -67,8 +67,10 @@ const WEBHOOK_URL = `http://localhost:${WEBHOOK_PORT}/webhook/task-updates`;
 const WEBHOOK_TOKEN = 'compat-demo-token';
 
 // Content types we want to print and compare side-by-side. Defined
-// inline (rather than imported from `@a2a-js/sdk/compat/v0_3/constants`)
-// so this driver's only SDK dependency is the public client API.
+// inline (rather than imported as `LEGACY_JSON_CONTENT_TYPE` from
+// `@a2a-js/sdk/compat/v0_3` and the equivalent v1.0 `A2A_CONTENT_TYPE`
+// from `@a2a-js/sdk`) so this driver's only SDK dependency is the
+// public client API.
 const V1_CONTENT_TYPE = 'application/a2a+json';
 const V03_CONTENT_TYPE = 'application/json';
 

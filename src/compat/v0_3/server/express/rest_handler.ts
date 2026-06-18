@@ -119,7 +119,7 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  *
  * @example
  * ```ts
- * import { legacyRestRouter } from '@a2a-js/sdk/compat/v0_3';
+ * import { legacyRestRouter } from '@a2a-js/sdk/compat/v0_3/server/express';
  * app.use(legacyRestRouter({ requestHandler, userBuilder }));
  * // → POST /v1/message:send
  * // → GET  /v1/tasks/:taskId

@@ -1,6 +1,6 @@
 import { withA2AVersion } from './service-parameters.js';
 import { AgentCardSignatureVerifier } from '../signature.js';
-import { LEGACY_HTTP_EXTENSION_HEADER } from '../compat/v0_3/constants.js';
+import { LEGACY_HTTP_EXTENSION_HEADER } from '../compat/v0_3/index.js';
 import { HTTP_EXTENSION_HEADER } from '../constants.js';
 import { PushNotificationNotSupportedError } from '../errors.js';
 import { isLegacyVersion } from '../version_utils.js';

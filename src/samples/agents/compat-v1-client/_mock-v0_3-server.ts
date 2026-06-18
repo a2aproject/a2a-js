@@ -5,10 +5,11 @@
  * having to start a real v0.3 server somewhere. It is INTENTIONALLY
  * hand-rolled — every wire response below is a literal JSON template
  * matching the v0.3 JSON-RPC spec verbatim. It does NOT import or use
- * the SDK's `@a2a-js/sdk/compat/v0_3/server` modules
- * (`LegacyJsonRpcTransportHandler`, `legacyAgentCardRouter`,
- * `legacyRestRouter`, etc.) — those exist exclusively to teach the
- * SDK's v1.0 server how to handle incoming v0.3 traffic.
+ * the SDK's v0.3 server modules — `LegacyJsonRpcTransportHandler`
+ * (from `@a2a-js/sdk/compat/v0_3/server`), `legacyAgentCardRouter`
+ * and `legacyRestRouter` (from `@a2a-js/sdk/compat/v0_3/server/express`),
+ * etc. — those exist exclusively to teach the SDK's v1.0 server how
+ * to handle incoming v0.3 traffic.
  */
 
 import express from 'express';

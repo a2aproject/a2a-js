@@ -29,6 +29,24 @@
       ],
       "client/grpc": [
         "./dist/client/transports/grpc/index.d.ts"
+      ],
+      "compat/v0_3": [
+        "./dist/compat/v0_3/index.d.ts"
+      ],
+      "compat/v0_3/server": [
+        "./dist/compat/v0_3/server/index.d.ts"
+      ],
+      "compat/v0_3/server/express": [
+        "./dist/compat/v0_3/server/express/index.d.ts"
+      ],
+      "compat/v0_3/server/grpc": [
+        "./dist/compat/v0_3/server/grpc/index.d.ts"
+      ],
+      "compat/v0_3/client": [
+        "./dist/compat/v0_3/client/index.d.ts"
+      ],
+      "compat/v0_3/client/grpc": [
+        "./dist/compat/v0_3/client/transports/grpc/index.d.ts"
       ]
     }
   },
@@ -62,11 +80,42 @@
       "types": "./dist/client/transports/grpc/index.d.ts",
       "import": "./dist/client/transports/grpc/index.js",
       "require": "./dist/client/transports/grpc/index.cjs"
+    },
+    "./compat/v0_3": {
+      "types": "./dist/compat/v0_3/index.d.ts",
+      "import": "./dist/compat/v0_3/index.js",
+      "require": "./dist/compat/v0_3/index.cjs"
+    },
+    "./compat/v0_3/server": {
+      "types": "./dist/compat/v0_3/server/index.d.ts",
+      "import": "./dist/compat/v0_3/server/index.js",
+      "require": "./dist/compat/v0_3/server/index.cjs"
+    },
+    "./compat/v0_3/server/express": {
+      "types": "./dist/compat/v0_3/server/express/index.d.ts",
+      "import": "./dist/compat/v0_3/server/express/index.js",
+      "require": "./dist/compat/v0_3/server/express/index.cjs"
+    },
+    "./compat/v0_3/server/grpc": {
+      "types": "./dist/compat/v0_3/server/grpc/index.d.ts",
+      "import": "./dist/compat/v0_3/server/grpc/index.js",
+      "require": "./dist/compat/v0_3/server/grpc/index.cjs"
+    },
+    "./compat/v0_3/client": {
+      "types": "./dist/compat/v0_3/client/index.d.ts",
+      "import": "./dist/compat/v0_3/client/index.js",
+      "require": "./dist/compat/v0_3/client/index.cjs"
+    },
+    "./compat/v0_3/client/grpc": {
+      "types": "./dist/compat/v0_3/client/transports/grpc/index.d.ts",
+      "import": "./dist/compat/v0_3/client/transports/grpc/index.js",
+      "require": "./dist/compat/v0_3/client/transports/grpc/index.cjs"
     }
   },
   "files": [
     "dist",
     "!dist/**/*.map",
+    "!dist/tmp-checks",
     "README.md"
   ],
   "devDependencies": {
@@ -105,7 +154,7 @@
     "coverage": "vitest run --coverage",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
     "generate:compat": "curl https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
-    "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
+    "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js ./dist/compat/v0_3/index.js ./dist/compat/v0_3/client/index.js ./dist/compat/v0_3/server/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
     "itk-agent": "tsx itk/itk_agent.ts"
   },
   "dependencies": {

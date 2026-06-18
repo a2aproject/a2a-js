@@ -7,7 +7,5 @@
  * side-by-side with the v1.0 service on a single gRPC `Server`.
  */
 
-export { legacyGrpcService } from './grpc_service.js';
-export type { LegacyGrpcServiceOptions } from './grpc_service.js';
+export { legacyGrpcService, type LegacyGrpcServiceOptions } from './grpc_service.js';
 export { A2AServiceService as LegacyA2AService } from '../../grpc/pb/a2a.js';
-export { UserBuilder } from './common.js';

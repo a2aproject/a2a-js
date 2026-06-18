@@ -7,11 +7,11 @@
  * native I/O bindings) and is incompatible with the Cloudflare Workers
  * runtime that the v1.0 `JsonRpcTransportFactory` and
  * `RestTransportFactory` must support. Consumers that need the gRPC
- * compat client should import it directly from
- * `./transports/grpc/index.js` (i.e. through the v1.0
+ * compat client should import it from
+ * `@a2a-js/sdk/compat/v0_3/client/grpc` (i.e. through the v1.0
  * `GrpcTransportFactory.legacyCompat` opt-in path, mirroring how
- * `./client/transports/grpc/index.ts` is the only Node-required
- * client-side entry point).
+ * `@a2a-js/sdk/client/grpc` is the only Node-required client-side
+ * entry point).
  */
 
 export { isLegacyAgentCard, parseLegacyAgentCard } from './card-resolver.js';

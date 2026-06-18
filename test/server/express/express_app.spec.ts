@@ -28,7 +28,7 @@ import { agentCardHandler } from '../../../src/server/express/agent_card_handler
 import { UserBuilder } from '../../../src/server/express/common.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../../../src/server/transports/jsonrpc/jsonrpc_transport_handler.js';
-import { LegacyJsonRpcTransportHandler } from '../../../src/compat/v0_3/index.js';
+import { LegacyJsonRpcTransportHandler } from '../../../src/compat/v0_3/server/index.js';
 import { AgentCard } from '../../../src/index.js';
 import { JSONRPCErrorResponse } from '../../../src/core.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';

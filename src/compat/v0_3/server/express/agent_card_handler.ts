@@ -77,7 +77,7 @@ function computeETag(json: string): string {
  *
  * @example
  * ```ts
- * import { legacyAgentCardRouter } from '@a2a-js/sdk/compat/v0_3';
+ * import { legacyAgentCardRouter } from '@a2a-js/sdk/compat/v0_3/server/express';
  * app.use(
  *   '/.well-known/agent-card.json',
  *   legacyAgentCardRouter({ agentCardProvider: requestHandler })

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import express, { Request, RequestHandler, Response } from 'express';
 import { A2A_VERSION_HEADER } from '../../constants.js';
-import { legacyAgentCardRouter } from '../../compat/v0_3/server/index.js';
+import { legacyAgentCardRouter } from '../../compat/v0_3/server/express/index.js';
 import { AgentCard } from '../../index.js';
 
 export interface AgentCardCacheOptions {

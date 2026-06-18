@@ -2,6 +2,21 @@
 
 This directory (`src/compat/v0_3/`) provides the foundational data representations necessary for modern `v1.0` clients and servers to interoperate with legacy `v0.3` A2A systems.
 
+## Published entry points
+
+The compat layer is shipped as five subpath exports off `@a2a-js/sdk`. Each subpath carries only the peer dependencies (`express`, `@grpc/grpc-js`) its runtime needs, so a Workers consumer that only opts into the compat-aware client transports never has to pull in Node-only modules.
+
+| Subpath | What it exports | Peer deps |
+| :--- | :--- | :--- |
+| `@a2a-js/sdk/compat/v0_3` | v0.3 protocol constants (`A2A_LEGACY_PROTOCOL_VERSION`, `LEGACY_HTTP_EXTENSION_HEADER`, `LEGACY_JSON_CONTENT_TYPE`, the `LEGACY_METHOD_*` literals) and method-name translators (`legacyJsonRpcToV1Method`, `v1MethodToLegacyJsonRpc`, `legacyJsonRpcToLegacyGrpcMethod`, `legacyGrpcToLegacyJsonRpcMethod`, `legacyGrpcToV1Method`, `v1MethodToLegacyGrpc`, `isLegacyJsonRpcMethod`). | none (Workers-safe) |
+| `@a2a-js/sdk/compat/v0_3/server` | Framework-agnostic transport handlers (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`, `toLegacyHTTPError`), push-notification factory (`createLegacyAwarePushNotificationSender`) and serializer (`V03PushNotificationSerializer`), and the `LegacyA2AError` class. Mount the transport handlers from any HTTP runtime (Express, Fastify, Hono, Cloudflare Workers, …). | none (Workers-safe) |
+| `@a2a-js/sdk/compat/v0_3/server/express` | Express routers (`legacyAgentCardRouter`, `legacyRestRouter`) that wrap the handlers above with the v0.3 well-known agent-card and REST endpoint paths. Header-based dispatch on `A2A-Version`. | `express` |
+| `@a2a-js/sdk/compat/v0_3/server/grpc` | v0.3 gRPC service factory (`legacyGrpcService`), service descriptor (`LegacyA2AService`), and options type. Register alongside the v1.0 `grpcService` on the same gRPC `Server`. | `@grpc/grpc-js` |
+| `@a2a-js/sdk/compat/v0_3/client` | Card-resolver helpers (`isLegacyAgentCard`, `parseLegacyAgentCard`) and the v0.3 JSON-RPC + REST client transports (`LegacyJsonRpcTransport`, `LegacyRestTransport`). | none (Workers-safe) |
+| `@a2a-js/sdk/compat/v0_3/client/grpc` | v0.3 gRPC client transport (`LegacyGrpcTransport`), lazy-loaded by the v1.0 `GrpcTransportFactory` when `legacyCompat: { enabled: true }` and the matched `AgentInterface.protocolVersion` falls in `[0.3, 1.0)`. | `@grpc/grpc-js` |
+
+The bidirectional v0.3 ↔ v1.0 payload translators in `./translate/` are intentionally NOT part of the public surface and may change without a major-version bump.
+
 ## Data Representations
 
 To support cross-version compatibility across JSON, REST, and gRPC, this directory manages three distinct legacy data representations inside `types/`:
@@ -55,7 +70,7 @@ Per A2A spec §3.6.2, clients that omit the `A2A-Version` header are treated as 
 
 2. **Synthesized v0.3 card.** The `legacyAgentCardRouter` calls `toCompatAgentCard(card, { synthesize: true })` so the well-known endpoint returns a discoverable v0.3-shaped card whose `(url, preferredTransport, additionalInterfaces)` reflect the v1.0 `supportedInterfaces` entries but whose `protocolVersion` is stamped as `'0.3'`. v0.3 clients can therefore both discover and use a v1.0-only server when the operator has opted into the compat layer.
 
-The v1.0 gRPC service factory (`src/server/grpc/grpc_service.ts`) intentionally does **not** carry a `legacyCompat` option; v0.3 gRPC clients are served by registering `legacyGrpcService` alongside the v1.0 `grpcService` on the same `Server`.
+The v1.0 gRPC service factory (`src/server/grpc/grpc_service.ts`) intentionally does **not** carry a `legacyCompat` option; v0.3 gRPC clients are served by importing `legacyGrpcService` from `@a2a-js/sdk/compat/v0_3/server/grpc` and registering it alongside the v1.0 `grpcService` on the same `Server`. (The v1.0 `@a2a-js/sdk/server/grpc` barrel does not re-export `legacyGrpcService`; the explicit compat import keeps `@grpc/grpc-js` out of the v1.0 dependency graph for operators who only deploy the v1.0 service.)
 
 ## Push Notifications
 
@@ -69,7 +84,7 @@ This is implemented by two pieces working together:
 
 ### Enabling v0.3 push delivery
 
-Use `createLegacyAwarePushNotificationSender` from `src/compat/v0_3/server/index.ts` (re-exported as `createLegacyAwarePushNotificationSender` from `@a2a-js/sdk/server`'s compat barrel) instead of constructing the sender directly. It pre-registers `V03PushNotificationSerializer` under the `'0.3'` key:
+Use `createLegacyAwarePushNotificationSender` (exported from `@a2a-js/sdk/compat/v0_3/server`) instead of constructing the sender directly. It pre-registers `V03PushNotificationSerializer` under the `'0.3'` key:
 
 ```ts
 import { InMemoryPushNotificationStore } from '@a2a-js/sdk/server';

@@ -16,8 +16,8 @@ import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_util
 import { Extensions } from '../../extensions.js';
 import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
 import { validateVersion } from '../version.js';
-import { LegacyJsonRpcTransportHandler, isLegacyJsonRpcMethod } from '../../compat/v0_3/index.js';
-import { LEGACY_HTTP_EXTENSION_HEADER } from '../../compat/v0_3/constants.js';
+import { LegacyJsonRpcTransportHandler } from '../../compat/v0_3/server/index.js';
+import { LEGACY_HTTP_EXTENSION_HEADER, isLegacyJsonRpcMethod } from '../../compat/v0_3/index.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;

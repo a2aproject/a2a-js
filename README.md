@@ -78,6 +78,8 @@ Each sample directory has its own `README.md` with run instructions.
 | [`extensions`](src/samples/extensions/)                                         | A2A protocol extension implemented as an `AgentExecutor` decorator that adds metadata to outgoing events.                                      |
 | [`client/interceptors`](src/samples/client/interceptors/)                       | Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.                                   |
 | [`cli.ts`](src/samples/cli.ts)                                                  | Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with optional Google ADC authentication.                                       |
+| [`agents/compat-v1-server`](src/samples/agents/compat-v1-server/)               | v1.0-native server with `legacyCompat: { enabled: true }` on every transport — JSON-RPC, REST, gRPC, agent card, and push notifications.       |
+| [`agents/compat-v1-client`](src/samples/agents/compat-v1-client/)               | v1.0-native client driving both the compat-aware server above and a hand-rolled mock v0.3 server in-process; pairs with `compat-v1-server`.    |
 
 To run a sample, install dependencies inside `src/samples` and use the
 provided npm scripts:
@@ -221,6 +223,29 @@ via a published JWKS. The SDK exposes `verifyAgentCardSignature`,
 on `DefaultRequestHandler`.
 
 See the [`agents/verify-signing`](src/samples/agents/verify-signing/) sample.
+
+### v0.3 backward compatibility
+
+A v1.0 server can transparently accept v0.3 clients (and a v1.0 client can
+transparently talk to v0.3 servers) by opting into the compat layer with
+`legacyCompat: { enabled: true }` on the relevant transport / handler. The
+compat surface is shipped as five subpath exports off `@a2a-js/sdk`:
+
+| Subpath                                 | Use it for                                                                                                                                                                                                       |
+| :-------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@a2a-js/sdk/compat/v0_3`               | v0.3 protocol constants and method-name translators. Workers-safe — no Node-only peer deps.                                                                                                                       |
+| `@a2a-js/sdk/compat/v0_3/server`        | Framework-agnostic transport handlers (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`), push-notification factory (`createLegacyAwarePushNotificationSender`), serializer, and `LegacyA2AError`. Workers-safe. |
+| `@a2a-js/sdk/compat/v0_3/server/express`| Express routers (`legacyAgentCardRouter`, `legacyRestRouter`) that wrap the handlers above with the v0.3 well-known agent-card and REST endpoint paths.                                                          |
+| `@a2a-js/sdk/compat/v0_3/server/grpc`   | `legacyGrpcService` + `LegacyA2AService`. Register alongside the v1.0 `grpcService` on the same gRPC `Server`.                                                                                                  |
+| `@a2a-js/sdk/compat/v0_3/client`        | `LegacyJsonRpcTransport`, `LegacyRestTransport`, and the `isLegacyAgentCard` / `parseLegacyAgentCard` helpers. Workers-safe.                                                                                     |
+| `@a2a-js/sdk/compat/v0_3/client/grpc`   | `LegacyGrpcTransport`, lazy-loaded by the v1.0 `GrpcTransportFactory` when the matched `AgentInterface.protocolVersion` falls in `[0.3, 1.0)`.                                                                   |
+
+See [`src/compat/v0_3/README.md`](src/compat/v0_3/README.md) for the full
+compat-layer architecture (version negotiation under §3.6.2, push-notification
+wire-version routing, agent-card synthesis, translator policy decisions) and
+the [`compat-v1-server`](src/samples/agents/compat-v1-server/) /
+[`compat-v1-client`](src/samples/agents/compat-v1-client/) samples for an
+end-to-end demonstration across every transport.
 
 ## License
 

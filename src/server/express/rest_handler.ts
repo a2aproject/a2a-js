@@ -23,7 +23,7 @@ import {
 import { UserBuilder } from './common.js';
 import { Extensions } from '../../extensions.js';
 import { validateVersion } from '../version.js';
-import { legacyRestRouter } from '../../compat/v0_3/server/express/rest_handler.js';
+import { legacyRestRouter } from '../../compat/v0_3/server/express/index.js';
 
 import {
   AgentCard,
