@@ -125,11 +125,9 @@ curl -sS -X POST http://localhost:41251/a2a/rest/v1/message:send \
   -H 'A2A-Version: 0.3' \
   -d '{
     "request": {
-      "message": {
-        "messageId": "demo-rest-v03",
-        "role": "user",
-        "parts": [{ "kind": "text", "text": "hello" }]
-      }
+      "messageId": "demo-rest-v03",
+      "role": "ROLE_USER",
+      "content": [{ "text": "hello", "mediaType": "text/plain" }]
     }
   }'
 ```
