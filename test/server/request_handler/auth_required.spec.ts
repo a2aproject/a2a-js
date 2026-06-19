@@ -22,6 +22,7 @@ import { ServerCallContext } from '../../../src/server/context.js';
 import { RequestContext } from '../../../src/server/agent_execution/request_context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 import { MockPushNotificationSender } from '../mocks/push_notification_sender.mock.js';
+import { MockTaskStore } from '../mocks/task_store.mock.js';
 
 /**
  * End-to-end coverage for the §7.6.1 AUTH_REQUIRED lifecycle through
@@ -586,5 +587,131 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
     // Bus stays alive for the follow-up `message/send` (§3.4.3) —
     // same pre-existing behaviour.
     expect(eventBusManager.getByTaskId(observedTaskId)).toBeDefined();
+  });
+
+  it('post-AUTH_REQUIRED drain error persists a FAILED status update instead of throwing into the background', async () => {
+    // The caller already has the AUTH_REQUIRED snapshot when the
+    // drain throws. Without `firstResultRejector` wired into the
+    // blocking-mode `_processEvents` call, `_handleProcessingError`
+    // would fall into its "blocking case" branch and `throw error`
+    // inside the unattended background drain — which makes the
+    // failure invisible to the client AND leaves the task stuck at
+    // AUTH_REQUIRED in the store. With the fix, `firstResultSent` is
+    // set alongside the snapshot resolve and `firstResultRejector`
+    // is passed in, routing the error into the "first result already
+    // sent" branch which persists a FAILED status via `ResultManager`.
+    const failingStore = new MockTaskStore();
+    const localBusManager = new DefaultExecutionEventBusManager();
+    const localHandler = new DefaultRequestHandler(
+      agentCard,
+      failingStore,
+      mockExecutor,
+      localBusManager,
+      pushNotificationStore,
+      pushNotificationSender
+    );
+
+    const errorMessage = 'Simulated store failure on COMPLETED save';
+    let savedFailed: Task | undefined;
+    const taskByState = new Map<TaskState, Task>();
+    failingStore.save.mockImplementation(async (task: Task) => {
+      // Inject the failure only on the post-snapshot publish so the
+      // snapshot return path itself is unaffected.
+      if (task.status.state === TaskState.TASK_STATE_COMPLETED) {
+        throw new Error(errorMessage);
+      }
+      if (task.status.state === TaskState.TASK_STATE_FAILED) {
+        savedFailed = task;
+      }
+      taskByState.set(task.status.state, task);
+    });
+    failingStore.load.mockImplementation(async (id: string) => {
+      // Returns the most recently saved version of the task,
+      // regardless of state — used by `ResultManager.ensureTaskLoaded`
+      // and by the handler's task-event-to-stream-response mapping.
+      for (const t of [...taskByState.values()].reverse()) {
+        if (t.id === id) return t;
+      }
+      return undefined;
+    });
+
+    let releaseGate!: () => void;
+    const gate = new Promise<void>((r) => (releaseGate = r));
+    const ids = { taskId: '', contextId: '' };
+
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      ids.taskId = ctx.taskId;
+      ids.contextId = ctx.contextId;
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_AUTH_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      await gate;
+      // This publish will trigger the rigged store failure inside
+      // the drain loop after the snapshot has already been returned.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+    });
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-auth-7', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    // The blocking call resolves with the snapshot — the
+    // post-snapshot failure must not surface here.
+    const snapshot = (await localHandler.sendMessage(params, serverContext)) as Task;
+    expect(snapshot.status.state).toBe(TaskState.TASK_STATE_AUTH_REQUIRED);
+
+    releaseGate();
+    // Let the background drain advance through the throwing publish
+    // and the recovery path that saves the FAILED status.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    // The FAILED status must have been persisted via the
+    // "first result already sent" recovery branch.
+    expect(savedFailed).toBeDefined();
+    expect(savedFailed!.id).toBe(ids.taskId);
+    expect(savedFailed!.status.state).toBe(TaskState.TASK_STATE_FAILED);
+    expect(savedFailed!.status.message?.role).toBe(Role.ROLE_AGENT);
+    expect(
+      (savedFailed!.status.message?.parts[0].content as { $case: 'text'; value: string }).value
+    ).toContain(errorMessage);
   });
 });

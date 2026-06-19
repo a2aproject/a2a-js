@@ -332,10 +332,32 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             // received.
             options.authRequiredSnapshotResolver(structuredClone(currentTask));
             authRequiredSnapshotSent = true;
+            // The caller has been handed a result (the snapshot); from
+            // `_handleProcessingError`'s perspective this is
+            // indistinguishable from the non-blocking
+            // first-Task-event resolution. Setting `firstResultSent`
+            // routes any subsequent drain error to the
+            // "first result already sent" branch, where the failure
+            // is persisted as a TASK_STATE_FAILED status update via
+            // `ResultManager` instead of being re-thrown into the
+            // unattended background drain.
+            firstResultSent = true;
           }
         }
       }
-      if (options?.firstResultRejector && !firstResultSent) {
+      // Non-blocking contract guard: the caller wired a
+      // `firstResultResolver` and expects the drain to produce at
+      // least one Task / Message event. If the executor returned
+      // without publishing one, surface the protocol violation via
+      // `firstResultRejector`.
+      //
+      // This is intentionally gated on `firstResultResolver` (not
+      // `firstResultRejector`) so the blocking caller — which also
+      // passes `firstResultRejector` to route post-AUTH_REQUIRED
+      // drain errors — doesn't trip this branch on a normal
+      // INPUT_REQUIRED / terminal exit where no first-result tracking
+      // is meaningful.
+      if (options?.firstResultResolver && options?.firstResultRejector && !firstResultSent) {
         options.firstResultRejector(
           new RequestMalformedError('Execution finished before a message or task was produced.')
         );
@@ -367,20 +389,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * a terminal — or INPUT_REQUIRED — state arrives and the loop
    * naturally exits.
    *
-   * Scheduling: detached via `queueMicrotask` so the caller's `await`
-   * resolves immediately and the drain loop runs in its own
-   * microtask context. The promise is otherwise unattended — any
-   * thrown error is logged and swallowed here so it doesn't surface
-   * as a Node `unhandledRejection`.
+   * Attaches a `.catch` so a thrown error in the unattended drain is
+   * logged instead of surfacing as a Node `unhandledRejection`.
+   * Drain errors that happen *after* the AUTH_REQUIRED snapshot are
+   * already routed through `_handleProcessingError`'s
+   * "first result already sent" branch (which persists a FAILED
+   * status update via `ResultManager`), so this handler is the
+   * last-ditch safety net for synchronous throws inside the drain
+   * machinery itself.
    */
   private _continueDraining(taskId: string, pending: Promise<void>): void {
-    queueMicrotask(() => {
-      pending.catch((error) => {
-        console.error(
-          `Background AUTH_REQUIRED drain failed for task ${taskId}:`,
-          error instanceof Error ? error.message : error
-        );
-      });
+    pending.catch((error) => {
+      console.error(
+        `Background AUTH_REQUIRED drain failed for task ${taskId}:`,
+        error instanceof Error ? error.message : error
+      );
     });
   }
 
@@ -658,6 +681,22 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             // `_continueDraining` for the unhandled-rejection guard.
             this._continueDraining(taskId, pending);
           },
+          // Passing `firstResultRejector` keeps the blocking promise
+          // in sync with `_handleProcessingError`'s tri-state contract
+          // (see `_processEvents`):
+          //   * pre-AUTH_REQUIRED drain error → rejects the outer
+          //     promise so the caller's `await sendMessage(...)`
+          //     throws (same as today's blocking behaviour);
+          //   * post-AUTH_REQUIRED drain error → `firstResultSent` is
+          //     true (set alongside the snapshot resolve), so
+          //     `_handleProcessingError` falls into the
+          //     "first result already sent" branch and persists a
+          //     FAILED status update via `ResultManager` instead of
+          //     re-throwing into the unattended background drain.
+          // Calling `reject` after `resolve` is a no-op (Promise
+          // settlement is one-shot), so this is safe even when the
+          // snapshot path already fired.
+          firstResultRejector: reject,
         });
         pending
           .then(() => {
