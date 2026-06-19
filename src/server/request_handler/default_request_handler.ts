@@ -447,8 +447,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // Publish a synthetic error event so the consumer's event loop
         // can settle the first-result promise and so any concurrent
         // resubscribers see the failure on the wire.
+        //
+        // The synthetic Task id MUST be `requestContext.taskId` — that's
+        // the id the bus is registered under and the id we hand back to
+        // the client. Fabricating a fresh `uuidv4()` here would make the
+        // returned Task unreachable via `getTask` (TaskNotFoundError).
         const errorTask: Task = {
-          id: requestContext.task?.id || uuidv4(),
+          id: requestContext.taskId,
           contextId: finalMessageForAgent.contextId!,
           status: {
             state: TaskState.TASK_STATE_FAILED,
@@ -540,23 +545,50 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   /**
    * Streaming variant of {@link _runExecutor}.
    *
-   * Differs in error handling: only publishes a synthetic statusUpdate
-   * (not a fresh Task event) when the executor rejects, because the
-   * stream is required to start with the executor's own Task event per
-   * §3.1.2. If the executor failed BEFORE publishing any Task event
-   * (e.g. argument validation), the consumer would otherwise hang
-   * forever — `eventBus.finished()` in the finally block unblocks it.
+   * Error handling mirrors the blocking path:
+   *
+   *   * If the executor has already published a Task event before
+   *     throwing, only a synthetic statusUpdate(FAILED) is published —
+   *     publishing a fresh Task event in that state would violate the
+   *     §3.1.2 task-lifecycle ordering enforced by
+   *     {@link _advanceStreamPattern}.
+   *   * If the executor threw BEFORE publishing any Task event (e.g.
+   *     argument validation, auth check), we synthesize BOTH the Task
+   *     event and the statusUpdate(FAILED) so the SSE consumer sees a
+   *     well-formed task-lifecycle stream that terminates in FAILED.
+   *     Previously this path silently returned, leaving the client with
+   *     an empty stream and no signal that the request failed —
+   *     asymmetric with the blocking path which always synthesizes the
+   *     error Task.
+   *
+   * The synthetic Task id is `requestContext.taskId` (the bus
+   * registration key and the id the client will use for subsequent
+   * `getTask` calls); the executor-published `latestTask` (if any) is
+   * preferred for the statusUpdate so the failure carries the same id
+   * the consumer has already seen on the wire.
+   *
+   * Note: we read the most-recently-published Task off the bus listener
+   * rather than from `ResultManager`. The consumer loop that drains the
+   * bus into `ResultManager` runs in a separate microtask, so
+   * `ResultManager.getCurrentTask()` would still return `undefined`
+   * immediately after a synchronous `bus.publish(...)` followed by a
+   * `throw` — which is exactly the typical executor pattern. See
+   * `trackLatestPublishedTask` and `_runExecutor` for the same
+   * rationale.
    */
   private _runStreamExecutor(
     taskId: string,
     eventBus: ExecutionEventBus,
     requestContext: RequestContext,
-    resultManager: ResultManager
+    _resultManager: ResultManager
   ): void {
     const finalMessageForAgent = requestContext.userMessage;
     // See `_runExecutor` for why we snoop the bus directly instead of
-    // re-reading state from `resultManager` in the `.finally` block.
+    // re-reading state from `resultManager` in the `.finally` block,
+    // and `trackLatestPublishedTask` for the analogous reasoning in
+    // the `.catch` block below.
     const stateTracker = trackLatestTaskState(eventBus);
+    const publishedTaskTracker = trackLatestPublishedTask(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -568,24 +600,65 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
           err
         );
-        // Only publish a synthetic error status update if the task already
-        // exists in the store. If the agent failed before creating a task,
-        // the `finished()` signal below unblocks the consumer without
-        // producing a stream-pattern violation.
-        const currentTask = resultManager.getCurrentTask();
-        if (!currentTask) {
-          return;
+
+        const latestTask = publishedTaskTracker();
+        const errorTaskId = latestTask?.id ?? requestContext.taskId;
+        const errorContextId = latestTask?.contextId ?? finalMessageForAgent.contextId!;
+
+        // If no Task event has been published yet, synthesize one first
+        // so the SSE consumer's stream pattern transitions into
+        // TASK_LIFECYCLE (per §3.1.2) before the statusUpdate(FAILED)
+        // lands. Without this, the executor would silently close an
+        // empty stream and the client would have no way to learn the
+        // request failed — the asymmetry called out in PR 2.
+        if (!latestTask) {
+          const errorTask: Task = {
+            id: requestContext.taskId,
+            contextId: finalMessageForAgent.contextId!,
+            status: {
+              state: TaskState.TASK_STATE_FAILED,
+              message: {
+                role: Role.ROLE_AGENT,
+                messageId: uuidv4(),
+                taskId: requestContext.taskId,
+                contextId: finalMessageForAgent.contextId!,
+                parts: [
+                  {
+                    content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
+                    mediaType: 'text/plain',
+                    filename: '',
+                    metadata: {},
+                  },
+                ],
+                metadata: {},
+                extensions: [],
+                referenceTaskIds: [],
+              },
+              timestamp: new Date().toISOString(),
+            },
+            artifacts: [],
+            history: requestContext.task?.history ? [...requestContext.task.history] : [],
+            metadata: {},
+          };
+          if (
+            finalMessageForAgent &&
+            !errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)
+          ) {
+            errorTask.history?.push(finalMessageForAgent);
+          }
+          eventBus.publish(AgentEvent.task(errorTask));
         }
+
         const errorTaskStatus: TaskStatusUpdateEvent = {
-          taskId: requestContext.taskId,
-          contextId: finalMessageForAgent.contextId!,
+          taskId: errorTaskId,
+          contextId: errorContextId,
           status: {
             state: TaskState.TASK_STATE_FAILED,
             message: {
               role: Role.ROLE_AGENT,
               messageId: uuidv4(),
-              taskId: requestContext.taskId,
-              contextId: finalMessageForAgent.contextId!,
+              taskId: errorTaskId,
+              contextId: errorContextId,
               parts: [
                 {
                   content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
@@ -1244,5 +1317,39 @@ function trackLatestTaskState(bus: ExecutionEventBus): () => TaskState | undefin
   return () => {
     bus.off('event', listener);
     return lastState;
+  };
+}
+
+/**
+ * Subscribes a lightweight listener on `bus` that records the
+ * most-recent `Task` event published. Returns a thunk that detaches
+ * the listener and yields the captured `Task` (or `undefined` if none
+ * was published).
+ *
+ * Used by `_runStreamExecutor`'s error path to decide whether to
+ * synthesize a fresh Task event before the terminal statusUpdate.
+ * Reading from the `ResultManager` is unsafe at the point we need to
+ * make this decision: the consumer loop that drains the bus into the
+ * `ResultManager` runs in a separate microtask, so an executor that
+ * synchronously `bus.publish(...)`s a Task and then throws would
+ * appear (via `ResultManager`) to have published nothing — and we'd
+ * incorrectly re-publish a Task, violating the §3.1.2 stream-pattern
+ * ordering enforced by `_advanceStreamPattern`.
+ *
+ * The same per-execution listener-detach contract as
+ * {@link trackLatestTaskState} applies: detach on read in `.finally()`
+ * so a long-lived bus doesn't accumulate listeners across turns.
+ */
+function trackLatestPublishedTask(bus: ExecutionEventBus): () => Task | undefined {
+  let lastTask: Task | undefined;
+  const listener = (event: AgentExecutionEvent) => {
+    if (event.kind === 'task') {
+      lastTask = event.data;
+    }
+  };
+  bus.on('event', listener);
+  return () => {
+    bus.off('event', listener);
+    return lastTask;
   };
 }
