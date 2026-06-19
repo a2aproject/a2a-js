@@ -248,7 +248,7 @@ describe('RestTransportHandler', () => {
 
       expect(result).to.deep.equal(testTask);
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1', historyLength: 0, tenant: '' },
+        { id: 'task-1', tenant: '' },
         mockContext
       );
     });
