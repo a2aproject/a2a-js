@@ -1,4 +1,10 @@
-import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../index.js';
+import {
+  Artifact,
+  Message,
+  Task,
+  TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
+} from '../index.js';
 import { ServerCallContext } from './context.js';
 import { AgentExecutionEvent, assertUnreachableEvent } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
@@ -35,9 +41,53 @@ export class ResultManager {
       }
       case 'task': {
         const taskEvent = event.data;
-        this.currentTask = { ...taskEvent }; // Make a copy
 
-        // Ensure the latest user message is in history if not already present
+        // Merge with any persisted state instead of wholesale-replacing it.
+        // A fresh Task event published on a follow-up turn (e.g. after
+        // INPUT_REQUIRED) often has empty `history` / `artifacts`; replacing
+        // would drop the entire conversation.
+        //
+        // Unlike status/artifact updates, receiving a Task event with no
+        // prior persisted task is the normal create-flow, so we load
+        // directly rather than going through `ensureTaskLoaded` (which
+        // warns on misses).
+        if (!this.currentTask && taskEvent.id) {
+          const loaded = await this.taskStore.load(taskEvent.id, this.serverCallContext);
+          if (loaded) {
+            this.currentTask = loaded;
+          }
+        }
+        const persistedTask =
+          this.currentTask && this.currentTask.id === taskEvent.id ? this.currentTask : undefined;
+
+        const mergedTask: Task = { ...taskEvent };
+
+        if (persistedTask) {
+          // Preserve persisted history when the incoming Task event omits it.
+          // If the incoming Task event carries its own history, treat it as
+          // authoritative (the executor is responsible for what gets persisted
+          // per §3.7).
+          if ((!mergedTask.history || mergedTask.history.length === 0) && persistedTask.history) {
+            mergedTask.history = [...persistedTask.history];
+          }
+
+          // Merge artifacts: keep persisted artifacts and overlay any incoming
+          // ones (matched by artifactId). Incoming wins for collisions; new
+          // ones are appended.
+          mergedTask.artifacts = this.mergeArtifacts(persistedTask.artifacts, taskEvent.artifacts);
+
+          // Merge metadata, incoming wins on key collisions.
+          if (persistedTask.metadata || taskEvent.metadata) {
+            mergedTask.metadata = {
+              ...(persistedTask.metadata ?? {}),
+              ...(taskEvent.metadata ?? {}),
+            };
+          }
+        }
+
+        this.currentTask = mergedTask;
+
+        // Ensure the latest user message is in history if not already present.
         if (this.latestUserMessage) {
           if (
             !this.currentTask.history?.find(
@@ -127,6 +177,38 @@ export class ResultManager {
       }
       await this.saveCurrentTask();
     }
+  }
+
+  /**
+   * Merges artifact arrays, deduplicating by `artifactId`. Persisted artifacts
+   * are retained and overlaid by any incoming artifact with the same id;
+   * artifacts only present in the incoming list are appended. Order is
+   * preserved (persisted first, then any newly-introduced incoming artifacts).
+   */
+  private mergeArtifacts(
+    persisted: Artifact[] | undefined,
+    incoming: Artifact[] | undefined
+  ): Artifact[] {
+    if (!persisted || persisted.length === 0) {
+      return incoming ? [...incoming] : [];
+    }
+    if (!incoming || incoming.length === 0) {
+      return [...persisted];
+    }
+
+    const incomingById = new Map<string, Artifact>();
+    for (const art of incoming) {
+      incomingById.set(art.artifactId, art);
+    }
+
+    const merged: Artifact[] = persisted.map((art) => incomingById.get(art.artifactId) ?? art);
+    const seenIds = new Set(persisted.map((art) => art.artifactId));
+    for (const art of incoming) {
+      if (!seenIds.has(art.artifactId)) {
+        merged.push(art);
+      }
+    }
+    return merged;
   }
 
   private async saveCurrentTask(): Promise<void> {
