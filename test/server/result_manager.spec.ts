@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { Artifact, Message, Role, Task, TaskState } from '../../src/types/pb/a2a.js';
+import {
+  Artifact,
+  Message,
+  Role,
+  Task,
+  TaskState,
+  TaskStatusUpdateEvent,
+} from '../../src/types/pb/a2a.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { ResultManager } from '../../src/server/result_manager.js';
 import { InMemoryTaskStore } from '../../src/server/store.js';
@@ -353,5 +360,168 @@ describe('ResultManager.processEvent("task")', () => {
     // The new artifact landed without clobbering anything.
     expect(finalTask!.artifacts).toHaveLength(1);
     expect(finalTask!.artifacts![0].artifactId).toBe('movie-rec');
+  });
+
+  it('re-loads from the store when the cached task id differs from the incoming Task event', async () => {
+    // Prime the store with two distinct tasks.
+    const taskA = createTask('task-A', 'ctx-A', {
+      history: [createMessage('a-user-1', 'A first')],
+      status: {
+        state: TaskState.TASK_STATE_INPUT_REQUIRED,
+        message: undefined,
+        timestamp: undefined,
+      },
+    });
+    const taskB = createTask('task-B', 'ctx-B', {
+      history: [createMessage('b-user-1', 'B first')],
+      status: {
+        state: TaskState.TASK_STATE_INPUT_REQUIRED,
+        message: undefined,
+        timestamp: undefined,
+      },
+    });
+    await store.save(taskA, context);
+    await store.save(taskB, context);
+
+    const rm = new ResultManager(store, context);
+    rm.setContext(createMessage('a-user-2', 'A second'));
+
+    // First publish a Task event for task-A so the ResultManager caches it.
+    await rm.processEvent(
+      AgentEvent.task(
+        createTask('task-A', 'ctx-A', {
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+    expect(rm.getCurrentTask()?.id).toBe('task-A');
+
+    // Now publish a Task event for task-B with empty history. Without the
+    // defensive reload this would have wholesale-overwritten task-B's
+    // persisted history (because the cached currentTask had id task-A and
+    // wouldn't have matched, so persistedTask would have been undefined).
+    rm.setContext(createMessage('b-user-2', 'B second'));
+    await rm.processEvent(
+      AgentEvent.task(
+        createTask('task-B', 'ctx-B', {
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+
+    const finalB = await store.load('task-B', context);
+    const finalBIds = (finalB!.history ?? []).map((m) => m.messageId);
+    expect(finalBIds).toContain('b-user-1'); // history preserved across reload
+    expect(finalBIds).toContain('b-user-2');
+    // task-A's persisted state should not have been touched by the task-B
+    // event. The latest user message is prepended by ResultManager when
+    // missing from history.
+    const finalA = await store.load('task-A', context);
+    const finalAIds = (finalA!.history ?? []).map((m) => m.messageId);
+    expect(finalAIds).toContain('a-user-1');
+    expect(finalAIds).toContain('a-user-2');
+    expect(finalAIds).toHaveLength(2);
+  });
+
+  it('isolates persisted state from later mutation of the incoming Task event payload', async () => {
+    const rm = new ResultManager(store, context);
+    const userMsg = createMessage('user-1', 'hi');
+    rm.setContext(userMsg);
+
+    const sharedArtifact = createArtifact('art-1', 'original content');
+    const taskEvent = createTask('task-mutate', 'ctx-mutate', {
+      artifacts: [sharedArtifact],
+      metadata: { agentVersion: 'v1' },
+    });
+    await rm.processEvent(AgentEvent.task(taskEvent));
+
+    // Mutate the originals after publication; the persisted task must not
+    // observe these changes.
+    sharedArtifact.name = 'mutated-name';
+    sharedArtifact.parts[0].content = { $case: 'text', value: 'mutated content' };
+    (taskEvent.metadata as Record<string, string>).agentVersion = 'v999';
+    taskEvent.history = [createMessage('injected', 'should not appear')];
+
+    const saved = await store.load('task-mutate', context);
+    expect(saved!.artifacts![0].name).toBe('art-1');
+    expect((saved!.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value).toBe(
+      'original content'
+    );
+    expect((saved!.metadata as Record<string, string>).agentVersion).toBe('v1');
+    // The injected history entry must not have leaked into our stored task.
+    expect((saved!.history ?? []).map((m) => m.messageId)).not.toContain('injected');
+  });
+
+  it('isolates persisted state from later mutation of incoming status / artifact event payloads', async () => {
+    const taskId = 'task-mutate-updates';
+    const contextId = 'ctx-mutate-updates';
+
+    // Seed with a base task.
+    await store.save(
+      createTask(taskId, contextId, {
+        history: [createMessage('user-1', 'go')],
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          message: undefined,
+          timestamp: undefined,
+        },
+      }),
+      context
+    );
+
+    const rm = new ResultManager(store, context);
+
+    // Status update with a message — mutate the original after delivery.
+    const statusMessage = createMessage('agent-1', 'thinking', Role.ROLE_AGENT);
+    const statusEvent: TaskStatusUpdateEvent = {
+      taskId,
+      contextId,
+      status: {
+        state: TaskState.TASK_STATE_WORKING,
+        timestamp: undefined,
+        message: statusMessage,
+      },
+      metadata: {},
+    };
+    await rm.processEvent(AgentEvent.statusUpdate(statusEvent));
+    statusMessage.parts[0].content = { $case: 'text', value: 'mutated' };
+    statusEvent.status.state = TaskState.TASK_STATE_FAILED;
+
+    let snapshot = await store.load(taskId, context);
+    expect(snapshot!.status?.state).toBe(TaskState.TASK_STATE_WORKING);
+    const persistedAgentMsg = snapshot!.history!.find((m) => m.messageId === 'agent-1')!;
+    expect((persistedAgentMsg.parts[0].content as { $case: 'text'; value: string }).value).toBe(
+      'thinking'
+    );
+
+    // Artifact update — mutate after delivery and verify persisted artifact
+    // is unchanged.
+    const artifact = createArtifact('art-x', 'original');
+    await rm.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId,
+        contextId,
+        artifact,
+        append: false,
+        lastChunk: true,
+        metadata: {},
+      })
+    );
+    artifact.parts[0].content = { $case: 'text', value: 'mutated artifact' };
+    artifact.name = 'mutated';
+
+    snapshot = await store.load(taskId, context);
+    expect(snapshot!.artifacts![0].name).toBe('art-x');
+    expect(
+      (snapshot!.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value
+    ).toBe('original');
   });
 });
