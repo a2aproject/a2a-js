@@ -12,7 +12,10 @@ import {
   TaskStatusUpdateEvent,
 } from '../../../src/types/pb/a2a.js';
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
-import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
+import {
+  AgentEvent,
+  DefaultExecutionEventBus,
+} from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
@@ -342,5 +345,144 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeUndefined();
+  });
+
+  it('does not leak the published-task listener on the success path (regression: gemini-code-assist)', async () => {
+    // Regression for the listener leak gemini-code-assist flagged on
+    // PR #525: `trackLatestPublishedTask` registers a listener on the
+    // bus at the top of `_runStreamExecutor`, but the detach thunk it
+    // returns is only invoked inside the `.catch` block. On the
+    // success path the `.catch` is skipped, so the listener leaks on
+    // the bus — and because the bus is kept alive across
+    // INPUT_REQUIRED / AUTH_REQUIRED turns (§3.4.3, §7.6.1), every
+    // follow-up `sendMessageStream` on the same task adds another
+    // listener.
+    //
+    // Strategy: drive several successful INPUT_REQUIRED turns on the
+    // same task (so the bus stays alive across turns) and read the
+    // bus's internal `eventListeners` map size after each turn
+    // settles. With the bug, the map size would grow by 1 per turn
+    // (the un-detached `trackLatestPublishedTask` listener). With the
+    // fix, the map shrinks back to its baseline after each turn.
+    const taskId = 'leak-task-1';
+    const contextId = 'leak-context-1';
+
+    // Pre-create the task in the store so the handler binds each
+    // follow-up `message/send` to this taskId (per §3.4.3) and finds
+    // the bus we install below.
+    await taskStore.save(
+      {
+        id: taskId,
+        contextId,
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      },
+      serverContext
+    );
+
+    const bus = new DefaultExecutionEventBus();
+
+    // Install the bus into the manager BEFORE the handler is asked to
+    // create one, so `createOrGetByTaskId` returns this instance.
+    const localBusManager = new DefaultExecutionEventBusManager();
+    (localBusManager as unknown as { taskIdToBus: Map<string, unknown> }).taskIdToBus.set(
+      taskId,
+      bus
+    );
+
+    const localHandler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      mockExecutor,
+      localBusManager
+    );
+
+    // Reach into the bus's private listener map to read its size.
+    // The DefaultExecutionEventBus tracks 'event' listeners in a
+    // private `Map<Listener, WrappedListener[]>`; counting its size
+    // gives us the number of distinct registered `event` listeners.
+    const eventListenerCount = (): number =>
+      (bus as unknown as { eventListeners: Map<unknown, unknown> }).eventListeners.size;
+
+    // Drive N successful INPUT_REQUIRED turns. Pre-fix, each turn
+    // leaks one listener (the `trackLatestPublishedTask` one),
+    // monotonically growing the listener map. Post-fix, the size
+    // returns to the same baseline after each turn settles.
+    const turns = 3;
+    const sizesAfterTurns: number[] = [];
+
+    const runInputRequiredTurn = async (turnIdx: number): Promise<void> => {
+      mockExecutor.execute.mockImplementationOnce(async (_ctx, busArg) => {
+        busArg.publish(
+          AgentEvent.task({
+            id: taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
+        busArg.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_INPUT_REQUIRED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            metadata: {},
+          })
+        );
+      });
+
+      const params: SendMessageRequest = {
+        message: makeMessage(`msg-leak-${turnIdx}`, `turn ${turnIdx}`, { taskId, contextId }),
+        tenant: '',
+        configuration: undefined,
+        metadata: {},
+      };
+      for await (const _event of localHandler.sendMessageStream(params, serverContext)) {
+        void _event;
+      }
+      // Allow `.finally()` (which detaches the tracker listeners) and
+      // the queue's stop() (which detaches its own listeners) to run.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      // Bus must still be alive at INPUT_REQUIRED per §3.4.3.
+      expect(localBusManager.getByTaskId(taskId)).toBe(bus);
+      sizesAfterTurns.push(eventListenerCount());
+    };
+
+    for (let i = 0; i < turns; i++) {
+      await runInputRequiredTurn(i);
+    }
+
+    // After every settled turn, the bus must hold exactly the same
+    // number of `event` listeners — the baseline (0 in this setup, but
+    // we assert equality rather than zero to stay robust against
+    // future infrastructure listeners). A leaking
+    // `trackLatestPublishedTask` would make the sequence monotonically
+    // increasing (e.g., [1, 2, 3]).
+    const baseline = sizesAfterTurns[0];
+    for (let i = 1; i < sizesAfterTurns.length; i++) {
+      expect(sizesAfterTurns[i]).toBe(baseline);
+    }
+    // And the baseline itself must be 0: there's no executor running
+    // between turns and no live consumer, so nothing should remain
+    // attached to the bus.
+    expect(baseline).toBe(0);
   });
 });

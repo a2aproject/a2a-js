@@ -587,8 +587,22 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // re-reading state from `resultManager` in the `.finally` block,
     // and `trackLatestPublishedTask` for the analogous reasoning in
     // the `.catch` block below.
-    const stateTracker = trackLatestTaskState(eventBus);
+    const rawStateTracker = trackLatestTaskState(eventBus);
     const publishedTaskTracker = trackLatestPublishedTask(eventBus);
+    // Compose the two trackers so `.finally()` always detaches BOTH
+    // listeners — including on the success path, which never enters
+    // `.catch` and so never invokes `publishedTaskTracker()` directly.
+    // Without this, the published-task listener leaks on the bus, and
+    // since the bus is kept alive across INPUT_REQUIRED / AUTH_REQUIRED
+    // turns, every follow-up `sendMessageStream` on the same task would
+    // pile on another listener. The detach thunks are idempotent
+    // (`bus.off` on an already-removed listener is a no-op), so calling
+    // `publishedTaskTracker()` here after the `.catch` block has already
+    // consumed it is safe.
+    const stateTracker = () => {
+      publishedTaskTracker();
+      return rawStateTracker();
+    };
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
