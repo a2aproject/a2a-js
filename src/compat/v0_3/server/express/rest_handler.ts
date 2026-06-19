@@ -25,7 +25,7 @@ import express, {
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
 import { Extensions } from '../../../../extensions.js';
 import { ServerCallContext } from '../../../../server/context.js';
-import { UserBuilder } from '../../../../server/express/common.js';
+import { UserBuilder, delegateAsyncIterator } from '../../../../server/express/common.js';
 import { type A2ARequestHandler } from '../../../../server/request_handler/a2a_request_handler.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../../../sse_utils.js';
 import { validateVersion } from '../../../../server/version.js';
@@ -357,7 +357,14 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
       if (!firstResult.done) {
         res.write(formatSSEEvent(encodeStreamEvent(firstResult.value)));
       }
-      for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
+      // Delegate through `delegateAsyncIterator` so `.return()` is
+      // explicitly forwarded to the underlying generator on disposal —
+      // the inline `{ [Symbol.asyncIterator]: () => iterator }` wrapper
+      // relies on host-engine `for await` semantics for that cleanup,
+      // which is unreliable across runtimes. Without explicit
+      // propagation the generator's `finally` (event-bus listener
+      // cleanup, queue stop) may not run, leaking listeners.
+      for await (const event of delegateAsyncIterator(iterator)) {
         res.write(formatSSEEvent(encodeStreamEvent(event)));
       }
     } catch (streamError: unknown) {

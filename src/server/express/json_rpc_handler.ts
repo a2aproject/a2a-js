@@ -11,7 +11,7 @@ import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContext } from '../context.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '../../constants.js';
-import { UserBuilder } from './common.js';
+import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
 import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
@@ -167,7 +167,14 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           if (!firstResult.done) {
             res.write(formatSSEEvent(firstResult.value));
           }
-          for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
+          // Delegate through `delegateAsyncIterator` so `.return()` is
+          // explicitly forwarded to the underlying generator on disposal —
+          // the inline `{ [Symbol.asyncIterator]: () => iterator }` wrapper
+          // relies on host-engine `for await` semantics for that cleanup,
+          // which is unreliable across runtimes. Without explicit
+          // propagation the generator's `finally` (event-bus listener
+          // cleanup, queue stop) may not run, leaking listeners.
+          for await (const event of delegateAsyncIterator(iterator)) {
             res.write(formatSSEEvent(event));
           }
         } catch (streamError) {

@@ -20,7 +20,7 @@ import {
   A2A_VERSION_HEADER,
   HTTP_EXTENSION_HEADER,
 } from '../../constants.js';
-import { UserBuilder } from './common.js';
+import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { Extensions } from '../../extensions.js';
 import { validateVersion } from '../version.js';
 import { legacyRestRouter } from '../../compat/v0_3/server/express/index.js';
@@ -301,7 +301,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         const result = StreamResponse.toJSON(firstResult.value);
         res.write(formatSSEEvent(result));
       }
-      for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
+      // Delegate through `delegateAsyncIterator` so `.return()` is
+      // explicitly forwarded to the underlying generator on disposal —
+      // the inline `{ [Symbol.asyncIterator]: () => iterator }` wrapper
+      // relies on host-engine `for await` semantics for that cleanup,
+      // which is unreliable across runtimes. Without explicit
+      // propagation the generator's `finally` (event-bus listener
+      // cleanup, queue stop) may not run, leaking listeners.
+      for await (const event of delegateAsyncIterator(iterator)) {
         const result = StreamResponse.toJSON(event);
         res.write(formatSSEEvent(result));
       }
