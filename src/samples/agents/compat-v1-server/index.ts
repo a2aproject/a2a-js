@@ -52,13 +52,7 @@ import {
   UserBuilder,
 } from '../../../server/express/index.js';
 import { A2AService, grpcService } from '../../../server/grpc/index.js';
-// Published path: `@a2a-js/sdk/compat/v0_3/server/grpc`
 import { LegacyA2AService, legacyGrpcService } from '../../../compat/v0_3/server/grpc/index.js';
-// Published path: `@a2a-js/sdk/compat/v0_3/server`. The Express routers
-// (`legacyAgentCardRouter`, `legacyRestRouter`) live under
-// `@a2a-js/sdk/compat/v0_3/server/express` and are mounted automatically
-// by the v1.0 `agentCardHandler` / `restHandler` below when
-// `legacyCompat: { enabled: true }` is passed — no direct import needed.
 import { createLegacyAwarePushNotificationSender } from '../../../compat/v0_3/server/index.js';
 import { SampleAgentExecutor } from '../sample-agent/agent_executor.js';
 
