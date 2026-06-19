@@ -11,16 +11,45 @@ const TERMINAL_STATE_LIST: TaskState[] = [
 export { TERMINAL_STATE_LIST };
 
 /**
- * Non-terminal states that pause the executor and require a follow-up
- * message before progress can resume. The agent's `execute()` is
- * expected to return after publishing one of these states, but the
- * underlying task remains live so a client can resubscribe — or send a
- * fresh message with the same `taskId` — to continue the flow. See
- * §3.4.3 (Input Required State) of the A2A specification.
+ * Non-terminal state in which the executor pauses awaiting a fresh
+ * follow-up message from the client (§3.4.3). Both the executor's
+ * `execute()` call AND the blocking consumer's drain loop stop when
+ * this state is published — there is nothing more to drain until a
+ * subsequent `message/send` reuses the same `taskId`.
+ */
+const INPUT_REQUIRED_STATE_LIST: TaskState[] = [TaskState.TASK_STATE_INPUT_REQUIRED];
+export { INPUT_REQUIRED_STATE_LIST };
+
+/**
+ * Non-terminal state in which the executor pauses awaiting an
+ * out-of-band credential injection (§7.6.1). Unlike INPUT_REQUIRED, the
+ * agent is expected to "immediately continue Task processing after
+ * receiving the credential, without a requirement that clients send a
+ * follow-up message." The response stream therefore MUST NOT be closed
+ * on this state, and a blocking caller MUST be returned a snapshot of
+ * the current Task while the event bus keeps draining in the
+ * background until a terminal state is reached.
+ */
+const AUTH_REQUIRED_STATE_LIST: TaskState[] = [TaskState.TASK_STATE_AUTH_REQUIRED];
+export { AUTH_REQUIRED_STATE_LIST };
+
+/**
+ * Union of {@link INPUT_REQUIRED_STATE_LIST} and
+ * {@link AUTH_REQUIRED_STATE_LIST} — the non-terminal states in which
+ * the executor's `execute()` call returns after a single publish (the
+ * agent is paused, waiting on the client or on external credentials).
+ *
+ * Kept as a re-export for the call sites that genuinely need both
+ * states together — typically terminal/snapshot checks where the
+ * distinction between the two pause reasons doesn't matter (e.g. "have
+ * we reached a steady state from which the blocking caller can return
+ * a snapshot to the client?"). Lifecycle decisions that differ between
+ * the two (closing the bus, stopping the drain loop) MUST use the
+ * specific lists above instead.
  */
 const INTERRUPTED_STATE_LIST: TaskState[] = [
-  TaskState.TASK_STATE_INPUT_REQUIRED,
-  TaskState.TASK_STATE_AUTH_REQUIRED,
+  ...INPUT_REQUIRED_STATE_LIST,
+  ...AUTH_REQUIRED_STATE_LIST,
 ];
 export { INTERRUPTED_STATE_LIST };
 

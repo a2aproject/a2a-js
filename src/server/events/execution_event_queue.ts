@@ -1,5 +1,5 @@
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
-import { INTERRUPTED_STATE_LIST, TERMINAL_STATE_LIST } from '../utils.js';
+import { INPUT_REQUIRED_STATE_LIST, TERMINAL_STATE_LIST } from '../utils.js';
 
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
@@ -43,17 +43,26 @@ export class ExecutionEventQueue {
         //   * a Message (the only event a stateless agent ever produces);
         //   * a terminal Task status (COMPLETED / FAILED / CANCELED /
         //     REJECTED) — the task can never produce further events;
-        //   * an interrupted Task status (INPUT_REQUIRED / AUTH_REQUIRED)
-        //     — the executor has returned and is awaiting a fresh
-        //     message, so blocking consumers must stop iterating; the
-        //     underlying bus stays alive in `DefaultRequestHandler` so
-        //     resubscribers and follow-up sends can still attach.
+        //   * INPUT_REQUIRED — the executor has returned and is
+        //     awaiting a fresh client message, so blocking consumers
+        //     must stop iterating; the underlying bus stays alive in
+        //     `DefaultRequestHandler` so resubscribers and follow-up
+        //     sends can still attach.
+        //
+        // AUTH_REQUIRED is deliberately NOT in the stop set per spec
+        // §7.6.1: the agent is expected to keep publishing on the same
+        // bus immediately after the out-of-band credential injection,
+        // so the queue must stay drainable. A blocking caller in
+        // `DefaultRequestHandler` returns a snapshot at the
+        // AUTH_REQUIRED status update via a separate code path and a
+        // background consumer continues draining this queue until a
+        // terminal state is reached.
         if (
           event.kind === 'message' ||
           (event.kind === 'statusUpdate' &&
             event.data.status &&
             (TERMINAL_STATE_LIST.includes(event.data.status.state) ||
-              INTERRUPTED_STATE_LIST.includes(event.data.status.state)))
+              INPUT_REQUIRED_STATE_LIST.includes(event.data.status.state)))
         ) {
           this.handleFinished();
           break;

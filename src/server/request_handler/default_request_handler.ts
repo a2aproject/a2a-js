@@ -56,7 +56,13 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-import { INTERRUPTED_STATE_LIST, TERMINAL_STATE_LIST, isTask, StreamPattern } from '../utils.js';
+import {
+  AUTH_REQUIRED_STATE_LIST,
+  INTERRUPTED_STATE_LIST,
+  TERMINAL_STATE_LIST,
+  isTask,
+  StreamPattern,
+} from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors.js';
 
@@ -250,9 +256,32 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     options?: {
       firstResultResolver?: (value: Message | Task) => void;
       firstResultRejector?: (reason?: unknown) => void;
+      /**
+       * If provided, fires (at most once) the first time the queue
+       * yields a `statusUpdate` whose state is in
+       * {@link AUTH_REQUIRED_STATE_LIST}. The callback receives a deep
+       * snapshot of the current Task as known to the `ResultManager`
+       * immediately after the AUTH_REQUIRED event has been persisted.
+       *
+       * The drain loop continues iterating after invocation per spec
+       * §7.6.1: AUTH_REQUIRED is not a stream-terminating state, so the
+       * agent may resume publishing on the same bus as soon as the
+       * credential is injected out-of-band.
+       *
+       * Blocking `sendMessage` uses this hook to return a snapshot to
+       * the caller without tearing down the consumer; the
+       * `ExecutionEventQueue` is configured (see
+       * `INPUT_REQUIRED_STATE_LIST` in `events()`) to keep yielding
+       * after AUTH_REQUIRED, so this same `_processEvents` invocation
+       * continues draining in the background as a fire-and-forget
+       * task until a terminal state — or INPUT_REQUIRED, the other
+       * pause state — is reached.
+       */
+      authRequiredSnapshotResolver?: (snapshot: Task) => void;
     }
   ): Promise<void> {
     let firstResultSent = false;
+    let authRequiredSnapshotSent = false;
     try {
       for await (const event of eventQueue.events()) {
         await resultManager.processEvent(event);
@@ -281,6 +310,30 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             firstResultSent = true;
           }
         }
+
+        // §7.6.1 AUTH_REQUIRED snapshot: hand the blocking caller a
+        // copy of the current Task at the moment the executor signals
+        // it needs a credential, but DO NOT break out of the loop —
+        // the queue is configured to keep yielding past AUTH_REQUIRED
+        // so the executor can resume publishing once the credential
+        // arrives out-of-band.
+        if (
+          options?.authRequiredSnapshotResolver &&
+          !authRequiredSnapshotSent &&
+          event.kind === 'statusUpdate' &&
+          event.data.status &&
+          AUTH_REQUIRED_STATE_LIST.includes(event.data.status.state)
+        ) {
+          const currentTask = resultManager.getCurrentTask();
+          if (currentTask) {
+            // Deep-clone so subsequent in-place mutations by the
+            // continuing drain (status updates, artifact merges)
+            // can't leak into the snapshot the caller already
+            // received.
+            options.authRequiredSnapshotResolver(structuredClone(currentTask));
+            authRequiredSnapshotSent = true;
+          }
+        }
       }
       if (options?.firstResultRejector && !firstResultSent) {
         options.firstResultRejector(
@@ -301,6 +354,34 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // when the executor settles (see `_runExecutor` / `_runStreamExecutor`).
       eventQueue.stop();
     }
+  }
+
+  /**
+   * Background drain helper used by the blocking `sendMessage` path
+   * after an AUTH_REQUIRED snapshot has been returned to the caller.
+   *
+   * The pending `_processEvents` promise continues iterating the
+   * event queue (which, per §7.6.1, is configured to stay open
+   * through AUTH_REQUIRED) so subsequent agent events keep flowing
+   * into the {@link ResultManager} and push-notification sender until
+   * a terminal — or INPUT_REQUIRED — state arrives and the loop
+   * naturally exits.
+   *
+   * Scheduling: detached via `queueMicrotask` so the caller's `await`
+   * resolves immediately and the drain loop runs in its own
+   * microtask context. The promise is otherwise unattended — any
+   * thrown error is logged and swallowed here so it doesn't surface
+   * as a Node `unhandledRejection`.
+   */
+  private _continueDraining(taskId: string, pending: Promise<void>): void {
+    queueMicrotask(() => {
+      pending.catch((error) => {
+        console.error(
+          `Background AUTH_REQUIRED drain failed for task ${taskId}:`,
+          error instanceof Error ? error.message : error
+        );
+      });
+    });
   }
 
   /**
@@ -399,10 +480,27 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * Settles the event bus once the executor returns.
    *
    * Terminal states (and the bare-Message pattern in §3.1.2) close the
-   * bus immediately. Interrupted states (INPUT_REQUIRED / AUTH_REQUIRED)
-   * keep it alive so a follow-up `message/send` can resume the same
-   * execution via `createOrGetByTaskId`, and `tasks/resubscribe` can
-   * attach in the meantime (§3.4.3).
+   * bus immediately. Interrupted states keep it alive but for two
+   * subtly different reasons:
+   *
+   *   * INPUT_REQUIRED (§3.4.3): the executor has stopped publishing
+   *     and is waiting on a follow-up `message/send` from the client.
+   *     The bus must survive across calls so `createOrGetByTaskId`
+   *     finds the same instance when the client resumes, and so
+   *     `tasks/resubscribe` can attach in the meantime.
+   *
+   *   * AUTH_REQUIRED (§7.6.1): the executor is expected to resume
+   *     publishing on this same bus as soon as the credential is
+   *     injected out-of-band, with no follow-up client message
+   *     required. A blocking `sendMessage` has already returned a
+   *     snapshot to its caller and its `_processEvents` loop is now
+   *     draining in the background (see `_continueDraining`); the
+   *     bus stays alive so those subsequent publishes still flow
+   *     into `ResultManager` and the push-notification sender.
+   *
+   * Both cases share the same `INTERRUPTED_STATE_LIST` early-return
+   * here because the lifecycle decision — "don't close the bus when
+   * `execute()` returns at this state" — is identical.
    */
   private _settleBus(
     taskId: string,
@@ -539,19 +637,51 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const historyLengthConfig = params.configuration;
 
     if (isBlocking) {
-      // In blocking mode, wait for the full processing to complete.
-      await this._processEvents(taskId, resultManager, eventQueue, context);
-      const finalResult = resultManager.getFinalResult();
-      if (!finalResult) {
-        throw new GenericError(
-          'Agent execution finished without a result, and no task context found.'
-        );
-      }
-
-      if (isTask(finalResult)) {
-        this._applyHistoryLengthSemantics(finalResult, historyLengthConfig ?? {});
-      }
-      return finalResult;
+      // In blocking mode, the call normally resolves after the full
+      // event drain finishes — the final result comes from the
+      // ResultManager once the queue closes on terminal /
+      // INPUT_REQUIRED / Message.
+      //
+      // AUTH_REQUIRED is the §7.6.1 exception: the blocking caller
+      // gets handed a snapshot of the current Task as soon as the
+      // AUTH_REQUIRED status update is observed, and the drain loop
+      // detaches into the background so the executor can keep
+      // publishing on the same bus after the out-of-band credential
+      // injection (and so the ResultManager / push-notification
+      // pipeline continues servicing those events).
+      return new Promise<Message | Task>((resolve, reject) => {
+        const pending = this._processEvents(taskId, resultManager, eventQueue, context, {
+          authRequiredSnapshotResolver: (snapshot) => {
+            this._applyHistoryLengthSemantics(snapshot, historyLengthConfig ?? {});
+            resolve(snapshot);
+            // Drain continues in the background; see
+            // `_continueDraining` for the unhandled-rejection guard.
+            this._continueDraining(taskId, pending);
+          },
+        });
+        pending
+          .then(() => {
+            // If we already resolved with an AUTH_REQUIRED snapshot
+            // above, this resolve() call is a no-op — Promise
+            // resolution is one-shot, and the background drain only
+            // exists to keep ResultManager + push notifications
+            // current beyond the snapshot.
+            const finalResult = resultManager.getFinalResult();
+            if (!finalResult) {
+              reject(
+                new GenericError(
+                  'Agent execution finished without a result, and no task context found.'
+                )
+              );
+              return;
+            }
+            if (isTask(finalResult)) {
+              this._applyHistoryLengthSemantics(finalResult, historyLengthConfig ?? {});
+            }
+            resolve(finalResult);
+          })
+          .catch(reject);
+      });
     } else {
       // In non-blocking mode, return a promise that will be settled by fullProcessing.
       return new Promise<Message | Task>((resolve, reject) => {
