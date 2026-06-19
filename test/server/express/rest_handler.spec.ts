@@ -300,7 +300,7 @@ describe('restHandler', () => {
       // Status state is enum string
       assert.deepEqual(response.body.status.state, 'TASK_STATE_COMPLETED');
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1', tenant: '', historyLength: 0 },
+        { id: 'task-1', tenant: '' },
         expect.anything()
       );
     });

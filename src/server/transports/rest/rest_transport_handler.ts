@@ -213,7 +213,7 @@ export class RestTransportHandler {
     historyLength?: unknown,
     tenant?: string
   ): Promise<Task> {
-    const params: GetTaskRequest = { id: taskId, historyLength: 0, tenant: tenant || '' };
+    const params: GetTaskRequest = { id: taskId, tenant: tenant || '' };
     if (historyLength !== undefined) {
       params.historyLength = this.parseHistoryLength(historyLength);
     }
