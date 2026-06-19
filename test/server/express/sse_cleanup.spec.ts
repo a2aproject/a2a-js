@@ -219,6 +219,40 @@ describe('delegateAsyncIterator', () => {
     expect(returnCalls).toBe(1);
   });
 
+  it('does not call .return() and propagates the original error when .next() throws', async () => {
+    // Per the iterator protocol, an iterator that throws from `.next()`
+    // is already considered closed and `.return()` should NOT be
+    // invoked on it. Calling `.return()` in that case may either be a
+    // no-op or — if `.return()` itself throws — mask the original
+    // producer error. This matches ECMAScript's `for await … of`
+    // semantics: `IfAbruptCloseAsyncIterator` only fires for
+    // consumer-side abrupt completion, not when `IteratorStep`
+    // (i.e. `.next()`) itself errors.
+    let returnCalled = false;
+    const it: AsyncIterator<number> = {
+      next: async () => {
+        throw new Error('next error');
+      },
+      return: async () => {
+        returnCalled = true;
+        // Simulate a stream whose `.return()` ALSO throws on an
+        // already-errored handle (common pattern for streams that
+        // were torn down by the underlying error). If the helper
+        // mistakenly invokes `.return()`, this would mask the
+        // 'next error' the caller actually cares about.
+        throw new Error('return error');
+      },
+    };
+
+    await expect(async () => {
+      for await (const value of delegateAsyncIterator(it)) {
+        // unreachable — the underlying `.next()` throws immediately.
+        expect(value).toBeUndefined();
+      }
+    }).rejects.toThrow('next error');
+    expect(returnCalled).toBe(false);
+  });
+
   it('mirrors the readFrom shape from src/sse_utils.ts (client-side fix)', async () => {
     // Documents the symmetry with the client-side helper that motivated
     // this PR. `sse_utils.ts:178-191` wraps `ReadableStreamDefaultReader`

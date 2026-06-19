@@ -38,6 +38,15 @@ export const UserBuilder = {
  * of how the consumer exits the loop, on every runtime that hosts
  * standard `async function*` semantics.
  *
+ * Notably, `it.return()` is NOT called when `it.next()` itself
+ * rejects: per the iterator protocol an iterator that throws from
+ * `next()` is already considered closed, and calling `return()` on
+ * such an iterator may either be a no-op or throw a secondary error
+ * that would mask the original. This matches the host language's
+ * `for await … of` semantics, which only invoke
+ * `IfAbruptCloseAsyncIterator` when the loop body completes abruptly,
+ * not when `IteratorStep` itself throws.
+ *
  * Mirror of the client-side `readFrom` helper in `sse_utils.ts`,
  * which applies the same try/finally shape around
  * `ReadableStreamDefaultReader.releaseLock()`.
@@ -47,13 +56,28 @@ export const UserBuilder = {
  * @yields Values produced by the underlying iterator until it's done.
  */
 export async function* delegateAsyncIterator<T>(it: AsyncIterator<T>): AsyncGenerator<T> {
+  // Track whether the producer (`it.next()`) threw. If it did, the
+  // iterator is already closed per the iterator protocol and calling
+  // `it.return()` would either no-op or surface a secondary error that
+  // masks the original. Only invoke `it.return()` for consumer-side
+  // abrupt completion (`break` / `throw` / `return` inside `for await`),
+  // mirroring `IfAbruptCloseAsyncIterator` in the ECMAScript spec.
+  let nextThrew = false;
   try {
     while (true) {
-      const { value, done } = await it.next();
-      if (done) return;
-      yield value;
+      let result: IteratorResult<T>;
+      try {
+        result = await it.next();
+      } catch (err) {
+        nextThrew = true;
+        throw err;
+      }
+      if (result.done) return;
+      yield result.value;
     }
   } finally {
-    await it.return?.();
+    if (!nextThrew) {
+      await it.return?.();
+    }
   }
 }
