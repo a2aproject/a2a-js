@@ -567,42 +567,26 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * preferred for the statusUpdate so the failure carries the same id
    * the consumer has already seen on the wire.
    *
-   * Note: we read the most-recently-published Task off the bus listener
-   * rather than from `ResultManager`. The consumer loop that drains the
-   * bus into `ResultManager` runs in a separate microtask, so
+   * Note: we read the most-recent published Task and task state off
+   * the bus via {@link trackLatestTaskAndState} rather than from
+   * `ResultManager`. The consumer loop that drains the bus into
+   * `ResultManager` runs in a separate microtask, so
    * `ResultManager.getCurrentTask()` would still return `undefined`
    * immediately after a synchronous `bus.publish(...)` followed by a
-   * `throw` — which is exactly the typical executor pattern. See
-   * `trackLatestPublishedTask` and `_runExecutor` for the same
-   * rationale.
+   * `throw` — which is exactly the typical executor pattern.
    */
   private _runStreamExecutor(
     taskId: string,
     eventBus: ExecutionEventBus,
-    requestContext: RequestContext,
-    _resultManager: ResultManager
+    requestContext: RequestContext
   ): void {
     const finalMessageForAgent = requestContext.userMessage;
-    // See `_runExecutor` for why we snoop the bus directly instead of
-    // re-reading state from `resultManager` in the `.finally` block,
-    // and `trackLatestPublishedTask` for the analogous reasoning in
-    // the `.catch` block below.
-    const rawStateTracker = trackLatestTaskState(eventBus);
-    const publishedTaskTracker = trackLatestPublishedTask(eventBus);
-    // Compose the two trackers so `.finally()` always detaches BOTH
-    // listeners — including on the success path, which never enters
-    // `.catch` and so never invokes `publishedTaskTracker()` directly.
-    // Without this, the published-task listener leaks on the bus, and
-    // since the bus is kept alive across INPUT_REQUIRED / AUTH_REQUIRED
-    // turns, every follow-up `sendMessageStream` on the same task would
-    // pile on another listener. The detach thunks are idempotent
-    // (`bus.off` on an already-removed listener is a no-op), so calling
-    // `publishedTaskTracker()` here after the `.catch` block has already
-    // consumed it is safe.
-    const stateTracker = () => {
-      publishedTaskTracker();
-      return rawStateTracker();
-    };
+    // Single per-execution listener captures both the most-recent Task
+    // event and the most-recent task state — see
+    // `trackLatestTaskAndState` for why combining them in one listener
+    // avoids double dispatch and why reading the snapshot from
+    // ResultManager here is unsafe.
+    const snapshotTracker = trackLatestTaskAndState(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -615,7 +599,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           err
         );
 
-        const latestTask = publishedTaskTracker();
+        const latestTask = snapshotTracker().task;
         const errorTaskId = latestTask?.id ?? requestContext.taskId;
         const errorContextId = latestTask?.contextId ?? finalMessageForAgent.contextId!;
 
@@ -692,10 +676,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        // Closes the bus for terminal tasks; kept alive for
+        // Detach the bus listener and read the final state in one
+        // call. Closes the bus for terminal tasks; kept alive for
         // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
         // resubscribers can still attach.
-        this._settleBus(taskId, eventBus, stateTracker());
+        this._settleBus(taskId, eventBus, snapshotTracker().state);
       });
   }
 
@@ -864,7 +849,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // to attach via `tasks/resubscribe` while the executor keeps
     // running, so we cannot tear down the bus here when this generator
     // settles.
-    this._runStreamExecutor(taskId, eventBus, requestContext, resultManager);
+    this._runStreamExecutor(taskId, eventBus, requestContext);
 
     let streamPattern = StreamPattern.UNDETERMINED;
     try {
@@ -1335,35 +1320,73 @@ function trackLatestTaskState(bus: ExecutionEventBus): () => TaskState | undefin
 }
 
 /**
- * Subscribes a lightweight listener on `bus` that records the
- * most-recent `Task` event published. Returns a thunk that detaches
- * the listener and yields the captured `Task` (or `undefined` if none
- * was published).
+ * Snapshot exposed by {@link trackLatestTaskAndState}.
+ */
+interface LatestTaskSnapshot {
+  /**
+   * The most-recent `Task` event published on the bus, or `undefined`
+   * if no Task event has been seen.
+   */
+  task: Task | undefined;
+  /**
+   * The most-recent task state observed on the bus — either via a
+   * `Task` event or a subsequent `TaskStatusUpdateEvent`. May be more
+   * recent than `task.status.state`.
+   */
+  state: TaskState | undefined;
+}
+
+/**
+ * Subscribes a single lightweight listener on `bus` that records both:
  *
- * Used by `_runStreamExecutor`'s error path to decide whether to
- * synthesize a fresh Task event before the terminal statusUpdate.
- * Reading from the `ResultManager` is unsafe at the point we need to
- * make this decision: the consumer loop that drains the bus into the
- * `ResultManager` runs in a separate microtask, so an executor that
- * synchronously `bus.publish(...)`s a Task and then throws would
+ *   * the most-recent `Task` event published, and
+ *   * the most-recent task state (from `Task` or
+ *     `TaskStatusUpdateEvent`, whichever is newer).
+ *
+ * Returns a thunk that detaches the listener and yields the snapshot.
+ *
+ * Combines what used to be two separate per-execution listeners into
+ * one to avoid double dispatch on every `bus.publish(...)`. Used by
+ * {@link DefaultRequestHandler._runStreamExecutor} to make two
+ * decisions in the executor's `.finally` / `.catch` blocks:
+ *
+ *   1. Whether to settle the bus or keep it alive for follow-ups
+ *      (driven by `state`).
+ *   2. Whether to synthesize a Task event before the terminal
+ *      statusUpdate on the error path (driven by `task`).
+ *
+ * Reading state from `ResultManager` would be unsafe at the point we
+ * need to make these decisions: the consumer loop that drains the bus
+ * into `ResultManager` runs in a separate microtask, so an executor
+ * that synchronously `bus.publish(...)`s a Task and then throws would
  * appear (via `ResultManager`) to have published nothing — and we'd
  * incorrectly re-publish a Task, violating the §3.1.2 stream-pattern
  * ordering enforced by `_advanceStreamPattern`.
  *
- * The same per-execution listener-detach contract as
- * {@link trackLatestTaskState} applies: detach on read in `.finally()`
- * so a long-lived bus doesn't accumulate listeners across turns.
+ * Detach contract: the returned thunk must be invoked exactly once,
+ * in a `.finally` block, so the listener is removed regardless of
+ * whether the executor succeeded or threw. Otherwise long-lived buses
+ * (kept alive for INPUT_REQUIRED / AUTH_REQUIRED) would accumulate
+ * one listener per turn. The thunk's `bus.off` is idempotent at the
+ * bus level, so an extra read after the listener is already detached
+ * just returns the last-known snapshot.
  */
-function trackLatestPublishedTask(bus: ExecutionEventBus): () => Task | undefined {
+function trackLatestTaskAndState(bus: ExecutionEventBus): () => LatestTaskSnapshot {
   let lastTask: Task | undefined;
+  let lastState: TaskState | undefined;
   const listener = (event: AgentExecutionEvent) => {
     if (event.kind === 'task') {
       lastTask = event.data;
+      if (event.data.status?.state !== undefined) {
+        lastState = event.data.status.state;
+      }
+    } else if (event.kind === 'statusUpdate' && event.data.status?.state !== undefined) {
+      lastState = event.data.status.state;
     }
   };
   bus.on('event', listener);
   return () => {
     bus.off('event', listener);
-    return lastTask;
+    return { task: lastTask, state: lastState };
   };
 }
