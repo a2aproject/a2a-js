@@ -301,13 +301,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
         const result = StreamResponse.toJSON(firstResult.value);
         res.write(formatSSEEvent(result));
       }
-      // Delegate through `delegateAsyncIterator` so `.return()` is
-      // explicitly forwarded to the underlying generator on disposal —
-      // the inline `{ [Symbol.asyncIterator]: () => iterator }` wrapper
-      // relies on host-engine `for await` semantics for that cleanup,
-      // which is unreliable across runtimes. Without explicit
-      // propagation the generator's `finally` (event-bus listener
-      // cleanup, queue stop) may not run, leaking listeners.
       for await (const event of delegateAsyncIterator(iterator)) {
         const result = StreamResponse.toJSON(event);
         res.write(formatSSEEvent(result));

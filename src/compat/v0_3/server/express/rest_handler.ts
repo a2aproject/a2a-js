@@ -357,13 +357,6 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
       if (!firstResult.done) {
         res.write(formatSSEEvent(encodeStreamEvent(firstResult.value)));
       }
-      // Delegate through `delegateAsyncIterator` so `.return()` is
-      // explicitly forwarded to the underlying generator on disposal —
-      // the inline `{ [Symbol.asyncIterator]: () => iterator }` wrapper
-      // relies on host-engine `for await` semantics for that cleanup,
-      // which is unreliable across runtimes. Without explicit
-      // propagation the generator's `finally` (event-bus listener
-      // cleanup, queue stop) may not run, leaking listeners.
       for await (const event of delegateAsyncIterator(iterator)) {
         res.write(formatSSEEvent(encodeStreamEvent(event)));
       }
