@@ -16,12 +16,19 @@
  * **Data parts.** v1.0 `Part.data` is a `google.protobuf.Value`, so it can
  * carry primitives, arrays, and `null` in addition to objects. v0.3
  * `DataPart.data` is typed `{ [k: string]: unknown }` — strictly a JSON
- * object. v1.0 data parts whose `value` is a primitive, array, or `null`
- * therefore cannot be represented in v0.3 and throw `A2AError.invalidParams`
- * during `toCompatPart`. (The Python SDK wraps such values as
- * `{ value: <primitive> }` with a private `data_part_compat = true`
- * metadata flag, but that pollutes the v0.3 wire format with an out-of-spec
- * key; we deliberately diverge from Python here.)
+ * object. To round-trip the wider v1.0 set through the narrower v0.3
+ * schema, `toCompatPart` wraps primitive / array / `null` values as
+ * `{ value: <original> }` and tags the v0.3 part with a
+ * `metadata.dataPartCompat = true` flag. `toCorePart` looks for the same
+ * flag and unwraps `data.value` back to the original primitive, stripping
+ * the flag from the resulting v1.0 metadata. This mirrors the convention
+ * used by `a2a-python` (`compat/v0_3/conversions.py`) and `a2a-go`
+ * (`a2acompat/a2av0/conversions.go`).
+ *
+ * Values that are neither plain objects nor wrap-eligible primitives
+ * (`Symbol`, `function`, `bigint`, `undefined`, `Buffer`) still throw
+ * `A2AError.invalidParams` from `toCompatPart`: the wrapper itself would
+ * not survive serialization.
  */
 
 import { A2AError } from '../server/error.js';
@@ -29,10 +36,35 @@ import type * as legacy from '../types/types.js';
 import type { Part as V1Part } from '../../../types/pb/a2a.js';
 import { deepCloneMetadata } from './_clone.js';
 
+/**
+ * Metadata key set on v0.3 `DataPart`s whose `data` field carries a
+ * `{ value: <primitive|array|null> }` wrapper synthesized by
+ * `toCompatPart`. `toCorePart` strips both the wrapper and this flag.
+ *
+ * The key name matches the one used by `a2a-python` (lower-snake-cased to
+ * `data_part_compat` on the wire by Python's serializer) and `a2a-go`.
+ */
+const DATA_PART_COMPAT_FLAG = 'dataPartCompat';
+
 function isPlainObject(value: unknown): value is { [k: string]: unknown } {
   return (
     typeof value === 'object' && value !== null && !Array.isArray(value) && !Buffer.isBuffer(value)
   );
+}
+
+/**
+ * True for v1.0 `Part.data` values that are valid `google.protobuf.Value`s
+ * but cannot live directly under v0.3 `DataPart.data: { [k]: unknown }`
+ * (which only admits JSON objects). These are the values `toCompatPart`
+ * wraps as `{ value: <original> }` with the `dataPartCompat` flag.
+ */
+function isCompatWrappableDataValue(
+  value: unknown
+): value is string | number | boolean | null | unknown[] {
+  if (value === null) return true;
+  if (Array.isArray(value)) return true;
+  const t = typeof value;
+  return t === 'string' || t === 'number' || t === 'boolean';
 }
 
 /**
@@ -43,9 +75,13 @@ function isPlainObject(value: unknown): value is { [k: string]: unknown } {
  *   the base64 payload into a `Buffer`); `FileWithUri` → `content.$case:
  *   'url'`. The optional `mimeType` / `name` are lifted to the top-level
  *   `mediaType` / `filename` fields.
- * - Data parts pass `data` through unchanged (v0.3 schema guarantees
- *   `data` is a plain object, which is always valid for the v1.0
- *   `google.protobuf.Value` target).
+ * - Data parts pass `data` through unchanged, except when
+ *   `metadata.dataPartCompat === true` and `data` has the shape
+ *   `{ value: <primitive|array|null> }`. In that case the wrapper is
+ *   stripped, `data.value` becomes the v1.0 `content.value` directly, and
+ *   the `dataPartCompat` flag is removed from the resulting metadata
+ *   (with `metadata` itself omitted if no other keys remain). This
+ *   reverses the wrapping done by `toCompatPart`.
  */
 export function toCorePart(compatPart: legacy.Part): V1Part {
   if (compatPart.kind === 'text') {
@@ -83,9 +119,27 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
   }
 
   if (compatPart.kind === 'data') {
+    const metadata = deepCloneMetadata(compatPart.metadata);
+    let value: unknown = compatPart.data;
+    let outMetadata = metadata;
+
+    // Reverse the `{ value: <primitive> }` wrap added by `toCompatPart`
+    // when the source v1 value was a primitive/array/null. The flag is
+    // the load-bearing signal — without it we cannot distinguish a
+    // genuine `{ value: ... }` object from a synthesized wrapper.
+    if (metadata?.[DATA_PART_COMPAT_FLAG] === true) {
+      if (isPlainObject(compatPart.data) && 'value' in compatPart.data) {
+        value = compatPart.data.value;
+      }
+      delete metadata[DATA_PART_COMPAT_FLAG];
+      // Drop the metadata object entirely if the flag was its only key,
+      // so a round-trip from a primitive v1 value yields no metadata.
+      outMetadata = Object.keys(metadata).length > 0 ? metadata : undefined;
+    }
+
     return {
-      content: { $case: 'data', value: compatPart.data },
-      metadata: deepCloneMetadata(compatPart.metadata),
+      content: { $case: 'data', value },
+      metadata: outMetadata,
       filename: '',
       mediaType: '',
     };
@@ -105,12 +159,18 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
  *   `FileWithUri`. `filename` / `mediaType` are pushed down into the
  *   inner file's `name` / `mimeType`.
  * - `content.$case: 'data'`: when the v1.0 value is a plain object it is
- *   used directly. Throws `A2AError.invalidParams` when the value is a
- *   primitive, array, or `null` — those are not representable in v0.3's
- *   `DataPart.data: { [k: string]: unknown }` schema.
+ *   used directly. When the value is a primitive (string, number,
+ *   boolean), an array, or `null`, it is wrapped as `{ value: <original> }`
+ *   and `metadata.dataPartCompat: true` is set on the resulting v0.3 part
+ *   so `toCorePart` can unwrap it losslessly. Throws
+ *   `A2AError.invalidParams` only when the value is neither a plain
+ *   object nor a wrap-eligible primitive — i.e., `Symbol`, `function`,
+ *   `bigint`, `undefined`, or `Buffer` — for which even the
+ *   `{ value: ... }` wrapper could not survive JSON serialization.
  *
  * @throws {A2AError} when `content` is missing, has an unknown `$case`,
- * or carries a non-object `data` value.
+ * or carries a `data` value that is neither a plain object nor a
+ * wrap-eligible primitive / array / null.
  */
 export function toCompatPart(corePart: V1Part): legacy.Part {
   const content = corePart.content;
@@ -153,15 +213,33 @@ export function toCompatPart(corePart: V1Part): legacy.Part {
 
   if (content.$case === 'data') {
     const value: unknown = content.value;
-    if (!isPlainObject(value)) {
-      throw A2AError.invalidParams(
-        'Cannot translate v1 data part to v0.3: value is not a plain object. ' +
-          'v0.3 DataPart.data requires { [k: string]: unknown }; primitives, arrays, and null are not representable.'
-      );
+
+    if (isPlainObject(value)) {
+      const result: legacy.DataPart = { kind: 'data', data: value };
+      if (metadata !== undefined) result.metadata = metadata;
+      return result;
     }
-    const result: legacy.DataPart = { kind: 'data', data: value };
-    if (metadata !== undefined) result.metadata = metadata;
-    return result;
+
+    if (isCompatWrappableDataValue(value)) {
+      // Wrap the primitive / array / null in `{ value: <original> }` and
+      // tag the v0.3 part so `toCorePart` can losslessly unwrap. The
+      // wrapped reference is passed through as-is (no defensive clone),
+      // matching the plain-object branch above and the metadata-cloning
+      // policy already documented for this file.
+      const data: { [k: string]: unknown } = { value };
+      const outMetadata: { [k: string]: unknown } = metadata ?? {};
+      outMetadata[DATA_PART_COMPAT_FLAG] = true;
+      const result: legacy.DataPart = { kind: 'data', data, metadata: outMetadata };
+      return result;
+    }
+
+    throw A2AError.invalidParams(
+      'Cannot translate v1 data part to v0.3: value is neither a plain object ' +
+        'nor a wrap-eligible primitive / array / null ' +
+        '(e.g., Symbol, function, bigint, undefined, Buffer). ' +
+        'Primitives, arrays, and null are wrapped as { value: ... } with dataPartCompat=true; ' +
+        'all other non-plain-object values are rejected.'
+    );
   }
 
   throw A2AError.invalidParams(
