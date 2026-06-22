@@ -1081,14 +1081,20 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       }
 
-      if (!eventQueue) {
-        throw new UnsupportedOperationError(`Resubscribe: No active event bus for task ${taskId}.`);
-      }
-
       // Per spec 3.1.6: "The operation MUST return a Task object as the first event
       // in the stream, representing the current state of the task at the time of
       // subscription."
       yield { payload: { $case: 'task', value: task } };
+
+      // No active event bus means there is no live executor to drain
+      // from — but per §3.1.6 the snapshot above is still a valid
+      // response. Closing the stream here (instead of throwing
+      // `UnsupportedOperationError`) lets clients reconnect to a
+      // long-running task after server restart, executor pause, or an
+      // INPUT_REQUIRED bus-sleep window.
+      if (!eventQueue) {
+        return;
+      }
 
       // Stream live events, filtering by taskId.
       // The ResultManager is already handled by the original execution flow;

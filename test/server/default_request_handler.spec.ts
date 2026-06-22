@@ -1474,7 +1474,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual((results[0].payload as { $case: 'task'; value: Task }).value, fakeTask);
   });
 
-  it('resubscribe: should throw UnsupportedOperationError when no active event bus exists', async () => {
+  it('resubscribe: should yield the Task snapshot and close when no active event bus exists', async () => {
     const taskId = 'task-resub-no-bus';
     const fakeTask: Task = {
       id: taskId,
@@ -1487,15 +1487,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
-    try {
-      await generator.next();
-      assert.fail('Should have thrown UnsupportedOperationError');
-    } catch (error: unknown) {
-      expect(error).to.be.instanceOf(UnsupportedOperationError);
-      expect((error as Error).message).to.contain(
-        `Resubscribe: No active event bus for task ${taskId}`
-      );
+    const results: StreamResponse[] = [];
+    for await (const event of generator) {
+      results.push(event);
     }
+
+    assert.lengthOf(results, 1, 'Should yield exactly one event (the Task snapshot)');
+    assert.equal(results[0].payload?.$case, 'task');
+    assert.deepEqual((results[0].payload as { $case: 'task'; value: Task }).value, fakeTask);
   });
 
   it('sendMessageStream: should close stream after a single message (§3.1.2 message-only pattern)', async () => {
