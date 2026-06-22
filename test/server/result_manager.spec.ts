@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import {
   Artifact,
@@ -363,6 +363,10 @@ describe('ResultManager.processEvent("task")', () => {
   });
 
   it('re-loads from the store when the cached task id differs from the incoming Task event', async () => {
+    // Silence the expected mid-stream-switch warn from `lastSeenTaskId`
+    // tracking; the dedicated "warns" test below verifies it fires.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     // Prime the store with two distinct tasks.
     const taskA = createTask('task-A', 'ctx-A', {
       history: [createMessage('a-user-1', 'A first')],
@@ -386,7 +390,8 @@ describe('ResultManager.processEvent("task")', () => {
     const rm = new ResultManager(store, context);
     rm.setContext(createMessage('a-user-2', 'A second'));
 
-    // First publish a Task event for task-A so the ResultManager caches it.
+    // First publish a Task event for task-A so the ResultManager has a
+    // cached `currentTask` from a prior event.
     await rm.processEvent(
       AgentEvent.task(
         createTask('task-A', 'ctx-A', {
@@ -400,10 +405,10 @@ describe('ResultManager.processEvent("task")', () => {
     );
     expect(rm.getCurrentTask()?.id).toBe('task-A');
 
-    // Now publish a Task event for task-B with empty history. Without the
-    // defensive reload this would have wholesale-overwritten task-B's
-    // persisted history (because the cached currentTask had id task-A and
-    // wouldn't have matched, so persistedTask would have been undefined).
+    // Now publish a Task event for task-B with empty history. Under the
+    // always-reload-inside-lock semantics, this must load task-B fresh
+    // from the store (not merge against the stale task-A cache) so
+    // task-B's history is preserved.
     rm.setContext(createMessage('b-user-2', 'B second'));
     await rm.processEvent(
       AgentEvent.task(
@@ -429,6 +434,8 @@ describe('ResultManager.processEvent("task")', () => {
     expect(finalAIds).toContain('a-user-1');
     expect(finalAIds).toContain('a-user-2');
     expect(finalAIds).toHaveLength(2);
+
+    warnSpy.mockRestore();
   });
 
   it('isolates persisted state from later mutation of the incoming Task event payload', async () => {
@@ -523,5 +530,250 @@ describe('ResultManager.processEvent("task")', () => {
     expect(
       (snapshot!.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value
     ).toBe('original');
+  });
+});
+
+describe('concurrent ResultManagers on the same taskId', () => {
+  let store: InMemoryTaskStore;
+  let context: ServerCallContext;
+
+  beforeEach(() => {
+    store = new InMemoryTaskStore();
+    context = new ServerCallContext();
+  });
+
+  it('serializes concurrent Task event writes from two RMs without losing user messages', async () => {
+    // Pre-seed an INPUT_REQUIRED task — the common AUTH_REQUIRED-style
+    // setup where two RMs (background drain + follow-up sendMessage) end
+    // up racing on the same row.
+    const taskId = 'task-concurrent-1';
+    const contextId = 'ctx-concurrent-1';
+    await store.save(
+      createTask(taskId, contextId, {
+        history: [createMessage('seed-1', 'seed')],
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+      }),
+      context
+    );
+
+    const rmA = new ResultManager(store, context);
+    rmA.setContext(createMessage('user-A', 'from A'));
+    const rmB = new ResultManager(store, context);
+    rmB.setContext(createMessage('user-B', 'from B'));
+
+    const taskEvent = createTask(taskId, contextId, {
+      status: {
+        state: TaskState.TASK_STATE_WORKING,
+        message: undefined,
+        timestamp: undefined,
+      },
+      history: [],
+    });
+
+    // Fire both concurrently. Without the lock, one RM's load happens
+    // before the other's save, and the second merge clobbers the first
+    // sibling's user message.
+    await Promise.all([
+      rmA.processEvent(AgentEvent.task(structuredClone(taskEvent))),
+      rmB.processEvent(AgentEvent.task(structuredClone(taskEvent))),
+    ]);
+
+    const final = await store.load(taskId, context);
+    const ids = (final!.history ?? []).map((m) => m.messageId);
+    expect(ids).toContain('seed-1');
+    expect(ids).toContain('user-A');
+    expect(ids).toContain('user-B');
+  });
+
+  it('serializes interleaved status + artifact updates from two RMs', async () => {
+    const taskId = 'task-concurrent-2';
+    const contextId = 'ctx-concurrent-2';
+    await store.save(
+      createTask(taskId, contextId, {
+        history: [createMessage('user-1', 'go')],
+        status: {
+          state: TaskState.TASK_STATE_SUBMITTED,
+          message: undefined,
+          timestamp: undefined,
+        },
+      }),
+      context
+    );
+
+    const rmA = new ResultManager(store, context);
+    const rmB = new ResultManager(store, context);
+
+    await Promise.all([
+      rmA.processEvent(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: createArtifact('art-A', 'from A'),
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      ),
+      rmB.processEvent(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            timestamp: undefined,
+            message: createMessage('agent-B', 'from B', Role.ROLE_AGENT),
+          },
+          metadata: {},
+        })
+      ),
+    ]);
+
+    const final = await store.load(taskId, context);
+    // Both writes survived: the artifact from RM-A and the agent message
+    // from RM-B's status update. Without the lock, one of the two would
+    // have been overwritten by the other's save.
+    expect(final!.artifacts?.map((a) => a.artifactId)).toContain('art-A');
+    expect(final!.history?.map((m) => m.messageId)).toContain('agent-B');
+  });
+
+  it('end-to-end: background drain + follow-up sendMessage preserve combined state', async () => {
+    // Models the AUTH_REQUIRED scenario: the original blocking call's RM is still draining events
+    // in the background while the credential-injecting follow-up
+    // sendMessage spins up its own RM. Both run against the same bus and
+    // the same TaskStore row.
+    const taskId = 'task-concurrent-3';
+    const contextId = 'ctx-concurrent-3';
+
+    // Turn 1: initial sendMessage reaches AUTH_REQUIRED.
+    const rmTurn1 = new ResultManager(store, context);
+    rmTurn1.setContext(createMessage('user-1', 'turn 1'));
+    await rmTurn1.processEvent(
+      AgentEvent.task(
+        createTask(taskId, contextId, {
+          status: {
+            state: TaskState.TASK_STATE_AUTH_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+
+    // Background drain (rmTurn1 is still alive) interleaves with a new
+    // rmTurn2 from the credential-injecting follow-up sendMessage.
+    const rmTurn2 = new ResultManager(store, context);
+    rmTurn2.setContext(createMessage('user-2', 'with credential'));
+
+    await Promise.all([
+      // Background drain sees a working statusUpdate.
+      rmTurn1.processEvent(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            timestamp: undefined,
+            message: createMessage('agent-1', 'resumed', Role.ROLE_AGENT),
+          },
+          metadata: {},
+        })
+      ),
+      // Follow-up sendMessage's RM publishes its own task event.
+      rmTurn2.processEvent(
+        AgentEvent.task(
+          createTask(taskId, contextId, {
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              message: undefined,
+              timestamp: undefined,
+            },
+          })
+        )
+      ),
+      // Background drain then sees an artifact.
+      rmTurn1.processEvent(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: createArtifact('art-result', 'final answer'),
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      ),
+    ]);
+
+    const final = await store.load(taskId, context);
+    const ids = (final!.history ?? []).map((m) => m.messageId);
+    expect(ids).toContain('user-1');
+    expect(ids).toContain('user-2');
+    expect(ids).toContain('agent-1');
+    expect(final!.artifacts?.map((a) => a.artifactId)).toContain('art-result');
+  });
+
+  it('warns when an executor publishes events for a different taskId on the same RM', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const rm = new ResultManager(store, context);
+    rm.setContext(createMessage('user-1', 'hi'));
+    await rm.processEvent(AgentEvent.task(createTask('task-X', 'ctx-X')));
+    await rm.processEvent(AgentEvent.task(createTask('task-Y', 'ctx-Y')));
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/switched tasks mid-stream/));
+    warnSpy.mockRestore();
+  });
+
+  it('does not deadlock if a sibling RM throws inside the lock', async () => {
+    const taskId = 'task-concurrent-throw';
+    const contextId = 'ctx-concurrent-throw';
+    await store.save(
+      createTask(taskId, contextId, {
+        history: [createMessage('user-1', 'go')],
+      }),
+      context
+    );
+
+    // Stub a TaskStore that throws once on save, then succeeds, so the
+    // first RM's processEvent rejects under the lock.
+    let saveAttempt = 0;
+    const flakyStore: InMemoryTaskStore = Object.create(store) as InMemoryTaskStore;
+    flakyStore.save = async (task, ctx) => {
+      saveAttempt++;
+      if (saveAttempt === 1) {
+        throw new Error('boom');
+      }
+      return store.save(task, ctx);
+    };
+    flakyStore.load = (id, ctx) => store.load(id, ctx);
+
+    const rmA = new ResultManager(flakyStore, context);
+    rmA.setContext(createMessage('user-A', 'from A'));
+    const rmB = new ResultManager(flakyStore, context);
+    rmB.setContext(createMessage('user-B', 'from B'));
+
+    const taskEvent = createTask(taskId, contextId, {
+      status: {
+        state: TaskState.TASK_STATE_WORKING,
+        message: undefined,
+        timestamp: undefined,
+      },
+    });
+
+    const results = await Promise.allSettled([
+      rmA.processEvent(AgentEvent.task(structuredClone(taskEvent))),
+      rmB.processEvent(AgentEvent.task(structuredClone(taskEvent))),
+    ]);
+
+    // One should have rejected (the flaky save), the other should have
+    // succeeded — the lock chain must not deadlock or swallow the
+    // success.
+    const rejected = results.filter((r) => r.status === 'rejected');
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    expect(rejected).toHaveLength(1);
+    expect(fulfilled).toHaveLength(1);
   });
 });

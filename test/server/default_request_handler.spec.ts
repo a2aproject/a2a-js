@@ -493,6 +493,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     let finalTaskSaved: Task | undefined;
     const errorMessage = 'Error thrown on saving completed task notification';
+    const taskByState = new Map<TaskState, Task>();
     (mockTaskStore as MockTaskStore).save.mockImplementation(async (task) => {
       if (task.status.state == TaskState.TASK_STATE_COMPLETED) {
         throw new Error(errorMessage);
@@ -501,6 +502,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       if (task.status.state == TaskState.TASK_STATE_FAILED) {
         finalTaskSaved = task;
       }
+      taskByState.set(task.status.state, task);
+    });
+    (mockTaskStore as MockTaskStore).load.mockImplementation(async (id) => {
+      for (const t of [...taskByState.values()].reverse()) {
+        if (t.id === id) return t;
+      }
+      return undefined;
     });
 
     // This call should return as soon as the first 'task' event is published
