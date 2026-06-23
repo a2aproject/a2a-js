@@ -15,10 +15,9 @@ import { AgentExecutor } from '../../../src/server/agent_execution/agent_executo
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 
 /**
- * End-to-end regression guard for §3.3.4 / §14.2.2 `A2A-Extensions`
- * response-header echo: client declares `A2A-Extensions: <uri>`, executor
- * calls `addActivatedExtension(<uri>)`, response header MUST contain
- * `<uri>`.
+ * End-to-end regression guard for the `A2A-Extensions` response-header
+ * echo: client declares `A2A-Extensions: <uri>`, executor calls
+ * `addActivatedExtension(<uri>)`, response header contains `<uri>`.
  *
  * Pre-fix `_createRequestContext` replaced the `ServerCallContext` with
  * a fresh instance after filtering requested extensions to the agent's
@@ -32,7 +31,7 @@ import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
  * test does (it spies on `JsonRpcTransportHandler.handle`, bypassing
  * `_createRequestContext` entirely).
  */
-describe('A2A-Extensions response header (end-to-end §3.3.4 / §14.2.2)', () => {
+describe('A2A-Extensions response header (end-to-end echo)', () => {
   let app: Express;
   let executor: AgentExecutor;
   let observedContextExtensions: string[] | undefined;
@@ -107,7 +106,7 @@ describe('A2A-Extensions response header (end-to-end §3.3.4 / §14.2.2)', () =>
         );
         bus.finished();
       },
-      cancelTask: async () => {},
+      cancelTask: async () => { },
     };
 
     const handler = new DefaultRequestHandler(
@@ -156,9 +155,7 @@ describe('A2A-Extensions response header (end-to-end §3.3.4 / §14.2.2)', () =>
   });
 
   it('omits the response header entirely when the executor activates nothing', async () => {
-    // Spec §14.2.2: server only emits the header when at least one
-    // extension was activated. A client-requested-but-not-activated
-    // extension must not appear.
+    // Emit the response header only when at least one extension was actually activated.
     extensionsToActivate = [];
 
     const response = await request(app)
@@ -182,7 +179,7 @@ describe('A2A-Extensions response header (end-to-end §3.3.4 / §14.2.2)', () =>
     expect(response.get(HTTP_EXTENSION_HEADER)).toBeUndefined();
   });
 
-  it('drops extensions the agent does not expose before passing the context to the executor (§3.3.4)', async () => {
+  it('drops extensions the agent does not expose before passing the context to the executor (§4.6.3)', async () => {
     extensionsToActivate = [ECHOED_EXT, UNKNOWN_EXT];
 
     const response = await request(app)
@@ -203,15 +200,16 @@ describe('A2A-Extensions response header (end-to-end §3.3.4 / §14.2.2)', () =>
       })
       .expect(200);
 
-    // §3.3.4: unknown extensions never reach the executor.
+    // §4.6.3 ("SHOULD ignore the extension … and proceed without it"):
+    // unknown extensions never reach the executor via the requested set.
     expect(observedContextExtensions).toEqual([ECHOED_EXT]);
-    // Even though the executor tried to activate `UNKNOWN_EXT`, the
-    // header echoes everything it activated (the SDK does not re-filter
-    // on the activation path — addActivatedExtension is unguarded).
-    // The §3.3.4 protection lives at the requested-set filter, not the
+    // The SDK does not re-filter on the activation path —
+    // `addActivatedExtension` is unguarded and accepts any URI. The
+    // §4.6.3 filter lives at the requested-set narrowing, not the
     // activation set. This assertion documents that contract so a
-    // future tightening (filtering activations too) is a deliberate
-    // change with a failing test.
+    // future tightening (rejecting activations outside the requested
+    // set) is a deliberate change with a failing test, not a silent
+    // behavior shift.
     expect(response.get(HTTP_EXTENSION_HEADER)).toBe(`${ECHOED_EXT}, ${UNKNOWN_EXT}`);
   });
 });

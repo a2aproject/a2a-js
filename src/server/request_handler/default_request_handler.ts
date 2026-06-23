@@ -181,7 +181,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       ) {
         throw new RequestMalformedError(
           `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
-            `does not match task '${task.id}' contextId '${task.contextId}'`
+          `does not match task '${task.id}' contextId '${task.contextId}'`
         );
       }
       // Add incomingMessage to history and save the task.
@@ -226,11 +226,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       );
     }
 
-    // Filter client-requested extensions to only those the agent exposes.
-    // Mutate in place — the Express / gRPC transport layer holds a
-    // reference to this context and reads `activatedExtensions` off it
-    // after dispatch to echo the `A2A-Extensions` response header
-    // (§3.3.4 + §14.2.2).
+    // Narrow the client-requested set to extensions the agent actually
+    // exposes (§4.6.3: "SHOULD ignore the extension … and proceed
+    // without it"). Mutate in place — the Express / gRPC transport
+    // layer holds a reference to this context and, after dispatch,
+    // reads `activatedExtensions` off it to populate the response
+    // `A2A-Extensions` header. Replacing the reference would strand
+    // later `addActivatedExtension(...)` calls from the executor on a
+    // dead object and silently drop the header.
     if (context.requestedExtensions) {
       const exposedExtensions = new Set(agentExtensions.map((ext) => ext.uri));
       context.setRequestedExtensions(

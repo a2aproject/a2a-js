@@ -65,8 +65,11 @@ export class ServerCallContext {
   /**
    * Replaces the requested-extensions set. Used by
    * {@link DefaultRequestHandler} to narrow the list to those the agent
-   * actually exposes (§3.3.4) without orphaning the original context
-   * reference held by the Express / gRPC transport layer.
+   * actually exposes (per §4.6.3's "SHOULD ignore" rule for unsupported
+   * extensions) without orphaning the original context reference held
+   * by the Express / gRPC transport layer — replacing the context would
+   * strand later `addActivatedExtension(...)` calls on a dead object
+   * and response-side `A2A-Extensions` header would be missing.
    */
   public setRequestedExtensions(extensions: Extensions) {
     this._requestedExtensions = extensions;
