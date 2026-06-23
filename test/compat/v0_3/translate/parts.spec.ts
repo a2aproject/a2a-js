@@ -65,7 +65,6 @@ describe('parts', () => {
       };
       const core = toCorePart(compat);
       expect(core.content).toEqual({ $case: 'data', value: 42 });
-      // The flag is the only key, so metadata is dropped entirely.
       expect(core.metadata).toBeUndefined();
     });
 
@@ -103,16 +102,14 @@ describe('parts', () => {
     });
 
     it('does not unwrap a {value: ...} object when data_part_compat is absent', () => {
-      // Without the flag, `data` is treated as an ordinary v0.3 payload —
-      // the literal `{ value: ... }` object must survive as-is.
       const compat: legacy.Part = { kind: 'data', data: { value: 42 } };
       const core = toCorePart(compat);
       expect(core.content).toEqual({ $case: 'data', value: { value: 42 } });
     });
 
     it('does not unwrap when the compat flag is present but not strictly true', () => {
-      // Only the literal boolean `true` is honored; truthy strings, 1, etc.
-      // do not trigger unwrap — they're foreign metadata that must round-trip.
+      // Only the literal boolean `true` triggers unwrap; truthy strings,
+      // 1, etc. are foreign metadata that must round-trip.
       const compat: legacy.Part = {
         kind: 'data',
         data: { value: 42 },
@@ -206,22 +203,19 @@ describe('parts', () => {
       ['boolean false', false],
       ['null', null],
       ['array', [1, 2, 3]],
-    ])(
-      'wraps a non-object data value (%s) with data_part_compat=true (snake_case on the wire)',
-      (_label, value) => {
-        const core: V1Part = {
-          content: { $case: 'data', value },
-          metadata: undefined,
-          filename: '',
-          mediaType: '',
-        };
-        expect(toCompatPart(core)).toEqual({
-          kind: 'data',
-          data: { value },
-          metadata: { data_part_compat: true },
-        });
-      }
-    );
+    ])('wraps a non-object data value (%s) with data_part_compat=true', (_label, value) => {
+      const core: V1Part = {
+        content: { $case: 'data', value },
+        metadata: undefined,
+        filename: '',
+        mediaType: '',
+      };
+      expect(toCompatPart(core)).toEqual({
+        kind: 'data',
+        data: { value },
+        metadata: { data_part_compat: true },
+      });
+    });
 
     it('merges the data_part_compat flag with existing metadata when wrapping', () => {
       const core: V1Part = {
@@ -332,12 +326,10 @@ describe('parts', () => {
       ['null', null],
       ['array', [1, 2, 3]],
     ])(
-      'unwraps a v0.3 payload (%s) wrapped by a cross-SDK peer using snake_case',
+      'unwraps an incoming v0.3 payload (%s) tagged with data_part_compat=true',
       (_label, value) => {
-        // Simulates a v0.3 message produced by `a2a-python` / `a2a-go`,
-        // which emit `data_part_compat: true`. JS must recognize and
-        // unwrap so the v1 layer sees the original primitive / array /
-        // null instead of a stray `{ value: ... }` object.
+        // The v1 layer must see the original primitive / array / null,
+        // not a stray `{ value: ... }` object.
         const compat: legacy.Part = {
           kind: 'data',
           data: { value },
