@@ -10,8 +10,8 @@ import { AgentExecutionEvent, assertUnreachableEvent } from './events/execution_
 import { TaskStore } from './store.js';
 
 /**
- * Per-`taskId` write serializer shared across every `ResultManager`
- * instance in this process.
+ * Per-(tenant, owner, taskId) write serializer shared across every
+ * `ResultManager` instance in this process.
  *
  * Multiple `ResultManager`s can run concurrently against the same task:
  * - The AUTH_REQUIRED background drain holds one RM while a follow-up
@@ -28,27 +28,52 @@ import { TaskStore } from './store.js';
  * merge semantics make the race observable as missing history /
  * artifacts.
  *
+ * Scoping: the lock key mirrors the {@link TaskStore} scoping contract
+ * — `(tenant, owner, taskId)` — so two different tenants (or two
+ * different owners within the same tenant) that happen to reuse the
+ * same `taskId` do NOT serialize against each other. The `tenant` part
+ * comes from {@link ServerCallContext.tenant}; the owner is derived
+ * from `context.user.userName` (mirroring the default
+ * {@link OwnerResolver}, `resolveUserScope`). Custom store owner
+ * resolvers may produce a slightly different bucketing — this is an
+ * acceptable approximation: the lock is at worst over-conservative
+ * (serializing two callers that the store would have kept separate),
+ * never under-conservative for the default scoping.
+ *
  * Scope: in-process only. Cross-process serialization belongs in the
- * `TaskStore` interface (compare-and-swap or transactional `update`) and
- * is intentionally out of scope here.
+ * `TaskStore` interface (compare-and-swap or transactional `update`)
+ * and is intentionally out of scope here.
  */
 const taskWriteLocks = new Map<string, Promise<unknown>>();
 
-async function serializeByTaskId<T>(taskId: string, fn: () => Promise<T>): Promise<T> {
-  const prev = taskWriteLocks.get(taskId) ?? Promise.resolve();
-  // `.then(fn, fn)` ensures one RM's rejection doesn't block the chain —
-  // the next queued function still runs.
+/**
+ * Builds a stable string key that uniquely identifies a `(tenant,
+ * owner, taskId)` triple. The `\x00` separator guarantees there's no
+ * collision between e.g. `{tenant: 'a\x00b', owner: 'c'}` and `{tenant:
+ * 'a', owner: 'b\x00c'}` because the NUL byte cannot appear in the
+ * input segments under any realistic header/identifier policy.
+ */
+function lockKey(context: ServerCallContext, taskId: string): string {
+  const tenant = context.tenant ?? '';
+  const owner = context.user?.userName ?? '';
+  return `${tenant}\x00${owner}\x00${taskId}`;
+}
+
+/**
+ * Runs `fn` serialized against any prior calls for the same `key`,
+ * chaining onto the existing promise so rejections don't block the
+ * queue and evicting the map entry once the chain drains.
+ */
+async function serializeByScope<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = taskWriteLocks.get(key) ?? Promise.resolve();
   const next = prev.then(fn, fn);
-  taskWriteLocks.set(
-    taskId,
-    next.finally(() => {
-      // Only evict if no newer call has extended the chain. Without this
-      // guard, a fast successor would be orphaned by our cleanup.
-      if (taskWriteLocks.get(taskId) === next) {
-        taskWriteLocks.delete(taskId);
-      }
-    })
-  );
+  taskWriteLocks.set(key, next);
+  const evict = (): void => {
+    if (taskWriteLocks.get(key) === next) {
+      taskWriteLocks.delete(key);
+    }
+  };
+  void next.then(evict, evict);
   return next;
 }
 
@@ -65,12 +90,15 @@ async function serializeByTaskId<T>(taskId: string, fn: () => Promise<T>): Promi
  * this class is safe to combine with stores that share references.
  *
  * Concurrency: `processEvent` serializes all store-touching branches
- * (`task` / `statusUpdate` / `artifactUpdate`) through a per-`taskId`
- * lock shared across every `ResultManager` instance in the process.
- * Inside the lock we always invalidate `currentTask` and re-load from
- * the store, so a sibling RM's write (e.g. the AUTH_REQUIRED background
- * drain interleaving with a follow-up `sendMessage`) cannot be silently
- * overwritten by a merge against a stale cached snapshot.
+ * (`task` / `statusUpdate` / `artifactUpdate`) through a per-(tenant,
+ * owner, `taskId`) lock shared across every `ResultManager` instance in
+ * the process. The lock key mirrors {@link TaskStore} scoping so two
+ * tenants (or two owners within the same tenant) reusing the same
+ * `taskId` do not falsely serialize. Inside the lock we always
+ * invalidate `currentTask` and re-load from the store, so a sibling
+ * RM's write (e.g. the AUTH_REQUIRED background drain interleaving
+ * with a follow-up `sendMessage`) cannot be silently overwritten by a
+ * merge against a stale cached snapshot.
  */
 export class ResultManager {
   private readonly taskStore: TaskStore;
@@ -129,7 +157,9 @@ export class ResultManager {
           await this.processTaskEventLocked(taskEvent);
           break;
         }
-        await serializeByTaskId(taskEvent.id, () => this.processTaskEventLocked(taskEvent));
+        await serializeByScope(lockKey(this.serverCallContext, taskEvent.id), () =>
+          this.processTaskEventLocked(taskEvent)
+        );
         break;
       }
       case 'statusUpdate': {
@@ -138,7 +168,9 @@ export class ResultManager {
           await this.applyStatusUpdate(updateEvent);
           break;
         }
-        await serializeByTaskId(updateEvent.taskId, () => this.applyStatusUpdate(updateEvent));
+        await serializeByScope(lockKey(this.serverCallContext, updateEvent.taskId), () =>
+          this.applyStatusUpdate(updateEvent)
+        );
         break;
       }
       case 'artifactUpdate': {
@@ -147,7 +179,7 @@ export class ResultManager {
           await this.applyArtifactUpdate(artifactEvent);
           break;
         }
-        await serializeByTaskId(artifactEvent.taskId, () =>
+        await serializeByScope(lockKey(this.serverCallContext, artifactEvent.taskId), () =>
           this.applyArtifactUpdate(artifactEvent)
         );
         break;

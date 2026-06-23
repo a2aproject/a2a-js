@@ -776,4 +776,73 @@ describe('concurrent ResultManagers on the same taskId', () => {
     expect(rejected).toHaveLength(1);
     expect(fulfilled).toHaveLength(1);
   });
+
+  it('does not serialize writes across tenants that happen to share a taskId', async () => {
+    // Two tenants with the same `taskId` MUST NOT block each other. The
+    // lock key is keyed by (tenant, owner, taskId) so different tenants
+    // get independent chains. Verify this by holding tenant-A's lock
+    // open and asserting tenant-B's write still completes promptly.
+    const taskId = 'shared-task-id';
+    const contextId = 'ctx';
+    const ctxA = new ServerCallContext({ tenant: 'tenant-A' });
+    const ctxB = new ServerCallContext({ tenant: 'tenant-B' });
+
+    // Use a single store but with tenant-scoped isolation.
+    await store.save(
+      createTask(taskId, contextId, {
+        history: [createMessage('A-seed', 'A seed')],
+      }),
+      ctxA
+    );
+    await store.save(
+      createTask(taskId, contextId, {
+        history: [createMessage('B-seed', 'B seed')],
+      }),
+      ctxB
+    );
+
+    // Build a slow store wrapper for tenant-A that holds save() open
+    // until we release a gate. Tenant-B uses the unblocked store
+    // directly.
+    let releaseAGate!: () => void;
+    const aGate = new Promise<void>((r) => (releaseAGate = r));
+    const slowStoreA: InMemoryTaskStore = Object.create(store) as InMemoryTaskStore;
+    slowStoreA.save = async (task, ctx) => {
+      await aGate;
+      return store.save(task, ctx);
+    };
+    slowStoreA.load = (id, ctx) => store.load(id, ctx);
+
+    const rmA = new ResultManager(slowStoreA, ctxA);
+    rmA.setContext(createMessage('A-user', 'A user'));
+    const rmB = new ResultManager(store, ctxB);
+    rmB.setContext(createMessage('B-user', 'B user'));
+
+    // Fire tenant-A first; it will block at the gated save.
+    const aPromise = rmA.processEvent(AgentEvent.task(createTask(taskId, contextId)));
+    // Tenant-B's write must NOT wait on tenant-A's lock. Use a small
+    // timeout via Promise.race to assert B completes without A.
+    const bPromise = rmB.processEvent(AgentEvent.task(createTask(taskId, contextId)));
+    const bResult = await Promise.race([
+      bPromise.then(() => 'B-done' as const),
+      new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), 50)),
+    ]);
+    expect(bResult).toBe('B-done');
+
+    // Release tenant-A and let it finish.
+    releaseAGate();
+    await aPromise;
+
+    // Both tenants ended up with their own histories preserved.
+    const finalA = await store.load(taskId, ctxA);
+    const finalB = await store.load(taskId, ctxB);
+    expect((finalA!.history ?? []).map((m) => m.messageId)).toContain('A-seed');
+    expect((finalA!.history ?? []).map((m) => m.messageId)).toContain('A-user');
+    expect((finalB!.history ?? []).map((m) => m.messageId)).toContain('B-seed');
+    expect((finalB!.history ?? []).map((m) => m.messageId)).toContain('B-user');
+    // Cross-contamination check: A's user message must not appear in B
+    // and vice versa.
+    expect((finalA!.history ?? []).map((m) => m.messageId)).not.toContain('B-user');
+    expect((finalB!.history ?? []).map((m) => m.messageId)).not.toContain('A-user');
+  });
 });
