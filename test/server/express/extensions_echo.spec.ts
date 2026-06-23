@@ -106,7 +106,7 @@ describe('A2A-Extensions response header (end-to-end echo)', () => {
         );
         bus.finished();
       },
-      cancelTask: async () => { },
+      cancelTask: async () => {},
     };
 
     const handler = new DefaultRequestHandler(

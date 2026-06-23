@@ -71,7 +71,7 @@ export class ServerCallContext {
    * strand later `addActivatedExtension(...)` calls on a dead object
    * and response-side `A2A-Extensions` header would be missing.
    */
-  public setRequestedExtensions(extensions: Extensions) {
+  public setRequestedExtensions(extensions: Extensions | undefined) {
     this._requestedExtensions = extensions;
   }
 }

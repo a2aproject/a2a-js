@@ -28,4 +28,13 @@ describe('ServerCallContext.setRequestedExtensions', () => {
     expect(aliasHeldByTransport.tenant).toBe('t1');
     expect(aliasHeldByTransport.requestedVersion).toBe('1.0');
   });
+
+  it('accepts `undefined` to reset the requested set back to its initial unset state', () => {
+    // `_requestedExtensions` is `Extensions | undefined`, so the setter
+    // must accept `undefined` — otherwise a caller can never restore
+    // the field to its "no header was sent" state.
+    const ctx = new ServerCallContext({ requestedExtensions: ['ext-a'] });
+    ctx.setRequestedExtensions(undefined);
+    expect(ctx.requestedExtensions).toBeUndefined();
+  });
 });
