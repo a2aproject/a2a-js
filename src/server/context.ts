@@ -21,7 +21,7 @@ export interface ServerCallContextOptions {
 }
 
 export class ServerCallContext {
-  private readonly _requestedExtensions?: Extensions;
+  private _requestedExtensions?: Extensions;
   private readonly _user?: User;
   private readonly _requestedVersion: string;
   private readonly _tenant?: string;
@@ -60,5 +60,15 @@ export class ServerCallContext {
 
   public addActivatedExtension(uri: string) {
     this._activatedExtensions = Extensions.createFrom(this._activatedExtensions, uri);
+  }
+
+  /**
+   * Replaces the requested-extensions set. Used by
+   * {@link DefaultRequestHandler} to narrow the list to those the agent
+   * actually exposes (§3.3.4) without orphaning the original context
+   * reference held by the Express / gRPC transport layer.
+   */
+  public setRequestedExtensions(extensions: Extensions) {
+    this._requestedExtensions = extensions;
   }
 }
