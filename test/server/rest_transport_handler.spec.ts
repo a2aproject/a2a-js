@@ -355,15 +355,32 @@ describe('RestTransportHandler', () => {
         expect(result).to.deep.equal(mockConfig);
       });
 
-      it('should throw InvalidParams if id is missing', async () => {
-        const invalidConfig = {
+      it('should accept id-less config and delegate to the handler (handler assigns UUID)', async () => {
+        // Spec §3.1.7 / §5.1: id is optional across all transports. The
+        // handler generates a server-side UUID when omitted, so REST must
+        // not pre-reject id-less requests (previously threw
+        // `RequestMalformedError('id is required')`, breaking parity
+        // with JSON-RPC, gRPC, and the reference a2a-python / a2a-go REST
+        // dispatchers).
+        const idLessConfig = {
           taskId: 'task-1',
           url: 'https://example.com/webhook',
         };
+        const assignedConfig = { ...idLessConfig, id: 'server-assigned-uuid' };
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(
+          assignedConfig
+        );
 
-        await expect(
-          transportHandler.createTaskPushNotificationConfig(invalidConfig as any, mockContext)
-        ).rejects.toThrow('id is required');
+        const result = await transportHandler.createTaskPushNotificationConfig(
+          idLessConfig as any,
+          mockContext
+        );
+
+        expect(mockRequestHandler.createTaskPushNotificationConfig).toHaveBeenCalledWith(
+          idLessConfig,
+          mockContext
+        );
+        expect(result).to.deep.equal(assignedConfig);
       });
     });
 

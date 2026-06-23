@@ -42,15 +42,17 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     expect(loaded).toEqual([]);
   });
 
-  it('defaults a missing config id to the taskId on save', async () => {
+  it('throws when saved with an empty config id (handler must assign one)', async () => {
+    // The handler now guarantees a non-empty id (auto-generates UUIDs for
+    // id-less Creates — see `DefaultRequestHandler.createTaskPushNotificationConfig`).
+    // The old `id ||= taskId` fallback silently collapsed every id-less
+    // Create onto the same row; the store now rejects empty ids so a
+    // direct `store.save(...)` from custom code can't reintroduce that
+    // destructive upsert path.
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
-    const config = makeConfig({ id: '' });
-
-    await store.save('task-id-default', context, config);
-    const loaded = await store.load('task-id-default', context);
-
-    expect(loaded).toHaveLength(1);
-    expect(loaded[0].id).toBe('task-id-default');
+    await expect(store.save('task-id-empty', context, makeConfig({ id: '' }))).rejects.toThrow(
+      /id must be non-empty/
+    );
   });
 
   it('delete() matches against the config id', async () => {

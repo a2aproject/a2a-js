@@ -102,9 +102,16 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     const bucket = this._scopedStore.getOrCreateBucket(context);
     const entries = bucket.get(taskId) || [];
 
-    // Set ID if it's not already set
+    // The handler now guarantees a non-empty id (generates a UUID when the
+    // caller omits one — see `DefaultRequestHandler.createTaskPushNotificationConfig`).
+    // Validate here so a direct `store.save(...)` from custom code can't
+    // silently fall through to a destructive same-id upsert: an empty id
+    // would match every other empty-id entry under `findIndex` below.
     if (!pushNotificationConfig.id) {
-      pushNotificationConfig.id = taskId;
+      throw new Error(
+        'PushNotificationStore.save: pushNotificationConfig.id must be non-empty. ' +
+          'Use DefaultRequestHandler.createTaskPushNotificationConfig to auto-generate one.'
+      );
     }
 
     // Capture the wire version from the request context. ServerCallContext

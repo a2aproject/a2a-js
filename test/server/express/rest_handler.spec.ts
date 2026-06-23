@@ -612,6 +612,42 @@ describe('restHandler', () => {
           })
           .expect(400);
       });
+
+      it('should accept an id-less body and return 201 with the server-assigned id', async () => {
+        // Spec §3.1.7 / §5.1: id is optional across all transports — the
+        // handler generates a UUID server-side. REST previously rejected
+        // id-less requests with `RequestMalformedError('id is required')`,
+        // breaking parity with JSON-RPC, gRPC, and the reference
+        // a2a-python / a2a-go REST dispatchers (which both accept id-less
+        // bodies and return the persisted record).
+        const assignedConfig: TaskPushNotificationConfig = {
+          ...mockConfig,
+          id: 'server-assigned-uuid',
+        };
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(
+          assignedConfig
+        );
+
+        const response = await request(app)
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({
+            url: 'http://127.0.0.1:9999/webhook',
+            taskId: 'task-1',
+            tenant: '',
+          })
+          .expect(201);
+
+        const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.equal(protoResponse.taskId, 'task-1');
+        assert.equal(protoResponse.id, 'server-assigned-uuid');
+
+        // Sanity: the handler received a config with no id, proving REST
+        // did not pre-reject and did not fabricate an id of its own.
+        const passedConfig = (mockRequestHandler.createTaskPushNotificationConfig as Mock).mock
+          .calls[0][0];
+        assert.equal(passedConfig.id, '');
+      });
     });
 
     describe('GET /tasks/:taskId/pushNotificationConfigs', () => {

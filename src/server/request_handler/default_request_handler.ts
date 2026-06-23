@@ -985,9 +985,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
-    await this.pushNotificationStore?.save(taskId, context, params);
+    const configToSave: TaskPushNotificationConfig = params.id
+      ? params
+      : { ...params, id: uuidv4() };
 
-    return params;
+    await this.pushNotificationStore?.save(taskId, context, configToSave);
+
+    const stored = (await this.pushNotificationStore?.load(taskId, context)) ?? [];
+    return stored.find((c) => c.id === configToSave.id) ?? configToSave;
   }
 
   async getTaskPushNotificationConfig(

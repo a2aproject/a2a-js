@@ -277,9 +277,6 @@ export class RestTransportHandler {
     context: ServerCallContext
   ): Promise<TaskPushNotificationConfig> {
     await this.requireCapability('pushNotifications');
-    if (!config.id) {
-      throw new RequestMalformedError('id is required');
-    }
     return this.requestHandler.createTaskPushNotificationConfig(config, context);
   }
 
