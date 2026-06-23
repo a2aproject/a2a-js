@@ -42,17 +42,24 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     expect(loaded).toEqual([]);
   });
 
-  it('throws when saved with an empty config id (handler must assign one)', async () => {
-    // The handler now guarantees a non-empty id (auto-generates UUIDs for
-    // id-less Creates — see `DefaultRequestHandler.createTaskPushNotificationConfig`).
-    // The old `id ||= taskId` fallback silently collapsed every id-less
-    // Create onto the same row; the store now rejects empty ids so a
-    // direct `store.save(...)` from custom code can't reintroduce that
-    // destructive upsert path.
+  it('assigns a server-side UUID when saved with an empty config id', async () => {
+    // Spec §3.1.7 / §5.1: id is the *result* of Create, not an input
+    // requirement. The store assigns a UUID at the save boundary so
+    // every entry point — `createTaskPushNotificationConfig`,
+    // `sendMessage`'s and `sendMessageStream`'s
+    // `params.configuration.taskPushNotificationConfig` paths — gets
+    // the same auto-assignment.
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
-    await expect(store.save('task-id-empty', context, makeConfig({ id: '' }))).rejects.toThrow(
-      /id must be non-empty/
-    );
+
+    await store.save('task-id-empty', context, makeConfig({ id: '' }));
+    await store.save('task-id-empty', context, makeConfig({ id: '' }));
+    const loaded = await store.load('task-id-empty', context);
+
+    expect(loaded).toHaveLength(2);
+    const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(loaded[0].id).toMatch(UUIDV4_RE);
+    expect(loaded[1].id).toMatch(UUIDV4_RE);
+    expect(loaded[0].id).not.toBe(loaded[1].id);
   });
 
   it('delete() matches against the config id', async () => {

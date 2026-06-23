@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import { TaskPushNotificationConfig } from '../../index.js';
 import { A2A_LEGACY_PROTOCOL_VERSION } from '../../constants.js';
 import { ServerCallContext } from '../context.js';
@@ -34,6 +35,12 @@ export interface StoredPushNotificationConfig {
  * for push notification configuration operations.
  */
 export interface PushNotificationStore {
+  /**
+   * Implementations MUST assign a non-empty `pushNotificationConfig.id`
+   * in place when the caller passes an empty one (spec §3.1.7 — id is
+   * the *result* of Create). Callers observe the assignment via the same
+   * reference they passed in.
+   */
   save(
     taskId: string,
     context: ServerCallContext,
@@ -102,16 +109,11 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     const bucket = this._scopedStore.getOrCreateBucket(context);
     const entries = bucket.get(taskId) || [];
 
-    // The handler now guarantees a non-empty id (generates a UUID when the
-    // caller omits one — see `DefaultRequestHandler.createTaskPushNotificationConfig`).
-    // Validate here so a direct `store.save(...)` from custom code can't
-    // silently fall through to a destructive same-id upsert: an empty id
-    // would match every other empty-id entry under `findIndex` below.
+    // Spec §3.1.7 / §5.1: id is the *result* of Create, not an input
+    // requirement — id-less Creates must produce distinct records, not
+    // silently upsert onto the same row.
     if (!pushNotificationConfig.id) {
-      throw new Error(
-        'PushNotificationStore.save: pushNotificationConfig.id must be non-empty. ' +
-          'Use DefaultRequestHandler.createTaskPushNotificationConfig to auto-generate one.'
-      );
+      pushNotificationConfig.id = uuidv4();
     }
 
     // Capture the wire version from the request context. ServerCallContext

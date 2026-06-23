@@ -164,7 +164,7 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     ]);
   });
 
-  it('preserves an explicit id and returns the persisted shape (not the input reference)', async () => {
+  it('preserves an explicit id and returns a deep clone (caller mutations cannot reach the store)', async () => {
     const taskId = 'task-explicit-id';
     await taskStore.save(makeTask(taskId), serverContext);
 
@@ -181,13 +181,14 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     expect(result.id).toBe('caller-chosen-id');
     expect(result.url).toBe('https://example.test/webhook-explicit');
 
-    // The returned object must come from the store (deep-cloned per
-    // `InMemoryPushNotificationStore.load`), not be the input reference.
-    // This proves the handler reads back from persistence rather than
-    // echoing params, which is the §3.1.7 "Created configuration with
-    // assigned ID" contract — what the server stored, not what the
-    // caller sent.
+    // The returned object must be a deep clone, not the input reference —
+    // caller-side mutations of the returned value must not reach the
+    // store's internal entry. Same isolation guarantee `store.load()`
+    // provides.
     expect(result).not.toBe(params);
+    result.url = 'https://attacker.test/';
+    const stored = await pushNotificationStore.load(taskId, serverContext);
+    expect(stored[0].url).toBe('https://example.test/webhook-explicit');
   });
 
   it('listTaskPushNotificationConfigs returns every entry after mixed id-less + explicit Creates', async () => {
