@@ -3199,34 +3199,40 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
     const taskId = createdTaskEvent.payload.value.id;
 
-    // Now, issue the cancel request
-    const cancelPromise = handler.cancelTask(
+    // Per §3.1.5, cancelTask is non-blocking — it fires the signal and
+    // returns the current snapshot rather than awaiting the event drain.
+    // The snapshot here will be WORKING because the executor's next
+    // loop tick (which publishes CANCELED) hasn't fired yet.
+    const cancelResponse = await handler.cancelTask(
       { id: taskId, tenant: '', metadata: {} },
       serverCallContext
     );
-
-    // Let the executor's loop run to completion to detect the cancellation
-    await vi.runAllTimersAsync();
-
-    const cancelResponse = await cancelPromise;
 
     expect(cancellableExecutor.cancelTaskSpy).toHaveBeenCalledExactlyOnceWith(
       taskId,
       expect.anything()
     );
+    assert.equal(cancelResponse.status.state, TaskState.TASK_STATE_WORKING);
+
+    // Let the executor's loop run to completion to detect the cancellation
+    // and let the stream consumer drain CANCELED into the store.
+    await vi.runAllTimersAsync();
 
     const finalTask = await handler.getTask(
       { id: taskId, tenant: '', historyLength: 0 },
       serverCallContext
     );
     assert.equal(finalTask.status.state, TaskState.TASK_STATE_CANCELED);
-
-    assert.equal(cancelResponse.status.state, TaskState.TASK_STATE_CANCELED);
   });
 
-  it('cancelTask: should fail when it fails to cancel a task', async () => {
+  it('cancelTask: returns snapshot when executor resolves without publishing CANCELED (§3.1.5)', async () => {
     vi.useFakeTimers();
-    // Use the more advanced mock for this specific test
+    // Use a mock whose cancelTask is a no-op — it resolves without
+    // publishing CANCELED. §3.1.5 defines the output as "Updated Task
+    // with cancellation status" and notes "success is not guaranteed";
+    // the handler MUST fire the signal and return the current snapshot
+    // rather than throw TaskNotCancelableError. The executor's normal
+    // lifecycle plays out afterwards.
     const failingCancellableExecutor = new FailingCancellableMockAgentExecutor();
 
     handler = new DefaultRequestHandler(
@@ -3255,30 +3261,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
     const taskId = createdTaskEvent.payload.value.id;
 
-    let cancelResponse: Task | undefined;
-    let thrownError: any;
-    try {
-      const cancelPromise = handler.cancelTask(
-        { id: taskId, tenant: '', metadata: {} },
-        serverCallContext
-      );
-      cancelPromise.catch(() => {});
-      await vi.runAllTimersAsync();
-      try {
-        cancelResponse = await cancelPromise;
-      } catch (error: any) {
-        thrownError = error;
-      }
-    } finally {
-      assert.isDefined(thrownError);
-      assert.isUndefined(cancelResponse);
-      assert.instanceOf(thrownError, TaskNotCancelableError);
-      expect(thrownError.message).to.contain('Task not cancelable');
-      expect(failingCancellableExecutor.cancelTaskSpy).toHaveBeenCalledWith(
-        taskId,
-        expect.anything()
-      );
-    }
+    const cancelResponse = await handler.cancelTask(
+      { id: taskId, tenant: '', metadata: {} },
+      serverCallContext
+    );
+
+    // Snapshot reflects the persisted state — the executor hasn't
+    // honored the signal, so it stays WORKING.
+    assert.equal(cancelResponse.status.state, TaskState.TASK_STATE_WORKING);
+    expect(failingCancellableExecutor.cancelTaskSpy).toHaveBeenCalledWith(
+      taskId,
+      expect.anything()
+    );
   });
 
   it('cancelTask: should fail for tasks in a terminal state', async () => {

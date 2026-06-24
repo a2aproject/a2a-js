@@ -915,25 +915,26 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
     }
 
-    // Check if task is in a cancelable state
-    if (TERMINAL_STATE_LIST.includes(task.status!.state)) {
+    // §3.3.1: cancel is idempotent — a second cancel on a canceled task
+    // returns the snapshot. Other terminal states are not cancelable.
+    const currentState = task.status!.state;
+    if (currentState === TaskState.TASK_STATE_CANCELED) {
+      return task;
+    }
+    if (TERMINAL_STATE_LIST.includes(currentState)) {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
     }
 
     const eventBus = this.eventBusManager.getByTaskId(taskId);
 
     if (eventBus) {
-      const eventQueue = new ExecutionEventQueue(eventBus);
+      // Signal the executor and return; §3.1.5's "Updated Task with
+      // cancellation status" output is satisfied by the snapshot below.
+      // `_runExecutor`'s background drain keeps the store current.
       await this.agentExecutor.cancelTask(taskId, eventBus);
-      // Consume all the events until the task reaches a terminal state.
-      await this._processEvents(
-        taskId,
-        new ResultManager(this.taskStore, context),
-        eventQueue,
-        context
-      );
     } else {
-      // Here we are marking task as cancelled. We are not waiting for the executor to actually cancel processing.
+      // No active bus — executor isn't running here, so persist CANCELED
+      // directly.
       task.status = {
         state: TaskState.TASK_STATE_CANCELED,
         message: {
@@ -967,9 +968,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!latestTask) {
       throw new GenericError(`Task ${params.id} not found after cancellation.`);
     }
-    if (latestTask.status!.state != TaskState.TASK_STATE_CANCELED) {
-      throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
-    }
+    // No post-load throw: §3.1.5 lists "the task might have already
+    // completed or failed" as a valid outcome; return the snapshot.
     return latestTask;
   }
 
