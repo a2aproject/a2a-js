@@ -917,11 +917,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // §3.3.1: cancel is idempotent — a second cancel on a canceled task
     // returns the snapshot. Other terminal states are not cancelable.
-    const currentState = task.status!.state;
+    const currentState = task.status?.state;
     if (currentState === TaskState.TASK_STATE_CANCELED) {
       return task;
     }
-    if (TERMINAL_STATE_LIST.includes(currentState)) {
+    if (currentState !== undefined && TERMINAL_STATE_LIST.includes(currentState)) {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
     }
 
