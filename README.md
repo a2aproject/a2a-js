@@ -1,6 +1,7 @@
 # A2A JavaScript SDK
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/@a2a-js/sdk.svg)](https://www.npmjs.com/package/@a2a-js/sdk)
 
 <!-- markdownlint-disable no-inline-html -->
 
@@ -13,15 +14,25 @@
 
 <!-- markdownlint-enable no-inline-html -->
 
+`@a2a-js/sdk` is the official TypeScript / JavaScript SDK for the A2A
+Protocol. Use it to build A2A **servers** (agents exposing their capabilities
+over the protocol) and A2A **clients** (applications discovering and driving
+those agents) — one package, three wire transports (JSON-RPC,
+HTTP+JSON/REST, gRPC), and an opt-in compatibility layer for v0.3 peers.
+
+- 🚀 **Stable 1.0 release** tracking [A2A Protocol Specification v1.0](https://a2a-protocol.org/v1.0.0/specification/).
+- 🔌 **Three transports** — JSON-RPC, HTTP+JSON/REST, and gRPC (Node-only),
+  all backed by a single `DefaultRequestHandler`.
+- 🔄 **v0.3 backward compatibility** as an opt-in layer so v1.0 deployments
+  can interoperate with peers still on v0.3 during a staged migration.
+
 ## Installation
 
-You can install the latest `next` release of the A2A SDK using `npm`.
+You can install the A2A SDK using `npm`.
 
 ```bash
-npm install @a2a-js/sdk@next
+npm install @a2a-js/sdk
 ```
-
-Note that this is a `next` release. To install the latest stable release, use `npm install @a2a-js/sdk`.
 
 ### For Server Usage
 
@@ -51,6 +62,9 @@ This SDK implements the A2A Protocol Specification [`v1.0.0`](https://a2a-protoc
 | **HTTP+JSON/REST**      |   ✅   |   ✅   |
 | **GRPC** (Node.js only) |   ✅   |   ✅   |
 
+Upgrading from `0.3.x`? Read the
+[v0.3 → v1.0 migration guide](docs/migration-guide.md).
+
 ## Documentation
 
 **A2A Protocol Specification (v1.0.0):** <https://a2a-protocol.org/v1.0.0/specification/>
@@ -59,6 +73,11 @@ The protocol specification is the source of truth for message formats, task
 lifecycle states, transport bindings, push notifications, extensions, and
 authentication. This SDK provides a TypeScript implementation of that surface;
 when in doubt about behavior, consult the specification.
+
+SDK-specific guides live under [`docs/`](docs/):
+
+- [Migration guide (`v0.3` → `v1.0`)](docs/migration-guide.md)
+- [v0.3 compatibility guide](docs/compatibility-v0_3.md)
 
 ## Samples
 
@@ -240,10 +259,13 @@ compat surface is shipped as six subpath exports off `@a2a-js/sdk`:
 | `@a2a-js/sdk/compat/v0_3/client`         | `LegacyJsonRpcTransport`, `LegacyRestTransport`, and the `isLegacyAgentCard` / `parseLegacyAgentCard` helpers. Workers-safe.                                                                                                  |
 | `@a2a-js/sdk/compat/v0_3/client/grpc`    | `LegacyGrpcTransport`, instantiated by the v1.0 `GrpcTransportFactory` when the matched `AgentInterface.protocolVersion` falls in `[0.3, 1.0)`.                                                                               |
 
-See [`src/compat/v0_3/README.md`](src/compat/v0_3/README.md) for the full
-compat-layer architecture (version negotiation under §3.6.2, push-notification
-wire-version routing, agent-card synthesis, translator policy decisions) and
-the [`compat-v1-server`](src/samples/agents/compat-v1-server/) /
+See the end-user [v0.3 compatibility guide](docs/compatibility-v0_3.md) for
+opt-in mechanics and caveats (dropped fields, defaults, unavailable
+methods like `ListTasks`, push-notification routing, agent-card synthesis).
+For the architecture-level walkthrough — translators, version negotiation
+under §3.6.2, push-notification wire-version routing — see
+[`src/compat/v0_3/README.md`](src/compat/v0_3/README.md), and the
+[`compat-v1-server`](src/samples/agents/compat-v1-server/) /
 [`compat-v1-client`](src/samples/agents/compat-v1-client/) samples for an
 end-to-end demonstration across every transport.
 

@@ -23,29 +23,36 @@ compatibility layer for v0.3 peers (see section 5 below).
 The project is structured into modular entry points to allow tree-shaking and separation of concerns.
 
 ### 1. Common (`src/index.ts`)
-*   **Types**: Core protocol types (`Message`, `Task`, `AgentCard`).
-*   **Constants**: Protocol constants like `AGENT_CARD_PATH`.
-*   **Errors**: Common error classes (`A2AError`).
+*   **Types**: Core protocol types (`Message`, `Task`, `AgentCard`, `Part`) generated from protobuf.
+*   **Constants**: Protocol constants (`AGENT_CARD_PATH`, `A2A_VERSION_HEADER`, `A2A_PROTOCOL_VERSION`, `A2A_CONTENT_TYPE`).
+*   **Signing**: `generateAgentCardSignature`, `verifyAgentCardSignature`, `canonicalizeAgentCard`.
 
 ### 2. Client (`src/client/index.ts`)
-*   **`ClientFactory`**: The main entry point for creating clients. Can create clients from a base URL or an `AgentCard`.
-*   **`A2AClient`**: The interface for sending messages and streams.
-*   **Transports**:
-    *   `JsonRpcTransport`: Uses JSON-RPC over HTTP.
-    *   `RestTransport`: Uses standard HTTP+JSON REST patterns.
-*   **Interceptors**: `CallInterceptor` for modifying requests/responses (e.g., adding auth headers).
-*   **Auth**: `AuthenticationHandler` and `createAuthenticatingFetchWithRetry` for handling token refresh logic.
+*   **`ClientFactory`**: The main entry point. `createFromUrl(baseUrl, path?)` fetches the agent card; `createFromAgentCard(card)` works from an in-memory card.
+*   **`Client`**: Transport-agnostic API (`sendMessage`, `sendMessageStream`, `getTask`, `cancelTask`, `listTasks`, `createTaskPushNotificationConfig`, …).
+*   **Transport factories**:
+    *   `JsonRpcTransportFactory`: JSON-RPC over HTTP (Workers-safe).
+    *   `RestTransportFactory`: HTTP+JSON/REST per spec §11.3 (Workers-safe).
+    *   `GrpcTransportFactory` (from `@a2a-js/sdk/client/grpc`): Node only.
+*   **`CallInterceptor`**: `before` / `after` hooks for header injection, metrics, A2A extensions.
+*   **Auth**: `AuthenticationHandler` and `createAuthenticatingFetchWithRetry` for token refresh + 401/403 retry.
+*   **`DefaultAgentCardResolver`**: Stand-alone card fetcher/parser; pass into `ClientFactoryOptions` (e.g. with `legacyCompat: { enabled: true }`).
 
 ### 3. Server (`src/server/index.ts`)
-*   **`AgentExecutor`**: The core interface you implement to define your agent's logic (`execute`, `cancelTask`).
-*   **`DefaultRequestHandler`**: Orchestrates request processing, task management, and event dispatching.
-*   **`ExecutionEventBus`**: Used within `AgentExecutor` to publish `Message`, `Task`, and `Artifact` updates.
-*   **`InMemoryTaskStore`**: Default in-memory storage for task state.
-*   **Push Notifications**: `PushNotificationSender` and `InMemoryPushNotificationStore` for async updates.
+*   **`AgentExecutor`**: The core interface you implement (`execute`, `cancelTask`).
+*   **`DefaultRequestHandler`**: Orchestrates request routing, task storage, version validation, cancellation, push notifications.
+*   **`ExecutionEventBus`**: Used inside `AgentExecutor` to publish events; wrap each event with `AgentEvent.message(...)` / `AgentEvent.task(...)` / `AgentEvent.statusUpdate(...)` / `AgentEvent.artifactUpdate(...)`.
+*   **`InMemoryTaskStore`**: Default tenant-scoped task store. Implements `list()` for `ListTasks`.
+*   **Push Notifications**: `PushNotificationSender`, `InMemoryPushNotificationStore`, `V1PushNotificationSerializer`, `DefaultPushNotificationSender`.
+*   **Errors**: `TaskNotFoundError`, `RequestMalformedError`, `VersionNotSupportedError`, `UnsupportedOperationError`, `PushNotificationNotSupportedError`, etc.
+*   **Version**: `validateVersion`, `getSupportedVersions`.
 
 ### 4. Server Express Integration (`src/server/express/index.ts`)
-*   **Handlers**: `agentCardHandler`, `jsonRpcHandler`, `restHandler` to easily mount A2A endpoints in an Express app.
-*   **`UserBuilder`**: Middleware for extracting user identity from requests.
+*   **Handlers**: `agentCardHandler`, `jsonRpcHandler`, `restHandler` for mounting A2A endpoints. All three accept a `legacyCompat: { enabled: boolean }` option.
+*   **`UserBuilder`**: Middleware-friendly callback for extracting user identity from requests.
+
+### 4b. Server gRPC Integration (`src/server/grpc/index.ts`)
+*   **`grpcService`** + **`A2AService`** descriptor for `grpc.Server.addService(...)`.
 
 ### 5. v0.3 Backward Compatibility (`src/compat/v0_3/`)
 The compat layer is shipped as six subpath exports off `@a2a-js/sdk`, mirroring the v1.0 layout (`server` is framework-agnostic; `server/express` and `server/grpc` carry the runtime-specific bits):
@@ -72,14 +79,21 @@ The bidirectional v0.3 ↔ v1.0 translators in `./translate/` are intentionally 
 
 ## Samples
 
-The `src/samples` directory contains practical examples:
+The `src/samples` directory contains practical examples. Each subdirectory has its own `README.md` with run instructions.
 
 *   **`agents/`**:
-    *   `movie-agent/`: A sample agent that queries movie data from TMDB.
-    *   `sample-agent/`: A basic reference agent implementation.
-*   **`authentication/`**: Examples of how to implement authentication middleware and user building.
-*   **`extensions/`**: Examples of using protocol extensions.
-*   **`cli.ts`**: A CLI tool example for interacting with agents.
+    *   `sample-agent/`: Minimal streaming agent over JSON-RPC.
+    *   `movie-agent/`: A realistic agent backed by Genkit + the TMDB API.
+    *   `multi-transport-agent/`: One agent exposed over JSON-RPC, REST, and gRPC simultaneously from a single `DefaultRequestHandler`.
+    *   `cancellable-agent/`: Implements `cancelTask` so a client can abort an in-flight task.
+    *   `push-notification-agent/`: Long-running agent that POSTs events to a client-provided webhook (server + webhook receiver + client).
+    *   `verify-signing/`: Client-side verification of signed agent cards (JWS + JWKS).
+    *   `compat-v1-server/`: v1.0-native server with `legacyCompat: { enabled: true }` on every transport.
+    *   `compat-v1-client/`: v1.0-native client driving both the compat-aware server above and an in-process mock v0.3 server.
+*   **`authentication/`**: Bearer/JWT authentication with Passport, including a `UserBuilder` that propagates the authenticated user into the agent context.
+*   **`extensions/`**: Protocol extension implemented as an `AgentExecutor` decorator that stamps metadata onto outgoing events.
+*   **`client/interceptors/`**: Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.
+*   **`cli.ts`**: Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with optional Google ADC authentication.
 
 ## Development Conventions
 
