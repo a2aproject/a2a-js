@@ -23,7 +23,7 @@ Turn `legacyCompat: { enabled: true }` on when **any of these** is true:
   staged client migration.
 - You write a v1.0 client and one or more of the agents it talks to still
   advertises v0.3 in its agent card.
-- You're rolling out v1.0 across a fleet and want a single deployable artefact
+- You're rolling out v1.0 across a fleet and want a single deployable artifact
   that handles both versions, instead of running parallel binaries.
 
 Leave it off when:
@@ -64,70 +64,16 @@ intentionally internal and may change without a major-version bump.
 
 The v1.0 server handlers all expose a `legacyCompat` option. Set
 `{ enabled: true }` on each handler whose transport should also accept
-v0.3 traffic; the rest stay strict v1.0.
+v0.3 traffic; the rest stay strict v1.0. Push notifications additionally
+need `createLegacyAwarePushNotificationSender(...)` from
+`@a2a-js/sdk/compat/v0_3/server` so v0.3-registered webhooks receive v0.3
+bodies; gRPC needs `legacyGrpcService` from
+`@a2a-js/sdk/compat/v0_3/server/grpc` bound next to `grpcService` (the v1.0
+gRPC factory has no `legacyCompat` flag).
 
-```ts
-import express from 'express';
-import { Server, ServerCredentials } from '@grpc/grpc-js';
-
-import {
-  AGENT_CARD_PATH,
-  DefaultRequestHandler,
-  InMemoryPushNotificationStore,
-  InMemoryTaskStore,
-} from '@a2a-js/sdk/server';
-import {
-  agentCardHandler,
-  jsonRpcHandler,
-  restHandler,
-  UserBuilder,
-} from '@a2a-js/sdk/server/express';
-import { A2AService, grpcService } from '@a2a-js/sdk/server/grpc';
-import { LegacyA2AService, legacyGrpcService } from '@a2a-js/sdk/compat/v0_3/server/grpc';
-import { createLegacyAwarePushNotificationSender } from '@a2a-js/sdk/compat/v0_3/server';
-
-// One push-notification sender pre-loaded with both v1.0 and v0.3 serializers.
-const pushStore = new InMemoryPushNotificationStore();
-const pushSender = createLegacyAwarePushNotificationSender(pushStore);
-
-const requestHandler = new DefaultRequestHandler(
-  agentCard,             // declared with v1.0 supportedInterfaces only — see below
-  new InMemoryTaskStore(),
-  myAgentExecutor,
-  undefined,             // event bus manager (default)
-  pushStore,
-  pushSender
-);
-
-const app = express();
-
-// Card: serves a v1.0 card to v1.0 clients, a hybrid card (v0.3 top-level
-// fields + embedded supportedInterfaces[]) to v0.3 clients. `Vary: A2A-Version`
-// keeps shared HTTP caches honest.
-app.use(`/${AGENT_CARD_PATH}`,
-  agentCardHandler({ agentCardProvider: requestHandler, legacyCompat: { enabled: true } })
-);
-
-// JSON-RPC: routes by body shape on a single endpoint.
-app.use('/a2a/jsonrpc',
-  jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication, legacyCompat: { enabled: true } })
-);
-
-// REST: mounts the v0.3 `/v1/...` routes alongside the v1.0 `/<operation>` routes.
-app.use('/a2a/rest',
-  restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication, legacyCompat: { enabled: true } })
-);
-
-// gRPC: register both services on the same Server. The v1.0 gRPC factory
-// has no legacyCompat flag — the canonical way to serve v0.3 gRPC clients is
-// to bind `legacyGrpcService` next to `grpcService`.
-const grpcServer = new Server();
-grpcServer.addService(A2AService, grpcService({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
-grpcServer.addService(LegacyA2AService, legacyGrpcService({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
-```
-
-The runnable end-to-end version is the
-[`compat-v1-server`](../src/samples/agents/compat-v1-server/) sample.
+See the [`compat-v1-server`](../src/samples/agents/compat-v1-server/) sample
+for the runnable wiring across all four surfaces (agent card, JSON-RPC, REST,
+gRPC).
 
 ### How requests get routed
 
@@ -138,7 +84,7 @@ executor publishes back into v0.3 shapes on the way out.
 
 | Transport     | How v0.3 is detected                                                                                                                                                                                              |
 | :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JSON-RPC      | The handler inspects the JSON-RPC `method` name. Kebab-style names (`message/send`, `tasks/get`, …) route to the v0.3 dispatcher; PascalCase names (`SendMessage`, `GetTask`, …) route to the v1.0 dispatcher. See the method-name translation table below. |
+| JSON-RPC      | The handler inspects the JSON-RPC `method` name. Kebab-style names (`message/send`, `tasks/get`, …) route to the v0.3 dispatcher; PascalCase names (`SendMessage`, `GetTask`, …) route to the v1.0 dispatcher. |
 | REST          | The v0.3 routes live under the `/v1/...` prefix (per the v0.3 reference proto's `google.api.http` annotations). v1.0 routes use `/<operation>` directly. Express's prefix matcher disambiguates without ambiguity. |
 | gRPC          | Each version is a separate gRPC service descriptor (`A2AService` vs. `LegacyA2AService`). The transport picks the descriptor; the SDK never needs to sniff.                                                       |
 | Agent card    | The handler reads the `A2A-Version` header (defaulting to `'0.3'` when absent, per spec §3.6.2) and emits the appropriate card shape, with `Vary: A2A-Version` set on the response.                                |
@@ -256,7 +202,7 @@ layer applies the documented defaults rather than failing.
 | `AgentCard.supportedInterfaces[]` (v1.0) ↔ `(url, preferredTransport, additionalInterfaces)` (v0.3)                                                                | In **strict mode** (default), only interfaces whose `protocolVersion` is empty or in `[0.3, 1.0)` survive the v1.0 → v0.3 translation; if none qualify, `VersionNotSupportedError` is thrown. In **synthesis mode** (used by `legacyAgentCardRouter`), every interface survives and is restamped with `protocolVersion: '0.3'`. |
 | `Part.content.$case` discriminator                                                                                                                                  | Translated to the v0.3 `kind:` discriminator on each part (`text`, `file`, `data`). File URI ↔ v0.3 `FilePart.file.uri`; file bytes ↔ v0.3 `FilePart.file.bytes`; the v1.0 flat `Part.filename` / `Part.mediaType` map back into `FilePart.file.name` / `FilePart.file.mimeType`. |
 
-### REST wire-shape gotchas
+### REST wire-shape caveats
 
 Both the v0.3 and v1.0 REST surfaces speak **proto-JSON of their respective
 proto types** (per each version's `google.api.http` annotations) — they do
@@ -309,26 +255,6 @@ even when the task is later driven by a v1.0 client.
 > context carries `'1.0'` and the built-in V1 serializer handles every
 > dispatch.
 
-### Method-name translations
-
-Reference table — useful when debugging logs or sniffing traffic. The
-translators in `@a2a-js/sdk/compat/v0_3` expose this as a runtime function
-(`legacyJsonRpcToV1Method` and friends).
-
-| v0.3 JSON-RPC method                             | v1.0 method (PascalCase)              | v0.3 gRPC method                              |
-| :----------------------------------------------- | :------------------------------------ | :-------------------------------------------- |
-| `message/send`                                   | `SendMessage`                         | `SendMessage`                                 |
-| `message/stream`                                 | `SendStreamingMessage`                | `SendStreamingMessage`                        |
-| `tasks/get`                                      | `GetTask`                             | `GetTask`                                     |
-| `tasks/cancel`                                   | `CancelTask`                          | `CancelTask`                                  |
-| `tasks/resubscribe`                              | `SubscribeToTask`                     | `TaskSubscription`                            |
-| `tasks/pushNotificationConfig/set`               | `CreateTaskPushNotificationConfig`    | `CreateTaskPushNotificationConfig`            |
-| `tasks/pushNotificationConfig/get`               | `GetTaskPushNotificationConfig`       | `GetTaskPushNotificationConfig`               |
-| `tasks/pushNotificationConfig/list`              | `ListTaskPushNotificationConfigs`     | `ListTaskPushNotificationConfig`              |
-| `tasks/pushNotificationConfig/delete`            | `DeleteTaskPushNotificationConfig`    | `DeleteTaskPushNotificationConfig`            |
-| `agent/getAuthenticatedExtendedCard`             | `GetExtendedAgentCard`                | `GetAgentCard`                                |
-| *(no equivalent)*                                | `ListTasks`                           | *(no equivalent)*                             |
-
 ### Transport headers
 
 | Header                | v0.3                  | v1.0                          |
@@ -338,13 +264,6 @@ translators in `@a2a-js/sdk/compat/v0_3` expose this as a runtime function
 | REST Content-Type     | `application/json`    | `application/a2a+json`        |
 
 ---
-
-## When the compat layer reaches end-of-life
-
-The compat layer is opt-in and intended to be retired once the v0.3 client
-base has migrated. The translators in `src/compat/v0_3/translate/` are
-internal API and may change without a major-version bump; the published
-subpath exports follow the SDK's normal semver guarantees within `1.x`.
 
 If you're operating a v0.3 server and considering migration, the
 [migration guide](migration-guide.md) walks through every SDK-level breaking

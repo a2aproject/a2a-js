@@ -17,7 +17,7 @@ model changes (renamed fields, restructured types, new operations), see:
   npm install @a2a-js/sdk
   ```
 
-> If you can't migrate every peer at once, you don't have to: the v1.0 SDK
+> Migrating all v0.3 clients to v1.0 during upgrade is not required: the v1.0 SDK
 > ships an opt-in compatibility layer that lets a v1.0 server accept v0.3
 > clients (and a v1.0 client talk to v0.3 servers). See
 > [compatibility-v0_3.md](compatibility-v0_3.md) for end-user setup and
