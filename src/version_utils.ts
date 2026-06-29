@@ -46,13 +46,13 @@ function compareVersions(a: NumericVersion, b: NumericVersion): number {
 }
 
 /**
- * Returns `true` when `version` is a non-empty, parseable string that falls
- * inside the legacy range `[0.3, 1.0)`.
- *
- * Empty / nullish / unparseable inputs return `false`.
+ * Returns `true` when `version` is in the legacy range `[0.3, 1.0)`.
+ * Empty, whitespace-only, or nullish inputs are treated as legacy ('0.3'),
+ * matching the spec rule that clients without an explicit version are v0.3.
+ * Unparseable, non-empty inputs return `false`.
  */
 export function isLegacyVersion(version: string | null | undefined): boolean {
-  if (!version) return false;
+  if (!version || version.trim() === '') return true;
   const v = parseVersion(version);
   if (!v) return false;
 

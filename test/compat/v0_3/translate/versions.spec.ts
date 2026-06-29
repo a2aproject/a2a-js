@@ -44,13 +44,19 @@ describe('versions', () => {
       expect(isLegacyVersion('0.0')).toBe(false);
     });
 
-    it('returns false for an empty string', () => {
-      expect(isLegacyVersion('')).toBe(false);
+    it('returns true for an empty string (defaults to 0.3)', () => {
+      expect(isLegacyVersion('')).toBe(true);
     });
 
-    it('returns false for null/undefined', () => {
-      expect(isLegacyVersion(null)).toBe(false);
-      expect(isLegacyVersion(undefined)).toBe(false);
+    it('returns true for whitespace-only strings (defaults to 0.3)', () => {
+      expect(isLegacyVersion(' ')).toBe(true);
+      expect(isLegacyVersion('   ')).toBe(true);
+      expect(isLegacyVersion('\t\n')).toBe(true);
+    });
+
+    it('returns true for null/undefined (defaults to 0.3)', () => {
+      expect(isLegacyVersion(null)).toBe(true);
+      expect(isLegacyVersion(undefined)).toBe(true);
     });
 
     it('returns false for unparseable strings', () => {
