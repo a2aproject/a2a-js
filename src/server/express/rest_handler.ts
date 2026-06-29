@@ -299,7 +299,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     router[method](`/:tenant${path}`, tenantMiddleware, asyncHandler(handler));
   };
 
-  // GET /extendedAgentCard
+  /**
+   * GET /extendedAgentCard
+   *
+   * Retrieves the authenticated extended agent card.
+   *
+   * @returns 200 OK with agent card
+   * @returns 500 Internal Server Error on failure
+   */
   registerRoute('get', '/extendedAgentCard', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(
@@ -309,7 +316,17 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
   });
 
-  // POST /message:send (colon escaped for Express).
+  /**
+   * POST /message:send
+   *
+   * Sends a message to the agent synchronously.
+   * Returns either a Message (for immediate responses) or a Task (for async processing).
+   * Note: Colon is escaped in route definition for Express compatibility.
+   *
+   * @param req.body - MessageSendParams (accepts both snake_case and camelCase)
+   * @returns 201 Created with RestMessage or RestTask
+   * @returns 400 Bad Request if message is invalid
+   */
   registerRoute('post', '/message\\:send', async (req, res) => {
     const context = await buildContext(req);
     const params = SendMessageRequest.fromJSON(req.body ?? {});
@@ -324,7 +341,18 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  // POST /message:stream (SSE).
+  /**
+   * POST /message:stream
+   *
+   * Sends a message to the agent with streaming response.
+   * Returns a Server-Sent Events (SSE) stream of updates.
+   * Note: Colon is escaped in route definition for Express compatibility.
+   *
+   * @param req.body - MessageSendParams (accepts both snake_case and camelCase)
+   * @returns 200 OK with SSE stream of messages, tasks, and status updates
+   * @returns 400 Bad Request if message is invalid
+   * @returns 501 Not Implemented if streaming not supported
+   */
   registerRoute('post', '/message\\:stream', async (req, res) => {
     const context = await buildContext(req);
     const params = SendMessageRequest.fromJSON(req.body ?? {});
@@ -332,7 +360,17 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     await sendStreamResponse(res, stream, context);
   });
 
-  // GET /tasks/:taskId
+  /**
+   * GET /tasks/:taskId
+   *
+   * Retrieves the current status and details of a task.
+   *
+   * @param req.params.taskId - Task identifier
+   * @param req.query.historyLength - Optional number of history messages to include
+   * @returns 200 OK with RestTask
+   * @returns 400 Bad Request if historyLength is invalid
+   * @returns 404 Not Found if task doesn't exist
+   */
   registerRoute('get', '/tasks/:taskId', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getTask(
@@ -344,7 +382,17 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
 
-  // POST /tasks/:taskId:cancel
+  /**
+   * POST /tasks/:taskId:cancel
+   *
+   * Attempts to cancel an ongoing task.
+   * The task may not be immediately canceled depending on its current state.
+   *
+   * @param req.params.taskId - Task identifier
+   * @returns 200 OK with RestTask (task in its post-cancel state)
+   * @returns 404 Not Found if task doesn't exist
+   * @returns 400 Bad Request if task cannot be canceled
+   */
   registerRoute('post', '/tasks/:taskId\\:cancel', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.cancelTask(
@@ -355,14 +403,31 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
 
-  // GET /tasks
+  /**
+   * GET /tasks
+   *
+   * Retrieves a list of tasks with optional filtering and pagination capabilities.
+   *
+   * @returns 200 OK with ListTasksResponse
+   * @returns 400 Bad Request if filter or pageSize is invalid
+   */
   registerRoute('get', '/tasks', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTasks(req.query, context);
     sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
   });
 
-  // POST /tasks/:taskId:subscribe (SSE).
+  /**
+   * POST /tasks/:taskId:subscribe
+   *
+   * Resubscribes to an existing task's updates via Server-Sent Events (SSE).
+   * Useful for reconnecting to long-running tasks or receiving missed updates.
+   *
+   * @param req.params.taskId - Task identifier
+   * @returns 200 OK with SSE stream of task status and artifact updates
+   * @returns 404 Not Found if task doesn't exist
+   * @returns 501 Not Implemented if streaming not supported
+   */
   registerRoute('post', '/tasks/:taskId\\:subscribe', async (req, res) => {
     const context = await buildContext(req);
     const stream = await restTransportHandler.resubscribe(
@@ -373,7 +438,17 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     await sendStreamResponse(res, stream, context);
   });
 
-  // POST /tasks/:taskId/pushNotificationConfigs
+  /**
+   * POST /tasks/:taskId/pushNotificationConfigs
+   *
+   * Creates a push notification configuration for a task.
+   * The agent will send task updates to the configured webhook URL.
+   *
+   * @param req.params.taskId - Task identifier
+   * @param req.body - Push notification configuration (snake_case format)
+   * @returns 201 Created with TaskPushNotificationConfig
+   * @returns 501 Not Implemented if push notifications not supported
+   */
   registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
     const params = TaskPushNotificationConfig.fromJSON(req.body ?? {});
@@ -387,7 +462,15 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  // GET /tasks/:taskId/pushNotificationConfigs
+  /**
+   * GET /tasks/:taskId/pushNotificationConfigs
+   *
+   * Lists all push notification configurations for a task.
+   *
+   * @param req.params.taskId - Task identifier
+   * @returns 200 OK with array of TaskPushNotificationConfig
+   * @returns 404 Not Found if task doesn't exist
+   */
   registerRoute('get', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTaskPushNotificationConfigs(
@@ -404,7 +487,16 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  // GET /tasks/:taskId/pushNotificationConfigs/:configId
+  /**
+   * GET /tasks/:taskId/pushNotificationConfigs/:configId
+   *
+   * Retrieves a specific push notification configuration.
+   *
+   * @param req.params.taskId - Task identifier
+   * @param req.params.configId - Push notification configuration identifier
+   * @returns 200 OK with TaskPushNotificationConfig
+   * @returns 404 Not Found if task or config doesn't exist
+   */
   registerRoute('get', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getTaskPushNotificationConfig(
@@ -422,7 +514,16 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  // DELETE /tasks/:taskId/pushNotificationConfigs/:configId
+  /**
+   * DELETE /tasks/:taskId/pushNotificationConfigs/:configId
+   *
+   * Deletes a push notification configuration.
+   *
+   * @param req.params.taskId - Task identifier
+   * @param req.params.configId - Push notification configuration identifier
+   * @returns 204 No Content on success
+   * @returns 404 Not Found if task or config doesn't exist
+   */
   registerRoute('delete', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
     const context = await buildContext(req);
     await restTransportHandler.deleteTaskPushNotificationConfig(
