@@ -63,23 +63,18 @@ class MovieAgentExecutor implements AgentExecutor {
     );
 
     // 1. Every streaming turn must begin with a Task or Message event.
-    const taskSnapshot: Task = existingTask
-      ? {
-          ...existingTask,
-          history: [...(existingTask.history ?? []), userMessage],
-        }
-      : {
-          id: taskId,
-          contextId: contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            timestamp: new Date().toISOString(),
-            message: undefined,
-          },
-          artifacts: [],
-          history: [userMessage],
-          metadata: userMessage.metadata,
-        };
+    const taskSnapshot: Task = existingTask ?? {
+      id: taskId,
+      contextId: contextId,
+      status: {
+        state: TaskState.TASK_STATE_SUBMITTED,
+        timestamp: new Date().toISOString(),
+        message: undefined,
+      },
+      artifacts: [],
+      history: [userMessage],
+      metadata: userMessage.metadata,
+    };
     eventBus.publish(AgentEvent.task(taskSnapshot));
 
     // 2. Publish "working" status update
