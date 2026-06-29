@@ -131,17 +131,13 @@ export class JsonRpcTransportHandler {
               };
             }
           } catch (streamError) {
-            // If the underlying agent stream throws an error, we need to yield a JSONRPCErrorResponse.
-            // However, an AsyncGenerator is expected to yield JSONRPCResult.
-            // This indicates an issue with how errors from the agent's stream are propagated.
-            // For now, log it. The Express layer will handle the generator ending.
+            // Re-thrown errors are caught by the Express layer, which
+            // writes a final SSE `event: error` frame carrying the
+            // JSON-RPC error envelope before closing the stream.
             console.error(
               `Error in agent event stream for ${method} (request ${requestId}):`,
               streamError
             );
-            // Ideally, the Express layer should catch this and send a final error to the client if the stream breaks.
-            // Or, the agentEventStream itself should yield a final error event that gets wrapped.
-            // For now, we re-throw so it can be caught by the Express layer streaming support.
             throw streamError;
           }
         })();

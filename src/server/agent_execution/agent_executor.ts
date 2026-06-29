@@ -5,6 +5,11 @@ export interface AgentExecutor {
   /**
    * Executes the agent logic and publishes events to the bus.
    *
+   * Every call MUST publish either a `task` or a `message` event as its
+   * first event — including follow-up turns where `requestContext.task`
+   * is already set. The server enforces this ordering and rejects
+   * streams that begin with a `statusUpdate` or `artifactUpdate`.
+   *
    * Multi-tenant implementations can read the tenant identifier from
    * `requestContext.context.tenant`.
    */

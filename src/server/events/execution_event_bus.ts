@@ -231,7 +231,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
 
   private addFinishedListenerInternal(listener: Listener): void {
     const wrapped: WrappedListener = () => {
-      listener.call(this);
+      (listener as () => void).call(this);
     };
 
     this.trackListener(this.finishedListeners, listener, wrapped);
@@ -252,7 +252,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
   private addFinishedListenerOnceInternal(listener: Listener): void {
     const wrapped: WrappedListener = () => {
       this.untrackWrappedListener(this.finishedListeners, listener, wrapped);
-      listener.call(this);
+      (listener as () => void).call(this);
     };
 
     this.trackListener(this.finishedListeners, listener, wrapped);
