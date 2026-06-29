@@ -14,7 +14,7 @@ model changes (renamed fields, restructured types, new operations), see:
 - Install the v1.0 SDK:
 
   ```bash
-  npm install @a2a-js/sdk
+  npm install @a2a-js/sdk@next
   ```
 
 > Migrating all v0.3 clients to v1.0 during upgrade is not required: the v1.0 SDK
@@ -433,11 +433,11 @@ await verify(agentCard);
 
 ## 5. Import Path Changes
 
-| v0.3 Import                                                  | v1.0 Import                                                        |
-| ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| `import { A2AClient } from '@a2a-js/sdk/client'`             | Removed -- use `ClientFactory` + `Client`                          |
-| `import { TextPart, FilePart, DataPart } from '@a2a-js/sdk'` | Removed -- use `Part`                                              |
-| `import { MessageSendParams } from '@a2a-js/sdk'`            | `import { SendMessageRequest } from '@a2a-js/sdk'`                 |
-| `import { TaskQueryParams } from '@a2a-js/sdk'`              | `import { GetTaskRequest } from '@a2a-js/sdk'`                     |
-| `import { TaskIdParams } from '@a2a-js/sdk'`                 | `import { CancelTaskRequest } from '@a2a-js/sdk'`                  |
-| `import { A2AError } from '@a2a-js/sdk/server'`              | `import { TaskNotFoundError, ... } from '@a2a-js/sdk/server'`      |
+| v0.3 Import                                                  | v1.0 Import                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| `import { A2AClient } from '@a2a-js/sdk/client'`             | Removed -- use `ClientFactory` + `Client`                     |
+| `import { TextPart, FilePart, DataPart } from '@a2a-js/sdk'` | Removed -- use `Part`                                         |
+| `import { MessageSendParams } from '@a2a-js/sdk'`            | `import { SendMessageRequest } from '@a2a-js/sdk'`            |
+| `import { TaskQueryParams } from '@a2a-js/sdk'`              | `import { GetTaskRequest } from '@a2a-js/sdk'`                |
+| `import { TaskIdParams } from '@a2a-js/sdk'`                 | `import { CancelTaskRequest } from '@a2a-js/sdk'`             |
+| `import { A2AError } from '@a2a-js/sdk/server'`              | `import { TaskNotFoundError, ... } from '@a2a-js/sdk/server'` |
