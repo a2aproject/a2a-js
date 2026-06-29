@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 
 export const ai = genkit({
   plugins: [googleAI()],
-  model: googleAI.model('gemini-flash-latest'),
+  model: googleAI.model('gemini-3.1-flash-lite'),
   promptDir: dirname(fileURLToPath(import.meta.url)),
 });
 
