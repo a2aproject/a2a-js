@@ -20,15 +20,9 @@ import { Transport } from './transport.js';
 import { SendMessageResult } from '../../index.js';
 
 /**
- * A transport decorator that attaches a default tenant to all requests.
- *
- * When an `AgentInterface` declares a `tenant` value (per spec Section 4.4.6),
- * this decorator ensures every outbound request carries that tenant unless the
- * caller has already specified one. This mirrors the behavior of the Python SDK's
- * `TenantTransportDecorator`.
- *
- * The factory wires this decorator automatically when `AgentInterface.tenant` is
- * non-empty, so callers do not need to manually set tenant on every request.
+ * Transport decorator attaching a default tenant to every outbound
+ * request when the caller hasn't specified one. Wired automatically by
+ * `ClientFactory` when `AgentInterface.tenant` is non-empty.
  */
 export class TenantTransportDecorator implements Transport {
   constructor(
@@ -44,9 +38,6 @@ export class TenantTransportDecorator implements Transport {
     return this.base.protocolVersion;
   }
 
-  /**
-   * Returns the request tenant if non-empty, otherwise falls back to the default.
-   */
   private _resolveTenant(tenant: string | undefined): string {
     return tenant || this.defaultTenant;
   }

@@ -1,15 +1,13 @@
 /**
- * v0.3 well-known agent-card Express handler.
+ * v0.3 well-known agent-card Express handler. Mirrors the v1.0
+ * `agentCardHandler` but serves a v0.3-shaped card produced by
+ * `toCompatAgentCard` for requests whose `A2A-Version` header falls in
+ * the legacy range (or is absent — defaults to `'0.3'`).
  *
- * Mirrors the v1.0 {@link agentCardHandler} but serves a v0.3-shaped
- * agent card produced by {@link toCompatAgentCard} for requests whose
- * `A2A-Version` header falls in the legacy range `[0.3, 1.0)` (or is
- * absent — per §3.6.2 a missing header defaults to `'0.3'`).
- *
- * Designed to be mounted at the top of the v1.0 handler's chain by the
- * core `agentCardHandler` when `legacyCompat: { enabled: true }`. The
- * router short-circuits non-legacy requests via `next('router')` so the
- * v1.0 handler keeps serving the modern card unchanged.
+ * Mounted at the top of the v1.0 handler's chain by the core
+ * `agentCardHandler` when `legacyCompat: { enabled: true }`. Short-
+ * circuits non-legacy requests via `next('router')` so the v1.0 handler
+ * keeps serving the modern card unchanged.
  */
 
 import crypto from 'crypto';
@@ -32,13 +30,7 @@ import { isLegacyVersion } from '../../translate/versions.js';
 import type * as legacy from '../../types/types.js';
 import { HTTP_STATUS, toLegacyHTTPError } from '../transports/rest/rest_transport_handler.js';
 
-/**
- * Options for {@link legacyAgentCardRouter}.
- *
- * Re-uses the v1.0 {@link AgentCardProvider} and
- * {@link AgentCardCacheOptions} types so a single options object can be
- * passed through unchanged from the core `agentCardHandler`.
- */
+/** Options for {@link legacyAgentCardRouter}. */
 export interface LegacyAgentCardHandlerOptions {
   agentCardProvider: AgentCardProvider;
   cache?: AgentCardCacheOptions;
@@ -50,30 +42,13 @@ function computeETag(json: string): string {
 }
 
 /**
- * Creates an Express router that serves a v0.3-shaped agent card for
- * legacy-range requests on the well-known agent-card path.
+ * Creates an Express router serving a v0.3-shaped agent card for
+ * legacy-range requests. Dispatch is header-based: requests whose
+ * `A2A-Version` is not in `[0.3, 1.0)` are routed via `next('router')`
+ * to the parent's v1.0 handler.
  *
- * Dispatch is **header-based**, not path-based: a middleware at the top
- * of the chain parses `A2A-Version` (defaulting to `'0.3'` per §3.6.2
- * when absent) and short-circuits any request whose version is not in
- * `[0.3, 1.0)` by calling `next('router')`, falling through to the
- * parent's v1.0 handler.
- *
- * For legacy requests, the router:
- *   - Calls the configured `agentCardProvider` to obtain the v1.0
- *     proto card.
- *   - Runs the card through {@link toCompatAgentCard}, which filters
- *     `supportedInterfaces` to legacy entries and rebuilds the v0.3
- *     card-level `(url, preferredTransport, additionalInterfaces)`
- *     fields. If no interface qualifies the translator throws
- *     {@link VersionNotSupportedError}; the router maps that to an
- *     HTTP 400 with a v0.3-shaped error body.
- *   - Sets `Content-Type: application/json` (the v0.3 spelling — v1.0
- *     uses `application/a2a+json`).
- *   - Computes a per-version `ETag` derived from the v0.3 body and
- *     emits `Vary: A2A-Version` so caches keep separate entries per
- *     version.
- *   - Honors conditional `If-None-Match` requests via `req.fresh`.
+ * Sets `Content-Type: application/json` (v0.3 spelling), emits per-
+ * version `ETag` + `Vary: A2A-Version`, and honors `If-None-Match`.
  *
  * @example
  * ```ts
@@ -93,9 +68,8 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       ? options.agentCardProvider
       : options.agentCardProvider.getAgentCard.bind(options.agentCardProvider);
 
-  // Version-based dispatch: short-circuit anything that isn't in the
-  // legacy range `[0.3, 1.0)`. Header-less requests default to `'0.3'`
-  // per §3.6.2 and stay in this router.
+  // Version-based dispatch: short-circuit anything outside the legacy
+  // range. Header-less requests default to `'0.3'` and stay here.
   router.use((req: Request, _res: Response, next: NextFunction) => {
     const requestedVersion = req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION;
     if (isLegacyVersion(requestedVersion)) {
@@ -110,27 +84,15 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       const coreCard = await provider();
       let compatCard: legacy.AgentCard;
       try {
-        // `synthesize: true` lets the legacy endpoint serve a
-        // discoverable v0.3 card even when the operator only declared
-        // v1.0 interfaces in `supportedInterfaces` — symmetric with
-        // the request handlers' implicit-v0.3 acceptance under
-        // `legacyCompat`. Strict filtering would force operators to
-        // duplicate every v1.0 entry with a v0.3 stub just to get a
-        // discoverable v0.3 surface; this avoids that.
-        //
-        // `embedV1Interfaces: true` produces a "superset" card whose
-        // JSON document satisfies BOTH shapes: v0.3 fields at the top
-        // level (`url`, `preferredTransport`, `additionalInterfaces`,
-        // `protocolVersion`) AND the original v1.0
-        // `supportedInterfaces[]`. Without this, a v1.0 peer that
-        // didn't send `A2A-Version: 1.0` on the card fetch — for
-        // example a v1.0 SDK that registered v0.3 compat for one
-        // transport but not for others — would only see legacy-stamped
-        // interfaces and fail to dial bindings it has no v0.3 compat
-        // for. The two top-level field sets are disjoint, so the
-        // hybrid representation is unambiguous: v0.3 resolvers read
-        // the v0.3 fields and v1.0 resolvers read `supportedInterfaces`
-        // (per the `isLegacyAgentCard` hybrid override).
+        // `synthesize: true` makes the legacy endpoint discoverable
+        // even when the operator only declared v1.0 interfaces — so
+        // they don't need to duplicate every v1.0 entry with a v0.3
+        // stub. `embedV1Interfaces: true` emits a "superset" card whose
+        // JSON document satisfies BOTH shapes (v0.3 top-level fields
+        // AND v1.0 `supportedInterfaces`), so a v1.0 peer that didn't
+        // negotiate `A2A-Version: 1.0` can still dial bindings without
+        // v0.3 compat. The two top-level field sets are disjoint, so
+        // the hybrid representation is unambiguous.
         compatCard = toCompatAgentCard(coreCard, {
           synthesize: true,
           embedV1Interfaces: true,
@@ -151,9 +113,8 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       const etag = computeETag(body);
 
       res.setHeader('ETag', etag);
-      // `Vary: A2A-Version` partitions the cache per protocol version
-      // so a v1.0 client doesn't get a cached v0.3 body (and vice
-      // versa) when sitting behind a shared HTTP cache.
+      // Partition the cache by protocol version so a v1.0 client doesn't
+      // get a cached v0.3 body (and vice versa).
       res.append('Vary', A2A_VERSION_HEADER);
       if (maxAge > 0) {
         res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
@@ -161,8 +122,6 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
         res.setHeader('Cache-Control', 'no-cache');
       }
 
-      // Support conditional requests: if client sends If-None-Match
-      // matching the current ETag, return 304 with no body.
       if (req.fresh) {
         res.status(304).end();
         return;

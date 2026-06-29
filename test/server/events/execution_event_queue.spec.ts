@@ -9,19 +9,9 @@ import { ExecutionEventQueue } from '../../../src/server/events/execution_event_
 import { Message, Role, Task, TaskStatusUpdateEvent } from '../../../src/index.js';
 import { TaskState } from '../../../src/types/pb/a2a.js';
 
-/**
- * Tests for `ExecutionEventQueue.events()` focused on the stop-set
- * semantics introduced for spec §7.6.1 AUTH_REQUIRED handling.
- *
- * The queue must stop iterating on:
- *   * Message,
- *   * any terminal state,
- *   * INPUT_REQUIRED.
- *
- * The queue must KEEP iterating past:
- *   * AUTH_REQUIRED (executor resumes after out-of-band credential),
- *   * intermediate non-terminal states (SUBMITTED / WORKING / etc.).
- */
+// Stop-set semantics for AUTH_REQUIRED handling.
+// Queue stops on Message, any terminal state, or INPUT_REQUIRED;
+// keeps iterating past AUTH_REQUIRED and other non-terminals.
 describe('ExecutionEventQueue stop semantics', () => {
   let bus: DefaultExecutionEventBus;
 
@@ -67,12 +57,6 @@ describe('ExecutionEventQueue stop semantics', () => {
     referenceTaskIds: [],
   } as Message);
 
-  /**
-   * Helper that drives the queue until it stops on its own, returning
-   * the full list of yielded events. Publishes happen via the bus
-   * before the iteration starts so they're already buffered when
-   * `events()` first awaits.
-   */
   async function drain(queue: ExecutionEventQueue): Promise<AgentExecutionEvent[]> {
     const seen: AgentExecutionEvent[] = [];
     for await (const event of queue.events()) {
@@ -85,8 +69,7 @@ describe('ExecutionEventQueue stop semantics', () => {
     const queue = new ExecutionEventQueue(bus);
     bus.publish(taskEvent);
     bus.publish(messageEvent);
-    // Subsequent events would not be yielded after a Message; publish
-    // one to prove it.
+    // Trailing event should never be yielded.
     bus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
 
     const seen = await drain(queue);
@@ -98,7 +81,6 @@ describe('ExecutionEventQueue stop semantics', () => {
     const queue = new ExecutionEventQueue(bus);
     bus.publish(taskEvent);
     bus.publish(statusEvent(TaskState.TASK_STATE_COMPLETED));
-    // Anything after a terminal should be ignored.
     bus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
 
     const seen = await drain(queue);
@@ -129,9 +111,7 @@ describe('ExecutionEventQueue stop semantics', () => {
     bus.publish(taskEvent);
     bus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
     bus.publish(statusEvent(TaskState.TASK_STATE_INPUT_REQUIRED));
-    // Anything published after INPUT_REQUIRED on this queue should be
-    // ignored — a fresh queue (attached to the same bus) is the only
-    // path forward.
+    // After INPUT_REQUIRED only a fresh queue on the same bus can continue.
     bus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
 
     const seen = await drain(queue);
@@ -146,8 +126,7 @@ describe('ExecutionEventQueue stop semantics', () => {
     bus.publish(taskEvent);
     bus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
     bus.publish(statusEvent(TaskState.TASK_STATE_AUTH_REQUIRED));
-    // Simulate the agent resuming after out-of-band credential
-    // injection — these events MUST flow through the same queue.
+    // Agent resumes after out-of-band credential — events flow on the same queue.
     bus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
     bus.publish(statusEvent(TaskState.TASK_STATE_COMPLETED));
 
@@ -165,9 +144,6 @@ describe('ExecutionEventQueue stop semantics', () => {
   });
 
   it('AUTH_REQUIRED followed by INPUT_REQUIRED stops on INPUT_REQUIRED', async () => {
-    // Sanity: even though AUTH_REQUIRED is not in the stop set, the
-    // queue still treats a subsequent INPUT_REQUIRED as the natural
-    // pause point.
     const queue = new ExecutionEventQueue(bus);
     bus.publish(taskEvent);
     bus.publish(statusEvent(TaskState.TASK_STATE_AUTH_REQUIRED));
@@ -216,9 +192,8 @@ describe('ExecutionEventQueue stop semantics', () => {
   });
 
   it('keeps draining past AUTH_REQUIRED even when events arrive asynchronously', async () => {
-    // Exercise the async resolvePromise path: queue starts iterating
-    // before all events are published, then events are pushed one by
-    // one with a microtask gap between them.
+    // Exercises the async resolvePromise path: queue starts iterating
+    // before all events are published; events arrive with microtask gaps.
     const queue = new ExecutionEventQueue(bus);
     const collected: AgentExecutionEvent[] = [];
 
@@ -228,12 +203,11 @@ describe('ExecutionEventQueue stop semantics', () => {
       }
     })();
 
-    // Yield to let the consumer attach to the bus.
+    // Yield so the consumer can attach to the bus.
     bus.publish(taskEvent);
     await Promise.resolve();
     bus.publish(statusEvent(TaskState.TASK_STATE_AUTH_REQUIRED));
     await Promise.resolve();
-    // The executor resumes on the same bus after credential injection.
     bus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
     await Promise.resolve();
     bus.publish(statusEvent(TaskState.TASK_STATE_COMPLETED));

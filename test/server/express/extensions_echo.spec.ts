@@ -14,23 +14,11 @@ import { ExecutionEventBus } from '../../../src/server/events/execution_event_bu
 import { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 
-/**
- * End-to-end regression guard for the `A2A-Extensions` response-header
- * echo: client declares `A2A-Extensions: <uri>`, executor calls
- * `addActivatedExtension(<uri>)`, response header contains `<uri>`.
- *
- * Pre-fix `_createRequestContext` replaced the `ServerCallContext` with
- * a fresh instance after filtering requested extensions to the agent's
- * exposed set. The Express transport layer held a reference to the
- * *original* context and read `activatedExtensions` off it after
- * dispatch — so executor mutations landed on the orphaned object and
- * the header was never populated. This test reproduces the full path
- * (express → jsonRpcHandler → DefaultRequestHandler → executor →
- * response) without stubbing the transport, which is what the existing
- * `express_app.spec.ts` "should handle extensions headers in response"
- * test does (it spies on `JsonRpcTransportHandler.handle`, bypassing
- * `_createRequestContext` entirely).
- */
+// Regression guard: client declares A2A-Extensions, executor activates,
+// response header contains the activated set. Exercises the full
+// express → jsonRpcHandler → DefaultRequestHandler → executor path
+// without stubbing the transport (cf. express_app.spec.ts which spies
+// on JsonRpcTransportHandler.handle).
 describe('A2A-Extensions response header (end-to-end echo)', () => {
   let app: Express;
   let executor: AgentExecutor;
@@ -39,9 +27,7 @@ describe('A2A-Extensions response header (end-to-end echo)', () => {
   const ECHOED_EXT = 'https://example.test/ext/echo';
   const SILENT_EXT = 'https://example.test/ext/silent';
   const UNKNOWN_EXT = 'https://example.test/ext/unknown';
-  // Activated by the executor — narrower than `requested`. Tests must
-  // distinguish `requested`, `exposed`, and `activated`; if all three
-  // overlap, a buggy implementation that echoes the wrong set passes.
+  // Narrower than `requested` so tests can distinguish requested / exposed / activated.
   let extensionsToActivate: string[] = [];
 
   const agentCard: AgentCard = {
@@ -83,10 +69,6 @@ describe('A2A-Extensions response header (end-to-end echo)', () => {
         observedContextExtensions = ctx.context.requestedExtensions
           ? [...ctx.context.requestedExtensions]
           : [];
-        // Activate only the URIs the test asked for — independent of
-        // what was requested. This is what lets the response-header
-        // assertion distinguish `activated` from `requested` /
-        // `exposed`.
         for (const uri of extensionsToActivate) {
           ctx.context.addActivatedExtension(uri);
         }
@@ -126,10 +108,6 @@ describe('A2A-Extensions response header (end-to-end echo)', () => {
   });
 
   it('echoes only the activated subset, not the requested set or the exposed set', async () => {
-    // Client requests two extensions both exposed by the agent, but the
-    // executor activates only one. The response header MUST contain only
-    // the activated one — proving the header reflects `activated`, not
-    // `requested` and not the agent's exposed list.
     extensionsToActivate = [ECHOED_EXT];
 
     const response = await request(app)
@@ -155,7 +133,6 @@ describe('A2A-Extensions response header (end-to-end echo)', () => {
   });
 
   it('omits the response header entirely when the executor activates nothing', async () => {
-    // Emit the response header only when at least one extension was actually activated.
     extensionsToActivate = [];
 
     const response = await request(app)
@@ -200,16 +177,10 @@ describe('A2A-Extensions response header (end-to-end echo)', () => {
       })
       .expect(200);
 
-    // §4.6.3 ("SHOULD ignore the extension … and proceed without it"):
-    // unknown extensions never reach the executor via the requested set.
+    // Unknown extensions never reach the executor's requested set.
     expect(observedContextExtensions).toEqual([ECHOED_EXT]);
-    // The SDK does not re-filter on the activation path —
-    // `addActivatedExtension` is unguarded and accepts any URI. The
-    // §4.6.3 filter lives at the requested-set narrowing, not the
-    // activation set. This assertion documents that contract so a
-    // future tightening (rejecting activations outside the requested
-    // set) is a deliberate change with a failing test, not a silent
-    // behavior shift.
+    // SDK doesn't re-filter on activation — addActivatedExtension accepts any URI.
+    // Future tightening should break this assertion deliberately.
     expect(response.get(HTTP_EXTENSION_HEADER)).toBe(`${ECHOED_EXT}, ${UNKNOWN_EXT}`);
   });
 });

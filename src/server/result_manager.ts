@@ -11,47 +11,24 @@ import { TaskStore } from './store.js';
 
 /**
  * Per-(tenant, owner, taskId) write serializer shared across every
- * `ResultManager` instance in this process.
+ * `ResultManager` instance in this process. Multiple RMs can run
+ * concurrently against the same task (e.g. an AUTH_REQUIRED background
+ * drain holds one while a follow-up `sendMessage` constructs a new one,
+ * or `cancelTask` overlaps with a background drain). Without
+ * serialization, two RMs racing on the same row would each load a
+ * pre-sibling snapshot, merge against it, and the last writer would
+ * silently overwrite the other's contribution.
  *
- * Multiple `ResultManager`s can run concurrently against the same task:
- * - The AUTH_REQUIRED background drain holds one RM while a follow-up
- *   `sendMessage` constructs a new one (spec §7.6).
- * - INPUT_REQUIRED's `createOrGetByTaskId` bus reuse + a follow-up call.
- * - `cancelTask` overlapping with the background drain.
- * - Non-blocking `sendMessage` returning early while its drain continues.
- *
- * Each `processEvent` performs a load-merge-save sequence on the
- * `TaskStore`. Without serialization, two RMs racing on the same row
- * would each read a pre-sibling snapshot, merge against it, and the last
- * writer would silently overwrite the other's contribution (classic
- * lost-update). Wholesale-replace was bug-equivalent for both writers;
- * merge semantics make the race observable as missing history /
- * artifacts.
- *
- * Scoping: the lock key mirrors the {@link TaskStore} scoping contract
- * — `(tenant, owner, taskId)` — so two different tenants (or two
- * different owners within the same tenant) that happen to reuse the
- * same `taskId` do NOT serialize against each other. The `tenant` part
- * comes from {@link ServerCallContext.tenant}; the owner is derived
- * from `context.user.userName` (mirroring the default
- * {@link OwnerResolver}, `resolveUserScope`). Custom store owner
- * resolvers may produce a slightly different bucketing — this is an
- * acceptable approximation: the lock is at worst over-conservative
- * (serializing two callers that the store would have kept separate),
- * never under-conservative for the default scoping.
- *
- * Scope: in-process only. Cross-process serialization belongs in the
- * `TaskStore` interface (compare-and-swap or transactional `update`)
- * and is intentionally out of scope here.
+ * The lock key mirrors the {@link TaskStore} scoping contract so two
+ * tenants (or two owners within the same tenant) reusing the same
+ * `taskId` do not falsely serialize. In-process only; cross-process
+ * serialization belongs in the {@link TaskStore} interface.
  */
 const taskWriteLocks = new Map<string, Promise<unknown>>();
 
 /**
- * Builds a stable string key that uniquely identifies a `(tenant,
- * owner, taskId)` triple. The `\x00` separator guarantees there's no
- * collision between e.g. `{tenant: 'a\x00b', owner: 'c'}` and `{tenant:
- * 'a', owner: 'b\x00c'}` because the NUL byte cannot appear in the
- * input segments under any realistic header/identifier policy.
+ * Stable string key identifying a `(tenant, owner, taskId)` triple. The
+ * NUL separator avoids collisions across boundary placements.
  */
 function lockKey(context: ServerCallContext, taskId: string): string {
   const tenant = context.tenant ?? '';
@@ -60,9 +37,9 @@ function lockKey(context: ServerCallContext, taskId: string): string {
 }
 
 /**
- * Runs `fn` serialized against any prior calls for the same `key`,
- * chaining onto the existing promise so rejections don't block the
- * queue and evicting the map entry once the chain drains.
+ * Runs `fn` serialized against any prior call for the same `key`,
+ * chaining onto the existing promise so rejections don't block the queue
+ * and evicting the map entry once the chain drains.
  */
 async function serializeByScope<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const prev = taskWriteLocks.get(key) ?? Promise.resolve();
@@ -81,38 +58,26 @@ async function serializeByScope<T>(key: string, fn: () => Promise<T>): Promise<T
  * Tracks the in-flight task/message state for a single A2A request and
  * persists updates to the {@link TaskStore}.
  *
- * Mutation safety: every external object handed to this class (event
- * payloads, user messages) is deep-cloned via `structuredClone` before
- * being stored, and every object stored back into the task is likewise a
- * fresh clone. This isolates `ResultManager`'s internal state from
- * caller-side mutations of the same event objects (and vice versa). The
- * `TaskStore.load` / `TaskStore.save` boundary clones independently, so
- * this class is safe to combine with stores that share references.
+ * Every external object handed to this class is deep-cloned via
+ * `structuredClone` before being stored, and every object stored back
+ * into the task is likewise a fresh clone, isolating internal state from
+ * caller-side mutations.
  *
- * Concurrency: `processEvent` serializes all store-touching branches
- * (`task` / `statusUpdate` / `artifactUpdate`) through a per-(tenant,
- * owner, `taskId`) lock shared across every `ResultManager` instance in
- * the process. The lock key mirrors {@link TaskStore} scoping so two
- * tenants (or two owners within the same tenant) reusing the same
- * `taskId` do not falsely serialize. Inside the lock we always
- * invalidate `currentTask` and re-load from the store, so a sibling
- * RM's write (e.g. the AUTH_REQUIRED background drain interleaving
- * with a follow-up `sendMessage`) cannot be silently overwritten by a
- * merge against a stale cached snapshot.
+ * `processEvent` serializes all store-touching branches through a
+ * per-(tenant, owner, taskId) lock shared across every `ResultManager`
+ * instance in the process. Inside the lock we always re-load from the
+ * store so a sibling RM's write isn't overwritten by a merge against a
+ * stale cached snapshot.
  */
 export class ResultManager {
   private readonly taskStore: TaskStore;
   private readonly serverCallContext: ServerCallContext;
 
   private currentTask?: Task;
-  private latestUserMessage?: Message; // To add to history if a new task is created
-  private finalMessageResult?: Message; // Stores the message if it's the final result
-  /**
-   * The `taskId` from the last event this RM processed under the lock.
-   * Used to surface a warning when an executor publishes events for a
-   * different `taskId` on the same RM mid-stream — that's an executor
-   * bug and not something the per-task lock can paper over.
-   */
+  private latestUserMessage?: Message;
+  private finalMessageResult?: Message;
+  // taskId of the last event processed under the lock, used to warn if
+  // an executor switches tasks mid-stream on the same RM.
   private lastSeenTaskId?: string;
 
   constructor(taskStore: TaskStore, serverCallContext: ServerCallContext) {
@@ -121,39 +86,30 @@ export class ResultManager {
   }
 
   public setContext(latestUserMessage: Message): void {
-    // Clone so a caller mutating the message later (or reusing the object
-    // across calls) can't perturb our internal copy.
+    // Clone so caller-side mutation doesn't drift our internal copy.
     this.latestUserMessage = structuredClone(latestUserMessage);
   }
 
   /**
    * Processes an agent execution event and updates the task store.
-   *
-   * Store-touching branches run under `serializeByTaskId(taskId, ...)`
-   * so concurrent RMs on the same task linearize their load-merge-save
-   * sequences. The `message` branch only touches in-memory state and is
-   * intentionally unlocked.
-   *
-   * @param event The agent execution event.
+   * Store-touching branches run under a per-(tenant, owner, taskId) lock
+   * so concurrent RMs linearize their load-merge-save sequences. The
+   * `message` branch is in-memory only and intentionally unlocked.
    */
   public async processEvent(event: AgentExecutionEvent): Promise<void> {
     switch (event.kind) {
       case 'message': {
-        // In-memory only; no store I/O, so no lock needed.
         // Final-result messages may be returned to callers verbatim, so
         // store a defensive copy.
         this.finalMessageResult = structuredClone(event.data);
-        // If a message is received, it's usually the final result,
-        // but we continue processing to ensure task state (if any) is also saved.
-        // The ExecutionEventQueue will stop after a message event.
         break;
       }
       case 'task': {
         const taskEvent = event.data;
         if (!taskEvent.id) {
-          // No key to serialize on — fall through unlocked. This
-          // shouldn't happen for a valid Task event but defending
-          // against it keeps us crash-free on malformed payloads.
+          // No key to serialize on — fall through unlocked. Shouldn't
+          // happen for a valid Task event, but defending against it
+          // keeps us crash-free on malformed payloads.
           await this.processTaskEventLocked(taskEvent);
           break;
         }
@@ -190,10 +146,9 @@ export class ResultManager {
   }
 
   /**
-   * Warns once when the executor publishes an event for a different
-   * `taskId` than the previous event this RM observed. A single RM is
-   * scoped to one request and should only ever see events for one
-   * `taskId`; a mismatch indicates an executor bug.
+   * Warns when the executor publishes an event for a different `taskId`
+   * than the previous event this RM observed. A single RM is scoped to
+   * one request, so a mismatch indicates an executor bug.
    */
   private notePersistedTaskId(taskId: string | undefined): void {
     if (!taskId) return;
@@ -208,44 +163,36 @@ export class ResultManager {
   }
 
   /**
-   * Handles a `task` event under the per-`taskId` write lock.
-   *
-   * Always re-loads from the store (no cached state from prior events)
-   * so a sibling `ResultManager`'s write between our previous event and
-   * this one is observed by our merge (instead of being silently
-   * clobbered by a stale-snapshot merge).
+   * Handles a `task` event under the per-taskId write lock. Always
+   * re-loads from the store (no cached state) so a sibling RM's write
+   * between our previous event and this one is observed by our merge.
    */
   private async processTaskEventLocked(taskEvent: Task): Promise<void> {
     this.notePersistedTaskId(taskEvent.id);
 
-    // Receiving a Task event with no prior persisted task is the normal
-    // create-flow, so we load directly rather than going through
-    // `loadPersistedTask` (which warns on misses).
+    // A Task event with no prior persisted task is the normal create
+    // flow, so load directly rather than via `loadPersistedTask` (which
+    // warns on misses).
     const persistedTask = taskEvent.id
       ? await this.taskStore.load(taskEvent.id, this.serverCallContext)
       : undefined;
 
-    // Deep-clone the incoming Task so further executor mutations or
-    // caller-side reuse of the same event object can't leak into our
-    // state.
+    // Deep-clone the incoming Task so further executor mutations can't
+    // leak into our state.
     const mergedTask: Task = structuredClone(taskEvent);
 
     if (persistedTask && persistedTask.id === taskEvent.id) {
-      // Preserve persisted history when the incoming Task event omits it.
-      // If the incoming Task event carries its own history, treat it as
-      // authoritative (the executor is responsible for what gets persisted
-      // per §3.7).
+      // Preserve persisted history when the incoming event omits it. If
+      // the incoming event carries its own history, treat it as
+      // authoritative (the executor is responsible for what's persisted).
       if ((!mergedTask.history || mergedTask.history.length === 0) && persistedTask.history) {
         mergedTask.history = structuredClone(persistedTask.history);
       }
 
-      // Merge artifacts: keep persisted artifacts and overlay any incoming
-      // ones (matched by artifactId). Incoming wins for collisions; new
-      // ones are appended.
+      // Merge artifacts by `artifactId`; incoming wins for collisions.
       mergedTask.artifacts = this.mergeArtifacts(persistedTask.artifacts, taskEvent.artifacts);
 
-      // Merge metadata, incoming wins on key collisions. structuredClone
-      // each half so nested values can't be shared with either source.
+      // Merge metadata; incoming wins for key collisions.
       if (persistedTask.metadata || taskEvent.metadata) {
         mergedTask.metadata = {
           ...structuredClone(persistedTask.metadata ?? {}),
@@ -254,11 +201,9 @@ export class ResultManager {
       }
     }
 
-    // Ensure the latest user message is in history if not already present.
-    // `latestUserMessage` was already cloned in `setContext`, but clone
-    // again so the same reference can't end up shared between the
-    // history array and the `latestUserMessage` slot if the same
-    // `ResultManager` is reused for multiple task events.
+    // Ensure the latest user message is in history. Clone again so the
+    // same reference can't be shared between the history array and the
+    // `latestUserMessage` slot when the same RM handles multiple events.
     if (this.latestUserMessage) {
       const latest = this.latestUserMessage;
       if (!mergedTask.history?.find((msg) => msg.messageId === latest.messageId)) {
@@ -272,9 +217,8 @@ export class ResultManager {
 
   /**
    * Loads the task fresh from the store, warning if it doesn't exist.
-   * Returns the loaded task (or undefined) without mutating
-   * `this.currentTask`, so callers can use the result with TypeScript's
-   * flow-narrowing intact.
+   * Doesn't mutate `this.currentTask` so callers retain TypeScript
+   * flow-narrowing on the result.
    */
   private async loadPersistedTask(
     taskId: string | undefined,
@@ -291,21 +235,16 @@ export class ResultManager {
   private async applyStatusUpdate(updateEvent: TaskStatusUpdateEvent): Promise<void> {
     this.notePersistedTaskId(updateEvent.taskId);
 
-    // Under the per-taskId lock we always re-load fresh persisted state
-    // so a sibling RM's write isn't overwritten by a stale-snapshot
-    // merge.
     const task = await this.loadPersistedTask(updateEvent.taskId, 'status update');
     if (!task || task.id !== updateEvent.taskId) {
       this.currentTask = task;
       return;
     }
 
-    // Clone the incoming status (and its nested message) so caller-side
-    // mutation of the original event payload can't drift our state.
+    // Clone the incoming status so caller-side mutation can't drift state.
     task.status = structuredClone(updateEvent.status);
     const update = updateEvent.status?.message;
     if (update) {
-      // Add message to history if not already present.
       if (!task.history?.find((msg) => msg.messageId === update.messageId)) {
         task.history = [...(task.history || []), structuredClone(update)];
       }
@@ -320,9 +259,6 @@ export class ResultManager {
 
     this.notePersistedTaskId(artifactEvent.taskId);
 
-    // Under the per-taskId lock we always re-load fresh persisted state
-    // so a sibling RM's write isn't overwritten by a stale-snapshot
-    // merge.
     const task = await this.loadPersistedTask(artifactEvent.taskId, 'artifact update');
     if (!task || task.id !== artifactEvent.taskId) {
       this.currentTask = task;
@@ -337,10 +273,8 @@ export class ResultManager {
     );
     if (existingArtifactIndex !== -1) {
       if (artifactEvent.append) {
-        // Basic append logic, assuming parts are compatible.
         // Clone incoming parts/metadata so the persisted artifact owns
-        // its own deep copies and the event payload can be reused
-        // safely by the executor.
+        // its own deep copies.
         const existingArtifact = task.artifacts[existingArtifactIndex];
         existingArtifact.parts = [
           ...(existingArtifact.parts || []),
@@ -364,14 +298,10 @@ export class ResultManager {
   }
 
   /**
-   * Merges artifact arrays, deduplicating by `artifactId`. Persisted artifacts
-   * are retained and overlaid by any incoming artifact with the same id;
-   * artifacts only present in the incoming list are appended. Order is
-   * preserved (persisted first, then any newly-introduced incoming artifacts).
-   *
-   * Every artifact in the returned array is a fresh deep copy so subsequent
-   * in-place mutations (e.g. by `applyArtifactUpdate`) can't leak into the
-   * original `persisted` / `incoming` arrays the caller still holds.
+   * Merges artifact arrays, deduplicating by `artifactId`. Persisted
+   * artifacts are retained and overlaid by any incoming artifact with
+   * the same id; artifacts only in the incoming list are appended.
+   * Every entry in the returned array is a fresh deep copy.
    */
   private mergeArtifacts(
     persisted: Artifact[] | undefined,
@@ -408,21 +338,11 @@ export class ResultManager {
   }
 
   /**
-   * Gets the final result, which could be a Message or a Task.
-   * This should be called after the event stream has been fully processed.
-   *
-   * Returns a reference to the internally-tracked object (not a clone) so
-   * that downstream callers like `_applyHistoryLengthSemantics` can apply
-   * in-place edits. Safe because `ResultManager` instances are scoped to a
-   * single request and discarded immediately after this is called.
-   *
-   * The returned `currentTask` reflects whatever this RM saw at the end
-   * of its most recently completed `processEvent` (under the lock). A
-   * sibling RM running concurrently for the same `taskId` may have
-   * written newer state to the store after our last event; that's the
-   * documented snapshot contract — `getCurrentTask()` returns "what we
-   * processed", not "the store's current state".
-   * @returns The final Message or the current Task.
+   * Returns the final result (Message or Task) after the event stream
+   * has been fully processed. Returns the internally-tracked object
+   * directly (not a clone) so downstream callers can apply in-place
+   * edits; safe because RMs are scoped to a single request and discarded
+   * immediately after.
    */
   public getFinalResult(): Message | Task | undefined {
     if (this.finalMessageResult) {
@@ -432,12 +352,9 @@ export class ResultManager {
   }
 
   /**
-   * Gets the task currently being managed by this ResultManager instance.
-   * This task could be one that was started with or one created during agent execution.
-   *
-   * Returns the internal reference (see {@link getFinalResult} for the
-   * rationale).
-   * @returns The current Task or undefined if no task is active.
+   * Returns the task currently being managed (created during, or started
+   * with, agent execution). See {@link getFinalResult} for why this is
+   * the internal reference rather than a clone.
    */
   public getCurrentTask(): Task | undefined {
     return this.currentTask;

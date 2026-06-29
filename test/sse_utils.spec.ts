@@ -3,9 +3,6 @@ import { formatSSEEvent, formatSSEErrorEvent, parseSseStream, SseEvent } from '.
 
 const MOCK_CHUNK_SIZE = 2;
 
-/**
- * Creates a ReadableStream from chunks of Uint8Array data.
- */
 function createStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   let chunkIndex = 0;
   return new ReadableStream({
@@ -20,9 +17,6 @@ function createStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   });
 }
 
-/**
- * Encodes a string into chunks of Uint8Array data.
- */
 function encodeChunks(data: string): Uint8Array[] {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
@@ -32,10 +26,6 @@ function encodeChunks(data: string): Uint8Array[] {
   return chunks;
 }
 
-/**
- * Creates a mock Response object from SSE-formatted strings.
- * Used to test that the parser can understand what the formatter produces.
- */
 function createMockResponse(sseData: string): Response {
   const chunks = encodeChunks(sseData);
   return new Response(createStream(chunks), {
@@ -43,11 +33,8 @@ function createMockResponse(sseData: string): Response {
   });
 }
 
-/**
- * Creates a mock Response where the decoded stream has no native async iterator.
- * Simulates environments where ReadableStream async iteration is not supported.
- * @see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
- */
+// Simulates environments where ReadableStream async iteration is not supported.
+// See https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
 function createMockResponseWithoutAsyncIterator(sseData: string): Response {
   const chunks = encodeChunks(sseData);
   const stream = createStream(chunks);
@@ -152,7 +139,6 @@ describe('SSE Utils', () => {
       }
 
       expect(events).toHaveLength(1);
-      // Joined with `\n`; the JSON.parse round-trip is what matters.
       expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
     });
 

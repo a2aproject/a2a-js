@@ -247,7 +247,6 @@ describe('DefaultAgentCardResolver', () => {
 
       expect(card.supportedInterfaces).to.have.length(1);
       expect(card.supportedInterfaces[0]!.protocolVersion).to.equal('1.0');
-      // The factory will pick the v1.0 JsonRpcTransport for '1.0'.
     });
 
     it('v1.0+legacyCompat server → v1.0 transport (same v1.0 card; legacy router short-circuits on A2A-Version: 1.0)', async () => {
@@ -276,10 +275,8 @@ describe('DefaultAgentCardResolver', () => {
 
       const card = await resolver.resolve('https://example.com');
 
-      // The resolver detected the v0.3 shape via isLegacyAgentCard
-      // and translated it to v1.0 internal shape with '0.3' stamped
-      // on every interface — so the factory will pick
-      // LegacyJsonRpcTransport.
+      // Detected v0.3 shape via isLegacyAgentCard; translated to v1.0
+      // internal shape with '0.3' stamped on every interface.
       expect(card.supportedInterfaces).to.have.length(1);
       expect(card.supportedInterfaces[0]!.protocolVersion).to.equal('0.3');
       expect(card.supportedInterfaces[0]!.url).to.equal('https://example.com/legacy');
@@ -324,8 +321,6 @@ describe('DefaultAgentCardResolver', () => {
 
       const card = await resolver.resolve('https://example.com');
 
-      // The v1.0 entries flow through with their native '1.0' stamp;
-      // no v0.3 translation happens.
       expect(card.supportedInterfaces).to.have.length(2);
       expect(card.supportedInterfaces[0]!.protocolVersion).to.equal('1.0');
       expect(card.supportedInterfaces[0]!.url).to.equal('https://example.com/v1');

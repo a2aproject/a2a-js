@@ -70,16 +70,13 @@ describe('Agent Card Signature', () => {
       const result = canonicalizeAgentCard(input);
       const parsed = JSON.parse(result);
 
-      // Empty values should be removed
       expect(parsed.description).toBeUndefined();
       expect(parsed.skills).toBeUndefined();
       expect(parsed.defaultInputModes).toBeUndefined();
 
-      // Non-empty values should be preserved
       expect(parsed.name).toBe('Example Agent');
       expect(parsed.version).toBe('1.0.0');
 
-      // Keys should be sorted
       const keys = Object.keys(parsed);
       const sortedKeys = [...keys].sort();
       expect(keys).toEqual(sortedKeys);
@@ -184,7 +181,6 @@ describe('Agent Card Signature', () => {
     });
 
     it('should pass if at least one signature is valid (multi-sig)', async () => {
-      // Add an invalid signature first
       mockAgentCard.signatures = [
         {
           protected: 'invalid_value',
@@ -193,7 +189,6 @@ describe('Agent Card Signature', () => {
         },
       ];
 
-      // Then add a valid one
       const signer = generateAgentCardSignature(privateKey, {
         alg: ALG,
         kid: 'test-key-1',
@@ -213,8 +208,7 @@ describe('Agent Card Signature', () => {
       });
       const signedCard = await signer(mockAgentCard);
 
-      // Simulate backward-compat fields injected by another SDK implementation
-      // (e.g., Python SDK v0.3 compat layer adds these to the HTTP response)
+      // Simulates backward-compat fields injected by another SDK (e.g. Python v0.3 compat).
       const cardWithExtraFields = {
         ...signedCard,
         url: 'http://localhost:8080',

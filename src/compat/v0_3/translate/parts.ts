@@ -1,20 +1,15 @@
 /**
- * `Part` translators between v1.0 proto and v0.3 JSON.
+ * `Part` translators. Shape mismatch:
+ *  - v1.0: `content.$case` ∈ `'text' | 'raw' | 'url' | 'data'`, with
+ *    `filename` / `mediaType` at the top level.
+ *  - v0.3: `kind` ∈ `'text' | 'file' | 'data'`, with the bytes-vs-uri
+ *    choice and `name` / `mimeType` nested under `file`.
  *
- * Shape differences:
- *  - v1.0 discriminator: `part.content.$case` ∈ `'text' | 'raw' | 'url' | 'data'`.
- *    v0.3 discriminator: `part.kind` ∈ `'text' | 'file' | 'data'`, with the
- *    bytes-vs-uri choice nested under `part.file`.
- *  - v1.0 carries `filename` / `mediaType` at the top level; v0.3 carries
- *    `name` / `mimeType` on the inner `file`.
- *
- * Data parts: v1.0 `Part.data` admits any JSON value (primitives, arrays,
- * `null`, objects); v0.3 `DataPart.data` admits only objects. Primitive /
- * array / `null` values are wrapped as `{ value: <original> }` and tagged
- * with `metadata.data_part_compat = true`; `toCorePart` reverses the
- * wrap when the flag is present and strips the flag from the result.
- * Values that cannot be JSON-serialized (`Symbol`, `function`, `bigint`,
- * `undefined`, `Buffer`) still throw `A2AError.invalidParams`.
+ * Data parts: v1.0 admits any JSON value but v0.3 admits only objects.
+ * Non-object values are wrapped as `{ value: <original> }` with a
+ * `data_part_compat` metadata flag so `toCorePart` can losslessly
+ * unwrap. Unrepresentable values (`Symbol`, `bigint`, `Buffer`, …)
+ * throw.
  */
 
 import { A2AError } from '../server/error.js';
@@ -22,11 +17,7 @@ import type * as legacy from '../types/types.js';
 import type { Part as V1Part } from '../../../types/pb/a2a.js';
 import { deepCloneMetadata } from './_clone.js';
 
-/**
- * Metadata key tagging v0.3 `DataPart`s whose `data` field carries the
- * `{ value: <primitive|array|null> }` wrapper synthesized by
- * `toCompatPart`. Snake_case is the on-the-wire form.
- */
+// Metadata key marking the `{ value: ... }` wrapper. Snake_case on the wire.
 const DATA_PART_COMPAT_FLAG = 'data_part_compat';
 
 function isPlainObject(value: unknown): value is { [k: string]: unknown } {
@@ -35,11 +26,8 @@ function isPlainObject(value: unknown): value is { [k: string]: unknown } {
   );
 }
 
-/**
- * True for JSON values valid in v1.0 `Part.data` but unrepresentable in
- * v0.3 `DataPart.data: { [k]: unknown }` (objects only). These are the
- * values `toCompatPart` wraps as `{ value: <original> }`.
- */
+// True for non-object JSON values that v0.3 can't represent directly
+// (so we wrap them as `{ value: <original> }`).
 function isCompatWrappableDataValue(
   value: unknown
 ): value is string | number | boolean | null | unknown[] {
@@ -49,19 +37,6 @@ function isCompatWrappableDataValue(
   return t === 'string' || t === 'number' || t === 'boolean';
 }
 
-/**
- * Converts a v0.3 JSON `Part` into a v1.0 proto `Part`.
- *
- * - Text → `content.$case: 'text'`.
- * - File: `FileWithBytes` → `'raw'` (base64-decoded into a `Buffer`);
- *   `FileWithUri` → `'url'`. Inner `mimeType` / `name` lift to top-level
- *   `mediaType` / `filename`.
- * - Data: `data` passes through unchanged, except when
- *   `metadata.data_part_compat === true` and `data` has shape
- *   `{ value: <primitive|array|null> }` — then the wrapper is stripped,
- *   `data.value` becomes the v1.0 value, and the flag is removed
- *   (dropping `metadata` entirely if empty).
- */
 export function toCorePart(compatPart: legacy.Part): V1Part {
   if (compatPart.kind === 'text') {
     return {
@@ -102,17 +77,15 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
     let value: unknown = compatPart.data;
     let outMetadata = metadata;
 
-    // Reverse the `{ value: <primitive> }` wrap. The flag is the
-    // load-bearing signal — without it a genuine `{ value: ... }`
-    // payload is indistinguishable from a synthesized wrapper. The
-    // flag is stripped so it does not leak into v1.0 metadata.
+    // Reverse the `{ value: ... }` wrap. The flag is load-bearing —
+    // without it a genuine `{ value: ... }` payload is indistinguishable
+    // from a synthesized wrapper. Strip the flag so it doesn't leak into
+    // v1.0 metadata, and drop `metadata` entirely if it was the only key.
     if (metadata !== undefined && metadata[DATA_PART_COMPAT_FLAG] === true) {
       if (isPlainObject(compatPart.data) && 'value' in compatPart.data) {
         value = compatPart.data.value;
       }
       delete metadata[DATA_PART_COMPAT_FLAG];
-      // Drop the metadata object entirely if the flag was its only key,
-      // so a round-trip from a primitive v1 value yields no metadata.
       outMetadata = Object.keys(metadata).length > 0 ? metadata : undefined;
     }
 
@@ -129,22 +102,6 @@ export function toCorePart(compatPart: legacy.Part): V1Part {
   );
 }
 
-/**
- * Converts a v1.0 proto `Part` into a v0.3 JSON `Part`.
- *
- * - `'text'` ↔ `kind: 'text'`.
- * - `'raw'` ↔ `kind: 'file'` + `FileWithBytes` (base64-encoded `Buffer`).
- * - `'url'` ↔ `kind: 'file'` + `FileWithUri`. Top-level `filename` /
- *   `mediaType` push down to inner `name` / `mimeType`.
- * - `'data'`: plain object → used directly. Primitive / array / `null`
- *   → wrapped as `{ value: <original> }` with
- *   `metadata.data_part_compat: true` so `toCorePart` can unwrap.
- *
- * @throws {A2AError} when `content` is missing, has an unknown `$case`,
- * or carries a `data` value that is neither a plain object nor a
- * wrap-eligible primitive / array / null (`Symbol`, `function`,
- * `bigint`, `undefined`, `Buffer`).
- */
 export function toCompatPart(corePart: V1Part): legacy.Part {
   const content = corePart.content;
   const metadata = deepCloneMetadata(corePart.metadata);
@@ -194,8 +151,7 @@ export function toCompatPart(corePart: V1Part): legacy.Part {
     }
 
     if (isCompatWrappableDataValue(value)) {
-      // Wrap and tag so `toCorePart` can losslessly unwrap. No
-      // defensive clone — matches the plain-object branch above.
+      // Wrap and tag so `toCorePart` can losslessly unwrap.
       const data: { [k: string]: unknown } = { value };
       const outMetadata: { [k: string]: unknown } = metadata ?? {};
       outMetadata[DATA_PART_COMPAT_FLAG] = true;

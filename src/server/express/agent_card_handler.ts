@@ -12,25 +12,14 @@ export interface AgentCardHandlerOptions {
   agentCardProvider: AgentCardProvider;
   cache?: AgentCardCacheOptions;
   /**
-   * Enables the v0.3 protocol compatibility layer.
+   * Enables the v0.3 protocol compatibility layer. When enabled, the
+   * handler inspects the `A2A-Version` header (defaulting to `'0.3'`
+   * when absent): legacy-range versions get a v0.3-shaped card via
+   * `toCompatAgentCard(card)`; non-legacy versions get the v1.0 card
+   * unchanged. Per-version `ETag`s and `Vary: A2A-Version` are emitted
+   * so shared HTTP caches keep separate entries per version.
    *
-   * When enabled, the handler inspects the `A2A-Version` header on
-   * each request (defaulting to `'0.3'` per §3.6.2 when absent): for
-   * versions in the legacy range `[0.3, 1.0)` it serves a v0.3-shaped
-   * card produced by `toCompatAgentCard(card)`; for any non-legacy
-   * version it serves the modern v1.0 card unchanged.
-   *
-   * When `toCompatAgentCard` throws `VersionNotSupportedError`
-   * (no v0.3 interface advertised on the agent card), the handler
-   * responds with HTTP 400 and a v0.3-shaped error body.
-   *
-   * Per-version `ETag`s are emitted and `Vary: A2A-Version` is set on
-   * every response so shared HTTP caches keep separate entries per
-   * version.
-   *
-   * Default: omitted (treated as disabled). When disabled, the v0.3
-   * compat module is not instantiated and the well-known endpoint
-   * behaves exactly as it did before this option was introduced.
+   * Default: omitted (disabled).
    */
   legacyCompat?: { enabled: boolean };
 }
@@ -43,33 +32,25 @@ function computeETag(json: string): string {
 }
 
 /**
- * Creates Express.js middleware to handle agent card requests.
- *
- * Per §8.6:
- * - Server SHOULD include `Cache-Control` with `max-age`
- * - Server SHOULD include `ETag`
- * - Client SHOULD honor HTTP caching (conditional requests via `If-None-Match`)
- *
- * When `legacyCompat: { enabled: true }`, the handler mounts the v0.3
- * compat router at the top of its chain; that router inspects the
- * `A2A-Version` header and serves a `toCompatAgentCard()`-translated
- * card for legacy-range requests. Non-legacy requests fall through to
- * the v1.0 handler below unchanged.
+ * Creates Express.js middleware serving the agent card with `Cache-Control`,
+ * `ETag`, and `If-None-Match` (304) support. When
+ * `legacyCompat: { enabled: true }`, the handler mounts the v0.3 compat
+ * router at the top of its chain; that router serves a v0.3-translated
+ * card for legacy-range requests and falls through to v1.0 otherwise.
  *
  * @example
  * ```ts
- * // With an existing A2ARequestHandler instance:
- * app.use('/.well-known/agent-card.json', agentCardHandler({ agentCardProvider: a2aRequestHandler }));
- * // With caching options:
- * app.use('/.well-known/agent-card.json', agentCardHandler({
- *   agentCardProvider: a2aRequestHandler,
- *   cache: { maxAge: 7200 }
- * }));
- * // With v0.3 compat negotiation enabled:
- * app.use('/.well-known/agent-card.json', agentCardHandler({
- *   agentCardProvider: a2aRequestHandler,
- *   legacyCompat: { enabled: true },
- * }));
+ * app.use(
+ *   '/.well-known/agent-card.json',
+ *   agentCardHandler({ agentCardProvider: a2aRequestHandler })
+ * );
+ * app.use(
+ *   '/.well-known/agent-card.json',
+ *   agentCardHandler({
+ *     agentCardProvider: a2aRequestHandler,
+ *     legacyCompat: { enabled: true },
+ *   })
+ * );
  * ```
  */
 export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandler {
@@ -81,12 +62,9 @@ export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandl
       ? options.agentCardProvider
       : options.agentCardProvider.getAgentCard.bind(options.agentCardProvider);
 
-  // Opt-in v0.3 compatibility. When enabled, the legacy router is
-  // mounted at the top of the chain (path-less) and dispatches per
-  // `A2A-Version` header internally: legacy-range requests get served
-  // a v0.3 card; non-legacy requests fall through via `next('router')`
-  // to the v1.0 handler below. When `legacyCompat` is omitted or
-  // disabled, the compat module is never instantiated.
+  // Opt-in v0.3 compatibility: the legacy router dispatches by
+  // `A2A-Version` header and falls through to the v1.0 handler below
+  // via `next('router')` for non-legacy versions.
   if (options.legacyCompat?.enabled) {
     router.use(legacyAgentCardRouter(options));
   }
@@ -98,9 +76,9 @@ export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandl
       const etag = computeETag(body);
 
       res.setHeader('ETag', etag);
-      // When compat negotiation is enabled, the cache key must include
-      // `A2A-Version` so a v1.0 client doesn't receive a cached v0.3
-      // body (and vice versa) when sitting behind a shared HTTP cache.
+      // The cache key must include `A2A-Version` so a v1.0 client
+      // doesn't receive a cached v0.3 body (and vice versa) when sitting
+      // behind a shared HTTP cache.
       if (options.legacyCompat?.enabled) {
         res.append('Vary', A2A_VERSION_HEADER);
       }
@@ -110,8 +88,6 @@ export function agentCardHandler(options: AgentCardHandlerOptions): RequestHandl
         res.setHeader('Cache-Control', 'no-cache');
       }
 
-      // Support conditional requests: if client sends If-None-Match
-      // matching the current ETag, return 304 with no body.
       if (req.fresh) {
         res.status(304).end();
         return;

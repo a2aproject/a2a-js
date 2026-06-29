@@ -12,40 +12,28 @@ export { TERMINAL_STATE_LIST };
 
 /**
  * Non-terminal state in which the executor pauses awaiting a fresh
- * follow-up message from the client (§3.4.3). Both the executor's
- * `execute()` call AND the blocking consumer's drain loop stop when
- * this state is published — there is nothing more to drain until a
- * subsequent `message/send` reuses the same `taskId`.
+ * follow-up message from the client. Both `execute()` and the blocking
+ * consumer's drain loop stop when this state is published.
  */
 const INPUT_REQUIRED_STATE_LIST: TaskState[] = [TaskState.TASK_STATE_INPUT_REQUIRED];
 export { INPUT_REQUIRED_STATE_LIST };
 
 /**
- * Non-terminal state in which the executor pauses awaiting an
- * out-of-band credential injection (§7.6.1). Unlike INPUT_REQUIRED, the
- * agent is expected to "immediately continue Task processing after
- * receiving the credential, without a requirement that clients send a
- * follow-up message." The response stream therefore MUST NOT be closed
- * on this state, and a blocking caller MUST be returned a snapshot of
- * the current Task while the event bus keeps draining in the
- * background until a terminal state is reached.
+ * Non-terminal state in which the executor pauses awaiting an out-of-band
+ * credential injection. Unlike INPUT_REQUIRED the agent resumes
+ * publishing without a follow-up client message, so the stream MUST stay
+ * open and a blocking caller MUST be returned a snapshot of the current
+ * Task while the event bus keeps draining in the background.
  */
 const AUTH_REQUIRED_STATE_LIST: TaskState[] = [TaskState.TASK_STATE_AUTH_REQUIRED];
 export { AUTH_REQUIRED_STATE_LIST };
 
 /**
  * Union of {@link INPUT_REQUIRED_STATE_LIST} and
- * {@link AUTH_REQUIRED_STATE_LIST} — the non-terminal states in which
- * the executor's `execute()` call returns after a single publish (the
- * agent is paused, waiting on the client or on external credentials).
- *
- * Kept as a re-export for the call sites that genuinely need both
- * states together — typically terminal/snapshot checks where the
- * distinction between the two pause reasons doesn't matter (e.g. "have
- * we reached a steady state from which the blocking caller can return
- * a snapshot to the client?"). Lifecycle decisions that differ between
- * the two (closing the bus, stopping the drain loop) MUST use the
- * specific lists above instead.
+ * {@link AUTH_REQUIRED_STATE_LIST} — non-terminal states in which the
+ * executor returns after a single publish. Use this for snapshot checks
+ * that don't care about the specific pause reason; lifecycle decisions
+ * that differ between the two MUST use the specific lists above.
  */
 const INTERRUPTED_STATE_LIST: TaskState[] = [
   ...INPUT_REQUIRED_STATE_LIST,
@@ -53,53 +41,35 @@ const INTERRUPTED_STATE_LIST: TaskState[] = [
 ];
 export { INTERRUPTED_STATE_LIST };
 
-/**
- * Generates a timestamp in ISO 8601 format.
- * @returns The current timestamp as a string.
- */
+/** Returns the current time as an ISO 8601 string. */
 export function getCurrentTimestamp(): string {
   return new Date().toISOString();
 }
 
-/**
- * Checks if a value is a plain object (excluding arrays and null).
- * @param value The value to check.
- * @returns True if the value is a plain object, false otherwise.
- */
+/** Type guard for plain objects (excluding arrays and `null`). */
 export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Type guard to check if an object is a TaskStatus update (lacks 'parts').
- * Used to differentiate yielded updates from the handler.
- */
+/** Type guard for a TaskStatus update (has `state`, lacks `parts`). */
 export function isTaskStatusUpdate(update: unknown): update is Omit<TaskStatus, 'timestamp'> {
-  // Check if it has 'state' and NOT 'parts' (which Artifacts have)
   return isObject(update) && 'state' in update && !('parts' in update);
 }
 
-/**
- * Type guard to check if an object is an Artifact update (has 'parts').
- * Used to differentiate yielded updates from the handler.
- */
+/** Type guard for an Artifact update (has `parts`). */
 export function isArtifactUpdate(update: unknown): update is Artifact {
-  // Check if it has 'parts'
   return isObject(update) && 'parts' in update;
 }
 
 /**
- * Type guard to check if a SendMessage result is a Task (not a Message).
+ * Type guard for a `SendMessage` result that is a Task (not a Message).
  * Tasks have a `status` field; Messages have a `role` field.
  */
 export function isTask(result: Message | Task): result is Task {
   return 'status' in result;
 }
 
-/**
- * Stream ordering patterns per §3.1.2.
- * Used to track which pattern a streaming response follows.
- */
+/** Stream ordering patterns used to track which pattern a stream follows. */
 export enum StreamPattern {
   /** First event not yet received — pattern undetermined. */
   UNDETERMINED = 'undetermined',
@@ -110,17 +80,10 @@ export enum StreamPattern {
 }
 
 /**
- * A generic triple-nested Map (tenant -> owner -> key -> value) that provides
- * tenant- and owner-scoped data isolation.
- *
- * Both {@link InMemoryTaskStore} and {@link InMemoryPushNotificationStore} delegate
- * their scoping logic to this class, avoiding duplication of the tenant/owner
- * bucket management code.
- *
- * Per spec §13.1, servers MUST ensure appropriate scope limitation based on the
- * authenticated caller's authorization boundaries.
- *
- * @typeParam T - The value type stored in the innermost Map.
+ * A generic triple-nested Map (tenant -> owner -> key -> value) providing
+ * tenant- and owner-scoped data isolation. Both {@link InMemoryTaskStore}
+ * and {@link InMemoryPushNotificationStore} delegate their scoping logic
+ * to this class.
  */
 export class ScopedStore<T> {
   private readonly _store: Map<string, Map<string, Map<string, T>>> = new Map();
@@ -138,18 +101,12 @@ export class ScopedStore<T> {
     return this._ownerResolver(context);
   }
 
-  /**
-   * Returns the owner-scoped bucket for the given context, or `undefined`
-   * if no data exists for that tenant/owner combination.
-   */
+  /** Returns the owner-scoped bucket, or `undefined` if absent. */
   getBucket(context: ServerCallContext): Map<string, T> | undefined {
     return this._store.get(this._tenantKey(context))?.get(this._ownerKey(context));
   }
 
-  /**
-   * Returns the owner-scoped bucket for the given context, creating the
-   * tenant and owner maps if they do not yet exist.
-   */
+  /** Returns the owner-scoped bucket, creating intermediate maps as needed. */
   getOrCreateBucket(context: ServerCallContext): Map<string, T> {
     const tenantKey = this._tenantKey(context);
     let tenantBucket = this._store.get(tenantKey);

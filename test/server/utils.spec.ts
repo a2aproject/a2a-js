@@ -43,7 +43,6 @@ describe('utils interrupted-state lists', () => {
 
   describe('INTERRUPTED_STATE_LIST', () => {
     it('is the union of INPUT_REQUIRED_STATE_LIST and AUTH_REQUIRED_STATE_LIST', () => {
-      // Order-independent set equality
       expect(new Set(INTERRUPTED_STATE_LIST)).toEqual(
         new Set([...INPUT_REQUIRED_STATE_LIST, ...AUTH_REQUIRED_STATE_LIST])
       );

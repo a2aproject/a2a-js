@@ -1,20 +1,8 @@
 /**
- * Security-related translators between v1.0 proto and v0.3 JSON:
- * `SecurityRequirement`, `SecurityScheme`, and `OAuthFlows`.
- *
- * Key shape differences handled here:
- *
- *  - **SecurityRequirement.** v1.0 wraps scope lists in a `StringList`
- *    proto message (`{ schemes: { [k]: { list: string[] } } }`); v0.3
- *    JSON stores plain `{ [k]: string[] }`.
- *  - **SecurityScheme discriminator.** v1.0 uses
- *    `scheme.$case: 'apiKeySecurityScheme' | ...`; v0.3 JSON uses a flat
- *    `type: 'apiKey' | 'http' | 'oauth2' | 'openIdConnect' | 'mutualTLS'`
- *    string.
- *  - **OAuthFlows.** v1.0 expresses the four classic flows plus
- *    `deviceCode` via a `flow.$case` oneof; v0.3 JSON keeps each flow as
- *    an optional sibling field. **`deviceCode` is silently dropped going
- *    v1.0 → v0.3** (v0.3 has no equivalent).
+ * Security translators: `SecurityRequirement`, `SecurityScheme`,
+ * `OAuthFlows`. Notable: v1.0 wraps scope lists in `StringList`, uses
+ * `$case`-tagged scheme oneofs, and has an extra `deviceCode` OAuth
+ * flow that v0.3 can't represent (silently dropped v1.0 → v0.3).
  */
 
 import { A2AError } from '../server/error.js';
@@ -38,10 +26,6 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value !== undefined && value !== '' ? value : undefined;
 }
 
-/**
- * Converts a v0.3 JSON security-requirement entry (`{ [k]: string[] }`)
- * into a v1.0 proto `SecurityRequirement` (with `StringList` wrappers).
- */
 export function toCoreSecurityRequirement(compat: {
   [k: string]: string[];
 }): V1SecurityRequirement {
@@ -52,10 +36,6 @@ export function toCoreSecurityRequirement(compat: {
   };
 }
 
-/**
- * Converts a v1.0 proto `SecurityRequirement` into the v0.3 JSON
- * `{ [k]: string[] }` shape by unwrapping the `StringList` records.
- */
 export function toCompatSecurityRequirement(core: V1SecurityRequirement): {
   [k: string]: string[];
 } {
@@ -101,10 +81,6 @@ function buildV1OidcScheme(
   };
 }
 
-/**
- * Converts a v0.3 JSON `SecurityScheme` (a `type`-tagged union) into a
- * v1.0 proto `SecurityScheme` (a `$case`-tagged oneof).
- */
 export function toCoreSecurityScheme(compat: legacy.SecurityScheme): V1SecurityScheme {
   switch (compat.type) {
     case 'apiKey':
@@ -138,10 +114,8 @@ function buildCompatApiKey(core: V1APIKeySecurityScheme): legacy.APIKeySecurityS
   const result: legacy.APIKeySecurityScheme = {
     type: 'apiKey',
     name: core.name,
-    // v1 proto widens `location` to a free-form `string`; v0.3 narrows it to a
-    // literal union. Unknown / empty values silently map to `'header'` (the most
-    // common API-key location and the effective OpenAPI default) so a
-    // misconfigured v1 server doesn't break the entire v0.3 translation path.
+    // v1.0 widens `location` to a free-form string; narrow to the v0.3
+    // union, defaulting unknown values to `'header'` (OpenAPI default).
     in: core.location === 'cookie' || core.location === 'query' ? core.location : 'header',
   };
   const description = nonEmpty(core.description);
@@ -190,9 +164,6 @@ function buildCompatOidc(core: V1OpenIdConnectSecurityScheme): legacy.OpenIdConn
   return result;
 }
 
-/**
- * Converts a v1.0 proto `SecurityScheme` into a v0.3 JSON `SecurityScheme`.
- */
 export function toCompatSecurityScheme(core: V1SecurityScheme): legacy.SecurityScheme {
   const scheme = core.scheme;
   if (!scheme) {
@@ -217,14 +188,9 @@ export function toCompatSecurityScheme(core: V1SecurityScheme): legacy.SecurityS
 }
 
 /**
- * Converts a v0.3 JSON `OAuthFlows` (a record of optional flows) into a
- * v1.0 proto `OAuthFlows` (a `flow.$case` oneof).
- *
- * The v0.3 schema permits at most one flow to be set in practice, but
- * the JSON shape allows any combination. We pick in a deterministic order
- * (authorization code → client credentials → implicit → password) and
- * throw if none are present (the proto oneof leaves no representation for
- * "all flows empty").
+ * Picks a flow in deterministic order (authorizationCode → clientCredentials
+ * → implicit → password). Throws if no flow is present — the proto oneof
+ * has no "empty" representation.
  */
 export function toCoreOAuthFlows(compat: legacy.OAuthFlows): V1OAuthFlows {
   if (compat.authorizationCode) {
@@ -267,12 +233,9 @@ export function toCoreOAuthFlows(compat: legacy.OAuthFlows): V1OAuthFlows {
 }
 
 /**
- * Converts a v1.0 proto `OAuthFlows` into a v0.3 JSON `OAuthFlows`.
- *
- * v1.0's `deviceCode` flow has no v0.3 equivalent and is **silently
- * dropped**. When `deviceCode` is the only declared flow the result is an
- * empty `{}` object — callers that need to reject this can guard via
- * `Object.keys(result).length === 0`.
+ * v1.0's `deviceCode` is silently dropped (no v0.3 equivalent). When
+ * `deviceCode` is the only declared flow the result is empty; callers
+ * can guard via `Object.keys(result).length === 0`.
  */
 export function toCompatOAuthFlows(core: V1OAuthFlows): legacy.OAuthFlows {
   const result: legacy.OAuthFlows = {};
@@ -322,10 +285,8 @@ export function toCompatOAuthFlows(core: V1OAuthFlows): legacy.OAuthFlows {
       break;
     }
     case 'deviceCode':
-      // Intentionally dropped: v0.3 has no `deviceCode` flow representation.
-      break;
     default:
-      // Unknown / future flow $case — also silently dropped.
+      // No v0.3 representation; silently dropped.
       break;
   }
   return result;

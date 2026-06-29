@@ -1,10 +1,7 @@
 /**
- * v0.3 gRPC integration for the A2A Server (compat layer).
- *
- * This module exports the v0.3 `A2AServiceServer` factory
- * (`legacyGrpcService`) and the v0.3 service descriptor
- * (`LegacyA2AService`) so operators can register the v0.3 surface
- * side-by-side with the v1.0 service on a single gRPC `Server`.
+ * v0.3 gRPC integration for the A2A server. Exports `legacyGrpcService`
+ * and `LegacyA2AService` so the v0.3 surface can be registered alongside
+ * the v1.0 service on the same gRPC `Server`.
  */
 
 export { legacyGrpcService, type LegacyGrpcServiceOptions } from './grpc_service.js';

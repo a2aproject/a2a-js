@@ -2,38 +2,11 @@ import { describe, it, expect } from 'vitest';
 
 import { delegateAsyncIterator } from '../../../src/server/express/common.js';
 
-/**
- * Tests for `delegateAsyncIterator` — the SSE-cleanup helper used by
- * the three express SSE response paths
- * (`server/express/rest_handler.ts`, `server/express/json_rpc_handler.ts`,
- * and `compat/v0_3/server/express/rest_handler.ts`).
- *
- * Before this fix, those three handlers wrapped a peeked iterator in
- * `{ [Symbol.asyncIterator]: () => iterator }` so they could resume
- * the `for await` loop AFTER pulling the first event eagerly. That
- * inline wrapper does not run any cleanup of its own — its lifecycle
- * is fully fused with whatever the underlying iterator does. In the
- * happy path (consumer iterates to completion) modern V8 engines DO
- * still propagate `.return()` from the outer `for await`, but the
- * pattern is fragile:
- *   - It relies on host-engine `for await` semantics (older engines and
- *     non-V8 runtimes — Workers, Deno — vary).
- *   - There is no explicit cleanup site to instrument or extend.
- *   - When the underlying iterator is "rebuilt" (peek-first then
- *     re-iterate) the engine has no view of the original generator's
- *     lifecycle and cannot guarantee `.return()` invocation on the
- *     boundary.
- *
- * `delegateAsyncIterator` replaces the inline wrapper with a real
- * `async function*` that explicitly calls `await it.return?.()` in
- * its own `finally`. This guarantees the underlying generator's
- * `finally` block (which detaches event-bus listeners and stops the
- * `ExecutionEventQueue`) runs whenever the wrapping generator is
- * disposed — by `break`, exception, GC, or natural completion.
- *
- * Mirror of the client-side `readFrom` helper in `src/sse_utils.ts:178-191`,
- * which uses the same try/finally shape around `reader.releaseLock()`.
- */
+// delegateAsyncIterator wraps an AsyncIterator in a real async generator
+// that explicitly calls `await it.return?.()` in its finally. Guarantees
+// the underlying generator's cleanup runs on break/throw/GC across
+// engines (V8, Workers, Deno). Mirrors the client-side readFrom in
+// src/sse_utils.ts which does the same around reader.releaseLock().
 describe('delegateAsyncIterator', () => {
   it('yields every value produced by the underlying iterator in order', async () => {
     async function* source() {
@@ -60,17 +33,14 @@ describe('delegateAsyncIterator', () => {
     }
 
     for await (const value of delegateAsyncIterator(source()[Symbol.asyncIterator]())) {
-      // consume all — `value` reads suppress the unused-binding lint.
       expect(value).toBe(1);
     }
     expect(finallyRan).toBe(1);
   });
 
   it('propagates .return() to the underlying iterator on early break', async () => {
-    // THE PRIMARY FIX BEHAVIOUR. With the new helper, breaking out of
-    // the consuming `for await` loop early MUST run the underlying
-    // generator's `finally` so listeners attached on the event bus
-    // (and the `ExecutionEventQueue` stop hook) are released.
+    // Primary fix: early `break` must release event-bus listeners
+    // attached in the underlying generator's `finally`.
     let finallyRan = 0;
     async function* source() {
       try {
@@ -101,7 +71,6 @@ describe('delegateAsyncIterator', () => {
 
     await expect(async () => {
       for await (const value of delegateAsyncIterator(source()[Symbol.asyncIterator]())) {
-        // Consume the first value, then throw on the very next iteration.
         if (value === 1) throw new Error('consumer error');
       }
     }).rejects.toThrow('consumer error');
@@ -109,9 +78,6 @@ describe('delegateAsyncIterator', () => {
   });
 
   it('explicitly calls .return() on the wrapped iterator when disposed early', async () => {
-    // Pinning the contract: `delegateAsyncIterator`'s own `finally` MUST
-    // invoke `.return()` on the wrapped iterator, not just hope the host
-    // engine does. We verify by spying on `.return()` directly.
     let nextCalls = 0;
     let returnCalls = 0;
     const it: AsyncIterator<number> = {
@@ -134,11 +100,8 @@ describe('delegateAsyncIterator', () => {
   });
 
   it('explicitly calls .return() on the wrapped iterator on natural completion', async () => {
-    // Even on natural exhaustion of the underlying iterator, the helper
-    // calls `.return?.()` from its `finally`. This is the
-    // "happy path" cleanup — important when the underlying iterator
-    // holds external resources (file handles, locks, listener
-    // subscriptions) that need explicit release.
+    // Happy-path cleanup still calls .return?.() so iterators holding
+    // external resources (locks, listeners) release them.
     let returnCalls = 0;
     let index = 0;
     const values = [10, 20, 30];
@@ -164,9 +127,7 @@ describe('delegateAsyncIterator', () => {
   });
 
   it('handles iterators that have no .return() method gracefully (no throw)', async () => {
-    // `it.return?.()` must NOT throw when the underlying iterator
-    // doesn't implement `return`. Many hand-rolled `AsyncIterator`
-    // objects (e.g. cursor-based DB streams) omit it.
+    // Many hand-rolled AsyncIterators (cursor-based DB streams) omit .return.
     const values = [10, 20, 30];
     let index = 0;
     const it: AsyncIterator<number> = {
@@ -188,13 +149,8 @@ describe('delegateAsyncIterator', () => {
   });
 
   it('does not double-call .return() when the iterator is naturally done', async () => {
-    // If the underlying iterator signals `done: true`, the helper
-    // returns from the loop and then enters its `finally` which calls
-    // `.return?.()` once. That's the documented contract; we don't
-    // try to suppress the `return` call after natural completion
-    // because (a) it's spec-compliant (`return()` on an exhausted
-    // iterator is a no-op per ES spec) and (b) iterator authors
-    // already handle the case.
+    // Helper calls .return?.() once in its finally; .return on an
+    // exhausted iterator is a spec-compliant no-op.
     let returnCalls = 0;
     let index = 0;
     const it: AsyncIterator<number> = {
@@ -214,20 +170,13 @@ describe('delegateAsyncIterator', () => {
       lastValue = value;
     }
     expect(lastValue).toBe(1);
-    // Exactly one call from the `finally`; the wrapper does not call
-    // it during the `done: true` branch.
     expect(returnCalls).toBe(1);
   });
 
   it('does not call .return() and propagates the original error when .next() throws', async () => {
-    // Per the iterator protocol, an iterator that throws from `.next()`
-    // is already considered closed and `.return()` should NOT be
-    // invoked on it. Calling `.return()` in that case may either be a
-    // no-op or — if `.return()` itself throws — mask the original
-    // producer error. This matches ECMAScript's `for await … of`
-    // semantics: `IfAbruptCloseAsyncIterator` only fires for
-    // consumer-side abrupt completion, not when `IteratorStep`
-    // (i.e. `.next()`) itself errors.
+    // Per the iterator protocol an iterator that throws from .next() is
+    // already closed; calling .return() can mask the original error.
+    // Matches ECMAScript `for await…of` semantics.
     let returnCalled = false;
     const it: AsyncIterator<number> = {
       next: async () => {
@@ -235,18 +184,13 @@ describe('delegateAsyncIterator', () => {
       },
       return: async () => {
         returnCalled = true;
-        // Simulate a stream whose `.return()` ALSO throws on an
-        // already-errored handle (common pattern for streams that
-        // were torn down by the underlying error). If the helper
-        // mistakenly invokes `.return()`, this would mask the
-        // 'next error' the caller actually cares about.
+        // .return() that also throws would mask the original error if invoked.
         throw new Error('return error');
       },
     };
 
     await expect(async () => {
       for await (const value of delegateAsyncIterator(it)) {
-        // unreachable — the underlying `.next()` throws immediately.
         expect(value).toBeUndefined();
       }
     }).rejects.toThrow('next error');
@@ -254,16 +198,7 @@ describe('delegateAsyncIterator', () => {
   });
 
   it('mirrors the readFrom shape from src/sse_utils.ts (client-side fix)', async () => {
-    // Documents the symmetry with the client-side helper that motivated
-    // this PR. `sse_utils.ts:178-191` wraps `ReadableStreamDefaultReader`
-    // in a generator that runs `reader.releaseLock()` in its `finally`.
-    // `delegateAsyncIterator` is the server-side equivalent for
-    // `AsyncIterator<T>`, running `it.return?.()` in its `finally`.
-    //
-    // Both achieve the same goal: bridge a non-generator stream-like
-    // object into the `async function*` lifecycle so the host engine's
-    // `for await` cleanup hooks (and explicit `break`/`throw`) trigger
-    // resource release deterministically.
+    // Server-side equivalent of the client-side readFrom helper in src/sse_utils.ts.
     let cleanups = 0;
     const it: AsyncIterator<number> = {
       next: async () => ({ value: 1, done: false }),

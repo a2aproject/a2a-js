@@ -32,51 +32,43 @@ import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
   /**
-   * Whether client prefers to poll for task updates instead of blocking until a terminal state is reached.
-   * If set to true, non-streaming send message result might be a Message or a Task in any (including non-terminal) state.
-   * Callers are responsible for running the polling loop. This configuration does not apply to streaming requests.
+   * Whether to poll for task updates instead of blocking until a terminal
+   * state is reached. When `true`, a non-streaming send result may be a
+   * Message or a Task in any (including non-terminal) state, and the
+   * caller is responsible for the polling loop. Does not apply to
+   * streaming requests.
    */
   polling?: boolean;
 
-  /**
-   * Specifies the default list of accepted media types to apply for all "send message" calls.
-   */
+  /** Default list of accepted media types for `sendMessage` calls. */
   acceptedOutputModes?: string[];
 
-  /**
-   * Specifies the default push notification configuration to apply for every Task.
-   */
+  /** Default push notification configuration applied to every Task. */
   pushNotificationConfig?: TaskPushNotificationConfig;
 
-  /**
-   * Interceptors invoked for each request.
-   */
+  /** Interceptors invoked for each request. */
   interceptors?: CallInterceptor[];
 }
 
 export interface RequestOptions {
-  /**
-   * Signal to abort request execution.
-   */
+  /** Signal to abort request execution. */
   signal?: AbortSignal;
 
   /**
-   * A key-value map for passing horizontally applicable context or parameters.
-   * All parameters are passed to the server via underlying transports (e.g. In JsonRPC via Headers).
+   * Key-value map for horizontally-applicable context. Passed to the
+   * server via the underlying transport (e.g. as HTTP headers).
    */
   serviceParameters?: ServiceParameters;
 
-  /**
-   * Arbitrary data available to interceptors and transport implementation.
-   */
+  /** Arbitrary data available to interceptors and the transport. */
   context?: ClientCallContext;
 }
 
 export class Client {
   /**
-   * The A2A protocol version sent with every request via the A2A-Version header.
-   * Determined by the transport, which receives the version from the matched
-   * AgentInterface during factory creation. Clients MUST send this header per §3.6.1.
+   * The A2A protocol version sent with every request via the
+   * `A2A-Version` header. Determined by the transport, which receives the
+   * version from the matched `AgentInterface` during factory creation.
    */
   public get protocolVersion(): string {
     return this.transport.protocolVersion;
@@ -89,12 +81,9 @@ export class Client {
   ) {}
 
   /**
-   * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
-   * Otherwise it will return the current agent card value.
-   *
-   * When a default tenant is configured (via `TenantTransportDecorator`, wired
-   * automatically by `ClientFactory` from `AgentInterface.tenant`), the tenant
-   * is applied to the request transparently.
+   * If the current agent card supports the extended feature, fetches the
+   * extended agent card from the server; otherwise returns the current
+   * card.
    */
   async getAgentCard(
     options?: RequestOptions,
@@ -113,10 +102,7 @@ export class Client {
     return this.agentCard;
   }
 
-  /**
-   * Sends a message to an agent to initiate a new interaction or to continue an existing one.
-   * Uses blocking mode by default.
-   */
+  /** Sends a message to an agent. Uses blocking mode by default. */
   sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
@@ -131,8 +117,9 @@ export class Client {
   }
 
   /**
-   * Sends a message to an agent to initiate/continue a task AND subscribes the client to real-time updates for that task.
-   * Performs fallback to non-streaming if not supported by the agent.
+   * Sends a message and subscribes to real-time updates for the
+   * resulting task. Falls back to non-streaming if the agent does not
+   * support streaming.
    */
   async *sendMessageStream(
     params: SendMessageRequest,
@@ -196,10 +183,7 @@ export class Client {
     }
   }
 
-  /**
-   * Creates a push notification configuration for a specified task.
-   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
-   */
+  /** Creates a push notification configuration for a task. */
   createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     options?: RequestOptions
@@ -215,10 +199,7 @@ export class Client {
     );
   }
 
-  /**
-   * Retrieves the current push notification configuration for a specified task.
-   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
-   */
+  /** Retrieves a push notification configuration for a task. */
   getTaskPushNotificationConfig(
     params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
@@ -234,10 +215,7 @@ export class Client {
     );
   }
 
-  /**
-   * Retrieves the associated push notification configurations for a specified task.
-   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
-   */
+  /** Lists push notification configurations for a task. */
   listTaskPushNotificationConfig(
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
@@ -253,9 +231,7 @@ export class Client {
     );
   }
 
-  /**
-   * Deletes an associated push notification configuration for a task.
-   */
+  /** Deletes a push notification configuration for a task. */
   deleteTaskPushNotificationConfig(
     params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
@@ -268,7 +244,8 @@ export class Client {
   }
 
   /**
-   * Retrieves the current state (including status, artifacts, and optionally history) of a previously initiated task.
+   * Retrieves the current state of a previously initiated task,
+   * including status, artifacts, and optionally history.
    */
   getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
@@ -279,8 +256,8 @@ export class Client {
   }
 
   /**
-   * Requests the cancellation of an ongoing task. The server will attempt to cancel the task,
-   * but success is not guaranteed (e.g., the task might have already completed or failed, or cancellation might not be supported at its current stage).
+   * Requests cancellation of an ongoing task. Success is not guaranteed
+   * (the task may have already completed or be uncancelable).
    */
   cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
@@ -290,9 +267,7 @@ export class Client {
     );
   }
 
-  /**
-   * Retrieves a list of tasks with optional filtering and pagination.
-   */
+  /** Retrieves a list of tasks with optional filtering and pagination. */
   listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
     return this.executeWithInterceptors(
       { method: 'listTasks', value: params },
@@ -302,7 +277,8 @@ export class Client {
   }
 
   /**
-   * Allows a client to reconnect to an updates stream for an ongoing task after a previous connection was interrupted.
+   * Reconnects to an updates stream for an ongoing task after a previous
+   * connection was interrupted.
    */
   async *resubscribeTask(
     params: SubscribeToTaskRequest,
@@ -373,31 +349,21 @@ export class Client {
   }
 
   /**
-   * Normalizes outgoing service parameters so they match the wire version
-   * negotiated by the underlying transport.
+   * Normalizes outgoing service parameters so they match the wire
+   * version negotiated by the underlying transport.
    *
-   * Two things happen here:
+   * 1. Injects the `A2A-Version` header from `this.protocolVersion`,
+   *    overriding any caller-supplied value.
+   * 2. Rewrites the extensions header to the spelling expected by the
+   *    negotiated wire version (v0.3 used `X-A2A-Extensions`; v1.0 uses
+   *    `A2A-Extensions`). Callers can use the {@link withA2AExtensions}
+   *    helper without knowing which transport they ended up on.
    *
-   * 1. The `A2A-Version` header is injected (overriding any caller-supplied
-   *    value) from `this.protocolVersion`. Per §3.6.1: "Clients MUST send the
-   *    A2A-Version header with each request."
-   *
-   * 2. The extension header is rewritten to the spelling expected by the
-   *    negotiated wire version. v0.3 used `X-A2A-Extensions`; v1.0 dropped the
-   *    `X-` prefix and uses `A2A-Extensions`. Callers can use the
-   *    {@link withA2AExtensions} helper (which always writes the v1.0
-   *    spelling) without having to know which transport they ended up on; the
-   *    orchestrator translates as needed.
-   *
-   *    Header names are matched case-insensitively per RFC 7230 §3.2, mirroring
-   *    the case-insensitive lookup the server performs on read. If multiple
-   *    case variants of the same logical header are supplied, the exact
-   *    canonical-cased key wins within its group; otherwise the last variant
-   *    seen wins. When both the canonical and the legacy spellings are present
-   *    (across groups), the canonical spelling wins and the alias is dropped,
-   *    again mirroring server-side precedence. The value emitted on the wire
-   *    is always under the exact canonical spelling for the negotiated wire
-   *    version.
+   * Header names are matched case-insensitively. Within a logical group
+   * the exact canonical-cased key wins; otherwise the last variant seen
+   * wins. The canonical spelling beats the alias across groups. The
+   * value emitted on the wire is always under the exact canonical
+   * spelling for the negotiated wire version.
    */
   private withNormalizedHeaders(options: RequestOptions | undefined): RequestOptions {
     const serviceParameters = ServiceParameters.createFrom(
@@ -412,9 +378,8 @@ export class Client {
     const aliasLower = alias.toLowerCase();
 
     // Collect values from any case variant of either header, then rebuild
-    // the entry under the exact canonical spelling at the end. We snapshot
-    // the key list with `Object.keys(...)` before mutating so the iteration
-    // is well-defined even though we delete entries inside the loop.
+    // the entry under the exact canonical spelling. The Object.keys snapshot
+    // keeps iteration well-defined even though we delete entries inside it.
     let canonicalValue: string | undefined;
     let exactCanonicalSeen = false;
     let aliasValue: string | undefined;
@@ -423,7 +388,6 @@ export class Client {
     for (const key of Object.keys(serviceParameters)) {
       const keyLower = key.toLowerCase();
       if (keyLower === canonicalLower) {
-        // Within the canonical group: exact spelling wins; otherwise last wins.
         if (key === canonical) {
           canonicalValue = serviceParameters[key];
           exactCanonicalSeen = true;
@@ -432,7 +396,6 @@ export class Client {
         }
         delete serviceParameters[key];
       } else if (keyLower === aliasLower) {
-        // Within the alias group: exact alias spelling wins; otherwise last wins.
         if (key === alias) {
           aliasValue = serviceParameters[key];
           exactAliasSeen = true;

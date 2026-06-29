@@ -109,9 +109,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   const serverCallContext = new ServerCallContext();
 
-  // Before each test, reset the components to a clean state
   beforeEach(() => {
-    // Default mock for most tests
     mockTaskStore = new InMemoryTaskStore();
     mockAgentExecutor = new MockAgentExecutor();
     executionEventBusManager = new DefaultExecutionEventBusManager();
@@ -123,13 +121,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
   });
 
-  // After each test, restore any mocks
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
-  // Helper function to create a basic user message
   const createTestMessage = (id: string, text: string): Message => ({
     messageId: id,
     role: Role.ROLE_USER,
@@ -1550,10 +1546,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   });
 
   it('sendMessageStream: handler invokes sender for stand-alone messages without error', async () => {
-    // The handler ALWAYS invokes the sender per §4.3.3 (which lists all
-    // four payload variants as valid). For stand-alone messages (no
-    // taskId), the sender's own _getTaskId-empty guard short-circuits
-    // dispatch silently — no webhook call, no error log.
+    // The handler ALWAYS invokes the sender (all four payload variants
+    // are valid). For stand-alone messages (no taskId), the sender's own
+    // _getTaskId-empty guard short-circuits dispatch silently — no
+    // webhook call, no error log.
     const pushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
     const handlerWithPush = new DefaultRequestHandler(
@@ -1881,9 +1877,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   it('sendMessage: should not trim history when historyLength is undefined (§3.2.4)', async () => {
     const contextId = 'ctx-send-hist-undef';
 
-    // Agent includes multiple messages in its task event history.
-    // Per §3.7, the agent is responsible for determining which messages
-    // are persisted in the task history.
+    // Agent includes multiple messages in its task event history. The
+    // agent is responsible for determining which messages are persisted
+    // in the task history.
     const agentHistory = [
       createTestMessage('hist-1', 'first message'),
       createTestMessage('hist-2', 'second message'),
@@ -2815,11 +2811,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   });
 
   it('should send push notification when message event is received (§4.3.3)', async () => {
-    // Per §4.3.3 all four StreamResponse payload variants (`task`,
-    // `message`, `statusUpdate`, `artifactUpdate`) are valid
-    // push-notification payloads. A message event bound to a task MUST
-    // reach the sender; the sender then routes to the right serializer.
-    // No `Failed to send push notification` error should be logged.
+    // All four StreamResponse payload variants (`task`, `message`,
+    // `statusUpdate`, `artifactUpdate`) are valid push-notification
+    // payloads. A message event bound to a task MUST reach the sender;
+    // the sender then routes to the right serializer. No `Failed to send
+    // push notification` error should be logged.
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 

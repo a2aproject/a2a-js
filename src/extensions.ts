@@ -1,11 +1,7 @@
-/**
- * A2A Protocol Extension URI.
- */
+/** A2A Protocol Extension URI. */
 export type ExtensionURI = string;
 
-/**
- * A collection of {@link ExtensionURI}.
- */
+/** A collection of {@link ExtensionURI}. */
 export type Extensions = ExtensionURI[];
 
 export const Extensions = {

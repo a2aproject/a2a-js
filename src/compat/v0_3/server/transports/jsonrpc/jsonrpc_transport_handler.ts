@@ -1,16 +1,7 @@
 /**
- * v0.3 JSON-RPC transport handler.
- *
- * Mirrors `JsonRpcTransportHandler` (the v1.0 handler) but accepts v0.3
- * method names (e.g. `message/send`, `tasks/get`) and v0.3-shaped params.
- * Inbound params are translated to v1.0 proto values via the `toCore*`
- * helpers in `../../../translate/requests.js`, dispatched to the v1.0
- * `A2ARequestHandler`, and translated back to v0.3 JSON via the
- * `toCompat*` helpers before being wrapped in a JSON-RPC envelope.
- *
- * Designed to share a transport with the v1.0 handler: the Express
- * dispatcher selects between the two based on the method name (see
- * `isLegacyJsonRpcMethod`).
+ * v0.3 JSON-RPC transport handler. Accepts v0.3 method names and params,
+ * translates to v1.0 proto, dispatches through `A2ARequestHandler`, and
+ * translates the response back to the v0.3 JSON-RPC envelope.
  */
 import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
@@ -36,9 +27,6 @@ import type * as legacy from '../../../types/types.js';
 import type { Message as V1Message, Task as V1Task } from '../../../../../types/pb/a2a.js';
 import { A2AError } from '../../error.js';
 
-/**
- * Minimal v0.3 JSON-RPC request envelope shape used by the handler.
- */
 type LegacyA2ARequest = {
   jsonrpc: '2.0';
   method: string;
@@ -46,12 +34,7 @@ type LegacyA2ARequest = {
   id?: string | number | null;
 };
 
-/**
- * Minimal v0.3 JSON-RPC response envelope shape used by the handler.
- *
- * Both success and error responses use this shape; `result` and `error`
- * are mutually exclusive.
- */
+// `result` and `error` are mutually exclusive.
 type LegacyJSONRPCResponse = {
   jsonrpc: '2.0';
   id: string | number | null;
@@ -59,11 +42,6 @@ type LegacyJSONRPCResponse = {
   error?: legacy.JSONRPCError;
 };
 
-/**
- * Handles incoming v0.3 JSON-RPC requests by translating them to v1.0
- * proto, dispatching to a v1.0 `A2ARequestHandler`, and translating
- * responses back to the v0.3 JSON wire shape.
- */
 export class LegacyJsonRpcTransportHandler {
   private requestHandler: A2ARequestHandler;
 
@@ -72,12 +50,9 @@ export class LegacyJsonRpcTransportHandler {
   }
 
   /**
-   * Handles an incoming v0.3 JSON-RPC request.
-   *
-   * For streaming methods (`message/stream`, `tasks/resubscribe`),
-   * returns an `AsyncGenerator` of v0.3-shaped JSON-RPC envelopes.
-   * For non-streaming methods, returns a single envelope (either a
-   * success response or a v0.3 error response).
+   * Handles an incoming v0.3 JSON-RPC request. Streaming methods
+   * (`message/stream`, `tasks/resubscribe`) return an `AsyncGenerator`
+   * of envelopes; non-streaming methods return a single envelope.
    */
   public async handle(
     requestBody: string | Record<string, unknown>,
@@ -111,8 +86,8 @@ export class LegacyJsonRpcTransportHandler {
 
     const { method, id: requestId = null } = rpcRequest;
     try {
-      // `agent/getAuthenticatedExtendedCard` carries no params; every other
-      // legacy method requires a params object.
+      // `agent/getAuthenticatedExtendedCard` carries no params; everything
+      // else requires a params object.
       if (
         method !== 'agent/getAuthenticatedExtendedCard' &&
         !this.paramsAreValid(rpcRequest.params)
@@ -254,7 +229,6 @@ export class LegacyJsonRpcTransportHandler {
     }
   }
 
-  /** Validates the basic structure of a JSON-RPC request. */
   private isRequestValid(rpcRequest: LegacyA2ARequest): boolean {
     if (rpcRequest.jsonrpc !== '2.0') {
       return false;
@@ -276,7 +250,6 @@ export class LegacyJsonRpcTransportHandler {
     return true;
   }
 
-  /** Validates that `params` is a non-null, non-array object with no empty keys. */
   private paramsAreValid(params: unknown): boolean {
     if (typeof params !== 'object' || params === null || Array.isArray(params)) {
       return false;
@@ -290,20 +263,7 @@ export class LegacyJsonRpcTransportHandler {
     return true;
   }
 
-  /**
-   * Maps an error to a v0.3-shaped {@link legacy.JSONRPCError}.
-   *
-   * Thin wrapper around {@link toCompatErrorBody} kept on the
-   * transport handler for backward compatibility with existing call
-   * sites (including the handler's own `catch` blocks). The actual
-   * v1.0 → v0.3 demotion logic — pass `LegacyA2AError` through, map
-   * known v1.0 SDK error classes to their numeric codes, strip the
-   * enriched `details[]`/`ErrorInfo` payload — lives in the translate
-   * unit and is shared with the REST handler.
-   *
-   * The cast is safe because the underlying converter returns a body
-   * that is structurally identical to {@link legacy.JSONRPCError}.
-   */
+  /** Maps an error to a v0.3-shaped `JSONRPCError`. */
   public static mapToLegacyJSONRPCError(error: unknown): legacy.JSONRPCError {
     return toCompatErrorBody(error) as legacy.JSONRPCError;
   }

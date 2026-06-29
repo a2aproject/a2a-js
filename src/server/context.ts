@@ -1,10 +1,8 @@
 import { Extensions } from '../extensions.js';
 import { User } from './authentication/user.js';
 
-/**
- * The A2A version assumed when the A2A-Version header is absent or empty.
- * Per §3.6.2: "Agents MUST interpret empty value as 0.3 version."
- */
+// Per the A2A spec, agents MUST interpret an absent or empty A2A-Version
+// header as a v0.3 request.
 const ABSENT_HEADER_VERSION = '0.3';
 
 export interface ServerCallContextOptions {
@@ -14,8 +12,7 @@ export interface ServerCallContextOptions {
 
   /**
    * The A2A protocol version requested by the client via the A2A-Version
-   * service parameter. Defaults to '0.3' when the header is absent or
-   * empty, per §3.6.2.
+   * service parameter. Defaults to `'0.3'` when the header is absent.
    */
   requestedVersion?: string;
 }
@@ -50,10 +47,6 @@ export class ServerCallContext {
     return this._requestedExtensions;
   }
 
-  /**
-   * The A2A protocol version requested by the client.
-   * Defaults to '0.3' when the A2A-Version header is absent or empty (§3.6.2).
-   */
   get requestedVersion(): string {
     return this._requestedVersion;
   }
@@ -63,13 +56,10 @@ export class ServerCallContext {
   }
 
   /**
-   * Replaces the requested-extensions set. Used by
-   * {@link DefaultRequestHandler} to narrow the list to those the agent
-   * actually exposes (per §4.6.3's "SHOULD ignore" rule for unsupported
-   * extensions) without orphaning the original context reference held
-   * by the Express / gRPC transport layer — replacing the context would
-   * strand later `addActivatedExtension(...)` calls on a dead object
-   * and response-side `A2A-Extensions` header would be missing.
+   * Replaces the requested-extensions set. Mutated in place rather than
+   * via a fresh context because the transport layer holds a reference
+   * to this object and reads `activatedExtensions` off it after dispatch
+   * to populate the response `A2A-Extensions` header.
    */
   public setRequestedExtensions(extensions: Extensions | undefined) {
     this._requestedExtensions = extensions;

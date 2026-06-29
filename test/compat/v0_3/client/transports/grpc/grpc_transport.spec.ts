@@ -21,11 +21,6 @@ import {
   type Task as V1Task,
 } from '../../../../../../src/types/pb/a2a.js';
 
-// --- Mocks ---
-
-// Mock the v0.3 gRPC client class so we can intercept calls without
-// standing up a real server. The set of methods mirrors the v0.3
-// `A2AServiceClient` interface declared in `src/compat/v0_3/grpc/pb/a2a.ts`.
 vi.mock('../../../../../../src/compat/v0_3/grpc/pb/a2a.js', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('../../../../../../src/compat/v0_3/grpc/pb/a2a.js')>();
@@ -44,10 +39,6 @@ vi.mock('../../../../../../src/compat/v0_3/grpc/pb/a2a.js', async (importOrigina
 });
 
 const ENDPOINT = 'localhost:50051';
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 function v1SendMessageRequest(): V1SendMessageRequest {
   return {
@@ -74,10 +65,7 @@ function v1SendMessageRequest(): V1SendMessageRequest {
   };
 }
 
-/**
- * A minimal v0.3 pb Task response. Field names use v0.3 pb camelCase
- * conventions (`contextId`, `status.state` as an enum value).
- */
+// Minimal v0.3 pb Task response in v0.3 pb camelCase.
 function v03PbTask(id = 't-1', state = 3 /* TASK_STATE_COMPLETED */): unknown {
   return {
     id,
@@ -88,10 +76,6 @@ function v03PbTask(id = 't-1', state = 3 /* TASK_STATE_COMPLETED */): unknown {
     metadata: undefined,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const mockUnarySuccess = (method: Mock, response: unknown) => {
   method.mockImplementation((_req: unknown, _meta: unknown, _opts: unknown, callback: any) => {

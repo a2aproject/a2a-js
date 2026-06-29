@@ -6,10 +6,7 @@ import { agentCardHandler } from '../../../../../src/server/express/agent_card_h
 import { legacyAgentCardRouter } from '../../../../../src/compat/v0_3/server/express/agent_card_handler.js';
 import type { AgentCard } from '../../../../../src/index.js';
 
-/**
- * Agent card with a single v0.3 JSONRPC interface so
- * `toCompatAgentCard` produces a valid legacy card.
- */
+// Single v0.3 JSONRPC interface so toCompatAgentCard produces a valid legacy card.
 function legacyOnlyCard(): AgentCard {
   return {
     name: 'Test Agent',
@@ -38,10 +35,7 @@ function legacyOnlyCard(): AgentCard {
   };
 }
 
-/**
- * Agent card with both a v0.3 and a v1.0 interface so the same card
- * can be served at both protocol versions.
- */
+// Both v0.3 and v1.0 interfaces so the card can be served at either version.
 function dualVersionCard(): AgentCard {
   return {
     name: 'Test Agent',
@@ -76,10 +70,7 @@ function dualVersionCard(): AgentCard {
   };
 }
 
-/**
- * Agent card with NO v0.3 interface — `toCompatAgentCard` must throw
- * `VersionNotSupportedError`, which the handler converts to HTTP 400.
- */
+// No v0.3 interface — toCompatAgentCard throws VersionNotSupportedError → HTTP 400.
 function modernOnlyCard(): AgentCard {
   return {
     name: 'Test Agent',
@@ -120,12 +111,8 @@ function createApp(card: AgentCard, legacyCompat?: { enabled: boolean }) {
   return app;
 }
 
-/**
- * Mounts a tiny pre-middleware that stamps `Vary: Accept-Encoding` so
- * tests can assert that the handlers' `Vary` write merges into (rather
- * than overwrites) upstream values — emulating what compression/CORS
- * middleware would do in a real deployment.
- */
+// Pre-middleware that stamps `Vary: Accept-Encoding` so tests verify the
+// handler merges (not overwrites) upstream Vary — same shape as compression/CORS.
 function createAppWithUpstreamVary(card: AgentCard, legacyCompat?: { enabled: boolean }) {
   const app = express();
   app.use((_req: Request, res: Response, next: NextFunction) => {
@@ -143,8 +130,6 @@ function createAppWithUpstreamVary(card: AgentCard, legacyCompat?: { enabled: bo
 }
 
 function createLegacyOnlyApp(card: AgentCard) {
-  // Mount only the legacy router for tests that need to exercise the
-  // legacy code path in isolation.
   const app = express();
   app.use(
     '/.well-known/agent-card.json',

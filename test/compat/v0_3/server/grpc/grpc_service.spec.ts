@@ -16,14 +16,7 @@ import {
 } from '../../../../../src/types/pb/a2a.js';
 import { decodeErrorInfo, decodeStatus } from '../../../../../src/server/grpc/error_details.js';
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
-/**
- * Agent card declaring a v0.3 GRPC interface — required so `validateVersion`
- * on the v0.3 service accepts the (defaulted) `0.3` requested version.
- */
+// v0.3 GRPC interface so validateVersion accepts the defaulted '0.3'.
 const testAgentCard: V1AgentCard = {
   name: 'Test Agent',
   description: 'desc',

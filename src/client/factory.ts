@@ -9,32 +9,27 @@ import { TransportFactory } from './transports/transport.js';
 
 export interface ClientFactoryOptions {
   /**
-   * Transport factories to use.
-   * Effectively defines transports supported by this client factory.
+   * Transport factories to use. Effectively defines transports supported
+   * by this client factory.
    */
   transports: TransportFactory[];
 
-  /**
-   * Client config to be used for clients created by this factory.
-   */
+  /** Client config used for clients created by this factory. */
   clientConfig?: ClientConfig;
 
   /**
-   * Transport preferences to override ones defined by the agent card.
-   * If no matches are found among preferred transports, agent card values are used next.
+   * Transport preferences overriding those defined by the agent card.
+   * If no matches are found among preferred transports, agent card
+   * values are used next.
    */
   preferredTransports?: TransportProtocolName[];
 
-  /**
-   * Used for createFromAgentCardUrl to download agent card.
-   */
+  /** Used by `createFromUrl` to download the agent card. */
   cardResolver?: AgentCardResolver;
 }
 
 export const ClientFactoryOptions = {
-  /**
-   * SDK default options for {@link ClientFactory}.
-   */
+  /** SDK default options for {@link ClientFactory}. */
   default: {
     transports: [new JsonRpcTransportFactory(), new RestTransportFactory()],
   } as Readonly<ClientFactoryOptions>,
@@ -95,12 +90,10 @@ export class ClientFactory {
   }
 
   /**
-   * Creates a new client from the provided agent card.
-   *
-   * When the selected `AgentInterface` declares a non-empty `tenant` value
-   * (per spec Section 4.4.6), the transport is automatically wrapped with a
-   * {@link TenantTransportDecorator} so the default tenant is applied to every
-   * request without requiring callers to set it manually.
+   * Creates a new client from the provided agent card. When the selected
+   * `AgentInterface` declares a non-empty `tenant`, the transport is
+   * wrapped with a {@link TenantTransportDecorator} so the default tenant
+   * is applied to every request.
    */
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const interfaces = agentCard.supportedInterfaces ?? [];
@@ -123,8 +116,6 @@ export class ClientFactory {
       if (factory && selectedInterface) {
         let transport = await factory.create(selectedInterface.url, agentCard);
 
-        // If the agent interface declares a default tenant, wrap the transport
-        // so the tenant is automatically applied to all requests.
         if (selectedInterface.tenant) {
           transport = new TenantTransportDecorator(transport, selectedInterface.tenant);
         }
@@ -139,15 +130,18 @@ export class ClientFactory {
   }
 
   /**
-   * Downloads agent card using AgentCardResolver from options
-   * and creates a new client from the downloaded card.
+   * Downloads the agent card using the configured {@link AgentCardResolver}
+   * and creates a new client from it.
    *
    * @example
    * ```ts
-   * const factory = new ClientFactory(); // use default options and default {@link AgentCardResolver}.
-   * const client1 = await factory.createFromUrl('https://example.com'); // /.well-known/agent-card.json is used by default
-   * const client2 = await factory.createFromUrl('https://example.com', '/my-agent-card.json'); // specify custom path
-   * const client3 = await factory.createFromUrl('https://example.com/my-agent-card.json', ''); // specify full URL and set path to empty
+   * const factory = new ClientFactory();
+   * // /.well-known/agent-card.json is used by default.
+   * const client = await factory.createFromUrl('https://example.com');
+   * // Custom path.
+   * const client2 = await factory.createFromUrl('https://example.com', '/my-card.json');
+   * // Full URL with empty path.
+   * const client3 = await factory.createFromUrl('https://example.com/my-card.json', '');
    * ```
    */
   async createFromUrl(baseUrl: string, path?: string): Promise<Client> {
@@ -200,8 +194,7 @@ function mergeArrays<T>(
 }
 
 /**
- * A Map that normalizes string keys to uppercase for case-insensitive lookups.
- * This prevents errors from inconsistent casing in protocol names.
+ * Map that uppercases string keys so protocol-name lookups are case-insensitive.
  */
 class CaseInsensitiveMap<T> extends Map<string, T> {
   private normalizeKey(key: string): string {

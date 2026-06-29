@@ -1,8 +1,5 @@
-/**
- * Re-exports the protocol-version helpers from the shared
- * `src/version_utils.js` module. Kept as a stable import path for the v0.3
- * compat layer's translators and tests.
- */
+// Re-exports the protocol-version helpers. Stable import path for the
+// translators and tests.
 
 export {
   PROTOCOL_VERSION_0_3,

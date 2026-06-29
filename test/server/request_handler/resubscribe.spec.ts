@@ -20,34 +20,10 @@ import { TaskNotFoundError, UnsupportedOperationError } from '../../../src/error
 import { TERMINAL_STATE_LIST } from '../../../src/server/utils.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
-/**
- * Focused coverage for {@link DefaultRequestHandler.resubscribe} per
- * spec §3.1.6.
- *
- * The contract verified here:
- *
- *   1. **Non-terminal task with NO active bus** — the handler MUST
- *      yield the Task snapshot loaded from the store and close the
- *      stream cleanly. This is the regression scenario for the
- *      previously-thrown `UnsupportedOperationError('No active event
- *      bus...')`, which broke reconnection after server restart,
- *      executor pause, or an INPUT_REQUIRED bus-sleep window. The new
- *      behaviour mirrors a2a-go's `distributedManager.Resubscribe`
- *      (`internal/taskexec/distributed_manager.go:73-82`).
- *
- *   2. **Terminal task** — still throws `UnsupportedOperationError`
- *      per the §3.1.6 errors list (no further events will be
- *      delivered, so a snapshot is not a meaningful response).
- *
- *   3. **Unknown task** — still throws `TaskNotFoundError` per the
- *      §3.1.6 errors list.
- *
- *   4. **Non-terminal task WITH active bus** — the snapshot is still
- *      the first yielded event and live events from the bus are
- *      forwarded afterwards. Pinned as a regression guard so the
- *      no-bus early-return doesn't accidentally short-circuit the
- *      live-bus path.
- */
+// Resubscribe: non-terminal task without an active bus yields the
+// stored snapshot (regression for the previous UnsupportedOperationError
+// that broke reconnect after restart / pause / INPUT_REQUIRED). Mirrors
+// a2a-go's distributedManager.Resubscribe.
 describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
   let handler: DefaultRequestHandler;
   let taskStore: TaskStore;
@@ -153,10 +129,9 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
   });
 
   it('still throws UnsupportedOperationError for terminal tasks', async () => {
-    // Per §3.1.6's errors list, terminal tasks are explicitly
-    // unsubscribable — there will be no further events to deliver,
-    // so a snapshot would mislead the caller into waiting for a
-    // stream that will never produce more events.
+    // Terminal tasks are explicitly unsubscribable — there will be no
+    // further events to deliver, so a snapshot would mislead the caller
+    // into waiting for a stream that will never produce more events.
     for (const state of TERMINAL_STATE_LIST) {
       const taskId = `task-terminal-${state}`;
       await taskStore.save(makeTask(taskId, state as TaskState), serverContext);
@@ -167,9 +142,9 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
   });
 
   it('still throws TaskNotFoundError when the task id is unknown', async () => {
-    // Per §3.1.6's errors list. The new snapshot path is gated on a
-    // successful `taskStore.load` — there is no snapshot to yield
-    // when the id is unknown, so the error contract is preserved.
+    // The new snapshot path is gated on a successful `taskStore.load` —
+    // there is no snapshot to yield when the id is unknown, so the error
+    // contract (TaskNotFoundError) is preserved.
     const generator = handler.resubscribe({ id: 'does-not-exist', tenant: '' }, serverContext);
     await expect(generator.next()).rejects.toThrow(TaskNotFoundError);
   });
@@ -212,7 +187,7 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
     const iterator = generator[Symbol.asyncIterator]();
 
     // Pull the snapshot first — must arrive before any live event is
-    // published so the consumer always observes the §3.1.6
+    // published so the consumer always observes the
     // "Task-snapshot as first event" guarantee.
     const first = await iterator.next();
     expect(first.done).toBe(false);

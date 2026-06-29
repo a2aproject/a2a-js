@@ -6,36 +6,23 @@ export interface AgentCardResolverOptions {
   path?: string;
   fetchImpl?: typeof fetch;
   /**
-   * Enables the v0.3 protocol compatibility layer.
-   *
-   * When enabled, the resolver inspects each fetched agent-card
-   * payload; if its shape matches v0.3 (top-level `url` without
-   * `supportedInterfaces`, `preferredTransport`,
-   * `additionalInterfaces`, `supportsAuthenticatedExtendedCard`, or a
-   * `protocolVersion` in `[0.3, 1.0)`), it is translated to the v1.0
-   * proto shape via `toCoreAgentCard`. Each synthesized
+   * Enables the v0.3 protocol compatibility layer. When enabled, the
+   * resolver detects v0.3-shaped card payloads and translates them to
+   * the v1.0 proto shape via `toCoreAgentCard`. Each synthesized
    * `AgentInterface` is stamped with `protocolVersion: '0.3'` so that
-   * a `JsonRpcTransportFactory` configured with
-   * `legacyCompat: { enabled: true }` selects the compat transport
-   * automatically.
+   * a transport factory configured with `legacyCompat: { enabled: true }`
+   * selects the compat transport automatically.
    *
-   * The discovery request itself always announces the SDK's native
-   * v1.0 in the `A2A-Version` header — detection of v0.3 servers is
-   * based on the response shape (see {@link resolve}), not on the
-   * request value. This avoids a downgrade dance when both client
-   * and server speak v1.0 natively but both have legacyCompat
-   * enabled.
+   * Detection is based on the response shape, not the request, so the
+   * discovery request always announces the SDK's native v1.0 in the
+   * `A2A-Version` header.
    *
-   * Default: omitted (treated as disabled). When disabled, the v0.3
-   * compat module is never loaded.
+   * Default: omitted (disabled).
    */
   legacyCompat?: { enabled: boolean };
 }
 
 export interface AgentCardResolver {
-  /**
-   * Fetches the agent card based on provided base URL and path,
-   */
   resolve(baseUrl: string, path?: string): Promise<AgentCard>;
 }
 
@@ -43,11 +30,8 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
   constructor(public readonly options?: AgentCardResolverOptions) {}
 
   /**
-   * Fetches the agent card based on provided base URL and path.
-   * Path is selected in the following order:
-   * 1) path parameter
-   * 2) path from options
-   * 3) .well-known/agent-card.json
+   * Fetches the agent card. Path is selected in this order:
+   * `path` parameter → `options.path` → `/.well-known/agent-card.json`.
    */
   async resolve(baseUrl: string, path?: string): Promise<AgentCard> {
     const agentCardUrl = new URL(path ?? this.options?.path ?? AGENT_CARD_PATH, baseUrl);
@@ -69,22 +53,14 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
   }
 
   /*
-   * In the v0.3.0 specification, there was a structural drift between the JSON Schema data model
-   * and the Protobuf-based data model for AgentCards.
-   * The JSON Schema format uses a `"type"` discriminator (e.g., `{"type": "openIdConnect"}`),
-   * while the Protobuf JSON representation uses the `oneof` field name as the discriminator
-   * (e.g., `{"openIdConnectSecurityScheme": {...}}`).
-   *
-   * The A2A SDK internal logic expects the JSON Schema-based format. This fallback detection
-   * allows us to parse cards served by endpoints returning the Protobuf JSON structure by
-   * identifying the lack of the "type" field in security schemes or the presence of the
-   * "schemes" wrapper in security entries, and normalizing it before use.
+   * In v0.3 there was structural drift between the JSON Schema data
+   * model and the Protobuf-based data model for AgentCards: JSON Schema
+   * uses a `"type"` discriminator, while Protobuf JSON uses the `oneof`
+   * field name. The SDK expects the JSON Schema format; this fallback
+   * detects the Protobuf JSON shape and normalizes it before use.
    *
    * When `legacyCompat: { enabled: true }`, this method also detects
-   * v0.3-shaped cards and translates them via the compat
-   * module so the rest of the client stack sees a uniform v1.0
-   * representation with `protocolVersion: '0.3'` stamped on every
-   * synthesized interface.
+   * v0.3-shaped cards and translates them via the compat module.
    */
   private normalizeAgentCard(card: unknown): AgentCard {
     if (this.options?.legacyCompat?.enabled) {
@@ -132,7 +108,7 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
       const schemes = Object.values(securitySchemes);
       if (schemes.length > 0) {
         const first = schemes[0];
-        // Proto JSON maps use the oneof field name directly rather than a "type" property
+        // Proto JSON uses the oneof field name directly rather than a "type" property.
         return first && typeof first === 'object' && !('type' in first);
       }
     }

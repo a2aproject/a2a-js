@@ -68,11 +68,9 @@ describe('InMemoryTaskStore tenant isolation', () => {
 
     await store.save(createTask('task-1'), ctxA);
 
-    // Tenant A can load the task
     const loadedA = await store.load('task-1', ctxA);
     expect(loadedA).toBeDefined();
 
-    // Tenant B cannot load the same task
     const loadedB = await store.load('task-1', ctxB);
     expect(loadedB).toBeUndefined();
   });
@@ -140,7 +138,6 @@ describe('InMemoryTaskStore tenant isolation', () => {
     await store.save(createTask('global-task'), ctxGlobal);
     await store.save(createTask('tenant-task'), ctxTenant);
 
-    // Global context should not see tenant tasks
     const globalList = await store.list(
       {
         tenant: '',
@@ -155,7 +152,6 @@ describe('InMemoryTaskStore tenant isolation', () => {
     expect(globalList.tasks).toHaveLength(1);
     expect(globalList.tasks[0].id).to.equal('global-task');
 
-    // Tenant context should not see global tasks
     const tenantList = await store.list(
       {
         tenant: 'tenant-A',
@@ -198,12 +194,10 @@ describe('InMemoryPushNotificationStore tenant isolation', () => {
 
     await store.save('task-1', ctxA, createConfig('config-1', 'task-1', 'tenant-A'));
 
-    // Tenant A can load the config
     const loadedA = await store.load('task-1', ctxA);
     expect(loadedA).toHaveLength(1);
     expect(loadedA[0].id).to.equal('config-1');
 
-    // Tenant B cannot load tenant A's configs
     const loadedB = await store.load('task-1', ctxB);
     expect(loadedB).toHaveLength(0);
   });
@@ -231,22 +225,15 @@ describe('InMemoryPushNotificationStore tenant isolation', () => {
     await store.save('task-1', ctxA, createConfig('config-1', 'task-1', 'tenant-A'));
     await store.save('task-1', ctxB, createConfig('config-1', 'task-1', 'tenant-B'));
 
-    // Delete from tenant A
     await store.delete('task-1', ctxA, 'config-1');
 
-    // Tenant A config is gone
     const loadedA = await store.load('task-1', ctxA);
     expect(loadedA).toHaveLength(0);
 
-    // Tenant B config still exists
     const loadedB = await store.load('task-1', ctxB);
     expect(loadedB).toHaveLength(1);
   });
 });
-
-// ============================================================================
-// Owner Isolation Tests (§13.1 resource scoping)
-// ============================================================================
 
 const listParams: ListTasksRequest = {
   tenant: '',
@@ -287,12 +274,10 @@ describe('InMemoryTaskStore owner isolation', () => {
 
     await store.save(createTask('task-1'), ctxAlice);
 
-    // Alice can load her task
     const loadedAlice = await store.load('task-1', ctxAlice);
     expect(loadedAlice).toBeDefined();
     expect(loadedAlice!.id).toBe('task-1');
 
-    // Bob cannot load Alice's task
     const loadedBob = await store.load('task-1', ctxBob);
     expect(loadedBob).toBeUndefined();
   });
@@ -328,7 +313,6 @@ describe('InMemoryTaskStore owner isolation', () => {
     expect(listBob.tasks).toHaveLength(1);
     expect(listBob.tasks[0].id).toBe('task-b1');
 
-    // Non-existent owner sees nothing
     const listCharlie = await store.list(listParams, ctxCharlie);
     expect(listCharlie.tasks).toHaveLength(0);
   });
@@ -339,14 +323,11 @@ describe('InMemoryTaskStore owner isolation', () => {
 
     await store.save(createTask('task-1'), ctxAlice);
 
-    // Bob's save to a different task won't affect Alice
     await store.save(createTask('task-2'), ctxBob);
 
-    // Alice's task still exists (no cross-owner mutation via save with same ID)
     const loaded = await store.load('task-1', ctxAlice);
     expect(loaded).toBeDefined();
 
-    // Bob cannot see Alice's task
     const loadedBob = await store.load('task-1', ctxBob);
     expect(loadedBob).toBeUndefined();
   });
@@ -357,11 +338,9 @@ describe('InMemoryTaskStore owner isolation', () => {
 
     await store.save(createTask('task-1'), ctxAliceT1);
 
-    // Same tenant, different owner: cannot see the task
     const loadedBob = await store.load('task-1', ctxBobT1);
     expect(loadedBob).toBeUndefined();
 
-    // Same tenant, same owner: can see the task
     const loadedAlice = await store.load('task-1', ctxAliceT1);
     expect(loadedAlice).toBeDefined();
   });
@@ -372,13 +351,11 @@ describe('InMemoryTaskStore owner isolation', () => {
 
     await store.save(createTask('task-1'), ctxAliceT1);
 
-    // Same owner, different tenant: cannot see the task
     const loaded = await store.load('task-1', ctxAliceT2);
     expect(loaded).toBeUndefined();
   });
 
   it('should accept a custom OwnerResolver', async () => {
-    // Custom resolver that uses a fixed scope
     const customStore = new InMemoryTaskStore(() => 'shared-scope');
 
     const ctx1 = createContext(undefined, new TestUser('alice'));
@@ -386,7 +363,7 @@ describe('InMemoryTaskStore owner isolation', () => {
 
     await customStore.save(createTask('task-1'), ctx1);
 
-    // Both contexts resolve to the same owner, so both can see the task
+    // Both contexts resolve to the same scope.
     const loaded1 = await customStore.load('task-1', ctx1);
     const loaded2 = await customStore.load('task-1', ctx2);
     expect(loaded1).toBeDefined();
@@ -416,12 +393,10 @@ describe('InMemoryPushNotificationStore owner isolation', () => {
 
     await store.save('task-1', ctxAlice, createPushConfig('config-1', 'task-1'));
 
-    // Alice can load her config
     const loadedAlice = await store.load('task-1', ctxAlice);
     expect(loadedAlice).toHaveLength(1);
     expect(loadedAlice[0].id).toBe('config-1');
 
-    // Bob cannot load Alice's config
     const loadedBob = await store.load('task-1', ctxBob);
     expect(loadedBob).toHaveLength(0);
   });
@@ -449,15 +424,13 @@ describe('InMemoryPushNotificationStore owner isolation', () => {
     await store.save('task-1', ctxAlice, createPushConfig('config-1', 'task-1'));
     await store.save('task-1', ctxBob, createPushConfig('config-2', 'task-1'));
 
-    // Bob tries to delete Alice's config -- should be a no-op
+    // Cross-owner delete is a no-op.
     await store.delete('task-1', ctxBob, 'config-1');
 
-    // Alice's config still exists
     const loadedAlice = await store.load('task-1', ctxAlice);
     expect(loadedAlice).toHaveLength(1);
     expect(loadedAlice[0].id).toBe('config-1');
 
-    // Bob's config still exists
     const loadedBob = await store.load('task-1', ctxBob);
     expect(loadedBob).toHaveLength(1);
     expect(loadedBob[0].id).toBe('config-2');
@@ -469,11 +442,9 @@ describe('InMemoryPushNotificationStore owner isolation', () => {
 
     await store.save('task-1', ctxAliceT1, createPushConfig('config-1', 'task-1'));
 
-    // Same tenant, different owner: cannot see
     const loadedBob = await store.load('task-1', ctxBobT1);
     expect(loadedBob).toHaveLength(0);
 
-    // Same tenant, same owner: can see
     const loadedAlice = await store.load('task-1', ctxAliceT1);
     expect(loadedAlice).toHaveLength(1);
   });
@@ -486,7 +457,6 @@ describe('InMemoryPushNotificationStore owner isolation', () => {
 
     await customStore.save('task-1', ctx1, createPushConfig('config-1', 'task-1'));
 
-    // Both contexts resolve to same owner, so both can see
     const loaded1 = await customStore.load('task-1', ctx1);
     const loaded2 = await customStore.load('task-1', ctx2);
     expect(loaded1).toHaveLength(1);

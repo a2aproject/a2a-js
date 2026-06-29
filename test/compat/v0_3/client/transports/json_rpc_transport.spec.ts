@@ -463,8 +463,6 @@ describe('LegacyJsonRpcTransport', () => {
       expect(received[2]!.payload?.$case).toBe('artifactUpdate');
       expect(received[3]!.payload?.$case).toBe('message');
 
-      // Verify the streaming request was made with text/event-stream Accept header
-      // and the streaming-specific v0.3 method name.
       const [, init] = mockFetch.mock.calls[0]!;
       const init2 = init as RequestInit;
       const headers = init2.headers as Record<string, string>;

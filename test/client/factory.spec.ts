@@ -86,10 +86,9 @@ describe('ClientFactory', () => {
     it('should accept preferred transport with different case', () => {
       const options: ClientFactoryOptions = {
         transports: [mockTransportFactory1],
-        preferredTransports: ['transport1'], // lowercase, but Transport1 is registered
+        preferredTransports: ['transport1'],
       };
 
-      // Should not throw
       const factory = new ClientFactory(options);
 
       expect(factory.options).to.equal(options);
@@ -97,11 +96,11 @@ describe('ClientFactory', () => {
 
     it('should detect duplicate transports with different case as duplicates', () => {
       const transport1Lower = {
-        protocolName: 'transport1', // lowercase
+        protocolName: 'transport1',
         create: vi.fn(),
       };
       const options: ClientFactoryOptions = {
-        transports: [mockTransportFactory1, transport1Lower], // Transport1 and transport1
+        transports: [mockTransportFactory1, transport1Lower],
       };
 
       expect(() => new ClientFactory(options)).to.throw('Duplicate protocol name: transport1');
@@ -191,7 +190,7 @@ describe('ClientFactory', () => {
     it('should fallback to default transport if preferred transport is missing but default supported', async () => {
       const factory = new ClientFactory({
         transports: [mockTransportFactory1, mockTransportFactory2],
-        preferredTransports: ['Transport2'], // Not supported
+        preferredTransports: ['Transport2'],
       });
 
       await factory.createFromAgentCard(agentCard);
@@ -212,7 +211,6 @@ describe('ClientFactory', () => {
     });
 
     it('should match transport with case-insensitive protocol name', async () => {
-      // Transport factory uses "Transport1" but agent card uses "transport1" (lowercase)
       agentCard.supportedInterfaces = [
         {
           url: 'http://transport1.com',
@@ -343,10 +341,8 @@ describe('ClientFactory', () => {
     });
 
     it('default ClientFactory does NOT route v0.3 JSON-RPC agents through the compat transport', async () => {
-      // No explicit `transports:` config — exercises ClientFactoryOptions.default.
-      // The default `JsonRpcTransportFactory` is constructed without
-      // `legacyCompat`, so v0.3 agents fall through to the v1.0 transport
-      // (mirrors the server-side opt-in convention).
+      // Default JsonRpcTransportFactory has no legacyCompat, so v0.3
+      // agents fall through to the v1.0 transport.
       const factory = new ClientFactory();
       agentCard.supportedInterfaces = [
         {

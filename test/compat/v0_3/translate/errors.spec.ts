@@ -1,20 +1,3 @@
-/**
- * Tests for `src/compat/v0_3/translate/errors.ts`.
- *
- * Verifies the v1.0 → v0.3 error demotion contract:
- *
- *   - `LegacyA2AError` passes through verbatim (code, message, data).
- *   - Every v1.0 SDK error class maps to its numeric code via
- *     `A2A_ERROR_CLASS_TO_CODE`.
- *   - The enriched `details[]` array and `ErrorInfo` payload are
- *     never emitted on v0.3 responses.
- *   - Bodies have NO outer `{ error: … }` wrapper and NO `status`
- *     field — bare `{ code, message, data? }` only.
- *   - Unknown errors fall back to `INTERNAL_ERROR` (`-32603`).
- *   - The new v1.0-only codes (`-32005`, `-32006`, `-32008`, `-32009`)
- *     pass through with their numeric code unchanged.
- */
-
 import { describe, expect, it } from 'vitest';
 import { toCompatErrorBody } from '../../../../src/compat/v0_3/translate/errors.js';
 import { A2AError as LegacyA2AError } from '../../../../src/compat/v0_3/server/error.js';

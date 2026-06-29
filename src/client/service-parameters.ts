@@ -28,10 +28,7 @@ export function withA2AExtensions(...extensions: Extensions): ServiceParametersU
   };
 }
 
-/**
- * Creates a {@link ServiceParametersUpdate} that sets the A2A-Version header.
- * Per §3.6.1: "Clients MUST send the A2A-Version header with each request."
- */
+/** Creates a {@link ServiceParametersUpdate} that sets the `A2A-Version` header. */
 export function withA2AVersion(version: string): ServiceParametersUpdate {
   return (parameters: ServiceParameters) => {
     parameters[A2A_VERSION_HEADER] = version;

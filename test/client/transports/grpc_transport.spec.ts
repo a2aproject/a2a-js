@@ -19,9 +19,6 @@ import {
 } from '../util.js';
 import { TaskState } from '../../../src/index.js';
 
-// --- Mocks ---
-
-// Mock the gRPC client class
 vi.mock('../../../src/grpc/pb/a2a.js', () => {
   const A2AServiceClient = vi.fn();
   A2AServiceClient.prototype.getExtendedAgentCard = vi.fn();
@@ -37,7 +34,7 @@ vi.mock('../../../src/grpc/pb/a2a.js', () => {
   return { A2AServiceClient };
 });
 
-// Mock FromProto to act as pass-through for testing transport flow
+// FromProto is mocked as pass-through so the transport flow can be inspected directly.
 vi.mock('../../../src/types/converters/from_proto.js', () => ({
   FromProto: {
     sendMessageResult: vi.fn((x) => x),
@@ -49,7 +46,6 @@ describe('GrpcTransport', () => {
   let mockGrpcClient: A2AServiceClient;
   const endpoint = 'localhost:50051';
 
-  // Helper to simulate a successful gRPC unary callback
   const mockUnarySuccess = (method: Mock, response: any) => {
     method.mockImplementation((_req: any, _meta: any, _opts: any, callback: any) => {
       callback(null, response);
@@ -57,7 +53,6 @@ describe('GrpcTransport', () => {
     });
   };
 
-  // Helper to simulate a gRPC error with enriched ErrorInfo metadata
   const mockUnaryError = (method: Mock, code: number, message: string, sdkError?: Error) => {
     method.mockImplementation((_req: any, _meta: any, _opts: any, callback: any) => {
       const metadata = sdkError ? buildGrpcErrorMetadata(code, message, sdkError) : undefined;
@@ -416,8 +411,7 @@ describe('GrpcTransportFactory', () => {
         ],
       });
       const transport = await factory.create('localhost:50051', agentCard);
-      // Even though the matched interface declares v0.3, the flag is off
-      // so we still get the v1.0 transport.
+      // Flag is off, so even the v0.3 interface produces the v1.0 transport.
       expect(transport).toBeInstanceOf(GrpcTransport);
     });
 
@@ -464,7 +458,7 @@ describe('GrpcTransportFactory', () => {
         ],
       });
       const transport = await factory.create('localhost:50051', agentCard);
-      // `pickMatchingInterface` prefers protocolVersion === '1.0'.
+      // pickMatchingInterface prefers protocolVersion === '1.0'.
       expect(transport).toBeInstanceOf(GrpcTransport);
     });
   });

@@ -1,9 +1,5 @@
-/**
- * Bidirectional translators between v1.0 proto types and v0.3 JSON types.
- *
- * The files are split per entity group (parts, messages, tasks, …) for
- * easier maintenance and tree-shakeable imports.
- */
+// Bidirectional translators between v1.0 proto and v0.3 JSON, split per
+// entity group.
 
 export * from './agent_card.js';
 export * from './artifacts.js';

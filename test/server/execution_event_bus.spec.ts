@@ -124,25 +124,21 @@ describe('DefaultExecutionEventBus', () => {
         callCount++;
       };
 
-      // Register same listener 3 times
       eventBus.on('event', listener);
       eventBus.on('event', listener);
       eventBus.on('event', listener);
 
-      // Remove one instance
       eventBus.off('event', listener);
 
       eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(2);
 
-      // Remove another instance
       callCount = 0;
       eventBus.off('event', listener);
 
       eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(1);
 
-      // Remove last instance
       callCount = 0;
       eventBus.off('event', listener);
 
@@ -186,11 +182,9 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.once('event', listener);
       eventBus.once('event', listener);
 
-      // First event should trigger both once listeners
       eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(2);
 
-      // Second event should trigger none
       callCount = 0;
       eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(callCount).to.equal(0);
@@ -296,11 +290,9 @@ describe('DefaultExecutionEventBus', () => {
       eventBus.on('event', () => order.push('on-2'));
       eventBus.once('event', () => order.push('once-2'));
 
-      // First emit
       eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(order).to.deep.equal(['on-1', 'once-1', 'on-2', 'once-2']);
 
-      // Second emit - only on() listeners should fire
       order.length = 0;
       eventBus.publish(AgentEvent.message(createMessage('test')));
       expect(order).to.deep.equal(['on-1', 'on-2']);
@@ -342,7 +334,7 @@ describe('DefaultExecutionEventBus', () => {
   });
 
   describe('this context', () => {
-    // Helper to capture `this` without triggering no-this-alias lint rule
+    // Captures `this` without triggering the no-this-alias lint rule.
     function createThisCapture(): { value: unknown; capture: () => void } {
       const result: { value: unknown; capture: () => void } = {
         value: undefined,

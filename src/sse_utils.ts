@@ -1,16 +1,13 @@
 /**
- * Shared Server-Sent Events (SSE) utilities for both JSON-RPC and REST transports.
- * This module provides common SSE formatting and parsing functions.
+ * Shared Server-Sent Events (SSE) utilities for both JSON-RPC and REST
+ * transports.
  */
 
 // ============================================================================
 // SSE Headers
 // ============================================================================
 
-/**
- * Standard HTTP headers for Server-Sent Events (SSE) streaming responses.
- * These headers ensure proper SSE behavior across different proxies and clients.
- */
+/** Standard HTTP headers for SSE streaming responses. */
 export const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
   'Cache-Control': 'no-cache',
@@ -22,9 +19,7 @@ export const SSE_HEADERS = {
 // SSE Event Types
 // ============================================================================
 
-/**
- * Represents a parsed SSE event with type and data.
- */
+/** A parsed SSE event with type and data. */
 export interface SseEvent {
   type: string;
   data: string;
@@ -35,19 +30,12 @@ export interface SseEvent {
 // ============================================================================
 
 /**
- * Formats a data event for Server-Sent Events (SSE) protocol.
- * Creates a standard SSE event with an ID and JSON-stringified data.
- *
- * @param event - The event data to send (will be JSON stringified)
- * @returns Formatted SSE event string following the SSE specification
+ * Formats a data event for the SSE protocol.
  *
  * @example
  * ```ts
  * formatSSEEvent({ kind: 'message', text: 'Hello' })
- * // Returns: "data: {\"kind\":\"message\",\"text\":\"Hello\"}\n\n"
- *
- * formatSSEEvent({ result: 'success' }, 'custom-id')
- * // Returns: "data: {\"result\":\"success\"}\n\n"
+ * // "data: {\"kind\":\"message\",\"text\":\"Hello\"}\n\n"
  * ```
  */
 export function formatSSEEvent(event: unknown): string {
@@ -55,17 +43,13 @@ export function formatSSEEvent(event: unknown): string {
 }
 
 /**
- * Formats an error event for Server-Sent Events (SSE) protocol.
- * Error events use the "error" event type to distinguish them from data events,
- * allowing clients to handle errors differently.
- *
- * @param error - The error object (will be JSON stringified)
- * @returns Formatted SSE error event string with custom event type
+ * Formats an error event for the SSE protocol, using the `error` event
+ * type so clients can distinguish errors from data events.
  *
  * @example
  * ```ts
  * formatSSEErrorEvent({ code: -32603, message: 'Internal error' })
- * // Returns: "event: error\ndata: {\"code\":-32603,\"message\":\"Internal error\"}\n\n"
+ * // "event: error\ndata: {\"code\":-32603,\"message\":\"Internal error\"}\n\n"
  * ```
  */
 export function formatSSEErrorEvent(error: unknown): string {
@@ -77,25 +61,9 @@ export function formatSSEErrorEvent(error: unknown): string {
 // ============================================================================
 
 /**
- * Parses a Server-Sent Events (SSE) stream from a Response object.
- * Yields parsed SSE events as they arrive.
- *
- * This parser expects well-formed SSE events with single-line JSON data,
- * matching the format produced by formatSSEEvent and formatSSEErrorEvent.
- *
- * @param response - The fetch Response containing an SSE stream
- * @yields SseEvent objects with type and data fields
- *
- * @example
- * ```ts
- * for await (const event of parseSseStream(response)) {
- *   if (event.type === 'error') {
- *     handleError(JSON.parse(event.data));
- *   } else {
- *     handleData(JSON.parse(event.data));
- *   }
- * }
- * ```
+ * Parses an SSE stream from a `Response`, yielding events as they arrive.
+ * Expects well-formed SSE events with single-line JSON data, matching the
+ * format produced by {@link formatSSEEvent} and {@link formatSSEErrorEvent}.
  */
 export async function* parseSseStream(
   response: Response
@@ -115,20 +83,15 @@ export async function* parseSseStream(
     let lineEndIndex: number;
 
     while ((lineEndIndex = buffer.indexOf('\n')) >= 0) {
-      // Per SSE spec a single trailing `\r` on the line is also a
-      // line terminator (lines may end with `\r\n`, `\r`, or `\n`).
-      // Strip the trailing `\r` here rather than calling `.trim()`,
-      // which would also eat leading/trailing whitespace inside the
-      // field value (e.g. a JSON-formatted `data:` line whose
-      // content starts with a space). The `data:` parser below
-      // already handles the spec-required optional single space
-      // after the colon.
+      // Per the SSE spec lines may end with `\r\n`, `\r`, or `\n`. We
+      // strip a trailing `\r` explicitly rather than calling `.trim()`,
+      // which would also eat whitespace inside JSON-formatted `data:`
+      // payloads.
       let line = buffer.substring(0, lineEndIndex);
       if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
       buffer = buffer.substring(lineEndIndex + 1);
 
       if (line === '') {
-        // Empty line signals end of event
         if (eventData) {
           yield { type: eventType, data: eventData };
           eventData = '';
@@ -139,41 +102,36 @@ export async function* parseSseStream(
       } else if (line.startsWith('event:')) {
         eventType = stripOptionalLeadingSpace(line.substring('event:'.length));
       } else if (line.startsWith('data:')) {
-        // Per the SSE spec, multiple consecutive `data:` lines within
-        // a single event are joined by `\n`. Server implementations
-        // (e.g. sse_starlette in a2a-python) take advantage of this
-        // to pretty-print JSON payloads across multiple lines. Append
-        // instead of overwriting to preserve the full payload.
+        // Multiple consecutive `data:` lines within a single event are
+        // joined by `\n` per the SSE spec. Some servers (e.g.
+        // sse_starlette in a2a-python) pretty-print JSON across lines,
+        // so append instead of overwriting.
         const fieldValue = stripOptionalLeadingSpace(line.substring('data:'.length));
         eventData = eventData === '' ? fieldValue : `${eventData}\n${fieldValue}`;
       }
     }
   }
 
-  // Yield any pending event at stream end
+  // Yield any pending event at stream end.
   if (eventData) {
     yield { type: eventType, data: eventData };
   }
 }
 
 /**
- * Per the SSE spec (HTML Living Standard, §9.2.6), the optional single
- * leading space after the field-name colon is consumed by the parser.
- * Trailing whitespace and embedded whitespace are preserved.
+ * Per the SSE spec, the optional single leading space after the field-name
+ * colon is consumed by the parser; embedded and trailing whitespace are
+ * preserved.
  */
 function stripOptionalLeadingSpace(value: string): string {
   return value.startsWith(' ') ? value.substring(1) : value;
 }
 
 /**
- * Reads string chunks from a ReadableStream using the reader API.
- *
- * We use the manual reader approach the native async iterator directly on the stream
- * because ReadableStream async iteration is not supported in all environments.
+ * Reads string chunks from a `ReadableStream` using the reader API. We
+ * use the manual reader rather than async iteration because the latter is
+ * not supported on all runtimes.
  * @see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
- *
- * @param stream - The ReadableStream to read from
- * @yields String chunks from the stream
  */
 async function* readFrom(stream: ReadableStream<string>): AsyncGenerator<string, void, void> {
   const reader = stream.getReader();

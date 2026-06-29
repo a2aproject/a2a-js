@@ -43,7 +43,10 @@ import { ServerCallContext } from '../../context.js';
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
 
 /**
- * Handles JSON-RPC transport layer, routing requests to A2ARequestHandler.
+ * Handles the JSON-RPC transport layer, routing requests to an
+ * {@link A2ARequestHandler}. Streaming methods return an
+ * `AsyncGenerator` of JSON-RPC responses; non-streaming methods return a
+ * single response (result or error envelope).
  */
 export class JsonRpcTransportHandler {
   private requestHandler: A2ARequestHandler;
@@ -52,11 +55,6 @@ export class JsonRpcTransportHandler {
     this.requestHandler = requestHandler;
   }
 
-  /**
-   * Handles an incoming JSON-RPC request.
-   * For streaming methods, it returns an AsyncGenerator of JSONRPCResult.
-   * For non-streaming methods, it returns a Promise of a single JSONRPCMessage (Result or ErrorResponse).
-   */
   public async handle(
     requestBody: string | Record<string, unknown>,
     context: ServerCallContext
@@ -93,8 +91,8 @@ export class JsonRpcTransportHandler {
         throw new RequestMalformedError(`Invalid method parameters.`);
       }
 
-      // For JSON-RPC, tenant is inside the params body. Extract it and enrich the
-      // context so downstream components (stores, executors) can scope by tenant.
+      // For JSON-RPC, tenant is inside the params body. Extract it and
+      // enrich the context so downstream components can scope by tenant.
       const paramsTenant = (rpcRequest.params as Record<string, unknown> | undefined)?.tenant as
         | string
         | undefined;
@@ -118,7 +116,7 @@ export class JsonRpcTransportHandler {
             ? this.requestHandler.sendMessageStream(SendMessageRequest.fromJSON(params), context)
             : this.requestHandler.resubscribe(SubscribeToTaskRequest.fromJSON(params), context);
 
-        // Wrap the agent event stream into a JSON-RPC result stream
+        // Wrap the agent event stream into a JSON-RPC result stream.
         return (async function* jsonRpcEventStream(): AsyncGenerator<
           JSONRPCResponse,
           void,
@@ -148,7 +146,6 @@ export class JsonRpcTransportHandler {
           }
         })();
       } else {
-        // Handle non-streaming methods
         let result: unknown;
         switch (method) {
           case 'SendMessage': {
@@ -245,7 +242,6 @@ export class JsonRpcTransportHandler {
     }
   }
 
-  // Validates the basic structure of a JSON-RPC request
   private isRequestValid(rpcRequest: A2ARequest): boolean {
     if (rpcRequest.jsonrpc !== '2.0') {
       return false;
@@ -267,7 +263,6 @@ export class JsonRpcTransportHandler {
     return true;
   }
 
-  // Validates that params is an object with non-empty string keys
   private paramsAreValid(params: unknown): boolean {
     if (typeof params !== 'object' || params === null || Array.isArray(params)) {
       return false;

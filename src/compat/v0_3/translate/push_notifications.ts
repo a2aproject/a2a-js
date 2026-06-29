@@ -1,20 +1,8 @@
 /**
- * Push-notification translators between v1.0 proto and v0.3 JSON.
- *
- * Two structural differences need bridging:
- *
- *  - **Authentication info.** v1.0 `AuthenticationInfo.scheme` is a single
- *    string (e.g. `'Bearer'`); v0.3
- *    `PushNotificationAuthenticationInfo.schemes` is a string array. Going
- *    v0.3 → v1.0 we take the first scheme (lossy when more than one is
- *    declared) Going v1.0 → v0.3 we wrap
- *    the single scheme into a one-element array (empty when the v1.0
- *    `scheme` is empty).
- *
- *  - **TaskPushNotificationConfig nesting.** v1.0 flattens
- *    `(taskId, id, url, token, authentication)` onto a single message;
- *    v0.3 JSON nests `(id, url, token, authentication)` under
- *    `pushNotificationConfig` and keeps `taskId` at the outer level.
+ * Push-notification translators. Two mismatches: v1.0 `scheme` is a
+ * single string while v0.3 `schemes` is an array (v0.3 → v1.0 keeps
+ * only the first); v1.0 flattens `TaskPushNotificationConfig` while
+ * v0.3 nests everything except `taskId` under `pushNotificationConfig`.
  */
 
 import type {
@@ -27,13 +15,7 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value !== undefined && value !== '' ? value : undefined;
 }
 
-/**
- * Converts a v0.3 JSON `PushNotificationAuthenticationInfo` into a v1.0
- * proto `AuthenticationInfo`.
- *
- * **Lossy when `schemes.length > 1`** — only the first scheme is kept.
- * Callers that need to preserve all declared schemes must do so out-of-band.
- */
+/** Lossy when `schemes.length > 1` — only the first scheme is kept. */
 export function toCoreAuthenticationInfo(
   compat: legacy.PushNotificationAuthenticationInfo
 ): V1AuthenticationInfo {
@@ -48,13 +30,6 @@ export function toCoreAuthenticationInfo(
   };
 }
 
-/**
- * Converts a v1.0 proto `AuthenticationInfo` into a v0.3 JSON
- * `PushNotificationAuthenticationInfo`.
- *
- * The single v1.0 `scheme` is wrapped into a one-element array; an empty
- * scheme becomes an empty array. Empty credentials collapse to `undefined`.
- */
 export function toCompatAuthenticationInfo(
   core: V1AuthenticationInfo
 ): legacy.PushNotificationAuthenticationInfo {
@@ -67,13 +42,9 @@ export function toCompatAuthenticationInfo(
 }
 
 /**
- * Converts a v0.3 JSON `PushNotificationConfig` (the inner record) into a
- * v1.0 proto `TaskPushNotificationConfig` minus its `taskId` (the caller
- * supplies that when stitching together a full
- * `TaskPushNotificationConfig`). `taskId` is set to the proto3
- * empty-string default; `tenant` defaults to `''` (global tenant) and
- * may be overridden by the caller — typically by
- * `toCoreTaskPushNotificationConfig` plumbing the URL tenant.
+ * Converts the inner v0.3 `PushNotificationConfig`. Caller fills in
+ * `taskId` when stitching together a full `TaskPushNotificationConfig`;
+ * `tenant` defaults to `''` (global).
  */
 export function toCorePushNotificationConfig(
   compat: legacy.PushNotificationConfig | legacy.PushNotificationConfig1,
@@ -91,11 +62,7 @@ export function toCorePushNotificationConfig(
   };
 }
 
-/**
- * Converts a v1.0 proto `TaskPushNotificationConfig` into the inner v0.3
- * JSON `PushNotificationConfig` record (drops the `taskId`, which v0.3
- * stores at the outer `TaskPushNotificationConfig` level).
- */
+/** Drops `taskId` — v0.3 stores it at the outer level. */
 export function toCompatPushNotificationConfig(
   core: V1TaskPushNotificationConfig
 ): legacy.PushNotificationConfig {
@@ -114,14 +81,7 @@ export function toCompatPushNotificationConfig(
   return result;
 }
 
-/**
- * Converts a v0.3 JSON `TaskPushNotificationConfig` (with the nested
- * `pushNotificationConfig`) into a v1.0 proto flat
- * `TaskPushNotificationConfig`.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
+/** v0.3 has no tenants; caller may supply one. Defaults to `''` (global). */
 export function toCoreTaskPushNotificationConfig(
   compat: legacy.TaskPushNotificationConfig,
   tenant: string = ''
@@ -138,11 +98,6 @@ export function toCoreTaskPushNotificationConfig(
   };
 }
 
-/**
- * Converts a v1.0 proto `TaskPushNotificationConfig` into a v0.3 JSON
- * `TaskPushNotificationConfig` (re-nesting the per-config fields under
- * `pushNotificationConfig`).
- */
 export function toCompatTaskPushNotificationConfig(
   core: V1TaskPushNotificationConfig
 ): legacy.TaskPushNotificationConfig {

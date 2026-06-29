@@ -1,23 +1,11 @@
 /**
- * v0.3 JSON-RPC client transport (compat layer).
+ * v0.3 JSON-RPC client transport. Implements the v1.0 `Transport`
+ * interface but speaks the v0.3 JSON-RPC wire format. The default
+ * `JsonRpcTransportFactory` picks this class automatically for
+ * interfaces whose `protocolVersion` falls in the legacy range.
  *
- * Implements the v1.0 {@link Transport} interface but speaks the v0.3 JSON-RPC
- * wire format. Each method translates the v1.0 proto request to v0.3 JSON via
- * the `toCompat*Request` helpers in `../../translate/requests.js`, sends a
- * v0.3 JSON-RPC envelope (with the v0.3 lowercase method name such as
- * `message/send`), then translates the v0.3 response back to v1.0 proto via
- * the corresponding `toCore*` helpers.
- *
- * Shares `protocolName === 'JSONRPC'` with the v1.0 transport. The
- * core-side {@link JsonRpcTransportFactory} inspects the matched
- * `AgentInterface.protocolVersion` and instantiates this class when it
- * falls in `[0.3, 1.0)`, so installing the default `JsonRpcTransportFactory`
- * transparently covers both protocol versions.
- *
- * `listTasks` has no equivalent in v0.3 JSON-RPC (per §3.5.6 of the v0.3
- * spec, `tasks/list` was gRPC/REST-only). Calling it throws
- * {@link JSONRPCTransportError} with `code: -32601` ("Method not found")
- * synchronously, without issuing any HTTP request.
+ * `listTasks` throws `Method not found` synchronously — v0.3 JSON-RPC
+ * never exposed `tasks/list`.
  */
 
 import { JSON_CONTENT_TYPE } from '../../../../constants.js';
@@ -77,11 +65,6 @@ export interface LegacyJsonRpcTransportOptions {
   fetchImpl?: typeof fetch;
 }
 
-/**
- * Minimal v0.3 JSON-RPC envelopes used internally. Kept private (and
- * intentionally narrower than the public `JSONRPCError` interface) because
- * the v0.3 wire shape is the only thing this transport ever (de)serializes.
- */
 interface LegacyJsonRpcRequest {
   jsonrpc: '2.0';
   method: string;
@@ -97,10 +80,6 @@ interface LegacyJsonRpcSuccessResponse<T> {
 
 type LegacyJsonRpcResponse<T> = LegacyJsonRpcSuccessResponse<T> | JSONRPCErrorResponse;
 
-/**
- * v0.3 JSON-RPC client transport. See the file-level comment for the
- * overall design.
- */
 export class LegacyJsonRpcTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   private readonly endpoint: string;
@@ -197,7 +176,7 @@ export class LegacyJsonRpcTransport implements Transport {
       envelope,
       options
     );
-    // Wrap the list result back into the v0.3 success-response shape that
+    // Wrap the bare list back into the success-response shape that
     // `toCoreListTaskPushNotificationConfigsResponse` expects.
     return toCoreListTaskPushNotificationConfigsResponse({
       id: response.id,
@@ -232,10 +211,7 @@ export class LegacyJsonRpcTransport implements Transport {
     return toCoreTask(response.result);
   }
 
-  /**
-   * `tasks/list` has no JSON-RPC binding in v0.3 (§3.5.6). Throws
-   * synchronously without issuing an HTTP request.
-   */
+  /** `tasks/list` has no JSON-RPC binding in v0.3. Throws synchronously. */
   async listTasks(
     _params: V1ListTasksRequest,
     _options?: RequestOptions
@@ -412,9 +388,8 @@ export class LegacyJsonRpcTransport implements Transport {
       throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
     }
 
-    // Translate the v0.3 streaming result into the v1.0 `StreamResponse`
-    // shape by wrapping it in a v0.3 success-response envelope and reusing
-    // `toCoreStreamResponse`.
+    // Wrap in a success-response envelope so `toCoreStreamResponse` can
+    // translate to v1.0 `StreamResponse`.
     return toCoreStreamResponse({
       id: legacyStreamResponse.id,
       jsonrpc: '2.0',
@@ -422,12 +397,7 @@ export class LegacyJsonRpcTransport implements Transport {
     });
   }
 
-  /**
-   * Parses the `result` field of a v0.3 `message/send` success response into
-   * a v1.0 {@link SendMessageResult}. v0.3 used a discriminated union with a
-   * `kind: 'task' | 'message'` field; we use that to pick the right
-   * translator.
-   */
+  /** Picks the right translator based on the `kind` discriminator. */
   private static _parseSendMessageResult(result: legacy.Task | legacy.Message): SendMessageResult {
     if (!result) {
       throw new InvalidAgentResponseError('Invalid response: v0.3 message/send result is missing.');

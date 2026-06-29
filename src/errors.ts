@@ -18,21 +18,13 @@ export const A2A_ERROR_CODE = {
   VERSION_NOT_SUPPORTED: -32009,
 } as const;
 
-/**
- * The domain value for all A2A-specific errors.
- * Used in `google.rpc.ErrorInfo` details across all transport bindings (§9.5, §10.6, §11.6).
- */
+/** Domain value for all A2A-specific errors in `google.rpc.ErrorInfo`. */
 export const A2A_ERROR_DOMAIN = 'a2a-protocol.org';
 
-/**
- * The `@type` URL for `google.rpc.ErrorInfo` in ProtoJSON `Any` representation.
- */
+/** `@type` URL for `google.rpc.ErrorInfo` in ProtoJSON `Any` representation. */
 export const ERROR_INFO_TYPE = 'type.googleapis.com/google.rpc.ErrorInfo';
 
-/**
- * A structured detail object included in error responses.
- * Each object MUST include a `@type` key per §3.3.2.
- */
+/** A structured detail object included in error responses. */
 export interface ErrorDetail {
   '@type': string;
   [key: string]: unknown;
@@ -41,7 +33,7 @@ export interface ErrorDetail {
 /**
  * The `google.rpc.ErrorInfo` structure used across all A2A transport bindings.
  * Included in `error.data` (JSON-RPC), `error.details` (REST), and
- * `status.details` (gRPC) per §9.5, §11.6, §10.6.
+ * `status.details` (gRPC).
  */
 export interface A2AErrorInfo extends ErrorDetail {
   '@type': typeof ERROR_INFO_TYPE;
@@ -50,9 +42,7 @@ export interface A2AErrorInfo extends ErrorDetail {
   metadata?: Record<string, string>;
 }
 
-/**
- * REST error response structure per §11.6 (google.rpc.Status JSON representation).
- */
+/** REST error response structure (google.rpc.Status JSON representation). */
 export interface RestErrorBody {
   error: {
     code: number;
@@ -63,9 +53,8 @@ export interface RestErrorBody {
 }
 
 /**
- * Mapping of error class names to UPPER_SNAKE_CASE reason codes.
- * The reason is the error type name without the "Error" suffix, in UPPER_SNAKE_CASE.
- * Used in `google.rpc.ErrorInfo.reason` per §9.5, §10.6, §11.6.
+ * Mapping of error class names to UPPER_SNAKE_CASE reason codes used in
+ * `google.rpc.ErrorInfo.reason`.
  */
 export const A2A_ERROR_REASON: Record<string, string> = {
   TaskNotFoundError: 'TASK_NOT_FOUND',
@@ -82,16 +71,14 @@ export const A2A_ERROR_REASON: Record<string, string> = {
 };
 
 /**
- * Reverse mapping from reason codes to error class names.
- * Used by client transports to reconstruct SDK error classes from ErrorInfo.
+ * Reverse mapping from reason codes to error class names. Used by client
+ * transports to reconstruct SDK error classes from ErrorInfo.
  */
 export const A2A_REASON_TO_ERROR: Record<string, string> = Object.fromEntries(
   Object.entries(A2A_ERROR_REASON).map(([cls, reason]) => [reason, cls])
 );
 
-/**
- * Maps JSON-RPC error codes to error class names.
- */
+/** Maps JSON-RPC error codes to error class names. */
 export const A2A_ERROR_CODE_TO_CLASS: Record<number, string> = {
   [A2A_ERROR_CODE.TASK_NOT_FOUND]: 'TaskNotFoundError',
   [A2A_ERROR_CODE.TASK_NOT_CANCELABLE]: 'TaskNotCancelableError',
@@ -107,24 +94,17 @@ export const A2A_ERROR_CODE_TO_CLASS: Record<number, string> = {
 };
 
 /**
- * Maps error class names to their JSON-RPC error codes.
- *
  * Inverse of {@link A2A_ERROR_CODE_TO_CLASS}. Used by JSON-RPC transport
- * handlers (v1.0 and v0.3 compat) to resolve an error instance to the
- * numeric code carried in the response envelope's `error.code` field.
- * The lookup is keyed on `error.name`, consistent with how
- * `buildErrorInfo` resolves errors to `ErrorInfo.reason`.
+ * handlers to resolve an error instance to the numeric code carried in the
+ * response envelope's `error.code` field. Keyed on `error.name`.
  */
 export const A2A_ERROR_CLASS_TO_CODE: Record<string, number> = Object.fromEntries(
   Object.entries(A2A_ERROR_CODE_TO_CLASS).map(([code, cls]) => [cls, Number(code)])
 );
 
 /**
- * Builds a `google.rpc.ErrorInfo` detail object from an error instance.
- *
- * @param error - The error to build ErrorInfo from.
- * @param metadata - Optional additional context metadata.
- * @returns An `A2AErrorInfo` object, or `undefined` if the error has no known reason.
+ * Builds a `google.rpc.ErrorInfo` detail object from an error instance, or
+ * returns `undefined` if the error has no known reason.
  */
 export function buildErrorInfo(
   error: Error,
@@ -141,12 +121,10 @@ export function buildErrorInfo(
 }
 
 /**
- * Per-error gRPC status name mapping per §5.4.
- * Used in REST error responses for the `error.status` field (§11.6).
- *
- * Multiple A2A errors may share the same HTTP status code (e.g., 400) but
- * have different gRPC statuses (FAILED_PRECONDITION vs INVALID_ARGUMENT).
- * This mapping ensures the correct gRPC status name is used for each error.
+ * Per-error gRPC status name mapping. Also used in REST error responses
+ * for the `error.status` field. Multiple A2A errors may share the same
+ * HTTP status code (e.g. 400) but have different gRPC statuses
+ * (FAILED_PRECONDITION vs INVALID_ARGUMENT).
  */
 export const A2A_ERROR_GRPC_STATUS: Record<string, string> = {
   TaskNotFoundError: 'NOT_FOUND',
@@ -163,23 +141,21 @@ export const A2A_ERROR_GRPC_STATUS: Record<string, string> = {
 };
 
 /**
- * Returns the gRPC status name for an error instance.
- * Falls back to HTTP-status-based inference for unknown errors.
+ * Returns the gRPC status name for an error instance, falling back to
+ * HTTP-status-based inference for unknown errors.
  */
 export function getGrpcStatusName(error: unknown, httpStatus: number): string {
   if (error instanceof Error && A2A_ERROR_GRPC_STATUS[error.name]) {
     return A2A_ERROR_GRPC_STATUS[error.name];
   }
-  // Fallback for unknown errors
   if (httpStatus === 404) return 'NOT_FOUND';
   if (httpStatus === 500) return 'INTERNAL';
   if (httpStatus === 400) return 'INVALID_ARGUMENT';
   return 'UNKNOWN';
 }
 
-// --------------------------------------------------
-// These errors are a2a-js SDK specific and not covered by the protocol's documentation.
-// They are used when the error does not fit into any of the other error categories.
+// SDK-specific errors not covered by the protocol's documentation. Used
+// when the error does not fit into any of the other error categories.
 
 export class RequestMalformedError extends Error {
   constructor(message?: string) {
@@ -195,10 +171,7 @@ export class GenericError extends Error {
   }
 }
 
-// End of a2a-js SDK specific errors.
-// --------------------------------------------------
-
-// Transport-agnostic errors per §3.3.2 A2A-Specific Error Types.
+// Transport-agnostic A2A-specific errors.
 
 export class TaskNotFoundError extends Error {
   constructor(message?: string) {
@@ -264,8 +237,8 @@ export class VersionNotSupportedError extends Error {
 }
 
 /**
- * Maps UPPER_SNAKE_CASE reason codes to error class constructors.
- * Used by client transports to reconstruct SDK error instances from
+ * Maps UPPER_SNAKE_CASE reason codes to error class constructors. Used by
+ * client transports to reconstruct SDK error instances from
  * `google.rpc.ErrorInfo.reason` values received in error responses.
  */
 export const A2A_REASON_TO_ERROR_CLASS: Record<string, new (message?: string) => Error> = {
@@ -283,9 +256,9 @@ export const A2A_REASON_TO_ERROR_CLASS: Record<string, new (message?: string) =>
 };
 
 /**
- * Maps error class names to error class constructors.
- * Used by client transports to reconstruct SDK error instances from
- * legacy error responses that include the error class name.
+ * Maps error class names to error class constructors. Used by client
+ * transports to reconstruct SDK error instances from legacy error
+ * responses that include the error class name.
  */
 export const A2A_NAME_TO_ERROR_CLASS: Record<string, new (message?: string) => Error> =
   Object.fromEntries(
@@ -296,8 +269,8 @@ export const A2A_NAME_TO_ERROR_CLASS: Record<string, new (message?: string) => E
   );
 
 /**
- * Generic JSON-RPC transport error returned when a JSON-RPC error envelope
- * carries a code that doesn't map to a known A2A SDK error class.
+ * Returned when a JSON-RPC error envelope carries a code that doesn't map
+ * to a known A2A SDK error class.
  */
 export class JSONRPCTransportError extends Error {
   constructor(public errorResponse: JSONRPCErrorResponse) {
@@ -310,16 +283,8 @@ export class JSONRPCTransportError extends Error {
 
 /**
  * Maps an A2A numeric error code + message to a typed SDK error class.
- *
- * Envelope-agnostic core of the A2A code → SDK error switch. Used by both
- * JSON-RPC transports (via {@link mapJsonRpcErrorToSdkError}) and the v0.3
- * REST compat transport, which carry the same numeric `A2A_ERROR_CODE`
- * values in different wire envelopes (JSON-RPC envelope vs. bare v0.3
- * REST error body).
- *
- * Unknown codes return `fallback()`, allowing each transport to surface a
- * shape-appropriate generic error (e.g. `JSONRPCTransportError` carrying
- * the full envelope, or a plain `Error` with the REST body fields).
+ * Envelope-agnostic; unknown codes return `fallback()` so each transport
+ * can surface a shape-appropriate generic error.
  */
 export function mapA2aErrorToSdkError(
   err: { code: number; message: string },
@@ -357,16 +322,9 @@ export function mapA2aErrorToSdkError(
 }
 
 /**
- * Maps a JSON-RPC error envelope to a typed SDK error instance.
- *
- * Shared by both the v1.0 `JsonRpcTransport` and the v0.3 compat
- * `LegacyJsonRpcTransport`. v0.3 servers will never emit the
- * `EXTENSION_SUPPORT_REQUIRED` / `VERSION_NOT_SUPPORTED` codes in practice,
- * so handling them here is a no-op for the legacy transport.
- *
- * Thin wrapper over {@link mapA2aErrorToSdkError} that supplies a
- * JSON-RPC-appropriate fallback ({@link JSONRPCTransportError}) carrying
- * the full envelope for debuggability.
+ * Maps a JSON-RPC error envelope to a typed SDK error instance. Falls back
+ * to {@link JSONRPCTransportError} carrying the full envelope when the
+ * code is unknown.
  */
 export function mapJsonRpcErrorToSdkError(response: JSONRPCErrorResponse): Error {
   return mapA2aErrorToSdkError(response.error, () => new JSONRPCTransportError(response));
@@ -374,18 +332,9 @@ export function mapJsonRpcErrorToSdkError(response: JSONRPCErrorResponse): Error
 
 /**
  * Coerces an arbitrary rejected-promise reason into a printable message.
- *
- * Promise rejections are not required to be `Error` instances — agents
- * (or libraries they call) may `throw "boom"`, `Promise.reject(null)`,
- * `throw { code: ... }`, etc. Accessing `.message` on those would throw
- * a fresh `TypeError` from inside the catch handler and mask the
- * original failure, so unwrap defensively before formatting:
- *
- *  - `Error` instances → their `.message`
- *  - `null` / `undefined` → the literal `"null"` / `"undefined"`
- *  - strings → as-is
- *  - everything else → `JSON.stringify`, with a `String(err)` fallback
- *    for values that can't be serialised (cyclic, BigInt, etc.).
+ * Promise rejections are not required to be `Error` instances; reading
+ * `.message` on a non-Error rejection would throw a fresh `TypeError` from
+ * inside the catch handler and mask the original failure.
  */
 export function extractErrorMessage(err: unknown): string {
   if (err instanceof Error) {

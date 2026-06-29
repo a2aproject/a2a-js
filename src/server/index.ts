@@ -1,6 +1,5 @@
 /**
- * Server entry point for the A2A Server V2 library.
- * Exports the server-only codebase.
+ * Server entry point for the A2A SDK. Exports the server-only codebase.
  */
 
 export type { AgentExecutor } from './agent_execution/agent_executor.js';

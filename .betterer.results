@@ -5,9 +5,9 @@
 //
 exports[`TypeScript Strict Mode`] = {
   value: `{
-    "src/server/events/execution_event_bus.ts:150995267": [
-      [327, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
-      [350, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
+    "src/server/events/execution_event_bus.ts:1102247656": [
+      [233, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"],
+      [254, 15, 4, "tsc: Expected 2 arguments, but got 1.", "2087764327"]
     ]
   }`
 };

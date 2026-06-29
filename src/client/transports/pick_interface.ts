@@ -1,23 +1,17 @@
 /**
- * Shared helper for picking the best-matching `AgentInterface` for a
- * given protocol binding from an agent card's `supportedInterfaces`.
- *
- * Lives in its own module so protocol-specific factories can
- * share the same dispatch policy when deciding whether to dispatch to a
- * v0.3 compat transport.
+ * Helper for picking the best-matching `AgentInterface` for a given
+ * protocol binding. Lives in its own module so protocol-specific
+ * factories can share the same dispatch policy.
  */
 
 import type { AgentCard, AgentInterface } from '../../types/pb/a2a.js';
 
 /**
- * Picks the `AgentInterface` for the given protocol binding that best
- * matches the endpoint URL.
- *
- * Mirrors Python's `_find_best_interface(..., url=...)`: filters by
- * `protocolBinding` (case-insensitive), narrows to entries whose `url`
- * matches if any such entry exists, then prefers `protocolVersion === '1.0'`
- * among the survivors. Returns `undefined` when nothing matches so the
- * caller can fall back to a default policy (today: assume v1.0).
+ * Picks the `AgentInterface` for `protocolBinding` whose `url` matches
+ * `url`, preferring `protocolVersion === '1.0'`. Falls back to any
+ * matching binding entry when no URL match is found, then to
+ * `undefined` when nothing matches. Mirrors Python's
+ * `_find_best_interface(..., url=...)`.
  */
 export function pickMatchingInterface(
   agentCard: AgentCard,

@@ -1,12 +1,6 @@
 /**
- * v0.3 compat-layer push-notification serializer and helpers.
- *
- * The canonical push-notification machinery (store, sender) lives in
- * `src/server/push_notification/`. This module adds the v0.3-aware
- * serializer + a convenience factory that pre-registers it on a
- * {@link DefaultPushNotificationSender}, so deployments that mount the
- * v0.3 compat transports can deliver webhooks in the v0.3 wire format
- * without manually wiring the serializer.
+ * v0.3 push-notification serializer plus a factory that pre-registers it
+ * on a `DefaultPushNotificationSender`.
  */
 
 import {
@@ -20,19 +14,11 @@ import { V03PushNotificationSerializer } from './v03_push_notification_serialize
 export { V03PushNotificationSerializer };
 
 /**
- * Constructs a {@link DefaultPushNotificationSender} with the v0.3
- * serializer pre-registered under {@link ProtocolVersion.V0_3} (`'0.3'`).
- *
- * Webhooks registered over v0.3 transports (e.g. legacy gRPC, legacy
- * JSON-RPC, legacy REST) carry their wire version through the
- * {@link PushNotificationStore} (when it implements `loadWithMetadata`)
- * and are dispatched with the v0.3-shaped body + `application/json`
- * content type. Webhooks registered over the canonical v1.0 transports
- * continue to use the built-in v1.0 serializer.
- *
- * Callers can override the pre-registered v0.3 entry — or add serializers
- * for other versions — by supplying their own `serializers` map in
- * `options`; user-supplied entries take precedence.
+ * Constructs a `DefaultPushNotificationSender` with the v0.3 serializer
+ * pre-registered under `ProtocolVersion.V0_3`. Webhooks registered over
+ * v0.3 transports are dispatched with the v0.3 body shape; v1.0
+ * webhooks keep using the built-in v1.0 serializer. User-supplied
+ * `serializers` in `options` take precedence.
  */
 export function createLegacyAwarePushNotificationSender(
   pushNotificationStore: PushNotificationStore,

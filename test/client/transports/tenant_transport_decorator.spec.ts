@@ -3,10 +3,9 @@ import { TenantTransportDecorator } from '../../../src/client/transports/tenant_
 import { Transport } from '../../../src/client/transports/transport.js';
 import { SendMessageRequest } from '../../../src/types/pb/a2a.js';
 
-/** Drains an async generator to completion. */
 async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
   while (!(await gen.next()).done) {
-    // consume all values
+    /* consume */
   }
 }
 
@@ -289,9 +288,7 @@ describe('TenantTransportDecorator', () => {
       const original = { ...params };
       await decorator.sendMessage(params);
 
-      // Original object should be unchanged
       expect(params).to.deep.equal(original);
-      // But the base transport received the resolved tenant
       const passedParams = mockTransport.sendMessage.mock.calls[0][0];
       expect(passedParams.tenant).to.equal(DEFAULT_TENANT);
     });

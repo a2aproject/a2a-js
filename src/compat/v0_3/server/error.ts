@@ -1,24 +1,23 @@
 import * as schema from '../types/types.js';
 
 /**
- * Custom error class for A2A server operations, incorporating JSON-RPC error codes, used by the v0.3 compat layer.
+ * v0.3 compat-layer error carrying a JSON-RPC error code and optional
+ * task ID context.
  */
 export class A2AError extends Error {
   public code: number;
   public data?: Record<string, unknown>;
-  public taskId?: string; // Optional task ID context
+  public taskId?: string;
 
   constructor(code: number, message: string, data?: Record<string, unknown>, taskId?: string) {
     super(message);
     this.name = 'A2AError';
     this.code = code;
     this.data = data;
-    this.taskId = taskId; // Store associated task ID if provided
+    this.taskId = taskId;
   }
 
-  /**
-   * Formats the error into a standard JSON-RPC error object structure.
-   */
+  /** Formats the error into a standard JSON-RPC error object. */
   toJSONRPCError(): schema.JSONRPCError {
     const errorObject: schema.JSONRPCError = {
       code: this.code,
@@ -32,7 +31,7 @@ export class A2AError extends Error {
     return errorObject;
   }
 
-  // Static factory methods for common errors
+  // Factory methods for common errors.
 
   static parseError(message: string, data?: Record<string, unknown>): A2AError {
     return new A2AError(-32700, message, data);

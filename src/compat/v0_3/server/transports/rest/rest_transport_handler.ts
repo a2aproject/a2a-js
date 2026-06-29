@@ -1,17 +1,7 @@
 /**
- * v0.3 HTTP+JSON (REST) Transport Handler.
- *
- * Mirrors {@link import('../../../../../server/transports/rest/rest_transport_handler.js').RestTransportHandler}
- * (the v1.0 handler) but accepts v0.3-shaped JSON payloads and returns
- * v0.3-shaped JSON results. Inbound params are translated to v1.0 proto
- * values via the `toCore*` helpers in `../../../translate/requests.js`,
- * dispatched to the v1.0 {@link A2ARequestHandler}, and translated back
- * to v0.3 JSON via the `toCompat*` helpers before being returned to the
- * Express layer.
- *
- * Designed to share an `A2ARequestHandler` instance with the v1.0
- * handler so a single agent implementation can serve both protocol
- * versions side-by-side.
+ * v0.3 HTTP+JSON (REST) transport handler. Accepts v0.3-shaped JSON
+ * payloads, translates to v1.0 proto, dispatches through
+ * `A2ARequestHandler`, and translates the response back to v0.3 JSON.
  */
 
 import type { ServerCallContext } from '../../../../../server/context.js';
@@ -38,61 +28,21 @@ import { toCompatTask } from '../../../translate/tasks.js';
 import type * as legacy from '../../../types/types.js';
 import { A2AError as LegacyA2AError } from '../../error.js';
 
-// Re-export the shared HTTP status / error mapping helpers from the v1.0
-// transport handler. Numeric A2A error codes and their HTTP semantics
-// are identical between v0.3 and v1.0 for every code that exists in
-// both, so no parallel implementation is needed.
+// Numeric A2A error codes and HTTP semantics are identical between v0.3
+// and v1.0, so we reuse the v1.0 mapping helpers as-is.
 export { HTTP_STATUS, mapErrorToStatus };
 
-// ============================================================================
-// HTTP Error Conversion (v0.3 wire shape)
-// ============================================================================
-
-// Re-export the v0.3 REST error body type and converter from the
-// translate unit so existing consumers (including the public
-// `LegacyRestErrorBody` / `toLegacyHTTPError` exports) keep working.
-// The actual v1.0 → v0.3 demotion logic — pass `LegacyA2AError`
-// through, map known v1.0 SDK error classes to their numeric codes,
-// strip the enriched `details[]`/`ErrorInfo` payload — lives in
-// `../../../translate/errors.ts` and is shared with the JSON-RPC
-// handler.
 export type { LegacyRestErrorBody };
 
-/**
- * Converts any error to a v0.3-shaped HTTP error body.
- *
- * Thin wrapper around {@link toCompatErrorBody} kept on this module
- * for backward compatibility with existing call sites (including
- * {@link LegacyRestTransportHandler.mapToLegacyHTTPError} and the
- * Express layer in `../../express/rest_handler.ts`).
- *
- * The cast is safe because the underlying converter returns a body
- * that is structurally identical to {@link LegacyRestErrorBody}.
- */
+/** Converts any error to a v0.3-shaped HTTP error body. */
 export function toLegacyHTTPError(error: unknown): LegacyRestErrorBody {
   return toCompatErrorBody(error) as LegacyRestErrorBody;
 }
 
-// ============================================================================
-// REST Transport Handler Class
-// ============================================================================
-
 /**
- * Handles v0.3 REST transport, routing requests to a v1.0
- * {@link A2ARequestHandler}.
- *
- * Each public method:
- *   1. Accepts v0.3-shaped JSON params (already parsed from `req.body`,
- *      `req.params`, or `req.query` by the Express layer).
- *   2. Translates the params to v1.0 proto via the matching `toCore*`
- *      helper.
- *   3. Awaits the v1.0 request handler.
- *   4. Translates the v1.0 result back to v0.3 JSON via the matching
- *      `toCompat*` helper.
- *
- * Streaming methods return an `AsyncGenerator` of v0.3-shaped
- * `SendStreamingMessageSuccessResponse.result` payloads
- * (`Task | Message | TaskStatusUpdateEvent | TaskArtifactUpdateEvent`).
+ * Routes v0.3 REST requests through a v1.0 `A2ARequestHandler`. Streaming
+ * methods yield the bare v0.3 `.result` payloads (REST SSE has no
+ * JSON-RPC wrapper).
  */
 export class LegacyRestTransportHandler {
   private requestHandler: A2ARequestHandler;
@@ -101,20 +51,10 @@ export class LegacyRestTransportHandler {
     this.requestHandler = requestHandler;
   }
 
-  // ==========================================================================
-  // Public API Methods
-  // ==========================================================================
-
-  /**
-   * Returns the v1.0 agent card (used for capability checks).
-   */
   async getAgentCard(): Promise<V1AgentCard> {
     return this.requestHandler.getAgentCard();
   }
 
-  /**
-   * Returns the authenticated extended agent card translated to v0.3 JSON.
-   */
   async getAuthenticatedExtendedAgentCard(context: ServerCallContext): Promise<legacy.AgentCard> {
     const core = await this.requestHandler.getAuthenticatedExtendedAgentCard(
       { tenant: context.tenant ?? '' },
@@ -123,9 +63,6 @@ export class LegacyRestTransportHandler {
     return toCompatAgentCard(core);
   }
 
-  /**
-   * Validates that the v0.3 `MessageSendParams` is well-formed.
-   */
   private validateMessageSendParams(params: legacy.MessageSendParams): void {
     if (!params.message) {
       throw LegacyA2AError.invalidParams('message is required');
@@ -135,10 +72,6 @@ export class LegacyRestTransportHandler {
     }
   }
 
-  /**
-   * Sends a message to the agent (synchronous).
-   * Returns either a v0.3 `Task` or `Message` envelope.
-   */
   async sendMessage(
     params: legacy.MessageSendParams,
     context: ServerCallContext
@@ -154,14 +87,7 @@ export class LegacyRestTransportHandler {
       : toCompatTask(result as V1Task);
   }
 
-  /**
-   * Sends a message to the agent with a streaming response.
-   * Yields v0.3-shaped stream event payloads (the `.result` portion of
-   * the v0.3 `SendStreamingMessageSuccessResponse`).
-   *
-   * @throws {LegacyA2AError} `unsupportedOperation` (-32004) if the
-   *   agent does not advertise streaming.
-   */
+  /** Throws `unsupportedOperation` if the agent does not advertise streaming. */
   async sendMessageStream(
     params: legacy.MessageSendParams,
     context: ServerCallContext
@@ -179,14 +105,9 @@ export class LegacyRestTransportHandler {
   }
 
   /**
-   * Fetches a task by id, translated to v0.3 JSON.
-   * Accepts optional `historyLength` (parsed/validated locally).
-   *
-   * `historyLength` is deliberately left absent on the params object
-   * when the caller did not supply it: per §3.2.4, `undefined` means
-   * "no client limit, return full history". Coercing the default to
-   * `0` here would silently change the semantics to "return no
-   * history".
+   * Leave `historyLength` absent when the caller didn't supply it:
+   * `undefined` means "no client limit, return full history". Coercing
+   * to `0` would silently change the semantics to "return no history".
    */
   async getTask(
     taskId: string,
@@ -204,9 +125,6 @@ export class LegacyRestTransportHandler {
     return toCompatTask(core);
   }
 
-  /**
-   * Cancels a task, returning the updated v0.3 `Task` envelope.
-   */
   async cancelTask(taskId: string, context: ServerCallContext): Promise<legacy.Task> {
     const core = await this.requestHandler.cancelTask(
       { id: taskId, tenant: context.tenant ?? '', metadata: {} },
@@ -215,13 +133,7 @@ export class LegacyRestTransportHandler {
     return toCompatTask(core);
   }
 
-  /**
-   * Resubscribes to a task's update stream.
-   * Yields v0.3-shaped stream event payloads.
-   *
-   * @throws {LegacyA2AError} `unsupportedOperation` (-32004) if the
-   *   agent does not advertise streaming.
-   */
+  /** Throws `unsupportedOperation` if the agent does not advertise streaming. */
   async resubscribe(
     taskId: string,
     context: ServerCallContext
@@ -236,12 +148,7 @@ export class LegacyRestTransportHandler {
     return LegacyRestTransportHandler.translateStream(stream);
   }
 
-  /**
-   * Creates a push notification configuration (v0.3 calls this "set").
-   *
-   * @throws {LegacyA2AError} `pushNotificationNotSupported` (-32003) if
-   *   the agent does not advertise push notifications.
-   */
+  /** v0.3 calls this "set". Throws if push notifications are not supported. */
   async setTaskPushNotificationConfig(
     config: legacy.TaskPushNotificationConfig,
     context: ServerCallContext
@@ -258,10 +165,6 @@ export class LegacyRestTransportHandler {
     return toCompatTaskPushNotificationConfig(result);
   }
 
-  /**
-   * Lists all push notification configurations for a task.
-   * Returns a v0.3-shaped array of `TaskPushNotificationConfig`.
-   */
   async listTaskPushNotificationConfigs(
     taskId: string,
     context: ServerCallContext
@@ -273,9 +176,6 @@ export class LegacyRestTransportHandler {
     return result.configs.map((cfg) => toCompatTaskPushNotificationConfig(cfg));
   }
 
-  /**
-   * Fetches a specific push notification configuration, translated to v0.3 JSON.
-   */
   async getTaskPushNotificationConfig(
     taskId: string,
     configId: string,
@@ -288,9 +188,6 @@ export class LegacyRestTransportHandler {
     return toCompatTaskPushNotificationConfig(result);
   }
 
-  /**
-   * Deletes a push notification configuration.
-   */
   async deleteTaskPushNotificationConfig(
     taskId: string,
     configId: string,
@@ -302,15 +199,9 @@ export class LegacyRestTransportHandler {
     );
   }
 
-  // ==========================================================================
-  // Helpers
-  // ==========================================================================
-
   /**
-   * Wraps a v1.0 stream into a v0.3 stream by translating each event via
-   * `toCompatStreamResponse` and unwrapping the JSON-RPC envelope (REST
-   * SSE events carry only the `.result` payload, not the JSON-RPC
-   * wrapper).
+   * Translates each event via `toCompatStreamResponse` and unwraps the
+   * JSON-RPC envelope — REST SSE carries only `.result`.
    */
   private static async *translateStream(
     stream: AsyncGenerator<V1StreamResponse, void, undefined>
@@ -321,9 +212,6 @@ export class LegacyRestTransportHandler {
     }
   }
 
-  /**
-   * Static map of capability to error factory for missing capabilities.
-   */
   private static readonly CAPABILITY_ERRORS: Record<
     'streaming' | 'pushNotifications',
     () => LegacyA2AError
@@ -332,12 +220,6 @@ export class LegacyRestTransportHandler {
     pushNotifications: () => LegacyA2AError.pushNotificationNotSupported(),
   };
 
-  /**
-   * Validates that the agent supports a required capability.
-   *
-   * @throws {LegacyA2AError} `unsupportedOperation` for streaming,
-   *   `pushNotificationNotSupported` for push notifications.
-   */
   private async requireCapability(capability: 'streaming' | 'pushNotifications'): Promise<void> {
     const agentCard = await this.getAgentCard();
     if (!agentCard.capabilities?.[capability]) {
@@ -345,9 +227,6 @@ export class LegacyRestTransportHandler {
     }
   }
 
-  /**
-   * Parses and validates the `historyLength` query parameter.
-   */
   private parseHistoryLength(value: unknown): number {
     if (value === undefined || value === null) {
       throw LegacyA2AError.invalidParams('historyLength is required');
@@ -362,29 +241,16 @@ export class LegacyRestTransportHandler {
     return parsed;
   }
 
-  /**
-   * Converts any error to a v0.3-shaped HTTP error body. Exposed
-   * statically so the Express layer can reuse the same mapping logic
-   * without holding a transport-handler instance. Mirrors
-   * `LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError`.
-   */
+  /** Same as `toLegacyHTTPError`, exposed for the Express layer. */
   public static mapToLegacyHTTPError(error: unknown): LegacyRestErrorBody {
     return toLegacyHTTPError(error);
   }
 }
 
 /**
- * Wraps a v0.3 `MessageSendParams` in a minimal v0.3 JSON-RPC request
- * envelope so it can be fed through `toCoreSendMessageRequest` (which
- * was originally written for the JSON-RPC path and expects the
- * `{ params: { … } }` wrapping).
- *
- * The `jsonrpc`, `id`, and `method` fields are placeholders: only
- * `params` is consumed by the translator, but they're required by the
- * envelope's TypeScript shape. The return type is the union
- * `SendMessageRequest | SendStreamingMessageRequest` because the
- * translator accepts either; the caller picks one via the `method`
- * argument purely to satisfy the discriminated-union envelope.
+ * Wraps `MessageSendParams` in a minimal JSON-RPC envelope so it can be
+ * fed through `toCoreSendMessageRequest` (which expects the `{ params }`
+ * wrapping). Only `params` is consumed; the rest are placeholders.
  */
 function buildLegacySendRequest(
   params: legacy.MessageSendParams,

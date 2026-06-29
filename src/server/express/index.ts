@@ -1,7 +1,4 @@
-/**
- * Express integration for the A2A Server library.
- * This module provides Express.js specific functionality.
- */
+/** Express integration for the A2A server. */
 
 export { UserBuilder } from './common.js';
 export { jsonRpcHandler } from './json_rpc_handler.js';

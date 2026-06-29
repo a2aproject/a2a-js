@@ -1,13 +1,6 @@
-/**
- * `Task`, `TaskStatus`, and streaming-update event translators between
- * v1.0 proto and v0.3 JSON.
- *
- * The notable mismatch handled here is `TaskStatusUpdateEvent.final`:
- * v0.3 JSON requires it, v1.0 proto has no equivalent field. Going
- * v1.0 → v0.3 we compute `final` from the task state using the rule that
- * `final = state ∈ {completed, canceled, failed, rejected}`. Going
- * v0.3 → v1.0 we simply drop the field.
- */
+// `Task`, `TaskStatus`, and update-event translators. Notable mismatch:
+// v0.3 `TaskStatusUpdateEvent.final` has no v1.0 equivalent; v1.0 → v0.3
+// computes it from the task state.
 
 import { toCompatTaskState, toCoreTaskState } from './enums.js';
 import { toCompatMessage, toCoreMessage } from './messages.js';
@@ -22,13 +15,7 @@ import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
 import { A2AError } from '../server/error.js';
 
-/**
- * Terminal v0.3 task states for which a `status-update` event should be
- * marked as `final: true`.
- *
- * Note: interrupted states (`'input-required'`, `'auth-required'`) are
- * intentionally NOT considered final.
- */
+// Interrupted states (`input-required`, `auth-required`) are NOT final.
 const FINAL_LEGACY_STATES: ReadonlySet<legacy.TaskStatus['state']> = new Set([
   'completed',
   'canceled',
@@ -36,9 +23,6 @@ const FINAL_LEGACY_STATES: ReadonlySet<legacy.TaskStatus['state']> = new Set([
   'rejected',
 ]);
 
-/**
- * Converts a v0.3 JSON `TaskStatus` into a v1.0 proto `TaskStatus`.
- */
 export function toCoreTaskStatus(compatStatus: legacy.TaskStatus): V1TaskStatus {
   return {
     state: toCoreTaskState(compatStatus.state),
@@ -47,12 +31,6 @@ export function toCoreTaskStatus(compatStatus: legacy.TaskStatus): V1TaskStatus 
   };
 }
 
-/**
- * Converts a v1.0 proto `TaskStatus` into a v0.3 JSON `TaskStatus`.
- *
- * Empty `timestamp` strings collapse to `undefined` since v0.3 JSON marks
- * the field optional.
- */
 export function toCompatTaskStatus(coreStatus: V1TaskStatus): legacy.TaskStatus {
   const result: legacy.TaskStatus = { state: toCompatTaskState(coreStatus.state) };
   if (coreStatus.message) {
@@ -64,13 +42,6 @@ export function toCompatTaskStatus(coreStatus: V1TaskStatus): legacy.TaskStatus 
   return result;
 }
 
-/**
- * Converts a v0.3 JSON `Task` into a v1.0 proto `Task`.
- *
- * Optional `artifacts` / `history` arrays collapse to empty arrays.
- * If `status` is missing the result carries a `TASK_STATE_UNSPECIFIED`
- * placeholder.
- */
 export function toCoreTask(compatTask: legacy.Task): V1Task {
   return {
     id: compatTask.id,
@@ -82,14 +53,6 @@ export function toCoreTask(compatTask: legacy.Task): V1Task {
   };
 }
 
-/**
- * Converts a v1.0 proto `Task` into a v0.3 JSON `Task`.
- *
- * Adds the `kind: 'task'` discriminator. Empty arrays are pruned so
- * v0.3 consumers see truly-optional fields when nothing was provided.
- * A missing `status` is replaced with `{ state: 'unknown' }` so the
- * v0.3 schema (which requires `status`) remains satisfied.
- */
 export function toCompatTask(coreTask: V1Task): legacy.Task {
   const result: legacy.Task = {
     kind: 'task',
@@ -110,13 +73,7 @@ export function toCompatTask(coreTask: V1Task): legacy.Task {
   return result;
 }
 
-/**
- * Converts a v0.3 JSON `TaskStatusUpdateEvent` into a v1.0 proto
- * `TaskStatusUpdateEvent`.
- *
- * Drops the v0.3-only `final` field — v1.0 has no equivalent and the
- * receiver computes terminality from the status state.
- */
+/** Drops `final` — v1.0 computes terminality from the status state. */
 export function toCoreTaskStatusUpdateEvent(
   compatEvent: legacy.TaskStatusUpdateEvent
 ): V1TaskStatusUpdateEvent {
@@ -128,14 +85,7 @@ export function toCoreTaskStatusUpdateEvent(
   };
 }
 
-/**
- * Converts a v1.0 proto `TaskStatusUpdateEvent` into a v0.3 JSON
- * `TaskStatusUpdateEvent`.
- *
- * Computes `final` from the (translated) status state. The legacy
- * `kind: 'status-update'` discriminator is added so the result can be
- * embedded in the v0.3 streaming-response union.
- */
+/** Computes `final` from the status state; adds the `kind` discriminator. */
 export function toCompatTaskStatusUpdateEvent(
   coreEvent: V1TaskStatusUpdateEvent
 ): legacy.TaskStatusUpdateEvent {
@@ -155,12 +105,6 @@ export function toCompatTaskStatusUpdateEvent(
   return result;
 }
 
-/**
- * Converts a v0.3 JSON `TaskArtifactUpdateEvent` into a v1.0 proto
- * `TaskArtifactUpdateEvent`.
- *
- * Optional boolean fields default to `false` (proto3 convention).
- */
 export function toCoreTaskArtifactUpdateEvent(
   compatEvent: legacy.TaskArtifactUpdateEvent
 ): V1TaskArtifactUpdateEvent {
@@ -174,14 +118,6 @@ export function toCoreTaskArtifactUpdateEvent(
   };
 }
 
-/**
- * Converts a v1.0 proto `TaskArtifactUpdateEvent` into a v0.3 JSON
- * `TaskArtifactUpdateEvent`.
- *
- * The legacy `kind: 'artifact-update'` discriminator is added.
- * The optional `append` / `lastChunk` booleans are preserved as-is so a
- * server explicitly emitting `false` is round-trip-stable.
- */
 export function toCompatTaskArtifactUpdateEvent(
   coreEvent: V1TaskArtifactUpdateEvent
 ): legacy.TaskArtifactUpdateEvent {

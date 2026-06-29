@@ -39,39 +39,23 @@ import {
 import { ToProto } from '../../types/converters/to_proto.js';
 import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
 
-/**
- * Options for configuring the HTTP+JSON/REST handler.
- */
+/** Options for configuring the HTTP+JSON/REST handler. */
 export interface RestHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
   /**
-   * Enables the v0.3 protocol compatibility layer.
+   * Enables the v0.3 protocol compatibility layer. When enabled, the
+   * handler accepts v0.3-shaped requests on the v0.3 reference URL
+   * paths and routes them through the compat module mounted at the top
+   * of the router. The agent card MUST also declare a v0.3
+   * `HTTP+JSON` interface in `supportedInterfaces`.
    *
-   * When enabled, the handler accepts v0.3-shaped requests
-   * (`A2A-Version: 0.3`, or no header per §3.6.2) on the v0.3
-   * reference URL paths (`/v1/...`) and routes them through the
-   * compat module mounted at the top of the router.
-   *
-   * Default: omitted (treated as disabled). To accept v0.3 clients,
-   * the agent card MUST also declare a v0.3 `HTTP+JSON` interface in
-   * `supportedInterfaces`; see §3.6.2.
-   *
-   * When disabled, the v0.3 compatibility code is not instantiated and
-   * v0.3-shaped requests are rejected by the v1.0 version validator.
+   * Default: omitted (disabled).
    */
   legacyCompat?: { enabled: boolean };
 }
 
-/**
- * Express error handler middleware for REST API JSON parse errors.
- * Catches SyntaxError from express.json() and converts to A2A parse error format.
- *
- * @param err - Error thrown by express.json() middleware
- * @param _req - Express request (unused)
- * @param res - Express response
- * @param next - Next middleware function
- */
+/** Catches JSON parse errors from `express.json()` and maps them to A2A. */
 const restErrorHandler: ErrorRequestHandler = (
   err: Error,
   _req: Request,
@@ -87,15 +71,13 @@ const restErrorHandler: ErrorRequestHandler = (
 };
 
 /**
- * Express middleware that rejects body-bearing REST requests whose
- * Content-Type is neither `application/json` nor `application/a2a+json`,
- * surfacing a `ContentTypeNotSupportedError` mapped to HTTP 400 per §5.4.
+ * Rejects body-bearing REST requests whose Content-Type is neither
+ * `application/json` nor `application/a2a+json`, surfacing a
+ * ContentTypeNotSupportedError. Bodyless requests (GET, DELETE, OPTIONS)
+ * without a Content-Type pass through.
  */
 const restContentTypeGuard: RequestHandler = (req, res, next) => {
   const rawContentType = req.header('content-type');
-  // Only enforce on requests that actually carry a body. GET / DELETE
-  // without a Content-Type header are routine; CORS preflights live on
-  // OPTIONS and must keep working.
   if (!rawContentType) {
     next();
     return;
@@ -111,56 +93,32 @@ const restContentTypeGuard: RequestHandler = (req, res, next) => {
   res.status(HTTP_STATUS.BAD_REQUEST).json(toHTTPError(error, HTTP_STATUS.BAD_REQUEST));
 };
 
-// Route patterns removed - using explicit route definitions instead
-
-/**
- * Type alias for async Express route handlers used in this module.
- */
 type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
 
-// ============================================================================
-// HTTP+JSON/REST Handler - Main Export
-// ============================================================================
-
 /**
- * Creates Express.js middleware to handle A2A HTTP+JSON/REST requests.
- *
- * This handler implements the A2A REST API specification with snake_case
- * field names, providing endpoints for:
- * - Agent card retrieval (GET /extendedAgentCard)
- * - Message sending with optional streaming (POST /message:send|stream)
- * - Task management (GET/POST /tasks/:taskId:cancel|subscribe)
- * - Push notification configuration
- *
- * The handler acts as an adapter layer, converting between REST format
- * (snake_case) at the API boundary and internal TypeScript format (camelCase)
- * for business logic.
- *
- * @param options - Configuration options including the request handler
- * @returns Express router configured with all A2A REST endpoints
+ * Creates Express.js middleware handling A2A HTTP+JSON/REST requests.
  *
  * @example
  * ```ts
- * const app = express();
- * const requestHandler = new DefaultRequestHandler(...);
- * app.use('/api/rest', restHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * app.use(
+ *   '/api/rest',
+ *   restHandler({
+ *     requestHandler: a2aRequestHandler,
+ *     userBuilder: UserBuilder.noAuthentication,
+ *   })
+ * );
  * ```
  */
 export function restHandler(options: RestHandlerOptions): RequestHandler {
   const router = express.Router();
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
-  // Opt-in v0.3 compatibility. When enabled, the legacy router is
-  // mounted at the top of the chain (path-less). Dispatch between the
-  // v0.3 and v1.0 layers happens INSIDE the legacy router via a
-  // header-based middleware that parses `A2A-Version` and short-circuits
-  // non-legacy requests via `next('router')`. Path-based dispatch is
-  // intentionally avoided so the v1.0 spec's tenant routes
-  // (`/:tenant/...`) remain free to use `v1` (or any other label) as a
-  // tenant identifier without colliding with the v0.3 reference URLs.
-  // When `legacyCompat` is omitted or disabled, the compat module is
-  // never instantiated and v0.3-shaped requests are rejected by the
-  // v1.0 version validator.
+  // Opt-in v0.3 compatibility. Dispatch between v0.3 and v1.0 happens
+  // INSIDE the legacy router via a header-based middleware that parses
+  // `A2A-Version` and short-circuits non-legacy requests via
+  // `next('router')`. Path-based dispatch is intentionally avoided so
+  // tenant routes (`/:tenant/...`) remain free to use `v1` (or any
+  // other label) as a tenant identifier.
   if (options.legacyCompat?.enabled) {
     router.use(legacyRestRouter(options));
   }
@@ -170,30 +128,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       res.setHeader('Content-Type', A2A_CONTENT_TYPE);
       next();
     },
-    // A body-bearing request (POST / PUT / DELETE) with an unsupported
-    // Content-Type must surface as `ContentTypeNotSupportedError`
-    // mapped to HTTP 400 (§5.4), not as a generic 400 once
-    // `express.json()` silently skips parsing. Bodyless requests
-    // (GET / OPTIONS / HEAD) pass through.
+    // Body-bearing requests with an unsupported Content-Type must
+    // surface as ContentTypeNotSupportedError, not as the generic
+    // 400 that `express.json()` would produce after silently skipping.
     restContentTypeGuard,
     express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE], strict: false }),
     restErrorHandler
   );
 
-  // ============================================================================
-  // Helper Functions
-  // ============================================================================
-
-  /**
-   * Builds a ServerCallContext from the Express request.
-   * Extracts protocol extensions from headers, builds user from request,
-   * and extracts tenant from the URL path parameter if present.
-   * Validates the requested version against the agent card's supported versions.
-
-   *
-   * @param req - Express request object
-   * @returns ServerCallContext with requested extensions, authenticated user, and tenant
-   */
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
     const tenant = (req.params.tenant as string) || undefined;
@@ -206,40 +148,19 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       tenant,
     });
     const agentCard = await restTransportHandler.getAgentCard();
-    // When `legacyCompat` is enabled, the validator implicitly accepts
-    // '0.3' for any binding the card already exposes (per §3.6.2),
-    // so v0.3 clients (and header-less clients) succeed without
-    // requiring operators to duplicate every v1.0 `supportedInterfaces`
-    // entry with a v0.3 stub.
     validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON', {
       legacyCompat: options.legacyCompat,
     });
     return context;
   };
 
-  /**
-   * Sets activated extensions header in the response if any extensions were activated.
-   *
-   * @param res - Express response object
-   * @param context - ServerCallContext containing activated extensions
-   */
   const setExtensionsHeader = (res: Response, context: ServerCallContext): void => {
     if (context.activatedExtensions) {
       res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions));
     }
   };
 
-  /**
-   * Sends a JSON response with the specified status code.
-   * Handles 204 No Content responses specially (no body).
-   * Sets activated extensions header if present in context.
-   *
-   * @param res - Express response object
-   * @param statusCode - HTTP status code
-   * @param context - ServerCallContext for setting extension headers
-   * @param body - Response body (omitted for 204 responses)
-   * @param responseType - Optional protobuf message type for serialization
-   */
+  /** Sends a JSON response; 204 produces an empty body. */
   const sendResponse = <T>(
     res: Response,
     statusCode: number,
@@ -260,35 +181,26 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   };
 
   /**
-   * Sends a Server-Sent Events (SSE) stream response.
-   * Sets appropriate SSE headers, streams events, and handles errors gracefully.
-   * Events are already converted to REST format by the transport handler.
-   * Sets activated extensions header if present in context.
-   *
-   * @param res - Express response object
-   * @param stream - Async generator yielding REST-formatted events
-   * @param context - ServerCallContext for setting extension headers
+   * Sends an SSE stream response. The first event is consumed eagerly so
+   * an early failure can surface as a proper HTTP error instead of a 200
+   * SSE stream carrying a single error event.
    */
   const sendStreamResponse = async (
     res: Response,
     stream: AsyncGenerator<StreamResponse, void, undefined>,
     context: ServerCallContext
   ): Promise<void> => {
-    // Get first event before flushing headers to catch early errors
-    // This allows returning proper HTTP error codes instead of 200 + SSE error
     const iterator = stream[Symbol.asyncIterator]();
     let firstResult: IteratorResult<StreamResponse>;
     try {
       firstResult = await iterator.next();
     } catch (error) {
-      // Early error - return proper HTTP error
       setExtensionsHeader(res, context);
       const statusCode = mapErrorToStatus(error);
       res.status(statusCode).json(toHTTPError(error, statusCode));
       return;
     }
 
-    // First event succeeded - now set SSE headers and stream
     Object.entries(SSE_HEADERS).forEach(([key, value]) => {
       res.setHeader(key, value);
     });
@@ -296,7 +208,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     res.flushHeaders();
 
     try {
-      // Write first event
       if (!firstResult.done) {
         const result = StreamResponse.toJSON(firstResult.value);
         res.write(formatSSEEvent(result));
@@ -317,14 +228,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     }
   };
 
-  /**
-   * Handles errors in route handlers by converting them to A2A error format
-   * and sending appropriate HTTP response.
-   * Gracefully handles cases where headers have already been sent.
-   *
-   * @param res - Express response object
-   * @param error - Error to handle (can be A2AError or generic Error)
-   */
   const handleError = (res: Response, error: unknown): void => {
     if (res.headersSent) {
       if (!res.writableEnded) {
@@ -336,13 +239,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     res.status(statusCode).json(toHTTPError(error, statusCode));
   };
 
-  /**
-   * Wraps an async route handler to centralize error handling.
-   * Catches any errors thrown by the handler and passes them to handleError.
-   *
-   * @param handler - Async route handler function
-   * @returns Wrapped handler with built-in error handling
-   */
   const asyncHandler = (handler: AsyncRouteHandler): AsyncRouteHandler => {
     return async (req: Request, res: Response): Promise<void> => {
       try {
@@ -353,25 +249,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     };
   };
 
-  // ============================================================================
-  // Route Handlers
-  // ============================================================================
-
   /**
-   * Middleware that resolves tenant from the URL path parameter and normalizes
-   * it into the request so downstream handlers don't need to deal with tenant
-   * resolution at all.
-   *
-   * For tenant-prefixed routes (`/:tenant/...`), the path tenant is the
-   * canonical source (per spec: "provided as a path parameter"). If the
-   * request body or query string also carries a tenant that differs, a warning
-   * is logged and the path tenant wins.
-   *
-   * The resolved tenant is written to:
-   * - `req.body.tenant` for POST / PUT / DELETE requests that may carry a JSON body
-   * - `req.query.tenant` for GET requests that use query parameters
-   *
-   * Non-tenant-prefixed routes pass through unchanged.
+   * Resolves tenant from the URL path parameter and normalizes it onto
+   * `req.body.tenant` and `req.query.tenant`. The path tenant is the
+   * canonical source — if the body or query also carries a tenant that
+   * differs, a warning is logged and the path tenant wins.
    */
   const tenantMiddleware = (req: Request, _res: Response, next: () => void): void => {
     const pathTenant = req.params.tenant as string | undefined;
@@ -380,7 +262,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       return;
     }
 
-    // Detect conflict with body tenant (POST / PUT / DELETE with JSON body)
     const bodyTenant = req.body?.tenant as string | undefined;
     if (bodyTenant && bodyTenant !== pathTenant) {
       console.warn(
@@ -389,7 +270,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       );
     }
 
-    // Detect conflict with query tenant (GET)
     const queryTenant = req.query?.tenant as string | undefined;
     if (queryTenant && queryTenant !== pathTenant) {
       console.warn(
@@ -398,8 +278,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       );
     }
 
-    // Normalize: write path tenant into both body and query so handlers can
-    // read it from whichever source they naturally consume.
     if (req.body) {
       req.body.tenant = pathTenant;
     }
@@ -409,9 +287,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   };
 
   /**
-   * Helper to register routes with and without optional tenant prefix.
-   * Tenant-prefixed routes get `tenantMiddleware` applied automatically,
-   * so individual handlers never need to resolve tenant themselves.
+   * Registers a route both with and without an optional `/:tenant` prefix.
+   * Tenant-prefixed routes get `tenantMiddleware` automatically.
    */
   const registerRoute = (
     method: 'get' | 'post' | 'delete' | 'put',
@@ -422,14 +299,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     router[method](`/:tenant${path}`, tenantMiddleware, asyncHandler(handler));
   };
 
-  /**
-   * GET /extendedAgentCard
-   *
-   * Retrieves the authenticated extended agent card.
-   *
-   * @returns 200 OK with agent card
-   * @returns 500 Internal Server Error on failure
-   */
+  // GET /extendedAgentCard
   registerRoute('get', '/extendedAgentCard', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(
@@ -439,17 +309,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
   });
 
-  /**
-   * POST /message:send
-   *
-   * Sends a message to the agent synchronously.
-   * Returns either a Message (for immediate responses) or a Task (for async processing).
-   * Note: Colon is escaped in route definition for Express compatibility.
-   *
-   * @param req.body - MessageSendParams (accepts both snake_case and camelCase)
-   * @returns 201 Created with RestMessage or RestTask
-   * @returns 400 Bad Request if message is invalid
-   */
+  // POST /message:send (colon escaped for Express).
   registerRoute('post', '/message\\:send', async (req, res) => {
     const context = await buildContext(req);
     const params = SendMessageRequest.fromJSON(req.body ?? {});
@@ -464,18 +324,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  /**
-   * POST /message:stream
-   *
-   * Sends a message to the agent with streaming response.
-   * Returns a Server-Sent Events (SSE) stream of updates.
-   * Note: Colon is escaped in route definition for Express compatibility.
-   *
-   * @param req.body - MessageSendParams (accepts both snake_case and camelCase)
-   * @returns 200 OK with SSE stream of messages, tasks, and status updates
-   * @returns 400 Bad Request if message is invalid
-   * @returns 501 Not Implemented if streaming not supported
-   */
+  // POST /message:stream (SSE).
   registerRoute('post', '/message\\:stream', async (req, res) => {
     const context = await buildContext(req);
     const params = SendMessageRequest.fromJSON(req.body ?? {});
@@ -483,17 +332,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     await sendStreamResponse(res, stream, context);
   });
 
-  /**
-   * GET /tasks/:taskId
-   *
-   * Retrieves the current status and details of a task.
-   *
-   * @param req.params.taskId - Task identifier
-   * @param req.query.historyLength - Optional number of history messages to include
-   * @returns 200 OK with RestTask
-   * @returns 400 Bad Request if historyLength is invalid
-   * @returns 404 Not Found if task doesn't exist
-   */
+  // GET /tasks/:taskId
   registerRoute('get', '/tasks/:taskId', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getTask(
@@ -505,17 +344,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
 
-  /**
-   * POST /tasks/:taskId:cancel
-   *
-   * Attempts to cancel an ongoing task.
-   * The task may not be immediately canceled depending on its current state.
-   *
-   * @param req.params.taskId - Task identifier
-   * @returns 200 OK with RestTask (task in its post-cancel state)
-   * @returns 404 Not Found if task doesn't exist
-   * @returns 400 Bad Request if task cannot be canceled
-   */
+  // POST /tasks/:taskId:cancel
   registerRoute('post', '/tasks/:taskId\\:cancel', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.cancelTask(
@@ -526,31 +355,14 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
 
-  /**
-   * GET /tasks
-   *
-   * Retrieves a list of tasks with optional filtering and pagination capabilities.
-   *
-   * @returns 200 OK with ListTasksResponse
-   * @returns 400 Bad Request if filter or pageSize is invalid
-   */
+  // GET /tasks
   registerRoute('get', '/tasks', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTasks(req.query, context);
     sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
   });
 
-  /**
-   * POST /tasks/:taskId:subscribe
-   *
-   * Resubscribes to an existing task's updates via Server-Sent Events (SSE).
-   * Useful for reconnecting to long-running tasks or receiving missed updates.
-   *
-   * @param req.params.taskId - Task identifier
-   * @returns 200 OK with SSE stream of task status and artifact updates
-   * @returns 404 Not Found if task doesn't exist
-   * @returns 501 Not Implemented if streaming not supported
-   */
+  // POST /tasks/:taskId:subscribe (SSE).
   registerRoute('post', '/tasks/:taskId\\:subscribe', async (req, res) => {
     const context = await buildContext(req);
     const stream = await restTransportHandler.resubscribe(
@@ -561,17 +373,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     await sendStreamResponse(res, stream, context);
   });
 
-  /**
-   * POST /tasks/:taskId/pushNotificationConfigs
-   *
-   * Creates a push notification configuration for a task.
-   * The agent will send task updates to the configured webhook URL.
-   *
-   * @param req.params.taskId - Task identifier
-   * @param req.body - Push notification configuration (snake_case format)
-   * @returns 201 Created with TaskPushNotificationConfig
-   * @returns 501 Not Implemented if push notifications not supported
-   */
+  // POST /tasks/:taskId/pushNotificationConfigs
   registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
     const params = TaskPushNotificationConfig.fromJSON(req.body ?? {});
@@ -585,15 +387,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  /**
-   * GET /tasks/:taskId/pushNotificationConfigs
-   *
-   * Lists all push notification configurations for a task.
-   *
-   * @param req.params.taskId - Task identifier
-   * @returns 200 OK with array of TaskPushNotificationConfig
-   * @returns 404 Not Found if task doesn't exist
-   */
+  // GET /tasks/:taskId/pushNotificationConfigs
   registerRoute('get', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTaskPushNotificationConfigs(
@@ -610,16 +404,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  /**
-   * GET /tasks/:taskId/pushNotificationConfigs/:configId
-   *
-   * Retrieves a specific push notification configuration.
-   *
-   * @param req.params.taskId - Task identifier
-   * @param req.params.configId - Push notification configuration identifier
-   * @returns 200 OK with TaskPushNotificationConfig
-   * @returns 404 Not Found if task or config doesn't exist
-   */
+  // GET /tasks/:taskId/pushNotificationConfigs/:configId
   registerRoute('get', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getTaskPushNotificationConfig(
@@ -637,16 +422,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     );
   });
 
-  /**
-   * DELETE /tasks/:taskId/pushNotificationConfigs/:configId
-   *
-   * Deletes a push notification configuration.
-   *
-   * @param req.params.taskId - Task identifier
-   * @param req.params.configId - Push notification configuration identifier
-   * @returns 204 No Content on success
-   * @returns 404 Not Found if task or config doesn't exist
-   */
+  // DELETE /tasks/:taskId/pushNotificationConfigs/:configId
   registerRoute('delete', '/tasks/:taskId/pushNotificationConfigs/:configId', async (req, res) => {
     const context = await buildContext(req);
     await restTransportHandler.deleteTaskPushNotificationConfig(

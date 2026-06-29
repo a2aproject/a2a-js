@@ -216,8 +216,8 @@ describe('ResultManager.processEvent("task")', () => {
     const rm = new ResultManager(store, context);
     rm.setContext(createMessage('user-2', 'next'));
 
-    // Executor explicitly publishes a history list; this is authoritative
-    // per §3.7, so we should NOT keep the persisted history.
+    // Executor explicitly publishes a history list; this is
+    // authoritative, so we should NOT keep the persisted history.
     const turn2Task = createTask('task-replace-hist', 'ctx-rh', {
       history: [createMessage('fresh-1', 'agent rewrote history', Role.ROLE_AGENT)],
     });

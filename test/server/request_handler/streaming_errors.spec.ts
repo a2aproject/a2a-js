@@ -19,28 +19,9 @@ import {
 import { ServerCallContext } from '../../../src/server/context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
-/**
- * Coverage for the streaming error path in
- * {@link DefaultRequestHandler._runStreamExecutor}.
- *
- * Two scenarios are exercised, mirroring the asymmetry called out in
- * PR 2:
- *
- *   1. Executor throws BEFORE publishing any Task event. Previously
- *      `_runStreamExecutor` silently returned from its `.catch` block
- *      after seeing `resultManager.getCurrentTask()` is undefined,
- *      leaving the SSE consumer with an empty stream and no error
- *      indication. With the fix it now synthesizes BOTH a Task event
- *      (so the stream pattern transitions into TASK_LIFECYCLE per
- *      §3.1.2) AND a statusUpdate(FAILED), using `requestContext.taskId`
- *      as the synthetic Task id.
- *
- *   2. Executor publishes a Task event, then throws. This was already
- *      handled before the fix (only a synthetic statusUpdate(FAILED) is
- *      published; a fresh Task event would violate the §3.1.2 ordering
- *      enforced by `_advanceStreamPattern`). Pinned here as a regression
- *      guard so future refactors don't accidentally re-emit a Task.
- */
+// Streaming error synthesis: if the executor throws before a Task
+// event, _runStreamExecutor synthesizes Task + statusUpdate(FAILED).
+// If it throws after, only statusUpdate(FAILED) (no fresh Task).
 describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)', () => {
   let handler: DefaultRequestHandler;
   let taskStore: TaskStore;
@@ -354,9 +335,8 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     // returns is only invoked inside the `.catch` block. On the
     // success path the `.catch` is skipped, so the listener leaks on
     // the bus — and because the bus is kept alive across
-    // INPUT_REQUIRED / AUTH_REQUIRED turns (§3.4.3, §7.6.1), every
-    // follow-up `sendMessageStream` on the same task adds another
-    // listener.
+    // INPUT_REQUIRED / AUTH_REQUIRED turns, every follow-up
+    // `sendMessageStream` on the same task adds another listener.
     //
     // Strategy: drive several successful INPUT_REQUIRED turns on the
     // same task (so the bus stays alive across turns) and read the
@@ -368,8 +348,8 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     const contextId = 'leak-context-1';
 
     // Pre-create the task in the store so the handler binds each
-    // follow-up `message/send` to this taskId (per §3.4.3) and finds
-    // the bus we install below.
+    // follow-up `message/send` to this taskId and finds the bus we
+    // install below.
     await taskStore.save(
       {
         id: taskId,
@@ -461,7 +441,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       await new Promise<void>((resolve) => setImmediate(resolve));
       await new Promise<void>((resolve) => setImmediate(resolve));
 
-      // Bus must still be alive at INPUT_REQUIRED per §3.4.3.
+      // Bus must still be alive at INPUT_REQUIRED.
       expect(localBusManager.getByTaskId(taskId)).toBe(bus);
       sizesAfterTurns.push(eventListenerCount());
     };

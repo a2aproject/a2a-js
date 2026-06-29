@@ -91,11 +91,9 @@ describe('agentCardHandler', () => {
     it('should return 304 Not Modified when If-None-Match matches ETag', async () => {
       const app = createApp();
 
-      // First request to get the ETag
       const response1 = await request(app).get('/.well-known/agent-card.json').expect(200);
       const etag = response1.headers['etag'];
 
-      // Second request with If-None-Match
       const response2 = await request(app)
         .get('/.well-known/agent-card.json')
         .set('If-None-Match', etag)

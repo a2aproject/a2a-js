@@ -6,15 +6,8 @@ import { DefaultExecutionEventBusManager } from '../../../src/server/events/exec
 import { ServerCallContext } from '../../../src/server/context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
-/**
- * Focused coverage for the §3.3.1 idempotency carve-out in
- * {@link DefaultRequestHandler.cancelTask}: "Cancel Task operations
- * are idempotent — multiple cancellation requests have the same effect."
- *
- * The rest of the cancel contract (terminal-state rejection, unknown
- * task, drain-then-return) is already covered in
- * `default_request_handler.spec.ts`.
- */
+// Cancellation idempotency: multiple cancellation requests have the same effect.
+// Other cancel contract coverage lives in default_request_handler.spec.ts.
 describe('DefaultRequestHandler.cancelTask idempotency (§3.3.1)', () => {
   let handler: DefaultRequestHandler;
   let taskStore: TaskStore;
@@ -77,9 +70,7 @@ describe('DefaultRequestHandler.cancelTask idempotency (§3.3.1)', () => {
   });
 
   it('returns the snapshot (no throw) when canceling an already-canceled task', async () => {
-    // The user retries cancel after the first one succeeded (or two
-    // clients raced the same cancel). Per §3.3.1 the second call MUST
-    // be idempotent — return the snapshot, not TaskNotCancelableError.
+    // A second cancel returns the snapshot, not TaskNotCancelableError.
     const taskId = 'task-double-cancel';
     const persisted = makeTask(taskId, TaskState.TASK_STATE_CANCELED);
     await taskStore.save(persisted, serverContext);
@@ -88,8 +79,7 @@ describe('DefaultRequestHandler.cancelTask idempotency (§3.3.1)', () => {
 
     expect(result.id).toBe(taskId);
     expect(result.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
-    // The executor must not be re-signaled for a task that's already
-    // canceled — idempotency means a no-op, not a re-issue.
+    // Idempotency is a no-op — the executor must not be re-signaled.
     expect(mockExecutor.cancelTask).not.toHaveBeenCalled();
   });
 });

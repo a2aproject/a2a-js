@@ -13,37 +13,28 @@ import {
 } from './push_notification_serializer.js';
 
 export interface DefaultPushNotificationSenderOptions {
-  /**
-   * Timeout in milliseconds for the abort controller. Defaults to 5000ms.
-   */
+  /** Timeout in milliseconds for the abort controller. Defaults to 5000ms. */
   timeout?: number;
   /**
-   * Custom header name for the legacy token. Defaults to 'X-A2A-Notification-Token'.
-   * Used only when `pushConfig.token` is set and `pushConfig.authentication` is not.
-   * @deprecated Use `pushConfig.authentication` with `AuthenticationInfo` instead.
+   * Custom header name for the legacy token (defaults to
+   * `X-A2A-Notification-Token`). Used only when `pushConfig.token` is set
+   * and `pushConfig.authentication` is not.
+   * @deprecated Use `pushConfig.authentication` with `AuthenticationInfo`.
    */
   tokenHeaderName?: string;
   /**
-   * Per-wire-version push-notification serializers. Keys are A2A wire
-   * versions ({@link ProtocolVersion.V1_0} = `'1.0'`,
-   * {@link ProtocolVersion.V0_3} = `'0.3'`); values are the
-   * {@link PushNotificationSerializer} implementations that produce the
-   * HTTP body and content type for notifications going out to webhooks
-   * registered over that wire version.
-   *
-   * The sender always registers a built-in `'1.0'` serializer
+   * Per-wire-version push-notification serializers. The sender always
+   * registers a built-in `'1.0'` serializer
    * ({@link V1PushNotificationSerializer}) at construction time; entries
    * supplied here override that default and add support for additional
    * versions (e.g. legacy v0.3 via the compat layer's
    * `V03PushNotificationSerializer`).
    *
    * When a stored config carries a wire version with no registered
-   * serializer, the sender logs a warning and falls back to the `'1.0'`
-   * serializer for that dispatch.
+   * serializer, the sender logs a warning and falls back to `'1.0'`.
    *
-   * The typed key set (`ProtocolVersion`) is a developer affordance; the
-   * underlying registry accepts any string at runtime to remain forward
-   * compatible with future or custom wire versions.
+   * The typed key set is a developer affordance; the underlying registry
+   * accepts any string at runtime.
    */
   serializers?: Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
 }
@@ -54,8 +45,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   private readonly options: Required<Omit<DefaultPushNotificationSenderOptions, 'serializers'>>;
   private readonly serializers: Map<string, PushNotificationSerializer>;
   private readonly fallbackSerializer: PushNotificationSerializer;
-  // Track wire versions we've already warned about (per sender instance) to
-  // avoid log spam when many notifications target the same unknown version.
+  // Avoid log spam when many notifications target the same unknown version.
   private readonly warnedMissingSerializers: Set<string> = new Set();
 
   constructor(
@@ -69,10 +59,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       tokenHeaderName: options.tokenHeaderName ?? 'X-A2A-Notification-Token',
     };
 
-    // Seed the registry with the canonical v1.0 serializer, then overlay
-    // user-supplied entries. User entries with key '1.0' override the
-    // default, which is intentional (callers may want a custom v1.0
-    // serializer for testing or alternative encodings).
+    // Seed with the built-in v1.0 serializer, then overlay user-supplied
+    // entries. User entries with key '1.0' override the default
+    // (intentional — callers may want a custom v1.0 encoding).
     const builtinV1 = new V1PushNotificationSerializer();
     this.serializers = new Map<string, PushNotificationSerializer>([
       [ProtocolVersion.V1_0, builtinV1],
@@ -84,19 +73,15 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         }
       }
     }
-    // Cache the v1.0 serializer for unknown-version fallback. We resolve
-    // this from the registry (not the local `builtinV1`) so a user who
-    // overrode '1.0' has their custom serializer used for fallback too.
+    // Resolve from the registry (not `builtinV1`) so a user who overrode
+    // '1.0' has their custom serializer used for fallback too.
     this.fallbackSerializer = this.serializers.get(ProtocolVersion.V1_0) ?? builtinV1;
   }
 
   async send(streamResponse: StreamResponse, context: ServerCallContext): Promise<void> {
     const taskId = this._getTaskId(streamResponse);
-    // Stand-alone Messages (the message-only stream pattern in §3.1.2 with
-    // no task association) cannot have a registered push config — skip the
-    // store round-trip. This also keeps the dispatch silent when the
-    // request handler forwards a bare Message event for which no task
-    // exists.
+    // Stand-alone messages with no task association can't have a
+    // registered push config — skip the store round-trip.
     if (!taskId) {
       return;
     }
@@ -107,9 +92,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     }
 
     const lastPromise = this.notificationChain.get(taskId) ?? Promise.resolve();
-    // Chain promises to ensure notifications for the same task are sent sequentially.
-    // Once the promise is resolved, the Garbage Collector will clean it up if there are no other references to it.
-    // This will prevent memory to linearly grow with the number of notifications sent.
+    // Chain promises so notifications for the same task are sent
+    // sequentially; once resolved the GC can clean them up so memory
+    // doesn't grow linearly with the number of notifications sent.
     const newPromise = lastPromise
       .catch(() => {})
       .then(async () => {
@@ -128,7 +113,6 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     this.notificationChain.set(taskId, newPromise);
 
     return newPromise.finally(() => {
-      // Clean up the chain if it's the last notification
       if (this.notificationChain.get(taskId) === newPromise) {
         this.notificationChain.delete(taskId);
       }
@@ -137,14 +121,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
   /**
    * Returns the task id associated with a {@link StreamResponse}.
-   *
-   * Per spec §4.3.3 all four payload variants (`task`, `message`,
-   * `statusUpdate`, `artifactUpdate`) are valid push-notification payloads.
-   * For task / status / artifact events the task id is always present.
-   * For message events the task id is present iff the message is bound to
-   * an existing task (§3.4.2); stand-alone messages from the message-only
-   * stream pattern carry an empty `taskId`, in which case there can be no
-   * registered push config and the sender simply skips dispatch.
+   * Returns an empty string for stand-alone messages with no task
+   * association; the sender skips dispatch in that case.
    */
   private _getTaskId(streamResponse: StreamResponse): string {
     const payload = streamResponse.payload;
@@ -159,8 +137,6 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       case 'message':
         return payload.value.taskId;
       default: {
-        // Exhaustive check: if a new $case is added to the StreamResponse union
-        // without updating this switch, TypeScript will report a compile error here.
         const _exhaustive: never = payload;
         throw new Error(`Unknown payload case: ${(_exhaustive as { $case: string }).$case}`);
       }
@@ -169,17 +145,12 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
   /**
    * Resolves stored configs from the {@link PushNotificationStore},
-   * preferring the wire-version-aware {@link PushNotificationStore.loadWithMetadata}
-   * when available.
+   * preferring the wire-version-aware
+   * {@link PushNotificationStore.loadWithMetadata} when available.
    *
    * Stores that only implement the canonical {@link PushNotificationStore.load}
-   * method are silently lifted into the wrapped shape by tagging every
-   * entry with the wire version of the request *triggering* this dispatch
-   * ({@link ServerCallContext.requestedVersion}). This keeps pure-v1.0
-   * deployments with custom stores warning-free — no implicit dependency
-   * on a `'0.3'` serializer they never opted into. Spec §3.6.2 ('0.3' on
-   * absent header) applies as the final defensive default when the
-   * triggering context itself carries no version. See
+   * are silently lifted into the wrapped shape by tagging every entry
+   * with the wire version of the *triggering* request. See
    * `src/compat/v0_3/README.md` for the implication on v1.0 deployments
    * with v0.3 compat opted in.
    */
@@ -196,13 +167,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   }
 
   /**
-   * Resolves the serializer registered for the given wire version.
-   *
-   * Falls back to the v1.0 serializer (logging a warning at most once per
-   * unknown version per sender instance) if no entry is registered. The
-   * fallback keeps push delivery best-effort even when a custom compat
-   * layer registers webhooks under a wire version the sender wasn't
-   * configured for.
+   * Resolves the serializer registered for the given wire version,
+   * falling back to v1.0 (with a one-time warning) when no entry is
+   * registered.
    */
   private _resolveSerializer(wireVersion: string): PushNotificationSerializer {
     const serializer = this.serializers.get(wireVersion);
@@ -221,15 +188,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   }
 
   /**
-   * Builds the authentication headers for a push notification request.
-   *
-   * Per §4.3.3, the agent MUST include auth credentials per the push
-   * notification config's `authentication` field when sending notifications.
-   *
-   * Priority:
-   * 1. `pushConfig.authentication` (AuthenticationInfo with scheme + credentials)
-   *    → sets `Authorization: <scheme> <credentials>` per RFC 9110 §11.4
-   * 2. `pushConfig.token` (legacy) → sets the custom token header (deprecated)
+   * Builds the auth headers for a push notification request. Priority:
+   * `pushConfig.authentication` (scheme + credentials) → `Authorization`
+   * header; otherwise `pushConfig.token` → legacy token header.
    */
   private _buildAuthHeaders(pushConfig: TaskPushNotificationConfig): Record<string, string> {
     const headers: Record<string, string> = {};
@@ -252,7 +213,6 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     const { config: pushConfig, wireVersion } = storedConfig;
     const url = pushConfig.url;
     const controller = new AbortController();
-    // Abort the request if it takes longer than the configured timeout.
     const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
     try {

@@ -1,43 +1,18 @@
 /**
- * v0.3 gRPC client transport (compat layer).
+ * v0.3 gRPC client transport. Implements the v1.0 `Transport` interface
+ * but speaks the v0.3 gRPC wire format. Picked automatically by the
+ * v1.0 `GrpcTransportFactory` when `legacyCompat: { enabled: true }`
+ * matches a legacy interface.
  *
- * Implements the v1.0 {@link Transport} interface but speaks the v0.3 gRPC
- * wire format. Each method translates the v1.0 proto request to the v0.3
- * JSON shape (via the `toCompat*Request` helpers in
- * `../../../translate/requests.js`) and then to the v0.3 protobuf wire
- * shape (via {@link ToProto} from `../../../types/converters/to_proto.js`),
- * issues the gRPC call against the v0.3 service descriptor, then runs the
- * reverse chain on the response: v0.3 pb -> v0.3 JSON (via
- * {@link FromProto}) -> v1.0 proto (via the `toCore*` helpers).
- *
- * Shares `protocolName === 'GRPC'` with the v1.0 transport. The core-side
- * {@link GrpcTransportFactory} inspects the matched
- * `AgentInterface.protocolVersion` when `legacyCompat: { enabled: true }`
- * is set and instantiates this class when the version falls in
- * `[0.3, 1.0)`, so installing the default `GrpcTransportFactory` with the
- * flag transparently covers both protocol versions.
- *
- * v0.3 gRPC wire-format differences from v1.0:
- *   - Method names differ: `getAgentCard` (v0.3) vs `getExtendedAgentCard`
- *     (v1.0); `taskSubscription` (v0.3) vs `subscribeToTask` (v1.0);
- *     `listTaskPushNotificationConfig` (v0.3, singular) vs
- *     `listTaskPushNotificationConfigs` (v1.0, plural).
- *   - Resource identifiers travel as URI-style names
- *     (`tasks/{id}`, `tasks/{id}/pushNotificationConfigs/{cfg}`) instead of
- *     the v1.0 dedicated request fields.
- *   - `CreateTaskPushNotificationConfigRequest` wraps the config under
- *     `{ parent, configId, config }` instead of carrying the
- *     `TaskPushNotificationConfig` as the request body directly.
- *   - The v0.3 server response payload `SendMessageResponse.payload.$case`
- *     uses `msg` (not `message`).
- *   - `listTasks` has no v0.3 equivalent at all — calling it throws
- *     {@link UnsupportedOperationError} synchronously without issuing any
- *     RPC.
- *   - Error mapping uses the §10.6 enriched error model: it parses
- *     `google.rpc.ErrorInfo` from `grpc-status-details-bin` if present
- *     (the v0.3 `legacyGrpcService` in this SDK emits it), and otherwise
- *     returns a generic `Error` preserving the original gRPC code and
- *     details.
+ * v0.3 differences worth noting:
+ *  - Method names: `getAgentCard` / `taskSubscription` /
+ *    `listTaskPushNotificationConfig` (singular).
+ *  - Resource ids travel as URI names (`tasks/{id}`, …).
+ *  - `SendMessageResponse.payload.$case` uses `msg`, not `message`.
+ *  - `listTasks` throws synchronously — no v0.3 equivalent exists.
+ *  - Errors are decoded from `grpc-status-details-bin` when present
+ *    (this SDK's `legacyGrpcService` emits ErrorInfo), otherwise a
+ *    generic `Error` preserving the gRPC code and details.
  */
 
 import * as grpc from '@grpc/grpc-js';
@@ -127,20 +102,10 @@ export interface LegacyGrpcTransportOptions {
   grpcCallOptions?: Partial<grpc.CallOptions>;
 }
 
-/**
- * v0.3 gRPC client transport. See the file-level comment for the overall
- * design.
- */
 export class LegacyGrpcTransport implements Transport {
   private readonly grpcCallOptions?: Partial<grpc.CallOptions>;
   private readonly grpcClient: A2AServiceClient;
-  /**
-   * Monotonic counter for synthetic JSON-RPC request IDs used by the
-   * `toCompat*Request` translators. The values never appear on the v0.3
-   * gRPC wire (gRPC carries no envelope); we use the counter for parity
-   * with the v0.3 JSON-RPC transport in case any translator becomes
-   * id-sensitive in the future.
-   */
+  // Synthetic IDs for the `toCompat*Request` translators. Never on the wire.
   private requestIdCounter: number = 1;
 
   constructor(options: LegacyGrpcTransportOptions) {
@@ -164,7 +129,7 @@ export class LegacyGrpcTransport implements Transport {
     options?: RequestOptions
   ): Promise<V1AgentCard> {
     const pbReq = ToProto.getAgentCardRequest();
-    // The v0.3 RPC is `GetAgentCard` (no params).
+    // v0.3's `GetAgentCard` takes no params.
     void params;
     return this._sendGrpcRequest<GetAgentCardRequest, AgentCard, V1AgentCard>(
       'getAgentCard',
@@ -234,10 +199,8 @@ export class LegacyGrpcTransport implements Transport {
       params,
       this.requestIdCounter++
     ).params;
-    // `legacyParams` may be either `GetTaskPushNotificationConfigParams`
-    // (with `pushNotificationConfigId`) or `TaskIdParams1` (bare `id`).
-    // `ToProto.getTaskPushNotificationConfigParams` accepts the former
-    // and treats a missing `pushNotificationConfigId` as `''`.
+    // `legacyParams` may carry `pushNotificationConfigId` or just `id`.
+    // The proto helper treats a missing config id as `''`.
     const pbReq = ToProto.getTaskPushNotificationConfigParams({
       id: legacyParams.id,
       pushNotificationConfigId:
@@ -327,11 +290,7 @@ export class LegacyGrpcTransport implements Transport {
     );
   }
 
-  /**
-   * `tasks/list` has no equivalent in v0.3 gRPC (the v0.3 proto has no
-   * `ListTasks` RPC at all). Throws synchronously without issuing any
-   * RPC, consistent with the v0.3 JSON-RPC and REST compat transports.
-   */
+  /** No `ListTasks` RPC exists in v0.3. Throws synchronously. */
   async listTasks(
     _params: V1ListTasksRequest,
     _options?: RequestOptions
@@ -352,10 +311,6 @@ export class LegacyGrpcTransport implements Transport {
       this.grpcClient.taskSubscription.bind(this.grpcClient)
     );
   }
-
-  // ==========================================================================
-  // Internals
-  // ==========================================================================
 
   private async _sendGrpcRequest<TReq, TRes, TResponse>(
     method: string,
@@ -446,11 +401,6 @@ export class LegacyGrpcTransport implements Transport {
     return metadata;
   }
 
-  /**
-   * Parses the `result` of a v0.3 `sendMessage` response (post-FromProto)
-   * into a v1.0 `SendMessageResult`. v0.3 uses the `kind: 'task'|'message'`
-   * discriminator we pick on.
-   */
   private static _parseSendMessageResult(response: SendMessageResponse): SendMessageResult {
     const result = FromProto.sendMessageResult(response);
     if (result.kind === 'task') {
@@ -459,13 +409,7 @@ export class LegacyGrpcTransport implements Transport {
     return toCoreMessage(result);
   }
 
-  /**
-   * Translates a v0.3 pb `StreamResponse` into a v1.0 proto
-   * `StreamResponse` by going through the v0.3 JSON shape first
-   * (`FromProto.messageStreamResult`) and then through
-   * `toCoreStreamResponse` via a synthetic JSON-RPC success envelope (the
-   * translator was authored for the JSON-RPC path).
-   */
+  /** v0.3 pb → v0.3 JSON → v1.0 proto via a synthetic JSON-RPC envelope. */
   private static _toCoreStreamResponse(pb: StreamResponse): V1StreamResponse {
     const result = FromProto.messageStreamResult(pb);
     const envelope: legacy.SendStreamingMessageSuccessResponse = {
@@ -477,16 +421,9 @@ export class LegacyGrpcTransport implements Transport {
   }
 
   /**
-   * Maps a gRPC `ServiceError` to a typed SDK error.
-   *
-   * Uses the §10.6 enriched error model: parses `google.rpc.ErrorInfo`
-   * from `grpc-status-details-bin` metadata and looks the `reason` code
-   * up in {@link A2A_REASON_TO_ERROR_CLASS} to produce a typed SDK error.
-   * The v0.3 `legacyGrpcService` (in this SDK) emits ErrorInfo, so
-   * v0.3-on-v0.3 SDK paths still get typed errors. For servers that
-   * don't include ErrorInfo (e.g. third-party non-A2A v0.3 servers),
-   * returns a generic `Error` preserving the original gRPC code and
-   * details.
+   * Decodes `google.rpc.ErrorInfo` from `grpc-status-details-bin` when
+   * present (this SDK's `legacyGrpcService` emits it); otherwise returns
+   * a generic `Error` preserving the gRPC code and details.
    */
   private static _mapToError(error: grpc.ServiceError, method?: string): Error {
     const fromErrorInfo = LegacyGrpcTransport._mapFromErrorInfo(error);

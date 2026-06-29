@@ -31,32 +31,19 @@ export class ExecutionEventQueue {
   };
 
   /**
-   * Provides an async generator that yields events from the event bus.
-   * Stops when a Message event is received or a TaskStatusUpdateEvent with final=true is received.
+   * Async generator yielding events from the bus. Terminates on Message,
+   * terminal Task status, or INPUT_REQUIRED. AUTH_REQUIRED is deliberately
+   * NOT in the stop set: the executor resumes publishing on the same bus
+   * after the out-of-band credential injection, so the queue must stay
+   * drainable. Blocking callers return a snapshot at AUTH_REQUIRED via a
+   * separate code path and a background consumer keeps draining until a
+   * terminal state is reached.
    */
   public async *events(): AsyncGenerator<AgentExecutionEvent, void, undefined> {
     while (!this.stopped || this.eventQueue.length > 0) {
       if (this.eventQueue.length > 0) {
         const event = this.eventQueue.shift()!;
         yield event;
-        // A consumer's event loop terminates on:
-        //   * a Message (the only event a stateless agent ever produces);
-        //   * a terminal Task status (COMPLETED / FAILED / CANCELED /
-        //     REJECTED) — the task can never produce further events;
-        //   * INPUT_REQUIRED — the executor has returned and is
-        //     awaiting a fresh client message, so blocking consumers
-        //     must stop iterating; the underlying bus stays alive in
-        //     `DefaultRequestHandler` so resubscribers and follow-up
-        //     sends can still attach.
-        //
-        // AUTH_REQUIRED is deliberately NOT in the stop set per spec
-        // §7.6.1: the agent is expected to keep publishing on the same
-        // bus immediately after the out-of-band credential injection,
-        // so the queue must stay drainable. A blocking caller in
-        // `DefaultRequestHandler` returns a snapshot at the
-        // AUTH_REQUIRED status update via a separate code path and a
-        // background consumer continues draining this queue until a
-        // terminal state is reached.
         if (
           event.kind === 'message' ||
           (event.kind === 'statusUpdate' &&
@@ -75,9 +62,6 @@ export class ExecutionEventQueue {
     }
   }
 
-  /**
-   * Stops the event queue from processing further events.
-   */
   public stop(): void {
     this.stopped = true;
     if (this.resolvePromise) {

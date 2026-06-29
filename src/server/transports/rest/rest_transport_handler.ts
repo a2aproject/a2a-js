@@ -1,8 +1,6 @@
 /**
- * HTTP+JSON (REST) Transport Handler
- *
- * Accepts both snake_case (REST) and camelCase (internal) input.
- * Returns camelCase (internal types).
+ * HTTP+JSON (REST) transport handler. Accepts both snake_case (REST)
+ * and camelCase (internal) input; returns camelCase internal types.
  */
 
 import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js';
@@ -40,13 +38,7 @@ import {
   type RestErrorBody,
 } from '../../../errors.js';
 
-// ============================================================================
-// HTTP Status Codes and Error Mapping
-// ============================================================================
-
-/**
- * HTTP status codes used in REST responses.
- */
+/** HTTP status codes used in REST responses. */
 export const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,
@@ -60,12 +52,7 @@ export const HTTP_STATUS = {
   NOT_IMPLEMENTED: 501,
 } as const;
 
-/**
- * Maps error instances to appropriate HTTP status codes per §5.4.
- *
- * @param error - The actual error instance
- * @returns Corresponding HTTP status code
- */
+/** Maps an error instance to its HTTP status code. */
 export function mapErrorToStatus(error: unknown): number {
   if (error instanceof TaskNotFoundError) return HTTP_STATUS.NOT_FOUND;
   if (error instanceof TaskNotCancelableError) return HTTP_STATUS.BAD_REQUEST;
@@ -80,30 +67,9 @@ export function mapErrorToStatus(error: unknown): number {
   return HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 
-// ============================================================================
-// HTTP Error Conversion (google.rpc.Status JSON per §11.6)
-// ============================================================================
-
 /**
- * Converts any Error to a `google.rpc.Status` JSON response body per §11.6.
- *
- * The response structure is:
- * ```json
- * {
- *   "error": {
- *     "code": <HTTP status code>,
- *     "status": "<gRPC status name>",
- *     "message": "<human-readable message>",
- *     "details": [
- *       { "@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "...", "domain": "a2a-protocol.org" }
- *     ]
- *   }
- * }
- * ```
- *
- * @param error - The error to convert
- * @param httpStatus - The HTTP status code for this error
- * @returns `google.rpc.Status` JSON body
+ * Converts an error to a `google.rpc.Status` JSON response body, with
+ * `google.rpc.ErrorInfo` in `details` when the error has a known reason.
  */
 export function toHTTPError(error: unknown, httpStatus: number): RestErrorBody {
   const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
@@ -127,17 +93,10 @@ export function toHTTPError(error: unknown, httpStatus: number): RestErrorBody {
   };
 }
 
-// ============================================================================
-// REST Transport Handler Class
-// ============================================================================
-
 /**
- * Handles REST transport layer, routing requests to A2ARequestHandler.
- * Performs type conversion, validation, and capability checks.
- * Similar to JsonRpcTransportHandler but for HTTP+JSON (REST) protocol.
- *
- * Accepts both snake_case and camelCase inputs.
- * Outputs camelCase for spec compliance.
+ * Handles the REST transport layer, routing requests to an
+ * {@link A2ARequestHandler}. Performs type conversion, validation, and
+ * capability checks.
  */
 export class RestTransportHandler {
   private requestHandler: A2ARequestHandler;
@@ -146,20 +105,10 @@ export class RestTransportHandler {
     this.requestHandler = requestHandler;
   }
 
-  // ==========================================================================
-  // Public API Methods
-  // ==========================================================================
-
-  /**
-   * Gets the agent card (for capability checks).
-   */
   async getAgentCard(): Promise<AgentCard> {
     return this.requestHandler.getAgentCard();
   }
 
-  /**
-   * Gets the authenticated extended agent card.
-   */
   async getAuthenticatedExtendedAgentCard(
     params: GetExtendedAgentCardRequest,
     context: ServerCallContext
@@ -167,9 +116,6 @@ export class RestTransportHandler {
     return this.requestHandler.getAuthenticatedExtendedAgentCard(params, context);
   }
 
-  /**
-   * Validates the message send parameters.
-   */
   private validateSendMessageRequest(params: SendMessageRequest): void {
     if (!params.message) {
       throw new RequestMalformedError('message is required');
@@ -179,9 +125,6 @@ export class RestTransportHandler {
     }
   }
 
-  /**
-   * Sends a message to the agent.
-   */
   async sendMessage(
     params: SendMessageRequest,
     context: ServerCallContext
@@ -190,10 +133,6 @@ export class RestTransportHandler {
     return this.requestHandler.sendMessage(params, context);
   }
 
-  /**
-   * Sends a message with streaming response.
-   * @throws {A2AError} UnsupportedOperation if streaming not supported
-   */
   async sendMessageStream(
     params: SendMessageRequest,
     context: ServerCallContext
@@ -203,10 +142,6 @@ export class RestTransportHandler {
     return this.requestHandler.sendMessageStream(params, context);
   }
 
-  /**
-   * Gets a task by ID.
-   * Validates historyLength parameter if provided.
-   */
   async getTask(
     taskId: string,
     context: ServerCallContext,
@@ -220,17 +155,11 @@ export class RestTransportHandler {
     return this.requestHandler.getTask(params, context);
   }
 
-  /**
-   * Cancels a task.
-   */
   async cancelTask(taskId: string, context: ServerCallContext, tenant?: string): Promise<Task> {
     const params: CancelTaskRequest = { id: taskId, tenant: tenant || '', metadata: {} };
     return this.requestHandler.cancelTask(params, context);
   }
 
-  /**
-   * Lists tasks with filtering and pagination.
-   */
   async listTasks(
     queryParams: Record<string, unknown>,
     context: ServerCallContext
@@ -254,11 +183,6 @@ export class RestTransportHandler {
     return this.requestHandler.listTasks(params, context);
   }
 
-  /**
-   * Resubscribes to task updates.
-   * Returns camelCase stream of task updates.
-   * @throws {A2AError} UnsupportedOperation if streaming not supported
-   */
   async resubscribe(
     taskId: string,
     context: ServerCallContext,
@@ -268,10 +192,6 @@ export class RestTransportHandler {
     return this.requestHandler.resubscribe({ id: taskId, tenant: tenant || '' }, context);
   }
 
-  /**
-   * Sets a push notification configuration.
-   * @throws {A2AError} PushNotificationNotSupported if push notifications not supported
-   */
   async createTaskPushNotificationConfig(
     config: TaskPushNotificationConfig,
     context: ServerCallContext
@@ -280,9 +200,6 @@ export class RestTransportHandler {
     return this.requestHandler.createTaskPushNotificationConfig(config, context);
   }
 
-  /**
-   * Lists all push notification configurations for a task.
-   */
   async listTaskPushNotificationConfigs(
     taskId: string,
     context: ServerCallContext,
@@ -295,9 +212,6 @@ export class RestTransportHandler {
     return result;
   }
 
-  /**
-   * Gets a specific push notification configuration.
-   */
   async getTaskPushNotificationConfig(
     taskId: string,
     configId: string,
@@ -311,9 +225,6 @@ export class RestTransportHandler {
     return config;
   }
 
-  /**
-   * Deletes a push notification configuration.
-   */
   async deleteTaskPushNotificationConfig(
     taskId: string,
     configId: string,
@@ -326,9 +237,6 @@ export class RestTransportHandler {
     );
   }
 
-  /**
-   * Static map of capability to error for missing capabilities.
-   */
   private static readonly CAPABILITY_ERRORS: Record<
     'streaming' | 'pushNotifications',
     () => Error
@@ -337,10 +245,6 @@ export class RestTransportHandler {
     pushNotifications: () => new PushNotificationNotSupportedError(),
   };
 
-  /**
-   * Validates that the agent supports a required capability.
-   * @throws {A2AError} UnsupportedOperation for streaming, PushNotificationNotSupported for push notifications
-   */
   private async requireCapability(capability: 'streaming' | 'pushNotifications'): Promise<void> {
     const agentCard = await this.getAgentCard();
     if (!agentCard.capabilities?.[capability]) {
@@ -348,9 +252,6 @@ export class RestTransportHandler {
     }
   }
 
-  /**
-   * Parses and validates historyLength query parameter.
-   */
   private parseHistoryLength(value: unknown): number {
     if (value === undefined || value === null) {
       throw new RequestMalformedError('historyLength is required');

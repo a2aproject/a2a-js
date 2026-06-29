@@ -1,7 +1,4 @@
-/**
- * gRPC integration for the A2A Server library.
- * This module provides gRPC specific functionality for the v1.0 service.
- */
+/** gRPC integration for the A2A v1.0 service. */
 
 export { grpcService } from './grpc_service.js';
 export type { GrpcServiceOptions } from './grpc_service.js';

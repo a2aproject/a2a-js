@@ -334,13 +334,10 @@ export class GrpcTransport implements Transport {
   }
 
   /**
-   * Maps a gRPC ServiceError to an SDK error class.
-   *
-   * Uses the enriched error model (§10.6): parses `google.rpc.ErrorInfo`
-   * from `grpc-status-details-bin` metadata to precisely identify the A2A
-   * error type via its `reason` code. For servers that do not include
-   * ErrorInfo (e.g., non-A2A gRPC services), returns a generic Error
-   * preserving the original gRPC code and details.
+   * Maps a gRPC `ServiceError` to an SDK error class via
+   * `google.rpc.ErrorInfo` from `grpc-status-details-bin` metadata.
+   * Falls back to a generic `Error` carrying the gRPC code and details
+   * when no ErrorInfo is present.
    */
   private static mapToError(error: grpc.ServiceError, method?: keyof A2AServiceClient): Error {
     const fromErrorInfo = GrpcTransport.mapFromErrorInfo(error);
@@ -357,41 +354,20 @@ export class GrpcTransportFactoryOptions {
   grpcChannelCredentials?: grpc.ChannelCredentials;
   grpcCallOptions?: Partial<grpc.CallOptions>;
   /**
-   * Enables the v0.3 protocol compatibility layer.
+   * Enables the v0.3 protocol compatibility layer. When enabled, the
+   * factory inspects the matched `AgentInterface.protocolVersion`; if
+   * it falls in `[0.3, 1.0)`, the v0.3 `LegacyGrpcTransport` is
+   * instantiated instead of v1.0.
    *
-   * When enabled, the factory inspects the matched
-   * `AgentInterface.protocolVersion` on every `create()` call; if it
-   * falls in `[0.3, 1.0)`, the v0.3 `LegacyGrpcTransport` is
-   * instantiated instead of the v1.0 `GrpcTransport`.
-   *
-   * Default: omitted (treated as disabled). To talk to v0.3 gRPC
-   * agents, the agent card MUST declare a v0.3 `GRPC` interface in
-   * `supportedInterfaces`; see §3.6.2.
-   *
-   * When disabled, the v0.3 compat module is never reached on the
-   * dispatch path and v0.3 agents are not contacted via the compat
-   * transport.
+   * Default: omitted (disabled).
    */
   legacyCompat?: { enabled: boolean };
 }
 
 /**
- * Factory that produces a gRPC `Transport` for the matched agent
- * interface.
- *
- * When the factory is constructed with `legacyCompat: { enabled: true }`,
- * it transparently dispatches between the v1.0 transport
- * (`GrpcTransport`) and the v0.3 compat transport
- * (`LegacyGrpcTransport`) based on the matched
- * `AgentInterface.protocolVersion`: when the matched interface declares
- * `protocolVersion` in `[0.3, 1.0)`, the v0.3 transport is used;
- * otherwise (1.0 / empty / missing), the v1.0 transport is used.
- *
- * When `legacyCompat` is omitted or `{ enabled: false }`, the factory
- * always produces the v1.0 `GrpcTransport` and never consults the
- * matched interface's version. This mirrors the opt-in convention
- * shared with `JsonRpcTransportFactory.legacyCompat` and
- * `RestTransportFactory.legacyCompat`.
+ * Factory producing a gRPC `Transport`. With
+ * `legacyCompat: { enabled: true }` it dispatches between the v1.0 and
+ * v0.3 transports based on `AgentInterface.protocolVersion`.
  */
 export class GrpcTransportFactory implements TransportFactory {
   constructor(private readonly options?: GrpcTransportFactoryOptions) {}

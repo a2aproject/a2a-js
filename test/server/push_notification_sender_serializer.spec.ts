@@ -95,8 +95,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     received = [];
     store = new InMemoryPushNotificationStore();
     const app = express();
-    // Accept both v1.0 and v0.3 content types so the test webhook can decode
-    // either format.
+    // Accept any content type so the webhook can decode either v1.0 or v0.3.
     app.use(express.text({ type: '*/*' }));
     app.post('/notify', (req: Request, res: Response) => {
       const rawBody = typeof req.body === 'string' ? req.body : '';
@@ -241,9 +240,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   });
 
   it('delivers message payloads with task association per §4.3.3', async () => {
-    // Per spec §4.3.3 push notifications accept all four StreamResponse
-    // payload variants. The built-in v1.0 serializer encodes the message as
-    // part of the canonical StreamResponse JSON wrapper.
+    // Push notifications accept all four StreamResponse payload
+    // variants. The built-in v1.0 serializer encodes the message as part
+    // of the canonical StreamResponse JSON wrapper.
     const sender = new DefaultPushNotificationSender(store);
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-msg', ctxV1, makeConfig(`${baseUrl}/notify`));
@@ -256,8 +255,8 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   });
 
   it('silently skips dispatch for stand-alone messages (no task association)', async () => {
-    // Message-only stream pattern (§3.1.2): no taskId means no config can
-    // ever match. Sender returns silently without hitting the store.
+    // Message-only stream pattern: no taskId means no config can ever
+    // match. Sender returns silently without hitting the store.
     const sender = new DefaultPushNotificationSender(store);
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
 
@@ -296,8 +295,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
   it("fallback path: defaults to '0.3' per §3.6.2 when context has no version", async () => {
     // Defensive: a context constructed without requestedVersion (e.g. by a
-    // caller bypassing the transport layer) must still fall back to '0.3'
-    // per spec §3.6.2's absent-header rule.
+    // caller bypassing the transport layer) must still fall back to '0.3'.
     const customConfig = makeConfig(`${baseUrl}/notify`, { id: 'cfg-defensive' });
     const customStore: PushNotificationStore = {
       save: vi.fn(async () => {}),

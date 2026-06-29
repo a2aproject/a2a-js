@@ -1,6 +1,4 @@
-/**
- * Client entry point for the A2A Server V2 library.
- */
+/** Client entry point for the A2A SDK. */
 
 export * from './auth-handler.js';
 export {

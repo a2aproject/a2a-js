@@ -1,9 +1,6 @@
 /**
- * Utilities for encoding and decoding google.rpc.Status with
- * google.rpc.ErrorInfo in gRPC error metadata per §10.6.
- *
- * Uses the generated protobuf types from google/rpc/status.proto and
- * google/rpc/error_details.proto for encoding/decoding.
+ * Utilities for encoding and decoding `google.rpc.Status` with
+ * `google.rpc.ErrorInfo` in gRPC error metadata.
  */
 
 import * as grpc from '@grpc/grpc-js';
@@ -13,13 +10,9 @@ import { ErrorInfo } from '../../grpc/pb/google/rpc/error_details.js';
 import { Any } from '../../grpc/pb/google/protobuf/any.js';
 
 /**
- * Builds gRPC trailing metadata containing `grpc-status-details-bin`
- * with an encoded `google.rpc.Status` carrying a `google.rpc.ErrorInfo` detail.
- *
- * @param grpcCode - The gRPC status code
- * @param message - The error message
- * @param error - The SDK error instance (used to look up the reason code)
- * @returns gRPC Metadata with the encoded status details, or undefined if no reason mapping exists
+ * Builds gRPC trailing metadata with `grpc-status-details-bin` carrying
+ * a `google.rpc.Status` + `google.rpc.ErrorInfo`. Returns `undefined`
+ * if `error` has no known reason mapping.
  */
 export function buildGrpcErrorMetadata(
   grpcCode: number,
@@ -55,10 +48,7 @@ export function buildGrpcErrorMetadata(
   return metadata;
 }
 
-/**
- * Decodes a `google.rpc.Status` protobuf message from binary.
- * Used by the client to parse `grpc-status-details-bin` metadata.
- */
+/** Decodes a `google.rpc.Status` protobuf message from binary. */
 export function decodeStatus(buffer: Buffer): {
   code: number;
   message: string;
@@ -67,10 +57,7 @@ export function decodeStatus(buffer: Buffer): {
   return Status.decode(new Uint8Array(buffer));
 }
 
-/**
- * Decodes a `google.rpc.ErrorInfo` protobuf message from binary.
- * Used by the client to extract reason and domain from error details.
- */
+/** Decodes a `google.rpc.ErrorInfo` protobuf message from binary. */
 export function decodeErrorInfo(buffer: Buffer): {
   reason: string;
   domain: string;

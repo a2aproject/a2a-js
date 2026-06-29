@@ -1,47 +1,18 @@
 /**
- * v0.3 HTTP+JSON (REST) client transport (compat layer).
+ * v0.3 HTTP+JSON (REST) client transport. Implements the v1.0 `Transport`
+ * interface but speaks the v0.3 REST wire format.
  *
- * Implements the v1.0 {@link Transport} interface but speaks the v0.3 REST
- * wire format. Request bodies are serialized as **proto-JSON** of the v0.3
- * proto types (per `google.api.http` annotations on the v0.3 a2a.proto:
- * the REST surface is the same A2AService methods exposed via Google's
- * HTTP transcoding rules, with `body: "*"` mapping the whole proto-JSON
- * payload onto the HTTP body). Responses are decoded with the matching
- * `fromJSON` and then converted back to the v1.0 proto types via the
- * `FromProto.*` helpers.
+ * Request bodies are proto-JSON of the v0.3 proto types (per the
+ * `google.api.http` annotations with `body: "*"`) — NOT the v0.3
+ * JSON-RPC body shape. The reference SDKs (a2a-python, a2a-go) feed
+ * REST bodies through `json_format` against the proto, so the proto-JSON
+ * shape is the only one they accept.
  *
- * This is intentionally NOT the v0.3 JSON-RPC body shape (with `kind`
- * discriminators on parts and `parts` instead of `content`): the v0.3
- * reference SDKs' REST handlers (a2a-python's `A2ARESTFastAPIApplication`,
- * a2a-go's REST router) feed the body through Google's `json_format`
- * parser against `a2a.v1.SendMessageRequest`, so they only accept the
- * proto-JSON shape.
- *
- * Shares `protocolName === 'HTTP+JSON'` with the v1.0 transport. The
- * core-side {@link RestTransportFactory} inspects the matched
- * `AgentInterface.protocolVersion` and instantiates this class when it
- * falls in `[0.3, 1.0)`, so installing the default `RestTransportFactory`
- * with `legacyCompat: { enabled: true }` transparently covers both
- * protocol versions.
- *
- * v0.3 wire-format differences from v1.0:
- *   - Content-Type / Accept are `application/json` (v0.3 did not introduce
- *     the `application/a2a+json` media type).
- *   - All paths live under `/v1/...` (the canonical v0.3 reference URLs).
- *   - Bodies and responses are proto-JSON of the v0.3 proto types
- *     (different from v1.0's proto-JSON only by the field-name and
- *     message-type set the v0.3 proto exposes).
- *   - Error bodies are bare `{ code, message, data? }` objects with no
- *     outer `{ error: {...} }` wrapper, no `status` field, and no
- *     `details[]` array — `google.rpc.Status` was a v1.0 addition.
- *   - REST SSE events carry only the bare v0.3 stream-result payload
- *     (proto-JSON of `StreamResponse`) with no JSON-RPC envelope.
- *
- * `listTasks` has no equivalent in v0.3 HTTP+JSON (per
- * {@link V1_METHODS_WITHOUT_LEGACY_EQUIVALENT}: the v0.3 REST surface
- * never exposed `tasks/list`). Calling it throws
- * {@link UnsupportedOperationError} synchronously, without issuing any
- * HTTP request.
+ * Wire differences from v1.0: `application/json` (no `application/a2a+json`),
+ * paths under `/v1/...`, bare error bodies (no `google.rpc.Status`), and
+ * REST SSE events carry the bare stream-result payload (no JSON-RPC
+ * envelope). `listTasks` throws synchronously — v0.3 REST never exposed
+ * `tasks/list`.
  */
 
 import {
@@ -104,32 +75,20 @@ export interface LegacyRestTransportOptions {
   fetchImpl?: typeof fetch;
 }
 
-/**
- * v0.3-shaped HTTP error body.
- *
- * Mirrors `LegacyRestErrorBody` on the server side: v0.3 returned errors
- * as bare `{ code, message, data? }` objects (no `details[]` array, no
- * `status` field, no outer `{ error: {...} }` wrapper).
- */
+// v0.3 returned errors as bare `{ code, message, data? }` objects.
 interface LegacyRestErrorBody {
   code: number;
   message: string;
   data?: Record<string, unknown>;
 }
 
-/**
- * v0.3 REST client transport. See the file-level comment for the overall
- * design.
- */
 export class LegacyRestTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   private readonly endpoint: string;
   private requestIdCounter: number = 1;
 
   constructor(options: LegacyRestTransportOptions) {
-    // Match v1.0 RestTransport: strip trailing slashes so callers can pass
-    // either `https://host/api` or `https://host/api/` and get identical
-    // paths.
+    // Strip trailing slashes for path consistency, matching v1.0.
     this.endpoint = options.endpoint.replace(/\/+$/, '');
     this.customFetchImpl = options.fetchImpl;
   }
@@ -183,9 +142,8 @@ export class LegacyRestTransport implements Transport {
     params: V1TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<V1TaskPushNotificationConfig> {
-    // The REST path embeds the task id (per the v0.3 google.api.http
-    // annotation); the body is the proto-JSON of the parent
-    // `TaskPushNotificationConfig` (per `body: "*"`).
+    // Path embeds the task id; body is the proto-JSON of the parent
+    // `TaskPushNotificationConfig` (per the proto's `body: "*"`).
     const protoConfig = ToProto.taskPushNotificationConfig(
       toCompatTaskPushNotificationConfig(params)
     );
@@ -223,10 +181,8 @@ export class LegacyRestTransport implements Transport {
     options?: RequestOptions
   ): Promise<V1ListTaskPushNotificationConfigsResponse> {
     const path = `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`;
-    // v0.3 REST `list` returns the proto-JSON of
-    // `ListTaskPushNotificationConfigResponse` (a wrapper with a
-    // `configs[]` repeated field), not a bare JSON array. Decode via
-    // the proto's `fromJSON` and unwrap.
+    // v0.3 returns a `ListTaskPushNotificationConfigResponse` wrapper with
+    // a `configs[]` field — not a bare JSON array.
     const result = await this._sendRequestJson(
       'GET',
       path,
@@ -270,11 +226,7 @@ export class LegacyRestTransport implements Transport {
     return toCoreTask(FromProto.task(result));
   }
 
-  /**
-   * `tasks/list` has no REST binding in v0.3 (per
-   * {@link V1_METHODS_WITHOUT_LEGACY_EQUIVALENT}). Throws synchronously
-   * without issuing an HTTP request.
-   */
+  /** `tasks/list` has no REST binding in v0.3. Throws synchronously. */
   async listTasks(
     _params: V1ListTasksRequest,
     _options?: RequestOptions
@@ -287,38 +239,16 @@ export class LegacyRestTransport implements Transport {
     options?: RequestOptions
   ): AsyncGenerator<V1StreamResponse, void, undefined> {
     const path = `/v1/tasks/${encodeURIComponent(params.id)}:subscribe`;
-    // GET, not POST: the v0.3 proto's `google.api.http` annotation for
-    // `SubscribeToTask` maps to `get: "/v1/tasks/{id}:subscribe"` (no
-    // request body), and a2a-python's `A2ARESTFastAPIApplication` only
-    // registers the GET method. Some baselines (a2a-python's v0.3 compat
-    // adapter at `src/a2a/compat/v0_3/rest_adapter.py`) additionally
-    // accept POST for tolerance, but the canonical reference does not —
-    // sending POST yields 405 Method Not Allowed.
+    // GET, not POST: the v0.3 proto annotates `SubscribeToTask` with
+    // `get: "/v1/tasks/{id}:subscribe"` and a2a-python only registers
+    // GET, so POST yields 405.
     yield* this._sendStreamingRequest(path, 'GET', undefined, options);
   }
 
-  // ==========================================================================
-  // Internals
-  // ==========================================================================
-
   /**
-   * Translates v1.0 `SendMessageRequest` into a proto-JSON body of the
-   * v0.3 `SendMessageRequest` proto message (the canonical wire format
-   * for the v0.3 REST surface, per the proto's `google.api.http`
-   * annotation with `body: "*"`).
-   *
-   * Pipeline:
-   *   1. v1.0 `SendMessageRequest` → v0.3 `legacy.MessageSendParams`
-   *      via `toCompatSendMessageRequest` (we only need the
-   *      `.params` payload; REST never carries the JSON-RPC envelope).
-   *   2. `legacy.MessageSendParams` → v0.3 proto `SendMessageRequest`
-   *      via `ToProto.messageSendParams`.
-   *   3. v0.3 proto `SendMessageRequest` → proto-JSON via
-   *      `SendMessageRequest.toJSON`.
-   *
-   * The `requestId` passed to `toCompatSendMessageRequest` is irrelevant
-   * since we only consume `.params`; we use the same counter as JSON-RPC
-   * for symmetry but never see the value on the wire.
+   * v1.0 `SendMessageRequest` → proto-JSON body of the v0.3
+   * `SendMessageRequest` proto. The `requestId` is never seen on the
+   * wire — we only consume `.params` — but the translator requires one.
    */
   private _buildSendMessageRequestJson(core: V1SendMessageRequest): unknown {
     const envelope = toCompatSendMessageRequest(core, this.requestIdCounter++);
@@ -326,12 +256,7 @@ export class LegacyRestTransport implements Transport {
     return LegacyProtoSendMessageRequest.toJSON(protoRequest);
   }
 
-  /**
-   * Allocates a response ID for envelopes that need one for translator
-   * purposes (e.g. wrapping a bare list response so
-   * `toCoreListTaskPushNotificationConfigsResponse` can consume it). The
-   * value never appears on the v0.3 REST wire.
-   */
+  // ID for synthetic envelopes consumed by translators. Never on the wire.
   private _nextResponseId(): number {
     return this.requestIdCounter++;
   }
@@ -361,19 +286,8 @@ export class LegacyRestTransport implements Transport {
   }
 
   /**
-   * Issues a non-streaming HTTP request against the v0.3 REST surface
-   * and decodes the response as proto-JSON of the given proto type.
-   *
-   * - `body` is JSON-serialized as-is (callers pass the already-encoded
-   *   proto-JSON document via the proto's `toJSON`). Skipped for `GET`
-   *   and `DELETE`.
-   * - `responseType` is the v0.3 proto descriptor (`{ fromJSON, ... }`)
-   *   used to decode the response body. Pass `undefined` for endpoints
-   *   that return no body (`DELETE`).
-   * - 204 No Content resolves to `undefined`.
-   * - Non-2xx responses with a parseable v0.3 error body are mapped to a
-   *   typed SDK error via {@link mapA2aErrorToSdkError}; everything else
-   *   falls through to a generic `Error`.
+   * Issues a non-streaming request and decodes the response as proto-JSON
+   * of `responseType` (pass `undefined` for `DELETE` / 204).
    */
   private async _sendRequestJson<TResponse>(
     method: 'GET' | 'POST' | 'DELETE',
@@ -450,13 +364,8 @@ export class LegacyRestTransport implements Transport {
   }
 
   /**
-   * Translates a v0.3 SSE event payload (proto-JSON of `StreamResponse`)
-   * into a v1.0 `StreamResponse`.
-   *
-   * REST SSE in v0.3 emits the proto-JSON of `StreamResponse` directly
-   * — no JSON-RPC envelope. We decode via `StreamResponse.fromJSON` and
-   * then translate each proto oneof branch through the legacy types to
-   * the v1.0 proto via `toCoreStreamResponse`.
+   * v0.3 REST SSE emits the proto-JSON of `StreamResponse` directly —
+   * no JSON-RPC envelope.
    */
   private static _processSseEventData(jsonData: string): V1StreamResponse {
     if (!jsonData.trim()) {
@@ -507,12 +416,7 @@ export class LegacyRestTransport implements Transport {
     return toCoreStreamResponse({ id: null, jsonrpc: '2.0', result: legacyResult });
   }
 
-  /**
-   * Maps an SSE `error`-typed event payload to a typed SDK error. The
-   * payload should be a bare v0.3 error body
-   * (`{ code, message, data? }`); falls back to a generic `Error` on
-   * shape mismatch.
-   */
+  /** Maps an SSE `error` payload to a typed SDK error. */
   private static _parseSseErrorEvent(jsonData: string): Error {
     try {
       const parsed = JSON.parse(jsonData) as unknown;
@@ -528,16 +432,7 @@ export class LegacyRestTransport implements Transport {
     }
   }
 
-  /**
-   * Reads an error response body and throws a typed SDK error.
-   *
-   * v0.3 wire shape is a bare `{ code, message, data? }` JSON object. If
-   * the body parses to that shape, we map via {@link mapA2aErrorToSdkError};
-   * otherwise we throw a generic `Error` with the HTTP status and the
-   * raw body text for debuggability. Mirrors `RestTransport`'s v1.0
-   * equivalent but uses the bare body shape rather than
-   * `{ error: { code, status, message, details } }`.
-   */
+  /** Maps a v0.3 error body to a typed SDK error, or falls back to a generic `Error`. */
   private static async _handleErrorResponse(response: Response, path: string): Promise<never> {
     let errorBodyText = '(empty or non-JSON response)';
     let errorBody: LegacyRestErrorBody | undefined;
@@ -577,10 +472,8 @@ export class LegacyRestTransport implements Transport {
   }
 
   /**
-   * Parses a proto-JSON-decoded v0.3 `SendMessageResponse` (a
-   * `oneof payload { task | msg }` envelope) into a v1.0
-   * {@link SendMessageResult}. v0.3 REST returns the proto envelope
-   * directly (per `body: "*"`), not a bare `Task | Message`.
+   * v0.3 REST returns the proto `SendMessageResponse` envelope (with the
+   * `task | msg` oneof) directly, not a bare `Task | Message`.
    */
   private static _parseProtoSendMessageResult(
     response: LegacyProtoSendMessageResponse | undefined

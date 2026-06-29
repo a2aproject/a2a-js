@@ -41,36 +41,27 @@ import {
 } from '../../errors.js';
 import { validateVersion } from '../version.js';
 
-/**
- * Options for configuring the gRPC handler.
- */
+/** Options for configuring the gRPC handler. */
 export interface GrpcServiceOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
 }
 
 /**
- * Creates a gRPC transport handler.
- * This handler implements the A2A gRPC service definition and acts as an
- * adapter between the gRPC transport layer and the core A2A request handler.
- *
- * @param requestHandler - The core A2A request handler for business logic.
- * @returns An object that implements the A2AServiceServer interface.
+ * Creates a gRPC service implementation adapting an {@link A2ARequestHandler}.
  *
  * @example
  * ```ts
  * const server = new grpc.Server();
- * const requestHandler = new DefaultRequestHandler(...);
- * server.addService(A2AService, grpcService({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * server.addService(
+ *   A2AService,
+ *   grpcService({ requestHandler, userBuilder: UserBuilder.noAuthentication })
+ * );
  * ```
  */
 export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   const requestHandler = options.requestHandler;
 
-  /**
-   * Helper to wrap Unary calls with common logic (context, metadata, error handling).
-   * Extracts tenant from the request if available and enriches the context.
-   */
   const wrapUnaryWithConverter = async <TReq, TRes, TResult>(
     call: grpc.ServerUnaryCall<TReq, TRes>,
     callback: grpc.sendUnaryData<TRes>,
@@ -95,10 +86,6 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
     return wrapUnaryWithConverter(call, callback, handler, (res: TRes) => res);
   };
 
-  /**
-   * Helper to wrap Streaming calls with common logic (context, metadata, error handling).
-   * Extracts tenant from the request if available and enriches the context.
-   */
   const wrapStreaming = async <TReq, TRes>(
     call: grpc.ServerWritableStream<TReq, TRes>,
     handler: (req: TReq, ctx: ServerCallContext) => AsyncGenerator<TRes>
@@ -221,17 +208,11 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
   };
 }
 
-// --- Internal Helpers ---
-
 /**
- * Maps an error to a gRPC error with status details per §10.6.
- *
- * For A2A-specific errors, includes a `google.rpc.ErrorInfo` in the
- * `grpc-status-details-bin` trailing metadata with `reason` and `domain`.
- *
- * Uses an `instanceof` chain so user-defined subclasses of A2A error
- * types (e.g. `class MyTaskNotFound extends TaskNotFoundError {}`)
- * resolve to the correct gRPC status of the nearest base.
+ * Maps an error to a gRPC error with status details. For A2A-specific
+ * errors, attaches `google.rpc.ErrorInfo` in `grpc-status-details-bin`.
+ * Uses `instanceof` so user-defined subclasses of A2A error types resolve
+ * to the gRPC status of the nearest base.
  */
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   let code = grpc.status.UNKNOWN;
@@ -256,7 +237,6 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
     details: message,
   };
 
-  // Attach google.rpc.ErrorInfo in grpc-status-details-bin metadata
   if (error instanceof Error) {
     const errorMetadata = buildGrpcErrorMetadata(code, message, error);
     if (errorMetadata) {
@@ -276,7 +256,7 @@ const _buildContext = async (
   const extensionHeaders = call.metadata.get(HTTP_EXTENSION_HEADER);
   const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
 
-  // gRPC metadata keys are normalized to lowercase per gRPC conventions (§10.2).
+  // gRPC metadata keys are normalized to lowercase.
   const versionHeaders = call.metadata.get(A2A_VERSION_HEADER.toLowerCase());
   const requestedVersion = versionHeaders.length > 0 ? versionHeaders[0].toString() : undefined;
   const tenant = (call.request as Record<string, unknown>)?.tenant as string | undefined;

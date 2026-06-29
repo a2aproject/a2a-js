@@ -18,10 +18,8 @@ import {
   LEGACY_HTTP_EXTENSION_HEADER,
 } from '../../src/compat/v0_3/constants.js';
 
-/**
- * Helper: the default RequestOptions that the Client injects when the caller
- * passes no explicit options. Contains the auto-injected A2A-Version header.
- */
+// The default RequestOptions the Client injects when the caller passes none;
+// contains the auto-injected A2A-Version header.
 const defaultVersionOptions: RequestOptions = {
   serviceParameters: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION },
 };
@@ -1452,7 +1450,7 @@ describe('Client', () => {
       };
       await client.getTask(params, options);
 
-      // The transport's protocolVersion always takes precedence
+      // Transport's protocolVersion always takes precedence.
       expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     });
   });

@@ -2,62 +2,44 @@ import { AgentCard, StreamResponse } from '../index.js';
 import { Client, RequestOptions } from './multitransport-client.js';
 
 export interface CallInterceptor {
-  /**
-   * Invoked before transport method.
-   */
+  /** Invoked before the transport method. */
   before(args: BeforeArgs): Promise<void>;
 
-  /**
-   * Invoked after transport method.
-   */
+  /** Invoked after the transport method. */
   after(args: AfterArgs): Promise<void>;
 }
 
 export interface BeforeArgs<K extends keyof Client = keyof Client> {
-  /**
-   * Identifies the client method invoked and its payload.
-   * Payload inside the input object can be modified.
-   */
+  /** The client method invoked and its payload. Payload is mutable. */
   readonly input: ClientCallInput<K>;
 
-  /**
-   * Identifies the agent card cached on the client
-   */
+  /** The agent card cached on the client. */
   readonly agentCard: AgentCard;
 
   /**
-   * If set by the interceptor, stops execution, invokes "after"
-   * for executed interceptors and returns the result. Transport is not called.
+   * If set, stops execution and returns the result. `after` runs for
+   * already-executed interceptors; the transport is not called.
    */
   earlyReturn?: ClientCallResult<K>;
 
-  /**
-   * Options passed to the client.
-   */
+  /** Options passed to the client. */
   options?: RequestOptions;
 }
 
 export interface AfterArgs<K extends keyof Client = keyof Client> {
-  /**
-   * Identifies the client method invoked and its result.
-   * Payload inside the result object can be modified.
-   */
+  /** The client method invoked and its result. Result value is mutable. */
   readonly result: ClientCallResult<K>;
 
-  /**
-   * Identifies the agent card cached on the client
-   */
+  /** The agent card cached on the client. */
   readonly agentCard: AgentCard;
 
   /**
-   * If set by the interceptor, stops execution and returns result value,
-   * remaining interceptors are not executed.
+   * If set, stops execution and returns the result; remaining `after`
+   * interceptors are skipped.
    */
   earlyReturn?: boolean;
 
-  /**
-   * Options passed to the client.
-   */
+  /** Options passed to the client. */
   options?: RequestOptions;
 }
 
@@ -68,8 +50,9 @@ export type ClientCallResult<K extends keyof Client = keyof Client> = MethodResu
   ResultsOverrides
 >;
 
-// Types below are helper types and are not exported to allow simplifying it without affecting
-// public API if necessary. They are exported via type aliases ClientXxx which can be replaced with explicit union if necessary.
+// The helper types below are not exported so they can be simplified
+// without affecting the public API. They are surfaced via the
+// `ClientCallInput` / `ClientCallResult` aliases above.
 
 /**
  * For
@@ -79,15 +62,10 @@ export type ClientCallResult<K extends keyof Client = keyof Client> = MethodResu
  *   f2(arg: number): Promise<Result2>;
  * }
  *
- * MethodInputs<Foo> resolves to
+ * resolves to
  *
- * {
- *   readonly method: "f1";
- *   value: string;
- * } | {
- *   readonly method: "f2";
- *   value: number;
- * }
+ * { readonly method: "f1"; value: string }
+ * | { readonly method: "f2"; value: number }
  */
 type MethodInput<T, TMembers extends keyof T = keyof T> = {
   [M in TMembers]: T[M] extends (options: RequestOptions | undefined) => unknown
@@ -105,28 +83,22 @@ type MethodInput<T, TMembers extends keyof T = keyof T> = {
  *   f2(): Promise<Result2>;
  * }
  *
- * MethodsResults<Foo> resolves to
+ * resolves to
  *
- * {
- *   readonly method: "f1";
- *   value: Result1;
- * } | {
- *   readonly method: "f2";
- *   value: Result2;
- * }
+ * { readonly method: "f1"; value: Result1 }
+ * | { readonly method: "f2"; value: Result2 }
  */
 type MethodResult<T, TMembers extends keyof T = keyof T, TOverrides = object> = {
-  [M in TMembers]: M extends keyof TOverrides // If there is an override, use it directly.
+  [M in TMembers]: M extends keyof TOverrides
     ? { readonly method: M; value: TOverrides[M] }
-    : // Infer result, unwrap it from Promise and pack with method name.
-      T[M] extends (...args: never[]) => infer R
+    : T[M] extends (...args: never[]) => infer R
       ? { readonly method: M; value: Awaited<R> }
       : never;
 }[TMembers];
 
 interface ResultsOverrides {
-  // sendMessageStream and resubscribeTask return async iterators and are intercepted on each item,
-  // which requires custom handling.
+  // sendMessageStream and resubscribeTask return async iterators and are
+  // intercepted per-item, which requires custom handling.
   sendMessageStream: StreamResponse;
   resubscribeTask: StreamResponse;
 }

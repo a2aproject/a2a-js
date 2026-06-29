@@ -43,10 +43,10 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
   });
 
   it('assigns a server-side UUID when saved with an empty config id', async () => {
-    // Spec §3.1.7 / §5.1: id is the *result* of Create, not an input
-    // requirement. The store assigns a UUID at the save boundary so
-    // every entry point — `createTaskPushNotificationConfig`,
-    // `sendMessage`'s and `sendMessageStream`'s
+    // The id is the *result* of Create, not an input requirement. The
+    // store assigns a UUID at the save boundary so every entry point —
+    // `createTaskPushNotificationConfig`, `sendMessage`'s and
+    // `sendMessageStream`'s
     // `params.configuration.taskPushNotificationConfig` paths — gets
     // the same auto-assignment.
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
@@ -81,15 +81,13 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     const first = await store.load('task-iso', context);
     expect(first).toHaveLength(1);
 
-    // Caller-side mutations of both the array spine AND the inner config
-    // object must not affect subsequent reads.
     first.pop();
     first.push(makeConfig({ id: 'attacker' }));
     const second = await store.load('task-iso', context);
     expect(second).toHaveLength(1);
     expect(second[0].id).toBe('cfg-iso');
 
-    // Inner-object mutation (validates the deep clone, not just shallow):
+    // Deep-clone check: inner-object mutation must not leak either.
     second[0].url = 'http://evil/';
     const third = await store.load('task-iso', context);
     expect(third[0].url).toBe('http://orig/');
@@ -116,8 +114,8 @@ describe('InMemoryPushNotificationStore.loadWithMetadata() wire-version capture'
   });
 
   it('defaults the stored wire version to 0.3 when the context has no header', async () => {
-    // ServerCallContext applies ABSENT_HEADER_VERSION = '0.3' when no header
-    // is set (per spec §3.6.2). The store should surface that value.
+    // ServerCallContext applies ABSENT_HEADER_VERSION = '0.3' when no
+    // header is set. The store should surface that value.
     const context = new ServerCallContext();
     const config = makeConfig({ id: 'cfg-default', url: 'http://example.test/wh-default' });
 
@@ -130,8 +128,7 @@ describe('InMemoryPushNotificationStore.loadWithMetadata() wire-version capture'
 
   it("defaults to '0.3' when context.requestedVersion is explicitly empty (§3.6.2)", async () => {
     // Defensive: caller constructs a context with explicit empty version.
-    // The store's fallback should still resolve to '0.3' (NOT '1.0') per
-    // §3.6.2's absent-header rule.
+    // The store's fallback should still resolve to '0.3' (NOT '1.0').
     const context = new ServerCallContext({ requestedVersion: '' });
     const config = makeConfig({ id: 'cfg-empty' });
 
@@ -188,7 +185,6 @@ describe('InMemoryPushNotificationStore.loadWithMetadata() wire-version capture'
     const first = await store.loadWithMetadata('task-iso-meta', context);
     expect(first).toHaveLength(1);
 
-    // Array-spine mutation:
     first.pop();
     first.push({
       config: makeConfig({ id: 'attacker' }),
@@ -198,7 +194,6 @@ describe('InMemoryPushNotificationStore.loadWithMetadata() wire-version capture'
     expect(second).toHaveLength(1);
     expect(second[0].config.id).toBe('cfg-iso-meta');
 
-    // Inner-object mutation:
     second[0].config.url = 'http://evil/';
     const third = await store.loadWithMetadata('task-iso-meta', context);
     expect(third[0].config.url).toBe('http://orig/');

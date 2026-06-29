@@ -1,29 +1,15 @@
 /**
- * v0.3 gRPC service handler (compat layer).
+ * v0.3 gRPC service handler. Implements the v0.3 `A2AServiceServer`
+ * interface by dispatching to a v1.0 `A2ARequestHandler`, with proto
+ * shape translation on both directions. Register alongside the v1.0
+ * `grpcService` on the same `Server` — both share the
+ * `a2a.v1.A2AService` package name but use different service
+ * descriptors, so they coexist without collisions.
  *
- * Implements the v0.3 `A2AServiceServer` interface but dispatches to the
- * v1.0 {@link A2ARequestHandler}. Each method translates the inbound v0.3
- * protobuf request into the v1.0 proto types the request handler speaks
- * (via {@link FromProto} + the v0.3 `toCore*` translators), invokes the
- * handler, and translates the v1.0 proto response back into the v0.3
- * protobuf shape on the wire (via the v0.3 `toCompat*` translators +
- * {@link ToProto}).
- *
- * Designed to be registered side-by-side with the v1.0 `grpcService`: the
- * two services share a gRPC `Server` and an `A2ARequestHandler` but
- * advertise different proto service descriptors, so they coexist on the
- * same port without method-name collisions even though both are scoped
- * under the `a2a.v1.A2AService` proto package name.
- *
- *     const server = new grpc.Server();
- *     server.addService(A2AService,       grpcService(...));        // v1.0
- *     server.addService(LegacyA2AService, legacyGrpcService(...));  // v0.3
- *
- * Errors are mapped via an `instanceof` chain (matching the v1.0
- * `grpcService`) and enriched with `google.rpc.ErrorInfo` in
- * `grpc-status-details-bin` so v1.0-aware clients connecting to a v0.3
- * server still benefit from §10.6's enriched error model; v0.3 clients
- * that don't decode the binary status simply ignore it.
+ * Errors are mapped through an `instanceof` chain and enriched with
+ * `google.rpc.ErrorInfo` in `grpc-status-details-bin`. v0.3 clients
+ * that don't decode binary status ignore it; v1.0-aware clients get
+ * typed errors.
  */
 
 import * as grpc from '@grpc/grpc-js';
@@ -99,55 +85,27 @@ import type {
   TaskPushNotificationConfig as V1TaskPushNotificationConfig,
 } from '../../../../types/pb/a2a.js';
 
-/**
- * Options for configuring the v0.3 gRPC service handler.
- *
- * Shares the same shape as {@link import('../../../../server/grpc/grpc_service.js').GrpcServiceOptions}
- * so operators can build a single options object and pass it to both
- * `grpcService` (v1.0) and `legacyGrpcService` (v0.3).
- */
+/** Same shape as v1.0 `GrpcServiceOptions`. */
 export interface LegacyGrpcServiceOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
 }
 
 /**
- * Creates a v0.3 gRPC service handler.
- *
- * The returned object implements the v0.3 `A2AServiceServer` interface
- * generated into `src/compat/v0_3/types/pb/a2a.ts`; register it on a
- * gRPC `Server` against the `LegacyA2AService` descriptor exported from
- * the same module.
- *
- * @param options - The v0.3 service options.
- * @returns An object implementing the v0.3 `A2AServiceServer` interface.
+ * Creates a v0.3 gRPC service handler. Register on a `grpc.Server`
+ * against the `LegacyA2AService` descriptor.
  *
  * @example
  * ```ts
- * import * as grpc from '@grpc/grpc-js';
- * import { DefaultRequestHandler } from '@a2a-js/sdk/server';
- * import { A2AService, grpcService, UserBuilder } from '@a2a-js/sdk/server/grpc';
- * import {
- *   LegacyA2AService,
- *   legacyGrpcService,
- * } from '@a2a-js/sdk/compat/v0_3/server/grpc';
- *
- * const requestHandler = new DefaultRequestHandler(...);
- * const server = new grpc.Server();
- * server.addService(A2AService,       grpcService({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
- * server.addService(LegacyA2AService, legacyGrpcService({ requestHandler, userBuilder: UserBuilder.noAuthentication }));
+ * server.addService(A2AService,       grpcService({ requestHandler, userBuilder }));
+ * server.addService(LegacyA2AService, legacyGrpcService({ requestHandler, userBuilder }));
  * ```
  */
 export function legacyGrpcService(options: LegacyGrpcServiceOptions): A2AServiceServer {
   const requestHandler = options.requestHandler;
 
-  /**
-   * Helper to wrap unary calls with shared context/metadata/error logic.
-   *
-   * `parser` maps the inbound v0.3 pb request to whatever shape the v1.0
-   * `requestHandler` expects (i.e. v1.0 proto). `converter` maps the v1.0
-   * proto response back into the v0.3 pb response on the wire.
-   */
+  // `parser` maps v0.3 pb → whatever the v1.0 handler expects;
+  // `converter` maps the v1.0 result back to the v0.3 pb response.
   const wrapUnary = async <TPbReq, TPbRes, TCoreReq, TCoreRes>(
     call: grpc.ServerUnaryCall<TPbReq, TPbRes>,
     callback: grpc.sendUnaryData<TPbRes>,
@@ -166,11 +124,8 @@ export function legacyGrpcService(options: LegacyGrpcServiceOptions): A2AService
     }
   };
 
-  /**
-   * Helper to wrap server-streaming calls with shared context/metadata
-   * /error logic. Mirrors {@link wrapUnary} but for server-streaming
-   * RPCs (`sendStreamingMessage`, `taskSubscription`).
-   */
+  // Streaming counterpart to `wrapUnary` for `sendStreamingMessage` and
+  // `taskSubscription`.
   const wrapStreaming = async <TPbReq, TPbRes, TCoreReq, TCoreRes>(
     call: grpc.ServerWritableStream<TPbReq, TPbRes>,
     parser: (req: TPbReq) => TCoreReq,
@@ -327,18 +282,11 @@ export function legacyGrpcService(options: LegacyGrpcServiceOptions): A2AService
   };
 }
 
-// =============================================================================
-// Internal helpers
-// =============================================================================
+// Request parsers (v0.3 pb → v1.0 proto via v0.3 JSON).
 
-// ----- Request parsers (v0.3 pb -> v1.0 proto via v0.3 JSON) -----
-
-/**
- * Wraps a v0.3 JSON-shaped params payload in the minimal v0.3 JSON-RPC
- * envelope expected by `toCore*Request` translators (which were authored
- * for the JSON-RPC path). The `id`/`method` fields are placeholders since
- * gRPC has no envelope on the wire.
- */
+// Wraps a v0.3 JSON-shaped params payload in the minimal envelope expected
+// by `toCore*Request` (which was authored for the JSON-RPC path). `id` and
+// `method` are placeholders since gRPC has no envelope on the wire.
 function _envelope<T>(
   params: T,
   method: string
@@ -405,10 +353,9 @@ function _parseListTaskPushNotificationConfigRequest(req: ListTaskPushNotificati
 function _parseDeleteTaskPushNotificationConfigRequest(
   req: DeleteTaskPushNotificationConfigRequest
 ) {
-  // v0.3 DeleteTaskPushNotificationConfigRequest uses `name=tasks/{id}/pushNotificationConfigs/{cfg}`
-  // but the JSON-RPC params are `{ id, pushNotificationConfigId }`. Build the
-  // JSON shape manually since `FromProto.deleteTaskPushNotificationConfigParams`
-  // would do the same.
+  // v0.3 uses `name=tasks/{id}/pushNotificationConfigs/{cfg}`; the JSON-RPC
+  // params are `{ id, pushNotificationConfigId }`. Build the JSON shape
+  // manually.
   const { taskId, configId } = extractTaskAndPushNotificationConfigId(req.name);
   return toCoreDeleteTaskPushNotificationConfigRequest(
     _envelope(
@@ -427,12 +374,9 @@ function _parseGetAgentCardRequest(_req: GetAgentCardRequest) {
   );
 }
 
-// ----- Response serializers (v1.0 proto -> v0.3 pb via v0.3 JSON) -----
+// Response serializers (v1.0 proto → v0.3 pb via v0.3 JSON).
 
 function _serializeSendMessageResult(result: V1Message | V1Task): SendMessageResponse {
-  // `requestHandler.sendMessage` returns either a Message or a Task (v1.0
-  // proto). Translate via the v0.3 message/task translators and then run
-  // `ToProto.messageSendResult` to put the result back into v0.3 pb shape.
   if (!result) {
     throw new InvalidAgentResponseError('Invalid SendMessage result from request handler');
   }
@@ -446,11 +390,8 @@ function _serializeSendMessageResult(result: V1Message | V1Task): SendMessageRes
 }
 
 function _serializeStreamResponse(event: V1StreamResponse): StreamResponse {
-  // v1.0 `StreamResponse` carries a oneof `payload` matching v0.3's
-  // `StreamResponse.payload` 1:1 modulo casing (`msg` vs `message`).
-  // For each case, translate the v1.0 proto value to v0.3 JSON via the
-  // `toCompat*` translators, then re-encode into the v0.3 pb wire
-  // representation via `ToProto.messageStreamResult`.
+  // v1.0's payload oneof matches v0.3's 1:1 modulo casing (`msg` vs
+  // `message`).
   if (!event || !event.payload) {
     throw new InvalidAgentResponseError('StreamResponse missing payload');
   }
@@ -482,9 +423,7 @@ function _serializeTaskPushNotificationConfig(
 function _serializeListTaskPushNotificationConfigResponse(
   response: V1ListTaskPushNotificationConfigsResponse
 ): ListTaskPushNotificationConfigResponse {
-  // v0.3 has no pagination on this endpoint, so `nextPageToken` is dropped
-  // on the way out. v1.0 callers that need it should use the v1.0
-  // transport.
+  // v0.3 has no pagination here, so `nextPageToken` is dropped.
   if (!response || !response.configs) {
     throw new InvalidAgentResponseError(
       'Invalid ListTaskPushNotificationConfigs result from request handler'
@@ -495,21 +434,11 @@ function _serializeListTaskPushNotificationConfigResponse(
   );
 }
 
-// ----- Error mapping -----
+// Error mapping.
 
-/**
- * Maps an error to a gRPC error with v1.0-style status details.
- *
- * Uses an `instanceof` chain (matching the v1.0 `grpcService`) so that
- * user-defined subclasses of A2A error types — e.g.
- * `class MyTaskNotFound extends TaskNotFoundError {}` — resolve to the
- * correct gRPC status of the nearest base class.
- *
- * Also attaches a `google.rpc.ErrorInfo` detail in
- * `grpc-status-details-bin`: v0.3 clients that don't decode binary status
- * trailers ignore it harmlessly, while v1.0-aware clients connecting to
- * a v0.3 server still get the enriched §10.6 error model.
- */
+// `instanceof` chain so user-defined subclasses of A2A error types resolve
+// to the correct gRPC status of the nearest base class. Also attaches a
+// `google.rpc.ErrorInfo` detail for v1.0-aware clients.
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   let code = grpc.status.UNKNOWN;
   if (error instanceof TaskNotFoundError) code = grpc.status.NOT_FOUND;
@@ -543,7 +472,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   return result;
 };
 
-// ----- Context / metadata helpers -----
+// Context / metadata helpers.
 
 const _buildContext = async (
   call: grpc.ServerUnaryCall<unknown, unknown> | grpc.ServerWritableStream<unknown, unknown>,
@@ -551,20 +480,17 @@ const _buildContext = async (
   requestHandler: A2ARequestHandler
 ): Promise<ServerCallContext> => {
   const user = await userBuilder(call);
-  // v0.3 used the `X-A2A-Extensions` header; v1.0 dropped the `X-` prefix.
-  // Accept both so a v0.3-on-v0.3 path and a v1.0-on-v0.3 path both work.
-  // gRPC metadata keys are normalized to lowercase per §10.2.
+  // Accept both v0.3's `X-A2A-Extensions` and v1.0's `A2A-Extensions`.
+  // gRPC metadata keys are normalized to lowercase.
   const extensionHeaders = [
     ...call.metadata.get(HTTP_EXTENSION_HEADER.toLowerCase()),
     ...call.metadata.get(LEGACY_HTTP_EXTENSION_HEADER.toLowerCase()),
   ];
   const extensionString = extensionHeaders.map((v) => v.toString()).join(',');
 
-  // gRPC metadata keys are normalized to lowercase per gRPC conventions (§10.2).
   const versionHeaders = call.metadata.get(A2A_VERSION_HEADER.toLowerCase());
   const requestedVersion = versionHeaders.length > 0 ? versionHeaders[0].toString() : undefined;
 
-  // v0.3 has no tenant concept on the wire; leave it undefined.
   const context = new ServerCallContext({
     requestedExtensions: Extensions.parseServiceParameter(extensionString),
     user,
@@ -572,12 +498,9 @@ const _buildContext = async (
   });
 
   const agentCard = await requestHandler.getAgentCard();
-  // `legacyGrpcService` is only registered alongside the v1.0
-  // `grpcService` when the operator opts into the v0.3 compat layer,
-  // so the validator implicitly accepts '0.3' for any binding the
-  // card already exposes (per §3.6.2). A v1.0-only card therefore
-  // serves legacy gRPC clients without forcing operators to declare a
-  // duplicate v0.3 `supportedInterfaces` entry.
+  // `legacyCompat` lets the validator accept '0.3' against a v1.0-only
+  // card, so operators don't have to declare a duplicate v0.3 entry in
+  // `supportedInterfaces`.
   validateVersion(context.requestedVersion, agentCard, 'GRPC', {
     legacyCompat: { enabled: true },
   });

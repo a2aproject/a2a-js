@@ -51,7 +51,7 @@ describe('V03PushNotificationSerializer', () => {
     const { body } = serializer.serialize(event);
     const parsed = JSON.parse(body);
 
-    // Per v0.3 spec §9.5 the body MUST be the bare event object.
+    // The body MUST be the bare event object.
     expect(parsed).not.toHaveProperty('jsonrpc');
     expect(parsed).not.toHaveProperty('result');
     expect(parsed).not.toHaveProperty('task');
@@ -155,9 +155,8 @@ describe('V03PushNotificationSerializer', () => {
   });
 
   it('serializes a Message payload as bare v0.3 Message with kind="message"', () => {
-    // Per spec §4.3.3 messages are valid push-notification payloads. The
-    // v0.3 wire shape is the bare Message object discriminated by the
-    // `kind` field.
+    // Messages are valid push-notification payloads. The v0.3 wire shape
+    // is the bare Message object discriminated by the `kind` field.
     const event: StreamResponse = {
       payload: {
         $case: 'message',
@@ -189,7 +188,7 @@ describe('V03PushNotificationSerializer', () => {
     expect(parsed.messageId).toBe('m-1');
     expect(parsed.contextId).toBe('ctx-msg');
     expect(parsed.taskId).toBe('task-msg');
-    // Per v0.3 spec §9.5 the body MUST be the bare event object.
+    // The body MUST be the bare event object.
     expect(parsed).not.toHaveProperty('jsonrpc');
     expect(parsed).not.toHaveProperty('result');
     expect(parsed).not.toHaveProperty('message');

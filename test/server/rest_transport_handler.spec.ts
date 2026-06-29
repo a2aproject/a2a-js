@@ -356,12 +356,11 @@ describe('RestTransportHandler', () => {
       });
 
       it('should accept id-less config and delegate to the handler (handler assigns UUID)', async () => {
-        // Spec §3.1.7 / §5.1: id is optional across all transports. The
-        // handler generates a server-side UUID when omitted, so REST must
-        // not pre-reject id-less requests (previously threw
-        // `RequestMalformedError('id is required')`, breaking parity
-        // with JSON-RPC, gRPC, and the reference a2a-python / a2a-go REST
-        // dispatchers).
+        // The id is optional across all transports. The handler generates
+        // a server-side UUID when omitted, so REST must not pre-reject
+        // id-less requests (previously threw `RequestMalformedError('id is
+        // required')`, breaking parity with JSON-RPC, gRPC, and the
+        // reference a2a-python / a2a-go REST dispatchers).
         const idLessConfig = {
           taskId: 'task-1',
           url: 'https://example.com/webhook',

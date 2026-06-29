@@ -61,11 +61,7 @@ describe('A2AExpressApp', () => {
     return expressApp;
   };
 
-  /**
-   * Convenience wrapper around {@link setupA2ARoutes} that enables the
-   * v0.3 compatibility layer. Used by the `legacy v0.3 JSON-RPC
-   * dispatch` test block to opt the handler into v0.3 method routing.
-   */
+  // setupA2ARoutes with the v0.3 compatibility layer enabled.
   const setupA2ARoutesWithLegacyCompat = (
     expressApp: Express,
     requestHandler: A2ARequestHandler
@@ -74,7 +70,6 @@ describe('A2AExpressApp', () => {
       legacyCompat: { enabled: true },
     });
 
-  // Helper function to create JSON-RPC request bodies
   const createRpcRequest = (id: string | null, method = 'SendMessage', params: object = {}) => ({
     jsonrpc: '2.0',
     method,
@@ -656,11 +651,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('should reject header-less requests against a v1.0-only card when legacyCompat is omitted', async () => {
-      // Without legacyCompat, the v1.0-only `testAgentCard` rejects
-      // the §3.6.2 default-to-'0.3' because '0.3' is not declared in
-      // `supportedInterfaces`. This is the strict-mode behavior; the
-      // implicit-v0.3 acceptance is gated on opting into the compat
-      // layer (see the `legacy v0.3 JSON-RPC dispatch` block).
+      // Strict mode: v1.0-only card rejects the default-to-'0.3' fallback.
       const response = await request(expressApp)
         .post('/')
         .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
@@ -767,7 +758,7 @@ describe('A2AExpressApp', () => {
         result: { kind: 'task' },
       });
 
-      // No A2A-Version header → requestedVersion defaults to '0.3' per §3.6.2.
+      // No A2A-Version header → requestedVersion defaults to '0.3'.
       // Card declares v0.3 so validateVersion passes.
       await request(expressApp)
         .post('/')
@@ -778,12 +769,8 @@ describe('A2AExpressApp', () => {
     });
 
     it('accepts header-less legacy requests against a v1.0-only card when legacyCompat is enabled', async () => {
-      // testAgentCard only declares the v1.0 interface. With
-      // legacyCompat enabled, the validator implicitly accepts the
-      // §3.6.2 default-to-'0.3' for any binding the card already
-      // exposes — so a header-less v0.3-shaped request still routes
-      // to the legacy handler without forcing operators to duplicate
-      // every v1.0 entry with a v0.3 stub.
+      // legacyCompat implicitly accepts the default-to-'0.3' fallback for
+      // any binding the card already exposes — no duplicate v0.3 stubs needed.
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
       legacyHandleStub.mockResolvedValue({
         jsonrpc: '2.0',
@@ -801,8 +788,7 @@ describe('A2AExpressApp', () => {
     });
 
     it('accepts explicit A2A-Version: 0.3 against a v1.0-only card when legacyCompat is enabled', async () => {
-      // Same as above but with the header explicitly set rather than
-      // relying on the §3.6.2 missing-header default.
+      // Same as above but with the header set explicitly.
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
       legacyHandleStub.mockResolvedValue({
         jsonrpc: '2.0',
@@ -860,8 +846,6 @@ describe('A2AExpressApp', () => {
     });
 
     it('returns method-not-found for v0.3 methods when legacyCompat is omitted', async () => {
-      // Build a fresh app WITHOUT the compat opt-in. The v0.3 method
-      // name is unknown to the v1.0 dispatcher, which returns -32601.
       const optOutApp = express();
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(dualVersionAgentCard);
       setupA2ARoutes(optOutApp, mockRequestHandler);
@@ -872,9 +856,8 @@ describe('A2AExpressApp', () => {
         .send(createRpcRequest('req-no-compat', 'message/send'))
         .expect(200);
 
-      // JSON-RPC convention: HTTP 200 carries the JSON-RPC error body.
+      // JSON-RPC convention: HTTP 200 carries the error body.
       expect(response.body.error.code).to.equal(A2A_ERROR_CODE.METHOD_NOT_FOUND);
-      // Legacy code path is never instantiated nor invoked.
       expect(legacyHandleStub).not.toHaveBeenCalled();
     });
 
@@ -894,10 +877,6 @@ describe('A2AExpressApp', () => {
       expect(response.body.error.code).to.equal(A2A_ERROR_CODE.METHOD_NOT_FOUND);
       expect(legacyHandleStub).not.toHaveBeenCalled();
     });
-
-    // ========================================================================
-    // Extension-header tolerance on the legacy JSON-RPC path
-    // ========================================================================
 
     it('accepts X-A2A-Extensions on the legacy JSON-RPC path', async () => {
       legacyHandleStub.mockImplementation(async (_body, context) => {
@@ -972,8 +951,6 @@ describe('A2AExpressApp', () => {
     });
 
     it('v1.0 JSON-RPC path does NOT read X-A2A-Extensions (stays strict)', async () => {
-      // Non-regression: matches the REST handler's behaviour where the
-      // v1.0 layer ignores the legacy header spelling.
       handleStub.mockImplementation(async (_body, context) => {
         for (const ext of context.requestedExtensions ?? []) {
           context.addActivatedExtension(ext);

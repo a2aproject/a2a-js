@@ -4,11 +4,7 @@ import { TaskState } from '../../../src/types/pb/a2a.js';
 import { RequestContext } from '../../../src/server/agent_execution/request_context.js';
 import { ExecutionEventBus, AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 
-/**
- * A mock implementation of AgentExecutor to control agent behavior during tests.
- */
 export class MockAgentExecutor implements AgentExecutor {
-  // Stubs to control and inspect calls to execute and cancelTask
   public execute: Mock<
     (requestContext: RequestContext, eventBus: ExecutionEventBus) => Promise<void>
   > = vi.fn();
@@ -16,14 +12,10 @@ export class MockAgentExecutor implements AgentExecutor {
   public cancelTask: Mock<(taskId: string, eventBus: ExecutionEventBus) => Promise<void>> = vi.fn();
 }
 
-/**
- * Fake implementation of the task execution events.
- */
 export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBus) => {
   const taskId = ctx.taskId;
   const contextId = ctx.contextId;
 
-  // Publish task creation
   bus.publish(
     AgentEvent.task({
       id: taskId,
@@ -35,7 +27,6 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
     })
   );
 
-  // Publish working status
   bus.publish(
     AgentEvent.statusUpdate({
       taskId,
@@ -45,7 +36,6 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
     })
   );
 
-  // Publish completion
   bus.publish(
     AgentEvent.statusUpdate({
       taskId,
@@ -58,9 +48,6 @@ export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBu
   bus.finished();
 };
 
-/**
- * A realistic mock of AgentExecutor for cancellation tests.
- */
 export class CancellableMockAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
   public cancelTaskSpy: MockInstance;
@@ -92,10 +79,7 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
       })
     );
 
-    // Simulate a long-running process
     for (let i = 0; i < 5; i++) {
-      // We can't easily advance timers in a tight loop without yielding, but for test purposes
-      // checking the cancelledTasks set is enough if the test calls cancelTask.
       if (this.cancelledTasks.has(taskId)) {
         eventBus.publish(
           AgentEvent.statusUpdate({
@@ -112,8 +96,6 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
         eventBus.finished();
         return;
       }
-      // Use fake timers to simulate work
-      // In real code we'd need to yield or wait for timer.
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
@@ -130,13 +112,10 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
 
   public async cancelTask(taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
     this.cancelledTasks.add(taskId);
-    // The execute loop is responsible for publishing the final state
+    // execute() publishes the final cancellation status.
   }
 }
 
-/**
- * A realistic mock of AgentExecutor for failed cancellation tests.
- */
 export class FailingCancellableMockAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
   public cancelTaskSpy: MockInstance;
@@ -168,7 +147,6 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
       })
     );
 
-    // Simulate a long-running process
     for (let i = 0; i < 5; i++) {
       if (this.cancelledTasks.has(taskId)) {
         eventBus.publish(
@@ -201,6 +179,6 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
   }
 
   public async cancelTask(_taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
-    // No operation: simulates the failure of task cancellation
+    // No-op: simulates a cancellation that never publishes.
   }
 }

@@ -1,19 +1,8 @@
 /**
- * RPC request/response translators between v1.0 proto and v0.3 JSON.
- *
- * Each v0.3 JSON-RPC request type wraps its parameters under
- * `.params`; the v1.0 proto types are flat. These helpers cross that
- * boundary so transport layers can call into a v1.0 handler with the v1
- * proto types while presenting/parsing the v0.3 JSON-RPC wire format to
- * legacy clients.
- *
- * **`returnImmediately` ↔ `blocking` polarity inversion.** The v1.0
- * `SendMessageConfiguration.returnImmediately` field is the logical
- * inverse of v0.3 `MessageSendConfiguration.blocking`. We translate as
- * `return_immediately = !blocking` (and back)
- *
- * Going v1.0 → v0.3 we need a JSON-RPC `id` to populate the response
- * envelope; callers supply it explicitly as the `requestId` argument.
+ * RPC request/response translators. v0.3 JSON-RPC wraps params under
+ * `.params`; v1.0 proto types are flat. Note the polarity inversion:
+ * v1.0 `returnImmediately` = `!blocking` in v0.3. v1.0 → v0.3 helpers
+ * require an explicit `requestId` since v1.0 proto carries none.
  */
 
 import { A2AError } from '../server/error.js';
@@ -53,9 +42,6 @@ import { deepCloneMetadata } from './_clone.js';
 type RequestId = string | number;
 type ResponseId = string | number | null;
 
-/* --------------------------------- SendMessageConfiguration --------------------------------- */
-
-/** v0.3 `MessageSendConfiguration` → v1.0 proto `SendMessageConfiguration`. */
 export function toCoreSendMessageConfiguration(
   compat: legacy.MessageSendConfiguration
 ): V1SendMessageConfiguration {
@@ -69,22 +55,16 @@ export function toCoreSendMessageConfiguration(
   };
 }
 
-/** v1.0 proto `SendMessageConfiguration` → v0.3 `MessageSendConfiguration`. */
 export function toCompatSendMessageConfiguration(
   core: V1SendMessageConfiguration
 ): legacy.MessageSendConfiguration {
   const result: legacy.MessageSendConfiguration = {
     blocking: !core.returnImmediately,
   };
-  // Always emit `acceptedOutputModes`, even when empty. v1.0 proto types
-  // it as a required `string[]` (no `undefined` representation), and both
-  // the v1.0 JSON serializer (`SendMessageConfiguration.toJSON`) and gRPC
-  // `encode` treat `[]` and "absent" as wire-identical. Preserving the
-  // empty array here keeps an explicit v0.3 `acceptedOutputModes: []`
-  // round-trip-stable; the only observable cost is that a v0.3 caller
-  // who originally omitted the field will see `[]` on the return path
-  // rather than `undefined`, which carries no semantic change because
-  // the v1.0 layer has already collapsed the distinction.
+  // Always emit `acceptedOutputModes` (even `[]`). v1.0 collapses
+  // absent/empty on the wire, so a round-trip from an explicit `[]`
+  // stays stable; the only effect is callers who originally omitted it
+  // see `[]` on the return path.
   result.acceptedOutputModes = [...core.acceptedOutputModes];
   if (core.historyLength !== undefined) result.historyLength = core.historyLength;
   if (core.taskPushNotificationConfig) {
@@ -93,17 +73,7 @@ export function toCompatSendMessageConfiguration(
   return result;
 }
 
-/* --------------------------------- SendMessage --------------------------------- */
-
-/**
- * v0.3 `SendMessageRequest` (or `SendStreamingMessageRequest`) →
- * v1.0 proto `SendMessageRequest`.
- *
- * v0.3 has no concept of tenants, so the caller may supply the v1.0
- * `tenant` value out-of-band (e.g. from a URL path parameter resolved
- * by the Express layer). Defaults to `''` for the global tenant when
- * unspecified, matching the original v0.3 semantics.
- */
+/** v0.3 has no tenants; caller may supply one. Defaults to `''` (global). */
 export function toCoreSendMessageRequest(
   compat: legacy.SendMessageRequest | legacy.SendStreamingMessageRequest,
   tenant: string = ''
@@ -118,11 +88,6 @@ export function toCoreSendMessageRequest(
   };
 }
 
-/**
- * v1.0 proto `SendMessageRequest` → v0.3 `SendMessageRequest`.
- *
- * The caller supplies the JSON-RPC `id` since the proto carries none.
- */
 export function toCompatSendMessageRequest(
   core: V1SendMessageRequest,
   requestId: RequestId
@@ -141,12 +106,7 @@ export function toCompatSendMessageRequest(
   return { id: requestId, jsonrpc: '2.0', method: 'message/send', params };
 }
 
-/**
- * v1.0 proto `SendMessageRequest` → v0.3 `SendStreamingMessageRequest`.
- *
- * Identical to `toCompatSendMessageRequest` except the method name is
- * `message/stream`.
- */
+/** Like `toCompatSendMessageRequest` but with `method: 'message/stream'`. */
 export function toCompatSendStreamingMessageRequest(
   core: V1SendMessageRequest,
   requestId: RequestId
@@ -155,14 +115,7 @@ export function toCompatSendStreamingMessageRequest(
   return { ...inner, method: 'message/stream' };
 }
 
-/* --------------------------------- SendMessageResponse --------------------------------- */
-
-/**
- * v0.3 `SendMessageResponse` → v1.0 proto `SendMessageResponse`.
- *
- * Throws if the v0.3 response is an error envelope (callers should
- * surface errors via the v1.0 typed error classes instead).
- */
+/** Throws on error envelopes — callers should use typed error classes. */
 export function toCoreSendMessageResponse(
   compat: legacy.SendMessageResponse
 ): V1SendMessageResponse {
@@ -181,13 +134,7 @@ export function toCoreSendMessageResponse(
   throw A2AError.invalidParams('Invalid v0.3 SendMessageResponse result');
 }
 
-/**
- * v1.0 proto `SendMessageResponse` → v0.3 success envelope
- * `SendMessageSuccessResponse`.
- *
- * Errors should be wrapped via the v0.3 JSON-RPC error envelope at the
- * transport layer rather than here.
- */
+/** Errors are wrapped at the transport layer, not here. */
 export function toCompatSendMessageResponse(
   core: V1SendMessageResponse,
   requestId: ResponseId = null
@@ -207,17 +154,7 @@ export function toCompatSendMessageResponse(
   return { id: requestId, jsonrpc: '2.0', result };
 }
 
-/* --------------------------------- StreamResponse --------------------------------- */
-
-/**
- * v0.3 `SendStreamingMessageResponse` → v1.0 proto `StreamResponse`.
- *
- * The four success cases mirror the v1.0 oneof:
- * `Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent`.
- *
- * Throws if the v0.3 response is an error envelope (callers should
- * surface errors via the v1.0 typed error classes instead).
- */
+/** Throws on error envelopes — use typed error classes instead. */
 export function toCoreStreamResponse(
   compat: legacy.SendStreamingMessageResponse
 ): V1StreamResponse {
@@ -247,9 +184,6 @@ export function toCoreStreamResponse(
   }
 }
 
-/**
- * v1.0 proto `StreamResponse` → v0.3 `SendStreamingMessageSuccessResponse`.
- */
 export function toCompatStreamResponse(
   core: V1StreamResponse,
   requestId: ResponseId = null
@@ -278,14 +212,6 @@ export function toCompatStreamResponse(
   return { id: requestId, jsonrpc: '2.0', result };
 }
 
-/* --------------------------------- GetTask --------------------------------- */
-
-/**
- * v0.3 `GetTaskRequest` → v1.0 proto `GetTaskRequest`.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreGetTaskRequest(
   compat: legacy.GetTaskRequest,
   tenant: string = ''
@@ -297,7 +223,6 @@ export function toCoreGetTaskRequest(
   };
 }
 
-/** v1.0 proto `GetTaskRequest` → v0.3 `GetTaskRequest`. */
 export function toCompatGetTaskRequest(
   core: V1GetTaskRequest,
   requestId: RequestId
@@ -307,14 +232,6 @@ export function toCompatGetTaskRequest(
   return { id: requestId, jsonrpc: '2.0', method: 'tasks/get', params };
 }
 
-/* --------------------------------- CancelTask --------------------------------- */
-
-/**
- * v0.3 `CancelTaskRequest` → v1.0 proto `CancelTaskRequest`.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreCancelTaskRequest(
   compat: legacy.CancelTaskRequest,
   tenant: string = ''
@@ -326,7 +243,6 @@ export function toCoreCancelTaskRequest(
   };
 }
 
-/** v1.0 proto `CancelTaskRequest` → v0.3 `CancelTaskRequest`. */
 export function toCompatCancelTaskRequest(
   core: V1CancelTaskRequest,
   requestId: RequestId
@@ -337,14 +253,6 @@ export function toCompatCancelTaskRequest(
   return { id: requestId, jsonrpc: '2.0', method: 'tasks/cancel', params };
 }
 
-/* --------------------------------- SubscribeToTask --------------------------------- */
-
-/**
- * v0.3 `TaskResubscriptionRequest` → v1.0 proto `SubscribeToTaskRequest`.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreSubscribeToTaskRequest(
   compat: legacy.TaskResubscriptionRequest,
   tenant: string = ''
@@ -352,7 +260,6 @@ export function toCoreSubscribeToTaskRequest(
   return { tenant, id: compat.params.id };
 }
 
-/** v1.0 proto `SubscribeToTaskRequest` → v0.3 `TaskResubscriptionRequest`. */
 export function toCompatTaskResubscriptionRequest(
   core: V1SubscribeToTaskRequest,
   requestId: RequestId
@@ -365,16 +272,6 @@ export function toCompatTaskResubscriptionRequest(
   };
 }
 
-/* --------------------------------- PushNotificationConfig RPCs --------------------------------- */
-
-/**
- * v0.3 `SetTaskPushNotificationConfigRequest` → v1.0 proto
- * `TaskPushNotificationConfig` (used as the request body for
- * `CreateTaskPushNotificationConfig`).
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreCreateTaskPushNotificationConfigRequest(
   compat: legacy.SetTaskPushNotificationConfigRequest,
   tenant: string = ''
@@ -382,10 +279,6 @@ export function toCoreCreateTaskPushNotificationConfigRequest(
   return toCoreTaskPushNotificationConfig(compat.params, tenant);
 }
 
-/**
- * v1.0 proto `TaskPushNotificationConfig` (create request body) →
- * v0.3 `SetTaskPushNotificationConfigRequest`.
- */
 export function toCompatSetTaskPushNotificationConfigRequest(
   core: V1TaskPushNotificationConfig,
   requestId: RequestId
@@ -398,25 +291,17 @@ export function toCompatSetTaskPushNotificationConfigRequest(
   };
 }
 
-/**
- * v0.3 `GetTaskPushNotificationConfigRequest` → v1.0 proto request.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreGetTaskPushNotificationConfigRequest(
   compat: legacy.GetTaskPushNotificationConfigRequest,
   tenant: string = ''
 ): V1GetTaskPushNotificationConfigRequest {
   const params = compat.params;
-  // Both `GetTaskPushNotificationConfigParams` and `TaskIdParams1` carry `id`.
-  // The former additionally carries `pushNotificationConfigId`.
+  // Both shapes carry `id`; only the former carries `pushNotificationConfigId`.
   const configId =
     'pushNotificationConfigId' in params ? params.pushNotificationConfigId : undefined;
   return { tenant, taskId: params.id, id: configId ?? '' };
 }
 
-/** v1.0 proto request → v0.3 `GetTaskPushNotificationConfigRequest`. */
 export function toCompatGetTaskPushNotificationConfigRequest(
   core: V1GetTaskPushNotificationConfigRequest,
   requestId: RequestId
@@ -431,12 +316,6 @@ export function toCompatGetTaskPushNotificationConfigRequest(
   };
 }
 
-/**
- * v0.3 `DeleteTaskPushNotificationConfigRequest` → v1.0 proto request.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreDeleteTaskPushNotificationConfigRequest(
   compat: legacy.DeleteTaskPushNotificationConfigRequest,
   tenant: string = ''
@@ -448,7 +327,6 @@ export function toCoreDeleteTaskPushNotificationConfigRequest(
   };
 }
 
-/** v1.0 proto request → v0.3 `DeleteTaskPushNotificationConfigRequest`. */
 export function toCompatDeleteTaskPushNotificationConfigRequest(
   core: V1DeleteTaskPushNotificationConfigRequest,
   requestId: RequestId
@@ -461,12 +339,6 @@ export function toCompatDeleteTaskPushNotificationConfigRequest(
   };
 }
 
-/**
- * v0.3 `ListTaskPushNotificationConfigRequest` → v1.0 proto request.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreListTaskPushNotificationConfigsRequest(
   compat: legacy.ListTaskPushNotificationConfigRequest,
   tenant: string = ''
@@ -474,7 +346,6 @@ export function toCoreListTaskPushNotificationConfigsRequest(
   return { tenant, taskId: compat.params.id, pageSize: 0, pageToken: '' };
 }
 
-/** v1.0 proto request → v0.3 `ListTaskPushNotificationConfigRequest`. */
 export function toCompatListTaskPushNotificationConfigRequest(
   core: V1ListTaskPushNotificationConfigsRequest,
   requestId: RequestId
@@ -487,9 +358,6 @@ export function toCompatListTaskPushNotificationConfigRequest(
   };
 }
 
-/* --------------------------------- ListTaskPushNotificationConfigsResponse --------------------------------- */
-
-/** v0.3 list-success response → v1.0 proto `ListTaskPushNotificationConfigsResponse`. */
 export function toCoreListTaskPushNotificationConfigsResponse(
   compat: legacy.ListTaskPushNotificationConfigSuccessResponse
 ): V1ListTaskPushNotificationConfigsResponse {
@@ -499,7 +367,6 @@ export function toCoreListTaskPushNotificationConfigsResponse(
   };
 }
 
-/** v1.0 proto `ListTaskPushNotificationConfigsResponse` → v0.3 list-success response. */
 export function toCompatListTaskPushNotificationConfigSuccessResponse(
   core: V1ListTaskPushNotificationConfigsResponse,
   requestId: ResponseId = null
@@ -511,14 +378,6 @@ export function toCompatListTaskPushNotificationConfigSuccessResponse(
   };
 }
 
-/* --------------------------------- GetExtendedAgentCard --------------------------------- */
-
-/**
- * v0.3 `GetAuthenticatedExtendedCardRequest` → v1.0 proto `GetExtendedAgentCardRequest`.
- *
- * v0.3 has no concept of tenants; the caller may supply the v1.0
- * `tenant` value out-of-band. Defaults to `''` (global tenant).
- */
 export function toCoreGetExtendedAgentCardRequest(
   _compat: legacy.GetAuthenticatedExtendedCardRequest,
   tenant: string = ''
@@ -526,7 +385,6 @@ export function toCoreGetExtendedAgentCardRequest(
   return { tenant };
 }
 
-/** v1.0 proto `GetExtendedAgentCardRequest` → v0.3 `GetAuthenticatedExtendedCardRequest`. */
 export function toCompatGetAuthenticatedExtendedCardRequest(
   _core: V1GetExtendedAgentCardRequest,
   requestId: RequestId

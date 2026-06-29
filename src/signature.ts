@@ -1,32 +1,19 @@
 /**
- * Agent Card Signature utilities per §8.4.
- *
- * Provides JWS signing and verification for Agent Cards using
- * JCS (RFC 8785) canonicalization and the `jose` library.
- *
- * Agent Cards MAY be signed using JWS. Canonicalization MUST use JCS.
- * Clients SHOULD verify signatures when present.
+ * Agent Card signing and verification utilities. Uses JWS over a JCS
+ * (RFC 8785) canonicalization of the card, backed by the `jose` library.
  */
 
 import * as jose from 'jose';
 import { AgentCard, AgentCardSignature } from './index.js';
 
-/**
- * A function that signs an agent card and returns the card with signatures attached.
- */
+/** Signs an agent card and returns the card with signatures attached. */
 export type AgentCardSignatureGenerator = (agentCard: AgentCard) => Promise<AgentCard>;
 
 /**
- * Creates an {@link AgentCardSignatureGenerator} that signs an agent card using JWS
- * (Flattened JSON Serialization) with the provided private key.
- *
- * The agent card is canonicalized using JCS (RFC 8785) before signing.
- * The `signatures` field is excluded from the payload before canonicalization.
- *
- * @param privateKey - The private key used for signing.
- * @param protectedHeader - JWS protected header (MUST include `alg`, `kid`, `typ`).
- * @param header - Optional unprotected JWS header values.
- * @returns A function that signs an agent card and appends the signature.
+ * Creates an {@link AgentCardSignatureGenerator} that signs an agent card
+ * using JWS (Flattened JSON Serialization) with the provided private key.
+ * The `signatures` field is excluded from the payload before
+ * canonicalization. The `protectedHeader` MUST include `alg`, `kid`, `typ`.
  *
  * @example
  * ```ts
@@ -70,27 +57,17 @@ export function generateAgentCardSignature(
   };
 }
 
-/**
- * A function that verifies an agent card's signatures.
- * Throws if no valid signature is found.
- */
+/** Verifies an agent card's signatures, throwing if none are valid. */
 export type AgentCardSignatureVerifier = (agentCard: AgentCard) => Promise<void>;
 
 /**
- * Creates an {@link AgentCardSignatureVerifier} that verifies agent card signatures.
- *
- * The verifier iterates through all signatures on the card and succeeds if at least
- * one signature is valid (multi-signature support). The agent card is canonicalized
- * using JCS (RFC 8785) and compared against each signature's payload.
- *
- * @param retrievePublicKey - A function that retrieves the public key for a given `kid`
- *   and optional `jku` (JWK Set URL). Called for each signature's protected header.
- * @returns A function that verifies an agent card's signatures.
+ * Creates an {@link AgentCardSignatureVerifier} that succeeds if at least
+ * one signature on the card verifies against a key returned by
+ * `retrievePublicKey(kid, jku)`.
  *
  * @example
  * ```ts
  * const verifier = verifyAgentCardSignature(async (kid, jku) => {
- *   // Fetch the public key from your key store
  *   return await fetchPublicKey(kid, jku);
  * });
  * await verifier(agentCard); // throws if no valid signature
@@ -108,9 +85,8 @@ export function verifyAgentCardSignature(
     }
 
     // Round-trip through AgentCard.fromJSON/toJSON to normalize the card:
-    // fromJSON strips non-schema fields (e.g., backward-compatibility fields
-    // injected by other SDK implementations), and toJSON omits fields with
-    // default values. This mirrors the Python SDK's MessageToDict behavior.
+    // strip non-schema fields and omit fields with default values. Mirrors
+    // the Python SDK's MessageToDict behaviour.
     const normalizedCard = AgentCard.toJSON(AgentCard.fromJSON(agentCard)) as Record<
       string,
       unknown
@@ -136,7 +112,7 @@ export function verifyAgentCardSignature(
         };
 
         await jose.flattenedVerify(jws, publicKey);
-        return; // At least one valid signature found
+        return;
       } catch (error) {
         console.debug('Signature verification on entry was not successful:', signatureEntry, error);
       }
@@ -147,8 +123,8 @@ export function verifyAgentCardSignature(
 }
 
 /**
- * Removes empty values (empty strings, null, undefined, empty arrays, empty objects)
- * recursively from a value, preparing it for JCS canonicalization.
+ * Recursively strips empty values (empty strings, null, undefined, empty
+ * arrays, empty objects) from `d` in preparation for JCS canonicalization.
  */
 function cleanEmpty(d: unknown): unknown {
   if (d === '' || d === null || d === undefined) {
@@ -176,8 +152,8 @@ function cleanEmpty(d: unknown): unknown {
 }
 
 /**
- * JCS Canonicalization (RFC 8785).
- * Sorts object keys recursively and serializes to a deterministic JSON string.
+ * JCS canonicalization (RFC 8785): sorts object keys recursively and
+ * serializes to a deterministic JSON string.
  */
 function jcsStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -196,13 +172,9 @@ function jcsStringify(value: unknown): string {
 }
 
 /**
- * Canonicalizes an agent card using JCS (RFC 8785) for signing/verification.
- *
- * The `signatures` field MUST be excluded from the agent card before calling this.
- * Empty values are cleaned recursively, then keys are sorted deterministically.
- *
- * @param agentCard - The agent card without the `signatures` field.
- * @returns The canonical JSON string representation.
+ * Canonicalizes an agent card using JCS (RFC 8785) for signing /
+ * verification. The `signatures` field MUST be excluded from `agentCard`
+ * before calling this.
  */
 export function canonicalizeAgentCard(agentCard: Omit<AgentCard, 'signatures'>): string {
   const cleaned = cleanEmpty(agentCard);

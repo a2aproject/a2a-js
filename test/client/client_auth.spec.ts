@@ -7,22 +7,19 @@ import {
 } from '../../src/client/auth-handler.js';
 import { createMessageParams, createMockFetch } from './util.js';
 
-// Challenge manager class for authentication testing
 class ChallengeManager {
   private challengeStore: Set<string> = new Set();
 
   createChallenge(): string {
-    const challenge = Math.random().toString(36).substring(2, 18); // just a random string
+    const challenge = Math.random().toString(36).substring(2, 18);
     this.challengeStore.add(challenge);
     return challenge;
   }
 
-  // used by clients to sign challenges
   static signChallenge(challenge: string): string {
     return challenge + '.' + challenge.split('.').reverse().join('');
   }
 
-  // verify the "signature" as simply the reverse of the challenge
   verifyToken(token: string): boolean {
     const [challenge, signature] = token.split('.');
     if (!this.challengeStore.has(challenge)) return false;
@@ -37,7 +34,6 @@ class ChallengeManager {
 
 const challengeManager = new ChallengeManager();
 
-// Mock authentication handler that simulates generating tokens and confirming signatures
 class MockAuthHandler implements AuthenticationHandler {
   private authorization: string | null = null;
 
@@ -46,22 +42,17 @@ class MockAuthHandler implements AuthenticationHandler {
   }
 
   async shouldRetryWithHeaders(req: RequestInit, res: Response): Promise<HttpHeaders | undefined> {
-    // Simulate 401/403 response handling
     if (res.status !== 401 && res.status !== 403) return undefined;
 
-    // Parse WWW-Authenticate header to extract the token68/challenge value
     const [scheme, challenge] = res.headers.get('WWW-Authenticate')?.split(/\s+/) || [];
-    if (scheme !== 'Bearer') return undefined; // Not the type we expected for this test
+    if (scheme !== 'Bearer') return undefined;
 
-    // Use the ChallengeManager to sign the challenge
     const token = ChallengeManager.signChallenge(challenge);
 
-    // have the client try the token, BUT don't save it in case the client doesn't accept it
     return { Authorization: `Bearer ${token}` };
   }
 
   async onSuccessfulRetry(headers: HttpHeaders): Promise<void> {
-    // Remember successful authorization header
     const auth = headers['Authorization'];
     if (auth) this.authorization = auth;
   }
@@ -78,7 +69,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
     originalConsoleError = console.error;
     console.error = () => {};
 
-    // Create a fresh mock fetch for each test
     mockFetch = createMockFetch({
       requiresAuth: true,
       agentDescription: 'A test agent for authentication testing',
@@ -90,7 +80,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
     });
 
     authHandler = new MockAuthHandler();
-    // Use AuthHandlingFetch to wrap the mock fetch with authentication handling
     const authHandlingFetch = createAuthenticatingFetchWithRetry(mockFetch, authHandler);
     client = new JsonRpcTransport({
       endpoint: 'https://test-agent.example.com/api',
@@ -99,7 +88,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
   });
 
   afterEach(() => {
-    // Restore console.error
     console.error = originalConsoleError;
     vi.restoreAllMocks();
   });
@@ -111,10 +99,8 @@ describe('JsonRpcTransport Authentication Tests', () => {
         text: 'Hello, agent!',
       });
 
-      // This should trigger the authentication flow
       const result = await client.sendMessage(messageParams.request);
 
-      // Verify fetch was called multiple times
       expect(mockFetch.mock.calls.length).to.equal(2);
 
       // First call: RPC request without auth header
@@ -133,7 +119,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
       expect(mockFetch.mock.calls[1][1]).to.deep.include({
         method: 'POST',
       });
-      // Check headers separately to avoid issues with Authorization header
       expect(mockFetch.mock.calls[1][1].headers).to.have.property(
         'Content-Type',
         'application/json'
@@ -144,7 +129,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
       expect(mockFetch.mock.calls[1][1].headers['Authorization']).to.match(/^Bearer .+$/);
       expect(mockFetch.mock.calls[1][1].body).to.include('"method":"SendMessage"');
 
-      // Verify the result
       expect(result).to.exist;
       expect(result).to.have.property('messageId', 'msg-123');
     });
@@ -155,29 +139,23 @@ describe('JsonRpcTransport Authentication Tests', () => {
         text: 'Second message',
       });
 
-      // First request - should trigger auth flow
+      // First request triggers auth flow
       await client.sendMessage(messageParams.request);
 
-      // Capture the token from the first request
       const firstRequestAuthCall = mockFetch.mock.calls.find(
         (args) => (args[0] as string).includes('/api') && args[1].headers?.['Authorization']
       );
       const firstRequestToken = firstRequestAuthCall?.[1]?.headers?.['Authorization'];
 
-      // Second request - should use existing token
       const result2 = await client.sendMessage(messageParams.request);
 
-      // Total calls should be 3: 2 for first request + 1 for second request (auth token cached)
+      // 3 calls total: 2 for first request + 1 for second (token cached).
       expect(mockFetch.mock.calls.length).to.equal(3);
 
-      // Second request should start from call #3 (after the first 2 calls)
       const secondRequestCalls = mockFetch.mock.calls.slice(2);
 
-      // Only one call for second request: RPC request with auth header (agent card and token cached)
       expect(secondRequestCalls[0][0]).to.equal('https://test-agent.example.com/api');
       expect(secondRequestCalls[0][1].headers).to.have.property('Authorization');
-
-      // Should use the exact same token from the first request
       expect(secondRequestCalls[0][1].headers['Authorization']).to.equal(firstRequestToken);
 
       expect(result2).to.exist;
@@ -199,16 +177,13 @@ describe('JsonRpcTransport Authentication Tests', () => {
 
       await client.sendMessage(messageParams.request);
 
-      // Verify auth handler methods were called
       expect(authHandlerSpy.headers).toHaveBeenCalled();
       expect(authHandlerSpy.shouldRetryWithHeaders).toHaveBeenCalled();
       expect(authHandlerSpy.onSuccess).toHaveBeenCalled();
     });
 
     it('should handle auth handler returning undefined for retry', async () => {
-      // Create a mock that doesn't retry
       const noRetryHandler = new MockAuthHandler();
-      // noRetryHandler.shouldRetryWithHeaders.bind(noRetryHandler);
       noRetryHandler.shouldRetryWithHeaders = vi.fn().mockResolvedValue(undefined);
 
       const clientNoRetry = new JsonRpcTransport({
@@ -221,7 +196,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
         text: 'No retry test',
       });
 
-      // This should fail because we're not retrying with auth
       try {
         await clientNoRetry.sendMessage(messageParams.request);
         expect.fail('Expected error to be thrown');
@@ -231,7 +205,6 @@ describe('JsonRpcTransport Authentication Tests', () => {
     });
 
     it('should retry with new auth headers', async () => {
-      // Create a mock that tracks the Authorization headers sent
       const authRetryTestFetch = createMockFetch({
         agentDescription: 'A test agent for authentication testing',
         messageConfig: {
@@ -254,21 +227,16 @@ describe('JsonRpcTransport Authentication Tests', () => {
         text: 'Test auth retry',
       });
 
-      // This should trigger the auth flow and succeed
       const result = await clientAuthTest.sendMessage(messageParams.request);
 
-      // Verify the Authorization headers were sent correctly
-      // With AuthHandlingFetch, the auth handler makes the retry internally, so we see both calls
       expect(capturedAuthHeaders).to.have.length(2);
-      expect(capturedAuthHeaders[0]).to.equal(''); // First call: no Authorization header
-      expect(capturedAuthHeaders[1]).to.be.a('string').and.not.be.empty; // Second call: with Authorization header
+      expect(capturedAuthHeaders[0]).to.equal('');
+      expect(capturedAuthHeaders[1]).to.be.a('string').and.not.be.empty;
 
-      // Verify the result
       expect(result).to.exist;
     });
 
     it('should continue without authentication when server does not return 401', async () => {
-      // Create a mock that doesn't require authentication
       const noAuthRequiredFetch = createMockFetch({
         requiresAuth: false,
         agentDescription: 'A test agent that does not require authentication',
@@ -290,29 +258,23 @@ describe('JsonRpcTransport Authentication Tests', () => {
         text: 'Test without authentication',
       });
 
-      // This should succeed without any authentication flow
       const result = await clientNoAuth.sendMessage(messageParams.request);
 
-      // Verify that no Authorization headers were sent
       expect(capturedAuthHeaders).to.have.length(1);
-      expect(capturedAuthHeaders[0]).to.equal(''); // No auth header sent
+      expect(capturedAuthHeaders[0]).to.equal('');
 
-      // Verify the result
       expect(result).to.exist;
-      // Check if result is a Message1 (which has messageId) or Task2
       if ('messageId' in result) {
         expect(result.messageId).to.equal('msg-no-auth-required');
       }
     });
 
     it('Client pipes server errors when no auth handler is specified', async () => {
-      // Create a mock that returns 401 without authHandler
       const fetchWithApiError = createMockFetch({
         agentDescription: 'A test agent that requires authentication',
         behavior: 'alwaysFail',
       });
 
-      // Create client WITHOUT authHandler
       const clientNoAuthHandler = new JsonRpcTransport({
         endpoint: 'https://test-agent.example.com/api',
         fetchImpl: fetchWithApiError,
@@ -323,18 +285,16 @@ describe('JsonRpcTransport Authentication Tests', () => {
         text: 'Test without auth handler',
       });
 
-      // The client should return a TaskNotFoundError (since the error code is -32001) rather than throwing an error directly, but JsonRpcTransport maps it back out to be thrown
+      // Error code -32001 maps to TaskNotFoundError via JsonRpcTransport.
       try {
         await clientNoAuthHandler.sendMessage(messageParams.request);
         expect.fail('Expected error to be thrown');
       } catch (error) {
-        // Verify that the result is a JSON-RPC mapped error
         expect(error).to.be.instanceOf(Error);
         expect((error as Error).name).to.equal('TaskNotFoundError');
       }
 
-      // Verify that fetch was called only once (no retry attempted)
-      expect(fetchWithApiError.mock.calls.length).to.equal(1); // One for API call
+      expect(fetchWithApiError.mock.calls.length).to.equal(1);
     });
   });
 });
@@ -375,11 +335,8 @@ describe('AuthHandlingFetch Tests', () => {
 
   describe('Header Merging', () => {
     it('should merge auth headers with provided headers when auth headers exist', async () => {
-      // Create an auth handler that has stored authorization headers
       const authHandlerWithHeaders = new MockAuthHandler();
 
-      // Simulate a successful authentication by calling onSuccessfulRetry
-      // This will store the Authorization header in the auth handler
       await authHandlerWithHeaders.onSuccessfulRetry({
         Authorization: 'Bearer test-token-123',
       });
@@ -396,18 +353,15 @@ describe('AuthHandlingFetch Tests', () => {
         },
       });
 
-      // Verify that the fetch was called with merged headers including auth headers
       const fetchCallArgs = mockFetch.mock.calls[0];
       const headers = fetchCallArgs[1]?.headers as Record<string, string>;
 
-      // Should include both user headers and auth headers
       expect(headers).to.include({
         'Content-Type': 'application/json',
         'Custom-Header': 'custom-value',
         Authorization: 'Bearer test-token-123',
       });
 
-      // Verify the auth handler's headers method returns the stored authorization
       const storedHeaders = await authHandlerWithHeaders.headers();
       expect(storedHeaders['Authorization']).to.equal('Bearer test-token-123');
     });
@@ -428,7 +382,6 @@ describe('AuthHandlingFetch Tests', () => {
       const successAuthHandler = new MockAuthHandler();
       const onSuccessSpy = vi.spyOn(successAuthHandler, 'onSuccessfulRetry');
 
-      // Create a modified version of the existing mockFetch that returns 401 first, then 200
       const successMockFetch = createMockFetch({
         messageConfig: {
           messageId: 'msg-success',
@@ -456,7 +409,6 @@ describe('AuthHandlingFetch Tests', () => {
 
       createAuthenticatingFetchWithRetry(mockFetch, failAuthHandler);
 
-      // Mock fetch to return 401 first, then 401 again
       const failMockFetch = createMockFetch({
         behavior: 'alwaysFail',
       });

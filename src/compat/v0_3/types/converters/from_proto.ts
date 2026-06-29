@@ -37,9 +37,7 @@ import {
 import * as types from '../types.js';
 import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_decoding.js';
 
-/**
- * Converts proto types to internal types.
- */
+/** Converts proto types to internal types. */
 export class FromProto {
   static taskQueryParams(request: GetTaskRequest): types.TaskQueryParams {
     return {

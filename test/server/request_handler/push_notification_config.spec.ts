@@ -16,35 +16,8 @@ import { DefaultExecutionEventBusManager } from '../../../src/server/events/exec
 import { ServerCallContext } from '../../../src/server/context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
-/**
- * Focused coverage for {@link DefaultRequestHandler.createTaskPushNotificationConfig}
- * per spec §3.1.7 ("Created configuration with assigned ID") and §5.1
- * (functional equivalence across transports).
- *
- * The contract verified here:
- *
- *   1. **Id-less Create** — when `params.id` is empty the handler MUST
- *      assign a server-side UUID and return the persisted record. Prior
- *      to this fix the store's `id ||= taskId` fallback collapsed every
- *      parameter-less Create onto a single row, silently overwriting
- *      previous configs.
- *
- *   2. **Multiple id-less Creates** — must produce distinct entries,
- *      each with its own UUID. Regression guard for the same
- *      destructive-upsert path.
- *
- *   3. **Explicit id** — when the caller supplies a non-empty id the
- *      handler MUST persist under that id and return the stored shape
- *      (not the input params reference), so the caller observes any
- *      normalization the store performed.
- *
- *   4. **List after multi-Create** — `listTaskPushNotificationConfigs`
- *      returns every entry created above (id-less + explicit), proving
- *      the records weren't merged.
- *
- * Mirrors a2a-go's UUIDv7-based store (`a2asrv/push/store.go:45-48`) and
- * a2a-python's parameter-less Create handling.
- */
+// id-less Create assigns a server-side UUID. Regression guard for the
+// pre-fix `id ||= taskId` collapse that overwrote configs.
 describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1)', () => {
   let handler: DefaultRequestHandler;
   let taskStore: TaskStore;

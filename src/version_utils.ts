@@ -1,10 +1,8 @@
 /**
- * Utility helpers for A2A protocol-version comparison.
- *
- * Lives in core so both the v1.0 transports (which dispatch to the v0.3
- * compat transport when the matched `AgentInterface.protocolVersion` is
- * legacy) and the v0.3 compat translators can share a single implementation
- * without core having to statically import from the compat layer.
+ * Utility helpers for A2A protocol-version comparison. Lives in core so
+ * both the v1.0 transports and the v0.3 compat translators can share a
+ * single implementation without core having to import from the compat
+ * layer.
  */
 
 import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from './constants.js';
@@ -22,10 +20,7 @@ interface NumericVersion {
 
 /**
  * Parses a `Major.Minor[.Patch...]` version string into its leading
- * `(major, minor)` pair.
- *
- * Returns `undefined` for empty / unparseable inputs so callers can fall back
- * to a default policy.
+ * `(major, minor)` pair. Returns `undefined` for unparseable inputs.
  */
 function parseVersion(version: string): NumericVersion | undefined {
   const trimmed = version.trim();
@@ -63,7 +58,6 @@ export function isLegacyVersion(version: string | null | undefined): boolean {
 
   const lower = parseVersion(PROTOCOL_VERSION_0_3);
   const upper = parseVersion(PROTOCOL_VERSION_1_0);
-  // Defensive: both bounds are constants, so they should always parse.
   if (!lower || !upper) return false;
 
   return compareVersions(v, lower) >= 0 && compareVersions(v, upper) < 0;

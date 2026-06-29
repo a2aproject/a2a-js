@@ -332,7 +332,6 @@ describe('Client E2E tests', () => {
 
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          // Create the task first (non-blocking so it returns immediately)
           await client.sendMessage({
             tenant: '',
             message: createTestMessage('msg-terminal', 'test'),
@@ -344,35 +343,30 @@ describe('Client E2E tests', () => {
             metadata: {},
           });
 
-          // Try to cancel a completed task
           await expect(client.cancelTask({ id: taskId, tenant: '', metadata: {} })).rejects.toThrow(
             TaskNotCancelableError
           );
         });
 
         it('should return UnsupportedOperationError when streaming is disabled', async () => {
-          // Override agent card to disable streaming
           agentCard.capabilities!.streaming = false;
 
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          // sendMessageStream falls back to sendMessage when streaming is not supported.
-          // Use sendMessage directly to trigger the streaming-specific error path
-          // by attempting to resubscribe to a non-existent task.
+          // sendMessageStream falls back to sendMessage when streaming is not supported;
+          // resubscribeTask triggers the streaming-specific error path.
           await expect(
             client.resubscribeTask({ id: 'non-existent', tenant: '' }).next()
           ).rejects.toThrow(UnsupportedOperationError);
         });
 
         it('should return ExtensionSupportRequiredError when required extension is missing', async () => {
-          // Override agent card to require an extension
           agentCard.capabilities!.extensions = [
             { uri: 'urn:a2a:required-ext', required: true, description: 'Required', params: {} },
           ];
 
           const client = await clientFactory.createFromAgentCard(agentCard);
 
-          // Send without declaring the required extension
           await expect(
             client.sendMessage({
               tenant: '',
@@ -482,12 +476,10 @@ describe('Multi-tenancy E2E tests', () => {
         metadata: {},
       });
 
-      // Result should be a Task (not a Message) since we published task events
       expect('id' in result).to.equal(true);
       const task = result as Task;
       expect(task.status?.state).to.equal(TaskState.TASK_STATE_COMPLETED);
 
-      // Should be able to retrieve the task via the same tenant
       const retrieved = await client.getTask({
         id: task.id,
         tenant,
@@ -503,7 +495,6 @@ describe('Multi-tenancy E2E tests', () => {
         agentExecutor
       );
 
-      // Create a separate server with a fresh store
       const isolationApp = express();
       isolationApp.use(
         '/a2a/rest',
@@ -515,7 +506,6 @@ describe('Multi-tenancy E2E tests', () => {
       try {
         const baseUrl = `http://localhost:${address.port}/a2a/rest`;
 
-        // Send message as tenant-A
         agentExecutor.events = [
           AgentEvent.task({
             id: 'task-a',
@@ -561,7 +551,7 @@ describe('Multi-tenancy E2E tests', () => {
         });
         expect('id' in resultA).to.equal(true);
 
-        // Try to get tenant-A's task as tenant-B -- should fail
+        // tenant-B should not see tenant-A's task
         const tenantBCard = {
           ...agentCard,
           supportedInterfaces: [
@@ -580,7 +570,6 @@ describe('Multi-tenancy E2E tests', () => {
             tenant: 'tenant-B',
             historyLength: 0,
           });
-          // Should not reach here
           expect.fail('Expected TaskNotFoundError');
         } catch (error: unknown) {
           expect((error as Error).name).to.equal('TaskNotFoundError');

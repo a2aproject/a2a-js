@@ -6,63 +6,46 @@ import { OwnerResolver, resolveUserScope } from './owner_resolver.js';
 import { ScopedStore } from './utils.js';
 
 /**
- * Simplified interface for task storage providers.
- * Stores and retrieves the task.
+ * Interface for task storage providers. Implementations SHOULD use
+ * `context.tenant` (when present) and the authenticated caller's identity
+ * to scope data access so that each authenticated client only sees its
+ * own tasks.
  *
- * Implementations SHOULD use `context.tenant` (when present) and the authenticated
- * caller's identity to scope data access. Per spec §13.1, servers MUST ensure
- * appropriate scope limitation based on the authenticated caller's authorization
- * boundaries. This includes both tenant isolation in multi-tenant deployments and
- * user/owner-level resource scoping so that each authenticated client can only
- * access its own tasks.
- *
- * The built-in {@link InMemoryTaskStore} uses an {@link OwnerResolver} (defaulting
- * to {@link resolveUserScope}) to derive the owner from `context.user`.
+ * The built-in {@link InMemoryTaskStore} uses an {@link OwnerResolver}
+ * (defaulting to {@link resolveUserScope}) to derive the owner from
+ * `context.user`.
  */
 export interface TaskStore {
   /**
-   * Saves a task.
-   * Overwrites existing data if the task ID exists.
+   * Saves a task, overwriting any existing entry with the same ID.
    * @param task The task to save.
-   * @param context The context of the current call.
-   *   Use `context.tenant` for tenant-scoped storage and `context.user` for owner scoping.
-   * @returns A promise resolving when the save operation is complete.
+   * @param context The context of the current call. Use `context.tenant`
+   *   for tenant-scoped storage and `context.user` for owner scoping.
    */
   save(task: Task, context: ServerCallContext): Promise<void>;
 
   /**
-   * Loads a task by task ID.
-   * Returns `undefined` if the task does not exist or is not accessible to the caller.
+   * Loads a task by ID, or `undefined` if not found / not accessible.
    * @param taskId The ID of the task to load.
-   * @param context The context of the current call.
-   *   Use `context.tenant` for tenant-scoped lookups and `context.user` for owner scoping.
-   * @returns A promise resolving to the Task, or undefined if not found/not accessible.
+   * @param context The context of the current call. Use `context.tenant`
+   *   for tenant-scoped lookups and `context.user` for owner scoping.
    */
   load(taskId: string, context: ServerCallContext): Promise<Task | undefined>;
 
   /**
-   * Lists tasks with filtering and pagination.
-   * Per spec §3.1.4, the operation MUST return only tasks visible to the authenticated client.
+   * Lists tasks visible to the authenticated caller, with filtering and pagination.
    * @param params Filtering and pagination parameters.
-   * @param context The context of the current call.
-   *   Use `context.tenant` for tenant-scoped listing and `context.user` for owner scoping.
+   * @param context The context of the current call. Use `context.tenant`
+   *   for tenant-scoped listing and `context.user` for owner scoping.
    */
   list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse>;
 }
 
-// ========================
-// InMemoryTaskStore
-// ========================
-//
-// InMemoryTaskStore provides tenant- and owner-scoped data isolation.
-// A triple-nested Map structure (tenant -> owner -> taskId -> Task) is used so that
-// both tenant and owner scoping are structural rather than key-convention based,
-// imposing no restrictions on task ID format.
-//
-// Per spec §13.1, servers MUST ensure appropriate scope limitation based on the
-// authenticated caller's authorization boundaries. This store resolves the owner
-// via an OwnerResolver (defaulting to resolveUserScope which uses context.user.userName).
-
+/**
+ * In-memory {@link TaskStore} backed by a triple-nested Map
+ * (tenant -> owner -> taskId -> Task). Owner identity comes from an
+ * {@link OwnerResolver} (defaulting to {@link resolveUserScope}).
+ */
 export class InMemoryTaskStore implements TaskStore {
   private readonly _scopedStore: ScopedStore<Task>;
 
@@ -72,12 +55,12 @@ export class InMemoryTaskStore implements TaskStore {
 
   async load(taskId: string, context: ServerCallContext): Promise<Task | undefined> {
     const entry = this._scopedStore.getBucket(context)?.get(taskId);
-    // Return deep copies to prevent external mutation
+    // Return deep copies so callers can't mutate our internal state.
     return entry ? structuredClone(entry) : undefined;
   }
 
   async save(task: Task, context: ServerCallContext): Promise<void> {
-    // Store deep copies to prevent internal mutation if caller reuses objects
+    // Store deep copies so caller-side mutation can't drift our state.
     this._scopedStore.getOrCreateBucket(context).set(task.id, structuredClone(task));
   }
 
@@ -94,17 +77,14 @@ export class InMemoryTaskStore implements TaskStore {
     const bucket = this._scopedStore.getBucket(context);
     let tasks = bucket ? Array.from(bucket.values()) : [];
 
-    // Filter by contextId
     if (contextId) {
       tasks = tasks.filter((task) => task.contextId === contextId);
     }
 
-    // Filter by status
     if (status !== undefined) {
       tasks = tasks.filter((task) => task.status?.state === status);
     }
 
-    // Filter by timestamp after
     if (statusTimestampAfter) {
       const filterTime = new Date(statusTimestampAfter).getTime();
       tasks = tasks.filter(
@@ -112,7 +92,7 @@ export class InMemoryTaskStore implements TaskStore {
       );
     }
 
-    // Sort by timestamp descending
+    // Sort by timestamp descending; break ties by id descending.
     tasks.sort((taskA, taskB) => {
       const timeA = taskA.status?.timestamp || '';
       const timeB = taskB.status?.timestamp || '';
@@ -124,7 +104,6 @@ export class InMemoryTaskStore implements TaskStore {
 
     const totalSize = tasks.length;
 
-    // Pagination cursor
     if (pageToken) {
       try {
         const decoded = Buffer.from(pageToken, 'base64').toString('utf-8');
@@ -141,7 +120,7 @@ export class InMemoryTaskStore implements TaskStore {
         if (cursorIndex !== -1) {
           tasks = tasks.slice(cursorIndex + 1);
         } else {
-          // This case can happen if the cursor task was deleted.
+          // The cursor task may have been deleted between calls.
           tasks = [];
         }
       } catch (e) {
@@ -152,7 +131,6 @@ export class InMemoryTaskStore implements TaskStore {
 
     const paginatedTasks = tasks.slice(0, pageSize);
 
-    // Map tasks to response format
     const resultTasks = paginatedTasks.map((task) => {
       const taskCopy = structuredClone(task);
       if (!includeArtifacts) {

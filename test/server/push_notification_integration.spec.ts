@@ -70,7 +70,6 @@ describe('Push Notification Integration Tests', () => {
     signatures: [],
   };
 
-  // Create test Express server to receive push notifications
   const createTestServer = (): Promise<{
     server: Server;
     port: number;
@@ -80,7 +79,6 @@ describe('Push Notification Integration Tests', () => {
       const app = express();
       app.use(express.json({ type: ['application/json', 'application/a2a+json'] }));
 
-      // Endpoint to receive push notifications
       app.post('/notify', (req: Request, res: Response) => {
         receivedNotifications.push({
           body: req.body,
@@ -91,10 +89,9 @@ describe('Push Notification Integration Tests', () => {
         res.status(200).json({ received: true, timestamp: new Date().toISOString() });
       });
 
-      // Endpoint to simulate different response scenarios
       app.post('/notify/:scenario', async (req: Request, res: Response) => {
         const scenario = req.params.scenario;
-        // Simulate delay for 'submitted' status to test correct ordering of notifications
+        // Delay 'submitted' notifications so ordering can be observed.
         if (
           scenario === 'delay_on_submitted' &&
           req.body.task?.status?.state === 'TASK_STATE_SUBMITTED'
@@ -127,15 +124,12 @@ describe('Push Notification Integration Tests', () => {
   };
 
   beforeEach(async () => {
-    // Reset state
     receivedNotifications = [];
 
-    // Create and start test server
     const serverInfo = await createTestServer();
     testServer = serverInfo.server;
     testServerUrl = serverInfo.url;
 
-    // Create fresh instances for each test
     taskStore = new InMemoryTaskStore();
     mockAgentExecutor = new MockAgentExecutor();
     const executionEventBusManager = new DefaultExecutionEventBusManager();
@@ -155,7 +149,6 @@ describe('Push Notification Integration Tests', () => {
   });
 
   afterEach(async () => {
-    // Clean up test server
     if (testServer) {
       await testServer.close();
     }
@@ -214,19 +207,15 @@ describe('Push Notification Integration Tests', () => {
       };
 
       let taskId: string = '';
-      // Mock the agent executor to publish all three states for this test only
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         taskId = ctx.taskId;
         await fakeTaskExecute(ctx, bus);
       });
 
-      // Send message and wait for completion
       await handler.sendMessage(params, defaultContext);
 
-      // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
 
-      // Load the task from the store
       const expectedTaskResult: Task = {
         id: taskId,
         contextId,
@@ -240,14 +229,12 @@ describe('Push Notification Integration Tests', () => {
         metadata: {},
       };
 
-      // Verify push notifications were sent
       assert.lengthOf(
         receivedNotifications,
         3,
         'Should send notifications for submitted, working, and completed states'
       );
 
-      // Verify all three states are present
       const states = receivedNotifications.map(
         (n) => n.body.task?.status?.state || n.body.statusUpdate?.status?.state
       );
@@ -267,7 +254,6 @@ describe('Push Notification Integration Tests', () => {
         'Should include completed state'
       );
 
-      // Verify first notification has correct format
       const firstNotification = receivedNotifications[0];
       assert.equal(firstNotification.method, 'POST');
       assert.equal(firstNotification.url, '/notify/delay_on_submitted');
@@ -362,7 +348,7 @@ describe('Push Notification Integration Tests', () => {
         configuration: undefined,
       };
 
-      // Assume the task is created by a previous message
+      // Task assumed to be created by a previous message.
       const task: Task = {
         id: 'test-multi-endpoints',
         contextId: 'test-context',
@@ -377,17 +363,14 @@ describe('Push Notification Integration Tests', () => {
       };
       await taskStore.save(task, defaultContext);
 
-      // Set multiple push notification configs for this message
       await handler.createTaskPushNotificationConfig(pushConfig1, defaultContext);
 
       await handler.createTaskPushNotificationConfig(pushConfig2, defaultContext);
 
-      // Mock the agent executor to publish only completed state
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
 
-        // Publish working status
         bus.publish(
           AgentEvent.statusUpdate({
             taskId,
@@ -401,7 +384,6 @@ describe('Push Notification Integration Tests', () => {
           })
         );
 
-        // Publish completion directly
         bus.publish(
           AgentEvent.statusUpdate({
             taskId,
@@ -418,13 +400,10 @@ describe('Push Notification Integration Tests', () => {
         bus.finished();
       });
 
-      // Send a message to trigger notifications
       await handler.sendMessage(params, defaultContext);
 
-      // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
 
-      // Should now have notifications from both endpoints
       const notificationsByEndpoint = receivedNotifications.reduce(
         (acc, n) => {
           acc[n.url] = acc[n.url] || 0;
@@ -434,7 +413,6 @@ describe('Push Notification Integration Tests', () => {
         {} as Record<string, number>
       );
 
-      // Verify push notification was attempted (even though it failed)
       assert.lengthOf(receivedNotifications, 4, 'Should have 4 notifications 2 for each endpoint');
       assert.equal(
         notificationsByEndpoint['/notify'],
@@ -477,20 +455,17 @@ describe('Push Notification Integration Tests', () => {
       };
 
       let taskId: string = '';
-      // Mock the agent executor to publish task states
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         taskId = ctx.taskId;
         fakeTaskExecute(ctx, bus);
       });
 
-      // Send message and wait for completion - this should not throw an error
+      // Sending should not throw even though the webhook returns an error.
       const result = await handler.sendMessage(params, defaultContext);
       const taskResult = result as Task;
 
-      // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
 
-      // Load the task from the store
       const expectedTaskResult: Task = {
         id: taskId,
         contextId,
@@ -504,11 +479,10 @@ describe('Push Notification Integration Tests', () => {
         metadata: {},
       };
 
-      // Verify the task payload requires loose matching for timestamps
+      // Loose match on timestamps.
       assert.equal(taskResult.id, expectedTaskResult.id);
       assert.equal(taskResult.status?.state, TaskState.TASK_STATE_COMPLETED);
 
-      // Verify the error endpoint was hit
       const errorNotifications = receivedNotifications.filter((n) => n.url === '/notify/error');
       assert.lengthOf(
         errorNotifications,
@@ -541,7 +515,6 @@ describe('Push Notification Integration Tests', () => {
         },
       };
 
-      // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
@@ -579,10 +552,8 @@ describe('Push Notification Integration Tests', () => {
 
       await handler.sendMessage(params, defaultContext);
 
-      // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
 
-      // Verify default header name is used
       assert.lengthOf(
         receivedNotifications,
         2,
@@ -604,7 +575,6 @@ describe('Push Notification Integration Tests', () => {
     });
 
     it('should use custom header name when tokenHeaderName is specified', async () => {
-      // Create a new handler with custom header name
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
         {
@@ -643,7 +613,6 @@ describe('Push Notification Integration Tests', () => {
         },
       };
 
-      // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
@@ -681,10 +650,8 @@ describe('Push Notification Integration Tests', () => {
 
       await customHandler.sendMessage(params, defaultContext);
 
-      // Wait for async push notifications to be sent
       await waitForPushNotifications(customSenderSpy);
 
-      // Verify custom header name is used
       assert.lengthOf(
         receivedNotifications,
         2,
@@ -715,7 +682,7 @@ describe('Push Notification Integration Tests', () => {
         taskId: '',
         id: 'no-token-test',
         url: `${testServerUrl}/notify`,
-        token: '', // Empty token
+        token: '',
         authentication: undefined,
       };
 
@@ -731,7 +698,6 @@ describe('Push Notification Integration Tests', () => {
         },
       };
 
-      // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
@@ -769,10 +735,8 @@ describe('Push Notification Integration Tests', () => {
 
       await handler.sendMessage(params, defaultContext);
 
-      // Wait for async push notifications to be sent
       await waitForPushNotifications(pushNotificationSenderSpy);
 
-      // Verify no token header is sent
       assert.lengthOf(
         receivedNotifications,
         2,
@@ -793,7 +757,6 @@ describe('Push Notification Integration Tests', () => {
     });
 
     it('should handle multiple push configs with different header configurations', async () => {
-      // Create a handler with custom header name
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
         {
@@ -841,7 +804,6 @@ describe('Push Notification Integration Tests', () => {
         configuration: undefined,
       };
 
-      // Create task and set multiple push configs
       const task: Task = {
         id: 'multi-config-test',
         contextId: 'test-context',
@@ -860,7 +822,6 @@ describe('Push Notification Integration Tests', () => {
 
       await customHandler.createTaskPushNotificationConfig(pushConfig2, defaultContext);
 
-      // Mock the agent executor to publish completion
       mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
         const taskId = ctx.taskId;
         const contextId = ctx.contextId;
@@ -883,17 +844,14 @@ describe('Push Notification Integration Tests', () => {
 
       await customHandler.sendMessage(params, defaultContext);
 
-      // Wait for async push notifications to be sent
       await waitForPushNotifications(customSenderSpy);
 
-      // Verify both endpoints received notifications with correct headers
       const config1Notifications = receivedNotifications.filter((n) => n.url === '/notify');
       const config2Notifications = receivedNotifications.filter((n) => n.url === '/notify/second');
 
       assert.lengthOf(config1Notifications, 1, 'Should send notification to first endpoint');
       assert.lengthOf(config2Notifications, 1, 'Should send notification to second endpoint');
 
-      // Check headers for config with token
       config1Notifications.forEach((notification) => {
         assert.equal(
           notification.headers['x-custom-token'],
@@ -906,7 +864,6 @@ describe('Push Notification Integration Tests', () => {
         );
       });
 
-      // Check headers for config without token
       config2Notifications.forEach((notification) => {
         assert.isUndefined(
           notification.headers['x-custom-token'],
@@ -918,7 +875,6 @@ describe('Push Notification Integration Tests', () => {
         );
       });
 
-      // Both should have content-type
       receivedNotifications.forEach((notification) => {
         assert.equal(
           notification.headers['content-type'],
@@ -1157,9 +1113,9 @@ describe('Push Notification Integration Tests', () => {
 
   describe('StreamResponse payload types', () => {
     it('should send message payload correctly (§4.3.3)', async () => {
-      // Per spec §4.3.3 messages are valid push-notification payloads. When
-      // bound to a task with a registered config the webhook receives the
-      // canonical StreamResponse JSON containing the message.
+      // Messages are valid push-notification payloads. When bound to a
+      // task with a registered config the webhook receives the canonical
+      // StreamResponse JSON containing the message.
       const taskId = 'test-message-payload';
       const pushConfig: TaskPushNotificationConfig = {
         tenant: '',
@@ -1201,9 +1157,9 @@ describe('Push Notification Integration Tests', () => {
     });
 
     it('should silently skip dispatch for stand-alone messages (no task association)', async () => {
-      // Message-only stream pattern (§3.1.2) has no taskId — no config can
-      // be registered for it, so the sender returns silently without
-      // hitting the store or webhook.
+      // Message-only stream pattern has no taskId — no config can be
+      // registered for it, so the sender returns silently without hitting
+      // the store or webhook.
       const streamResponse: StreamResponse = {
         payload: {
           $case: 'message',

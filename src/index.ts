@@ -1,8 +1,8 @@
 /**
  * Exports the common types.
  *
- * Use the client/index.ts file to import the client-only codebase.
- * Use the server/index.ts file to import the server-only codebase.
+ * Use `./client` for the client-only codebase and `./server` for the
+ * server-only codebase.
  */
 
 import { Message, Task } from './types/pb/a2a.js';
