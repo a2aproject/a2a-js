@@ -111,21 +111,17 @@ export class LegacyJsonRpcTransportHandler {
                 context
               );
 
+        // Errors thrown by `agentEventStream` propagate out of the
+        // generator; the Express layer catches them, logs the failure,
+        // and writes a final SSE `event: error` frame carrying the
+        // JSON-RPC error envelope before closing the stream.
         return (async function* legacyJsonRpcEventStream(): AsyncGenerator<
           LegacyJSONRPCResponse,
           void,
           undefined
         > {
-          try {
-            for await (const event of agentEventStream) {
-              yield toCompatStreamResponse(event, requestId);
-            }
-          } catch (streamError) {
-            console.error(
-              `Error in agent event stream for ${method} (request ${requestId}):`,
-              streamError
-            );
-            throw streamError;
+          for await (const event of agentEventStream) {
+            yield toCompatStreamResponse(event, requestId);
           }
         })();
       }

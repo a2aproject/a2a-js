@@ -8,8 +8,10 @@ export { RequestContext } from './agent_execution/request_context.js';
 export type {
   AgentExecutionEvent,
   AgentExecutionEventKind,
+  EventListener,
   ExecutionEventBus,
   ExecutionEventName,
+  FinishedListener,
 } from './events/execution_event_bus.js';
 export {
   AgentEvent,

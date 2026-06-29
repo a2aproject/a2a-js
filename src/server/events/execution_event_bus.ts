@@ -52,11 +52,20 @@ export function assertUnreachableEvent(event: never): never {
 /** Event names supported by {@link ExecutionEventBus}. */
 export type ExecutionEventName = 'event' | 'finished';
 
+/** Listener for `'event'` notifications, invoked with the published event. */
+export type EventListener = (event: AgentExecutionEvent) => void;
+
+/** Listener for `'finished'` notifications, invoked with no arguments. */
+export type FinishedListener = () => void;
+
 export interface ExecutionEventBus {
   publish(event: AgentExecutionEvent): void;
-  on(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this;
-  off(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this;
-  once(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this;
+  on(eventName: 'event', listener: EventListener): this;
+  on(eventName: 'finished', listener: FinishedListener): this;
+  off(eventName: 'event', listener: EventListener): this;
+  off(eventName: 'finished', listener: FinishedListener): this;
+  once(eventName: 'event', listener: EventListener): this;
+  once(eventName: 'finished', listener: FinishedListener): this;
   removeAllListeners(eventName?: ExecutionEventName): this;
   finished(): void;
 }
@@ -74,7 +83,6 @@ const CustomEventImpl: typeof CustomEvent =
         }
       } as typeof CustomEvent);
 
-type Listener = (event: AgentExecutionEvent) => void;
 type WrappedListener = (e: Event) => void;
 
 // Should always pass for 'event' type events since we control the dispatch
@@ -92,11 +100,11 @@ function isAgentExecutionCustomEvent(e: Event): e is CustomEvent<AgentExecutionE
  * `listenerCount`, `rawListeners`, etc. are not available.
  */
 export class DefaultExecutionEventBus extends EventTarget implements ExecutionEventBus {
-  // Separate storage for each event type — both use the interface's
-  // Listener type but are invoked differently (with event payload vs. no
-  // arguments).
-  private readonly eventListeners: Map<Listener, WrappedListener[]> = new Map();
-  private readonly finishedListeners: Map<Listener, WrappedListener[]> = new Map();
+  // Separate storage so each event type can hold listeners of its own
+  // signature: 'event' listeners receive a payload, 'finished' listeners
+  // are invoked with no arguments.
+  private readonly eventListeners: Map<EventListener, WrappedListener[]> = new Map();
+  private readonly finishedListeners: Map<FinishedListener, WrappedListener[]> = new Map();
 
   publish(event: AgentExecutionEvent): void {
     this.dispatchEvent(new CustomEventImpl('event', { detail: event }));
@@ -106,29 +114,35 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     this.dispatchEvent(new Event('finished'));
   }
 
-  on(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this {
+  on(eventName: 'event', listener: EventListener): this;
+  on(eventName: 'finished', listener: FinishedListener): this;
+  on(eventName: ExecutionEventName, listener: EventListener | FinishedListener): this {
     if (eventName === 'event') {
-      this.addEventListenerInternal(listener);
+      this.addEventListenerInternal(listener as EventListener);
     } else {
-      this.addFinishedListenerInternal(listener);
+      this.addFinishedListenerInternal(listener as FinishedListener);
     }
     return this;
   }
 
-  off(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this {
+  off(eventName: 'event', listener: EventListener): this;
+  off(eventName: 'finished', listener: FinishedListener): this;
+  off(eventName: ExecutionEventName, listener: EventListener | FinishedListener): this {
     if (eventName === 'event') {
-      this.removeEventListenerInternal(listener);
+      this.removeEventListenerInternal(listener as EventListener);
     } else {
-      this.removeFinishedListenerInternal(listener);
+      this.removeFinishedListenerInternal(listener as FinishedListener);
     }
     return this;
   }
 
-  once(eventName: ExecutionEventName, listener: (event: AgentExecutionEvent) => void): this {
+  once(eventName: 'event', listener: EventListener): this;
+  once(eventName: 'finished', listener: FinishedListener): this;
+  once(eventName: ExecutionEventName, listener: EventListener | FinishedListener): this {
     if (eventName === 'event') {
-      this.addEventListenerOnceInternal(listener);
+      this.addEventListenerOnceInternal(listener as EventListener);
     } else {
-      this.addFinishedListenerOnceInternal(listener);
+      this.addFinishedListenerOnceInternal(listener as FinishedListener);
     }
     return this;
   }
@@ -157,9 +171,9 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
 
   // Listener tracking helpers.
 
-  private trackListener(
-    listenerMap: Map<Listener, WrappedListener[]>,
-    listener: Listener,
+  private trackListener<L>(
+    listenerMap: Map<L, WrappedListener[]>,
+    listener: L,
     wrapped: WrappedListener
   ): void {
     const existing = listenerMap.get(listener);
@@ -170,9 +184,9 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     }
   }
 
-  private untrackWrappedListener(
-    listenerMap: Map<Listener, WrappedListener[]>,
-    listener: Listener,
+  private untrackWrappedListener<L>(
+    listenerMap: Map<L, WrappedListener[]>,
+    listener: L,
     wrapped: WrappedListener
   ): void {
     const wrappedList = listenerMap.get(listener);
@@ -189,7 +203,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
 
   // 'event' listeners.
 
-  private addEventListenerInternal(listener: Listener): void {
+  private addEventListenerInternal(listener: EventListener): void {
     const wrapped: WrappedListener = (e: Event) => {
       if (!isAgentExecutionCustomEvent(e)) {
         throw new Error('Internal error: expected CustomEvent for "event" type');
@@ -201,7 +215,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     this.addEventListener('event', wrapped);
   }
 
-  private removeEventListenerInternal(listener: Listener): void {
+  private removeEventListenerInternal(listener: EventListener): void {
     const wrappedList = this.eventListeners.get(listener);
     if (wrappedList && wrappedList.length > 0) {
       const wrapped = wrappedList.pop()!;
@@ -212,7 +226,7 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     }
   }
 
-  private addEventListenerOnceInternal(listener: Listener): void {
+  private addEventListenerOnceInternal(listener: EventListener): void {
     const wrapped: WrappedListener = (e: Event) => {
       if (!isAgentExecutionCustomEvent(e)) {
         throw new Error('Internal error: expected CustomEvent for "event" type');
@@ -225,20 +239,19 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     this.addEventListener('event', wrapped, { once: true });
   }
 
-  // 'finished' listeners. The interface declares listeners as taking an
-  // `AgentExecutionEvent`, but for 'finished' they're invoked with no
-  // arguments (matching EventEmitter behaviour).
+  // 'finished' listeners. Invoked with no arguments; the interface
+  // declares them as `FinishedListener` so callers get a precise type.
 
-  private addFinishedListenerInternal(listener: Listener): void {
+  private addFinishedListenerInternal(listener: FinishedListener): void {
     const wrapped: WrappedListener = () => {
-      (listener as () => void).call(this);
+      listener.call(this);
     };
 
     this.trackListener(this.finishedListeners, listener, wrapped);
     this.addEventListener('finished', wrapped);
   }
 
-  private removeFinishedListenerInternal(listener: Listener): void {
+  private removeFinishedListenerInternal(listener: FinishedListener): void {
     const wrappedList = this.finishedListeners.get(listener);
     if (wrappedList && wrappedList.length > 0) {
       const wrapped = wrappedList.pop()!;
@@ -249,10 +262,10 @@ export class DefaultExecutionEventBus extends EventTarget implements ExecutionEv
     }
   }
 
-  private addFinishedListenerOnceInternal(listener: Listener): void {
+  private addFinishedListenerOnceInternal(listener: FinishedListener): void {
     const wrapped: WrappedListener = () => {
       this.untrackWrappedListener(this.finishedListeners, listener, wrapped);
-      (listener as () => void).call(this);
+      listener.call(this);
     };
 
     this.trackListener(this.finishedListeners, listener, wrapped);

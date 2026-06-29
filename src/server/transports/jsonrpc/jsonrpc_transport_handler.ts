@@ -117,28 +117,21 @@ export class JsonRpcTransportHandler {
             : this.requestHandler.resubscribe(SubscribeToTaskRequest.fromJSON(params), context);
 
         // Wrap the agent event stream into a JSON-RPC result stream.
+        // Errors thrown by `agentEventStream` propagate out of the
+        // generator; the Express layer catches them, logs the failure,
+        // and writes a final SSE `event: error` frame carrying the
+        // JSON-RPC error envelope before closing the stream.
         return (async function* jsonRpcEventStream(): AsyncGenerator<
           JSONRPCResponse,
           void,
           undefined
         > {
-          try {
-            for await (const event of agentEventStream) {
-              yield {
-                jsonrpc: '2.0',
-                id: requestId,
-                result: StreamResponse.toJSON(event),
-              };
-            }
-          } catch (streamError) {
-            // Re-thrown errors are caught by the Express layer, which
-            // writes a final SSE `event: error` frame carrying the
-            // JSON-RPC error envelope before closing the stream.
-            console.error(
-              `Error in agent event stream for ${method} (request ${requestId}):`,
-              streamError
-            );
-            throw streamError;
+          for await (const event of agentEventStream) {
+            yield {
+              jsonrpc: '2.0',
+              id: requestId,
+              result: StreamResponse.toJSON(event),
+            };
           }
         })();
       } else {
