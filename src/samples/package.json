@@ -19,7 +19,7 @@
     "client:interceptors": "tsx client/interceptors/index.ts"
   },
   "devDependencies": {
-    "@genkit-ai/googleai": "^1.8.0",
+    "@genkit-ai/google-genai": "^1.38.0",
     "@types/express": "^5.0.5",
     "@types/passport": "^1.0.17",
     "@types/passport-jwt": "^4.0.1",

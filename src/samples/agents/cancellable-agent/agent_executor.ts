@@ -49,22 +49,25 @@ export class CancellableAgentExecutor implements AgentExecutor {
     console.log(`[CancellableAgentExecutor] Starting task ${taskId} (context: ${contextId})`);
 
     try {
-      // 1. Publish initial Task event if it's a new task.
-      if (!existingTask) {
-        const initialTask: Task = {
-          id: taskId,
-          contextId: contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            timestamp: new Date().toISOString(),
-            message: undefined,
-          },
-          artifacts: [],
-          history: [userMessage],
-          metadata: userMessage.metadata,
-        };
-        eventBus.publish(AgentEvent.task(initialTask));
-      }
+      // 1. Every streaming turn must begin with a Task or Message event.
+      const taskSnapshot: Task = existingTask
+        ? {
+            ...existingTask,
+            history: [...(existingTask.history ?? []), userMessage],
+          }
+        : {
+            id: taskId,
+            contextId: contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              timestamp: new Date().toISOString(),
+              message: undefined,
+            },
+            artifacts: [],
+            history: [userMessage],
+            metadata: userMessage.metadata,
+          };
+      eventBus.publish(AgentEvent.task(taskSnapshot));
 
       // 2. Move into the working state.
       eventBus.publish(

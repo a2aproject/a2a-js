@@ -55,22 +55,25 @@ export class PushNotificationAgentExecutor implements AgentExecutor {
     );
 
     try {
-      // 1. Publish initial Task event if it's a new task.
-      if (!existingTask) {
-        const initialTask: Task = {
-          id: taskId,
-          contextId: contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            timestamp: new Date().toISOString(),
-            message: undefined,
-          },
-          artifacts: [],
-          history: [userMessage],
-          metadata: userMessage.metadata,
-        };
-        eventBus.publish(AgentEvent.task(initialTask));
-      }
+      // 1. Every streaming turn must begin with a Task or Message event.
+      const taskSnapshot: Task = existingTask
+        ? {
+            ...existingTask,
+            history: [...(existingTask.history ?? []), userMessage],
+          }
+        : {
+            id: taskId,
+            contextId: contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              timestamp: new Date().toISOString(),
+              message: undefined,
+            },
+            artifacts: [],
+            history: [userMessage],
+            metadata: userMessage.metadata,
+          };
+      eventBus.publish(AgentEvent.task(taskSnapshot));
 
       // 2. Publish a sequence of "working" status updates with progress messages,
       //    aborting early if cancellation is requested.
