@@ -8,7 +8,7 @@ import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
 import {
   HTTP_STATUS,
-  mapErrorToStatus,
+  mapErrorToStatus as mapV1ErrorToStatus,
 } from '../../../../../server/transports/rest/rest_transport_handler.js';
 import type {
   AgentCard as V1AgentCard,
@@ -30,9 +30,38 @@ import { A2AError as LegacyA2AError } from '../../error.js';
 
 // Numeric A2A error codes and HTTP semantics are identical between v0.3
 // and v1.0, so we reuse the v1.0 mapping helpers as-is.
-export { HTTP_STATUS, mapErrorToStatus };
+export { HTTP_STATUS };
 
 export type { LegacyRestErrorBody };
+
+/** JSON-RPC error code -> HTTP status. */
+const LEGACY_CODE_TO_HTTP_STATUS: Readonly<Record<number, number>> = {
+  [-32700]: HTTP_STATUS.BAD_REQUEST, // Parse error
+  [-32600]: HTTP_STATUS.BAD_REQUEST, // Invalid Request
+  [-32601]: HTTP_STATUS.NOT_IMPLEMENTED, // Method not found
+  [-32602]: HTTP_STATUS.BAD_REQUEST, // Invalid params
+  [-32603]: HTTP_STATUS.INTERNAL_SERVER_ERROR, // Internal error
+  [-32001]: HTTP_STATUS.NOT_FOUND, // Task not found
+  [-32002]: HTTP_STATUS.BAD_REQUEST, // Task not cancelable
+  [-32003]: HTTP_STATUS.BAD_REQUEST, // Push notification not supported
+  [-32004]: HTTP_STATUS.BAD_REQUEST, // Unsupported operation
+  [-32005]: HTTP_STATUS.BAD_REQUEST, // Content-Type not supported
+  [-32006]: HTTP_STATUS.INTERNAL_SERVER_ERROR, // Invalid agent response
+  [-32007]: HTTP_STATUS.BAD_REQUEST, // Extended card not configured
+};
+
+/**
+ * Maps an error to its HTTP status code with v0.3-compat awareness.
+ * `LegacyA2AError` carries a JSON-RPC code rather than a class identity,
+ * so it bypasses the v1.0 class-based mapping; everything else defers
+ * to the v1.0 mapper.
+ */
+export function mapErrorToStatus(error: unknown): number {
+  if (error instanceof LegacyA2AError) {
+    return LEGACY_CODE_TO_HTTP_STATUS[error.code] ?? HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  }
+  return mapV1ErrorToStatus(error);
+}
 
 /** Converts any error to a v0.3-shaped HTTP error body. */
 export function toLegacyHTTPError(error: unknown): LegacyRestErrorBody {

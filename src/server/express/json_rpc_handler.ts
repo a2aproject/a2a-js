@@ -14,10 +14,15 @@ import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '..
 import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
-import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
+import { A2A_ERROR_CODE, ContentTypeNotSupportedError } from '../../errors.js';
 import { validateVersion } from '../version.js';
 import { LegacyJsonRpcTransportHandler } from '../../compat/v0_3/server/index.js';
-import { LEGACY_HTTP_EXTENSION_HEADER, isLegacyJsonRpcMethod } from '../../compat/v0_3/index.js';
+import {
+  LEGACY_HTTP_EXTENSION_HEADER,
+  LEGACY_METHOD_TASKS_RESUBSCRIBE,
+  isLegacyJsonRpcMethod,
+  isV1JsonRpcMethod,
+} from '../../compat/v0_3/index.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
@@ -46,6 +51,16 @@ function isLegacyRequest(body: unknown): boolean {
 }
 
 /**
+ * Returns `true` for bodies that should fall through to the v0.3
+ * dispatcher when `legacyCompat` is enabled: missing or unknown
+ * `method`.
+ */
+function shouldUseLegacyFallback(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null) return false;
+  return !isV1JsonRpcMethod((body as { method?: unknown }).method);
+}
+
+/**
  * Creates Express.js middleware handling A2A JSON-RPC requests.
  *
  * @example
@@ -71,7 +86,9 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   router.use(express.json(), jsonErrorHandler);
 
   router.post('/', async (req: Request, res: Response) => {
-    const useLegacy = legacyJsonRpcTransportHandler !== undefined && isLegacyRequest(req.body);
+    const useLegacy =
+      legacyJsonRpcTransportHandler !== undefined &&
+      (isLegacyRequest(req.body) || shouldUseLegacyFallback(req.body));
     const mapToError = useLegacy
       ? LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError
       : JsonRpcTransportHandler.mapToJSONRPCError;
@@ -106,6 +123,36 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       }
       if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
         const stream = rpcResponseOrStream as AsyncGenerator<JSONRPCResponse, void, undefined>;
+
+        const alwaysStreamSse =
+          useLegacy &&
+          (req.body as { method?: unknown })?.method === LEGACY_METHOD_TASKS_RESUBSCRIBE;
+        if (alwaysStreamSse) {
+          Object.entries(SSE_HEADERS).forEach(([key, value]) => {
+            res.setHeader(key, value);
+          });
+          res.flushHeaders();
+          try {
+            for await (const event of stream) {
+              res.write(formatSSEEvent(event));
+            }
+          } catch (streamError) {
+            console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
+            const errorResponse: JSONRPCErrorResponse = {
+              jsonrpc: '2.0',
+              id: req.body?.id || null,
+              error: mapToError(streamError),
+            };
+            if (!res.writableEnded) {
+              res.write(formatSSEErrorEvent(errorResponse));
+            }
+          } finally {
+            if (!res.writableEnded) {
+              res.end();
+            }
+          }
+          return;
+        }
 
         // Peek the first event BEFORE flushing SSE headers so an early
         // failure (e.g. `resubscribe` on a terminal task, which throws
@@ -224,9 +271,10 @@ export const jsonErrorHandler: ErrorRequestHandler = (
     const errorResponse: JSONRPCErrorResponse = {
       jsonrpc: '2.0',
       id: null,
-      error: JsonRpcTransportHandler.mapToJSONRPCError(
-        new RequestMalformedError('Invalid JSON payload.')
-      ),
+      error: {
+        code: A2A_ERROR_CODE.PARSE_ERROR,
+        message: 'Invalid JSON payload.',
+      },
     };
     return res.status(400).json(errorResponse);
   }

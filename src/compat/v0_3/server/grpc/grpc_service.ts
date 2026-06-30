@@ -55,6 +55,7 @@ import {
 import { validateVersion } from '../../../../server/version.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
+import { A2AError as LegacyA2AError } from '../error.js';
 import {
   extractTaskAndPushNotificationConfigId,
   extractTaskId,
@@ -436,12 +437,31 @@ function _serializeListTaskPushNotificationConfigResponse(
 
 // Error mapping.
 
+// JSON-RPC error code -> gRPC status, used to translate `LegacyA2AError`
+// (which carries a JSON-RPC code, not a class identity).
+const LEGACY_CODE_TO_GRPC_STATUS: Readonly<Record<number, grpc.status>> = {
+  [-32700]: grpc.status.INVALID_ARGUMENT, // Parse error
+  [-32600]: grpc.status.INVALID_ARGUMENT, // Invalid Request
+  [-32601]: grpc.status.UNIMPLEMENTED, // Method not found
+  [-32602]: grpc.status.INVALID_ARGUMENT, // Invalid params
+  [-32603]: grpc.status.INTERNAL, // Internal error
+  [-32001]: grpc.status.NOT_FOUND, // Task not found
+  [-32002]: grpc.status.FAILED_PRECONDITION, // Task not cancelable
+  [-32003]: grpc.status.FAILED_PRECONDITION, // Push notification not supported
+  [-32004]: grpc.status.FAILED_PRECONDITION, // Unsupported operation
+  [-32005]: grpc.status.INVALID_ARGUMENT, // Content-Type not supported
+  [-32006]: grpc.status.INTERNAL, // Invalid agent response
+  [-32007]: grpc.status.FAILED_PRECONDITION, // Extended card not configured
+};
+
 // `instanceof` chain so user-defined subclasses of A2A error types resolve
 // to the correct gRPC status of the nearest base class. Also attaches a
 // `google.rpc.ErrorInfo` detail for v1.0-aware clients.
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   let code = grpc.status.UNKNOWN;
-  if (error instanceof TaskNotFoundError) code = grpc.status.NOT_FOUND;
+  if (error instanceof LegacyA2AError) {
+    code = LEGACY_CODE_TO_GRPC_STATUS[error.code] ?? grpc.status.UNKNOWN;
+  } else if (error instanceof TaskNotFoundError) code = grpc.status.NOT_FOUND;
   else if (error instanceof TaskNotCancelableError) code = grpc.status.FAILED_PRECONDITION;
   else if (error instanceof PushNotificationNotSupportedError)
     code = grpc.status.FAILED_PRECONDITION;

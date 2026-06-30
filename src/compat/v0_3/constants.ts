@@ -154,6 +154,16 @@ export function isLegacyJsonRpcMethod(method: unknown): boolean {
 }
 
 /**
+ * Returns `true` if `method` is a known v1.0 JSON-RPC (PascalCase)
+ * method name. Includes both {@link V1_TO_LEGACY_JSONRPC} and the
+ * v1.0-only methods in {@link V1_METHODS_WITHOUT_LEGACY_EQUIVALENT}.
+ */
+export function isV1JsonRpcMethod(method: unknown): boolean {
+  if (typeof method !== 'string') return false;
+  return method in V1_TO_LEGACY_JSONRPC || V1_METHODS_WITHOUT_LEGACY_EQUIVALENT.has(method);
+}
+
+/**
  * Translate a v1.0 method name to its v0.3 JSON-RPC equivalent. Throws
  * `A2AError.unsupportedOperation` for v1.0 names with no v0.3 equivalent
  * (e.g. `ListTasks`); throws `A2AError.invalidRequest` for unknown names.

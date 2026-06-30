@@ -8,7 +8,7 @@ The compat layer is shipped as six subpath exports off `@a2a-js/sdk`. Each subpa
 
 | Subpath                                  | What it exports                                                                                                                                                                                                                                                                                                                                                                         | Peer deps           |
 | :--------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ |
-| `@a2a-js/sdk/compat/v0_3`                | v0.3 protocol constants (`A2A_LEGACY_PROTOCOL_VERSION`, `LEGACY_HTTP_EXTENSION_HEADER`, `LEGACY_JSON_CONTENT_TYPE`, the `LEGACY_METHOD_*` literals) and method-name translators (`legacyJsonRpcToV1Method`, `v1MethodToLegacyJsonRpc`, `legacyJsonRpcToLegacyGrpcMethod`, `legacyGrpcToLegacyJsonRpcMethod`, `legacyGrpcToV1Method`, `v1MethodToLegacyGrpc`, `isLegacyJsonRpcMethod`).  | none (Workers-safe) |
+| `@a2a-js/sdk/compat/v0_3`                | v0.3 protocol constants (`A2A_LEGACY_PROTOCOL_VERSION`, `LEGACY_HTTP_EXTENSION_HEADER`, `LEGACY_JSON_CONTENT_TYPE`, the `LEGACY_METHOD_*` literals) and method-name translators (`legacyJsonRpcToV1Method`, `v1MethodToLegacyJsonRpc`, `legacyJsonRpcToLegacyGrpcMethod`, `legacyGrpcToLegacyJsonRpcMethod`, `legacyGrpcToV1Method`, `v1MethodToLegacyGrpc`, `isLegacyJsonRpcMethod`, `isV1JsonRpcMethod`).  | none (Workers-safe) |
 | `@a2a-js/sdk/compat/v0_3/server`         | Framework-agnostic transport handlers (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`, `toLegacyHTTPError`), push-notification factory (`createLegacyAwarePushNotificationSender`) and serializer (`V03PushNotificationSerializer`), and the `LegacyA2AError` class. Mount the transport handlers from any HTTP runtime (Express, Fastify, Hono, Cloudflare Workers, …). | none (Workers-safe) |
 | `@a2a-js/sdk/compat/v0_3/server/express` | Express routers (`legacyAgentCardRouter`, `legacyRestRouter`) that wrap the handlers above with the v0.3 well-known agent-card and REST endpoint paths. Header-based dispatch on `A2A-Version`.                                                                                                                                                                                         | `express`           |
 | `@a2a-js/sdk/compat/v0_3/server/grpc`    | v0.3 gRPC service factory (`legacyGrpcService`), service descriptor (`LegacyA2AService`), and options type. Register alongside the v1.0 `grpcService` on the same gRPC `Server`.                                                                                                                                                                                                        | `@grpc/grpc-js`     |
@@ -71,6 +71,25 @@ Per A2A spec §3.6.2, clients that omit the `A2A-Version` header are treated as 
 2. **Synthesized v0.3 card.** The `legacyAgentCardRouter` calls `toCompatAgentCard(card, { synthesize: true })` so the well-known endpoint returns a discoverable v0.3-shaped card whose `(url, preferredTransport, additionalInterfaces)` reflect the v1.0 `supportedInterfaces` entries but whose `protocolVersion` is stamped as `'0.3'`. v0.3 clients can therefore both discover and use a v1.0-only server when the operator has opted into the compat layer.
 
 The v1.0 gRPC service factory (`src/server/grpc/grpc_service.ts`) intentionally does **not** carry a `legacyCompat` option; v0.3 gRPC clients are served by importing `legacyGrpcService` from `@a2a-js/sdk/compat/v0_3/server/grpc` and registering it alongside the v1.0 `grpcService` on the same `Server`. (The v1.0 `@a2a-js/sdk/server/grpc` barrel does not re-export `legacyGrpcService`; the explicit compat import keeps `@grpc/grpc-js` out of the v1.0 dependency graph for operators who only deploy the v1.0 service.)
+
+### JSON-RPC method dispatch
+
+`jsonRpcHandler({ legacyCompat: { enabled: true } })` routes each request body based on its `method` field:
+
+- Method matches a v1.0 PascalCase name (`isV1JsonRpcMethod` → `true`, e.g. `SendMessage`, `ListTasks`) → v1.0 dispatcher.
+- Anything else — kebab-style v0.3 names (`message/send`, `tasks/get`), unknown strings, or bodies with no `method` field at all — → v0.3 dispatcher.
+
+The fallback exists so malformed and unknown requests surface v0.3-shaped errors (`-32600 Invalid Request` for missing `method`, `-32602` for bad params) instead of the v1.0 path's blanket `-32602`, which is what header-less v0.3 clients expect per spec §3.6.2.
+
+### REST wire format
+
+`legacyRestRouter` / `LegacyRestTransportHandler` emit JSON with **snake_case** field names (`context_id`, `task_id`, `message_id`, `protocol_version`, …) to match the v0.3 reference proto's canonical proto-JSON wire form. Input handlers accept both casings (proto3 JSON parsers tolerate either), so v0.3 clients that send camelCase still work.
+
+This deviates from the v1.0 REST handler (`src/server/express/rest_handler.ts`), which emits lowerCamelCase per proto3 JSON canonical form. The split is intentional: each handler matches the on-the-wire conventions of its respective spec version.
+
+### `tasks/resubscribe` streaming contract
+
+The legacy `tasks/resubscribe` handler always responds with `Content-Type: text/event-stream` and HTTP 200, even when the underlying call fails immediately (e.g. the task does not exist). Pre-stream errors are emitted as SSE error events on the open stream rather than as a plain JSON-RPC error response. Strict v0.3 clients reject anything other than `text/event-stream` on this method, so the header is committed before the first iterator pull. Other streaming methods (`message/stream`, `SubscribeToTask`) keep the peek-then-flush behaviour so a synchronous invalid-params error still surfaces as a JSON 200 error envelope.
 
 ## Push Notifications
 

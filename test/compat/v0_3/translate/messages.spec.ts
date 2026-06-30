@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toCompatMessage, toCoreMessage } from '../../../../src/compat/v0_3/translate/messages.js';
+import { A2AError } from '../../../../src/compat/v0_3/server/error.js';
 import { Role } from '../../../../src/types/pb/a2a.js';
 import type { Message as V1Message } from '../../../../src/types/pb/a2a.js';
 import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
@@ -126,6 +127,52 @@ describe('messages', () => {
         referenceTaskIds: ['t2'],
       };
       expect(toCompatMessage(toCoreMessage(compat))).toEqual(compat);
+    });
+  });
+
+  describe('input validation', () => {
+    it('rejects a non-object message with invalidParams', () => {
+      expect(() => toCoreMessage(undefined as unknown as legacy.Message)).toThrowError(A2AError);
+      expect(() => toCoreMessage(undefined as unknown as legacy.Message)).toThrow(/object/);
+    });
+
+    it('rejects a message missing messageId with invalidParams', () => {
+      const bad = { kind: 'message', role: 'user', parts: [] } as unknown as legacy.Message;
+      expect(() => toCoreMessage(bad)).toThrowError(A2AError);
+      expect(() => toCoreMessage(bad)).toThrow(/messageId/);
+    });
+
+    it('rejects a message missing role with invalidParams', () => {
+      const bad = { kind: 'message', messageId: 'm', parts: [] } as unknown as legacy.Message;
+      expect(() => toCoreMessage(bad)).toThrowError(A2AError);
+      expect(() => toCoreMessage(bad)).toThrow(/role/);
+    });
+
+    it('rejects a message whose parts field is not an array', () => {
+      const bad = {
+        kind: 'message',
+        messageId: 'm',
+        role: 'user',
+        parts: 'invalid',
+      } as unknown as legacy.Message;
+      expect(() => toCoreMessage(bad)).toThrowError(A2AError);
+      expect(() => toCoreMessage(bad)).toThrow(/parts/);
+    });
+
+    it('rejects a message whose parts field is missing', () => {
+      const bad = { kind: 'message', messageId: 'm', role: 'user' } as unknown as legacy.Message;
+      expect(() => toCoreMessage(bad)).toThrowError(A2AError);
+      expect(() => toCoreMessage(bad)).toThrow(/parts/);
+    });
+
+    it('thrown errors carry the JSON-RPC invalid-params code', () => {
+      try {
+        toCoreMessage({ kind: 'message' } as unknown as legacy.Message);
+        expect.fail('toCoreMessage should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(A2AError);
+        expect((err as A2AError).code).toBe(-32602);
+      }
     });
   });
 

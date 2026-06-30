@@ -626,19 +626,13 @@ describe('A2AExpressApp', () => {
         .send(requestBody)
         .expect(400);
 
+      // JSON-RPC 2.0 §4.2: parse errors use code -32700.
       const expectedErrorResponse: JSONRPCErrorResponse = {
         jsonrpc: '2.0',
         id: null,
         error: {
-          code: A2A_ERROR_CODE.INVALID_PARAMS,
+          code: A2A_ERROR_CODE.PARSE_ERROR,
           message: 'Invalid JSON payload.',
-          data: [
-            {
-              '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
-              reason: 'INVALID_PARAMS',
-              domain: 'a2a-protocol.org',
-            },
-          ],
         },
       };
       assert.deepEqual(response.body, expectedErrorResponse);

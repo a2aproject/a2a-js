@@ -6,6 +6,7 @@ import {
   TaskNotCancelableError,
   TaskNotFoundError,
 } from '../../../../../src/errors.js';
+import { A2AError as LegacyA2AError } from '../../../../../src/compat/v0_3/server/error.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../../src/constants.js';
 import type { A2ARequestHandler } from '../../../../../src/server/request_handler/a2a_request_handler.js';
 import {
@@ -191,6 +192,64 @@ describe('legacyGrpcService', () => {
       expect(status.details.length).toBeGreaterThan(0);
       const errorInfo = decodeErrorInfo(status.details[0]!.value as unknown as Buffer);
       expect(errorInfo.reason).toBe('TASK_NOT_FOUND');
+    });
+
+    it('maps a thrown LegacyA2AError.invalidParams (-32602) to INVALID_ARGUMENT', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
+        LegacyA2AError.invalidParams('Invalid role: 0')
+      );
+      const call = createMockUnaryCall({
+        request: { messageId: 'm1', role: V1Role.ROLE_USER, content: [] },
+      });
+      const callback = vi.fn();
+
+      await handler.sendMessage(call, callback);
+
+      const [err] = callback.mock.calls[0];
+      expect(err.code).toBe(grpc.status.INVALID_ARGUMENT);
+      expect(err.details).toBe('Invalid role: 0');
+    });
+
+    it('maps LegacyA2AError.taskNotFound (-32001) to NOT_FOUND', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
+        LegacyA2AError.taskNotFound('t-1')
+      );
+      const call = createMockUnaryCall({
+        request: { messageId: 'm1', role: V1Role.ROLE_USER, content: [] },
+      });
+      const callback = vi.fn();
+
+      await handler.sendMessage(call, callback);
+
+      expect(callback.mock.calls[0][0].code).toBe(grpc.status.NOT_FOUND);
+    });
+
+    it('maps LegacyA2AError.methodNotFound (-32601) to UNIMPLEMENTED', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
+        LegacyA2AError.methodNotFound('whatever')
+      );
+      const call = createMockUnaryCall({
+        request: { messageId: 'm1', role: V1Role.ROLE_USER, content: [] },
+      });
+      const callback = vi.fn();
+
+      await handler.sendMessage(call, callback);
+
+      expect(callback.mock.calls[0][0].code).toBe(grpc.status.UNIMPLEMENTED);
+    });
+
+    it('maps LegacyA2AError.internalError (-32603) to INTERNAL', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
+        LegacyA2AError.internalError('boom')
+      );
+      const call = createMockUnaryCall({
+        request: { messageId: 'm1', role: V1Role.ROLE_USER, content: [] },
+      });
+      const callback = vi.fn();
+
+      await handler.sendMessage(call, callback);
+
+      expect(callback.mock.calls[0][0].code).toBe(grpc.status.INTERNAL);
     });
   });
 

@@ -5,6 +5,7 @@
 
 import { toCompatRole, toCoreRole } from './enums.js';
 import { toCompatPart, toCorePart } from './parts.js';
+import { A2AError } from '../server/error.js';
 import type { Message as V1Message } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
@@ -18,6 +19,18 @@ function nonEmptyArray<T>(value: T[]): T[] | undefined {
 }
 
 export function toCoreMessage(compatMsg: legacy.Message): V1Message {
+  if (typeof compatMsg !== 'object' || compatMsg === null) {
+    throw A2AError.invalidParams('message must be an object');
+  }
+  if (typeof compatMsg.messageId !== 'string' || compatMsg.messageId === '') {
+    throw A2AError.invalidParams('message.messageId is required');
+  }
+  if (typeof compatMsg.role !== 'string') {
+    throw A2AError.invalidParams('message.role is required');
+  }
+  if (!Array.isArray(compatMsg.parts)) {
+    throw A2AError.invalidParams('message.parts must be an array');
+  }
   return {
     messageId: compatMsg.messageId,
     contextId: compatMsg.contextId ?? '',

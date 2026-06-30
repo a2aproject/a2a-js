@@ -57,7 +57,7 @@ The project is structured into modular entry points to allow tree-shaking and se
 ### 5. v0.3 Backward Compatibility (`src/compat/v0_3/`)
 The compat layer is shipped as six subpath exports off `@a2a-js/sdk`, mirroring the v1.0 layout (`server` is framework-agnostic; `server/express` and `server/grpc` carry the runtime-specific bits):
 
-*   **`@a2a-js/sdk/compat/v0_3`** — v0.3 protocol constants and method-name translators. Workers-safe (no Node-only peer deps).
+*   **`@a2a-js/sdk/compat/v0_3`** — v0.3 protocol constants and method-name translators (`isLegacyJsonRpcMethod`, `isV1JsonRpcMethod`). Workers-safe (no Node-only peer deps).
 *   **`@a2a-js/sdk/compat/v0_3/server`** — Framework-agnostic transport handlers (`LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`) and the push-notification factory (`createLegacyAwarePushNotificationSender`). Workers-safe.
 *   **`@a2a-js/sdk/compat/v0_3/server/express`** — Express routers (`legacyAgentCardRouter`, `legacyRestRouter`); mount alongside or under the v1.0 `agentCardHandler` / `restHandler` to negotiate v0.3 by `A2A-Version` header.
 *   **`@a2a-js/sdk/compat/v0_3/server/grpc`** — v0.3 gRPC service (`legacyGrpcService`, `LegacyA2AService`); register alongside the v1.0 `grpcService` on the same `Server`.

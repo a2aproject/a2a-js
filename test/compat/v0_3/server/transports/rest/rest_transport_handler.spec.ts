@@ -163,6 +163,29 @@ describe('LegacyRestTransportHandler', () => {
     it('maps unknown errors to 500', () => {
       expect(mapErrorToStatus(new Error('???'))).toBe(HTTP_STATUS.INTERNAL_SERVER_ERROR);
     });
+
+    it('maps LegacyA2AError.invalidParams (-32602) to 400', () => {
+      expect(mapErrorToStatus(LegacyA2AError.invalidParams('bad'))).toBe(HTTP_STATUS.BAD_REQUEST);
+    });
+    it('maps LegacyA2AError.invalidRequest (-32600) to 400', () => {
+      expect(mapErrorToStatus(LegacyA2AError.invalidRequest('bad'))).toBe(HTTP_STATUS.BAD_REQUEST);
+    });
+    it('maps LegacyA2AError.parseError (-32700) to 400', () => {
+      expect(mapErrorToStatus(LegacyA2AError.parseError('bad'))).toBe(HTTP_STATUS.BAD_REQUEST);
+    });
+    it('maps LegacyA2AError.methodNotFound (-32601) to 501', () => {
+      expect(mapErrorToStatus(LegacyA2AError.methodNotFound('x'))).toBe(
+        HTTP_STATUS.NOT_IMPLEMENTED
+      );
+    });
+    it('maps LegacyA2AError.taskNotFound (-32001) to 404', () => {
+      expect(mapErrorToStatus(LegacyA2AError.taskNotFound('t'))).toBe(HTTP_STATUS.NOT_FOUND);
+    });
+    it('maps LegacyA2AError.internalError (-32603) to 500', () => {
+      expect(mapErrorToStatus(LegacyA2AError.internalError('x'))).toBe(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    });
   });
 
   // ==========================================================================

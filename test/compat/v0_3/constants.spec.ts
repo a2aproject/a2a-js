@@ -26,6 +26,8 @@ import {
   legacyJsonRpcToV1Method,
   v1MethodToLegacyGrpc,
   v1MethodToLegacyJsonRpc,
+  isLegacyJsonRpcMethod,
+  isV1JsonRpcMethod,
 } from '../../../src/compat/v0_3/constants.js';
 import { A2AError } from '../../../src/compat/v0_3/server/error.js';
 
@@ -265,5 +267,55 @@ describe('compat/v0_3/constants - divergent-name spot checks', () => {
     expect(legacyGrpcToV1Method('ListTaskPushNotificationConfig')).toBe(
       'ListTaskPushNotificationConfigs'
     );
+  });
+});
+
+describe('compat/v0_3/constants - method classification predicates', () => {
+  describe('isLegacyJsonRpcMethod', () => {
+    it('returns true for every known v0.3 JSON-RPC method', () => {
+      for (const method of ALL_LEGACY_METHODS) {
+        expect(isLegacyJsonRpcMethod(method)).toBe(true);
+      }
+    });
+
+    it('returns false for v1.0 PascalCase methods', () => {
+      expect(isLegacyJsonRpcMethod('SendMessage')).toBe(false);
+      expect(isLegacyJsonRpcMethod('ListTasks')).toBe(false);
+    });
+
+    it('returns false for non-string inputs and unknown strings', () => {
+      expect(isLegacyJsonRpcMethod(undefined)).toBe(false);
+      expect(isLegacyJsonRpcMethod(null)).toBe(false);
+      expect(isLegacyJsonRpcMethod(42)).toBe(false);
+      expect(isLegacyJsonRpcMethod('nonexistent/method')).toBe(false);
+    });
+  });
+
+  describe('isV1JsonRpcMethod', () => {
+    it('returns true for every v1.0 method present in V1_TO_LEGACY_JSONRPC', () => {
+      for (const v1Name of Object.keys(V1_TO_LEGACY_JSONRPC)) {
+        expect(isV1JsonRpcMethod(v1Name)).toBe(true);
+      }
+    });
+
+    it('returns true for v1.0-only methods (e.g. ListTasks)', () => {
+      for (const v1Name of V1_METHODS_WITHOUT_LEGACY_EQUIVALENT) {
+        expect(isV1JsonRpcMethod(v1Name)).toBe(true);
+      }
+    });
+
+    it('returns false for v0.3 method names', () => {
+      for (const method of ALL_LEGACY_METHODS) {
+        expect(isV1JsonRpcMethod(method)).toBe(false);
+      }
+    });
+
+    it('returns false for non-string inputs and unknown strings', () => {
+      expect(isV1JsonRpcMethod(undefined)).toBe(false);
+      expect(isV1JsonRpcMethod(null)).toBe(false);
+      expect(isV1JsonRpcMethod(42)).toBe(false);
+      expect(isV1JsonRpcMethod('')).toBe(false);
+      expect(isV1JsonRpcMethod('FakeMethodName')).toBe(false);
+    });
   });
 });

@@ -24,6 +24,7 @@ export {
   LEGACY_METHOD_PUSH_NOTIFICATION_CONFIG_DELETE,
   LEGACY_METHOD_GET_AUTHENTICATED_EXTENDED_CARD,
   isLegacyJsonRpcMethod,
+  isV1JsonRpcMethod,
   legacyJsonRpcToV1Method,
   v1MethodToLegacyJsonRpc,
   legacyJsonRpcToLegacyGrpcMethod,

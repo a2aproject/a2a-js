@@ -84,7 +84,7 @@ executor publishes back into v0.3 shapes on the way out.
 
 | Transport     | How v0.3 is detected                                                                                                                                                                                              |
 | :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JSON-RPC      | The handler inspects the JSON-RPC `method` name. Kebab-style names (`message/send`, `tasks/get`, …) route to the v0.3 dispatcher; PascalCase names (`SendMessage`, `GetTask`, …) route to the v1.0 dispatcher. |
+| JSON-RPC      | The handler inspects the JSON-RPC `method` name. v1.0 PascalCase names matching `isV1JsonRpcMethod` (`SendMessage`, `GetTask`, `ListTasks`, …) route to the v1.0 dispatcher; everything else — kebab-style v0.3 names (`message/send`, `tasks/get`), unknown method strings, and bodies with no `method` field — routes to the v0.3 dispatcher so malformed/unknown requests surface v0.3-shaped errors (spec §3.6.2 default-to-v0.3). |
 | REST          | The v0.3 routes live under the `/v1/...` prefix (per the v0.3 reference proto's `google.api.http` annotations). v1.0 routes use `/<operation>` directly. Express's prefix matcher disambiguates without ambiguity. |
 | gRPC          | Each version is a separate gRPC service descriptor (`A2AService` vs. `LegacyA2AService`). The transport picks the descriptor; the SDK never needs to sniff.                                                       |
 | Agent card    | The handler reads the `A2A-Version` header (defaulting to `'0.3'` when absent, per spec §3.6.2) and emits the appropriate card shape, with `Vary: A2A-Version` set on the response.                                |
@@ -215,13 +215,31 @@ field-name differences:
 | Path prefix         | `/v1/<operation>`         | `/<operation>`            |
 | Request body field  | `request` (a `Message`)   | `message` (a `Message`)   |
 | `Message` payload   | `content[]`               | `parts[]`                 |
+| Field-name casing   | **snake_case** on output (`context_id`, `task_id`, `message_id`, …) to match the v0.3 reference proto's canonical proto-JSON. Input accepts both casings. | **lowerCamelCase** per proto3 JSON canonical form. |
 | Response shape      | proto-JSON `SendMessageResponse` (`{task: {...}}` or `{msg: {...}}`) | proto-JSON `SendMessageResponse` (same oneof, v1.0 types) |
 | Response Content-Type | `application/json`      | `application/a2a+json`    |
 | `TaskState` encoding | `TASK_STATE_COMPLETED`   | `TASK_STATE_COMPLETED`    |
+| Error → HTTP status | `LegacyA2AError` mapped to proper 4xx (e.g. `-32602` → 400, `-32001` → 404) via `mapErrorToStatus`. | A2A error classes mapped to 4xx by the v1.0 helper. |
 
 If you need to issue v0.3 wire shapes with JSON-Schema-style envelopes
 (`{kind: 'task', state: 'completed', parts: [{kind: 'text', ...}]}`), use the
 v0.3 JSON-RPC endpoint, not the REST endpoint.
+
+### `tasks/resubscribe` always responds with SSE
+
+The legacy `tasks/resubscribe` JSON-RPC method always responds with
+`Content-Type: text/event-stream` and HTTP 200, even when the underlying call
+fails immediately (e.g. the task does not exist). Pre-stream errors are
+emitted as an SSE error event on the open stream instead of as a plain
+JSON-RPC 200 error envelope. Strict v0.3 clients reject anything other than
+`text/event-stream` on this method, so the SSE headers are committed before
+the first iterator pull.
+
+Other streaming methods (`message/stream`, v1.0 `SubscribeToTask`) keep their
+peek-then-flush behaviour: a synchronous invalid-params or task-not-found
+error returned by the first iterator step is surfaced as a JSON 200 error
+envelope, and the SSE headers are only committed once the first event
+succeeds.
 
 ### Push notifications: routed per webhook
 
