@@ -77,7 +77,7 @@ The v1.0 gRPC service factory (`src/server/grpc/grpc_service.ts`) intentionally 
 `jsonRpcHandler({ legacyCompat: { enabled: true } })` routes each request body based on its `method` field:
 
 - Method matches a v1.0 PascalCase name (`isV1JsonRpcMethod` → `true`, e.g. `SendMessage`, `ListTasks`) → v1.0 dispatcher.
-- Anything else — kebab-style v0.3 names (`message/send`, `tasks/get`), unknown strings, or bodies with no `method` field at all — → v0.3 dispatcher.
+- Anything else — kebab-style v0.3 names (`message/send`, `tasks/get`), unknown strings, or bodies with no `method` field at all → v0.3 dispatcher.
 
 The fallback exists so malformed and unknown requests surface v0.3-shaped errors (`-32600 Invalid Request` for missing `method`, `-32602` for bad params) instead of the v1.0 path's blanket `-32602`, which is what header-less v0.3 clients expect per spec §3.6.2.
 
