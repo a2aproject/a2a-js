@@ -46,7 +46,7 @@ You can also find some samples [here](https://github.com/a2aproject/a2a-js/tree/
 This SDK implements the A2A Protocol Specification [`v0.3`](https://a2a-protocol.org/v0.3.0/specification).
 
 > [!IMPORTANT]
-> There is an [**beta version**](https://github.com/a2aproject/a2a-js/releases?q=%22v1.0.0-beta%22&expanded=true) available with support for [`v1.0`](https://a2a-protocol.org/v1.0.0/specification/) version and opt-in backward compatibility with [`v0.3`](https://a2a-protocol.org/v0.3.0/specification). Development for this version is taking place in the [`epic/1.0_breaking_changes`](https://github.com/a2aproject/a2a-js/tree/epic/1.0_breaking_changes) branch.
+> There is a [**beta version**](https://github.com/a2aproject/a2a-js/releases?q=%22v1.0.0-beta%22&expanded=true) available with support for [`v1.0`](https://a2a-protocol.org/v1.0.0/specification/) version and opt-in backward compatibility with [`v0.3`](https://a2a-protocol.org/v0.3.0/specification). Development for this version is taking place in the [`epic/1.0_breaking_changes`](https://github.com/a2aproject/a2a-js/tree/epic/1.0_breaking_changes) branch.
 > You can install the latest beta version using:
 > ```bash
 > npm install @a2a-js/sdk@next
