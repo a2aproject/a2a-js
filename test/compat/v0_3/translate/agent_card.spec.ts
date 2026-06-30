@@ -17,7 +17,10 @@ import {
   toCoreAgentSkill,
 } from '../../../../src/compat/v0_3/translate/agent_card.js';
 import { VersionNotSupportedError } from '../../../../src/errors.js';
-import type { AgentCard as V1AgentCard } from '../../../../src/types/pb/a2a.js';
+import type {
+  AgentCard as V1AgentCard,
+  AgentInterface as V1AgentInterface,
+} from '../../../../src/types/pb/a2a.js';
 import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
 
 describe('agent_card', () => {
@@ -452,6 +455,21 @@ describe('agent_card', () => {
         const input = [{ ...v1('JSONRPC'), protocolVersion: '' }];
         const out = duplicateInterfacesForLegacy(input, ['JSONRPC']);
         expect(out).toEqual(input);
+      });
+
+      it('returns a deep copy so caller mutations do not bleed into the source', () => {
+        const input = [v1('JSONRPC')];
+        const out = duplicateInterfacesForLegacy(input, ['JSONRPC']);
+        expect(out[0]).not.toBe(input[0]);
+        out[0]!.url = 'https://mutated';
+        expect(input[0]!.url).toBe('/jsonrpc');
+      });
+
+      it('tolerates a nullish interfaces input', () => {
+        const out = duplicateInterfacesForLegacy(undefined as unknown as V1AgentInterface[], [
+          'JSONRPC',
+        ]);
+        expect(out).toEqual([]);
       });
     });
   });

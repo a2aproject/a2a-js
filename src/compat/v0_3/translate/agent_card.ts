@@ -301,7 +301,7 @@ export function toCompatAgentCard(
 
   // Hybrid-card embedding: see `embedV1Interfaces` on the options type.
   if (options?.embedV1Interfaces && allInterfaces.length > 0) {
-    result.supportedInterfaces = allInterfaces.map((intf) => ({ ...intf }));
+    result.supportedInterfaces = structuredClone(allInterfaces);
   }
 
   return result;
@@ -330,17 +330,18 @@ export function duplicateInterfacesForLegacy(
   interfaces: V1AgentInterface[],
   bindings: string[]
 ): V1AgentInterface[] {
-  const result = [...interfaces];
+  const source = interfaces ?? [];
+  const result = structuredClone(source);
   for (const binding of bindings) {
-    const hasLegacy = interfaces.some(
+    const hasLegacy = source.some(
       (intf) =>
         intf.protocolBinding === binding &&
         (!intf.protocolVersion || isLegacyVersion(intf.protocolVersion))
     );
     if (hasLegacy) continue;
-    const source = interfaces.find((intf) => intf.protocolBinding === binding);
-    if (!source) continue;
-    result.push({ ...source, protocolVersion: PROTOCOL_VERSION_0_3 });
+    const template = source.find((intf) => intf.protocolBinding === binding);
+    if (!template) continue;
+    result.push({ ...structuredClone(template), protocolVersion: PROTOCOL_VERSION_0_3 });
   }
   return result;
 }
