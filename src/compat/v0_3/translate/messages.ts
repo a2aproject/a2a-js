@@ -25,8 +25,8 @@ export function toCoreMessage(compatMsg: legacy.Message): V1Message {
   if (typeof compatMsg.messageId !== 'string' || compatMsg.messageId === '') {
     throw A2AError.invalidParams('message.messageId is required');
   }
-  if (typeof compatMsg.role !== 'string') {
-    throw A2AError.invalidParams('message.role is required');
+  if (compatMsg.role !== 'user' && compatMsg.role !== 'agent') {
+    throw A2AError.invalidParams('message.role must be "user" or "agent"');
   }
   if (!Array.isArray(compatMsg.parts)) {
     throw A2AError.invalidParams('message.parts must be an array');

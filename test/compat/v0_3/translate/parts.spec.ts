@@ -124,6 +124,12 @@ describe('parts', () => {
       const compat = { kind: 'unknown' } as unknown as legacy.Part;
       expect(() => toCorePart(compat)).toThrow(A2AError);
     });
+
+    it('rejects a non-object entry (typeof [] === "object")', () => {
+      expect(() => toCorePart(null as unknown as legacy.Part)).toThrow(/object/);
+      expect(() => toCorePart('text' as unknown as legacy.Part)).toThrow(/object/);
+      expect(() => toCorePart([] as unknown as legacy.Part)).toThrow(/object/);
+    });
   });
 
   describe('toCompatPart', () => {

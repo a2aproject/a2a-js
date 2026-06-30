@@ -38,7 +38,7 @@ function isCompatWrappableDataValue(
 }
 
 export function toCorePart(compatPart: legacy.Part): V1Part {
-  if (typeof compatPart !== 'object' || compatPart === null) {
+  if (typeof compatPart !== 'object' || compatPart === null || Array.isArray(compatPart)) {
     throw A2AError.invalidParams('Each part must be an object');
   }
   if (compatPart.kind === 'text') {

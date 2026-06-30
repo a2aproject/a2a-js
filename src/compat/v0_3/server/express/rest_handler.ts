@@ -77,13 +77,17 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
  * accepts both on input — we deviate from the canonical output form to
  * stay readable for v0.3 clients.
  *
- * Keys only; values pass through. Non-plain objects (Buffer, Date, …)
- * are returned as-is.
+ * Keys only; values pass through. `Date` instances are serialized to
+ * ISO-8601 strings (matching `JSON.stringify`'s default for Date). Plain
+ * objects with a `null` prototype are recursed; other non-plain objects
+ * (Buffer, Map, …) are returned as-is.
  */
 function toSnakeCaseKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toSnakeCaseKeys);
   if (value === null || typeof value !== 'object') return value;
-  if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+  if (value instanceof Date) return value.toISOString();
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
     const snakeKey = key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);

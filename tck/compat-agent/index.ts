@@ -67,13 +67,15 @@ import { LegacyA2AService, legacyGrpcService } from '../../src/compat/v0_3/serve
  */
 class SUTAgentExecutor implements AgentExecutor {
   private runningTask: Set<string> = new Set();
-  private lastContextId?: string;
+  private taskContexts: Map<string, string> = new Map();
 
   public cancelTask = async (taskId: string, eventBus: ExecutionEventBus): Promise<void> => {
     this.runningTask.delete(taskId);
+    const contextId = this.taskContexts.get(taskId) ?? uuidv4();
+    this.taskContexts.delete(taskId);
     const cancelledUpdate: TaskStatusUpdateEvent = {
       taskId: taskId,
-      contextId: this.lastContextId ?? uuidv4(),
+      contextId: contextId,
       status: {
         state: TaskState.TASK_STATE_CANCELED,
         timestamp: new Date().toISOString(),
@@ -91,7 +93,7 @@ class SUTAgentExecutor implements AgentExecutor {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
 
-    this.lastContextId = contextId;
+    this.taskContexts.set(taskId, contextId);
     this.runningTask.add(taskId);
 
     console.log(

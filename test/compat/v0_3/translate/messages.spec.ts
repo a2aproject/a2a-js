@@ -148,6 +148,17 @@ describe('messages', () => {
       expect(() => toCoreMessage(bad)).toThrow(/role/);
     });
 
+    it('rejects a message whose role is not "user" or "agent"', () => {
+      const bad = {
+        kind: 'message',
+        messageId: 'm',
+        role: 'system',
+        parts: [],
+      } as unknown as legacy.Message;
+      expect(() => toCoreMessage(bad)).toThrowError(A2AError);
+      expect(() => toCoreMessage(bad)).toThrow(/"user" or "agent"/);
+    });
+
     it('rejects a message whose parts field is not an array', () => {
       const bad = {
         kind: 'message',
