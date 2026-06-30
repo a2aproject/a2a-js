@@ -28,10 +28,10 @@
  *     `application/a2a+json` `StreamResponse` envelopes — on the SAME
  *     task, on the same server.
  *
- * The agent card declared below intentionally contains ONLY v1.0
- * `supportedInterfaces` entries. The compat layer synthesizes the v0.3
- * surface automatically — no operator duplication required — which is
- * the whole point of opting into `legacyCompat`.
+ * The agent card declares each binding twice — once at v1.0 and once
+ * at v0.3 — via `duplicateInterfacesForLegacy`. Strict per-interface
+ * advertisement: a binding is only reachable at v0.3 if the card says
+ * so explicitly.
  */
 
 import express from 'express';
@@ -54,6 +54,7 @@ import {
 import { A2AService, grpcService } from '../../../server/grpc/index.js';
 import { LegacyA2AService, legacyGrpcService } from '../../../compat/v0_3/server/grpc/index.js';
 import { createLegacyAwarePushNotificationSender } from '../../../compat/v0_3/server/index.js';
+import { duplicateInterfacesForLegacy } from '../../../compat/v0_3/index.js';
 import { SampleAgentExecutor } from '../sample-agent/agent_executor.js';
 
 // --- Configuration ---
@@ -63,43 +64,40 @@ const GRPC_PORT = Number(process.env.GRPC_PORT || 41252);
 
 // --- Agent Card ---
 //
-// NOTE: only v1.0 (`A2A_PROTOCOL_VERSION`) interfaces are declared. With
-// `legacyCompat: { enabled: true }` set on the well-known agent-card
-// handler, requests carrying `A2A-Version: 0.3` (or no header at all,
-// which §3.6.2 defaults to `'0.3'`) receive a HYBRID card synthesized
-// by the compat layer: the same interface URLs are re-presented under
-// the v0.3 protocol version at the card's top level (`url` /
-// `preferredTransport` / `additionalInterfaces`), AND the v1.0
-// `supportedInterfaces[]` array is left intact. See
-// `src/compat/v0_3/server/express/agent_card_handler.ts`.
+// Each binding is declared at v1.0 (`A2A_PROTOCOL_VERSION`) and mirrored
+// at v0.3 via `duplicateInterfacesForLegacy`. v0.3 advertisement is
+// strictly per-interface; a binding only reaches v0.3 clients if it
+// appears in the card with `protocolVersion: '0.3'`.
 
 const compatServerCard: AgentCard = {
   name: 'Compat v1.0 Server',
   description:
-    'A v1.0-native A2A server that opts into the v0.3 compat layer on every ' +
-    'transport (including push notifications). Accepts both modern ' +
-    '(A2A-Version: 1.0) and legacy (A2A-Version: 0.3 or absent) clients on ' +
-    'the SAME URLs without any duplication of `supportedInterfaces` entries.',
-  supportedInterfaces: [
-    {
-      url: `http://localhost:${HTTP_PORT}/a2a/jsonrpc`,
-      protocolBinding: 'JSONRPC',
-      tenant: '',
-      protocolVersion: A2A_PROTOCOL_VERSION,
-    },
-    {
-      url: `http://localhost:${HTTP_PORT}/a2a/rest`,
-      protocolBinding: 'HTTP+JSON',
-      tenant: '',
-      protocolVersion: A2A_PROTOCOL_VERSION,
-    },
-    {
-      url: `localhost:${GRPC_PORT}`,
-      protocolBinding: 'GRPC',
-      tenant: '',
-      protocolVersion: A2A_PROTOCOL_VERSION,
-    },
-  ],
+    'A v1.0-native A2A server that declares each binding at both v1.0 and ' +
+    'v0.3 so the same URLs accept both modern (A2A-Version: 1.0) and legacy ' +
+    '(A2A-Version: 0.3 or absent) clients.',
+  supportedInterfaces: duplicateInterfacesForLegacy(
+    [
+      {
+        url: `http://localhost:${HTTP_PORT}/a2a/jsonrpc`,
+        protocolBinding: 'JSONRPC',
+        tenant: '',
+        protocolVersion: A2A_PROTOCOL_VERSION,
+      },
+      {
+        url: `http://localhost:${HTTP_PORT}/a2a/rest`,
+        protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: A2A_PROTOCOL_VERSION,
+      },
+      {
+        url: `localhost:${GRPC_PORT}`,
+        protocolBinding: 'GRPC',
+        tenant: '',
+        protocolVersion: A2A_PROTOCOL_VERSION,
+      },
+    ],
+    ['JSONRPC', 'HTTP+JSON', 'GRPC']
+  ),
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples',

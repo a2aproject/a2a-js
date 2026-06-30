@@ -9,8 +9,8 @@ without forcing every client (or every server) to upgrade in lockstep.
 This guide is written for **end users** of the SDK — server operators
 deciding whether to turn the compat layer on, and client developers who need
 to talk to peers that haven't migrated yet. For the architecture-level
-walkthrough (translators, version negotiation internals, card synthesis
-algorithm), see [`src/compat/v0_3/README.md`](../src/compat/v0_3/README.md).
+walkthrough (translators, version negotiation internals, card-shape
+translation), see [`src/compat/v0_3/README.md`](../src/compat/v0_3/README.md).
 For the protocol-level definition of v0.3 vs. v1.0 differences, see
 [Appendix A: Migration Guidance](https://a2a-protocol.org/v1.0.0/specification/#appendix-a-migration-legacy-compatibility)
 in the spec.
@@ -89,27 +89,37 @@ executor publishes back into v0.3 shapes on the way out.
 | gRPC          | Each version is a separate gRPC service descriptor (`A2AService` vs. `LegacyA2AService`). The transport picks the descriptor; the SDK never needs to sniff.                                                       |
 | Agent card    | The handler reads the `A2A-Version` header (defaulting to `'0.3'` when absent, per spec §3.6.2) and emits the appropriate card shape, with `Vary: A2A-Version` set on the response.                                |
 
-### Synthesized v0.3 agent card
+### Per-interface v0.3 advertisement
 
-When `legacyCompat` is enabled on `agentCardHandler`, you don't need to
-duplicate every entry of `supportedInterfaces` with a v0.3 stub. The compat
-layer:
+v0.3 advertisement is strict and per-interface: a binding is only reachable
+at v0.3 if the card lists an `AgentInterface` for it with
+`protocolVersion: '0.3'`. `validateVersion` and the agent-card synthesizer
+both key off the same declaration.
 
-1. Reads `validateVersion` with `{ legacyCompat: true }`, which adds the
-   legacy `'0.3'` version to the supported set for any binding the card
-   already exposes at least one interface for. v0.3 (and header-less)
-   requests therefore route through the legacy handler chain even when the
-   card declares only v1.0 interfaces.
-2. Synthesizes a v0.3-shaped card on the well-known endpoint by setting
-   `protocolVersion: '0.3'` on the same interface URLs the v1.0 card
-   advertises. v0.3 clients can discover and use the agent transparently.
+Use `duplicateInterfacesForLegacy` from `@a2a-js/sdk/compat/v0_3` to mirror
+each binding once at v1.0 and once at v0.3:
 
-The card returned to a v0.3 client is a *hybrid*: it carries the v0.3
-top-level fields (`url`, `preferredTransport`, `additionalInterfaces`) AND
-keeps the v1.0 `supportedInterfaces[]` array embedded. A modern client that
-encounters the hybrid card prefers `supportedInterfaces[]`, which prevents
-unnecessary downgrades — see the `compat-v1-client` sample for the receiver
-logic.
+```ts
+import { duplicateInterfacesForLegacy } from '@a2a-js/sdk/compat/v0_3';
+
+const card: AgentCard = {
+  // ...
+  supportedInterfaces: duplicateInterfacesForLegacy(
+    [
+      { url: '/jsonrpc', protocolBinding: 'JSONRPC',   tenant: '', protocolVersion: '1.0' },
+      { url: '/rest',    protocolBinding: 'HTTP+JSON', tenant: '', protocolVersion: '1.0' },
+      { url: '/grpc',    protocolBinding: 'GRPC',      tenant: '', protocolVersion: '1.0' },
+    ],
+    ['JSONRPC', 'HTTP+JSON'], // GRPC stays v1.0-only
+  ),
+};
+```
+
+The card returned to a v0.3 client is a *hybrid*: v0.3 top-level fields
+(`url`, `preferredTransport`, `additionalInterfaces`) AND the v1.0
+`supportedInterfaces[]` array embedded. A modern client that encounters
+the hybrid card prefers `supportedInterfaces[]`, which prevents unnecessary
+downgrades — see the `compat-v1-client` sample for the receiver logic.
 
 ---
 
@@ -199,7 +209,7 @@ layer applies the documented defaults rather than failing.
 | `AuthenticationInfo.scheme` (single string) ↔ `PushNotificationAuthenticationInfo.schemes` (string array)                                                          | Going v0.3 → v1.0: only the **first** element of `schemes[]` is preserved and the rest are dropped (with a warning). Going v1.0 → v0.3: the single scheme is wrapped into a one-element array; empty becomes `[]`.                                            |
 | `TaskStatusUpdateEvent.final` (removed in v1.0)                                                                                                                     | Going v1.0 → v0.3 the `final` flag is **computed** from the status state: `true` for `completed`, `canceled`, `failed`, or `rejected`; `false` otherwise.                                                                                                     |
 | `SendMessageConfiguration.returnImmediately` ↔ `MessageSendConfiguration.blocking`                                                                                 | Inverted polarity (v1.0 `returnImmediately: true` ↔ v0.3 `blocking: false`, and vice versa).                                                                                                                                                                  |
-| `AgentCard.supportedInterfaces[]` (v1.0) ↔ `(url, preferredTransport, additionalInterfaces)` (v0.3)                                                                | In **strict mode** (default), only interfaces whose `protocolVersion` is empty or in `[0.3, 1.0)` survive the v1.0 → v0.3 translation; if none qualify, `VersionNotSupportedError` is thrown. In **synthesis mode** (used by `legacyAgentCardRouter`), every interface survives and is restamped with `protocolVersion: '0.3'`. |
+| `AgentCard.supportedInterfaces[]` (v1.0) ↔ `(url, preferredTransport, additionalInterfaces)` (v0.3)                                                                | Only interfaces whose `protocolVersion` is empty or in `[0.3, 1.0)` survive the v1.0 → v0.3 translation; if none qualify, `VersionNotSupportedError` is thrown. Use `duplicateInterfacesForLegacy` to opt a v1.0 binding into v0.3 advertisement. |
 | `Part.content.$case` discriminator                                                                                                                                  | Translated to the v0.3 `kind:` discriminator on each part (`text`, `file`, `data`). File URI ↔ v0.3 `FilePart.file.uri`; file bytes ↔ v0.3 `FilePart.file.bytes`; the v1.0 flat `Part.filename` / `Part.mediaType` map back into `FilePart.file.name` / `FilePart.file.mimeType`. |
 
 ### REST wire-shape caveats

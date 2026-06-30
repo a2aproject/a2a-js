@@ -84,17 +84,12 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       const coreCard = await provider();
       let compatCard: legacy.AgentCard;
       try {
-        // `synthesize: true` makes the legacy endpoint discoverable
-        // even when the operator only declared v1.0 interfaces — so
-        // they don't need to duplicate every v1.0 entry with a v0.3
-        // stub. `embedV1Interfaces: true` emits a "superset" card whose
-        // JSON document satisfies BOTH shapes (v0.3 top-level fields
-        // AND v1.0 `supportedInterfaces`), so a v1.0 peer that didn't
-        // negotiate `A2A-Version: 1.0` can still dial bindings without
-        // v0.3 compat. The two top-level field sets are disjoint, so
-        // the hybrid representation is unambiguous.
+        // `embedV1Interfaces: true` emits a "superset" card whose JSON
+        // satisfies both shapes (v0.3 top-level fields AND v1.0
+        // `supportedInterfaces`); the two field sets are disjoint.
+        // Operators advertise v0.3 by declaring per-interface
+        // `protocolVersion: '0.3'` (or via `duplicateInterfacesForLegacy`).
         compatCard = toCompatAgentCard(coreCard, {
-          synthesize: true,
           embedV1Interfaces: true,
         });
       } catch (error) {

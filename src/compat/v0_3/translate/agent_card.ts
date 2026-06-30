@@ -205,14 +205,6 @@ export function toCoreAgentCard(compat: legacy.AgentCard): V1AgentCard {
 
 export interface ToCompatAgentCardOptions {
   /**
-   * Accept every interface regardless of `protocolVersion` and stamp
-   * the emitted card as `'0.3'`. Lets a v1.0-only server with
-   * `legacyCompat` opted in still serve a discoverable card to v0.3
-   * clients. Default: `false` (strict — throws if no legacy-range
-   * interface exists).
-   */
-  synthesize?: boolean;
-  /**
    * Also copy the source v1.0 `supportedInterfaces[]` onto the emitted
    * card. Produces a "superset" document parseable by both v0.3 and
    * v1.0 resolvers (their top-level fields are disjoint), so a v1.0
@@ -232,24 +224,20 @@ export type CompatAgentCardResult = legacy.AgentCard & {
 };
 
 /**
- * Strict mode (default): keep only interfaces with `protocolVersion`
- * empty or in `[0.3, 1.0)`; throw `VersionNotSupportedError` if none.
- * See `ToCompatAgentCardOptions` for `synthesize` and
- * `embedV1Interfaces`.
+ * Keeps only interfaces whose `protocolVersion` is empty or in
+ * `[0.3, 1.0)`; throws `VersionNotSupportedError` if none. To advertise
+ * v0.3 on a binding currently declared at v1.0, use
+ * {@link duplicateInterfacesForLegacy} or add a dedicated v0.3 entry to
+ * `supportedInterfaces`.
  */
 export function toCompatAgentCard(
   core: V1AgentCard,
   options?: ToCompatAgentCardOptions
 ): CompatAgentCardResult {
   const allInterfaces = core.supportedInterfaces ?? [];
-  const legacyInterfaces = allInterfaces.filter(
+  const compatInterfaces = allInterfaces.filter(
     (intf) => !intf.protocolVersion || isLegacyVersion(intf.protocolVersion)
   );
-  // Synthesis only falls back to non-legacy interfaces when there are no
-  // legacy ones — dual-version deployments keep their existing v0.3
-  // primary URL.
-  const compatInterfaces =
-    options?.synthesize && legacyInterfaces.length === 0 ? allInterfaces : legacyInterfaces;
   if (compatInterfaces.length === 0) {
     throw new VersionNotSupportedError(
       'AgentCard must have at least one interface with a protocol version in [0.3, 1.0).'
@@ -277,12 +265,7 @@ export function toCompatAgentCard(
         )
       : undefined;
 
-  // Under synthesize-fallback the emitted card always presents as v0.3
-  // regardless of the underlying interface's declared version.
-  const synthesizedFallback = options?.synthesize && legacyInterfaces.length === 0;
-  const emittedProtocolVersion = synthesizedFallback
-    ? PROTOCOL_VERSION_0_3
-    : primary.protocolVersion || PROTOCOL_VERSION_0_3;
+  const emittedProtocolVersion = primary.protocolVersion || PROTOCOL_VERSION_0_3;
 
   const result: CompatAgentCardResult = {
     name: core.name,
@@ -321,5 +304,43 @@ export function toCompatAgentCard(
     result.supportedInterfaces = allInterfaces.map((intf) => ({ ...intf }));
   }
 
+  return result;
+}
+
+/**
+ * Returns `interfaces` augmented with a v0.3 mirror entry for each
+ * binding in `bindings` that does not already have one. Idempotent: a
+ * binding that already declares a legacy-range interface is left
+ * untouched. Mirror entries copy `url`/`tenant` from the first v1.0
+ * entry for the binding and stamp `protocolVersion: '0.3'`.
+ *
+ * @example
+ * ```ts
+ * supportedInterfaces: duplicateInterfacesForLegacy(
+ *   [
+ *     { url: '/jsonrpc', protocolBinding: 'JSONRPC',   tenant: '', protocolVersion: '1.0' },
+ *     { url: '/rest',    protocolBinding: 'HTTP+JSON', tenant: '', protocolVersion: '1.0' },
+ *     { url: '/grpc',    protocolBinding: 'GRPC',      tenant: '', protocolVersion: '1.0' },
+ *   ],
+ *   ['JSONRPC', 'HTTP+JSON'],
+ * )
+ * ```
+ */
+export function duplicateInterfacesForLegacy(
+  interfaces: V1AgentInterface[],
+  bindings: string[]
+): V1AgentInterface[] {
+  const result = [...interfaces];
+  for (const binding of bindings) {
+    const hasLegacy = interfaces.some(
+      (intf) =>
+        intf.protocolBinding === binding &&
+        (!intf.protocolVersion || isLegacyVersion(intf.protocolVersion))
+    );
+    if (hasLegacy) continue;
+    const source = interfaces.find((intf) => intf.protocolBinding === binding);
+    if (!source) continue;
+    result.push({ ...source, protocolVersion: PROTOCOL_VERSION_0_3 });
+  }
   return result;
 }

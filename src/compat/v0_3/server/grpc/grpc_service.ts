@@ -518,12 +518,10 @@ const _buildContext = async (
   });
 
   const agentCard = await requestHandler.getAgentCard();
-  // `legacyCompat` lets the validator accept '0.3' against a v1.0-only
-  // card, so operators don't have to declare a duplicate v0.3 entry in
-  // `supportedInterfaces`.
-  validateVersion(context.requestedVersion, agentCard, 'GRPC', {
-    legacyCompat: { enabled: true },
-  });
+  // Strict per-interface check: the card must declare a GRPC interface
+  // at `protocolVersion: '0.3'` (manually or via
+  // `duplicateInterfacesForLegacy`).
+  validateVersion(context.requestedVersion, agentCard, 'GRPC');
 
   return context;
 };

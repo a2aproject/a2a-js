@@ -148,9 +148,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       tenant,
     });
     const agentCard = await restTransportHandler.getAgentCard();
-    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON', {
-      legacyCompat: options.legacyCompat,
-    });
+    validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
     return context;
   };
 

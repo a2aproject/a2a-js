@@ -107,9 +107,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         requestedVersion,
       });
       const agentCard = await options.requestHandler.getAgentCard();
-      validateVersion(context.requestedVersion, agentCard, 'JSONRPC', {
-        legacyCompat: options.legacyCompat,
-      });
+      validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
       const transportHandler = useLegacy ? legacyJsonRpcTransportHandler : jsonRpcTransportHandler;
       const rpcResponseOrStream = await transportHandler.handle(req.body, context);
 

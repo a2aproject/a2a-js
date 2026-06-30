@@ -762,42 +762,29 @@ describe('A2AExpressApp', () => {
       expect(legacyHandleStub).toHaveBeenCalledTimes(1);
     });
 
-    it('accepts header-less legacy requests against a v1.0-only card when legacyCompat is enabled', async () => {
-      // legacyCompat implicitly accepts the default-to-'0.3' fallback for
-      // any binding the card already exposes — no duplicate v0.3 stubs needed.
+    it('rejects header-less legacy requests against a v1.0-only card (strict)', async () => {
+      // legacyCompat is strict: card must declare a v0.3 interface for
+      // the binding. A v1.0-only card → VersionNotSupportedError → 500.
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
-      legacyHandleStub.mockResolvedValue({
-        jsonrpc: '2.0',
-        id: 'req-4',
-        result: { kind: 'task' },
-      });
 
       await request(expressApp)
         .post('/')
         .send(createRpcRequest('req-4', 'message/send'))
-        .expect(200);
+        .expect(500);
 
-      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
-      expect(handleStub).not.toHaveBeenCalled();
+      expect(legacyHandleStub).not.toHaveBeenCalled();
     });
 
-    it('accepts explicit A2A-Version: 0.3 against a v1.0-only card when legacyCompat is enabled', async () => {
-      // Same as above but with the header set explicitly.
+    it('rejects explicit A2A-Version: 0.3 against a v1.0-only card (strict)', async () => {
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
-      legacyHandleStub.mockResolvedValue({
-        jsonrpc: '2.0',
-        id: 'req-explicit-03',
-        result: { kind: 'task' },
-      });
 
       await request(expressApp)
         .post('/')
         .set('A2A-Version', '0.3')
         .send(createRpcRequest('req-explicit-03', 'message/send'))
-        .expect(200);
+        .expect(500);
 
-      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
-      expect(handleStub).not.toHaveBeenCalled();
+      expect(legacyHandleStub).not.toHaveBeenCalled();
     });
 
     it('streams SSE responses on the legacy path', async () => {

@@ -261,7 +261,7 @@ compat surface is shipped as six subpath exports off `@a2a-js/sdk`:
 
 See the end-user [v0.3 compatibility guide](docs/compatibility-v0_3.md) for
 opt-in mechanics and caveats (dropped fields, defaults, unavailable
-methods like `ListTasks`, push-notification routing, agent-card synthesis).
+methods like `ListTasks`, push-notification routing, per-interface v0.3 advertisement).
 For the architecture-level walkthrough — translators, version negotiation
 under §3.6.2, push-notification wire-version routing — see
 [`src/compat/v0_3/README.md`](src/compat/v0_3/README.md), and the

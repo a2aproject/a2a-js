@@ -874,7 +874,7 @@ describe('restHandler', () => {
       assert.include(response.body.error.message, '9.9');
     });
 
-    it('should accept header-less requests against a v1.0-only card when legacyCompat is enabled', async () => {
+    it('should reject header-less requests against a v1.0-only card even when legacyCompat is enabled (strict)', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
       const compatApp = express();
       compatApp.use(
@@ -885,10 +885,10 @@ describe('restHandler', () => {
         })
       );
 
-      await request(compatApp).get('/tasks/task-1').expect(200);
+      await request(compatApp).get('/tasks/task-1').expect(400);
     });
 
-    it('should accept explicit A2A-Version: 0.3 against a v1.0-only card when legacyCompat is enabled', async () => {
+    it('should reject explicit A2A-Version: 0.3 against a v1.0-only card even when legacyCompat is enabled (strict)', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
       const compatApp = express();
       compatApp.use(
@@ -899,9 +899,9 @@ describe('restHandler', () => {
         })
       );
 
-      // /tasks/:taskId is a v1.0 path (legacy router only owns /v1/...),
-      // but the v1.0 validator accepts '0.3' under legacyCompat.
-      await request(compatApp).get('/tasks/task-1').set('A2A-Version', '0.3').expect(200);
+      // The v1.0 validator no longer adds '0.3' implicitly; the card
+      // must declare an HTTP+JSON interface at protocolVersion '0.3'.
+      await request(compatApp).get('/tasks/task-1').set('A2A-Version', '0.3').expect(400);
     });
 
     it('should still reject unsupported versions (e.g. 9.9) when legacyCompat is enabled', async () => {
@@ -1092,24 +1092,14 @@ describe('restHandler', () => {
       expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
     });
 
-    it('accepts legacy requests against a v1.0-only card when legacyCompat is enabled', async () => {
-      // Card declares no v0.3 HTTP+JSON, but legacyCompat lets the legacy router handle it.
+    it('rejects legacy requests against a v1.0-only card (strict)', async () => {
+      // Strict mode: legacyCompat no longer adds '0.3' implicitly — the
+      // card must declare an HTTP+JSON interface at protocolVersion '0.3'.
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
-      legacySendMessageStub.mockResolvedValue({
-        kind: 'task',
-        id: 'legacy-task-v1card',
-        contextId: 'ctx',
-        status: { state: 'working' },
-      });
 
-      const response = await request(dualApp)
-        .post('/v1/message:send')
-        .send(legacyMessageBody)
-        .expect(201);
+      await request(dualApp).post('/v1/message:send').send(legacyMessageBody).expect(400);
 
-      assert.equal(response.body.task.id, 'legacy-task-v1card');
-      expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
-      expect(v1SendMessageStub).not.toHaveBeenCalled();
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
     });
 
     it('streams SSE responses on the legacy path', async () => {

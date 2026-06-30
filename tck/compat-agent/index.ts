@@ -21,13 +21,12 @@
  *   - The well-known agent-card endpoint at `/.well-known/agent-card.json`
  *     with `legacyCompat: { enabled: true }` — the `A2A-Version` header
  *     (defaulting to `'0.3'` per spec §3.6.2) selects the v0.3-shaped
- *     hybrid card synthesized from the v1.0 `supportedInterfaces` by
- *     `toCompatAgentCard(card, { synthesize: true })`.
+ *     hybrid card derived from the v0.3-tagged interfaces in
+ *     `supportedInterfaces`.
  *
- * The agent card declares ONLY v1.0 `supportedInterfaces`. The compat
- * layer synthesizes the v0.3 surface (`url`, `preferredTransport`,
- * `additionalInterfaces`, top-level `protocolVersion: '0.3'`) on the
- * fly — no operator-side duplication required.
+ * Each binding is declared twice — at v1.0 and at v0.3 — via
+ * `duplicateInterfacesForLegacy`. v0.3 advertisement is strictly
+ * per-interface.
  */
 
 import express from 'express';
@@ -209,11 +208,9 @@ class SUTAgentExecutor implements AgentExecutor {
 const HTTP_PORT = Number(process.env.HTTP_PORT || 41241);
 const GRPC_PORT = Number(process.env.GRPC_PORT || 41242);
 
-// Card declares ONLY v1.0 interfaces. The compat layer synthesizes the
-// v0.3 view (top-level `url` / `preferredTransport` /
-// `additionalInterfaces`) from these entries when the well-known
-// endpoint sees `A2A-Version: 0.3` (or a missing header, which §3.6.2
-// defaults to `'0.3'`).
+// Each binding declared at both v1.0 and v0.3; v0.3 advertisement is
+// strictly per-interface so the TCK (which speaks v0.3) finds an
+// interface for every binding it probes.
 const SUTAgentCard: AgentCard = {
   name: 'SUT Agent (compat)',
   description:
@@ -228,8 +225,26 @@ const SUTAgentCard: AgentCard = {
       protocolVersion: A2A_PROTOCOL_VERSION,
     },
     {
+      url: `http://localhost:${HTTP_PORT}/a2a/jsonrpc`,
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: '0.3',
+    },
+    {
       url: `http://localhost:${HTTP_PORT}/a2a/rest`,
       protocolBinding: 'HTTP+JSON',
+      tenant: '',
+      protocolVersion: A2A_PROTOCOL_VERSION,
+    },
+    {
+      url: `http://localhost:${HTTP_PORT}/a2a/rest`,
+      protocolBinding: 'HTTP+JSON',
+      tenant: '',
+      protocolVersion: '0.3',
+    },
+    {
+      url: `http://localhost:${GRPC_PORT}`,
+      protocolBinding: 'GRPC',
       tenant: '',
       protocolVersion: A2A_PROTOCOL_VERSION,
     },
@@ -237,7 +252,7 @@ const SUTAgentCard: AgentCard = {
       url: `http://localhost:${GRPC_PORT}`,
       protocolBinding: 'GRPC',
       tenant: '',
-      protocolVersion: A2A_PROTOCOL_VERSION,
+      protocolVersion: '0.3',
     },
   ],
   provider: {

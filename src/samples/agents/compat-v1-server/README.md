@@ -1,14 +1,15 @@
 # Compat v1.0 Server
 
 A v1.0-native A2A server that accepts BOTH modern (v1.0) and legacy (v0.3) clients
-on the **same URLs**, across **all three transports**, without duplicating any
-`supportedInterfaces` entries.
+on the **same URLs**, across **all three transports**. Each binding is declared
+twice in `supportedInterfaces` — once at v1.0 and once at v0.3 — via the
+`duplicateInterfacesForLegacy` helper.
 
 This is the server half of a two-part showcase of the `@a2a-js/sdk` v0.3 compat
 layer; the client half lives next to it under
 [`../compat-v1-client/`](../compat-v1-client/). See
 [`src/compat/v0_3/README.md`](../../../compat/v0_3/README.md) for the underlying
-architecture (translators, header dispatch, hybrid agent card synthesis).
+architecture (translators, header dispatch, hybrid agent card embedding).
 
 ## What the sample demonstrates
 

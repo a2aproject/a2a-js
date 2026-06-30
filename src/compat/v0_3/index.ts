@@ -32,3 +32,4 @@ export {
   legacyGrpcToV1Method,
   v1MethodToLegacyGrpc,
 } from './constants.js';
+export { duplicateInterfacesForLegacy } from './translate/agent_card.js';

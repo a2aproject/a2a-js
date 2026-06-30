@@ -682,14 +682,10 @@ async function main() {
       extensions: [],
       extendedAgentCard: true,
     },
-    // Only v1.0 interfaces are declared here; the agent-card endpoint
-    // serves a hybrid card that augments this list with v0.3-shaped
-    // `(url, preferredTransport, additionalInterfaces)` fields so that
-    // v0.3 SDK parsers (which don't recognize `supportedInterfaces`) can
-    // still discover the bindings. The v0.3 wire dispatch on the server
-    // side is enabled via `legacyCompat: { enabled: true }` on the
-    // JSON-RPC and REST handlers and via binding `LegacyA2AService`
-    // alongside `A2AService` on the gRPC server.
+    // Each binding declared twice — once at v1.0 and once at v0.3 — so
+    // a v0.3 baseline peer (go_v03, python_v03) can dial every binding.
+    // Strict per-interface advertisement: a binding is only reachable
+    // at v0.3 if listed here with `protocolVersion: '0.3'`.
     supportedInterfaces: [
       {
         url: `http://127.0.0.1:${httpPort}/jsonrpc`,
@@ -698,8 +694,26 @@ async function main() {
         protocolVersion: '1.0',
       },
       {
+        url: `http://127.0.0.1:${httpPort}/jsonrpc`,
+        protocolBinding: 'JSONRPC',
+        tenant: '',
+        protocolVersion: '0.3',
+      },
+      {
         url: `127.0.0.1:${grpcPort}`,
         protocolBinding: 'GRPC',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+      {
+        url: `127.0.0.1:${grpcPort}`,
+        protocolBinding: 'GRPC',
+        tenant: '',
+        protocolVersion: '0.3',
+      },
+      {
+        url: `http://127.0.0.1:${httpPort}/rest`,
+        protocolBinding: 'HTTP+JSON',
         tenant: '',
         protocolVersion: '1.0',
       },
@@ -707,7 +721,7 @@ async function main() {
         url: `http://127.0.0.1:${httpPort}/rest`,
         protocolBinding: 'HTTP+JSON',
         tenant: '',
-        protocolVersion: '1.0',
+        protocolVersion: '0.3',
       },
     ],
     provider: {
