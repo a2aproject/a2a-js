@@ -225,7 +225,6 @@ field-name differences:
 | Path prefix         | `/v1/<operation>`         | `/<operation>`            |
 | Request body field  | `request` (a `Message`)   | `message` (a `Message`)   |
 | `Message` payload   | `content[]`               | `parts[]`                 |
-| Field-name casing   | **snake_case** on output (`context_id`, `task_id`, `message_id`, …) to match the v0.3 reference proto's canonical proto-JSON. Input accepts both casings. | **lowerCamelCase** per proto3 JSON canonical form. |
 | Response shape      | proto-JSON `SendMessageResponse` (`{task: {...}}` or `{msg: {...}}`) | proto-JSON `SendMessageResponse` (same oneof, v1.0 types) |
 | Response Content-Type | `application/json`      | `application/a2a+json`    |
 | `TaskState` encoding | `TASK_STATE_COMPLETED`   | `TASK_STATE_COMPLETED`    |

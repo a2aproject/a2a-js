@@ -27,13 +27,7 @@ This file contains TypeScript interfaces generated from the legacy v0.3 JSON sch
 
 - **Purpose**: This is the primary legacy format. Legacy JSON-RPC and REST implementations natively serialize to/from these interfaces. It acts as the foundational data model for legacy message payloads.
 
-### 2. Legacy v0.3 REST Types (`types/rest_types.ts`)
-
-This file contains dedicated snake_case TypeScript interfaces mirroring the internal types.
-
-- **Purpose**: To support TCK and legacy REST clients/servers that send snake_case payloads over HTTP, importing base structures from `types.ts`.
-
-### 3. Legacy v0.3 Protobuf Bindings (`types/pb/` + `grpc/pb/`)
+### 2. Legacy v0.3 Protobuf Bindings (`types/pb/` + `grpc/pb/`)
 
 The v0.3 protobuf bindings are split across two sibling directories, mirroring the v1.0 layer (`src/types/pb/` vs. `src/grpc/pb/`):
 
@@ -81,12 +75,6 @@ The v1.0 gRPC service factory (`src/server/grpc/grpc_service.ts`) intentionally 
 - Anything else — kebab-style v0.3 names (`message/send`, `tasks/get`), unknown strings, or bodies with no `method` field at all → v0.3 dispatcher.
 
 The fallback exists so malformed and unknown requests surface v0.3-shaped errors (`-32600 Invalid Request` for missing `method`, `-32602` for bad params) instead of the v1.0 path's blanket `-32602`, which is what header-less v0.3 clients expect per spec §3.6.2.
-
-### REST wire format
-
-`legacyRestRouter` / `LegacyRestTransportHandler` emit JSON with **snake_case** field names (`context_id`, `task_id`, `message_id`, `protocol_version`, …) to match the v0.3 reference proto's canonical proto-JSON wire form. Input handlers accept both casings (proto3 JSON parsers tolerate either), so v0.3 clients that send camelCase still work.
-
-This deviates from the v1.0 REST handler (`src/server/express/rest_handler.ts`), which emits lowerCamelCase per proto3 JSON canonical form. The split is intentional: each handler matches the on-the-wire conventions of its respective spec version.
 
 ### `tasks/resubscribe` streaming contract
 
