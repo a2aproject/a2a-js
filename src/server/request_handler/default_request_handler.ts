@@ -143,7 +143,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   private async _createRequestContext(
     incomingMessage: Message,
-    context: ServerCallContext
+    context: ServerCallContext,
+    requestMetadata?: Record<string, unknown>
   ): Promise<RequestContext> {
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
@@ -220,7 +221,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       contextId,
       taskId,
     };
-    return new RequestContext(messageForContext, taskId, contextId, context, task, referenceTasks);
+    return new RequestContext(
+      messageForContext,
+      taskId,
+      contextId,
+      context,
+      task,
+      referenceTasks,
+      requestMetadata
+    );
   }
 
   private async _processEvents(
@@ -558,7 +567,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const resultManager = new ResultManager(this.taskStore, context);
     resultManager.setContext(incomingMessage);
 
-    const requestContext = await this._createRequestContext(incomingMessage, context);
+    const requestContext = await this._createRequestContext(
+      incomingMessage,
+      context,
+      params.metadata
+    );
     const taskId = requestContext.taskId;
     const finalMessageForAgent = requestContext.userMessage;
 
@@ -652,7 +665,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const resultManager = new ResultManager(this.taskStore, context);
     resultManager.setContext(incomingMessage);
 
-    const requestContext = await this._createRequestContext(incomingMessage, context);
+    const requestContext = await this._createRequestContext(
+      incomingMessage,
+      context,
+      params.metadata
+    );
     const taskId = requestContext.taskId;
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);

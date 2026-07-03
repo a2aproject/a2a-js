@@ -3543,6 +3543,130 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(capturedRequestContext?.context?.user).to.be.an.instanceOf(UnauthenticatedUser);
   });
 
+  it('should expose SendMessageRequest metadata to agentExecutor via RequestContext', async () => {
+    const requestMetadata = {
+      'a2a-service-parameters': { 'A2A-Extensions': 'https://example.com/extensions/sample/v1' },
+      traceId: 'trace-123',
+    };
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: requestMetadata,
+      configuration: undefined,
+      message: {
+        messageId: 'msg-request-metadata',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Verify request metadata.' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: 'metadata-context-id',
+        taskId: '',
+        extensions: [],
+        referenceTaskIds: [],
+        metadata: {},
+      },
+    };
+
+    let capturedRequestContext: RequestContext | undefined;
+    (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+      async (ctx: RequestContext, bus: ExecutionEventBus) => {
+        capturedRequestContext = ctx;
+        bus.publish(
+          AgentEvent.task({
+            id: ctx.taskId,
+            contextId: ctx.contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
+        bus.finished();
+      }
+    );
+
+    await handler.sendMessage(params, serverCallContext);
+    expect(capturedRequestContext?.metadata).to.deep.equal(
+      requestMetadata,
+      'sendMessage should thread request metadata into RequestContext'
+    );
+
+    capturedRequestContext = undefined;
+    const streamParams: SendMessageRequest = {
+      ...params,
+      message: { ...params.message!, messageId: 'msg-request-metadata-stream' },
+    };
+    for await (const event of handler.sendMessageStream(streamParams, serverCallContext)) {
+      void event; // drain the stream
+    }
+    expect(capturedRequestContext?.metadata).to.deep.equal(
+      requestMetadata,
+      'sendMessageStream should thread request metadata into RequestContext'
+    );
+  });
+
+  it('should leave RequestContext metadata undefined when the request carries none', async () => {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: undefined,
+      configuration: undefined,
+      message: {
+        messageId: 'msg-no-request-metadata',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'No request metadata.' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: 'no-metadata-context-id',
+        taskId: '',
+        extensions: [],
+        referenceTaskIds: [],
+        metadata: {},
+      },
+    };
+
+    let capturedRequestContext: RequestContext | undefined;
+    (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+      async (ctx: RequestContext, bus: ExecutionEventBus) => {
+        capturedRequestContext = ctx;
+        bus.publish(
+          AgentEvent.task({
+            id: ctx.taskId,
+            contextId: ctx.contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
+        bus.finished();
+      }
+    );
+
+    await handler.sendMessage(params, serverCallContext);
+    expect(capturedRequestContext?.metadata).to.equal(
+      undefined,
+      'RequestContext metadata should be undefined when the request has none'
+    );
+  });
+
   describe('getAuthenticatedExtendedAgentCard tests', async () => {
     class A2AUser implements User {
       constructor(private _isAuthenticated: boolean) {}
