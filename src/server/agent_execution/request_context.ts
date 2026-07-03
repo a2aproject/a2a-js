@@ -31,6 +31,6 @@ export class RequestContext {
     this.context = context;
     this.task = task;
     this.referenceTasks = referenceTasks;
-    this.metadata = metadata;
+    this.metadata = metadata ? structuredClone(metadata) : undefined;
   }
 }
