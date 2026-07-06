@@ -312,7 +312,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(taskResult.artifacts![0], testArtifact);
   });
 
-  it('sendMessage: should handle agent execution failure for blocking calls', async () => {
+  it('sendMessage: should surface executor rejection as a thrown error on blocking calls', async () => {
     const errorMessage = 'Agent failed!';
     (mockAgentExecutor as MockAgentExecutor).execute.mockRejectedValue(new Error(errorMessage));
 
@@ -328,18 +328,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       metadata: {},
     };
 
-    const blockingResult = await handler.sendMessage(blockingParams, serverCallContext);
-    const blockingTask = blockingResult as Task;
-
-    assert.equal(
-      blockingTask.status.state,
-      TaskState.TASK_STATE_FAILED,
-      'Task status should be failed'
-    );
-    assert.include(
-      (blockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
-      errorMessage,
-      'Error message should be in the status'
+    await expect(handler.sendMessage(blockingParams, serverCallContext)).rejects.toThrow(
+      errorMessage
     );
   });
 
@@ -426,6 +416,24 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
     expect(saveSpy).toHaveBeenCalledTimes(2);
     assert.equal(saveSpy.mock.calls[1][0].status.state, TaskState.TASK_STATE_COMPLETED);
+  });
+
+  it('sendMessage: (non-blocking) executor rejection before first event surfaces as thrown error', async () => {
+    const errorMessage = 'boom before first event';
+    (mockAgentExecutor as MockAgentExecutor).execute.mockRejectedValue(new Error(errorMessage));
+
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-370-nonblocking', 'Do work'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
+      metadata: {},
+    };
+
+    await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(errorMessage);
   });
 
   it('sendMessage: (non-blocking) should handle failure in event loop after successfull task event', async () => {
@@ -533,7 +541,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
   });
 
-  it('sendMessage: should handle agent execution failure for non-blocking calls', async () => {
+  it('sendMessage: should surface executor rejection as a thrown error on non-blocking calls', async () => {
     const errorMessage = 'Agent failed!';
     (mockAgentExecutor as MockAgentExecutor).execute.mockRejectedValue(new Error(errorMessage));
 
@@ -549,18 +557,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       metadata: {},
     };
 
-    const nonBlockingResult = await handler.sendMessage(nonBlockingParams, serverCallContext);
-    const nonBlockingTask = nonBlockingResult as Task;
-
-    assert.equal(
-      nonBlockingTask.status.state,
-      TaskState.TASK_STATE_FAILED,
-      'Task status should be failed'
-    );
-    assert.include(
-      (nonBlockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
-      errorMessage,
-      'Error message should be in the status'
+    await expect(handler.sendMessage(nonBlockingParams, serverCallContext)).rejects.toThrow(
+      errorMessage
     );
   });
 

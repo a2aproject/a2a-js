@@ -345,15 +345,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   /**
    * Runs the executor for a blocking `sendMessage` call and ties the
    * event bus lifecycle to the executor's settlement. On rejection,
-   * publishes a synthetic Task + statusUpdate(FAILED) so the consumer's
-   * event loop terminates with a usable final result and any concurrent
-   * resubscribers see the failure on the same wire.
+   * lets the error propagate up to the caller's Promise.
    */
   private _runExecutor(
     taskId: string,
     eventBus: ExecutionEventBus,
     requestContext: RequestContext,
-    finalMessageForAgent: Message
+    finalMessageForAgent: Message,
+    onExecutorError?: (err: unknown) => void
   ): void {
     // Track the last task state on the bus directly: the consumer loop
     // that drains into `ResultManager` runs in a separate microtask, so
@@ -362,57 +361,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
-        // Promises can reject with any value, so coerce defensively
-        // before reading `.message`.
-        const errorMessage = extractErrorMessage(err);
         console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
-        // The synthetic Task id MUST be `requestContext.taskId` — the
-        // id the bus is registered under and the id we hand back to
-        // the client. A fresh uuid would make the returned Task
-        // unreachable via `getTask`.
-        const errorTask: Task = {
-          id: requestContext.taskId,
-          contextId: finalMessageForAgent.contextId!,
-          status: {
-            state: TaskState.TASK_STATE_FAILED,
-            message: {
-              role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
-              taskId: requestContext.taskId,
-              contextId: finalMessageForAgent.contextId!,
-              parts: [
-                {
-                  content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
-                  mediaType: 'text/plain',
-                  filename: '',
-                  metadata: {},
-                },
-              ],
-              metadata: {},
-              extensions: [],
-              referenceTaskIds: [],
-            },
-            timestamp: new Date().toISOString(),
-          },
-          artifacts: [],
-          history: requestContext.task?.history ? [...requestContext.task.history] : [],
-          metadata: {},
-        };
-        if (
-          finalMessageForAgent &&
-          !errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)
-        ) {
-          errorTask.history?.push(finalMessageForAgent);
+        if (onExecutorError) {
+          onExecutorError(err);
         }
-        eventBus.publish(AgentEvent.task(errorTask));
-        eventBus.publish(
-          AgentEvent.statusUpdate({
-            taskId: errorTask.id,
-            contextId: errorTask.contextId,
-            status: errorTask.status,
-            metadata: {},
-          })
-        );
       })
       .finally(() => {
         // Close the bus for terminal tasks; keep it alive for
@@ -577,12 +529,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Attach the queue before kicking off the executor so no events are missed.
     const eventQueue = new ExecutionEventQueue(eventBus);
 
-    // Run the executor in the background. Bus cleanup is tied to the
-    // executor's lifecycle, not the consumer's, so a `tasks/resubscribe`
-    // arriving after the consumer settles can still find the bus while
-    // the executor is still publishing.
-    this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
-
     const historyLengthConfig = params.configuration;
 
     if (isBlocking) {
@@ -592,6 +538,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // observed, and the drain detaches into the background so the
       // executor can keep publishing on the same bus.
       return new Promise<Message | Task>((resolve, reject) => {
+        // Run the executor in the background. Bus cleanup is tied to
+        // the executor's lifecycle, not the consumer's, so a
+        // `tasks/resubscribe` arriving after the consumer settles can
+        // still find the bus while the executor is still publishing.
+        // Executor rejection short-circuits the outer promise. `reject()`
+        // is a no-op if the promise was already settled by the drain path.
+        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent, reject);
         const pending = this._processEvents(taskId, resultManager, eventQueue, context, {
           authRequiredSnapshotResolver: (snapshot) => {
             this._applyHistoryLengthSemantics(snapshot, historyLengthConfig ?? {});
@@ -627,6 +580,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     } else {
       // Non-blocking mode resolves with the first task/message event.
       return new Promise<Message | Task>((resolve, reject) => {
+        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent, reject);
         this._processEvents(taskId, resultManager, eventQueue, context, {
           firstResultResolver: (result) => {
             if (isTask(result)) {
