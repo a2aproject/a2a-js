@@ -352,7 +352,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventBus: ExecutionEventBus,
     requestContext: RequestContext,
     finalMessageForAgent: Message,
-    onExecutorError?: (err: unknown) => void
+    onExecutorError: (err: unknown) => void
   ): void {
     // Track the last task state on the bus directly: the consumer loop
     // that drains into `ResultManager` runs in a separate microtask, so
@@ -362,9 +362,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
         console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
-        if (onExecutorError) {
-          onExecutorError(err);
-        }
+        onExecutorError(err);
       })
       .finally(() => {
         // Close the bus for terminal tasks; keep it alive for
