@@ -140,6 +140,9 @@ export class ResultManager {
         );
         break;
       }
+      case 'error': {
+        break;
+      }
       default:
         assertUnreachableEvent(event);
     }

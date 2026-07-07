@@ -9,7 +9,6 @@ import {
   StreamResponse,
   Task,
   TaskState,
-  TaskStatusUpdateEvent,
 } from '../../../src/types/pb/a2a.js';
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import {
@@ -19,10 +18,13 @@ import {
 import { ServerCallContext } from '../../../src/server/context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
-// Streaming error synthesis: if the executor throws before a Task
-// event, _runStreamExecutor synthesizes Task + statusUpdate(FAILED).
-// If it throws after, only statusUpdate(FAILED) (no fresh Task).
-describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)', () => {
+// Streaming failure semantics: the executor throwing must terminate
+// the SSE stream via a THROWN exception (which the Express layer
+// converts to a terminal `event: error` SSE frame or a pre-flush
+// JSON-RPC error envelope). The stream never yields a synthetic
+// FAILED Task or FAILED statusUpdate; only the events the executor
+// actually published are yielded.
+describe('DefaultRequestHandler sendMessageStream executor-failure propagation', () => {
   let handler: DefaultRequestHandler;
   let taskStore: TaskStore;
   let mockExecutor: MockAgentExecutor;
@@ -30,7 +32,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
 
   const agentCard: AgentCard = {
     name: 'Streaming Errors Agent',
-    description: 'Test agent for streaming-error synthesis assertions',
+    description: 'Test agent for streaming-error propagation assertions',
     version: '1.0.0',
     provider: undefined,
     documentationUrl: '',
@@ -87,15 +89,23 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     ...overrides,
   });
 
-  it('executor throws before any Task event: stream yields synthetic Task + statusUpdate(FAILED), not empty', async () => {
-    // This is the core regression test for PR 2's streaming half:
-    // previously the SSE consumer saw an empty stream, making
-    // production debugging impossible. Now the consumer sees a
-    // well-formed task-lifecycle terminating in FAILED.
-    let observedRequestTaskId = '';
+  const drainStream = async (
+    stream: AsyncGenerator<StreamResponse, void, undefined>
+  ): Promise<{ events: StreamResponse[]; error?: unknown }> => {
+    const events: StreamResponse[] = [];
+    try {
+      for await (const event of stream) {
+        events.push(event);
+      }
+      return { events };
+    } catch (error) {
+      return { events, error };
+    }
+  };
+
+  it('executor throws before any Task event: stream throws immediately with the original error, no events yielded', async () => {
     const errorMessage = 'pre-publish failure in streaming executor';
-    mockExecutor.execute.mockImplementation(async (ctx) => {
-      observedRequestTaskId = ctx.taskId;
+    mockExecutor.execute.mockImplementation(async () => {
       throw new Error(errorMessage);
     });
 
@@ -106,101 +116,21 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       metadata: {},
     };
 
-    const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverContext)) {
-      events.push(event);
-    }
+    const { events, error } = await drainStream(handler.sendMessageStream(params, serverContext));
 
-    // Two events: synthetic Task followed by terminal status update.
-    expect(events.length).toBe(2);
-
-    // First event: synthetic Task carrying the FAILED state, keyed by
-    // `requestContext.taskId` — the same id the bus is registered
-    // under and that the client would use for a subsequent
-    // `tasks/resubscribe` or `getTask`.
-    const taskPayload = events[0].payload as { $case: 'task'; value: Task };
-    expect(taskPayload.$case).toBe('task');
-    expect(taskPayload.value.id).toBe(observedRequestTaskId);
-    expect(taskPayload.value.status?.state).toBe(TaskState.TASK_STATE_FAILED);
-
-    // Second event: statusUpdate(FAILED) referencing the same task id.
-    const statusPayload = events[1].payload as {
-      $case: 'statusUpdate';
-      value: TaskStatusUpdateEvent;
-    };
-    expect(statusPayload.$case).toBe('statusUpdate');
-    expect(statusPayload.value.taskId).toBe(observedRequestTaskId);
-    expect(statusPayload.value.status?.state).toBe(TaskState.TASK_STATE_FAILED);
-    expect(
-      (statusPayload.value.status?.message?.parts[0].content as { $case: 'text'; value: string })
-        .value
-    ).toContain(errorMessage);
+    expect(events.length).toBe(0);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(errorMessage);
   });
 
-  it('synthetic Task is reachable via taskStore after the stream closes', async () => {
-    // The Task event is drained through ResultManager into the store
-    // exactly the same way a real executor-published Task would be, so
-    // the FAILED state is queryable via getTask afterward.
-    const errorMessage = 'reachable after failure';
-    mockExecutor.execute.mockRejectedValue(new Error(errorMessage));
-
-    const params: SendMessageRequest = {
-      message: makeMessage('msg-stream-err-2', 'kick off'),
-      tenant: '',
-      configuration: undefined,
-      metadata: {},
-    };
-
-    const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverContext)) {
-      events.push(event);
-    }
-
-    const taskPayload = events[0].payload as { $case: 'task'; value: Task };
-    const taskId = taskPayload.value.id;
-
-    const stored = await taskStore.load(taskId, serverContext);
-    expect(stored).toBeDefined();
-    expect(stored!.id).toBe(taskId);
-    expect(stored!.status?.state).toBe(TaskState.TASK_STATE_FAILED);
-  });
-
-  it('synthetic Task includes the original user message in history', async () => {
-    // The stream-error synthesis appends the originating user message
-    // to the Task's history so the failed task is self-describing —
-    // matches the blocking-path synthesis in `_runExecutor`.
-    mockExecutor.execute.mockRejectedValue(new Error('boom'));
-
-    const userMessage = makeMessage('msg-stream-err-3', 'tell me a joke');
-    const params: SendMessageRequest = {
-      message: userMessage,
-      tenant: '',
-      configuration: undefined,
-      metadata: {},
-    };
-
-    const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverContext)) {
-      events.push(event);
-    }
-
-    const taskPayload = events[0].payload as { $case: 'task'; value: Task };
-    expect(
-      taskPayload.value.history?.find((m) => m.messageId === userMessage.messageId)
-    ).toBeDefined();
-  });
-
-  it('executor publishes Task then throws: stream yields the original Task + a synthetic FAILED statusUpdate (no duplicate Task)', async () => {
-    // Pre-existing behaviour preserved: when the executor has already
-    // published a Task event, we must NOT publish a second Task event
-    // in the error path (would violate stream-pattern ordering); only
-    // a statusUpdate(FAILED) is appended.
+  it('executor publishes Task then throws: stream yields the Task, then throws the original error', async () => {
+    // Client sees the events the executor actually published, then
+    // observes the error via a thrown exception (which Express turns
+    // into a terminal `event: error` SSE frame post-flush).
     const errorMessage = 'post-publish failure';
     let observedRequestTaskId = '';
-    let observedContextId = '';
     mockExecutor.execute.mockImplementation(async (ctx, bus) => {
       observedRequestTaskId = ctx.taskId;
-      observedContextId = ctx.contextId;
       bus.publish(
         AgentEvent.task({
           id: ctx.taskId,
@@ -219,40 +149,69 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     });
 
     const params: SendMessageRequest = {
-      message: makeMessage('msg-stream-err-4', 'kick off'),
+      message: makeMessage('msg-stream-err-2', 'kick off'),
       tenant: '',
       configuration: undefined,
       metadata: {},
     };
 
-    const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverContext)) {
-      events.push(event);
-    }
+    const { events, error } = await drainStream(handler.sendMessageStream(params, serverContext));
 
-    expect(events.length).toBe(2);
+    // Exactly one event yielded (the SUBMITTED Task).
+    expect(events.length).toBe(1);
+    const taskPayload = events[0].payload as { $case: 'task'; value: Task };
+    expect(taskPayload.$case).toBe('task');
+    expect(taskPayload.value.id).toBe(observedRequestTaskId);
+    expect(taskPayload.value.status?.state).toBe(TaskState.TASK_STATE_SUBMITTED);
 
-    const firstTask = events[0].payload as { $case: 'task'; value: Task };
-    expect(firstTask.$case).toBe('task');
-    expect(firstTask.value.id).toBe(observedRequestTaskId);
-    // The first Task event was the SUBMITTED one published by the
-    // executor before it threw — not a second synthetic FAILED Task.
-    expect(firstTask.value.status?.state).toBe(TaskState.TASK_STATE_SUBMITTED);
-
-    const failed = events[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent };
-    expect(failed.$case).toBe('statusUpdate');
-    expect(failed.value.taskId).toBe(observedRequestTaskId);
-    expect(failed.value.contextId).toBe(observedContextId);
-    expect(failed.value.status?.state).toBe(TaskState.TASK_STATE_FAILED);
-    expect(
-      (failed.value.status?.message?.parts[0].content as { $case: 'text'; value: string }).value
-    ).toContain(errorMessage);
+    // Then the stream throws the original error — no synthetic FAILED
+    // statusUpdate is yielded as a normal frame.
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(errorMessage);
   });
 
-  it('synthetic Task uses the explicit taskId the client supplied on the incoming message', async () => {
-    // When the client targets an existing non-terminal task and the
-    // executor blows up before publishing, the synthetic Task must use
-    // the client-supplied id — same contract as the blocking path.
+  it('after streaming failure, store reflects FAILED so getTask returns the terminal state', async () => {
+    const errorMessage = 'reachable after failure';
+    let observedRequestTaskId = '';
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      observedRequestTaskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      throw new Error(errorMessage);
+    });
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-stream-err-3', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    const { error } = await drainStream(handler.sendMessageStream(params, serverContext));
+    expect(error).toBeInstanceOf(Error);
+
+    const stored = await taskStore.load(observedRequestTaskId, serverContext);
+    expect(stored).toBeDefined();
+    expect(stored!.status?.state).toBe(TaskState.TASK_STATE_FAILED);
+  });
+
+  it('streaming failure on an existing task marks that task FAILED in the store', async () => {
+    // When the client targeted an existing non-terminal task and the
+    // executor throws before publishing anything, the existing task
+    // must still be updated to FAILED so the client sees the correct
+    // state on a subsequent `getTask`.
     const existingTaskId = 'client-supplied-stream-task-id';
     const existingContextId = 'client-supplied-stream-context-id';
     await taskStore.save(
@@ -271,10 +230,11 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       serverContext
     );
 
-    mockExecutor.execute.mockRejectedValue(new Error('stream boom on existing task'));
+    const errorMessage = 'stream boom on existing task';
+    mockExecutor.execute.mockRejectedValue(new Error(errorMessage));
 
     const params: SendMessageRequest = {
-      message: makeMessage('msg-stream-err-5', 'continue', {
+      message: makeMessage('msg-stream-err-4', 'continue', {
         taskId: existingTaskId,
         contextId: existingContextId,
       }),
@@ -283,27 +243,19 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       metadata: {},
     };
 
-    const events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(params, serverContext)) {
-      events.push(event);
-    }
+    const { events, error } = await drainStream(handler.sendMessageStream(params, serverContext));
+    expect(events.length).toBe(0);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(errorMessage);
 
-    expect(events.length).toBe(2);
-    const taskPayload = events[0].payload as { $case: 'task'; value: Task };
-    expect(taskPayload.value.id).toBe(existingTaskId);
-    expect(taskPayload.value.status?.state).toBe(TaskState.TASK_STATE_FAILED);
-
-    const statusPayload = events[1].payload as {
-      $case: 'statusUpdate';
-      value: TaskStatusUpdateEvent;
-    };
-    expect(statusPayload.value.taskId).toBe(existingTaskId);
+    const stored = await taskStore.load(existingTaskId, serverContext);
+    expect(stored!.status?.state).toBe(TaskState.TASK_STATE_FAILED);
   });
 
   it('event bus is cleaned up after the stream-error path runs', async () => {
-    // FAILED is a terminal state, so `_settleBus` must close the bus
-    // and detach it from the manager. Otherwise long-lived listeners
-    // (e.g. `trackLatestTaskState`) would leak on each failure.
+    // Errors are terminal for the bus, so `_settleBus` must close
+    // the bus and detach it from the manager even though no
+    // TASK_STATE_FAILED statusUpdate was seen by `trackLatestTaskState`.
     let observedRequestTaskId = '';
     mockExecutor.execute.mockImplementation(async (ctx) => {
       observedRequestTaskId = ctx.taskId;
@@ -311,15 +263,14 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     });
 
     const params: SendMessageRequest = {
-      message: makeMessage('msg-stream-err-6', 'kick off'),
+      message: makeMessage('msg-stream-err-5', 'kick off'),
       tenant: '',
       configuration: undefined,
       metadata: {},
     };
 
-    for await (const _event of handler.sendMessageStream(params, serverContext)) {
-      void _event;
-    }
+    const { error } = await drainStream(handler.sendMessageStream(params, serverContext));
+    expect(error).toBeInstanceOf(Error);
 
     // Give `.finally()` a tick to call `_settleBus`.
     await new Promise<void>((resolve) => setImmediate(resolve));

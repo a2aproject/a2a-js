@@ -64,7 +64,6 @@ import {
   StreamPattern,
 } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
-import { extractErrorMessage } from '../../errors.js';
 
 /**
  * Default implementation of the A2A request handler.
@@ -322,11 +321,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     } catch (error) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
-      this._handleProcessingError(
+      // `_handleProcessingError` persists FAILED (async) then either
+      // rejects the pending-caller promise or re-throws to propagate
+      // to the outer `_processEvents` awaiter.
+      await this._handleProcessingError(
         error,
         resultManager,
         firstResultSent,
         taskId,
+        context,
         options?.firstResultRejector
       );
     } finally {
@@ -354,9 +357,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   /**
    * Runs the executor for a blocking `sendMessage` call and ties the
    * event bus lifecycle to the executor's settlement. On rejection,
-   * publishes a synthetic Task + statusUpdate(FAILED) so the consumer's
-   * event loop terminates with a usable final result and any concurrent
-   * resubscribers see the failure on the same wire.
+   * publishes an internal `AgentEvent.error` on the bus so the drain
+   * loop can persist a FAILED status update and propagate the
+   * exception to the transport layer. The transport layer maps the
+   * exception to a proper JSON-RPC / REST error envelope.
    */
   private _runExecutor(
     taskId: string,
@@ -371,63 +375,19 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
-        // Promises can reject with any value, so coerce defensively
-        // before reading `.message`.
-        const errorMessage = extractErrorMessage(err);
         console.error(`Agent execution failed for message ${finalMessageForAgent.messageId}:`, err);
-        // The synthetic Task id MUST be `requestContext.taskId` — the
-        // id the bus is registered under and the id we hand back to
-        // the client. A fresh uuid would make the returned Task
-        // unreachable via `getTask`.
-        const errorTask: Task = {
-          id: requestContext.taskId,
-          contextId: finalMessageForAgent.contextId!,
-          status: {
-            state: TaskState.TASK_STATE_FAILED,
-            message: {
-              role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
-              taskId: requestContext.taskId,
-              contextId: finalMessageForAgent.contextId!,
-              parts: [
-                {
-                  content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
-                  mediaType: 'text/plain',
-                  filename: '',
-                  metadata: {},
-                },
-              ],
-              metadata: {},
-              extensions: [],
-              referenceTaskIds: [],
-            },
-            timestamp: new Date().toISOString(),
-          },
-          artifacts: [],
-          history: requestContext.task?.history ? [...requestContext.task.history] : [],
-          metadata: {},
-        };
-        if (
-          finalMessageForAgent &&
-          !errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)
-        ) {
-          errorTask.history?.push(finalMessageForAgent);
-        }
-        eventBus.publish(AgentEvent.task(errorTask));
-        eventBus.publish(
-          AgentEvent.statusUpdate({
-            taskId: errorTask.id,
-            contextId: errorTask.contextId,
-            status: errorTask.status,
-            metadata: {},
-          })
-        );
+        // Publish an internal error event so the drain loop's
+        // try/catch observes the exception via `eventQueue.events()`
+        // rethrowing it. The drain loop then persists a FAILED status
+        // update and rethrows so the transport can build a proper
+        // error envelope.
+        eventBus.publish(AgentEvent.error(err));
       })
       .finally(() => {
-        // Close the bus for terminal tasks; keep it alive for
-        // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
-        // resubscribers can still attach.
-        this._settleBus(taskId, eventBus, stateTracker());
+        // Force-close on error regardless of last observed state:
+        // errors are terminal and must not leave the bus dangling for
+        // an INPUT_REQUIRED / AUTH_REQUIRED holdover.
+        this._settleBus(taskId, eventBus, stateTracker(), false);
       });
   }
 
@@ -435,14 +395,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * Settles the event bus once the executor returns. Terminal states
    * (and the bare-Message stream pattern) close the bus immediately;
    * interrupted states (INPUT_REQUIRED, AUTH_REQUIRED) keep it alive
-   * so follow-up sends and resubscribers can still attach.
+   * so follow-up sends and resubscribers can still attach. Errors are
+   * always terminal — an executor rejection must not leave the bus
+   * suspended waiting for follow-up input that will never arrive.
    */
   private _settleBus(
     taskId: string,
     eventBus: ExecutionEventBus,
-    lastState: TaskState | undefined
+    lastState: TaskState | undefined,
+    hadError: boolean = false
   ): void {
-    if (lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState)) {
+    if (!hadError && lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState)) {
       return;
     }
     eventBus.finished();
@@ -450,12 +413,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   /**
-   * Streaming variant of {@link _runExecutor}. If the executor threw
-   * before publishing any Task event, synthesizes both the Task and a
-   * statusUpdate(FAILED) so the SSE consumer sees a well-formed
-   * task-lifecycle stream that terminates in FAILED. If a Task was
-   * already published, only the statusUpdate is synthesized to avoid
-   * violating the task-lifecycle ordering.
+   * Streaming variant of {@link _runExecutor}. Publishes an internal
+   * `AgentEvent.error` on rejection so the SSE stream terminates via
+   * a thrown exception, which the Express layer converts into a
+   * terminal `event: error` SSE frame (post-flush) or a JSON-RPC
+   * error envelope (pre-flush). No synthetic Task/statusUpdate is
+   * generated — the client sees whatever events the executor actually
+   * published, then observes the error termination.
    */
   private _runStreamExecutor(
     taskId: string,
@@ -467,89 +431,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
-        const errorMessage = extractErrorMessage(err);
         console.error(
           `Agent execution failed for stream message ${finalMessageForAgent.messageId}:`,
           err
         );
-
-        const latestTask = snapshotTracker().task;
-        const errorTaskId = latestTask?.id ?? requestContext.taskId;
-        const errorContextId = latestTask?.contextId ?? finalMessageForAgent.contextId!;
-
-        // If no Task event has been published yet, synthesize one
-        // first so the SSE consumer's stream pattern transitions into
-        // TASK_LIFECYCLE before the statusUpdate(FAILED) lands.
-        // Otherwise the executor would silently close an empty stream
-        // and the client would have no signal that the request failed.
-        if (!latestTask) {
-          const errorTask: Task = {
-            id: requestContext.taskId,
-            contextId: finalMessageForAgent.contextId!,
-            status: {
-              state: TaskState.TASK_STATE_FAILED,
-              message: {
-                role: Role.ROLE_AGENT,
-                messageId: uuidv4(),
-                taskId: requestContext.taskId,
-                contextId: finalMessageForAgent.contextId!,
-                parts: [
-                  {
-                    content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
-                    mediaType: 'text/plain',
-                    filename: '',
-                    metadata: {},
-                  },
-                ],
-                metadata: {},
-                extensions: [],
-                referenceTaskIds: [],
-              },
-              timestamp: new Date().toISOString(),
-            },
-            artifacts: [],
-            history: requestContext.task?.history ? [...requestContext.task.history] : [],
-            metadata: {},
-          };
-          if (
-            finalMessageForAgent &&
-            !errorTask.history?.find((m) => m.messageId === finalMessageForAgent.messageId)
-          ) {
-            errorTask.history?.push(finalMessageForAgent);
-          }
-          eventBus.publish(AgentEvent.task(errorTask));
-        }
-
-        const errorTaskStatus: TaskStatusUpdateEvent = {
-          taskId: errorTaskId,
-          contextId: errorContextId,
-          status: {
-            state: TaskState.TASK_STATE_FAILED,
-            message: {
-              role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
-              taskId: errorTaskId,
-              contextId: errorContextId,
-              parts: [
-                {
-                  content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
-                  mediaType: 'text/plain',
-                  filename: '',
-                  metadata: {},
-                },
-              ],
-              metadata: {},
-              extensions: [],
-              referenceTaskIds: [],
-            },
-            timestamp: new Date().toISOString(),
-          },
-          metadata: {},
-        };
-        eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
+        eventBus.publish(AgentEvent.error(err));
       })
       .finally(() => {
-        this._settleBus(taskId, eventBus, snapshotTracker().state);
+        this._settleBus(taskId, eventBus, snapshotTracker().state, false);
       });
   }
 
@@ -709,6 +598,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await this._sendPushNotificationIfNeeded(context, streamResponse);
         yield streamResponse;
       }
+    } catch (error) {
+      // Executor rejected — `eventQueue.events()` rethrows the wrapped
+      // error. Persist FAILED before propagating so a subsequent
+      // `getTask` reflects state.
+      await this._persistFailedStatus(taskId, error, resultManager, context);
+      throw error;
     } finally {
       // Detach THIS consumer's queue; the bus stays alive until the
       // executor settles.
@@ -957,6 +852,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           case 'message':
             // Messages are not yielded on resubscribe.
             break;
+          case 'error':
+            break;
           default:
             assertUnreachableEvent(event);
         }
@@ -990,6 +887,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         return { payload: { $case: 'statusUpdate', value: event.data } };
       case 'artifactUpdate':
         return { payload: { $case: 'artifactUpdate', value: event.data } };
+      case 'error':
+        throw event.data;
       default:
         assertUnreachableEvent(event);
     }
@@ -1017,8 +916,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     resultManager: ResultManager,
     firstResultSent: boolean,
     taskId: string,
+    context: ServerCallContext,
     firstResultRejector?: (reason: unknown) => void
   ): Promise<void> {
+    // Persist FAILED to the store BEFORE deciding how to surface the
+    // error to the caller.
+    await this._persistFailedStatus(taskId, error, resultManager, context);
+
     // Non-blocking, first result not yet sent: reject the caller's promise.
     if (firstResultRejector && !firstResultSent) {
       firstResultRejector(error);
@@ -1030,47 +934,89 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw error;
     }
 
-    // Non-blocking, first result already sent: persist a FAILED status
-    // update instead of re-throwing into the unattended background drain.
-    const currentTask = resultManager.getCurrentTask();
+    // Non-blocking, first result already sent: the caller is gone;
+    // persistence above is the only observable side effect. Log the
+    // error for operators.
     const errorMessage = (error instanceof Error && error.message) || 'Unknown error';
-    if (currentTask) {
-      const statusUpdateFailed: TaskStatusUpdateEvent = {
-        taskId: currentTask.id,
-        contextId: currentTask.contextId,
-        status: {
-          state: TaskState.TASK_STATE_FAILED,
-          message: {
-            role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
-            taskId: currentTask.id,
-            contextId: currentTask.contextId,
-            parts: [
-              {
-                content: { $case: 'text', value: `Event processing loop failed: ${errorMessage}` },
-                mediaType: 'text/plain',
-                filename: '',
-                metadata: {},
-              },
-            ],
-            metadata: {},
-            extensions: [],
-            referenceTaskIds: [],
-          },
-          timestamp: new Date().toISOString(),
-        },
-        metadata: {},
-      };
+    console.error(`Event processing loop failed for task ${taskId}: ${errorMessage}`);
+  }
 
+  /**
+   * Persists a FAILED status update to the {@link TaskStore} when the
+   * event drain loop throws. Handles two cases:
+   *  - The executor published a Task before rejecting → ResultManager
+   *    has a cached currentTask, we build a statusUpdate from it.
+   *  - The executor rejected without publishing anything, but the
+   *    client targeted an existing task → we load the task from the
+   *    store and mark it FAILED. This mirrors Python's EventConsumer
+   *    behavior of calling `TaskManager.get_task()` (which hits the
+   *    store) in its `except Exception` branch.
+   *  - Neither case applies (fresh taskId, executor threw before any
+   *    Task event) → no-op; the taskId points at nothing worth
+   *    persisting.
+   *
+   * Persistence errors are logged, not propagated — the caller's
+   * original error is what matters.
+   */
+  private async _persistFailedStatus(
+    taskId: string,
+    error: unknown,
+    resultManager: ResultManager,
+    context: ServerCallContext
+  ): Promise<void> {
+    let currentTask = resultManager.getCurrentTask();
+    if (!currentTask) {
+      // Fall back to a store lookup for the case where the executor
+      // targeted a pre-existing task but rejected before publishing
+      // any event of its own.
       try {
-        await resultManager.processEvent(AgentEvent.statusUpdate(statusUpdateFailed));
-      } catch (error) {
+        currentTask = await this.taskStore.load(taskId, context);
+      } catch (loadError) {
         console.error(
-          `Event processing loop failed for task ${taskId}: ${(error instanceof Error && error.message) || 'Unknown error'}`
+          `Failed to load task ${taskId} while persisting FAILED status: ${
+            (loadError instanceof Error && loadError.message) || 'Unknown error'
+          }`
         );
+        return;
       }
-    } else {
-      console.error(`Event processing loop failed for task ${taskId}: ${errorMessage}`);
+      if (!currentTask) return;
+    }
+    const errorMessage = (error instanceof Error && error.message) || 'Unknown error';
+    const statusUpdateFailed: TaskStatusUpdateEvent = {
+      taskId: currentTask.id,
+      contextId: currentTask.contextId,
+      status: {
+        state: TaskState.TASK_STATE_FAILED,
+        message: {
+          role: Role.ROLE_AGENT,
+          messageId: uuidv4(),
+          taskId: currentTask.id,
+          contextId: currentTask.contextId,
+          parts: [
+            {
+              content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        },
+        timestamp: new Date().toISOString(),
+      },
+      metadata: {},
+    };
+
+    try {
+      await resultManager.processEvent(AgentEvent.statusUpdate(statusUpdateFailed));
+    } catch (persistError) {
+      console.error(
+        `Failed to persist FAILED status for task ${taskId}: ${
+          (persistError instanceof Error && persistError.message) || 'Unknown error'
+        }`
+      );
     }
   }
 
@@ -1083,6 +1029,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     event: AgentExecutionEvent,
     currentPattern: StreamPattern
   ): StreamPattern {
+    if (event.kind === 'error') {
+      return currentPattern;
+    }
     switch (currentPattern) {
       case StreamPattern.UNDETERMINED:
         if (event.kind === 'message') return StreamPattern.MESSAGE_ONLY;

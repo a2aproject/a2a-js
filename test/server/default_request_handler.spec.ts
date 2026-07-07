@@ -312,11 +312,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(taskResult.artifacts![0], testArtifact);
   });
 
-  it('sendMessage: should handle agent execution failure for blocking calls', async () => {
+  it('sendMessage: should propagate agent execution failure for blocking calls', async () => {
+    // The handler must reject with the original error so the transport
+    // layer can map it to a proper JSON-RPC / REST error envelope.
     const errorMessage = 'Agent failed!';
     (mockAgentExecutor as MockAgentExecutor).execute.mockRejectedValue(new Error(errorMessage));
 
-    // Test blocking case
     const blockingParams: SendMessageRequest = {
       message: createTestMessage('msg-fail-block', 'Test failure blocking'),
       tenant: '',
@@ -328,18 +329,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       metadata: {},
     };
 
-    const blockingResult = await handler.sendMessage(blockingParams, serverCallContext);
-    const blockingTask = blockingResult as Task;
-
-    assert.equal(
-      blockingTask.status.state,
-      TaskState.TASK_STATE_FAILED,
-      'Task status should be failed'
-    );
-    assert.include(
-      (blockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
-      errorMessage,
-      'Error message should be in the status'
+    await expect(handler.sendMessage(blockingParams, serverCallContext)).rejects.toThrow(
+      errorMessage
     );
   });
 
@@ -529,15 +520,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(finalTaskSaved!.status.message!.role, Role.ROLE_AGENT);
     assert.equal(
       (finalTaskSaved!.status.message!.parts[0].content as { $case: 'text'; value: string }).value,
-      `Event processing loop failed: ${errorMessage}`
+      `Agent execution error: ${errorMessage}`
     );
   });
 
-  it('sendMessage: should handle agent execution failure for non-blocking calls', async () => {
+  it('sendMessage: should propagate agent execution failure for non-blocking calls when no first result was produced', async () => {
+    // Non-blocking resolves on the first Task/Message event, but if
+    // the executor throws before publishing anything, there is no
+    // first result — the outer promise must reject with the original
+    // error so the transport layer produces a proper JSON-RPC / REST
+    // error envelope.
     const errorMessage = 'Agent failed!';
     (mockAgentExecutor as MockAgentExecutor).execute.mockRejectedValue(new Error(errorMessage));
 
-    // Test non-blocking case
     const nonBlockingParams: SendMessageRequest = {
       message: createTestMessage('msg-fail-nonblock', 'Test failure non-blocking'),
       tenant: '',
@@ -549,18 +544,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       metadata: {},
     };
 
-    const nonBlockingResult = await handler.sendMessage(nonBlockingParams, serverCallContext);
-    const nonBlockingTask = nonBlockingResult as Task;
-
-    assert.equal(
-      nonBlockingTask.status.state,
-      TaskState.TASK_STATE_FAILED,
-      'Task status should be failed'
-    );
-    assert.include(
-      (nonBlockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
-      errorMessage,
-      'Error message should be in the status'
+    await expect(handler.sendMessage(nonBlockingParams, serverCallContext)).rejects.toThrow(
+      errorMessage
     );
   });
 

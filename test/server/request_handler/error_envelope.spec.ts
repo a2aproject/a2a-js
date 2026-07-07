@@ -14,11 +14,7 @@ import { DefaultExecutionEventBusManager } from '../../../src/server/events/exec
 import { ServerCallContext } from '../../../src/server/context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
-// Synthetic error Task from _runExecutor when the agent rejects before
-// publishing a Task event. Pre-fix the code used a fresh uuidv4() that
-// didn't match the bus key, so the client's follow-up getTask threw
-// TaskNotFoundError.
-describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => {
+describe('DefaultRequestHandler executor-failure error envelope (blocking path)', () => {
   let handler: DefaultRequestHandler;
   let taskStore: TaskStore;
   let mockExecutor: MockAgentExecutor;
@@ -26,7 +22,7 @@ describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => 
 
   const agentCard: AgentCard = {
     name: 'Error Envelope Agent',
-    description: 'Test agent for synthetic-error-Task id assertions',
+    description: 'Test agent for executor-throw propagation assertions',
     version: '1.0.0',
     provider: undefined,
     documentationUrl: '',
@@ -83,11 +79,10 @@ describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => 
     ...overrides,
   });
 
-  it('synthetic Task id matches requestContext.taskId (handler-generated) when message has no taskId', async () => {
-    let observedRequestTaskId = '';
-    mockExecutor.execute.mockImplementation(async (ctx) => {
-      observedRequestTaskId = ctx.taskId;
-      throw new Error('boom before any Task event');
+  it('sendMessage rejects with the original error when executor throws before any Task event', async () => {
+    const errorMessage = 'boom before any Task event';
+    mockExecutor.execute.mockImplementation(async () => {
+      throw new Error(errorMessage);
     });
 
     const params: SendMessageRequest = {
@@ -97,15 +92,94 @@ describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => 
       metadata: {},
     };
 
-    const result = (await handler.sendMessage(params, serverContext)) as Task;
-
-    expect(observedRequestTaskId).not.toBe('');
-    expect(result.id).toBe(observedRequestTaskId);
-    expect(result.status.state).toBe(TaskState.TASK_STATE_FAILED);
+    await expect(handler.sendMessage(params, serverContext)).rejects.toThrow(errorMessage);
   });
 
-  it('synthetic Task id matches the explicit taskId the client supplied on the incoming message', async () => {
-    // Prime the store so _createRequestContext finds the existing task.
+  it('sendMessage rejects when executor throws AFTER publishing a Task, and store reflects FAILED', async () => {
+    const errorMessage = 'boom after publishing task';
+    let observedRequestTaskId = '';
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      observedRequestTaskId = ctx.taskId;
+      bus.publish({
+        kind: 'task',
+        data: {
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        },
+      });
+      throw new Error(errorMessage);
+    });
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-err-2', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    await expect(handler.sendMessage(params, serverContext)).rejects.toThrow(errorMessage);
+
+    // Store should now hold a FAILED task with the same id.
+    expect(observedRequestTaskId).not.toBe('');
+    const stored = await taskStore.load(observedRequestTaskId, serverContext);
+    expect(stored).toBeDefined();
+    expect(stored!.status?.state).toBe(TaskState.TASK_STATE_FAILED);
+  });
+
+  it('getTask after executor-throw reflects FAILED status persisted by the drain loop', async () => {
+    const errorMessage = 'agent blew up mid-execution';
+    let observedRequestTaskId = '';
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      observedRequestTaskId = ctx.taskId;
+      bus.publish({
+        kind: 'task',
+        data: {
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        },
+      });
+      throw new Error(errorMessage);
+    });
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-err-3', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    await expect(handler.sendMessage(params, serverContext)).rejects.toThrow(errorMessage);
+
+    const getParams: GetTaskRequest = {
+      id: observedRequestTaskId,
+      tenant: '',
+      historyLength: undefined,
+    };
+    const loaded = await handler.getTask(getParams, serverContext);
+    expect(loaded.id).toBe(observedRequestTaskId);
+    expect(loaded.status.state).toBe(TaskState.TASK_STATE_FAILED);
+    expect(
+      (loaded.status.message?.parts[0].content as { $case: 'text'; value: string }).value
+    ).toContain(errorMessage);
+  });
+
+  it('sendMessage rejects when executor targets an existing task and throws', async () => {
     const existingTaskId = 'client-supplied-task-id';
     const existingContextId = 'client-supplied-context-id';
     await taskStore.save(
@@ -124,14 +198,11 @@ describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => 
       serverContext
     );
 
-    let observedRequestTaskId = '';
-    mockExecutor.execute.mockImplementation(async (ctx) => {
-      observedRequestTaskId = ctx.taskId;
-      throw new Error('boom before any Task event');
-    });
+    const errorMessage = 'boom on existing task';
+    mockExecutor.execute.mockRejectedValue(new Error(errorMessage));
 
     const params: SendMessageRequest = {
-      message: makeMessage('msg-err-2', 'kick off', {
+      message: makeMessage('msg-err-4', 'continue', {
         taskId: existingTaskId,
         contextId: existingContextId,
       }),
@@ -140,64 +211,41 @@ describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => 
       metadata: {},
     };
 
-    const result = (await handler.sendMessage(params, serverContext)) as Task;
+    await expect(handler.sendMessage(params, serverContext)).rejects.toThrow(errorMessage);
 
-    expect(observedRequestTaskId).toBe(existingTaskId);
-    expect(result.id).toBe(existingTaskId);
-    expect(result.status.state).toBe(TaskState.TASK_STATE_FAILED);
+    // The pre-existing task must be updated to FAILED (not left in
+    // INPUT_REQUIRED where the client would keep waiting for it).
+    const stored = await taskStore.load(existingTaskId, serverContext);
+    expect(stored!.status?.state).toBe(TaskState.TASK_STATE_FAILED);
   });
 
-  it('getTask(returnedId) resolves to the FAILED task — synthetic Task is reachable via its returned id', async () => {
-    // Regression: pre-fix the fabricated uuidv4() didn't match the bus key.
-    const errorMessage = 'agent blew up before publishing a Task';
-    mockExecutor.execute.mockRejectedValue(new Error(errorMessage));
-
-    const params: SendMessageRequest = {
-      message: makeMessage('msg-err-3', 'kick off'),
-      tenant: '',
-      configuration: undefined,
-      metadata: {},
-    };
-
-    const sendResult = (await handler.sendMessage(params, serverContext)) as Task;
-    expect(sendResult.status.state).toBe(TaskState.TASK_STATE_FAILED);
-
-    const getParams: GetTaskRequest = {
-      id: sendResult.id,
-      tenant: '',
-      historyLength: undefined,
-    };
-    const loaded = await handler.getTask(getParams, serverContext);
-    expect(loaded.id).toBe(sendResult.id);
-    expect(loaded.status.state).toBe(TaskState.TASK_STATE_FAILED);
-    expect(
-      (loaded.status.message?.parts[0].content as { $case: 'text'; value: string }).value
-    ).toContain(errorMessage);
-  });
-
-  it('synthetic Task carries the original user message in history so subsequent reads see what the client sent', async () => {
-    // The synthesis appends the user message to history so the FAILED task is self-describing.
-    mockExecutor.execute.mockRejectedValue(new Error('failed before publishing task'));
-
-    const userMessage = makeMessage('msg-err-4', 'please tell me a joke');
-    const params: SendMessageRequest = {
-      message: userMessage,
-      tenant: '',
-      configuration: undefined,
-      metadata: {},
-    };
-
-    const result = (await handler.sendMessage(params, serverContext)) as Task;
-    expect(result.status.state).toBe(TaskState.TASK_STATE_FAILED);
-    expect(result.history?.find((m) => m.messageId === userMessage.messageId)).toBeDefined();
-  });
-
-  it('non-blocking sendMessage path also returns the synthetic Task with id == requestContext.taskId', async () => {
-    // Non-blocking resolves on the first event — which IS the synthetic Task here.
+  it('non-blocking sendMessage: returns the initial Task, then persists FAILED in the background', async () => {
+    const errorMessage = 'non-blocking boom after first task';
     let observedRequestTaskId = '';
-    mockExecutor.execute.mockImplementation(async (ctx) => {
+    let releaseError!: () => void;
+    const errorGate = new Promise<void>((resolve) => {
+      releaseError = resolve;
+    });
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
       observedRequestTaskId = ctx.taskId;
-      throw new Error('non-blocking boom');
+      bus.publish({
+        kind: 'task',
+        data: {
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        },
+      });
+      // Wait until the non-blocking caller has resolved before throwing.
+      await errorGate;
+      throw new Error(errorMessage);
     });
 
     const params: SendMessageRequest = {
@@ -212,15 +260,20 @@ describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => 
     };
 
     const result = (await handler.sendMessage(params, serverContext)) as Task;
-    expect(observedRequestTaskId).not.toBe('');
+    expect(result.status.state).toBe(TaskState.TASK_STATE_SUBMITTED);
     expect(result.id).toBe(observedRequestTaskId);
-    expect(result.status.state).toBe(TaskState.TASK_STATE_FAILED);
+
+    // Let the executor throw; give the background drain a couple of
+    // microtasks to persist FAILED.
+    releaseError();
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
 
     const loaded = await handler.getTask(
       { id: result.id, tenant: '', historyLength: undefined },
       serverContext
     );
-    expect(loaded.id).toBe(result.id);
     expect(loaded.status.state).toBe(TaskState.TASK_STATE_FAILED);
   });
 });

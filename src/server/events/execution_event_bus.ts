@@ -1,21 +1,40 @@
 import { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../../index.js';
 
 /**
- * Discriminant values for {@link AgentExecutionEvent}. Mirror
- * `StreamResponse.payload.$case` values for trivial conversion.
+ * Discriminant values for {@link AgentExecutionEvent}. The wire-mapped
+ * kinds (`message`, `task`, `statusUpdate`, `artifactUpdate`) mirror
+ * `StreamResponse.payload.$case` values for trivial conversion. The
+ * `error` kind is internal to the server pipeline: it is published on
+ * the bus by the framework when the {@link AgentExecutor} rejects, and
+ * consumed by the drain loop to persist a FAILED status and propagate
+ * the exception to the transport. It never crosses the wire.
  */
-export type AgentExecutionEventKind = 'message' | 'task' | 'statusUpdate' | 'artifactUpdate';
+export type AgentExecutionEventKind =
+  | 'message'
+  | 'task'
+  | 'statusUpdate'
+  | 'artifactUpdate'
+  | 'error';
 
 /**
  * Discriminated union wrapper for agent execution events. The `kind`
  * property is the TypeScript discriminant, enabling exhaustive
  * `switch`/`case` narrowing without unsafe casts.
+ *
+ * The `error` variant carries the raw error thrown by the
+ * {@link AgentExecutor}. It is an internal, server-side signalling
+ * event: the framework publishes it in the `.catch` handler of
+ * `AgentExecutor.execute()` and the drain loop consumes it to persist
+ * a FAILED task status and propagate the exception to the transport
+ * layer. Executors MUST NOT publish `error` events directly — use
+ * regular termination (return normally or publish a FAILED status).
  */
 export type AgentExecutionEvent =
   | { kind: 'message'; data: Message }
   | { kind: 'task'; data: Task }
   | { kind: 'statusUpdate'; data: TaskStatusUpdateEvent }
-  | { kind: 'artifactUpdate'; data: TaskArtifactUpdateEvent };
+  | { kind: 'artifactUpdate'; data: TaskArtifactUpdateEvent }
+  | { kind: 'error'; data: unknown };
 
 /**
  * Factory functions for type-safe {@link AgentExecutionEvent} wrappers.
@@ -38,6 +57,13 @@ export const AgentEvent = {
     kind: 'artifactUpdate',
     data,
   }),
+  /**
+   * Wraps a raw executor error for in-band propagation on the event bus.
+   * See the `'error'` variant of {@link AgentExecutionEvent} for the
+   * lifecycle contract — do not publish this from user-facing executor
+   * code; the framework does so automatically.
+   */
+  error: (data: unknown): AgentExecutionEvent => ({ kind: 'error', data }),
 } as const;
 
 /**

@@ -38,11 +38,24 @@ export class ExecutionEventQueue {
    * drainable. Blocking callers return a snapshot at AUTH_REQUIRED via a
    * separate code path and a background consumer keeps draining until a
    * terminal state is reached.
+   *
+   * `error` events are handled specially: they are never yielded to the
+   * consumer. Instead the queue closes itself and throws the wrapped
+   * value so the drain loop's try/catch sees the original executor
+   * exception. Executors do not publish these directly — the framework
+   * emits them from the `.catch` on `AgentExecutor.execute()`.
    */
   public async *events(): AsyncGenerator<AgentExecutionEvent, void, undefined> {
     while (!this.stopped || this.eventQueue.length > 0) {
       if (this.eventQueue.length > 0) {
         const event = this.eventQueue.shift()!;
+        if (event.kind === 'error') {
+          // Terminate the queue and rethrow so the consumer's try/catch
+          // observes the executor's exception. Skip yielding — the
+          // `error` variant is an internal signal, not a wire event.
+          this.handleFinished();
+          throw event.data;
+        }
         yield event;
         if (
           event.kind === 'message' ||
