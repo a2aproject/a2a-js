@@ -37,6 +37,23 @@ import {
 import * as types from '../types.js';
 import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_decoding.js';
 
+/**
+ * Decodes the on-wire `file_with_bytes` payload into the v0.3 core
+ * data-model shape (a base64-encoded string).
+ *
+ * We sniff by attempting UTF-8 decode first (the majority convention);
+ * if the result is a valid base64 string we take it as-is, otherwise
+ * we assume raw bytes and base64-encode them ourselves.
+ */
+function fromProtoFileWithBytes(wire: Uint8Array): string {
+  const asUtf8 = Buffer.from(wire).toString('utf8');
+  if (asUtf8.length === 0) return '';
+  if (asUtf8.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(asUtf8)) {
+    return asUtf8;
+  }
+  return Buffer.from(wire).toString('base64');
+}
+
 /** Converts proto types to internal types. */
 export class FromProto {
   static taskQueryParams(request: GetTaskRequest): types.TaskQueryParams {
@@ -188,7 +205,7 @@ export class FromProto {
         return {
           kind: 'file',
           file: {
-            bytes: Buffer.from(filePart.file.value).toString('utf8'),
+            bytes: fromProtoFileWithBytes(filePart.file.value),
             mimeType: filePart.mimeType,
           },
         };

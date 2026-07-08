@@ -186,15 +186,7 @@ describe('FromProto', () => {
       });
     });
 
-    it('should convert a file part with bytes (v0.3 wire convention)', () => {
-      // Per v0.3 SDK interop: `file_with_bytes` over gRPC carries the
-      // base64 string's UTF-8 bytes, not raw decoded bytes. Decoding
-      // the buffer as UTF-8 yields back the base64 string the caller
-      // originally produced — matching what a2a-go v0.3's
-      // `string([]byte)` cast and a2a-python v0.3's str(bytes, 'utf-8')
-      // produce. This is the de-facto wire format across the v0.3
-      // reference SDKs, even though the proto file declares the field
-      // as `bytes`.
+    it('should convert a file part with bytes (v0.3 majority wire convention: utf-8-of-base64)', () => {
       const base64Bytes = Buffer.from('file content').toString('base64');
       const wireBytes = Buffer.from(base64Bytes, 'utf8');
       const part: proto.Part = {
@@ -207,6 +199,38 @@ describe('FromProto', () => {
       expect(result).toEqual({
         kind: 'file',
         file: { bytes: base64Bytes, mimeType: 'text/plain' },
+      });
+    });
+
+    it('should convert a file part with bytes (spec-compliant peer: raw payload)', () => {
+      const rawPayload = Buffer.from([0x00, 0x01, 0xff, 0xfe, 0x80]);
+      const part: proto.Part = {
+        part: {
+          $case: 'file',
+          value: { file: { $case: 'fileWithBytes', value: rawPayload }, mimeType: 'text/plain' },
+        },
+      };
+      const result = FromProto.part(part);
+      expect(result).toEqual({
+        kind: 'file',
+        file: { bytes: rawPayload.toString('base64'), mimeType: 'text/plain' },
+      });
+    });
+
+    it('should handle empty file bytes on the wire', () => {
+      const part: proto.Part = {
+        part: {
+          $case: 'file',
+          value: {
+            file: { $case: 'fileWithBytes', value: Buffer.alloc(0) },
+            mimeType: 'text/plain',
+          },
+        },
+      };
+      const result = FromProto.part(part);
+      expect(result).toEqual({
+        kind: 'file',
+        file: { bytes: '', mimeType: 'text/plain' },
       });
     });
 

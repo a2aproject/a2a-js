@@ -2,6 +2,7 @@ import { TransportProtocolName } from '../../core.js';
 import { A2A_REASON_TO_ERROR_CLASS, ERROR_INFO_TYPE } from '../../errors.js';
 
 import { SendMessageResult, A2A_PROTOCOL_VERSION, A2A_CONTENT_TYPE } from '../../index.js';
+import { JSON_CONTENT_TYPE } from '../../constants.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
@@ -265,11 +266,11 @@ export class RestTransport implements Transport {
 
   private _buildHeaders(
     options: RequestOptions | undefined,
-    acceptHeader: string = A2A_CONTENT_TYPE
+    acceptHeader: string = `${A2A_CONTENT_TYPE}, ${JSON_CONTENT_TYPE}`
   ): HeadersInit {
     return {
       ...options?.serviceParameters,
-      'Content-Type': A2A_CONTENT_TYPE,
+      'Content-Type': JSON_CONTENT_TYPE,
       Accept: acceptHeader,
     };
   }
