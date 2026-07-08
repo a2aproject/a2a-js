@@ -25,3 +25,11 @@ export {
 } from './signature.js';
 
 export type SendMessageResult = Message | Task;
+
+export {
+  SSE_HEADERS,
+  formatSSEEvent,
+  formatSSEErrorEvent,
+  parseSseStream,
+  type SseEvent,
+} from './sse_utils.js';
