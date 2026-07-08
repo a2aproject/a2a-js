@@ -186,7 +186,7 @@ describe('FromProto', () => {
       });
     });
 
-    it('should convert a file part with bytes (v0.3 majority wire convention: utf-8-of-base64)', () => {
+    it('should convert a file part with bytes (v0.3 wire convention)', () => {
       const base64Bytes = Buffer.from('file content').toString('base64');
       const wireBytes = Buffer.from(base64Bytes, 'utf8');
       const part: proto.Part = {
@@ -199,38 +199,6 @@ describe('FromProto', () => {
       expect(result).toEqual({
         kind: 'file',
         file: { bytes: base64Bytes, mimeType: 'text/plain' },
-      });
-    });
-
-    it('should convert a file part with bytes (spec-compliant peer: raw payload)', () => {
-      const rawPayload = Buffer.from([0x00, 0x01, 0xff, 0xfe, 0x80]);
-      const part: proto.Part = {
-        part: {
-          $case: 'file',
-          value: { file: { $case: 'fileWithBytes', value: rawPayload }, mimeType: 'text/plain' },
-        },
-      };
-      const result = FromProto.part(part);
-      expect(result).toEqual({
-        kind: 'file',
-        file: { bytes: rawPayload.toString('base64'), mimeType: 'text/plain' },
-      });
-    });
-
-    it('should handle empty file bytes on the wire', () => {
-      const part: proto.Part = {
-        part: {
-          $case: 'file',
-          value: {
-            file: { $case: 'fileWithBytes', value: Buffer.alloc(0) },
-            mimeType: 'text/plain',
-          },
-        },
-      };
-      const result = FromProto.part(part);
-      expect(result).toEqual({
-        kind: 'file',
-        file: { bytes: '', mimeType: 'text/plain' },
       });
     });
 

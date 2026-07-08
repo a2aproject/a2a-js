@@ -79,6 +79,15 @@ switch (part.content?.$case) {
 | `FilePart.file.uri`      | `Part.content` with `$case: 'url'` |
 | `FilePart.file.bytes`    | `Part.content` with `$case: 'raw'` |
 
+> **Encoding difference.** In v0.3 the SDK exposed file bytes as a
+> base64-encoded string (`FilePart.file.bytes: string`); user code was
+> expected to `atob(...)` / `Buffer.from(bytes, 'base64')` to recover the
+> payload. In v1.0 `Part.content.value` for `$case: 'raw'` is a `Uint8Array`
+> (or Node `Buffer`) of raw decoded bytes — no explicit decode step. If your
+> migration mixes v1.0 and v0.3 peers and you exchange raw binary payloads
+> over gRPC or HTTP+JSON, read the [`file_with_bytes` wire encoding section](compatibility-v0_3.md#file_with_bytes-wire-encoding)
+> of the v0.3 compat guide for the wire-shape considerations.
+
 ### 1.2 `kind` Discriminator Removed
 
 The `kind` field has been removed from `Message`, `Task`,

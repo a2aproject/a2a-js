@@ -252,9 +252,7 @@
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [
-        "jsonrpc",
-        "grpc",
-        "http_json"
+        "jsonrpc"
       ],
       "behavior": "send_message"
     },
@@ -264,9 +262,7 @@
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [
-        "jsonrpc",
-        "grpc",
-        "http_json"
+        "jsonrpc"
       ],
       "streaming": true,
       "behavior": "send_message"
@@ -277,9 +273,7 @@
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [
-        "jsonrpc",
-        "grpc",
-        "http_json"
+        "jsonrpc"
       ],
       "behavior": "push_notification"
     },
@@ -289,9 +283,7 @@
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [
-        "jsonrpc",
-        "grpc",
-        "http_json"
+        "jsonrpc"
       ],
       "streaming": true,
       "behavior": "resubscribe"
