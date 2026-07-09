@@ -98,7 +98,10 @@ describe('RestTransport', () => {
       expect(url).to.equal(`${endpoint}/message:send`);
       expect(options?.method).to.equal('POST');
       expect((options?.headers as Record<string, string>)['Content-Type']).to.equal(
-        'application/a2a+json'
+        'application/json'
+      );
+      expect((options?.headers as Record<string, string>)['Accept']).to.equal(
+        'application/a2a+json, application/json'
       );
     });
 

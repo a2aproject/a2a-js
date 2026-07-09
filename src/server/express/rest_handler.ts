@@ -359,26 +359,33 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   });
 
   /**
-   * GET /tasks/:taskId
+   * GET/POST /tasks/:taskId:subscribe
    *
-   * Retrieves the current status and details of a task.
+   * Resubscribes to an existing task's updates via Server-Sent Events (SSE).
+   * Useful for reconnecting to long-running tasks or receiving missed updates.
+   *
+   * Both GET and POST are accepted here because the v1.0 spec has
+   * two normative sources that disagree on the HTTP method:
+   *   - `spec/a2a.proto`'s `google.api.http` annotation for
+   *     `SubscribeToTask` uses `get: "/tasks/{id=*}:subscribe"`.
+   *   - The spec markdown documents the operation as `POST`.
    *
    * @param req.params.taskId - Task identifier
-   * @param req.query.historyLength - Optional number of history messages to include
-   * @returns 200 OK with RestTask
-   * @returns 400 Bad Request if historyLength is invalid
+   * @returns 200 OK with SSE stream of task status and artifact updates
    * @returns 404 Not Found if task doesn't exist
+   * @returns 501 Not Implemented if streaming not supported
    */
-  registerRoute('get', '/tasks/:taskId', async (req, res) => {
+  const resubscribeHandler = async (req: Request, res: Response) => {
     const context = await buildContext(req);
-    const result = await restTransportHandler.getTask(
+    const stream = await restTransportHandler.resubscribe(
       req.params.taskId,
       context,
-      req.query.historyLength,
       (req.query.tenant as string) || ''
     );
-    sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
-  });
+    await sendStreamResponse(res, stream, context);
+  };
+  registerRoute('get', '/tasks/:taskId\\:subscribe', resubscribeHandler);
+  registerRoute('post', '/tasks/:taskId\\:subscribe', resubscribeHandler);
 
   /**
    * POST /tasks/:taskId:cancel
@@ -402,6 +409,28 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   });
 
   /**
+   * GET /tasks/:taskId
+   *
+   * Retrieves the current status and details of a task.
+   *
+   * @param req.params.taskId - Task identifier
+   * @param req.query.historyLength - Optional number of history messages to include
+   * @returns 200 OK with RestTask
+   * @returns 400 Bad Request if historyLength is invalid
+   * @returns 404 Not Found if task doesn't exist
+   */
+  registerRoute('get', '/tasks/:taskId', async (req, res) => {
+    const context = await buildContext(req);
+    const result = await restTransportHandler.getTask(
+      req.params.taskId,
+      context,
+      req.query.historyLength,
+      (req.query.tenant as string) || ''
+    );
+    sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
+  });
+
+  /**
    * GET /tasks
    *
    * Retrieves a list of tasks with optional filtering and pagination capabilities.
@@ -413,27 +442,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTasks(req.query, context);
     sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
-  });
-
-  /**
-   * POST /tasks/:taskId:subscribe
-   *
-   * Resubscribes to an existing task's updates via Server-Sent Events (SSE).
-   * Useful for reconnecting to long-running tasks or receiving missed updates.
-   *
-   * @param req.params.taskId - Task identifier
-   * @returns 200 OK with SSE stream of task status and artifact updates
-   * @returns 404 Not Found if task doesn't exist
-   * @returns 501 Not Implemented if streaming not supported
-   */
-  registerRoute('post', '/tasks/:taskId\\:subscribe', async (req, res) => {
-    const context = await buildContext(req);
-    const stream = await restTransportHandler.resubscribe(
-      req.params.taskId,
-      context,
-      (req.query.tenant as string) || ''
-    );
-    await sendStreamResponse(res, stream, context);
   });
 
   /**

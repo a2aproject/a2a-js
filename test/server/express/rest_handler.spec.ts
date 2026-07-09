@@ -472,8 +472,27 @@ describe('restHandler', () => {
     });
   });
 
-  describe('POST /tasks/:taskId:subscribe', () => {
-    it('should resubscribe to task updates via SSE', async () => {
+  describe('/tasks/:taskId:subscribe', () => {
+    it('GET should resubscribe to task updates via SSE (canonical proto binding)', async () => {
+      async function* mockStream() {
+        yield testTask;
+      }
+
+      (mockRequestHandler.resubscribe as Mock).mockReturnValue(mockStream());
+
+      const response = await request(app)
+        .get('/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      assert.equal(response.headers['content-type'], 'text/event-stream');
+      expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: '' },
+        expect.anything()
+      );
+    });
+
+    it('POST should also resubscribe to task updates via SSE (tolerance)', async () => {
       async function* mockStream() {
         yield testTask;
       }

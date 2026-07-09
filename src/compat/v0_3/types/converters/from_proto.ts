@@ -188,7 +188,7 @@ export class FromProto {
         return {
           kind: 'file',
           file: {
-            bytes: Buffer.from(filePart.file.value).toString('utf8'),
+            bytes: Buffer.from(filePart.file.value).toString('base64'),
             mimeType: filePart.mimeType,
           },
         };
