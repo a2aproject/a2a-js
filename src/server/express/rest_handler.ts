@@ -352,7 +352,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * @param req.params.taskId - Task identifier
    * @returns 200 OK with SSE stream of task status and artifact updates
    * @returns 404 Not Found if task doesn't exist
-   * @returns 501 Not Implemented if streaming not supported
+   * @returns 400 Bad Request if streaming is not supported
    */
   const resubscribeHandler = asyncHandler(async (req, res) => {
     const context = await buildContext(req);
