@@ -45,3 +45,4 @@ export {
   TaskNotFoundError,
   UnsupportedOperationError,
 } from '../errors.js';
+export type { A2AErrorHttpDetails } from '../errors.js';

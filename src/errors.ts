@@ -14,56 +14,116 @@ export const A2A_ERROR_CODE = {
   AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED: -32007,
 } as const;
 
+/**
+ * Optional HTTP transport details that can be attached to any A2A error
+ * originating from an HTTP response.
+ */
+export interface A2AErrorHttpDetails {
+  /** The HTTP status code from the response (e.g. 401, 404, 429, 503). */
+  statusCode?: number;
+  /** Selected HTTP response headers, if available. */
+  headers?: Record<string, string>;
+}
+
 // Transport-agnostic errors according to https://a2a-protocol.org/v0.3.0/specification/#82-a2a-specific-errors.
 // Due to a name conflict with legacy JSON-RPC types reexported from src/index.ts
 // below errors are going to be exported via src/client/index.ts to allow usage
 // from external transport implementations.
 
 export class TaskNotFoundError extends Error {
-  constructor(message?: string) {
+  /** The HTTP status code from the response, if the error originated from an HTTP transport. */
+  statusCode?: number;
+  /** Selected HTTP response headers, if the error originated from an HTTP transport. */
+  headers?: Record<string, string>;
+
+  constructor(message?: string, httpDetails?: A2AErrorHttpDetails) {
     super(message ?? 'Task not found');
     this.name = 'TaskNotFoundError';
+    this.statusCode = httpDetails?.statusCode;
+    this.headers = httpDetails?.headers;
   }
 }
 
 export class TaskNotCancelableError extends Error {
-  constructor(message?: string) {
+  /** The HTTP status code from the response, if the error originated from an HTTP transport. */
+  statusCode?: number;
+  /** Selected HTTP response headers, if the error originated from an HTTP transport. */
+  headers?: Record<string, string>;
+
+  constructor(message?: string, httpDetails?: A2AErrorHttpDetails) {
     super(message ?? 'Task cannot be canceled');
     this.name = 'TaskNotCancelableError';
+    this.statusCode = httpDetails?.statusCode;
+    this.headers = httpDetails?.headers;
   }
 }
 
 export class PushNotificationNotSupportedError extends Error {
-  constructor(message?: string) {
+  /** The HTTP status code from the response, if the error originated from an HTTP transport. */
+  statusCode?: number;
+  /** Selected HTTP response headers, if the error originated from an HTTP transport. */
+  headers?: Record<string, string>;
+
+  constructor(message?: string, httpDetails?: A2AErrorHttpDetails) {
     super(message ?? 'Push Notification is not supported');
     this.name = 'PushNotificationNotSupportedError';
+    this.statusCode = httpDetails?.statusCode;
+    this.headers = httpDetails?.headers;
   }
 }
 
 export class UnsupportedOperationError extends Error {
-  constructor(message?: string) {
+  /** The HTTP status code from the response, if the error originated from an HTTP transport. */
+  statusCode?: number;
+  /** Selected HTTP response headers, if the error originated from an HTTP transport. */
+  headers?: Record<string, string>;
+
+  constructor(message?: string, httpDetails?: A2AErrorHttpDetails) {
     super(message ?? 'This operation is not supported');
     this.name = 'UnsupportedOperationError';
+    this.statusCode = httpDetails?.statusCode;
+    this.headers = httpDetails?.headers;
   }
 }
 
 export class ContentTypeNotSupportedError extends Error {
-  constructor(message?: string) {
+  /** The HTTP status code from the response, if the error originated from an HTTP transport. */
+  statusCode?: number;
+  /** Selected HTTP response headers, if the error originated from an HTTP transport. */
+  headers?: Record<string, string>;
+
+  constructor(message?: string, httpDetails?: A2AErrorHttpDetails) {
     super(message ?? 'Incompatible content types');
     this.name = 'ContentTypeNotSupportedError';
+    this.statusCode = httpDetails?.statusCode;
+    this.headers = httpDetails?.headers;
   }
 }
 
 export class InvalidAgentResponseError extends Error {
-  constructor(message?: string) {
+  /** The HTTP status code from the response, if the error originated from an HTTP transport. */
+  statusCode?: number;
+  /** Selected HTTP response headers, if the error originated from an HTTP transport. */
+  headers?: Record<string, string>;
+
+  constructor(message?: string, httpDetails?: A2AErrorHttpDetails) {
     super(message ?? 'Invalid agent response type');
     this.name = 'InvalidAgentResponseError';
+    this.statusCode = httpDetails?.statusCode;
+    this.headers = httpDetails?.headers;
   }
 }
 
 export class AuthenticatedExtendedCardNotConfiguredError extends Error {
-  constructor(message?: string) {
+  /** The HTTP status code from the response, if the error originated from an HTTP transport. */
+  statusCode?: number;
+  /** Selected HTTP response headers, if the error originated from an HTTP transport. */
+  headers?: Record<string, string>;
+
+  constructor(message?: string, httpDetails?: A2AErrorHttpDetails) {
     super(message ?? 'Authenticated Extended Card not configured');
     this.name = 'AuthenticatedExtendedCardNotConfiguredError';
+    this.statusCode = httpDetails?.statusCode;
+    this.headers = httpDetails?.headers;
   }
 }
