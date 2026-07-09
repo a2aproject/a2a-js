@@ -364,11 +364,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * Resubscribes to an existing task's updates via Server-Sent Events (SSE).
    * Useful for reconnecting to long-running tasks or receiving missed updates.
    *
-   * GET is the canonical binding per the v1.0 proto's
-   * `google.api.http` annotation:
-   *   `get: "/tasks/{id=*}:subscribe"`
-   * POST is also accepted for tolerance with clients that copy the
-   * pattern of the sibling `POST /tasks/{id}:cancel` binding.
+   * Both GET and POST are accepted here because the v1.0 spec has
+   * two normative sources that disagree on the HTTP method:
+   *   - `spec/a2a.proto`'s `google.api.http` annotation for
+   *     `SubscribeToTask` uses `get: "/tasks/{id=*}:subscribe"`.
+   *   - The spec markdown documents the operation as `POST`.
    *
    * @param req.params.taskId - Task identifier
    * @returns 200 OK with SSE stream of task status and artifact updates
