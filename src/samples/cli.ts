@@ -51,6 +51,33 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
+// Builds a minimal agent card pointing at `url` for endpoints that serve no
+// card. The single interface uses the requested transport (default HTTP+JSON)
+// at protocol version 1.0, which is what `createFromAgentCard` selects on.
+function agentCardFromTransport(url: string, transport?: string): AgentCard {
+  return {
+    name: 'External Agent',
+    description: '',
+    supportedInterfaces: [
+      {
+        url,
+        protocolBinding: transport ?? 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
+    provider: undefined,
+    version: '1.0.0',
+    capabilities: { streaming: true, extensions: [] },
+    securitySchemes: {},
+    securityRequirements: [],
+    defaultInputModes: [],
+    defaultOutputModes: [],
+    skills: [],
+    signatures: [],
+  };
+}
+
 // Application Default Credentials required for A2A agent running on Agent Engine.
 export class ADCHandler implements AuthenticationHandler {
   private auth = new GoogleAuth({
@@ -85,10 +112,20 @@ const preferredTransport = process.argv
 const serverUrlArg = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const serverUrl = serverUrlArg || 'http://localhost:41241'; // Agent's base URL
 
+// `--no-agent-card` synthesizes a card in-memory from the base URL (the
+// positional arg) so the client can connect to endpoints that expose no agent
+// card endpoint. Google (ADC) auth is opt-in via `--google-auth` (also implied
+// by `--agent-engine`).
+const buildAgentCardFromTransport = process.argv.includes('--no-agent-card');
+const useAdcAuth =
+  process.argv.includes('--google-auth') || process.argv.includes('--agent-engine');
+
 let fetchImpl: typeof fetch = fetch;
 let agentCardPath = AGENT_CARD_PATH;
-if (process.argv.includes('--agent-engine')) {
+if (useAdcAuth) {
   fetchImpl = createAuthenticatingFetchWithRetry(fetch, new ADCHandler());
+}
+if (process.argv.includes('--agent-engine')) {
   agentCardPath = 'a2a/extendedAgentCard'; // Agent Engine doesn't use well-known public agent card endpoint.
 }
 const factory = new ClientFactory(
@@ -102,7 +139,9 @@ const factory = new ClientFactory(
     preferredTransports: preferredTransport ? [preferredTransport] : undefined,
   })
 );
-const client = await factory.createFromUrl(serverUrl, agentCardPath);
+const client = buildAgentCardFromTransport
+  ? await factory.createFromAgentCard(agentCardFromTransport(serverUrl, preferredTransport))
+  : await factory.createFromUrl(serverUrl, agentCardPath);
 let agentName = 'Agent'; // Default, try to get from agent card later
 
 // --- Readline Setup ---
@@ -229,12 +268,21 @@ function printMessageContent(message: Message) {
 async function fetchAndDisplayAgentCard() {
   // Use the client's getAgentCard method.
   // The client was initialized with serverUrl, which is the agent's base URL.
-  console.log(colorize('dim', `Attempting to fetch agent card from agent at: ${serverUrl}`));
+  if (buildAgentCardFromTransport) {
+    console.log(colorize('dim', `Using synthesized agent card (no discovery) for: ${serverUrl}`));
+  } else {
+    console.log(colorize('dim', `Attempting to fetch agent card from agent at: ${serverUrl}`));
+  }
   try {
     // client.getAgentCard() uses the agentBaseUrl provided during client construction
     const card: AgentCard = await client.getAgentCard();
     agentName = card.name || 'Agent'; // Update global agent name
-    console.log(colorize('green', `✓ Agent Card Found:`));
+    console.log(
+      colorize(
+        'green',
+        buildAgentCardFromTransport ? `✓ Using Synthesized Agent Card:` : `✓ Agent Card Found:`
+      )
+    );
     console.log(`  Name:        ${colorize('bright', agentName)}`);
     if (card.description) {
       console.log(`  Description: ${card.description}`);
@@ -273,6 +321,9 @@ async function fetchAndDisplayAgentCard() {
 async function main() {
   console.log(colorize('bright', `A2A Terminal Client`));
   console.log(colorize('dim', `Agent Base URL: ${serverUrl}`));
+  if (useAdcAuth) {
+    console.log(colorize('dim', `Auth: ${colorize('green', 'Google ADC (Bearer token)')}`));
+  }
 
   await fetchAndDisplayAgentCard(); // Fetch the card before starting the loop
 
