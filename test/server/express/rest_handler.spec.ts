@@ -24,7 +24,7 @@ import { FromProto } from '../../../src/types/converters/from_proto.js';
  * - POST /v1/message:stream - Send message with SSE streaming
  * - GET /v1/tasks/:taskId - Get task status
  * - POST /v1/tasks/:taskId:cancel - Cancel task
- * - POST /v1/tasks/:taskId:subscribe - Resubscribe to task updates
+ * - GET/POST /v1/tasks/:taskId:subscribe - Resubscribe to task updates
  * - Push notification config CRUD operations
  */
 describe('restHandler', () => {
@@ -291,8 +291,31 @@ describe('restHandler', () => {
     });
   });
 
-  describe('POST /v1/tasks/:taskId:subscribe', () => {
-    it('should resubscribe to task updates via SSE', async () => {
+  describe('/v1/tasks/:taskId:subscribe', () => {
+    it('GET should resubscribe to task updates via SSE (canonical proto binding)', async () => {
+      // The v0.3 proto's `google.api.http` annotation for
+      // `SubscribeToTask` is `get: "/v1/tasks/{id=*}:subscribe"`, so
+      // GET is the canonical binding — spec-compliant peers
+      // (a2a-python, a2a-go, v1.0 a2a-js) all issue GET here.
+      async function* mockStream() {
+        yield testTask;
+      }
+
+      (mockRequestHandler.resubscribe as Mock).mockResolvedValue(mockStream());
+
+      const response = await request(app).get('/v1/tasks/task-1:subscribe').expect(200);
+
+      assert.equal(response.headers['content-type'], 'text/event-stream');
+
+      expect(mockRequestHandler.resubscribe).toHaveBeenCalledWith(
+        { id: 'task-1' },
+        expect.anything()
+      );
+    });
+
+    it('POST should also resubscribe to task updates via SSE (tolerance)', async () => {
+      // POST is accepted for tolerance with clients that copy the
+      // sibling `POST /v1/tasks/{id}:cancel` binding pattern.
       async function* mockStream() {
         yield testTask;
       }
