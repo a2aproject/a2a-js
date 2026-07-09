@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.14](https://github.com/a2aproject/a2a-js/compare/v0.3.13...v0.3.14) (2026-07-09)
+
+
+### Bug Fixes
+
+* support GET for resubscribe route ([#569](https://github.com/a2aproject/a2a-js/issues/569)) ([8dd43d1](https://github.com/a2aproject/a2a-js/commit/8dd43d1484bb7bf4dfc786eca1c4ce2d40441d73))
+
 ## [0.3.13](https://github.com/a2aproject/a2a-js/compare/v0.3.12...v0.3.13) (2026-03-16)
 
 
