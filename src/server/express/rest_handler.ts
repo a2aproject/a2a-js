@@ -349,18 +349,6 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    * Resubscribes to an existing task's updates via Server-Sent Events (SSE).
    * Useful for reconnecting to long-running tasks or receiving missed updates.
    *
-   * GET is the canonical binding per the v0.3 proto's
-   * `google.api.http` annotation:
-   *   `get: "/v1/tasks/{id=*}:subscribe"`
-   * and matches what a2a-python, a2a-go, and the v1.0 a2a-js client
-   * all issue. POST is also accepted for tolerance with clients that
-   * copy the pattern of the sibling `POST /v1/tasks/{id}:cancel`
-   * binding.
-   *
-   * Registered BEFORE the more generic `GET /v1/tasks/:taskId` route
-   * below so Express doesn't greedily match `:taskId="foo:subscribe"`
-   * and swallow the resubscribe request into `getTask`.
-   *
    * @param req.params.taskId - Task identifier
    * @returns 200 OK with SSE stream of task status and artifact updates
    * @returns 404 Not Found if task doesn't exist
