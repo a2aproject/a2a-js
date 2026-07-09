@@ -148,6 +148,8 @@
     "build": "tsup",
     "test": "vitest run",
     "test:edge": "vitest run --config vitest.edge.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "install:samples": "npm --prefix src/samples install",
     "lint": "tsc --noEmit && npx eslint . --fix && betterer precommit",
     "lint:ci": "tsc --noEmit && npx eslint . && betterer ci",
     "format:readme": "prettier --write ./README.md",

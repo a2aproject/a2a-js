@@ -1,0 +1,33 @@
+# Runs the integration test suite, which exercises the shipped samples
+# end-to-end by spawning the sample agent and CLI as subprocesses.
+
+name: Run Integration Tests
+
+on:
+  push:
+    branches: ['main', 'epic/**']
+  pull_request:
+    branches: ['main', 'epic/**']
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.github/CODEOWNERS'
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Min supported node (package.json engines: >=20); catches floor breakage.
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+      - run: npm ci
+      # The samples are a separate workspace the integration suite spawns.
+      - name: Install sample workspace dependencies
+        run: npm ci
+        working-directory: src/samples
+      - run: npm run test:integration
