@@ -51,9 +51,6 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-// Builds a minimal agent card pointing at `url` for endpoints that serve no
-// card. The single interface uses the requested transport (default HTTP+JSON)
-// at protocol version 1.0, which is what `createFromAgentCard` selects on.
 function agentCardFromTransport(url: string, transport?: string): AgentCard {
   return {
     name: 'External Agent',
@@ -112,10 +109,6 @@ const preferredTransport = process.argv
 const serverUrlArg = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const serverUrl = serverUrlArg || 'http://localhost:41241'; // Agent's base URL
 
-// `--no-agent-card` synthesizes a card in-memory from the base URL (the
-// positional arg) so the client can connect to endpoints that expose no agent
-// card endpoint. Google (ADC) auth is opt-in via `--google-auth` (also implied
-// by `--agent-engine`).
 const buildAgentCardFromTransport = process.argv.includes('--no-agent-card');
 const useAdcAuth =
   process.argv.includes('--google-auth') || process.argv.includes('--agent-engine');
