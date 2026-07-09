@@ -63,8 +63,8 @@
       "behavior": "resubscribe"
     },
     {
-      "name": "Current vs Python v03 - Send Message (Non-Streaming)",
-      "sdks": ["current", "python_v03"],
+      "name": "Current vs TS v03 - Send Message (Non-Streaming)",
+      "sdks": ["current", "ts_v03"],
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [
@@ -75,8 +75,8 @@
       "behavior": "send_message"
     },
     {
-      "name": "Current vs Python v03 - Send Message (Streaming)",
-      "sdks": ["current", "python_v03"],
+      "name": "Current vs TS v03 - Send Message (Streaming)",
+      "sdks": ["current", "ts_v03"],
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [
@@ -88,8 +88,8 @@
       "behavior": "send_message"
     },
     {
-      "name": "Current vs Python v03 - Push Notification",
-      "sdks": ["current", "python_v03"],
+      "name": "Current vs TS v03 - Push Notification",
+      "sdks": ["current", "ts_v03"],
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [
@@ -100,8 +100,8 @@
       "behavior": "push_notification"
     },
     {
-      "name": "Current vs Python v03 - Resubscribe",
-      "sdks": ["current", "python_v03"],
+      "name": "Current vs TS v03 - Resubscribe",
+      "sdks": ["current", "ts_v03"],
       "traversal": "euler",
       "edges": ["0->1", "1->0"],
       "protocols": [

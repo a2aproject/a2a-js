@@ -46,14 +46,14 @@ the peer dependencies (`express`, `@grpc/grpc-js`) its runtime actually needs.
 A Workers consumer that only needs the compat-aware JSON-RPC client transport
 never pulls in Node-only modules.
 
-| Subpath                                  | Use it for                                                                                                                               | Peer deps           |
-| :--------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- | :------------------ |
-| `@a2a-js/sdk/compat/v0_3`                | v0.3 protocol constants and method-name translators.                                                                                     | none (Workers-safe) |
+| Subpath                                  | Use it for                                                                                                                              | Peer deps           |
+| :--------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------- | :------------------ |
+| `@a2a-js/sdk/compat/v0_3`                | v0.3 protocol constants and method-name translators.                                                                                    | none (Workers-safe) |
 | `@a2a-js/sdk/compat/v0_3/server`         | Framework-agnostic `LegacyJsonRpcTransportHandler`, `LegacyRestTransportHandler`, `createLegacyAwarePushNotificationSender`, serializer. | none (Workers-safe) |
-| `@a2a-js/sdk/compat/v0_3/server/express` | Express routers (`legacyAgentCardRouter`, `legacyRestRouter`).                                                                           | `express`           |
-| `@a2a-js/sdk/compat/v0_3/server/grpc`    | `legacyGrpcService` + `LegacyA2AService` descriptor.                                                                                     | `@grpc/grpc-js`     |
-| `@a2a-js/sdk/compat/v0_3/client`         | `LegacyJsonRpcTransport`, `LegacyRestTransport`, plus `isLegacyAgentCard` / `parseLegacyAgentCard`.                                      | none (Workers-safe) |
-| `@a2a-js/sdk/compat/v0_3/client/grpc`    | `LegacyGrpcTransport` (Node only; lazy-loaded by `GrpcTransportFactory`).                                                                | `@grpc/grpc-js`     |
+| `@a2a-js/sdk/compat/v0_3/server/express` | Express routers (`legacyAgentCardRouter`, `legacyRestRouter`).                                                                          | `express`           |
+| `@a2a-js/sdk/compat/v0_3/server/grpc`    | `legacyGrpcService` + `LegacyA2AService` descriptor.                                                                                    | `@grpc/grpc-js`     |
+| `@a2a-js/sdk/compat/v0_3/client`         | `LegacyJsonRpcTransport`, `LegacyRestTransport`, plus `isLegacyAgentCard` / `parseLegacyAgentCard`.                                     | none (Workers-safe) |
+| `@a2a-js/sdk/compat/v0_3/client/grpc`    | `LegacyGrpcTransport` (Node only; lazy-loaded by `GrpcTransportFactory`).                                                               | `@grpc/grpc-js`     |
 
 The bidirectional v0.3 ↔ v1.0 translators in `src/compat/v0_3/translate/` are
 intentionally internal and may change without a major-version bump.
@@ -82,12 +82,12 @@ never sees a v0.3 type. The compat layer translates incoming v0.3 wire bodies
 into v1.0 proto types on the way in, and translates the v1.0 events your
 executor publishes back into v0.3 shapes on the way out.
 
-| Transport  | How v0.3 is detected                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JSON-RPC   | The handler inspects the JSON-RPC `method` name. v1.0 PascalCase names matching `isV1JsonRpcMethod` (`SendMessage`, `GetTask`, `ListTasks`, …) route to the v1.0 dispatcher; everything else — kebab-style v0.3 names (`message/send`, `tasks/get`), unknown method strings, and bodies with no `method` field — routes to the v0.3 dispatcher so malformed/unknown requests surface v0.3-shaped errors (spec §3.6.2 default-to-v0.3). |
-| REST       | The v0.3 routes live under the `/v1/...` prefix (per the v0.3 reference proto's `google.api.http` annotations). v1.0 routes use `/<operation>` directly. Express's prefix matcher disambiguates without ambiguity.                                                                                                                                                                                                                     |
-| gRPC       | Each version is a separate gRPC service descriptor (`A2AService` vs. `LegacyA2AService`). The transport picks the descriptor; the SDK never needs to sniff.                                                                                                                                                                                                                                                                            |
-| Agent card | The handler reads the `A2A-Version` header (defaulting to `'0.3'` when absent, per spec §3.6.2) and emits the appropriate card shape, with `Vary: A2A-Version` set on the response.                                                                                                                                                                                                                                                    |
+| Transport     | How v0.3 is detected                                                                                                                                                                                              |
+| :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JSON-RPC      | The handler inspects the JSON-RPC `method` name. v1.0 PascalCase names matching `isV1JsonRpcMethod` (`SendMessage`, `GetTask`, `ListTasks`, …) route to the v1.0 dispatcher; everything else — kebab-style v0.3 names (`message/send`, `tasks/get`), unknown method strings, and bodies with no `method` field — routes to the v0.3 dispatcher so malformed/unknown requests surface v0.3-shaped errors (spec §3.6.2 default-to-v0.3). |
+| REST          | The v0.3 routes live under the `/v1/...` prefix (per the v0.3 reference proto's `google.api.http` annotations). v1.0 routes use `/<operation>` directly. Express's prefix matcher disambiguates without ambiguity. |
+| gRPC          | Each version is a separate gRPC service descriptor (`A2AService` vs. `LegacyA2AService`). The transport picks the descriptor; the SDK never needs to sniff.                                                       |
+| Agent card    | The handler reads the `A2A-Version` header (defaulting to `'0.3'` when absent, per spec §3.6.2) and emits the appropriate card shape, with `Vary: A2A-Version` set on the response.                                |
 
 ### Per-interface v0.3 advertisement
 
@@ -106,16 +106,16 @@ const card: AgentCard = {
   // ...
   supportedInterfaces: duplicateInterfacesForLegacy(
     [
-      { url: '/jsonrpc', protocolBinding: 'JSONRPC', tenant: '', protocolVersion: '1.0' },
-      { url: '/rest', protocolBinding: 'HTTP+JSON', tenant: '', protocolVersion: '1.0' },
-      { url: '/grpc', protocolBinding: 'GRPC', tenant: '', protocolVersion: '1.0' },
+      { url: '/jsonrpc', protocolBinding: 'JSONRPC',   tenant: '', protocolVersion: '1.0' },
+      { url: '/rest',    protocolBinding: 'HTTP+JSON', tenant: '', protocolVersion: '1.0' },
+      { url: '/grpc',    protocolBinding: 'GRPC',      tenant: '', protocolVersion: '1.0' },
     ],
-    ['JSONRPC', 'HTTP+JSON'] // GRPC stays v1.0-only
+    ['JSONRPC', 'HTTP+JSON'], // GRPC stays v1.0-only
   ),
 };
 ```
 
-The card returned to a v0.3 client is a _hybrid_: v0.3 top-level fields
+The card returned to a v0.3 client is a *hybrid*: v0.3 top-level fields
 (`url`, `preferredTransport`, `additionalInterfaces`) AND the v1.0
 `supportedInterfaces[]` array embedded. A modern client that encounters
 the hybrid card prefers `supportedInterfaces[]`, which prevents unnecessary
@@ -185,9 +185,9 @@ know about before turning the flag on.
 
 ### Methods with no v0.3 equivalent
 
-| v1.0 method | Status in v0.3          | Behavior under compat                                                                                                                                                                                                                                                  |
-| :---------- | :---------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ListTasks` | Not implemented in v0.3 | A v1.0 client calling `client.listTasks(...)` against a v0.3 server fails with `UnsupportedOperationError` (JSON-RPC code `-32004`). The compat layer translates the call into a "method not implemented in v0.3" error rather than the generic invalid-request error. |
+| v1.0 method  | Status in v0.3                | Behavior under compat                                                                                                                                                                  |
+| :----------- | :---------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ListTasks`  | Not implemented in v0.3       | A v1.0 client calling `client.listTasks(...)` against a v0.3 server fails with `UnsupportedOperationError` (JSON-RPC code `-32004`). The compat layer translates the call into a "method not implemented in v0.3" error rather than the generic invalid-request error. |
 
 Per A2A v0.3 spec §3.5.6, `tasks/list` was a gRPC/REST-only operation in v0.3
 and was never exposed over JSON-RPC. The v0.3 proto shipped here has no
@@ -203,54 +203,14 @@ this) or use an out-of-band index.
 These differences come from the protocol data model itself; the compat
 layer applies the documented defaults rather than failing.
 
-| v1.0 field / shape                                                                                        | What happens going v1.0 → v0.3                                                                                                                                                                                                                                                    |
-| :-------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OAuthFlows.deviceCode` (v1.0 only)                                                                       | **Silently dropped.** v0.3 has no representation for the device-code flow. If `deviceCode` is the only declared flow on a `SecurityScheme`, the v0.3 card receives an empty `OAuthFlows` object — callers can guard via `Object.keys(result).length === 0`.                       |
-| `AuthenticationInfo.scheme` (single string) ↔ `PushNotificationAuthenticationInfo.schemes` (string array) | Going v0.3 → v1.0: only the **first** element of `schemes[]` is preserved and the rest are dropped (with a warning). Going v1.0 → v0.3: the single scheme is wrapped into a one-element array; empty becomes `[]`.                                                                |
-| `TaskStatusUpdateEvent.final` (removed in v1.0)                                                           | Going v1.0 → v0.3 the `final` flag is **computed** from the status state: `true` for `completed`, `canceled`, `failed`, or `rejected`; `false` otherwise.                                                                                                                         |
-| `SendMessageConfiguration.returnImmediately` ↔ `MessageSendConfiguration.blocking`                        | Inverted polarity (v1.0 `returnImmediately: true` ↔ v0.3 `blocking: false`, and vice versa).                                                                                                                                                                                      |
-| `AgentCard.supportedInterfaces[]` (v1.0) ↔ `(url, preferredTransport, additionalInterfaces)` (v0.3)       | Only interfaces whose `protocolVersion` is empty or in `[0.3, 1.0)` survive the v1.0 → v0.3 translation; if none qualify, `VersionNotSupportedError` is thrown. Use `duplicateInterfacesForLegacy` to opt a v1.0 binding into v0.3 advertisement.                                 |
-| `Part.content.$case` discriminator                                                                        | Translated to the v0.3 `kind:` discriminator on each part (`text`, `file`, `data`). File URI ↔ v0.3 `FilePart.file.uri`; file bytes ↔ v0.3 `FilePart.file.bytes`; the v1.0 flat `Part.filename` / `Part.mediaType` map back into `FilePart.file.name` / `FilePart.file.mimeType`. |
-
-### `file_with_bytes` wire encoding
-
-**Only relevant if you send `Part` values with `content.$case === 'raw'`
-to a v0.3 peer over gRPC or HTTP+JSON.** JSON-RPC is unaffected: it
-carries the payload as a base64 string in the JSON body and every
-implementation agrees on that shape.
-
-In the v0.3 core data model `FileWithBytes.bytes` is a base64-encoded
-string. On the wire the same field appears as a proto3 `bytes` scalar
-(binary framing over gRPC, base64-in-JSON over HTTP+JSON's proto-JSON
-mapping). The v0.3 ecosystem converged on writing the UTF-8 bytes of
-the base64 string into that scalar rather than the decoded raw payload.
-This SDK's compat layer follows that convention on both inbound and
-outbound so it interoperates with the v0.3 peers you're most likely to
-encounter today.
-
-A minority of v0.3 implementations put the decoded raw payload directly
-into the proto `bytes` field. When the compat client talks to such a
-peer with a `file_with_bytes` payload, the peer's decode step produces
-the wrong bytes and the exchange either fails loudly (proto decode
-error) or silently (garbage reaches the executor). The two wire
-formats are not distinguishable on the receiving side without a
-peer-capability signal that the protocol does not carry, so the
-mismatch cannot be bridged automatically.
-
-The exact failure mode depends on how the peer's REST layer
-deserializes: peers that parse the JSON body straight into a
-string-typed core field see a base64 string with an extra wrapping
-layer, while peers that route the JSON through the proto-JSON codec
-(base64-decoding the string back into wire bytes before rebuilding the
-core model) end up with the same corruption pattern as gRPC.
-
-If you need to interoperate with a peer in the raw-bytes minority and
-file bytes matter, either use JSON-RPC (which carries the base64 string
-directly, unaffected by the split), switch to `file_with_uri`, or move
-the peer to v1.0.
-
-Text parts, data parts, and file-by-URI parts are unaffected in either
-direction.
+| v1.0 field / shape                                                                                                                                                  | What happens going v1.0 → v0.3                                                                                                                                                                                                                                |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OAuthFlows.deviceCode` (v1.0 only)                                                                                                                                 | **Silently dropped.** v0.3 has no representation for the device-code flow. If `deviceCode` is the only declared flow on a `SecurityScheme`, the v0.3 card receives an empty `OAuthFlows` object — callers can guard via `Object.keys(result).length === 0`.   |
+| `AuthenticationInfo.scheme` (single string) ↔ `PushNotificationAuthenticationInfo.schemes` (string array)                                                          | Going v0.3 → v1.0: only the **first** element of `schemes[]` is preserved and the rest are dropped (with a warning). Going v1.0 → v0.3: the single scheme is wrapped into a one-element array; empty becomes `[]`.                                            |
+| `TaskStatusUpdateEvent.final` (removed in v1.0)                                                                                                                     | Going v1.0 → v0.3 the `final` flag is **computed** from the status state: `true` for `completed`, `canceled`, `failed`, or `rejected`; `false` otherwise.                                                                                                     |
+| `SendMessageConfiguration.returnImmediately` ↔ `MessageSendConfiguration.blocking`                                                                                 | Inverted polarity (v1.0 `returnImmediately: true` ↔ v0.3 `blocking: false`, and vice versa).                                                                                                                                                                  |
+| `AgentCard.supportedInterfaces[]` (v1.0) ↔ `(url, preferredTransport, additionalInterfaces)` (v0.3)                                                                | Only interfaces whose `protocolVersion` is empty or in `[0.3, 1.0)` survive the v1.0 → v0.3 translation; if none qualify, `VersionNotSupportedError` is thrown. Use `duplicateInterfacesForLegacy` to opt a v1.0 binding into v0.3 advertisement. |
+| `Part.content.$case` discriminator                                                                                                                                  | Translated to the v0.3 `kind:` discriminator on each part (`text`, `file`, `data`). File URI ↔ v0.3 `FilePart.file.uri`; file bytes ↔ v0.3 `FilePart.file.bytes`; the v1.0 flat `Part.filename` / `Part.mediaType` map back into `FilePart.file.name` / `FilePart.file.mimeType`. |
 
 ### REST wire-shape caveats
 
@@ -260,15 +220,15 @@ proto types** (per each version's `google.api.http` annotations) — they do
 send over v0.3 JSON-RPC. The two REST shapes look similar but have small
 field-name differences:
 
-| Aspect                | v0.3 REST                                                                                           | v1.0 REST                                                 |
-| :-------------------- | :-------------------------------------------------------------------------------------------------- | :-------------------------------------------------------- |
-| Path prefix           | `/v1/<operation>`                                                                                   | `/<operation>`                                            |
-| Request body field    | `request` (a `Message`)                                                                             | `message` (a `Message`)                                   |
-| `Message` payload     | `content[]`                                                                                         | `parts[]`                                                 |
-| Response shape        | proto-JSON `SendMessageResponse` (`{task: {...}}` or `{msg: {...}}`)                                | proto-JSON `SendMessageResponse` (same oneof, v1.0 types) |
-| Response Content-Type | `application/json`                                                                                  | `application/a2a+json`                                    |
-| `TaskState` encoding  | `TASK_STATE_COMPLETED`                                                                              | `TASK_STATE_COMPLETED`                                    |
-| Error → HTTP status   | `LegacyA2AError` mapped to proper 4xx (e.g. `-32602` → 400, `-32001` → 404) via `mapErrorToStatus`. | A2A error classes mapped to 4xx by the v1.0 helper.       |
+| Aspect              | v0.3 REST                 | v1.0 REST                 |
+| :------------------ | :------------------------ | :------------------------ |
+| Path prefix         | `/v1/<operation>`         | `/<operation>`            |
+| Request body field  | `request` (a `Message`)   | `message` (a `Message`)   |
+| `Message` payload   | `content[]`               | `parts[]`                 |
+| Response shape      | proto-JSON `SendMessageResponse` (`{task: {...}}` or `{msg: {...}}`) | proto-JSON `SendMessageResponse` (same oneof, v1.0 types) |
+| Response Content-Type | `application/json`      | `application/a2a+json`    |
+| `TaskState` encoding | `TASK_STATE_COMPLETED`   | `TASK_STATE_COMPLETED`    |
+| Error → HTTP status | `LegacyA2AError` mapped to proper 4xx (e.g. `-32602` → 400, `-32001` → 404) via `mapErrorToStatus`. | A2A error classes mapped to 4xx by the v1.0 helper. |
 
 If you need to issue v0.3 wire shapes with JSON-Schema-style envelopes
 (`{kind: 'task', state: 'completed', parts: [{kind: 'text', ...}]}`), use the
@@ -296,10 +256,10 @@ A v1.0-only deployment delivers every push as a `StreamResponse` envelope
 with `Content-Type: application/a2a+json`. With the compat layer enabled, the
 sender (`createLegacyAwarePushNotificationSender`) routes per webhook:
 
-| Wire version the webhook was registered under   | Body shape                                                                                                                   | Content-Type           |
-| :---------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- | :--------------------- |
-| `1.0`                                           | `StreamResponse` envelope                                                                                                    | `application/a2a+json` |
-| `0.3` (or absent `A2A-Version` at registration) | The bare event object (v0.3 `Task`, `TaskStatusUpdateEvent`, or `TaskArtifactUpdateEvent` discriminated by its `kind` field) | `application/json`     |
+| Wire version the webhook was registered under | Body shape                                                          | Content-Type            |
+| :-------------------------------------------- | :------------------------------------------------------------------ | :---------------------- |
+| `1.0`                                         | `StreamResponse` envelope                                           | `application/a2a+json`  |
+| `0.3` (or absent `A2A-Version` at registration) | The bare event object (v0.3 `Task`, `TaskStatusUpdateEvent`, or `TaskArtifactUpdateEvent` discriminated by its `kind` field) | `application/json`      |
 
 Routing is anchored on the `requestedVersion` recorded **when the webhook was
 registered** (captured by `InMemoryPushNotificationStore` on `save()` and
@@ -310,7 +270,7 @@ even when the task is later driven by a v1.0 client.
 > **Caveat for custom `PushNotificationStore` implementations.**
 > `loadWithMetadata` is optional. If your custom store does not implement
 > it, the sender defaults each dispatch to the wire version of the request
-> that _triggered_ the dispatch, falling back to `'0.3'` per spec §3.6.2
+> that *triggered* the dispatch, falling back to `'0.3'` per spec §3.6.2
 > when the triggering context carries no version. In a deployment that
 > opts into the compat layer, this can mean a v0.3 webhook receives a v1.0
 > body (or vice versa) when the registering and triggering clients disagree.
@@ -324,11 +284,11 @@ even when the task is later driven by a v1.0 client.
 
 ### Transport headers
 
-| Header            | v0.3               | v1.0                          |
-| :---------------- | :----------------- | :---------------------------- |
-| Extensions header | `X-A2A-Extensions` | `A2A-Extensions`              |
-| Version header    | _(absent → 0.3)_   | `A2A-Version: 1.0` (required) |
-| REST Content-Type | `application/json` | `application/a2a+json`        |
+| Header                | v0.3                  | v1.0                          |
+| :-------------------- | :-------------------- | :---------------------------- |
+| Extensions header     | `X-A2A-Extensions`    | `A2A-Extensions`              |
+| Version header        | *(absent → 0.3)*      | `A2A-Version: 1.0` (required) |
+| REST Content-Type     | `application/json`    | `application/a2a+json`        |
 
 ---
 

@@ -186,13 +186,13 @@ describe('FromProto', () => {
       });
     });
 
-    it('should convert a file part with bytes (v0.3 wire convention)', () => {
-      const base64Bytes = Buffer.from('file content').toString('base64');
-      const wireBytes = Buffer.from(base64Bytes, 'utf8');
+    it('should convert a file part with bytes (proto3-compliant raw payload)', () => {
+      const rawPayload = Buffer.from('file content');
+      const base64Bytes = rawPayload.toString('base64');
       const part: proto.Part = {
         part: {
           $case: 'file',
-          value: { file: { $case: 'fileWithBytes', value: wireBytes }, mimeType: 'text/plain' },
+          value: { file: { $case: 'fileWithBytes', value: rawPayload }, mimeType: 'text/plain' },
         },
       };
       const result = FromProto.part(part);
