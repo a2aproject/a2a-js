@@ -292,6 +292,67 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(saveSpy.mock.calls[1][0].status.state, 'completed');
   });
 
+  it('sendMessage: (non-blocking) returned task reference must remain a snapshot when later events arrive', async () => {
+    vi.useFakeTimers();
+
+    const params: MessageSendParams = {
+      message: createTestMessage('msg-412', 'Do work'),
+      configuration: { blocking: false, acceptedOutputModes: [] },
+    };
+
+    const taskId = 'task-412';
+    const contextId = 'ctx-412';
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      bus.publish({
+        id: taskId,
+        contextId,
+        status: { state: 'submitted' },
+        kind: 'task',
+      });
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      bus.publish({
+        taskId,
+        contextId,
+        kind: 'status-update',
+        status: {
+          state: 'failed',
+          message: {
+            kind: 'message',
+            role: 'agent',
+            messageId: 'agent-fail-msg',
+            parts: [{ kind: 'text', text: 'Internal Server Error' }],
+            taskId,
+            contextId,
+          },
+        },
+        final: true,
+      });
+      bus.finished();
+    });
+
+    const immediateResult = await handler.sendMessage(params, serverCallContext);
+    if ('id' in immediateResult && 'status' in immediateResult) {
+      assert.equal(
+        immediateResult.status.state,
+        'submitted',
+        "Should hand off in 'submitted' state"
+      );
+      // Let the background event loop drain the second event.
+      await vi.runAllTimersAsync();
+      // The caller's reference must still represent the handoff snapshot.
+      assert.equal(
+        immediateResult.status.state,
+        'submitted',
+        'Reference handed to the response layer must not be mutated by later events'
+      );
+    } else {
+      throw new Error('immediateResult is of Message type.');
+    }
+  });
+
   it('sendMessage: (non-blocking) should handle failure in event loop after successfull task event', async () => {
     vi.useFakeTimers();
 
