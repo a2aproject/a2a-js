@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["src/**/*.ts", "test/**/*.ts", "tck/**/*.ts"]
+  "compilerOptions": {
+    "strict": true
+  },
+  "include": ["src/**/*.ts"]
 }
