@@ -73,7 +73,7 @@ The bidirectional v0.3 ↔ v1.0 translators in `./translate/` are intentionally 
 | :--- | :--- |
 | `npm run build` | Builds the SDK using `tsup` into `dist/`. |
 | `npm test` | Runs unit tests using `vitest`. |
-| `npm run lint`    | Runs all linting checks and applies automatic fixes (ESLint + Prettier + betterer). |
+| `npm run lint`    | Runs all linting checks and applies automatic fixes (`tsc --noEmit` + ESLint + Prettier). |
 | `npm run lint:ci` | Runs all linting checks without applying fixes. Fails if any issues are found.      |
 | `npm run format:readme` | Formats the README file. |
 

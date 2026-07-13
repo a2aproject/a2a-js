@@ -119,8 +119,6 @@
     "README.md"
   ],
   "devDependencies": {
-    "@betterer/cli": "^6.0.0-alpha.1",
-    "@betterer/typescript": "^6.0.0-alpha.1",
     "@bufbuild/buf": "^1.61.0",
     "@bufbuild/protobuf": "^2.10.2",
     "@cloudflare/vitest-pool-workers": "^0.12.5",
@@ -150,8 +148,8 @@
     "test:edge": "vitest run --config vitest.edge.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "install:samples": "npm --prefix src/samples install",
-    "lint": "tsc --noEmit && npx eslint . --fix && betterer precommit",
-    "lint:ci": "tsc --noEmit && npx eslint . && betterer ci",
+    "lint": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit && npx eslint . --fix",
+    "lint:ci": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit && npx eslint .",
     "format:readme": "prettier --write ./README.md",
     "coverage": "vitest run --coverage",
     "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
