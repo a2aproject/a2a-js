@@ -3654,7 +3654,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     await handler.sendMessage(params, serverCallContext);
-    expect(capturedRequestContext?.metadata).to.deep.equal(
+    expect(capturedRequestContext?.request.metadata).to.deep.equal(
       requestMetadata,
       'sendMessage should thread request metadata into RequestContext'
     );
@@ -3667,7 +3667,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     for await (const event of handler.sendMessageStream(streamParams, serverCallContext)) {
       void event; // drain the stream
     }
-    expect(capturedRequestContext?.metadata).to.deep.equal(
+    expect(capturedRequestContext?.request.metadata).to.deep.equal(
       requestMetadata,
       'sendMessageStream should thread request metadata into RequestContext'
     );
@@ -3720,7 +3720,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     await handler.sendMessage(params, serverCallContext);
-    expect(capturedRequestContext?.metadata).to.equal(
+    expect(capturedRequestContext?.request.metadata).to.equal(
       undefined,
       'RequestContext metadata should be undefined when the request has none'
     );

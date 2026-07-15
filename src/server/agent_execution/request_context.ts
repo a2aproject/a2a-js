@@ -1,36 +1,54 @@
-import { Message, Task } from '../../index.js';
+import { Message, SendMessageRequest, Task } from '../../index.js';
 import { ServerCallContext } from '../context.js';
 
-export class RequestContext {
-  public readonly userMessage: Message;
-  public readonly taskId: string;
-  public readonly contextId: string;
-  public readonly task?: Task;
-  public readonly referenceTasks?: Task[];
-  public readonly context: ServerCallContext;
-  /**
-   * The request-level metadata from the originating `SendMessageRequest`,
-   * when provided. This is the spec's "flexible key-value map for passing
-   * additional context or parameters" and is distinct from
-   * `userMessage.metadata`.
-   */
-  public readonly metadata?: Record<string, unknown>;
+export interface RequestContextParams {
+  /** The incoming `SendMessageRequest` payload. Its `message` field MUST be set. */
+  request: SendMessageRequest;
+  /** The server call context associated with this request. */
+  context: ServerCallContext;
+  /** The resolved task ID (either from the request or server-generated). */
+  taskId: string;
+  /** The resolved context ID (either from the request or server-generated). */
+  contextId: string;
+  /** The existing `Task` object retrieved from the store, if any. */
+  task?: Task;
+  /** A list of other tasks related to the current request (e.g., for tool use). */
+  referenceTasks?: Task[];
+}
 
-  constructor(
-    userMessage: Message,
-    taskId: string,
-    contextId: string,
-    context: ServerCallContext,
-    task?: Task,
-    referenceTasks?: Task[],
-    metadata?: Record<string, unknown>
-  ) {
-    this.userMessage = userMessage;
-    this.taskId = taskId;
-    this.contextId = contextId;
-    this.context = context;
-    this.task = task;
-    this.referenceTasks = referenceTasks;
-    this.metadata = metadata ? structuredClone(metadata) : undefined;
+/**
+ * Holds information about the current request being processed by the server.
+ *
+ * Wraps the incoming {@link SendMessageRequest} so agent executors can reach
+ * the full payload (message, configuration, metadata, tenant) via `request`.
+ */
+export class RequestContext {
+  /** The incoming request payload, including `message`, `configuration`, `metadata`, and `tenant`. */
+  public readonly request: SendMessageRequest;
+  /** The server call context associated with this request. */
+  public readonly context: ServerCallContext;
+  /** The resolved task ID for this request. */
+  public readonly taskId: string;
+  /** The resolved context ID for this request. */
+  public readonly contextId: string;
+  /** The existing `Task` object retrieved from the store, if any. */
+  public readonly task?: Task;
+  /** A list of other tasks related to the current request (e.g., for tool use). */
+  public readonly referenceTasks?: Task[];
+
+  constructor(params: RequestContextParams) {
+    if (!params.request.message) {
+      throw new Error('RequestContext requires request.message to be set.');
+    }
+    this.request = params.request;
+    this.context = params.context;
+    this.taskId = params.taskId;
+    this.contextId = params.contextId;
+    this.task = params.task;
+    this.referenceTasks = params.referenceTasks;
+  }
+
+  get userMessage(): Message {
+    return this.request.message!;
   }
 }
