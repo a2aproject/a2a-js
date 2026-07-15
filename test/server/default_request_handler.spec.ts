@@ -3277,6 +3277,65 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
+  it('cancelTask: should surface an error thrown while draining the cancellation', async () => {
+    // Regression: `_processEvents` re-throws (via `_handleProcessingError`)
+    // on the blocking drain path used by `cancelTask`. That handler must be
+    // awaited, otherwise the throw escapes as a floating rejection, the drain
+    // resolves as if it succeeded, and `cancelTask` masks the real failure
+    // with a misleading `TaskNotCancelableError`.
+    vi.useFakeTimers();
+    const cancellableExecutor = new CancellableMockAgentExecutor();
+    handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      cancellableExecutor,
+      executionEventBusManager
+    );
+
+    const streamParams: SendMessageRequest = {
+      message: createTestMessage('msg-cancel-drain', 'Start and cancel'),
+    } as SendMessageRequest;
+    const streamGenerator = handler.sendMessageStream(streamParams, serverCallContext);
+
+    const streamEvents: any[] = [];
+    (async () => {
+      for await (const event of streamGenerator) {
+        streamEvents.push(event);
+      }
+    })().catch(() => {
+      // The injected persistence failure also surfaces on the stream; ignore.
+    });
+
+    // Allow the task to be created and reach TASK_STATE_WORKING.
+    await vi.advanceTimersByTimeAsync(25);
+
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
+
+    // Inject a failure when the cancellation (CANCELED) state is persisted
+    // during the drain. Earlier SUBMITTED/WORKING saves already succeeded.
+    const drainError = new Error('drain persistence failed');
+    const realSave = mockTaskStore.save.bind(mockTaskStore);
+    vi.spyOn(mockTaskStore, 'save').mockImplementation(async (task, ctx) => {
+      if (task.status?.state === TaskState.TASK_STATE_CANCELED) {
+        throw drainError;
+      }
+      return realSave(task, ctx);
+    });
+
+    // The real drain failure must surface, not a masking TaskNotCancelableError.
+    // Build the rejection assertion before running timers so the rejection is
+    // observed as soon as it happens (no floating unhandled rejection).
+    const cancelPromise = handler.cancelTask(
+      { id: taskId, tenant: '', metadata: {} },
+      serverCallContext
+    );
+    const rejectsWithDrainError = expect(cancelPromise).rejects.toBe(drainError);
+    await vi.runAllTimersAsync();
+    await rejectsWithDrainError;
+  });
+
   it('cancelTask: should fail for tasks in a terminal state', async () => {
     const taskId = 'task-terminal';
     const fakeTask: Task = {

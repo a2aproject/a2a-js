@@ -322,7 +322,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     } catch (error) {
       console.error(`Event processing loop failed for task ${taskId}:`, error);
-      this._handleProcessingError(
+      // Must be awaited: `_handleProcessingError` re-throws in the blocking
+      // (no `firstResultRejector`) case so the caller's `await` catches it.
+      // Without `await`, that throw escapes as a floating rejection and the
+      // caller (e.g. `cancelTask`'s drain) resolves as if nothing failed.
+      await this._handleProcessingError(
         error,
         resultManager,
         firstResultSent,
