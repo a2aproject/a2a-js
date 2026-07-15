@@ -144,6 +144,10 @@ async function* readFrom(stream: ReadableStream<string>): AsyncGenerator<string,
       yield value;
     }
   } finally {
+    // `releaseLock()` alone leaves the body un-cancelled, leaking the
+    // connection when a consumer breaks/throws early. `.catch()` swallows the
+    // rejection cancel() produces on an already-errored stream.
+    await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 }

@@ -51,6 +51,33 @@ function createMockResponseWithoutAsyncIterator(sseData: string): Response {
   });
 }
 
+// The teardown tests observe the leak fix by watching the source stream's
+// `cancel` callback fire through `parseSseStream`'s internal
+// `pipeThrough(TextDecoderStream)`. Some runtimes (notably the Cloudflare
+// Workers test pool / workerd) do not propagate a TextDecoderStream cancel to
+// the upstream source, so that signal is unobservable there even though the
+// fix runs. Probe the capability once and gate the assertions on it — the
+// leak matters most under Node/undici, where the probe passes.
+async function cancelPropagatesThroughTextDecoder(): Promise<boolean> {
+  let cancelled = false;
+  const source = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1]));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  // Mirror parseSseStream: pipe the response body through a TextDecoderStream.
+  const body = new Response(source).body;
+  if (!body) return false;
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  await reader.read();
+  await reader.cancel().catch(() => {});
+  return cancelled;
+}
+const CANCEL_PROPAGATES = await cancelPropagatesThroughTextDecoder();
+
 describe('SSE Utils', () => {
   describe('formatSSEEvent', () => {
     it('should format a data event', () => {
@@ -175,6 +202,66 @@ describe('SSE Utils', () => {
       expect(events).toHaveLength(1);
       expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
     });
+  });
+
+  describe('parseSseStream teardown', () => {
+    it.runIf(CANCEL_PROPAGATES)(
+      'cancels the underlying stream when the consumer stops early',
+      async () => {
+        // An early break must cancel the response body, not just release the lock.
+        let sourceCancelled = false;
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            // One event, then stay open — a long-lived SSE connection.
+            controller.enqueue(new TextEncoder().encode('data: {"id":1}\n\n'));
+          },
+          cancel() {
+            sourceCancelled = true;
+          },
+        });
+        const response = new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+
+        const seen: SseEvent[] = [];
+        for await (const event of parseSseStream(response)) {
+          seen.push(event);
+          break;
+        }
+
+        expect(seen).toHaveLength(1);
+        expect(sourceCancelled).toBe(true);
+      }
+    );
+
+    it.runIf(CANCEL_PROPAGATES)(
+      'cancels the underlying stream when the consumer throws',
+      async () => {
+        let sourceCancelled = false;
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"id":1}\n\n'));
+          },
+          cancel() {
+            sourceCancelled = true;
+          },
+        });
+        const response = new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+
+        await expect(
+          (async () => {
+            for await (const event of parseSseStream(response)) {
+              expect(event.data).toBe('{"id":1}');
+              throw new Error('consumer boom');
+            }
+          })()
+        ).rejects.toThrow('consumer boom');
+
+        expect(sourceCancelled).toBe(true);
+      }
+    );
   });
 
   describe('Symmetry: parser understands formatter output', () => {
