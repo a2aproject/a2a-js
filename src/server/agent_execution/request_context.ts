@@ -40,7 +40,7 @@ export class RequestContext {
     if (!params.request.message) {
       throw new Error('RequestContext requires request.message to be set.');
     }
-    this.request = params.request;
+    this.request = structuredClone(params.request);
     this.context = params.context;
     this.taskId = params.taskId;
     this.contextId = params.contextId;
