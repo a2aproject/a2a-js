@@ -104,6 +104,11 @@ export async function* parseSseStream(
     let lineEndIndex: number;
 
     while ((lineEndIndex = buffer.indexOf('\n')) >= 0) {
+      if (lineEndIndex > maxEventSizeBytes) {
+        throw new Error(
+          `SSE line exceeded the maximum allowed size of ${maxEventSizeBytes} bytes.`
+        );
+      }
       // Per the SSE spec lines may end with `\r\n`, `\r`, or `\n`. We
       // strip a trailing `\r` explicitly rather than calling `.trim()`,
       // which would also eat whitespace inside JSON-formatted `data:`
@@ -137,9 +142,8 @@ export async function* parseSseStream(
       }
     }
 
-    // A hostile/broken server can stream bytes that never form a complete
-    // line, leaving the residual partial line in `buffer` to grow without
-    // bound. Cap it here (the drained portion above never triggers this).
+    // Same cap for a line that never terminates: the loop above never runs,
+    // so the residual buffer would otherwise grow without bound.
     if (buffer.length > maxEventSizeBytes) {
       throw new Error(`SSE line exceeded the maximum allowed size of ${maxEventSizeBytes} bytes.`);
     }

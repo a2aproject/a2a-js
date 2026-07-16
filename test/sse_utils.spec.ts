@@ -355,6 +355,17 @@ describe('SSE Utils', () => {
       await expect(drain(response, 100)).rejects.toThrow(/SSE line exceeded the maximum/);
     });
 
+    it('throws when an oversized line is terminated and arrives in one chunk', async () => {
+      // Delivered whole so the newline is present before the residual check —
+      // exercises the in-loop guard the residual check alone would miss.
+      const stream = createStream([new TextEncoder().encode(': ' + 'A'.repeat(1000) + '\n')]);
+      const response = new Response(stream, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+
+      await expect(drain(response, 100)).rejects.toThrow(/SSE line exceeded the maximum/);
+    });
+
     it('throws when accumulated data lines exceed the limit before a blank line', async () => {
       // Many consecutive `data:` lines with no terminating blank line: the
       // joined event data grows past the cap.
