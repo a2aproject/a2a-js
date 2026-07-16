@@ -11,7 +11,7 @@ inputs:
       - google/rpc/status.proto
       - google/rpc/error_details.proto
 plugins:
-  - remote: buf.build/community/stephenh-ts-proto:v2.6.1
+  - remote: buf.build/community/stephenh-ts-proto:v2.11.0
     opt: 
       - oneof=unions-value
       - importSuffix=.js
