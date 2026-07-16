@@ -9,29 +9,29 @@ import { ServerCallContext } from '../context.js';
  */
 export class RequestContext {
   public readonly request: SendMessageRequest;
-  public readonly context: ServerCallContext;
   public readonly taskId: string;
   public readonly contextId: string;
+  public readonly context: ServerCallContext;
   public readonly task?: Task;
   public readonly referenceTasks?: Task[];
 
-  constructor(params: {
-    request: SendMessageRequest;
-    context: ServerCallContext;
-    taskId: string;
-    contextId: string;
-    task?: Task;
-    referenceTasks?: Task[];
-  }) {
-    if (!params.request.message) {
+  constructor(
+    request: SendMessageRequest,
+    taskId: string,
+    contextId: string,
+    context: ServerCallContext,
+    task?: Task,
+    referenceTasks?: Task[]
+  ) {
+    if (!request.message) {
       throw new Error('RequestContext requires request.message to be set.');
     }
-    this.request = structuredClone(params.request);
-    this.context = params.context;
-    this.taskId = params.taskId;
-    this.contextId = params.contextId;
-    this.task = params.task;
-    this.referenceTasks = params.referenceTasks;
+    this.request = structuredClone(request);
+    this.taskId = taskId;
+    this.contextId = contextId;
+    this.context = context;
+    this.task = task;
+    this.referenceTasks = referenceTasks;
   }
 
   get userMessage(): Message {

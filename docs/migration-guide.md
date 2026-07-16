@@ -305,15 +305,27 @@ new ServerCallContext(requestedExtensions, user);
 new ServerCallContext({ requestedExtensions, user, tenant: 'my-tenant', requestedVersion: '1.0' });
 ```
 
-`RequestContext` constructor parameter order also changed -- `context` moved
-from last (optional) to 4th (mandatory):
+`RequestContext` now wraps the incoming `SendMessageRequest`, 
+and `context` moved from last (optional) to 4th (mandatory).
+The loose `userMessage` parameter is replaced by `request: SendMessageRequest`;
+agent executors read the message via `ctx.userMessage` (convenience accessor
+guaranteed non-null) and the full payload -- including `configuration` and
+request-level `metadata` -- via `ctx.request`:
 
 ```typescript
 // v0.3
 new RequestContext(userMessage, taskId, contextId, task, referenceTasks, context);
 // v1.0
-new RequestContext(userMessage, taskId, contextId, context, task, referenceTasks);
+new RequestContext(request, taskId, contextId, context, task, referenceTasks);
+
+// Reading from an executor:
+ctx.userMessage; // Message -- shorthand for ctx.request.message (non-null)
+ctx.request.configuration; // SendMessageConfiguration | undefined -- newly exposed
+ctx.request.metadata; // Record<string, unknown> | undefined
 ```
+
+The wrapped `request` is deep-cloned on construction so mutations inside the
+executor cannot leak back to the caller's `SendMessageRequest`.
 
 ### 3.4 `ExecutionEventBus` -- Discriminated Event Wrapper
 
