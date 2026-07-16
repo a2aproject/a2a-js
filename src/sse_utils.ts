@@ -61,12 +61,33 @@ export function formatSSEErrorEvent(error: unknown): string {
 // ============================================================================
 
 /**
+ * Upper bound (in UTF-16 code units, a conservative over-approximation of
+ * byte length) on how large a single unterminated line or a single SSE event
+ * may grow before {@link parseSseStream} aborts.
+ *
+ * A2A clients stream from remote, potentially untrusted agent servers.
+ * Without this cap a malicious or broken server can stream bytes that never
+ * form a complete line — or `data:` lines whose blank-line terminator never
+ * arrives — growing an in-memory buffer without limit until the client
+ * process exhausts memory (CWE-400, uncontrolled resource consumption). The
+ * default is deliberately generous so that legitimate large JSON events
+ * (e.g. base64 file parts) still pass; callers handling larger payloads can
+ * raise it via the `maxEventSizeBytes` argument.
+ */
+export const DEFAULT_MAX_SSE_EVENT_SIZE_BYTES = 20 * 1024 * 1024; // 20 MiB
+
+/**
  * Parses an SSE stream from a `Response`, yielding events as they arrive.
  * Expects well-formed SSE events with single-line JSON data, matching the
  * format produced by {@link formatSSEEvent} and {@link formatSSEErrorEvent}.
+ *
+ * @param maxEventSizeBytes - Aborts the stream if a single line or event
+ *   exceeds this size, bounding memory against a hostile server. Defaults to
+ *   {@link DEFAULT_MAX_SSE_EVENT_SIZE_BYTES}.
  */
 export async function* parseSseStream(
-  response: Response
+  response: Response,
+  maxEventSizeBytes: number = DEFAULT_MAX_SSE_EVENT_SIZE_BYTES
 ): AsyncGenerator<SseEvent, void, undefined> {
   if (!response.body) {
     throw new Error('SSE response body is undefined. Cannot read stream.');
@@ -108,7 +129,19 @@ export async function* parseSseStream(
         // so append instead of overwriting.
         const fieldValue = stripOptionalLeadingSpace(line.substring('data:'.length));
         eventData = eventData === '' ? fieldValue : `${eventData}\n${fieldValue}`;
+        if (eventData.length > maxEventSizeBytes) {
+          throw new Error(
+            `SSE event data exceeded the maximum allowed size of ${maxEventSizeBytes} bytes.`
+          );
+        }
       }
+    }
+
+    // A hostile/broken server can stream bytes that never form a complete
+    // line, leaving the residual partial line in `buffer` to grow without
+    // bound. Cap it here (the drained portion above never triggers this).
+    if (buffer.length > maxEventSizeBytes) {
+      throw new Error(`SSE line exceeded the maximum allowed size of ${maxEventSizeBytes} bytes.`);
     }
   }
 

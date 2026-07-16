@@ -335,4 +335,44 @@ describe('SSE Utils', () => {
       expect(JSON.parse(parsedEvents[1].data)).toEqual(errorEvent);
     });
   });
+
+  // A2A clients stream from remote, potentially untrusted servers. A hostile
+  // server that never terminates a line — or an event — would grow an
+  // in-memory buffer without bound (CWE-400). parseSseStream caps both.
+  describe('parseSseStream size bound (DoS guard)', () => {
+    async function drain(response: Response, maxEventSizeBytes?: number): Promise<SseEvent[]> {
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response, maxEventSizeBytes)) {
+        events.push(event);
+      }
+      return events;
+    }
+
+    it('throws when a single line never terminates and exceeds the limit', async () => {
+      // No newline anywhere: the residual partial line grows past the cap.
+      const response = createMockResponse('data: ' + 'A'.repeat(1000));
+
+      await expect(drain(response, 100)).rejects.toThrow(/SSE line exceeded the maximum/);
+    });
+
+    it('throws when accumulated data lines exceed the limit before a blank line', async () => {
+      // Many consecutive `data:` lines with no terminating blank line: the
+      // joined event data grows past the cap.
+      let sse = '';
+      for (let i = 0; i < 200; i++) sse += `data: ${'A'.repeat(20)}\n`;
+      const response = createMockResponse(sse);
+
+      await expect(drain(response, 100)).rejects.toThrow(/SSE event data exceeded the maximum/);
+    });
+
+    it('parses a well-formed event that stays within the limit', async () => {
+      const event = { kind: 'message', text: 'hello' };
+      const response = createMockResponse(formatSSEEvent(event));
+
+      const events = await drain(response, 1024);
+
+      expect(events).toHaveLength(1);
+      expect(JSON.parse(events[0].data)).toEqual(event);
+    });
+  });
 });
