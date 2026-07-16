@@ -61,9 +61,11 @@ export function formatSSEErrorEvent(error: unknown): string {
 // ============================================================================
 
 /**
- * Upper bound (in UTF-16 code units, a conservative over-approximation of
- * byte length) on how large a single unterminated line or a single SSE event
- * may grow before {@link parseSseStream} aborts.
+ * Upper bound on how large a single unterminated line or a single SSE event
+ * may grow before {@link parseSseStream} aborts. Measured in UTF-16 code
+ * units (JS string length), which equals byte length for ASCII payloads such
+ * as JSON-encoded events; memory stays bounded within a small constant
+ * factor of this value either way.
  *
  * A2A clients stream from remote, potentially untrusted agent servers.
  * Without this cap a malicious or broken server can stream bytes that never
