@@ -13,6 +13,8 @@ import {
   A2AError as BaseA2AError,
   ExtendedAgentCardNotConfiguredError,
   GenericError,
+  JSON_RPC_ERROR_CLASSES,
+  JsonRpcGenericError,
   JsonRpcRequestMalformedError,
   JsonRpcUnsupportedOperationError,
   PushNotificationNotSupportedError,
@@ -49,7 +51,23 @@ interface A2AErrorFacade {
 
 function makeA2AError(code: number, message: string, data?: Record<string, unknown>): BaseA2AError {
   const spec = A2A_ERROR_SPECS_BY_CODE[code];
-  if (spec) return new A2A_ERROR_CLASSES[spec.name]({ message });
+  if (spec) {
+    return data === undefined
+      ? new A2A_ERROR_CLASSES[spec.name]({ message })
+      : new JSON_RPC_ERROR_CLASSES[spec.name]({
+          message,
+          envelopeCode: code,
+          data: data as never,
+        });
+  }
+
+  if (code === A2A_ERROR_CODE.METHOD_NOT_FOUND) {
+    return new JsonRpcUnsupportedOperationError({
+      message,
+      envelopeCode: code,
+      data: data as never,
+    });
+  }
   return new JsonRpcRequestMalformedError({
     message,
     envelopeCode: code,
@@ -98,7 +116,7 @@ A2AError.invalidParams = (message, data) =>
 A2AError.internalError = (message, data) =>
   data === undefined
     ? new GenericError({ message })
-    : new JsonRpcRequestMalformedError({
+    : new JsonRpcGenericError({
         message,
         envelopeCode: A2A_ERROR_CODE.INTERNAL_ERROR,
         data: data as never,

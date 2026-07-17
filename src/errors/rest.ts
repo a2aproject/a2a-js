@@ -149,7 +149,8 @@ export function toRestErrorBody(error: unknown, httpStatus: number): RestErrorBo
 
   if (error instanceof A2AError) {
     details.push(error.toErrorInfo());
-    statusName = GRPC_STATUS_NAME[A2A_ERROR_SPECS[error.name].grpcStatus] ?? 'UNKNOWN';
+    const spec = A2A_ERROR_SPECS[error.name];
+    statusName = spec ? (GRPC_STATUS_NAME[spec.grpcStatus] ?? 'UNKNOWN') : 'UNKNOWN';
   } else if (httpStatus === HTTP_STATUS.NOT_FOUND) statusName = 'NOT_FOUND';
   else if (httpStatus === HTTP_STATUS.INTERNAL_SERVER_ERROR) statusName = 'INTERNAL';
   else if (httpStatus === HTTP_STATUS.BAD_REQUEST) statusName = 'INVALID_ARGUMENT';
