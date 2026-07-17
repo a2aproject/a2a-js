@@ -41,7 +41,7 @@ import {
   TaskPushNotificationConfig,
 } from '../../types/pb/a2a.js';
 import { ToProto } from '../../types/converters/to_proto.js';
-import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors.js';
+import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors/index.js';
 
 /** Options for configuring the HTTP+JSON/REST handler. */
 export interface RestHandlerOptions {

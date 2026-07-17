@@ -16,7 +16,7 @@ import {
   TaskNotFoundError,
   UnsupportedOperationError,
   VersionNotSupportedError,
-} from '../../../../../../src/errors.js';
+} from '../../../../../../src/errors/index.js';
 import { Role, TaskState } from '../../../../../../src/types/pb/a2a.js';
 import type {
   AgentCard as V1AgentCard,

@@ -15,7 +15,7 @@ import {
   A2A_ERROR_CODE,
   GenericError,
   ExtendedAgentCardNotConfiguredError,
-} from '../../src/errors.js';
+} from '../../src/errors/index.js';
 
 describe('JsonRpcTransportHandler', () => {
   let mockRequestHandler: A2ARequestHandler;

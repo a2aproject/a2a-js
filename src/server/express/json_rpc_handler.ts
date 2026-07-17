@@ -14,7 +14,7 @@ import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '..
 import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
-import { A2A_ERROR_CODE, ContentTypeNotSupportedError } from '../../errors.js';
+import { A2A_ERROR_CODE, ContentTypeNotSupportedError } from '../../errors/index.js';
 import { validateVersion } from '../version.js';
 import { LegacyJsonRpcTransportHandler } from '../../compat/v0_3/server/index.js';
 import {

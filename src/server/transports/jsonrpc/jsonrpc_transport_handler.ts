@@ -17,13 +17,12 @@ import {
   AgentCard,
 } from '../../../index.js';
 import {
-  A2A_ERROR_CLASS_TO_CODE,
   A2A_ERROR_CODE,
-  RequestMalformedError,
-  UnsupportedOperationError,
-  buildErrorInfo,
   type ErrorDetail,
-} from '../../../errors.js';
+  RequestMalformedError,
+  toJsonRpcError,
+  UnsupportedOperationError,
+} from '../../../errors/index.js';
 import { JSONRPCErrorResponse } from '../../../core.js';
 
 export type A2ARequest = {
@@ -270,17 +269,6 @@ export class JsonRpcTransportHandler {
     message: string;
     data?: ErrorDetail[];
   } {
-    if (error instanceof Error) {
-      const code = A2A_ERROR_CLASS_TO_CODE[error.name];
-      if (code !== undefined) {
-        const data: ErrorDetail[] = [];
-        const errorInfo = buildErrorInfo(error);
-        if (errorInfo) data.push(errorInfo);
-        return { code, message: error.message, ...(data.length > 0 ? { data } : {}) };
-      }
-    }
-
-    const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
-    return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
+    return toJsonRpcError(error);
   }
 }

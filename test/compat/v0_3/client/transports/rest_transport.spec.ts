@@ -7,7 +7,7 @@ import {
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
-} from '../../../../../src/errors.js';
+} from '../../../../../src/errors/index.js';
 import { formatSSEEvent, formatSSEErrorEvent } from '../../../../../src/sse_utils.js';
 import {
   Role,

@@ -5,8 +5,11 @@ import {
   type LegacyGrpcTransportOptions,
 } from '../../../../../../src/compat/v0_3/client/transports/grpc/grpc_transport.js';
 import { A2AServiceClient } from '../../../../../../src/compat/v0_3/grpc/pb/a2a.js';
-import { TaskNotFoundError, UnsupportedOperationError } from '../../../../../../src/errors.js';
-import { buildGrpcErrorMetadata } from '../../../../../../src/server/grpc/error_details.js';
+import {
+  TaskNotFoundError,
+  UnsupportedOperationError,
+} from '../../../../../../src/errors/index.js';
+import { buildGrpcErrorMetadata } from '../../../../../../src/errors/index.js';
 import {
   Role as V1Role,
   TaskState as V1TaskState,
@@ -86,7 +89,7 @@ const mockUnarySuccess = (method: Mock, response: unknown) => {
 
 const mockUnaryError = (method: Mock, code: number, message: string, sdkError?: Error) => {
   method.mockImplementation((_req: unknown, _meta: unknown, _opts: unknown, callback: any) => {
-    const metadata = sdkError ? buildGrpcErrorMetadata(code, message, sdkError) : undefined;
+    const metadata = sdkError ? buildGrpcErrorMetadata(Metadata, sdkError) : undefined;
     const error: Partial<ServiceError> = {
       code,
       details: message,

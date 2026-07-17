@@ -16,7 +16,7 @@ import {
   toCoreAgentProvider,
   toCoreAgentSkill,
 } from '../../../../src/compat/v0_3/translate/agent_card.js';
-import { VersionNotSupportedError } from '../../../../src/errors.js';
+import { VersionNotSupportedError } from '../../../../src/errors/index.js';
 import type {
   AgentCard as V1AgentCard,
   AgentInterface as V1AgentInterface,

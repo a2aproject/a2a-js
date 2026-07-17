@@ -12,7 +12,7 @@
  * `VersionNotSupportedError` if none remain.
  */
 
-import { VersionNotSupportedError } from '../../../errors.js';
+import { VersionNotSupportedError } from '../../../errors/index.js';
 import { PROTOCOL_VERSION_0_3, isLegacyVersion } from './versions.js';
 import {
   toCompatSecurityRequirement,

@@ -9,8 +9,8 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
-} from '../../../src/errors.js';
-import { buildGrpcErrorMetadata } from '../../../src/server/grpc/error_details.js';
+} from '../../../src/errors/index.js';
+import { buildGrpcErrorMetadata } from '../../../src/errors/index.js';
 import {
   createMessageParams,
   createMockAgentCard,
@@ -55,7 +55,7 @@ describe('GrpcTransport', () => {
 
   const mockUnaryError = (method: Mock, code: number, message: string, sdkError?: Error) => {
     method.mockImplementation((_req: any, _meta: any, _opts: any, callback: any) => {
-      const metadata = sdkError ? buildGrpcErrorMetadata(code, message, sdkError) : undefined;
+      const metadata = sdkError ? buildGrpcErrorMetadata(Metadata, sdkError) : undefined;
       const error: Partial<ServiceError> = {
         code: code,
         details: message,

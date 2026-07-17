@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import * as proto from '../../../src/types/pb/a2a.js';
-import { GenericError } from '../../../src/errors.js';
+import { GenericError } from '../../../src/errors/index.js';
 
 describe('FromProto', () => {
   describe('sendMessageResult', () => {

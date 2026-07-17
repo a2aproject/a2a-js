@@ -11,7 +11,7 @@ import {
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
-} from '../../../src/errors.js';
+} from '../../../src/errors/index.js';
 import {
   createMessageParams,
   createMockAgentCard,

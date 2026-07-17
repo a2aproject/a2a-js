@@ -16,7 +16,7 @@ import {
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
-import { TaskNotFoundError, UnsupportedOperationError } from '../../../src/errors.js';
+import { TaskNotFoundError, UnsupportedOperationError } from '../../../src/errors/index.js';
 import { TERMINAL_STATE_LIST } from '../../../src/server/utils.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 

@@ -32,7 +32,7 @@ import { LegacyJsonRpcTransportHandler } from '../../../src/compat/v0_3/server/i
 import { AgentCard } from '../../../src/index.js';
 import { JSONRPCErrorResponse } from '../../../src/core.js';
 import { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
-import { A2A_ERROR_CODE, GenericError, RequestMalformedError } from '../../../src/errors.js';
+import { A2A_ERROR_CODE, GenericError, RequestMalformedError } from '../../../src/errors/index.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { User, UnauthenticatedUser } from '../../../src/server/authentication/user.js';
 

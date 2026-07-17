@@ -19,7 +19,7 @@ import express, {
 } from 'express';
 
 import { A2A_VERSION_HEADER } from '../../../../constants.js';
-import { VersionNotSupportedError } from '../../../../errors.js';
+import { VersionNotSupportedError } from '../../../../errors/index.js';
 import type {
   AgentCardCacheOptions,
   AgentCardProvider,

@@ -16,7 +16,7 @@ import {
   TaskNotCancelableError,
   UnsupportedOperationError,
   ExtensionSupportRequiredError,
-} from '../src/errors.js';
+} from '../src/errors/index.js';
 import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';

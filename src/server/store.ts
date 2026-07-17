@@ -1,7 +1,7 @@
 import { Task, ListTasksRequest, ListTasksResponse } from '../index.js';
 import { ServerCallContext } from './context.js';
 import { DEFAULT_PAGE_SIZE } from '../constants.js';
-import { RequestMalformedError } from '../errors.js';
+import { RequestMalformedError } from '../errors/index.js';
 import { OwnerResolver, resolveUserScope } from './owner_resolver.js';
 import { ScopedStore } from './utils.js';
 

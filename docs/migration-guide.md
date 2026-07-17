@@ -267,8 +267,10 @@ tenant-prefixed routes (`/:tenant/tasks/:taskId`, etc.) and validates the
 
 ### 3.2 Error Classes Replaced
 
-The monolithic `A2AError` class with static factory methods is removed.
-Use specific error classes:
+The monolithic `A2AError` class with static factory methods is removed. Errors
+now form a shared transport-agnostic hierarchy — one `A2AError` base with
+semantic subclasses (`TaskNotFoundError`, `RequestMalformedError`, …) — and
+live at the SDK root, not under `/client` or `/server`:
 
 ```typescript
 // v0.3
@@ -277,18 +279,40 @@ throw A2AError.taskNotFound('task-1');
 throw A2AError.invalidParams('bad input');
 
 // v1.0
-import { TaskNotFoundError, RequestMalformedError } from '@a2a-js/sdk/server';
-throw new TaskNotFoundError('task-1');
-throw new RequestMalformedError('bad input');
+import { TaskNotFoundError, RequestMalformedError } from '@a2a-js/sdk';
+throw new TaskNotFoundError({ message: 'task-1' });
+throw new RequestMalformedError({ message: 'bad input' });
 ```
 
-Available error classes from `@a2a-js/sdk/server`: `TaskNotFoundError`,
-`TaskNotCancelableError`, `RequestMalformedError`, `UnsupportedOperationError`,
+Semantic classes: `TaskNotFoundError`, `TaskNotCancelableError`,
+`RequestMalformedError`, `UnsupportedOperationError`,
 `PushNotificationNotSupportedError`, `ContentTypeNotSupportedError`,
-`ExtendedAgentCardNotConfiguredError`, `VersionNotSupportedError`.
+`InvalidAgentResponseError`, `ExtendedAgentCardNotConfiguredError`,
+`ExtensionSupportRequiredError`, `VersionNotSupportedError`, `GenericError`.
+
+Per-transport variants (`RestTaskNotFoundError`, `GrpcTaskNotFoundError`,
+`JsonRpcTaskNotFoundError`, …) carry transport-native context; narrow via the
+`isRestError` / `isGrpcError` / `isJsonRpcError` type guards. All catch-side
+API surfaces are on the base:
+
+```typescript
+import { isRestError, TaskNotFoundError } from '@a2a-js/sdk';
+
+try {
+  await client.getTask({ id });
+} catch (e) {
+  if (e instanceof TaskNotFoundError) {
+    if (isRestError(e)) {
+      // e.statusCode, e.headers, e.cause are typed
+      if (e.statusCode === 429) backoff(e.headers?.['retry-after']);
+    }
+  }
+}
+```
 
 Error codes and gRPC/HTTP status mappings are defined in the
-[spec](https://a2a-protocol.org/v1.0.0/specification/#54-error-code-mappings).
+[spec](https://a2a-protocol.org/v1.0.0/specification/#54-error-code-mappings)
+and live in a single registry (`A2A_ERROR_SPECS`) exported from `@a2a-js/sdk`.
 
 ### 3.3 `ServerCallContext` -- Now Mandatory
 
@@ -305,7 +329,7 @@ new ServerCallContext(requestedExtensions, user);
 new ServerCallContext({ requestedExtensions, user, tenant: 'my-tenant', requestedVersion: '1.0' });
 ```
 
-`RequestContext` now wraps the incoming `SendMessageRequest`, 
+`RequestContext` now wraps the incoming `SendMessageRequest`,
 and `context` moved from last (optional) to 4th (mandatory).
 The loose `userMessage` parameter is replaced by `request: SendMessageRequest`;
 agent executors read the message via `ctx.userMessage` (convenience accessor
@@ -445,11 +469,11 @@ await verify(agentCard);
 
 ## 5. Import Path Changes
 
-| v0.3 Import                                                  | v1.0 Import                                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------------- |
-| `import { A2AClient } from '@a2a-js/sdk/client'`             | Removed -- use `ClientFactory` + `Client`                     |
-| `import { TextPart, FilePart, DataPart } from '@a2a-js/sdk'` | Removed -- use `Part`                                         |
-| `import { MessageSendParams } from '@a2a-js/sdk'`            | `import { SendMessageRequest } from '@a2a-js/sdk'`            |
-| `import { TaskQueryParams } from '@a2a-js/sdk'`              | `import { GetTaskRequest } from '@a2a-js/sdk'`                |
-| `import { TaskIdParams } from '@a2a-js/sdk'`                 | `import { CancelTaskRequest } from '@a2a-js/sdk'`             |
-| `import { A2AError } from '@a2a-js/sdk/server'`              | `import { TaskNotFoundError, ... } from '@a2a-js/sdk/server'` |
+| v0.3 Import                                                  | v1.0 Import                                            |
+| ------------------------------------------------------------ | ------------------------------------------------------ |
+| `import { A2AClient } from '@a2a-js/sdk/client'`             | Removed -- use `ClientFactory` + `Client`              |
+| `import { TextPart, FilePart, DataPart } from '@a2a-js/sdk'` | Removed -- use `Part`                                  |
+| `import { MessageSendParams } from '@a2a-js/sdk'`            | `import { SendMessageRequest } from '@a2a-js/sdk'`     |
+| `import { TaskQueryParams } from '@a2a-js/sdk'`              | `import { GetTaskRequest } from '@a2a-js/sdk'`         |
+| `import { TaskIdParams } from '@a2a-js/sdk'`                 | `import { CancelTaskRequest } from '@a2a-js/sdk'`      |
+| `import { A2AError } from '@a2a-js/sdk/server'`              | `import { TaskNotFoundError, ... } from '@a2a-js/sdk'` |

@@ -22,76 +22,15 @@ import {
 } from '../../../index.js';
 import { taskStateFromJSON } from '../../../types/pb/a2a.js';
 import {
-  buildErrorInfo,
-  ContentTypeNotSupportedError,
-  ExtendedAgentCardNotConfiguredError,
-  ExtensionSupportRequiredError,
-  getGrpcStatusName,
-  InvalidAgentResponseError,
+  HTTP_STATUS,
   PushNotificationNotSupportedError,
   RequestMalformedError,
-  TaskNotCancelableError,
-  TaskNotFoundError,
+  restStatusFor as mapErrorToStatus,
+  toRestErrorBody as toHTTPError,
   UnsupportedOperationError,
-  VersionNotSupportedError,
-  type ErrorDetail,
-  type RestErrorBody,
-} from '../../../errors.js';
+} from '../../../errors/index.js';
 
-/** HTTP status codes used in REST responses. */
-export const HTTP_STATUS = {
-  OK: 200,
-  CREATED: 201,
-  ACCEPTED: 202,
-  NO_CONTENT: 204,
-  BAD_REQUEST: 400,
-  UNAUTHORIZED: 401,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  INTERNAL_SERVER_ERROR: 500,
-  NOT_IMPLEMENTED: 501,
-} as const;
-
-/** Maps an error instance to its HTTP status code. */
-export function mapErrorToStatus(error: unknown): number {
-  if (error instanceof TaskNotFoundError) return HTTP_STATUS.NOT_FOUND;
-  if (error instanceof TaskNotCancelableError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof PushNotificationNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof UnsupportedOperationError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof ContentTypeNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof InvalidAgentResponseError) return HTTP_STATUS.INTERNAL_SERVER_ERROR;
-  if (error instanceof ExtendedAgentCardNotConfiguredError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof ExtensionSupportRequiredError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof VersionNotSupportedError) return HTTP_STATUS.BAD_REQUEST;
-  if (error instanceof RequestMalformedError) return HTTP_STATUS.BAD_REQUEST;
-  return HTTP_STATUS.INTERNAL_SERVER_ERROR;
-}
-
-/**
- * Converts an error to a `google.rpc.Status` JSON response body, with
- * `google.rpc.ErrorInfo` in `details` when the error has a known reason.
- */
-export function toHTTPError(error: unknown, httpStatus: number): RestErrorBody {
-  const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
-  const status = getGrpcStatusName(error, httpStatus);
-  const details: ErrorDetail[] = [];
-
-  if (error instanceof Error) {
-    const errorInfo = buildErrorInfo(error);
-    if (errorInfo) {
-      details.push(errorInfo);
-    }
-  }
-
-  return {
-    error: {
-      code: httpStatus,
-      status,
-      message,
-      details,
-    },
-  };
-}
+export { HTTP_STATUS, mapErrorToStatus, toHTTPError };
 
 /**
  * Handles the REST transport layer, routing requests to an

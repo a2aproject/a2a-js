@@ -1,22 +1,33 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { JSONRPCErrorResponse } from '../src/core.js';
 import {
+  A2A_ERROR_CLASSES,
   A2A_ERROR_CODE,
+  A2A_ERROR_SPECS_BY_CODE,
   ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
+  extractErrorMessage,
+  fromJsonRpcErrorResponse as mapJsonRpcErrorToSdkError,
   InvalidAgentResponseError,
-  JSONRPCTransportError,
+  JsonRpcTransportError as JSONRPCTransportError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
   VersionNotSupportedError,
-  mapA2aErrorToSdkError,
-  mapJsonRpcErrorToSdkError,
-  extractErrorMessage,
-} from '../src/errors.js';
+} from '../src/errors/index.js';
+
+/** Thin wrapper that matches the removed `mapA2aErrorToSdkError` shape. */
+function mapA2aErrorToSdkError(
+  err: { code: number; message: string },
+  fallback: () => Error
+): Error {
+  const spec = A2A_ERROR_SPECS_BY_CODE[err.code];
+  if (spec) return new A2A_ERROR_CLASSES[spec.name]({ message: err.message });
+  return fallback();
+}
 
 function makeEnvelope(code: number, message = 'boom'): JSONRPCErrorResponse {
   return {
@@ -32,7 +43,7 @@ describe('mapJsonRpcErrorToSdkError', () => {
     [A2A_ERROR_CODE.INVALID_REQUEST, RequestMalformedError],
     [A2A_ERROR_CODE.METHOD_NOT_FOUND, RequestMalformedError],
     [A2A_ERROR_CODE.INVALID_PARAMS, RequestMalformedError],
-    [A2A_ERROR_CODE.INTERNAL_ERROR, RequestMalformedError],
+    [A2A_ERROR_CODE.INTERNAL_ERROR, A2A_ERROR_CLASSES.GenericError],
     [A2A_ERROR_CODE.TASK_NOT_FOUND, TaskNotFoundError],
     [A2A_ERROR_CODE.TASK_NOT_CANCELABLE, TaskNotCancelableError],
     [A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED, PushNotificationNotSupportedError],
@@ -59,10 +70,10 @@ describe('mapJsonRpcErrorToSdkError', () => {
     expect(transportError.message).toContain('-99999');
   });
 
-  it('JSONRPCTransportError sets a stable name for catch/instanceof callers', () => {
+  it('JsonRpcTransportError sets a stable name for catch/instanceof callers', () => {
     const envelope = makeEnvelope(-99999);
     const result = mapJsonRpcErrorToSdkError(envelope);
-    expect(result.name).toBe('JSONRPCTransportError');
+    expect(result.name).toBe('JsonRpcTransportError');
   });
 
   it('preserves the original error message from the envelope', () => {

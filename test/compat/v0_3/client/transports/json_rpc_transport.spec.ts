@@ -2,9 +2,9 @@ import { describe, it, beforeEach, expect, vi, type Mock } from 'vitest';
 import { formatSSEEvent } from '../../../../../src/sse_utils.js';
 import {
   A2A_ERROR_CODE,
-  JSONRPCTransportError,
+  JsonRpcTransportError as JSONRPCTransportError,
   TaskNotFoundError,
-} from '../../../../../src/errors.js';
+} from '../../../../../src/errors/index.js';
 import { LegacyJsonRpcTransport } from '../../../../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 import {
   Role,

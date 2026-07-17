@@ -42,17 +42,6 @@ export type {
   RequestHeaders,
 } from './context.js';
 export { validateVersion, getSupportedVersions } from './version.js';
-export {
-  RequestMalformedError,
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  PushNotificationNotSupportedError,
-  UnsupportedOperationError,
-  ContentTypeNotSupportedError,
-  InvalidAgentResponseError,
-  ExtendedAgentCardNotConfiguredError,
-  VersionNotSupportedError,
-} from '../errors.js';
 
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';
 export { DefaultPushNotificationSender } from './push_notification/default_push_notification_sender.js';

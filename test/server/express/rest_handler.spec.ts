@@ -20,7 +20,7 @@ import {
   RequestMalformedError,
   TaskNotFoundError,
   TaskNotCancelableError,
-} from '../../../src/errors.js';
+} from '../../../src/errors/index.js';
 import {
   ListTaskPushNotificationConfigsResponse,
   Message as ProtoMessage,

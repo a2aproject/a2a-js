@@ -12,10 +12,10 @@ import { JSON_CONTENT_TYPE } from '../../../../constants.js';
 import type { JSONRPCErrorResponse, TransportProtocolName } from '../../../../core.js';
 import {
   A2A_ERROR_CODE,
+  fromJsonRpcErrorResponse as mapJsonRpcErrorToSdkError,
   InvalidAgentResponseError,
-  JSONRPCTransportError,
-  mapJsonRpcErrorToSdkError,
-} from '../../../../errors.js';
+  JsonRpcTransportError,
+} from '../../../../errors/index.js';
 import type { SendMessageResult } from '../../../../index.js';
 import type { RequestOptions } from '../../../../client/multitransport-client.js';
 import { Transport } from '../../../../client/transports/transport.js';
@@ -216,7 +216,7 @@ export class LegacyJsonRpcTransport implements Transport {
     _params: V1ListTasksRequest,
     _options?: RequestOptions
   ): Promise<V1ListTasksResponse> {
-    throw new JSONRPCTransportError({
+    throw new JsonRpcTransportError({
       jsonrpc: '2.0',
       id: null,
       error: {

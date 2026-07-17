@@ -1,5 +1,5 @@
 import { TransportProtocolName } from '../core.js';
-import { VersionNotSupportedError } from '../errors.js';
+import { VersionNotSupportedError } from '../errors/index.js';
 import { AgentCard } from '../index.js';
 
 /**

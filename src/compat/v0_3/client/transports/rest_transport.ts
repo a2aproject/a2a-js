@@ -16,10 +16,11 @@
  */
 
 import {
+  A2A_ERROR_CLASSES,
+  A2A_ERROR_SPECS_BY_CODE,
   InvalidAgentResponseError,
-  mapA2aErrorToSdkError,
   UnsupportedOperationError,
-} from '../../../../errors.js';
+} from '../../../../errors/index.js';
 import type { TransportProtocolName } from '../../../../core.js';
 import type { SendMessageResult } from '../../../../index.js';
 import type { RequestOptions } from '../../../../client/multitransport-client.js';
@@ -421,10 +422,7 @@ export class LegacyRestTransport implements Transport {
     try {
       const parsed = JSON.parse(jsonData) as unknown;
       if (LegacyRestTransport._isLegacyRestErrorBody(parsed)) {
-        return mapA2aErrorToSdkError(parsed, () => {
-          const dataSuffix = parsed.data ? ` Data: ${JSON.stringify(parsed.data)}` : '';
-          return new Error(`REST error: ${parsed.message} (Code: ${parsed.code})${dataSuffix}`);
-        });
+        return LegacyRestTransport._errorFromLegacyBody(parsed);
       }
       return new Error(`SSE error event: ${jsonData}`);
     } catch {
@@ -450,16 +448,24 @@ export class LegacyRestTransport implements Transport {
     }
 
     if (errorBody) {
-      const body = errorBody;
-      throw mapA2aErrorToSdkError(body, () => {
-        const dataSuffix = body.data ? ` Data: ${JSON.stringify(body.data)}` : '';
-        return new Error(`REST error: ${body.message} (Code: ${body.code})${dataSuffix}`);
-      });
+      throw LegacyRestTransport._errorFromLegacyBody(errorBody);
     }
 
     throw new Error(
       `HTTP error for ${path}! Status: ${response.status} ${response.statusText}. Response: ${errorBodyText}`
     );
+  }
+
+  /**
+   * Reconstructs a semantic SDK error from a v0.3 error body. Unknown
+   * codes fall through to a generic `Error` preserving the code/data
+   * in the message for debugging.
+   */
+  private static _errorFromLegacyBody(body: LegacyRestErrorBody): Error {
+    const spec = A2A_ERROR_SPECS_BY_CODE[body.code];
+    if (spec) return new A2A_ERROR_CLASSES[spec.name]({ message: body.message });
+    const dataSuffix = body.data ? ` Data: ${JSON.stringify(body.data)}` : '';
+    return new Error(`REST error: ${body.message} (Code: ${body.code})${dataSuffix}`);
   }
 
   private static _isLegacyRestErrorBody(value: unknown): value is LegacyRestErrorBody {

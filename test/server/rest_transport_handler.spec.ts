@@ -13,7 +13,7 @@ import {
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
   UnsupportedOperationError,
-} from '../../src/errors.js';
+} from '../../src/errors/index.js';
 import { AgentCard, Task, Message, Role, TaskState, TaskStatus } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 

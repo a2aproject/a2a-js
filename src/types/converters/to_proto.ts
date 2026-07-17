@@ -1,4 +1,4 @@
-import { GenericError } from '../../errors.js';
+import { GenericError } from '../../errors/index.js';
 import { Message, SendMessageResponse, Task } from '../pb/a2a.js';
 
 export class ToProto {

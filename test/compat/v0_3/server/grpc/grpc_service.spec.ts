@@ -5,7 +5,7 @@ import {
   PushNotificationNotSupportedError,
   TaskNotCancelableError,
   TaskNotFoundError,
-} from '../../../../../src/errors.js';
+} from '../../../../../src/errors/index.js';
 import { A2AError as LegacyA2AError } from '../../../../../src/compat/v0_3/server/error.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../../src/constants.js';
 import type { A2ARequestHandler } from '../../../../../src/server/request_handler/a2a_request_handler.js';
@@ -15,7 +15,7 @@ import {
   type AgentCard as V1AgentCard,
   type Task as V1Task,
 } from '../../../../../src/types/pb/a2a.js';
-import { decodeErrorInfo, decodeStatus } from '../../../../../src/server/grpc/error_details.js';
+import { decodeErrorInfo, decodeStatus } from '../../../../../src/errors/index.js';
 
 // v0.3 GRPC interface so validateVersion accepts the defaulted '0.3'.
 const testAgentCard: V1AgentCard = {

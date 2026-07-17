@@ -9,7 +9,7 @@ import {
   TaskNotCancelableError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
-} from '../../src/errors.js';
+} from '../../src/errors/index.js';
 import {
   TaskStore,
   InMemoryTaskStore,

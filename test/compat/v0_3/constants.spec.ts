@@ -29,7 +29,15 @@ import {
   isLegacyJsonRpcMethod,
   isV1JsonRpcMethod,
 } from '../../../src/compat/v0_3/constants.js';
-import { A2AError } from '../../../src/compat/v0_3/server/error.js';
+import { A2AError as _LegacyFacade } from '../../../src/compat/v0_3/server/error.js';
+import { A2AError, isJsonRpcError, UnsupportedOperationError } from '../../../src/errors/index.js';
+void _LegacyFacade;
+
+/** Reads the wire code from a thrown error: envelopeCode wins over spec.code. */
+function wireCode(err: unknown): number {
+  return isJsonRpcError(err) ? err.envelopeCode : (err as A2AError).code;
+}
+void UnsupportedOperationError; // silence unused import guard
 
 const ALL_LEGACY_METHODS = [
   LEGACY_METHOD_MESSAGE_SEND,
@@ -128,9 +136,9 @@ describe('compat/v0_3/constants - asymmetric v1.0 methods', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32004);
-      expect((err as A2AError).message).toContain('ListTasks');
-      expect((err as A2AError).message).toContain('JSON-RPC');
+      expect(wireCode(err)).toBe(-32004);
+      expect((err as Error).message).toContain('ListTasks');
+      expect((err as Error).message).toContain('JSON-RPC');
     }
   });
 
@@ -140,9 +148,9 @@ describe('compat/v0_3/constants - asymmetric v1.0 methods', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32004);
-      expect((err as A2AError).message).toContain('ListTasks');
-      expect((err as A2AError).message).toContain('gRPC');
+      expect(wireCode(err)).toBe(-32004);
+      expect((err as Error).message).toContain('ListTasks');
+      expect((err as Error).message).toContain('gRPC');
     }
   });
 });
@@ -154,8 +162,8 @@ describe('compat/v0_3/constants - helper error behaviour', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32600);
-      expect((err as A2AError).message).toContain('does/not/exist');
+      expect(wireCode(err)).toBe(-32600);
+      expect((err as Error).message).toContain('does/not/exist');
     }
   });
 
@@ -165,7 +173,7 @@ describe('compat/v0_3/constants - helper error behaviour', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32600);
+      expect(wireCode(err)).toBe(-32600);
     }
   });
 
@@ -175,7 +183,7 @@ describe('compat/v0_3/constants - helper error behaviour', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32600);
+      expect(wireCode(err)).toBe(-32600);
     }
   });
 
@@ -185,7 +193,7 @@ describe('compat/v0_3/constants - helper error behaviour', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32600);
+      expect(wireCode(err)).toBe(-32600);
     }
   });
 
@@ -195,7 +203,7 @@ describe('compat/v0_3/constants - helper error behaviour', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32600);
+      expect(wireCode(err)).toBe(-32600);
     }
   });
 
@@ -205,7 +213,7 @@ describe('compat/v0_3/constants - helper error behaviour', () => {
       expect.fail('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(A2AError);
-      expect((err as A2AError).code).toBe(-32600);
+      expect(wireCode(err)).toBe(-32600);
     }
   });
 });

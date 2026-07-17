@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'v
 import * as grpc from '@grpc/grpc-js';
 import * as proto from '../../../src/grpc/pb/a2a.js';
 import { A2ARequestHandler } from '../../../src/server/index.js';
-import { TaskNotFoundError } from '../../../src/errors.js';
+import { TaskNotFoundError } from '../../../src/errors/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import {
   AgentCard,

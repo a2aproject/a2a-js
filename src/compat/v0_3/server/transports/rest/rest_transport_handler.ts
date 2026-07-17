@@ -8,8 +8,9 @@ import type { ServerCallContext } from '../../../../../server/context.js';
 import type { A2ARequestHandler } from '../../../../../server/request_handler/a2a_request_handler.js';
 import {
   HTTP_STATUS,
-  mapErrorToStatus as mapV1ErrorToStatus,
-} from '../../../../../server/transports/rest/rest_transport_handler.js';
+  isJsonRpcError,
+  restStatusFor as mapV1ErrorToStatus,
+} from '../../../../../errors/index.js';
 import type {
   AgentCard as V1AgentCard,
   Message as V1Message,
@@ -27,6 +28,7 @@ import { toCompatStreamResponse, toCoreSendMessageRequest } from '../../../trans
 import { toCompatTask } from '../../../translate/tasks.js';
 import type * as legacy from '../../../types/types.js';
 import { A2AError as LegacyA2AError } from '../../error.js';
+import type { A2AError as A2AErrorBase } from '../../../../../errors/index.js';
 
 // Numeric A2A error codes and HTTP semantics are identical between v0.3
 // and v1.0, so we reuse the v1.0 mapping helpers as-is.
@@ -52,13 +54,15 @@ const LEGACY_CODE_TO_HTTP_STATUS: Readonly<Record<number, number>> = {
 
 /**
  * Maps an error to its HTTP status code with v0.3-compat awareness.
- * `LegacyA2AError` carries a JSON-RPC code rather than a class identity,
- * so it bypasses the v1.0 class-based mapping; everything else defers
- * to the v1.0 mapper.
+ * `JsonRpc*Error` instances carry an `envelopeCode` that may differ
+ * from the semantic default (e.g. `METHOD_NOT_FOUND` -> 501, not the
+ * generic `UnsupportedOperationError` -> 400); those override the
+ * class-based mapping. Everything else defers to the v1.0 mapper.
  */
 export function mapErrorToStatus(error: unknown): number {
-  if (error instanceof LegacyA2AError) {
-    return LEGACY_CODE_TO_HTTP_STATUS[error.code] ?? HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  if (isJsonRpcError(error)) {
+    const override = LEGACY_CODE_TO_HTTP_STATUS[error.envelopeCode];
+    if (override !== undefined) return override;
   }
   return mapV1ErrorToStatus(error);
 }
@@ -243,7 +247,7 @@ export class LegacyRestTransportHandler {
 
   private static readonly CAPABILITY_ERRORS: Record<
     'streaming' | 'pushNotifications',
-    () => LegacyA2AError
+    () => A2AErrorBase
   > = {
     streaming: () => LegacyA2AError.unsupportedOperation('Agent does not support streaming'),
     pushNotifications: () => LegacyA2AError.pushNotificationNotSupported(),

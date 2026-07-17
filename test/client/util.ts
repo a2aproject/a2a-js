@@ -3,12 +3,11 @@ import { AGENT_CARD_PATH, JSON_CONTENT_TYPE } from '../../src/constants.js';
 import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/index.js';
 import {
-  A2A_ERROR_CODE_TO_CLASS,
   A2A_ERROR_DOMAIN,
-  A2A_ERROR_GRPC_STATUS,
-  A2A_ERROR_REASON,
+  A2A_ERROR_SPECS_BY_CODE,
   ERROR_INFO_TYPE,
-} from '../../src/errors.js';
+  GRPC_STATUS_NAME,
+} from '../../src/errors/index.js';
 
 export function extractRequestId(options?: RequestInit): number {
   if (!options?.body) {
@@ -355,15 +354,11 @@ export function createRestResponse(
   return new Response(JSON.stringify(data), { status, headers: responseHeaders });
 }
 
-// Resolves a JSON-RPC error code to (reason, grpcStatusName) by chaining
-// through the canonical mappings: code → className → (reason, grpcStatus).
+// Resolves a JSON-RPC error code to (reason, grpcStatusName) via the registry.
 function resolveErrorCode(code: number): { reason: string; grpcStatus: string } | undefined {
-  const className = A2A_ERROR_CODE_TO_CLASS[code];
-  if (!className) return undefined;
-  const reason = A2A_ERROR_REASON[className];
-  const grpcStatus = A2A_ERROR_GRPC_STATUS[className];
-  if (!reason || !grpcStatus) return undefined;
-  return { reason, grpcStatus };
+  const spec = A2A_ERROR_SPECS_BY_CODE[code];
+  if (!spec) return undefined;
+  return { reason: spec.reason, grpcStatus: GRPC_STATUS_NAME[spec.grpcStatus] ?? 'UNKNOWN' };
 }
 
 // Creates a REST error response in the google.rpc.Status JSON format.

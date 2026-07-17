@@ -1,5 +1,5 @@
 import { TransportProtocolName } from '../../core.js';
-import { A2A_REASON_TO_ERROR_CLASS, ERROR_INFO_TYPE } from '../../errors.js';
+import { fromRestErrorBody } from '../../errors/index.js';
 
 import { SendMessageResult, A2A_PROTOCOL_VERSION, A2A_CONTENT_TYPE } from '../../index.js';
 import { JSON_CONTENT_TYPE } from '../../constants.js';
@@ -329,13 +329,25 @@ export class RestTransport implements Transport {
       // Body wasn't JSON — fall through to a generic error.
     }
 
+    const transportCtx = {
+      statusCode: response.status,
+      headers: RestTransport._collectHeaders(response),
+    };
     if (errorStatus) {
-      throw RestTransport.mapToError(errorStatus);
+      throw fromRestErrorBody(errorStatus, transportCtx);
     }
-
-    throw new Error(
-      `HTTP error for ${path}! Status: ${response.status} ${response.statusText}. Response: ${errorBodyText}`
+    throw fromRestErrorBody(
+      { message: `HTTP error for ${path}: ${response.status} ${response.statusText}` },
+      transportCtx
     );
+  }
+
+  private static _collectHeaders(response: Response): Record<string, string> {
+    const out: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      out[key] = value;
+    });
+    return out;
   }
 
   private async *_sendStreamingRequest(
@@ -367,11 +379,15 @@ export class RestTransport implements Transport {
       );
     }
 
+    const sseTransportCtx = {
+      statusCode: response.status,
+      headers: RestTransport._collectHeaders(response),
+    };
     for await (const event of parseSseStream(response)) {
       if (event.type === 'error') {
         const errorData = JSON.parse(event.data) as { error?: RestErrorStatus };
         if (errorData.error && typeof errorData.error === 'object') {
-          throw RestTransport.mapToError(errorData.error);
+          throw fromRestErrorBody(errorData.error, sseTransportCtx);
         }
         throw new Error(`SSE error event: ${JSON.stringify(errorData)}`);
       }
@@ -393,22 +409,6 @@ export class RestTransport implements Transport {
         `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof Error && e.message) || 'Unknown error'}`
       );
     }
-  }
-
-  private static mapToError(error: RestErrorStatus): Error {
-    const message = error.message || 'Unknown error';
-
-    if (Array.isArray(error.details)) {
-      const errorInfo = error.details.find((d) => d['@type'] === ERROR_INFO_TYPE);
-      if (errorInfo && typeof errorInfo['reason'] === 'string') {
-        const ErrorClass = A2A_REASON_TO_ERROR_CLASS[errorInfo['reason'] as string];
-        if (ErrorClass) return new ErrorClass(message);
-      }
-    }
-
-    return new Error(
-      `REST error: ${error.status || 'UNKNOWN'} (${error.code || 'unknown code'}) - ${message}`
-    );
   }
 }
 

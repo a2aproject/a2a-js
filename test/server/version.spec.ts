@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { validateVersion, getSupportedVersions } from '../../src/server/version.js';
-import { VersionNotSupportedError } from '../../src/errors.js';
+import { VersionNotSupportedError } from '../../src/errors/index.js';
 import { AgentCard } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 

@@ -1,20 +1,25 @@
 /**
- * Error translator from v1.0 SDK errors to v0.3 wire shapes. v0.3
- * JSON-RPC and REST both use a bare `{ code, message, data? }` body
- * (no `details[]`, no outer `{ error }` wrapper, no `status` field),
- * so one converter serves both.
+ * Error translator to v0.3 wire shapes. v0.3 JSON-RPC and REST both
+ * use a bare `{ code, message, data? }` body (no `details[]`, no outer
+ * `{ error }` wrapper, no `status` field), so one converter serves
+ * both.
  *
- * v1.0-only error codes are passed through with their numeric code
- * unchanged rather than collapsed to `INTERNAL_ERROR` — preserves
- * debuggability for v0.3 clients that happen to recognise them.
+ * `JsonRpc*Error` instances preserve their `envelopeCode`, so wire
+ * codes like `PARSE_ERROR`, `INVALID_REQUEST`, and `METHOD_NOT_FOUND`
+ * survive the trip through the compat layer even though they have no
+ * v1.0 semantic class.
  *
  * The v0.3 gRPC handler doesn't use this module; it keeps emitting
  * `google.rpc.ErrorInfo` in `grpc-status-details-bin` for v1.0-aware
  * clients (see `server/grpc/grpc_service.ts`).
  */
 
-import { A2A_ERROR_CLASS_TO_CODE, A2A_ERROR_CODE } from '../../../errors.js';
-import { A2AError as LegacyA2AError } from '../server/error.js';
+import {
+  A2A_ERROR_CODE,
+  A2A_ERROR_SPECS,
+  A2AError,
+  isJsonRpcError,
+} from '../../../errors/index.js';
 import type { JSONRPCError } from '../types/types.js';
 
 /** v0.3 REST error body: bare `{ code, message, data? }`. */
@@ -25,43 +30,23 @@ export interface LegacyRestErrorBody {
 }
 
 /**
- * Resolves any thrown value into a `{ code, message, data? }` triple.
- * Honours `LegacyA2AError` verbatim, maps known v1.0 SDK error classes
- * to their numeric codes (dropping `details[]`/`ErrorInfo`), and falls
- * back to `INTERNAL_ERROR` for everything else.
+ * Converts any error to a v0.3-shaped body. Satisfies both the JSON-RPC
+ * `JSONRPCError` and REST `LegacyRestErrorBody` shapes (structurally
+ * identical). Drops the v1.0 `details[]` / `ErrorInfo` — v0.3 clients
+ * don't consume them.
  */
-function demoteToLegacyShape(error: unknown): {
-  code: number;
-  message: string;
-  data?: Record<string, unknown>;
-} {
-  if (error instanceof LegacyA2AError) {
+export function toCompatErrorBody(error: unknown): JSONRPCError | LegacyRestErrorBody {
+  if (isJsonRpcError(error)) {
     return {
-      code: error.code,
+      code: error.envelopeCode,
       message: error.message,
-      ...(error.data !== undefined ? { data: error.data } : {}),
+      ...(error.data !== undefined ? { data: error.data as Record<string, unknown> } : {}),
     };
   }
-  if (error instanceof Error) {
-    const code = A2A_ERROR_CLASS_TO_CODE[error.name];
-    if (code !== undefined) {
-      return { code, message: error.message };
-    }
+  if (error instanceof A2AError) {
+    const spec = A2A_ERROR_SPECS[error.name];
+    return { code: spec?.code ?? A2A_ERROR_CODE.INTERNAL_ERROR, message: error.message };
   }
   const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
   return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
-}
-
-/**
- * Converts any error to a v0.3-shaped body. Satisfies both the JSON-RPC
- * `JSONRPCError` and REST `LegacyRestErrorBody` shapes (structurally
- * identical). Never carries v1.0 `details[]` / `ErrorInfo`.
- */
-export function toCompatErrorBody(error: unknown): JSONRPCError | LegacyRestErrorBody {
-  const { code, message, data } = demoteToLegacyShape(error);
-  return {
-    code,
-    message,
-    ...(data !== undefined ? { data } : {}),
-  };
 }

@@ -1,15 +1,15 @@
 import { v4 as uuidv4 } from 'uuid';
 
 import {
-  RequestMalformedError,
+  ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
+  GenericError,
   PushNotificationNotSupportedError,
+  RequestMalformedError,
   TaskNotCancelableError,
   TaskNotFoundError,
   UnsupportedOperationError,
-  GenericError,
-  ExtendedAgentCardNotConfiguredError,
-  ExtensionSupportRequiredError,
-} from '../../errors.js';
+} from '../../errors/index.js';
 
 import {
   Message,
@@ -64,7 +64,7 @@ import {
   StreamPattern,
 } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
-import { extractErrorMessage } from '../../errors.js';
+import { extractErrorMessage } from '../../errors/index.js';
 
 /**
  * Default implementation of the A2A request handler.

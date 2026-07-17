@@ -1,5 +1,5 @@
 import { JSONRPCErrorResponse, TransportProtocolName } from '../../core.js';
-import { mapJsonRpcErrorToSdkError } from '../../errors.js';
+import { fromJsonRpcErrorResponse as mapJsonRpcErrorToSdkError } from '../../errors/index.js';
 import {
   Task,
   AgentCard,
