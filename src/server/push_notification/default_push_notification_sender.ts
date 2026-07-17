@@ -1,6 +1,7 @@
 import { Task, PushNotificationConfig } from '../../types.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore } from './push_notification_store.js';
+import { validateWebhookUrl, UrlValidationOptions } from './url_validator.js';
 
 export interface DefaultPushNotificationSenderOptions {
   /**
@@ -11,12 +12,24 @@ export interface DefaultPushNotificationSenderOptions {
    * Custom header name for the token. Defaults to 'X-A2A-Notification-Token'.
    */
   tokenHeaderName?: string;
+  /**
+   * URL validation options to prevent SSRF per A2A Spec §13.2.
+   * By default, rejects private IP ranges, loopback/localhost, link-local addresses, and non-HTTP(S) schemes.
+   */
+  urlValidationOptions?: UrlValidationOptions;
+  /**
+   * Custom validator function to validate webhook URLs.
+   */
+  urlValidator?: (url: string) => void;
 }
 
 export class DefaultPushNotificationSender implements PushNotificationSender {
   private readonly pushNotificationStore: PushNotificationStore;
   private notificationChain: Map<string, Promise<unknown>>;
-  private readonly options: Required<DefaultPushNotificationSenderOptions>;
+  private readonly options: DefaultPushNotificationSenderOptions & {
+    timeout: number;
+    tokenHeaderName: string;
+  };
 
   constructor(
     pushNotificationStore: PushNotificationStore,
@@ -69,6 +82,14 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     pushConfig: PushNotificationConfig
   ): Promise<void> {
     const url = pushConfig.url;
+
+    // Validate URL per A2A spec §13.2 before sending request
+    if (this.options.urlValidator) {
+      this.options.urlValidator(url);
+    } else {
+      validateWebhookUrl(url, this.options.urlValidationOptions);
+    }
+
     const controller = new AbortController();
     // Abort the request if it takes longer than the configured timeout.
     const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
@@ -87,6 +108,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         headers,
         body: JSON.stringify(task),
         signal: controller.signal,
+        redirect: 'error',
       });
 
       if (!response.ok) {

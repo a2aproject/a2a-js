@@ -32,6 +32,8 @@ export { DefaultPushNotificationSender } from './push_notification/default_push_
 export type { DefaultPushNotificationSenderOptions } from './push_notification/default_push_notification_sender.js';
 export type { PushNotificationStore } from './push_notification/push_notification_store.js';
 export { InMemoryPushNotificationStore } from './push_notification/push_notification_store.js';
+export { validateWebhookUrl, UrlValidationError } from './push_notification/url_validator.js';
+export type { UrlValidationOptions } from './push_notification/url_validator.js';
 
 export type { User } from './authentication/user.js';
 export { UnauthenticatedUser } from './authentication/user.js';
