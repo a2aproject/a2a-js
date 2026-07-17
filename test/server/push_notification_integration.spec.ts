@@ -118,7 +118,9 @@ describe('Push Notification Integration Tests', () => {
     mockAgentExecutor = new MockAgentExecutor();
     const executionEventBusManager = new DefaultExecutionEventBusManager();
     pushNotificationStore = new InMemoryPushNotificationStore();
-    pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
+    pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore, {
+      urlValidationOptions: { allowLoopback: true },
+    });
     pushNotificationSenderSpy = vi.spyOn(pushNotificationSender, 'send');
 
     handler = new DefaultRequestHandler(
@@ -127,7 +129,9 @@ describe('Push Notification Integration Tests', () => {
       mockAgentExecutor,
       executionEventBusManager,
       pushNotificationStore,
-      pushNotificationSender
+      pushNotificationSender,
+      undefined,
+      { allowLoopback: true }
     );
   });
 
@@ -449,6 +453,7 @@ describe('Push Notification Integration Tests', () => {
         pushNotificationStore,
         {
           tokenHeaderName: 'X-Custom-Auth-Token',
+          urlValidationOptions: { allowLoopback: true },
         }
       );
       const customSenderSpy = vi.spyOn(customPushNotificationSender, 'send');
@@ -459,7 +464,9 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender
+        customPushNotificationSender,
+        undefined,
+        { allowLoopback: true }
       );
 
       const pushConfig: PushNotificationConfig = {
@@ -596,6 +603,7 @@ describe('Push Notification Integration Tests', () => {
         pushNotificationStore,
         {
           tokenHeaderName: 'X-Custom-Token',
+          urlValidationOptions: { allowLoopback: true },
         }
       );
       const customSenderSpy = vi.spyOn(customPushNotificationSender, 'send');
@@ -606,7 +614,9 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender
+        customPushNotificationSender,
+        undefined,
+        { allowLoopback: true }
       );
 
       const pushConfig1: PushNotificationConfig = {

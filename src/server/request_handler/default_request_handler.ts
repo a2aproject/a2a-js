@@ -33,6 +33,11 @@ import {
 } from '../push_notification/push_notification_store.js';
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
+import {
+  validateWebhookUrl,
+  UrlValidationOptions,
+  UrlValidationError,
+} from '../push_notification/url_validator.js';
 import { ServerCallContext } from '../context.js';
 
 const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
@@ -45,6 +50,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly pushNotificationStore?: PushNotificationStore;
   private readonly pushNotificationSender?: PushNotificationSender;
   private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
+  private readonly urlValidationOptions?: UrlValidationOptions;
 
   constructor(
     agentCard: AgentCard,
@@ -53,20 +59,36 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     eventBusManager: ExecutionEventBusManager = new DefaultExecutionEventBusManager(),
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
-    extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider
+    extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider,
+    urlValidationOptions?: UrlValidationOptions
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
     this.agentExecutor = agentExecutor;
     this.eventBusManager = eventBusManager;
     this.extendedAgentCardProvider = extendedAgentCardProvider;
+    this.urlValidationOptions = urlValidationOptions;
 
     // If push notifications are supported, use the provided store and sender.
     // Otherwise, use the default in-memory store and sender.
     if (agentCard.capabilities.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
       this.pushNotificationSender =
-        pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
+        pushNotificationSender ||
+        new DefaultPushNotificationSender(this.pushNotificationStore, {
+          urlValidationOptions: this.urlValidationOptions,
+        });
+    }
+  }
+
+  private validatePushNotificationConfigUrl(url: string): void {
+    try {
+      validateWebhookUrl(url, this.urlValidationOptions);
+    } catch (error) {
+      if (error instanceof UrlValidationError) {
+        throw A2AError.invalidParams(`Invalid push notification webhook URL: ${error.message}`);
+      }
+      throw error;
     }
   }
 
@@ -225,11 +247,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // Use the (potentially updated) contextId from requestContext
     const finalMessageForAgent = requestContext.userMessage;
 
-    // If push notification config is provided, save it to the store.
+    // If push notification config is provided, validate and save it to the store.
     if (
       params.configuration?.pushNotificationConfig &&
       this.agentCard.capabilities.pushNotifications
     ) {
+      this.validatePushNotificationConfigUrl(params.configuration.pushNotificationConfig.url);
       await this.pushNotificationStore?.save(taskId, params.configuration.pushNotificationConfig);
     }
 
@@ -327,11 +350,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
     const eventQueue = new ExecutionEventQueue(eventBus);
 
-    // If push notification config is provided, save it to the store.
+    // If push notification config is provided, validate and save it to the store.
     if (
       params.configuration?.pushNotificationConfig &&
       this.agentCard.capabilities.pushNotifications
     ) {
+      this.validatePushNotificationConfigUrl(params.configuration.pushNotificationConfig.url);
       await this.pushNotificationStore?.save(taskId, params.configuration.pushNotificationConfig);
     }
 
@@ -459,6 +483,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const { taskId, pushNotificationConfig } = params;
+
+    // Validate webhook URL per A2A spec §13.2
+    this.validatePushNotificationConfigUrl(pushNotificationConfig.url);
 
     // Default the config ID to the task ID if not provided for backward compatibility.
     if (!pushNotificationConfig.id) {
