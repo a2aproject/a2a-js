@@ -9,7 +9,7 @@ import {
   TaskNotFoundError,
   UnsupportedOperationError,
 } from '../../../../../../src/errors/index.js';
-import { buildGrpcErrorMetadata } from '../../../../../../src/errors/index.js';
+import { buildGrpcErrorMetadata } from '../../../../../../src/errors/grpc/index.js';
 import {
   Role as V1Role,
   TaskState as V1TaskState,

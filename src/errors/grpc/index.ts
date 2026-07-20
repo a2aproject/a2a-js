@@ -13,14 +13,14 @@ import {
   A2A_ERROR_DOMAIN,
   A2A_ERROR_SPECS,
   A2A_ERROR_SPECS_BY_REASON,
+  A2A_STATUS_CODE,
   A2AError,
   type A2AErrorOptions,
   ERROR_INFO_TYPE,
-  GRPC_STATUS,
-} from './base.js';
-import { Any } from '../grpc/pb/google/protobuf/any.js';
-import { ErrorInfo } from '../grpc/pb/google/rpc/error_details.js';
-import { Status } from '../grpc/pb/google/rpc/status.js';
+} from '../base.js';
+import { Any } from '../../grpc/pb/google/protobuf/any.js';
+import { ErrorInfo } from '../../grpc/pb/google/rpc/error_details.js';
+import { Status } from '../../grpc/pb/google/rpc/status.js';
 
 /** Trailing metadata key for `google.rpc.Status`. */
 export const GRPC_STATUS_DETAILS_BIN = 'grpc-status-details-bin';
@@ -129,8 +129,8 @@ export const GRPC_ERROR_CLASSES: Readonly<
 export function grpcStatusFor(error: unknown): number {
   if (isGrpcError(error)) return error.status;
   if (error instanceof A2AError)
-    return A2A_ERROR_SPECS[error.name]?.grpcStatus ?? GRPC_STATUS.UNKNOWN;
-  return GRPC_STATUS.UNKNOWN;
+    return A2A_ERROR_SPECS[error.name]?.grpcStatus ?? A2A_STATUS_CODE.UNKNOWN;
+  return A2A_STATUS_CODE.UNKNOWN;
 }
 
 /** Encodes a `google.rpc.Status` + `ErrorInfo` blob for `grpc-status-details-bin`. */
@@ -229,9 +229,9 @@ export function fromGrpcError(error: grpc.ServiceError, method?: string): GrpcA2
   const suffix = method ? ` for ${method}` : '';
   return new GrpcGenericError({
     message:
-      `gRPC error${suffix}: ${error.code ?? GRPC_STATUS.UNKNOWN} ${error.details ?? ''}`.trim(),
+      `gRPC error${suffix}: ${error.code ?? A2A_STATUS_CODE.UNKNOWN} ${error.details ?? ''}`.trim(),
     cause: error,
-    status: error.code ?? GRPC_STATUS.UNKNOWN,
+    status: error.code ?? A2A_STATUS_CODE.UNKNOWN,
     statusDetailsBin,
   });
 }

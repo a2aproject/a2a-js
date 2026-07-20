@@ -15,7 +15,7 @@ import {
   type AgentCard as V1AgentCard,
   type Task as V1Task,
 } from '../../../../../src/types/pb/a2a.js';
-import { decodeErrorInfo, decodeStatus } from '../../../../../src/errors/index.js';
+import { decodeErrorInfo, decodeStatus } from '../../../../../src/errors/grpc/index.js';
 
 // v0.3 GRPC interface so validateVersion accepts the defaulted '0.3'.
 const testAgentCard: V1AgentCard = {

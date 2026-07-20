@@ -15,12 +15,9 @@ import {
   fromJsonRpcErrorResponse as mapJsonRpcErrorToSdkError,
   fromRestErrorBody,
   GenericError,
-  GRPC_STATUS,
-  GrpcTaskNotFoundError,
-  grpcStatusFor,
+  A2A_STATUS_CODE,
   HTTP_STATUS,
   InvalidAgentResponseError,
-  isGrpcError,
   isJsonRpcError,
   isRestError,
   JsonRpcRequestMalformedError,
@@ -37,6 +34,7 @@ import {
   UnsupportedOperationError,
   VersionNotSupportedError,
 } from '../src/errors/index.js';
+import { GrpcTaskNotFoundError, grpcStatusFor, isGrpcError } from '../src/errors/grpc/index.js';
 
 /** Thin wrapper that matches the removed `mapA2aErrorToSdkError` shape. */
 function mapA2aErrorToSdkError(
@@ -206,7 +204,7 @@ describe('A2AError hierarchy', () => {
   });
 
   it('GrpcTaskNotFoundError is-a TaskNotFoundError is-a A2AError', () => {
-    const e = new GrpcTaskNotFoundError({ status: GRPC_STATUS.NOT_FOUND });
+    const e = new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.NOT_FOUND });
     expect(e).toBeInstanceOf(GrpcTaskNotFoundError);
     expect(e).toBeInstanceOf(TaskNotFoundError);
     expect(e).toBeInstanceOf(A2AError);
@@ -242,7 +240,9 @@ describe('transport type guards', () => {
   });
 
   it('isGrpcError narrows only GrpcA2AError instances', () => {
-    expect(isGrpcError(new GrpcTaskNotFoundError({ status: GRPC_STATUS.NOT_FOUND }))).toBe(true);
+    expect(isGrpcError(new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.NOT_FOUND }))).toBe(
+      true
+    );
     expect(isGrpcError(new RestTaskNotFoundError())).toBe(false);
     expect(isGrpcError(new JsonRpcTaskNotFoundError())).toBe(false);
     expect(isGrpcError(new TaskNotFoundError())).toBe(false);
@@ -259,7 +259,7 @@ describe('transport type guards', () => {
 
   it('transports are mutually exclusive: exactly one guard matches per instance', () => {
     const rest = new RestTaskNotFoundError({ statusCode: 404 });
-    const grpc = new GrpcTaskNotFoundError({ status: GRPC_STATUS.NOT_FOUND });
+    const grpc = new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.NOT_FOUND });
     const json = new JsonRpcTaskNotFoundError({ envelopeCode: -32001 });
 
     expect([isRestError(rest), isGrpcError(rest), isJsonRpcError(rest)]).toEqual([
@@ -383,20 +383,22 @@ describe('restStatusFor', () => {
 
 describe('grpcStatusFor', () => {
   it('returns the instance-level status when it is a GrpcA2AError', () => {
-    expect(grpcStatusFor(new GrpcTaskNotFoundError({ status: GRPC_STATUS.CANCELLED }))).toBe(
-      GRPC_STATUS.CANCELLED
+    expect(grpcStatusFor(new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.CANCELLED }))).toBe(
+      A2A_STATUS_CODE.CANCELLED
     );
   });
 
   it('falls back to the spec grpcStatus for a plain semantic error', () => {
-    expect(grpcStatusFor(new TaskNotFoundError())).toBe(GRPC_STATUS.NOT_FOUND);
-    expect(grpcStatusFor(new ContentTypeNotSupportedError())).toBe(GRPC_STATUS.INVALID_ARGUMENT);
-    expect(grpcStatusFor(new InvalidAgentResponseError())).toBe(GRPC_STATUS.INTERNAL);
+    expect(grpcStatusFor(new TaskNotFoundError())).toBe(A2A_STATUS_CODE.NOT_FOUND);
+    expect(grpcStatusFor(new ContentTypeNotSupportedError())).toBe(
+      A2A_STATUS_CODE.INVALID_ARGUMENT
+    );
+    expect(grpcStatusFor(new InvalidAgentResponseError())).toBe(A2A_STATUS_CODE.INTERNAL);
   });
 
   it('returns UNKNOWN for non-A2A throwables', () => {
-    expect(grpcStatusFor(new Error('unrelated'))).toBe(GRPC_STATUS.UNKNOWN);
-    expect(grpcStatusFor(null)).toBe(GRPC_STATUS.UNKNOWN);
+    expect(grpcStatusFor(new Error('unrelated'))).toBe(A2A_STATUS_CODE.UNKNOWN);
+    expect(grpcStatusFor(null)).toBe(A2A_STATUS_CODE.UNKNOWN);
   });
 });
 

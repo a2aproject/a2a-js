@@ -29,12 +29,8 @@ import {
 import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
-import {
-  A2AError,
-  buildGrpcErrorMetadata,
-  GRPC_STATUS,
-  grpcStatusFor,
-} from '../../errors/index.js';
+import { A2A_STATUS_CODE, A2AError } from '../../errors/index.js';
+import { buildGrpcErrorMetadata, grpcStatusFor } from '../../errors/grpc/index.js';
 import { validateVersion } from '../version.js';
 
 /** Options for configuring the gRPC handler. */
@@ -222,7 +218,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
  * (`grpcStatusFor`), so user-defined subclasses inherit the base status.
  */
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
-  const code = error instanceof A2AError ? grpcStatusFor(error) : GRPC_STATUS.UNKNOWN;
+  const code = error instanceof A2AError ? grpcStatusFor(error) : A2A_STATUS_CODE.UNKNOWN;
   const message = error instanceof Error ? error.message : 'Internal server error';
   const result: Partial<grpc.ServiceError> = { code, details: message };
   const md = buildGrpcErrorMetadata(grpc.Metadata, error);

@@ -39,13 +39,12 @@ import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
 import { LEGACY_HTTP_EXTENSION_HEADER } from '../../constants.js';
 import {
+  A2A_STATUS_CODE,
   A2AError,
-  buildGrpcErrorMetadata,
-  GRPC_STATUS,
-  grpcStatusFor,
   InvalidAgentResponseError,
   isJsonRpcError,
 } from '../../../../errors/index.js';
+import { buildGrpcErrorMetadata, grpcStatusFor } from '../../../../errors/grpc/index.js';
 import { validateVersion } from '../../../../server/version.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
@@ -448,7 +447,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   } else if (error instanceof A2AError) {
     code = grpcStatusFor(error);
   } else {
-    code = GRPC_STATUS.UNKNOWN;
+    code = A2A_STATUS_CODE.UNKNOWN;
   }
   const message = error instanceof Error ? error.message : 'Internal server error';
   const result: Partial<grpc.ServiceError> = { code, details: message };

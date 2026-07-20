@@ -33,8 +33,3 @@ export {
   parseSseStream,
   type SseEvent,
 } from './sse_utils.js';
-
-// Transport-agnostic error hierarchy: base class, semantic subclasses,
-// per-transport variants (Rest*/Grpc*/JsonRpc*), and `is*Error` type
-// guards.
-export * from './errors/index.js';

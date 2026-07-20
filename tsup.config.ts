@@ -3,6 +3,8 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: [
     'src/index.ts',
+    'src/errors/index.ts',
+    'src/errors/grpc/index.ts',
     'src/server/index.ts',
     'src/server/express/index.ts',
     'src/server/grpc/index.ts',

@@ -45,8 +45,14 @@ export const HTTP_STATUS = {
   NOT_IMPLEMENTED: 501,
 } as const;
 
-/** gRPC status codes referenced by the registry. Mirrors `@grpc/grpc-js`'s `status` enum. */
-export const GRPC_STATUS = {
+/**
+ * Canonical numeric status codes used by the semantic-error registry
+ * to describe the spec-mapped status per §5.4. The numeric namespace
+ * matches gRPC's `status` enum (so the gRPC transport can emit them
+ * directly) and the string form (see {@link A2A_STATUS_NAME}) fills
+ * the REST body's `status` field per §11.6.
+ */
+export const A2A_STATUS_CODE = {
   OK: 0,
   CANCELLED: 1,
   UNKNOWN: 2,
@@ -66,25 +72,28 @@ export const GRPC_STATUS = {
   UNAUTHENTICATED: 16,
 } as const;
 
-/** Names of the gRPC status codes, for `google.rpc.Status.status`. */
-export const GRPC_STATUS_NAME: Readonly<Record<number, string>> = {
-  [GRPC_STATUS.OK]: 'OK',
-  [GRPC_STATUS.CANCELLED]: 'CANCELLED',
-  [GRPC_STATUS.UNKNOWN]: 'UNKNOWN',
-  [GRPC_STATUS.INVALID_ARGUMENT]: 'INVALID_ARGUMENT',
-  [GRPC_STATUS.DEADLINE_EXCEEDED]: 'DEADLINE_EXCEEDED',
-  [GRPC_STATUS.NOT_FOUND]: 'NOT_FOUND',
-  [GRPC_STATUS.ALREADY_EXISTS]: 'ALREADY_EXISTS',
-  [GRPC_STATUS.PERMISSION_DENIED]: 'PERMISSION_DENIED',
-  [GRPC_STATUS.RESOURCE_EXHAUSTED]: 'RESOURCE_EXHAUSTED',
-  [GRPC_STATUS.FAILED_PRECONDITION]: 'FAILED_PRECONDITION',
-  [GRPC_STATUS.ABORTED]: 'ABORTED',
-  [GRPC_STATUS.OUT_OF_RANGE]: 'OUT_OF_RANGE',
-  [GRPC_STATUS.UNIMPLEMENTED]: 'UNIMPLEMENTED',
-  [GRPC_STATUS.INTERNAL]: 'INTERNAL',
-  [GRPC_STATUS.UNAVAILABLE]: 'UNAVAILABLE',
-  [GRPC_STATUS.DATA_LOSS]: 'DATA_LOSS',
-  [GRPC_STATUS.UNAUTHENTICATED]: 'UNAUTHENTICATED',
+/**
+ * String form of {@link A2A_STATUS_CODE}, used in the REST body's
+ * `status` field per §11.6. Names follow the gRPC enum form.
+ */
+export const A2A_STATUS_NAME: Readonly<Record<number, string>> = {
+  [A2A_STATUS_CODE.OK]: 'OK',
+  [A2A_STATUS_CODE.CANCELLED]: 'CANCELLED',
+  [A2A_STATUS_CODE.UNKNOWN]: 'UNKNOWN',
+  [A2A_STATUS_CODE.INVALID_ARGUMENT]: 'INVALID_ARGUMENT',
+  [A2A_STATUS_CODE.DEADLINE_EXCEEDED]: 'DEADLINE_EXCEEDED',
+  [A2A_STATUS_CODE.NOT_FOUND]: 'NOT_FOUND',
+  [A2A_STATUS_CODE.ALREADY_EXISTS]: 'ALREADY_EXISTS',
+  [A2A_STATUS_CODE.PERMISSION_DENIED]: 'PERMISSION_DENIED',
+  [A2A_STATUS_CODE.RESOURCE_EXHAUSTED]: 'RESOURCE_EXHAUSTED',
+  [A2A_STATUS_CODE.FAILED_PRECONDITION]: 'FAILED_PRECONDITION',
+  [A2A_STATUS_CODE.ABORTED]: 'ABORTED',
+  [A2A_STATUS_CODE.OUT_OF_RANGE]: 'OUT_OF_RANGE',
+  [A2A_STATUS_CODE.UNIMPLEMENTED]: 'UNIMPLEMENTED',
+  [A2A_STATUS_CODE.INTERNAL]: 'INTERNAL',
+  [A2A_STATUS_CODE.UNAVAILABLE]: 'UNAVAILABLE',
+  [A2A_STATUS_CODE.DATA_LOSS]: 'DATA_LOSS',
+  [A2A_STATUS_CODE.UNAUTHENTICATED]: 'UNAUTHENTICATED',
 };
 
 /** A structured detail object included in error responses. */
@@ -177,7 +186,7 @@ const specs: A2AErrorSpec[] = [
     name: 'TaskNotFoundError',
     reason: 'TASK_NOT_FOUND',
     code: A2A_ERROR_CODE.TASK_NOT_FOUND,
-    grpcStatus: GRPC_STATUS.NOT_FOUND,
+    grpcStatus: A2A_STATUS_CODE.NOT_FOUND,
     httpStatus: HTTP_STATUS.NOT_FOUND,
     defaultMessage: 'Task not found',
   },
@@ -185,7 +194,7 @@ const specs: A2AErrorSpec[] = [
     name: 'TaskNotCancelableError',
     reason: 'TASK_NOT_CANCELABLE',
     code: A2A_ERROR_CODE.TASK_NOT_CANCELABLE,
-    grpcStatus: GRPC_STATUS.FAILED_PRECONDITION,
+    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Task cannot be canceled',
   },
@@ -193,7 +202,7 @@ const specs: A2AErrorSpec[] = [
     name: 'PushNotificationNotSupportedError',
     reason: 'PUSH_NOTIFICATION_NOT_SUPPORTED',
     code: A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED,
-    grpcStatus: GRPC_STATUS.FAILED_PRECONDITION,
+    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Push Notification is not supported',
   },
@@ -201,7 +210,7 @@ const specs: A2AErrorSpec[] = [
     name: 'UnsupportedOperationError',
     reason: 'UNSUPPORTED_OPERATION',
     code: A2A_ERROR_CODE.UNSUPPORTED_OPERATION,
-    grpcStatus: GRPC_STATUS.FAILED_PRECONDITION,
+    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'This operation is not supported',
   },
@@ -209,7 +218,7 @@ const specs: A2AErrorSpec[] = [
     name: 'ContentTypeNotSupportedError',
     reason: 'CONTENT_TYPE_NOT_SUPPORTED',
     code: A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED,
-    grpcStatus: GRPC_STATUS.INVALID_ARGUMENT,
+    grpcStatus: A2A_STATUS_CODE.INVALID_ARGUMENT,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Incompatible content types',
   },
@@ -217,7 +226,7 @@ const specs: A2AErrorSpec[] = [
     name: 'InvalidAgentResponseError',
     reason: 'INVALID_AGENT_RESPONSE',
     code: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE,
-    grpcStatus: GRPC_STATUS.INTERNAL,
+    grpcStatus: A2A_STATUS_CODE.INTERNAL,
     httpStatus: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     defaultMessage: 'Invalid agent response type',
   },
@@ -225,7 +234,7 @@ const specs: A2AErrorSpec[] = [
     name: 'ExtendedAgentCardNotConfiguredError',
     reason: 'EXTENDED_AGENT_CARD_NOT_CONFIGURED',
     code: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
-    grpcStatus: GRPC_STATUS.FAILED_PRECONDITION,
+    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Extended Agent Card not configured',
   },
@@ -233,7 +242,7 @@ const specs: A2AErrorSpec[] = [
     name: 'ExtensionSupportRequiredError',
     reason: 'EXTENSION_SUPPORT_REQUIRED',
     code: A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED,
-    grpcStatus: GRPC_STATUS.FAILED_PRECONDITION,
+    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Extension support required',
   },
@@ -241,7 +250,7 @@ const specs: A2AErrorSpec[] = [
     name: 'VersionNotSupportedError',
     reason: 'VERSION_NOT_SUPPORTED',
     code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED,
-    grpcStatus: GRPC_STATUS.FAILED_PRECONDITION,
+    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Version not supported',
   },
@@ -249,7 +258,7 @@ const specs: A2AErrorSpec[] = [
     name: 'RequestMalformedError',
     reason: 'INVALID_PARAMS',
     code: A2A_ERROR_CODE.INVALID_PARAMS,
-    grpcStatus: GRPC_STATUS.INVALID_ARGUMENT,
+    grpcStatus: A2A_STATUS_CODE.INVALID_ARGUMENT,
     httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Request malformed',
   },
@@ -257,7 +266,7 @@ const specs: A2AErrorSpec[] = [
     name: 'GenericError',
     reason: 'INTERNAL_ERROR',
     code: A2A_ERROR_CODE.INTERNAL_ERROR,
-    grpcStatus: GRPC_STATUS.INTERNAL,
+    grpcStatus: A2A_STATUS_CODE.INTERNAL,
     httpStatus: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     defaultMessage: 'An unexpected error occurred.',
   },

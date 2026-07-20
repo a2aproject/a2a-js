@@ -6,7 +6,7 @@ import {
   A2A_ERROR_DOMAIN,
   A2A_ERROR_SPECS_BY_CODE,
   ERROR_INFO_TYPE,
-  GRPC_STATUS_NAME,
+  A2A_STATUS_NAME,
 } from '../../src/errors/index.js';
 
 export function extractRequestId(options?: RequestInit): number {
@@ -358,7 +358,7 @@ export function createRestResponse(
 function resolveErrorCode(code: number): { reason: string; grpcStatus: string } | undefined {
   const spec = A2A_ERROR_SPECS_BY_CODE[code];
   if (!spec) return undefined;
-  return { reason: spec.reason, grpcStatus: GRPC_STATUS_NAME[spec.grpcStatus] ?? 'UNKNOWN' };
+  return { reason: spec.reason, grpcStatus: A2A_STATUS_NAME[spec.grpcStatus] ?? 'UNKNOWN' };
 }
 
 // Creates a REST error response in the google.rpc.Status JSON format.

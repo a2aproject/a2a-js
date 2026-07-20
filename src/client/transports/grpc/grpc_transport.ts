@@ -24,7 +24,7 @@ import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
 import { FromProto } from '../../../types/converters/from_proto.js';
 
-import { fromGrpcError } from '../../../errors/index.js';
+import { fromGrpcError } from '../../../errors/grpc/index.js';
 import { LegacyGrpcTransport } from '../../../compat/v0_3/client/transports/grpc/index.js';
 import { isLegacyVersion } from '../../../version_utils.js';
 import { pickMatchingInterface } from '../pick_interface.js';

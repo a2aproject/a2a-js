@@ -15,7 +15,7 @@ import {
   type A2AErrorOptions,
   ERROR_INFO_TYPE,
   type ErrorDetail,
-  GRPC_STATUS_NAME,
+  A2A_STATUS_NAME,
   HTTP_STATUS,
   type RestErrorBody,
 } from './base.js';
@@ -150,7 +150,7 @@ export function toRestErrorBody(error: unknown, httpStatus: number): RestErrorBo
   if (error instanceof A2AError) {
     details.push(error.toErrorInfo());
     const spec = A2A_ERROR_SPECS[error.name];
-    statusName = spec ? (GRPC_STATUS_NAME[spec.grpcStatus] ?? 'UNKNOWN') : 'UNKNOWN';
+    statusName = spec ? (A2A_STATUS_NAME[spec.grpcStatus] ?? 'UNKNOWN') : 'UNKNOWN';
   } else if (httpStatus === HTTP_STATUS.NOT_FOUND) statusName = 'NOT_FOUND';
   else if (httpStatus === HTTP_STATUS.INTERNAL_SERVER_ERROR) statusName = 'INTERNAL';
   else if (httpStatus === HTTP_STATUS.BAD_REQUEST) statusName = 'INVALID_ARGUMENT';

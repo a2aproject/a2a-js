@@ -10,7 +10,7 @@ import {
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
 } from '../../../src/errors/index.js';
-import { buildGrpcErrorMetadata } from '../../../src/errors/index.js';
+import { buildGrpcErrorMetadata } from '../../../src/errors/grpc/index.js';
 import {
   createMessageParams,
   createMockAgentCard,

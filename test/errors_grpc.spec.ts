@@ -7,14 +7,13 @@
 
 import { Metadata, status as grpcStatus, type ServiceError } from '@grpc/grpc-js';
 import { describe, it, expect } from 'vitest';
+import { GenericError, TaskNotFoundError } from '../src/errors/index.js';
 import {
   buildGrpcErrorMetadata,
   fromGrpcError,
-  GenericError,
   GrpcTaskNotFoundError,
   isGrpcError,
-  TaskNotFoundError,
-} from '../src/errors/index.js';
+} from '../src/errors/grpc/index.js';
 
 describe('gRPC roundtrip', () => {
   it('semantic error survives buildGrpcErrorMetadata -> fromGrpcError', () => {

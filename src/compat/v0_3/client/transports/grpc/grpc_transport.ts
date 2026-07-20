@@ -17,7 +17,8 @@
 
 import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../../../core.js';
-import { fromGrpcError, UnsupportedOperationError } from '../../../../../errors/index.js';
+import { UnsupportedOperationError } from '../../../../../errors/index.js';
+import { fromGrpcError } from '../../../../../errors/grpc/index.js';
 import { A2A_LEGACY_PROTOCOL_VERSION } from '../../../../../constants.js';
 import type { SendMessageResult } from '../../../../../index.js';
 import type { RequestOptions } from '../../../../../client/multitransport-client.js';
