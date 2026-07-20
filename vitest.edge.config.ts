@@ -12,6 +12,7 @@ export default defineWorkersConfig(
         // gRpc test require Node.js-specific gRPC module
         'test/server/grpc/*.spec.ts',
         'test/client/transports/grpc_transport.spec.ts',
+        'test/errors_grpc.spec.ts',
         // v0.3 compat gRPC tests also pull in @grpc/grpc-js and are
         // Node-only for the same reason as the v1.0 gRPC tests above.
         'test/compat/v0_3/server/grpc/**',
