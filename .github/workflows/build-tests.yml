@@ -1,12 +1,18 @@
-# Ensures no accidential Node.js API usage in browser and Edge compatible entrypoints.
+# Ensures no accidential Node.js API usage in browser and Edge compatible
+# entrypoints, and that gRPC-only helpers stay isolated from the pb-free
+# entrypoints. The two `test-build:*` steps run in DIFFERENT environments:
+#   1. workers-safe: no @grpc/grpc-js, no @bufbuild/protobuf installed.
+#      esbuild fails natively if any Workers-safe entry pulls them in.
+#      Mirrors what a real Workers / REST-only consumer gets.
+#   2. grpc: pb + grpc-js reinstalled; the gRPC entrypoint must resolve.
 
 name: Run Build Tests
 
 on:
   push:
-    branches: [ "main", "epic/**" ]
+    branches: ['main', 'epic/**']
   pull_request:
-    branches: [ "main", "epic/**" ]
+    branches: ['main', 'epic/**']
     paths-ignore:
       - '**.md'
       - 'LICENSE'
@@ -15,16 +21,22 @@ on:
 
 jobs:
   test:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        registry-url: 'https://registry.npmjs.org'
-        cache: 'npm'
-    - run: npm ci
-    - run: npm run build
-    - run: npm run test-build
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      # Strip the optional peer deps so esbuild sees the same module graph
+      # a non-gRPC consumer would. Any Workers-safe entrypoint that leaks
+      # a gRPC / pb import fails to resolve here.
+      - run: npm uninstall --no-save @grpc/grpc-js @bufbuild/protobuf
+      - run: npm run test-build:workers-safe
+      # Reinstall the peer deps and verify the gRPC entrypoint still bundles.
+      - run: npm install --no-save @grpc/grpc-js @bufbuild/protobuf
+      - run: npm run test-build:grpc
