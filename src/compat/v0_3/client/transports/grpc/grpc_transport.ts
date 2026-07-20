@@ -326,7 +326,7 @@ export class LegacyGrpcTransport implements Transport {
             options.signal.removeEventListener('abort', onAbort);
           }
           if (error) {
-            return reject(LegacyGrpcTransport._mapToError(error, method));
+            return reject(fromGrpcError(error, method));
           }
           try {
             resolve(converter(response));
@@ -371,7 +371,7 @@ export class LegacyGrpcTransport implements Transport {
       }
     } catch (error) {
       if (LegacyGrpcTransport._isServiceError(error)) {
-        throw LegacyGrpcTransport._mapToError(error, method);
+        throw fromGrpcError(error, method);
       }
       throw new Error(`GRPC error for ${String(method)}!`, { cause: error });
     } finally {
@@ -413,14 +413,5 @@ export class LegacyGrpcTransport implements Transport {
       result,
     };
     return toCoreStreamResponse(envelope);
-  }
-
-  /**
-   * Decodes `google.rpc.ErrorInfo` from `grpc-status-details-bin` when
-   * present (this SDK's `legacyGrpcService` emits it); otherwise returns
-   * `GrpcGenericError` preserving the gRPC code and details.
-   */
-  private static _mapToError(error: grpc.ServiceError, method?: string): Error {
-    return fromGrpcError(error, method);
   }
 }
