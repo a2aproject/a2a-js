@@ -14,9 +14,9 @@ name: Run Build Tests
 
 on:
   push:
-    branches: ['main', 'epic/**']
+    branches: [ "main", "epic/**" ]
   pull_request:
-    branches: ['main', 'epic/**']
+    branches: [ "main", "epic/**" ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
@@ -25,26 +25,27 @@ on:
 
 jobs:
   test:
+
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run build
-      # Strip ALL three optional peer deps so esbuild sees the same
-      # module graph a non-gRPC, non-Express consumer would. Any
-      # Workers-safe entrypoint that leaks one of them fails to resolve.
-      - run: npm uninstall --no-save @grpc/grpc-js @bufbuild/protobuf express
-      - run: npm run test-build:workers-safe
-      # Reinstall only the gRPC peers; verify every gRPC entry resolves
-      # (and would fail here if any of them silently required express).
-      - run: npm install --no-save @grpc/grpc-js @bufbuild/protobuf
-      - run: npm run test-build:grpc
-      # Reinstall express; verify every express entry resolves.
-      - run: npm install --no-save express
-      - run: npm run test-build:express
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+    - run: npm ci
+    - run: npm run build
+    # Strip ALL three optional peer deps so esbuild sees the same
+    # module graph a non-gRPC, non-Express consumer would. Any
+    # Workers-safe entrypoint that leaks one of them fails to resolve.
+    - run: npm uninstall --no-save @grpc/grpc-js @bufbuild/protobuf express
+    - run: npm run test-build:workers-safe
+    # Reinstall only the gRPC peers; verify every gRPC entry resolves
+    # (and would fail here if any of them silently required express).
+    - run: npm install --no-save @grpc/grpc-js @bufbuild/protobuf
+    - run: npm run test-build:grpc
+    # Reinstall express; verify every express entry resolves.
+    - run: npm install --no-save express
+    - run: npm run test-build:express
