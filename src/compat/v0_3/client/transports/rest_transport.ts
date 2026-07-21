@@ -17,8 +17,8 @@
 
 import {
   A2A_ERROR_CLASSES,
-  A2A_ERROR_SPECS_BY_CODE,
   InvalidAgentResponseError,
+  JSON_RPC_CODE_TO_ERROR,
   UnsupportedOperationError,
 } from '../../../../errors/index.js';
 import type { TransportProtocolName } from '../../../../core.js';
@@ -462,8 +462,8 @@ export class LegacyRestTransport implements Transport {
    * in the message for debugging.
    */
   private static _errorFromLegacyBody(body: LegacyRestErrorBody): Error {
-    const spec = A2A_ERROR_SPECS_BY_CODE[body.code];
-    if (spec) return new A2A_ERROR_CLASSES[spec.name]({ message: body.message });
+    const name = JSON_RPC_CODE_TO_ERROR[body.code];
+    if (name) return new A2A_ERROR_CLASSES[name]({ message: body.message });
     const dataSuffix = body.data ? ` Data: ${JSON.stringify(body.data)}` : '';
     return new Error(`REST error: ${body.message} (Code: ${body.code})${dataSuffix}`);
   }

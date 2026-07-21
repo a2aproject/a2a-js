@@ -5,10 +5,10 @@ import { A2AError as LegacyA2AError } from '../../../../../../src/compat/v0_3/se
 import { A2ARequestHandler } from '../../../../../../src/server/request_handler/a2a_request_handler.js';
 import { ServerCallContext } from '../../../../../../src/server/context.js';
 import {
+  A2AError,
   ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
-  GenericError,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
@@ -581,7 +581,7 @@ describe('LegacyJsonRpcTransportHandler', () => {
       [new ExtensionSupportRequiredError('a'), -32008],
       [new VersionNotSupportedError('a'), -32009],
       [new RequestMalformedError('a'), -32602],
-      [new GenericError('a'), -32603],
+      [new A2AError('a'), -32603],
     ];
 
     v1ToLegacyCodeCases.forEach(([err, expectedCode]) => {

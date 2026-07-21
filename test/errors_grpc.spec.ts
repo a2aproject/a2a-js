@@ -7,7 +7,7 @@
 
 import { Metadata, status as grpcStatus, type ServiceError } from '@grpc/grpc-js';
 import { describe, it, expect } from 'vitest';
-import { GenericError, TaskNotFoundError } from '../src/errors/index.js';
+import { A2AError, TaskNotFoundError } from '../src/errors/index.js';
 import {
   buildGrpcErrorMetadata,
   fromGrpcError,
@@ -46,7 +46,7 @@ describe('gRPC roundtrip', () => {
     expect(buildGrpcErrorMetadata(Metadata, 'string')).toBeUndefined();
   });
 
-  it('service error without grpc-status-details-bin becomes GrpcGenericError', () => {
+  it('service error without grpc-status-details-bin becomes a gRPC-scoped A2AError', () => {
     const wireError = {
       code: grpcStatus.INTERNAL,
       details: 'boom',
@@ -55,9 +55,11 @@ describe('gRPC roundtrip', () => {
       name: 'ServiceError',
     } as ServiceError;
     const rebuilt = fromGrpcError(wireError, 'SendMessage');
-    expect(rebuilt).toBeInstanceOf(GenericError);
+    expect(rebuilt).toBeInstanceOf(A2AError);
+    expect(rebuilt).not.toBeInstanceOf(TaskNotFoundError);
     expect(isGrpcError(rebuilt)).toBe(true);
     expect(rebuilt.status).toBe(grpcStatus.INTERNAL);
+    expect(rebuilt.name).toBe('A2AError');
     // method suffix appears in the fallback message for debuggability.
     expect(rebuilt.message).toContain('SendMessage');
   });

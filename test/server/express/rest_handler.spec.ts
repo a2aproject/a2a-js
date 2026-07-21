@@ -16,10 +16,10 @@ import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
 import { AgentCard, Task, Message, TaskState, Role } from '../../../src/index.js';
 import {
-  GenericError,
+  A2AError,
   RequestMalformedError,
-  TaskNotFoundError,
   TaskNotCancelableError,
+  TaskNotFoundError,
 } from '../../../src/errors/index.js';
 import {
   ListTaskPushNotificationConfigsResponse,
@@ -1146,7 +1146,7 @@ describe('restHandler', () => {
     });
 
     it('uses the legacy error mapper (bare body, no details[]) on legacy-path errors', async () => {
-      legacySendMessageStub.mockRejectedValue(new GenericError('legacy boom'));
+      legacySendMessageStub.mockRejectedValue(new A2AError('legacy boom'));
 
       const response = await request(dualApp)
         .post('/v1/message:send')

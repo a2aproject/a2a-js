@@ -1,4 +1,4 @@
-import { GenericError } from '../../errors/index.js';
+import { A2AError } from '../../errors/index.js';
 import { Message, SendMessageResponse, Task } from '../pb/a2a.js';
 
 /**
@@ -11,6 +11,6 @@ export class FromProto {
     if (response.payload?.$case === 'task' || response.payload?.$case === 'message') {
       return response.payload.value;
     }
-    throw new GenericError('Invalid SendMessageResponse: missing result');
+    throw new A2AError('Invalid SendMessageResponse: missing result');
   }
 }

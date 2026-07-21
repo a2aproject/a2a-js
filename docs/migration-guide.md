@@ -290,7 +290,9 @@ Semantic classes: `TaskNotFoundError`, `TaskNotCancelableError`,
 `RequestMalformedError`, `UnsupportedOperationError`,
 `PushNotificationNotSupportedError`, `ContentTypeNotSupportedError`,
 `InvalidAgentResponseError`, `ExtendedAgentCardNotConfiguredError`,
-`ExtensionSupportRequiredError`, `VersionNotSupportedError`, `GenericError`.
+`ExtensionSupportRequiredError`, `VersionNotSupportedError`. `A2AError`
+itself is the concrete fallback — instantiate it directly
+(`new A2AError('...')`) when no semantic class fits.
 
 Per-transport variants (`RestTaskNotFoundError`, `GrpcTaskNotFoundError`,
 `JsonRpcTaskNotFoundError`, …) carry transport-native context; narrow via the

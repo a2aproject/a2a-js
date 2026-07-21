@@ -4,9 +4,10 @@ import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a
 import { SendMessageResult } from '../../src/index.js';
 import {
   A2A_ERROR_DOMAIN,
-  A2A_ERROR_SPECS_BY_CODE,
+  A2A_ERROR_SPECS,
   ERROR_INFO_TYPE,
-  A2A_STATUS_NAME,
+  JSON_RPC_CODE_TO_ERROR,
+  REST_ERROR_STATUS_NAME,
 } from '../../src/errors/index.js';
 
 export function extractRequestId(options?: RequestInit): number {
@@ -356,9 +357,10 @@ export function createRestResponse(
 
 // Resolves a JSON-RPC error code to (reason, grpcStatusName) via the registry.
 function resolveErrorCode(code: number): { reason: string; grpcStatus: string } | undefined {
-  const spec = A2A_ERROR_SPECS_BY_CODE[code];
+  const name = JSON_RPC_CODE_TO_ERROR[code];
+  const spec = A2A_ERROR_SPECS[name];
   if (!spec) return undefined;
-  return { reason: spec.reason, grpcStatus: A2A_STATUS_NAME[spec.grpcStatus] ?? 'UNKNOWN' };
+  return { reason: spec.reason, grpcStatus: REST_ERROR_STATUS_NAME[name] ?? 'UNKNOWN' };
 }
 
 // Creates a REST error response in the google.rpc.Status JSON format.

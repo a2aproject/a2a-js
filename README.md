@@ -44,7 +44,7 @@ npm install express
 
 ### For gRPC Usage
 
-If you plan to use the GRPC transport (imports from `@a2a-js/sdk/server/grpc` or `@a2a-js/sdk/client/grpc`), you must install the required peer dependencies:
+If you plan to use the GRPC transport (imports from `@a2a-js/sdk/server/grpc`, `@a2a-js/sdk/client/grpc`, or the gRPC-specific error helpers in `@a2a-js/sdk/errors/grpc`), you must install the required peer dependencies:
 
 ```bash
 npm install @grpc/grpc-js @bufbuild/protobuf

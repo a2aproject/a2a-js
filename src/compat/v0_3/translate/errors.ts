@@ -16,9 +16,9 @@
 
 import {
   A2A_ERROR_CODE,
-  A2A_ERROR_SPECS,
   A2AError,
   isJsonRpcError,
+  JSON_RPC_ERROR_CODE,
 } from '../../../errors/index.js';
 import type { JSONRPCError } from '../types/types.js';
 
@@ -44,8 +44,8 @@ export function toCompatErrorBody(error: unknown): JSONRPCError | LegacyRestErro
     };
   }
   if (error instanceof A2AError) {
-    const spec = A2A_ERROR_SPECS[error.name];
-    return { code: spec?.code ?? A2A_ERROR_CODE.INTERNAL_ERROR, message: error.message };
+    const code = JSON_RPC_ERROR_CODE[error.name] ?? A2A_ERROR_CODE.INTERNAL_ERROR;
+    return { code, message: error.message };
   }
   const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
   return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };

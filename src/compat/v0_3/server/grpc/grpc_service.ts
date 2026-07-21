@@ -38,13 +38,12 @@ import { Extensions } from '../../../../extensions.js';
 import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
 import { LEGACY_HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { A2AError, InvalidAgentResponseError, isJsonRpcError } from '../../../../errors/index.js';
 import {
-  A2A_STATUS_CODE,
-  A2AError,
-  InvalidAgentResponseError,
-  isJsonRpcError,
-} from '../../../../errors/index.js';
-import { buildGrpcErrorMetadata, grpcStatusFor } from '../../../../errors/grpc/index.js';
+  buildGrpcErrorMetadata,
+  GRPC_STATUS_CODE,
+  grpcStatusFor,
+} from '../../../../errors/grpc/index.js';
 import { validateVersion } from '../../../../server/version.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import { ToProto } from '../../types/converters/to_proto.js';
@@ -438,6 +437,7 @@ const LEGACY_CODE_TO_GRPC_STATUS: Readonly<Record<number, grpc.status>> = {
   [-32700]: grpc.status.INVALID_ARGUMENT, // Parse error
   [-32600]: grpc.status.INVALID_ARGUMENT, // Invalid Request
   [-32601]: grpc.status.UNIMPLEMENTED, // Method not found
+  [-32603]: grpc.status.INTERNAL, // Internal error
 };
 
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
@@ -447,7 +447,7 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   } else if (error instanceof A2AError) {
     code = grpcStatusFor(error);
   } else {
-    code = A2A_STATUS_CODE.UNKNOWN;
+    code = GRPC_STATUS_CODE.UNKNOWN;
   }
   const message = error instanceof Error ? error.message : 'Internal server error';
   const result: Partial<grpc.ServiceError> = { code, details: message };

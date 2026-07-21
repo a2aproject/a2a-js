@@ -7,15 +7,14 @@
  */
 
 import {
-  A2A_ERROR_CODE,
   A2A_ERROR_CLASSES,
-  A2A_ERROR_SPECS_BY_CODE,
+  A2A_ERROR_CODE,
   A2AError as BaseA2AError,
   ExtendedAgentCardNotConfiguredError,
-  GenericError,
+  JSON_RPC_CODE_TO_ERROR,
   JSON_RPC_ERROR_CLASSES,
-  JsonRpcGenericError,
   JsonRpcRequestMalformedError,
+  JsonRpcTransportError,
   JsonRpcUnsupportedOperationError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
@@ -50,17 +49,18 @@ interface A2AErrorFacade {
 }
 
 function makeA2AError(code: number, message: string, data?: Record<string, unknown>): BaseA2AError {
-  const spec = A2A_ERROR_SPECS_BY_CODE[code];
-  if (spec) {
+  // Codes with a semantic twin (§5.4).
+  const name = JSON_RPC_CODE_TO_ERROR[code];
+  if (name) {
     return data === undefined
-      ? new A2A_ERROR_CLASSES[spec.name]({ message })
-      : new JSON_RPC_ERROR_CLASSES[spec.name]({
-          message,
-          envelopeCode: code,
-          data: data as never,
-        });
+      ? new A2A_ERROR_CLASSES[name]({ message })
+      : new JSON_RPC_ERROR_CLASSES[name]({ message, envelopeCode: code, data: data as never });
   }
-
+  // Wire-only reserved codes without a semantic twin (§8.1). Route
+  // METHOD_NOT_FOUND to UnsupportedOperation (semantically closer:
+  // "operation not supported"); PARSE_ERROR / INVALID_REQUEST stay in
+  // the RequestMalformed bucket ("wire not well-formed"). Others fall
+  // back to a raw envelope-preserving JsonRpcTransportError.
   if (code === A2A_ERROR_CODE.METHOD_NOT_FOUND) {
     return new JsonRpcUnsupportedOperationError({
       message,
@@ -68,10 +68,17 @@ function makeA2AError(code: number, message: string, data?: Record<string, unkno
       data: data as never,
     });
   }
-  return new JsonRpcRequestMalformedError({
-    message,
-    envelopeCode: code,
-    data: data as never,
+  if (code === A2A_ERROR_CODE.PARSE_ERROR || code === A2A_ERROR_CODE.INVALID_REQUEST) {
+    return new JsonRpcRequestMalformedError({
+      message,
+      envelopeCode: code,
+      data: data as never,
+    });
+  }
+  return new JsonRpcTransportError({
+    jsonrpc: '2.0',
+    id: null,
+    error: { code, message, data },
   });
 }
 
@@ -114,13 +121,15 @@ A2AError.invalidParams = (message, data) =>
       });
 
 A2AError.internalError = (message, data) =>
-  data === undefined
-    ? new GenericError({ message })
-    : new JsonRpcGenericError({
-        message,
-        envelopeCode: A2A_ERROR_CODE.INTERNAL_ERROR,
-        data: data as never,
-      });
+  new JsonRpcTransportError({
+    jsonrpc: '2.0',
+    id: null,
+    error: {
+      code: A2A_ERROR_CODE.INTERNAL_ERROR,
+      message,
+      ...(data !== undefined ? { data } : {}),
+    },
+  });
 
 A2AError.taskNotFound = (taskId) => new TaskNotFoundError({ message: `Task not found: ${taskId}` });
 

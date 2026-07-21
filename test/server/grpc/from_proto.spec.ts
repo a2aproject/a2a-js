@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import * as proto from '../../../src/types/pb/a2a.js';
-import { GenericError } from '../../../src/errors/index.js';
+import { A2AError } from '../../../src/errors/index.js';
 
 describe('FromProto', () => {
   describe('sendMessageResult', () => {
@@ -41,29 +41,29 @@ describe('FromProto', () => {
       expect(FromProto.sendMessageResult(response)).toEqual(msg);
     });
 
-    it('should throw GenericError if payload is missing', () => {
+    it('should throw A2AError if payload is missing', () => {
       const response: proto.SendMessageResponse = {};
-      let err: GenericError | undefined;
+      let err: A2AError | undefined;
       try {
         FromProto.sendMessageResult(response);
       } catch (error) {
-        err = error as GenericError;
+        err = error as A2AError;
       }
-      expect(err).toBeInstanceOf(GenericError);
+      expect(err).toBeInstanceOf(A2AError);
       expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
     });
 
-    it('should throw GenericError if payload case is invalid', () => {
+    it('should throw A2AError if payload case is invalid', () => {
       const response = {
         payload: { $case: 'streamError', value: undefined as any },
       } as unknown as proto.SendMessageResponse;
-      let err: GenericError | undefined;
+      let err: A2AError | undefined;
       try {
         FromProto.sendMessageResult(response);
       } catch (error) {
-        err = error as GenericError;
+        err = error as A2AError;
       }
-      expect(err).toBeInstanceOf(GenericError);
+      expect(err).toBeInstanceOf(A2AError);
       expect(err?.message).toContain('Invalid SendMessageResponse: missing result');
     });
   });

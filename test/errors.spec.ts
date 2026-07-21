@@ -5,7 +5,6 @@ import {
   A2A_ERROR_CODE,
   A2A_ERROR_DOMAIN,
   A2A_ERROR_SPECS,
-  A2A_ERROR_SPECS_BY_CODE,
   A2AError,
   ContentTypeNotSupportedError,
   ERROR_INFO_TYPE,
@@ -14,12 +13,12 @@ import {
   extractErrorMessage,
   fromJsonRpcErrorResponse as mapJsonRpcErrorToSdkError,
   fromRestErrorBody,
-  GenericError,
-  A2A_STATUS_CODE,
   HTTP_STATUS,
   InvalidAgentResponseError,
   isJsonRpcError,
   isRestError,
+  JSON_RPC_CODE_TO_ERROR,
+  JSON_RPC_ERROR_CODE,
   JsonRpcRequestMalformedError,
   JsonRpcTaskNotFoundError,
   JsonRpcTransportError as JSONRPCTransportError,
@@ -34,15 +33,20 @@ import {
   UnsupportedOperationError,
   VersionNotSupportedError,
 } from '../src/errors/index.js';
-import { GrpcTaskNotFoundError, grpcStatusFor, isGrpcError } from '../src/errors/grpc/index.js';
+import {
+  GRPC_STATUS_CODE,
+  GrpcTaskNotFoundError,
+  grpcStatusFor,
+  isGrpcError,
+} from '../src/errors/grpc/index.js';
 
 /** Thin wrapper that matches the removed `mapA2aErrorToSdkError` shape. */
 function mapA2aErrorToSdkError(
   err: { code: number; message: string },
   fallback: () => Error
 ): Error {
-  const spec = A2A_ERROR_SPECS_BY_CODE[err.code];
-  if (spec) return new A2A_ERROR_CLASSES[spec.name]({ message: err.message });
+  const name = JSON_RPC_CODE_TO_ERROR[err.code];
+  if (name) return new A2A_ERROR_CLASSES[name]({ message: err.message });
   return fallback();
 }
 
@@ -55,12 +59,13 @@ function makeEnvelope(code: number, message = 'boom'): JSONRPCErrorResponse {
 }
 
 describe('mapJsonRpcErrorToSdkError', () => {
+  // Codes that resolve to a spec-defined semantic class. The result's
+  // message is preserved verbatim.
   it.each([
     [A2A_ERROR_CODE.PARSE_ERROR, RequestMalformedError],
     [A2A_ERROR_CODE.INVALID_REQUEST, RequestMalformedError],
     [A2A_ERROR_CODE.METHOD_NOT_FOUND, RequestMalformedError],
     [A2A_ERROR_CODE.INVALID_PARAMS, RequestMalformedError],
-    [A2A_ERROR_CODE.INTERNAL_ERROR, A2A_ERROR_CLASSES.GenericError],
     [A2A_ERROR_CODE.TASK_NOT_FOUND, TaskNotFoundError],
     [A2A_ERROR_CODE.TASK_NOT_CANCELABLE, TaskNotCancelableError],
     [A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED, PushNotificationNotSupportedError],
@@ -77,14 +82,22 @@ describe('mapJsonRpcErrorToSdkError', () => {
     expect(result.message).toBe('specific message');
   });
 
+  it('maps -32603 INTERNAL_ERROR to JsonRpcTransportError preserving the envelope code', () => {
+    const envelope = makeEnvelope(A2A_ERROR_CODE.INTERNAL_ERROR, 'internal boom');
+    const result = mapJsonRpcErrorToSdkError(envelope);
+    expect(result).toBeInstanceOf(JSONRPCTransportError);
+    expect((result as JSONRPCTransportError).envelopeCode).toBe(A2A_ERROR_CODE.INTERNAL_ERROR);
+    expect(result.message).toBe('internal boom');
+  });
+
   it('returns JSONRPCTransportError for unknown error codes', () => {
     const envelope = makeEnvelope(-99999, 'mysterious failure');
     const result = mapJsonRpcErrorToSdkError(envelope);
     expect(result).toBeInstanceOf(JSONRPCTransportError);
     const transportError = result as JSONRPCTransportError;
     expect(transportError.errorResponse).toBe(envelope);
-    expect(transportError.message).toContain('mysterious failure');
-    expect(transportError.message).toContain('-99999');
+    expect(transportError.message).toBe('mysterious failure');
+    expect(transportError.envelopeCode).toBe(-99999);
   });
 
   it('JsonRpcTransportError sets a stable name for catch/instanceof callers', () => {
@@ -191,7 +204,7 @@ describe('A2AError hierarchy', () => {
     expect(e).toBeInstanceOf(A2AError);
     expect(e).toBeInstanceOf(Error);
     expect(e.name).toBe('TaskNotFoundError');
-    expect(e.code).toBe(-32001);
+    expect(JSON_RPC_ERROR_CODE[e.name]).toBe(-32001);
     expect(e.reason).toBe('TASK_NOT_FOUND');
   });
 
@@ -204,7 +217,7 @@ describe('A2AError hierarchy', () => {
   });
 
   it('GrpcTaskNotFoundError is-a TaskNotFoundError is-a A2AError', () => {
-    const e = new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.NOT_FOUND });
+    const e = new GrpcTaskNotFoundError({ status: GRPC_STATUS_CODE.NOT_FOUND });
     expect(e).toBeInstanceOf(GrpcTaskNotFoundError);
     expect(e).toBeInstanceOf(TaskNotFoundError);
     expect(e).toBeInstanceOf(A2AError);
@@ -240,7 +253,7 @@ describe('transport type guards', () => {
   });
 
   it('isGrpcError narrows only GrpcA2AError instances', () => {
-    expect(isGrpcError(new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.NOT_FOUND }))).toBe(
+    expect(isGrpcError(new GrpcTaskNotFoundError({ status: GRPC_STATUS_CODE.NOT_FOUND }))).toBe(
       true
     );
     expect(isGrpcError(new RestTaskNotFoundError())).toBe(false);
@@ -259,7 +272,7 @@ describe('transport type guards', () => {
 
   it('transports are mutually exclusive: exactly one guard matches per instance', () => {
     const rest = new RestTaskNotFoundError({ statusCode: 404 });
-    const grpc = new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.NOT_FOUND });
+    const grpc = new GrpcTaskNotFoundError({ status: GRPC_STATUS_CODE.NOT_FOUND });
     const json = new JsonRpcTaskNotFoundError({ envelopeCode: -32001 });
 
     expect([isRestError(rest), isGrpcError(rest), isJsonRpcError(rest)]).toEqual([
@@ -300,7 +313,8 @@ describe('A2AError construction', () => {
   it('defaults message from spec.defaultMessage when none is passed', () => {
     expect(new TaskNotFoundError().message).toBe('Task not found');
     expect(new UnsupportedOperationError().message).toBe('This operation is not supported');
-    expect(new GenericError().message).toBe('An unexpected error occurred.');
+    // Concrete A2AError (no spec entry) falls back to a generic message.
+    expect(new A2AError().message).toBe('An unexpected error occurred.');
   });
 
   it('accepts a bare string as the message (legacy call shape)', () => {
@@ -333,8 +347,9 @@ describe('A2AError construction', () => {
       const instance = new Cls();
       const spec = A2A_ERROR_SPECS[name];
       expect(spec).toBeDefined();
-      expect(instance.code).toBe(spec.code);
       expect(instance.reason).toBe(spec.reason);
+      // Per-transport code lives in the transport-specific tables.
+      expect(JSON_RPC_ERROR_CODE[name]).toBeTypeOf('number');
     }
   });
 });
@@ -383,22 +398,22 @@ describe('restStatusFor', () => {
 
 describe('grpcStatusFor', () => {
   it('returns the instance-level status when it is a GrpcA2AError', () => {
-    expect(grpcStatusFor(new GrpcTaskNotFoundError({ status: A2A_STATUS_CODE.CANCELLED }))).toBe(
-      A2A_STATUS_CODE.CANCELLED
+    expect(grpcStatusFor(new GrpcTaskNotFoundError({ status: GRPC_STATUS_CODE.CANCELLED }))).toBe(
+      GRPC_STATUS_CODE.CANCELLED
     );
   });
 
   it('falls back to the spec grpcStatus for a plain semantic error', () => {
-    expect(grpcStatusFor(new TaskNotFoundError())).toBe(A2A_STATUS_CODE.NOT_FOUND);
+    expect(grpcStatusFor(new TaskNotFoundError())).toBe(GRPC_STATUS_CODE.NOT_FOUND);
     expect(grpcStatusFor(new ContentTypeNotSupportedError())).toBe(
-      A2A_STATUS_CODE.INVALID_ARGUMENT
+      GRPC_STATUS_CODE.INVALID_ARGUMENT
     );
-    expect(grpcStatusFor(new InvalidAgentResponseError())).toBe(A2A_STATUS_CODE.INTERNAL);
+    expect(grpcStatusFor(new InvalidAgentResponseError())).toBe(GRPC_STATUS_CODE.INTERNAL);
   });
 
   it('returns UNKNOWN for non-A2A throwables', () => {
-    expect(grpcStatusFor(new Error('unrelated'))).toBe(A2A_STATUS_CODE.UNKNOWN);
-    expect(grpcStatusFor(null)).toBe(A2A_STATUS_CODE.UNKNOWN);
+    expect(grpcStatusFor(new Error('unrelated'))).toBe(GRPC_STATUS_CODE.UNKNOWN);
+    expect(grpcStatusFor(null)).toBe(GRPC_STATUS_CODE.UNKNOWN);
   });
 });
 
@@ -438,16 +453,17 @@ describe('REST roundtrip', () => {
     expect(rebuilt.message).toBe('task xyz missing');
   });
 
-  it('body without ErrorInfo detail becomes RestGenericError', () => {
+  it('body without ErrorInfo detail becomes a REST-scoped A2AError fallback', () => {
     const rebuilt = fromRestErrorBody({ message: 'plain 500', details: [] }, { statusCode: 500 });
     expect(rebuilt).toBeInstanceOf(A2AError);
+    expect(rebuilt).not.toBeInstanceOf(TaskNotFoundError);
     expect(isRestError(rebuilt)).toBe(true);
-    expect(rebuilt.name).toBe('GenericError');
+    expect(rebuilt.name).toBe('A2AError');
     expect(rebuilt.message).toBe('plain 500');
     expect(rebuilt.statusCode).toBe(500);
   });
 
-  it('body with unknown ErrorInfo.reason becomes RestGenericError', () => {
+  it('body with unknown ErrorInfo.reason falls through to the A2AError fallback', () => {
     const rebuilt = fromRestErrorBody(
       {
         message: 'unknown',
@@ -455,7 +471,7 @@ describe('REST roundtrip', () => {
       },
       { statusCode: 500 }
     );
-    expect(rebuilt.name).toBe('GenericError');
+    expect(rebuilt.name).toBe('A2AError');
   });
 
   it('ignores metadata when the ErrorInfo.domain is not a2a-protocol.org', () => {

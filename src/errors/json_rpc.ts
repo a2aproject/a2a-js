@@ -1,17 +1,58 @@
 /**
  * JSON-RPC transport error subclasses and envelope helpers.
+ *
+ * Owns the JSON-RPC 2.0 code namespace ({@link A2A_ERROR_CODE}) and
+ * the per-error code mapping (§5.4). `./base.ts` intentionally
+ * carries only §3.3.2 fields; codes are transport-specific.
  */
 
 import type { JSONRPCError, JSONRPCErrorResponse } from '../core.js';
 import {
   A2A_ERROR_CLASSES,
-  A2A_ERROR_CODE,
   A2A_ERROR_SPECS,
-  A2A_ERROR_SPECS_BY_CODE,
   A2AError,
   type A2AErrorOptions,
   type ErrorDetail,
 } from './base.js';
+
+/** JSON-RPC 2.0 error codes reserved for A2A. */
+export const A2A_ERROR_CODE = {
+  PARSE_ERROR: -32700,
+  INVALID_REQUEST: -32600,
+  METHOD_NOT_FOUND: -32601,
+  INVALID_PARAMS: -32602,
+  INTERNAL_ERROR: -32603,
+  TASK_NOT_FOUND: -32001,
+  TASK_NOT_CANCELABLE: -32002,
+  PUSH_NOTIFICATION_NOT_SUPPORTED: -32003,
+  UNSUPPORTED_OPERATION: -32004,
+  CONTENT_TYPE_NOT_SUPPORTED: -32005,
+  INVALID_AGENT_RESPONSE: -32006,
+  EXTENDED_CARD_NOT_CONFIGURED: -32007,
+  EXTENSION_SUPPORT_REQUIRED: -32008,
+  VERSION_NOT_SUPPORTED: -32009,
+} as const;
+
+/**
+ * Per-error JSON-RPC envelope code (§5.4). Semantic class name -> code.
+ */
+export const JSON_RPC_ERROR_CODE: Readonly<Record<string, number>> = Object.freeze({
+  TaskNotFoundError: A2A_ERROR_CODE.TASK_NOT_FOUND,
+  TaskNotCancelableError: A2A_ERROR_CODE.TASK_NOT_CANCELABLE,
+  PushNotificationNotSupportedError: A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED,
+  UnsupportedOperationError: A2A_ERROR_CODE.UNSUPPORTED_OPERATION,
+  ContentTypeNotSupportedError: A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED,
+  InvalidAgentResponseError: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE,
+  ExtendedAgentCardNotConfiguredError: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
+  ExtensionSupportRequiredError: A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED,
+  VersionNotSupportedError: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED,
+  RequestMalformedError: A2A_ERROR_CODE.INVALID_PARAMS,
+});
+
+/** Reverse of {@link JSON_RPC_ERROR_CODE}: envelope code -> class name. */
+export const JSON_RPC_CODE_TO_ERROR: Readonly<Record<number, string>> = Object.freeze(
+  Object.fromEntries(Object.entries(JSON_RPC_ERROR_CODE).map(([name, code]) => [code, name]))
+);
 
 /** Transport context carried by every `JsonRpc*Error`. */
 export interface JsonRpcA2AError extends A2AError {
@@ -22,7 +63,7 @@ export interface JsonRpcA2AError extends A2AError {
 
 /** Options accepted by every `JsonRpc*Error` constructor. */
 export interface JsonRpcA2AErrorOptions extends A2AErrorOptions {
-  /** Envelope `error.code`. Defaults to the semantic error's spec value. */
+  /** Envelope `error.code`. Defaults to the per-error spec value. */
   envelopeCode?: number;
   /** Envelope `error.data`, if any. */
   data?: JSONRPCError['data'];
@@ -34,8 +75,8 @@ export function isJsonRpcError(err: unknown): err is JsonRpcA2AError {
 }
 
 function makeJsonRpc(name: string): new (options?: JsonRpcA2AErrorOptions) => JsonRpcA2AError {
-  const spec = A2A_ERROR_SPECS[name];
   const Base = A2A_ERROR_CLASSES[name];
+  const defaultCode = JSON_RPC_ERROR_CODE[name] ?? A2A_ERROR_CODE.INTERNAL_ERROR;
   const cls = {
     [`JsonRpc${name}`]: class extends Base {
       public readonly transport = 'jsonrpc';
@@ -44,7 +85,7 @@ function makeJsonRpc(name: string): new (options?: JsonRpcA2AErrorOptions) => Js
       constructor(options?: JsonRpcA2AErrorOptions) {
         super(options);
         this.name = name;
-        this.envelopeCode = options?.envelopeCode ?? spec.code;
+        this.envelopeCode = options?.envelopeCode ?? defaultCode;
         if (options?.data !== undefined) this.data = options.data;
       }
     },
@@ -98,9 +139,6 @@ export type JsonRpcVersionNotSupportedError = InstanceType<typeof JsonRpcVersion
 export const JsonRpcRequestMalformedError = makeJsonRpc('RequestMalformedError');
 export type JsonRpcRequestMalformedError = InstanceType<typeof JsonRpcRequestMalformedError>;
 
-export const JsonRpcGenericError = makeJsonRpc('GenericError');
-export type JsonRpcGenericError = InstanceType<typeof JsonRpcGenericError>;
-
 /** JSON-RPC twins indexed by their semantic parent's name. */
 export const JSON_RPC_ERROR_CLASSES: Readonly<
   Record<string, new (options?: JsonRpcA2AErrorOptions) => JsonRpcA2AError>
@@ -115,26 +153,24 @@ export const JSON_RPC_ERROR_CLASSES: Readonly<
   ExtensionSupportRequiredError: JsonRpcExtensionSupportRequiredError,
   VersionNotSupportedError: JsonRpcVersionNotSupportedError,
   RequestMalformedError: JsonRpcRequestMalformedError,
-  GenericError: JsonRpcGenericError,
 });
 
 /**
  * Envelope for a JSON-RPC error not covered by any semantic code (e.g.
- * `METHOD_NOT_FOUND`, `PARSE_ERROR`, or a custom vendor code). Extends
- * {@link JsonRpcGenericError} so it still satisfies the transport
- * interface and `instanceof A2AError` checks.
+ * `METHOD_NOT_FOUND`, `PARSE_ERROR`, or a custom vendor code). Concrete
+ * {@link A2AError} carrying the full envelope; satisfies the
+ * {@link JsonRpcA2AError} interface for `isJsonRpcError` narrowing.
  */
-export class JsonRpcTransportError extends JsonRpcGenericError {
+export class JsonRpcTransportError extends A2AError implements JsonRpcA2AError {
+  public readonly transport = 'jsonrpc';
+  public readonly envelopeCode: number;
+  public readonly data?: JSONRPCError['data'];
   public readonly errorResponse: JSONRPCErrorResponse;
   constructor(envelope: JSONRPCErrorResponse) {
-    super({
-      message: `JSON-RPC error: ${envelope.error.message} (Code: ${envelope.error.code}) Data: ${JSON.stringify(envelope.error.data || {})}`,
-      envelopeCode: envelope.error.code,
-      data: envelope.error.data,
-    });
-    // Override the parent's `this.name = 'GenericError'` so
-    // `error.name === 'JsonRpcTransportError'` for catch-site consumers.
+    super({ message: envelope.error.message });
     this.name = 'JsonRpcTransportError';
+    this.envelopeCode = envelope.error.code;
+    if (envelope.error.data !== undefined) this.data = envelope.error.data;
     this.errorResponse = envelope;
   }
 }
@@ -161,14 +197,8 @@ export function toJsonRpcError(error: unknown): {
     };
   }
   if (error instanceof A2AError) {
-    const spec = A2A_ERROR_SPECS[error.name];
-    if (spec) {
-      return {
-        code: spec.code,
-        message: error.message,
-        data: [error.toErrorInfo()],
-      };
-    }
+    const code = JSON_RPC_ERROR_CODE[error.name] ?? A2A_ERROR_CODE.INTERNAL_ERROR;
+    return { code, message: error.message, data: [error.toErrorInfo()] };
   }
   const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
   return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
@@ -190,8 +220,8 @@ const RESERVED_CODE_TO_SEMANTIC: Readonly<Record<number, string>> = {
  * codes yield a {@link JsonRpcTransportError} carrying the full envelope.
  */
 export function fromJsonRpcErrorResponse(response: JSONRPCErrorResponse): JsonRpcA2AError {
-  const spec = A2A_ERROR_SPECS_BY_CODE[response.error.code];
-  const semanticName = spec?.name ?? RESERVED_CODE_TO_SEMANTIC[response.error.code];
+  const semanticName =
+    JSON_RPC_CODE_TO_ERROR[response.error.code] ?? RESERVED_CODE_TO_SEMANTIC[response.error.code];
   if (semanticName) {
     return new JSON_RPC_ERROR_CLASSES[semanticName]({
       message: response.error.message,

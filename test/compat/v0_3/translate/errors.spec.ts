@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { toCompatErrorBody } from '../../../../src/compat/v0_3/translate/errors.js';
 import { A2AError as LegacyA2AError } from '../../../../src/compat/v0_3/server/error.js';
 import {
+  A2AError,
   ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
-  GenericError,
   InvalidAgentResponseError,
   JsonRpcRequestMalformedError,
   PushNotificationNotSupportedError,
@@ -31,7 +31,7 @@ const v1ToLegacyCodeCases: ReadonlyArray<readonly [() => Error, number]> = [
   // SDK-internal classes (not part of the spec but raised by the SDK
   // when validating requests / wrapping arbitrary throws).
   [() => new RequestMalformedError('a'), -32602],
-  [() => new GenericError('a'), -32603],
+  [() => new A2AError('a'), -32603],
 ];
 
 describe('compat/v0_3/translate/errors - toCompatErrorBody', () => {

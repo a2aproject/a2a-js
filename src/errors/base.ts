@@ -5,96 +5,18 @@
  * (in `./rest`, `./grpc`, `./json_rpc`) mix in a transport-context
  * interface; catch sites narrow via `instanceof <SemanticError>` and
  * `isRestError` / `isGrpcError` / `isJsonRpcError` type guards.
+ *
+ * Only the spec-defined fields (§3.3.2 "A2A-Specific Errors") live
+ * here: `name`, `reason` (`ErrorInfo.reason`), and a default message.
+ * Per-transport code/status mappings (§5.4) live in the corresponding
+ * transport files.
  */
-
-/** JSON-RPC 2.0 error codes reserved for A2A. */
-export const A2A_ERROR_CODE = {
-  PARSE_ERROR: -32700,
-  INVALID_REQUEST: -32600,
-  METHOD_NOT_FOUND: -32601,
-  INVALID_PARAMS: -32602,
-  INTERNAL_ERROR: -32603,
-  TASK_NOT_FOUND: -32001,
-  TASK_NOT_CANCELABLE: -32002,
-  PUSH_NOTIFICATION_NOT_SUPPORTED: -32003,
-  UNSUPPORTED_OPERATION: -32004,
-  CONTENT_TYPE_NOT_SUPPORTED: -32005,
-  INVALID_AGENT_RESPONSE: -32006,
-  EXTENDED_CARD_NOT_CONFIGURED: -32007,
-  EXTENSION_SUPPORT_REQUIRED: -32008,
-  VERSION_NOT_SUPPORTED: -32009,
-} as const;
 
 /** Domain for `google.rpc.ErrorInfo.domain`. */
 export const A2A_ERROR_DOMAIN = 'a2a-protocol.org';
 
 /** `@type`/`typeUrl` for `google.rpc.ErrorInfo` in ProtoJSON `Any`. */
 export const ERROR_INFO_TYPE = 'type.googleapis.com/google.rpc.ErrorInfo';
-
-/** HTTP status codes used in REST responses. */
-export const HTTP_STATUS = {
-  OK: 200,
-  CREATED: 201,
-  ACCEPTED: 202,
-  NO_CONTENT: 204,
-  BAD_REQUEST: 400,
-  UNAUTHORIZED: 401,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  INTERNAL_SERVER_ERROR: 500,
-  NOT_IMPLEMENTED: 501,
-} as const;
-
-/**
- * Canonical numeric status codes used by the semantic-error registry
- * to describe the spec-mapped status per §5.4. The numeric namespace
- * matches gRPC's `status` enum (so the gRPC transport can emit them
- * directly) and the string form (see {@link A2A_STATUS_NAME}) fills
- * the REST body's `status` field per §11.6.
- */
-export const A2A_STATUS_CODE = {
-  OK: 0,
-  CANCELLED: 1,
-  UNKNOWN: 2,
-  INVALID_ARGUMENT: 3,
-  DEADLINE_EXCEEDED: 4,
-  NOT_FOUND: 5,
-  ALREADY_EXISTS: 6,
-  PERMISSION_DENIED: 7,
-  RESOURCE_EXHAUSTED: 8,
-  FAILED_PRECONDITION: 9,
-  ABORTED: 10,
-  OUT_OF_RANGE: 11,
-  UNIMPLEMENTED: 12,
-  INTERNAL: 13,
-  UNAVAILABLE: 14,
-  DATA_LOSS: 15,
-  UNAUTHENTICATED: 16,
-} as const;
-
-/**
- * String form of {@link A2A_STATUS_CODE}, used in the REST body's
- * `status` field per §11.6. Names follow the gRPC enum form.
- */
-export const A2A_STATUS_NAME: Readonly<Record<number, string>> = {
-  [A2A_STATUS_CODE.OK]: 'OK',
-  [A2A_STATUS_CODE.CANCELLED]: 'CANCELLED',
-  [A2A_STATUS_CODE.UNKNOWN]: 'UNKNOWN',
-  [A2A_STATUS_CODE.INVALID_ARGUMENT]: 'INVALID_ARGUMENT',
-  [A2A_STATUS_CODE.DEADLINE_EXCEEDED]: 'DEADLINE_EXCEEDED',
-  [A2A_STATUS_CODE.NOT_FOUND]: 'NOT_FOUND',
-  [A2A_STATUS_CODE.ALREADY_EXISTS]: 'ALREADY_EXISTS',
-  [A2A_STATUS_CODE.PERMISSION_DENIED]: 'PERMISSION_DENIED',
-  [A2A_STATUS_CODE.RESOURCE_EXHAUSTED]: 'RESOURCE_EXHAUSTED',
-  [A2A_STATUS_CODE.FAILED_PRECONDITION]: 'FAILED_PRECONDITION',
-  [A2A_STATUS_CODE.ABORTED]: 'ABORTED',
-  [A2A_STATUS_CODE.OUT_OF_RANGE]: 'OUT_OF_RANGE',
-  [A2A_STATUS_CODE.UNIMPLEMENTED]: 'UNIMPLEMENTED',
-  [A2A_STATUS_CODE.INTERNAL]: 'INTERNAL',
-  [A2A_STATUS_CODE.UNAVAILABLE]: 'UNAVAILABLE',
-  [A2A_STATUS_CODE.DATA_LOSS]: 'DATA_LOSS',
-  [A2A_STATUS_CODE.UNAUTHENTICATED]: 'UNAUTHENTICATED',
-};
 
 /** A structured detail object included in error responses. */
 export interface ErrorDetail {
@@ -110,16 +32,6 @@ export interface A2AErrorInfo extends ErrorDetail {
   metadata?: Record<string, string>;
 }
 
-/** REST error body (`google.rpc.Status` JSON). */
-export interface RestErrorBody {
-  error: {
-    code: number;
-    status: string;
-    message: string;
-    details: ErrorDetail[];
-  };
-}
-
 /** Options accepted by every `A2AError` constructor. */
 export interface A2AErrorOptions {
   /** Human-readable message. If omitted, the per-class default is used. */
@@ -131,29 +43,31 @@ export interface A2AErrorOptions {
 }
 
 /**
- * Base class for every SDK error. Carries the spec-aligned `reason`,
- * numeric `code`, and structured `metadata`. Concrete semantic classes
- * (below) fill in `reason` / `code` in their constructor. Transport
- * subclasses in `./rest`, `./grpc`, `./json_rpc` add wire context via
- * the {@link RestA2AError} / {@link GrpcA2AError} / {@link JsonRpcA2AError}
- * interfaces.
+ * Base class for every SDK error and the concrete fallback used when
+ * no semantic subclass matches (e.g. an unknown wire code). Carries
+ * the spec-aligned `reason`, structured `metadata`, and a stable
+ * `error.name` of `'A2AError'`. Transport subclasses in `./rest`,
+ * `./grpc`, `./json_rpc` add wire context via the
+ * {@link import('./rest.js').RestA2AError} / {@link import('./grpc/index.js').GrpcA2AError}
+ * / {@link import('./json_rpc.js').JsonRpcA2AError} interfaces.
+ *
+ * Accepts either a bare message string or an options object.
  */
 export class A2AError extends Error {
-  /** UPPER_SNAKE_CASE reason from `google.rpc.ErrorInfo`. */
+  /** UPPER_SNAKE_CASE reason from `google.rpc.ErrorInfo` (§10.6 / §11.6). */
   public readonly reason: string = 'INTERNAL_ERROR';
-  /** Numeric JSON-RPC / A2A error code. */
-  public readonly code: number = A2A_ERROR_CODE.INTERNAL_ERROR;
   /** Optional `google.rpc.ErrorInfo.metadata`. */
   public readonly metadata?: Record<string, string>;
 
-  constructor(defaultMessage: string, options?: A2AErrorOptions) {
+  constructor(options?: A2AErrorOptions | string) {
+    const opts = typeof options === 'string' ? { message: options } : options;
     super(
-      options?.message ?? defaultMessage,
-      options?.cause !== undefined ? { cause: options.cause } : undefined
+      opts?.message ?? 'An unexpected error occurred.',
+      opts?.cause !== undefined ? { cause: opts.cause } : undefined
     );
     this.name = new.target.name;
-    if (options?.metadata && Object.keys(options.metadata).length > 0) {
-      this.metadata = options.metadata;
+    if (opts?.metadata && Object.keys(opts.metadata).length > 0) {
+      this.metadata = opts.metadata;
     }
   }
 
@@ -169,124 +83,79 @@ export class A2AError extends Error {
 }
 
 /**
- * Registry row for one semantic error class. Adding a new error means
- * adding one row here; all wire mappings derive from it.
+ * Registry row for one semantic error class. Only holds the fields
+ * that appear in the transport-agnostic §3.3.2 "A2A-Specific Errors"
+ * table: name (also used as `error.name`), reason (ErrorInfo string),
+ * and a default human-readable message. Per-transport codes/statuses
+ * live in the corresponding transport files.
  */
 export interface A2AErrorSpec {
   name: string;
   reason: string;
-  code: number;
-  grpcStatus: number;
-  httpStatus: number;
   defaultMessage: string;
 }
 
 const specs: A2AErrorSpec[] = [
-  {
-    name: 'TaskNotFoundError',
-    reason: 'TASK_NOT_FOUND',
-    code: A2A_ERROR_CODE.TASK_NOT_FOUND,
-    grpcStatus: A2A_STATUS_CODE.NOT_FOUND,
-    httpStatus: HTTP_STATUS.NOT_FOUND,
-    defaultMessage: 'Task not found',
-  },
+  { name: 'TaskNotFoundError', reason: 'TASK_NOT_FOUND', defaultMessage: 'Task not found' },
   {
     name: 'TaskNotCancelableError',
     reason: 'TASK_NOT_CANCELABLE',
-    code: A2A_ERROR_CODE.TASK_NOT_CANCELABLE,
-    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Task cannot be canceled',
   },
   {
     name: 'PushNotificationNotSupportedError',
     reason: 'PUSH_NOTIFICATION_NOT_SUPPORTED',
-    code: A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED,
-    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Push Notification is not supported',
   },
   {
     name: 'UnsupportedOperationError',
     reason: 'UNSUPPORTED_OPERATION',
-    code: A2A_ERROR_CODE.UNSUPPORTED_OPERATION,
-    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'This operation is not supported',
   },
   {
     name: 'ContentTypeNotSupportedError',
     reason: 'CONTENT_TYPE_NOT_SUPPORTED',
-    code: A2A_ERROR_CODE.CONTENT_TYPE_NOT_SUPPORTED,
-    grpcStatus: A2A_STATUS_CODE.INVALID_ARGUMENT,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Incompatible content types',
   },
   {
     name: 'InvalidAgentResponseError',
     reason: 'INVALID_AGENT_RESPONSE',
-    code: A2A_ERROR_CODE.INVALID_AGENT_RESPONSE,
-    grpcStatus: A2A_STATUS_CODE.INTERNAL,
-    httpStatus: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     defaultMessage: 'Invalid agent response type',
   },
   {
     name: 'ExtendedAgentCardNotConfiguredError',
     reason: 'EXTENDED_AGENT_CARD_NOT_CONFIGURED',
-    code: A2A_ERROR_CODE.EXTENDED_CARD_NOT_CONFIGURED,
-    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Extended Agent Card not configured',
   },
   {
     name: 'ExtensionSupportRequiredError',
     reason: 'EXTENSION_SUPPORT_REQUIRED',
-    code: A2A_ERROR_CODE.EXTENSION_SUPPORT_REQUIRED,
-    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Extension support required',
   },
   {
     name: 'VersionNotSupportedError',
     reason: 'VERSION_NOT_SUPPORTED',
-    code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED,
-    grpcStatus: A2A_STATUS_CODE.FAILED_PRECONDITION,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Version not supported',
   },
   {
     name: 'RequestMalformedError',
     reason: 'INVALID_PARAMS',
-    code: A2A_ERROR_CODE.INVALID_PARAMS,
-    grpcStatus: A2A_STATUS_CODE.INVALID_ARGUMENT,
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
     defaultMessage: 'Request malformed',
-  },
-  {
-    name: 'GenericError',
-    reason: 'INTERNAL_ERROR',
-    code: A2A_ERROR_CODE.INTERNAL_ERROR,
-    grpcStatus: A2A_STATUS_CODE.INTERNAL,
-    httpStatus: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-    defaultMessage: 'An unexpected error occurred.',
   },
 ];
 
-/** Registry lookups keyed on the various identifiers used across wires. */
+/** Registry lookups keyed on the identifiers used across wires. */
 export const A2A_ERROR_SPECS: Readonly<Record<string, A2AErrorSpec>> = Object.freeze(
   Object.fromEntries(specs.map((s) => [s.name, s]))
 );
 export const A2A_ERROR_SPECS_BY_REASON: Readonly<Record<string, A2AErrorSpec>> = Object.freeze(
   Object.fromEntries(specs.map((s) => [s.reason, s]))
 );
-export const A2A_ERROR_SPECS_BY_CODE: Readonly<Record<number, A2AErrorSpec>> = Object.freeze(
-  Object.fromEntries(specs.map((s) => [s.code, s]))
-);
 
 /**
  * Concrete semantic error classes. One per {@link A2AErrorSpec} row.
  * Generated by {@link makeSemantic} so adding a new row automatically
- * produces a class with the right `name`, `reason`, `code`, and default
+ * produces a class with the right `name`, `reason`, and default
  * message. Transport variants are declared in `./rest`, `./grpc`,
  * `./json_rpc`.
  */
@@ -295,9 +164,12 @@ function makeSemantic(spec: A2AErrorSpec): new (options?: A2AErrorOptions | stri
   const cls = {
     [spec.name]: class extends A2AError {
       public override readonly reason = spec.reason;
-      public override readonly code = spec.code;
       constructor(options?: A2AErrorOptions | string) {
-        super(spec.defaultMessage, typeof options === 'string' ? { message: options } : options);
+        // Apply the spec's default message when the caller didn't
+        // supply one.
+        if (options === undefined) super({ message: spec.defaultMessage });
+        else if (typeof options === 'string') super({ message: options });
+        else super({ message: spec.defaultMessage, ...options });
       }
     },
   }[spec.name];
@@ -346,9 +218,6 @@ export type VersionNotSupportedError = InstanceType<typeof VersionNotSupportedEr
 export const RequestMalformedError = makeSemantic(A2A_ERROR_SPECS.RequestMalformedError);
 export type RequestMalformedError = InstanceType<typeof RequestMalformedError>;
 
-export const GenericError = makeSemantic(A2A_ERROR_SPECS.GenericError);
-export type GenericError = InstanceType<typeof GenericError>;
-
 /** Constructor type of a semantic {@link A2AError} subclass. */
 export type A2AErrorClass = new (options?: A2AErrorOptions | string) => A2AError;
 
@@ -364,7 +233,6 @@ export const A2A_ERROR_CLASSES: Readonly<Record<string, A2AErrorClass>> = Object
   ExtensionSupportRequiredError,
   VersionNotSupportedError,
   RequestMalformedError,
-  GenericError,
 });
 
 /**
@@ -384,20 +252,10 @@ export function extractErrorMessage(err: unknown): string {
 
 /**
  * Looks up the {@link A2AErrorSpec} matching an `Error` instance by
- * class name. Returns `undefined` for non-A2A errors.
+ * class name. Returns `undefined` for non-A2A errors (including the
+ * concrete `A2AError` fallback which has no semantic registry entry).
  */
 export function specForError(error: unknown): A2AErrorSpec | undefined {
   if (!(error instanceof Error)) return undefined;
   return A2A_ERROR_SPECS[error.name];
-}
-
-/**
- * Backward-compat shim retained for callers that still pass a `{ code,
- * message }` pair. Use {@link A2A_ERROR_SPECS_BY_CODE} plus a class
- * constructor directly when writing new code.
- */
-export function errorForCode(code: number, message: string): A2AError {
-  const spec = A2A_ERROR_SPECS_BY_CODE[code];
-  const cls = spec ? A2A_ERROR_CLASSES[spec.name] : A2A_ERROR_CLASSES.GenericError;
-  return new cls({ message });
 }

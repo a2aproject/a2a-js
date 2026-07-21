@@ -10,10 +10,10 @@ import { A2AError as LegacyA2AError } from '../../../../../../src/compat/v0_3/se
 import { A2ARequestHandler } from '../../../../../../src/server/request_handler/a2a_request_handler.js';
 import { ServerCallContext } from '../../../../../../src/server/context.js';
 import {
+  A2AError,
   ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
-  GenericError,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
@@ -218,7 +218,7 @@ describe('LegacyRestTransportHandler', () => {
       [new ExtensionSupportRequiredError('a'), -32008],
       [new VersionNotSupportedError('a'), -32009],
       [new RequestMalformedError('a'), -32602],
-      [new GenericError('a'), -32603],
+      [new A2AError('a'), -32603],
     ];
 
     v1ToLegacyCodeCases.forEach(([err, expectedCode]) => {
@@ -312,7 +312,7 @@ describe('LegacyRestTransportHandler', () => {
           },
           defaultContext
         )
-      ).rejects.toMatchObject({ code: -32602 });
+      ).rejects.toMatchObject({ name: 'RequestMalformedError' });
     });
   });
 
@@ -325,7 +325,7 @@ describe('LegacyRestTransportHandler', () => {
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(nonStreamingAgentCard);
       await expect(
         transportHandler.sendMessageStream(sampleLegacyMessageSendParams(), defaultContext)
-      ).rejects.toMatchObject({ code: -32004 });
+      ).rejects.toMatchObject({ name: 'UnsupportedOperationError' });
     });
 
     it('translates each v1 StreamResponse event into a v0.3 result payload', async () => {
@@ -414,13 +414,13 @@ describe('LegacyRestTransportHandler', () => {
 
     it('rejects an invalid historyLength (non-numeric)', async () => {
       await expect(transportHandler.getTask('t-1', defaultContext, 'abc')).rejects.toMatchObject({
-        code: -32602,
+        name: 'RequestMalformedError',
       });
     });
 
     it('rejects a negative historyLength', async () => {
       await expect(transportHandler.getTask('t-1', defaultContext, '-2')).rejects.toMatchObject({
-        code: -32602,
+        name: 'RequestMalformedError',
       });
     });
   });
@@ -447,7 +447,7 @@ describe('LegacyRestTransportHandler', () => {
     it('rejects when streaming is not supported', async () => {
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(nonStreamingAgentCard);
       await expect(transportHandler.resubscribe('t-1', defaultContext)).rejects.toMatchObject({
-        code: -32004,
+        name: 'UnsupportedOperationError',
       });
     });
 
@@ -481,7 +481,7 @@ describe('LegacyRestTransportHandler', () => {
           sampleLegacyTaskPushNotificationConfig(),
           defaultContext
         )
-      ).rejects.toMatchObject({ code: -32003 });
+      ).rejects.toMatchObject({ name: 'PushNotificationNotSupportedError' });
     });
 
     it('rejects when taskId is missing', async () => {
@@ -493,7 +493,7 @@ describe('LegacyRestTransportHandler', () => {
           },
           defaultContext
         )
-      ).rejects.toMatchObject({ code: -32602 });
+      ).rejects.toMatchObject({ name: 'RequestMalformedError' });
     });
 
     it('rejects when pushNotificationConfig is missing', async () => {
@@ -505,7 +505,7 @@ describe('LegacyRestTransportHandler', () => {
           },
           defaultContext
         )
-      ).rejects.toMatchObject({ code: -32602 });
+      ).rejects.toMatchObject({ name: 'RequestMalformedError' });
     });
 
     it('translates the v0.3 config and returns a v0.3 config', async () => {

@@ -7,14 +7,14 @@ import { ServerCallContext } from '../../src/server/context.js';
 import {
   RequestMalformedError,
   TaskNotFoundError,
-  TaskNotCancelableError,
-  PushNotificationNotSupportedError,
-  UnsupportedOperationError,
-  ContentTypeNotSupportedError,
-  InvalidAgentResponseError,
   A2A_ERROR_CODE,
-  GenericError,
+  A2AError,
+  ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
+  InvalidAgentResponseError,
+  PushNotificationNotSupportedError,
+  TaskNotCancelableError,
+  UnsupportedOperationError,
 } from '../../src/errors/index.js';
 
 describe('JsonRpcTransportHandler', () => {
@@ -294,10 +294,8 @@ describe('JsonRpcTransportHandler', () => {
       expect(mappedError.message).to.equal('Request Malformed');
     });
 
-    it('should map GenericError to code and message', async () => {
-      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
-        new GenericError('Generic Error')
-      );
+    it('should map A2AError to code and message', async () => {
+      const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(new A2AError('Generic Error'));
       expect(mappedError.code).to.equal(A2A_ERROR_CODE.INTERNAL_ERROR);
       expect(mappedError.message).to.equal('Generic Error');
     });

@@ -1,4 +1,4 @@
-import { GenericError } from '../../errors/index.js';
+import { A2AError } from '../../errors/index.js';
 import { Message, SendMessageResponse, Task } from '../pb/a2a.js';
 
 export class ToProto {
@@ -18,6 +18,6 @@ export class ToProto {
         },
       };
     }
-    throw new GenericError('Invalid SendMessageResult type');
+    throw new A2AError('Invalid SendMessageResult type');
   }
 }
