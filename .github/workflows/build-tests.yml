@@ -1,11 +1,14 @@
 # Ensures no accidental Node.js API usage in browser and Edge compatible
-# entrypoints, and that gRPC-only helpers stay isolated from the pb-free
-# entrypoints. The two `test-build:*` steps run in DIFFERENT environments:
+# entrypoints, and that transport-scoped entrypoints resolve only their
+# declared peers. Each `test-build:*` step runs in a DIFFERENT environment:
 #   1. workers-safe: NO optional peer deps installed (no @grpc/grpc-js,
 #      @bufbuild/protobuf, or express). esbuild fails natively if any
 #      Workers-safe entry pulls them in. Mirrors what a real Workers /
 #      REST-only consumer gets.
-#   2. grpc: peer deps reinstalled; the gRPC entrypoint must resolve.
+#   2. grpc: @grpc/grpc-js + @bufbuild/protobuf reinstalled (still no
+#      express); every gRPC entry must resolve.
+#   3. express: express reinstalled on top; every express entry must
+#      resolve.
 
 name: Run Build Tests
 
@@ -38,6 +41,10 @@ jobs:
       # Workers-safe entrypoint that leaks one of them fails to resolve.
       - run: npm uninstall --no-save @grpc/grpc-js @bufbuild/protobuf express
       - run: npm run test-build:workers-safe
-      # Reinstall the peer deps and verify the gRPC entrypoint still bundles.
-      - run: npm install --no-save @grpc/grpc-js @bufbuild/protobuf express
+      # Reinstall only the gRPC peers; verify every gRPC entry resolves
+      # (and would fail here if any of them silently required express).
+      - run: npm install --no-save @grpc/grpc-js @bufbuild/protobuf
       - run: npm run test-build:grpc
+      # Reinstall express; verify every express entry resolves.
+      - run: npm install --no-save express
+      - run: npm run test-build:express
