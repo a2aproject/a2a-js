@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.0.0](https://github.com/a2aproject/a2a-js/compare/v1.0.0-beta.0...v1.0.0) (2026-07-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* unify A2AError hierarchy with transport specific subclasses ([#587](https://github.com/a2aproject/a2a-js/issues/587))
+* **server:** replace individual properties with SendMessageRequest in RequestContext ([#581](https://github.com/a2aproject/a2a-js/issues/581))
+
+### Features
+
+* add state bag and ServerCallContextBuilder to ServerCallContext ([#364](https://github.com/a2aproject/a2a-js/issues/364)) ([477e394](https://github.com/a2aproject/a2a-js/commit/477e394981a92a118f3a738a0401fc45193612da))
+* export SSE wire-format helpers from public entry point ([#548](https://github.com/a2aproject/a2a-js/issues/548)) ([8bc21f5](https://github.com/a2aproject/a2a-js/commit/8bc21f5697f4b3ea31a1788747db418e6619809f)), closes [#547](https://github.com/a2aproject/a2a-js/issues/547)
+* **server:** expose SendMessageRequest metadata to AgentExecutor via RequestContext ([#564](https://github.com/a2aproject/a2a-js/issues/564)) ([a92f54e](https://github.com/a2aproject/a2a-js/commit/a92f54ec6ea5aa0c3d13891fd4ad110e97b07e93))
+* **server:** replace individual properties with SendMessageRequest in RequestContext ([#581](https://github.com/a2aproject/a2a-js/issues/581)) ([7cd30de](https://github.com/a2aproject/a2a-js/commit/7cd30dea0082e2d1491f1ec4e037e06b2e408462))
+* unify A2AError hierarchy with transport specific subclasses ([#587](https://github.com/a2aproject/a2a-js/issues/587)) ([4806f8f](https://github.com/a2aproject/a2a-js/commit/4806f8f757c7b945d1d588804cbfe06fc2d30a10))
+
+
+### Bug Fixes
+
+* **client:** bound SSE event size to prevent client-side memory exhaustion ([#582](https://github.com/a2aproject/a2a-js/issues/582)) ([e6e8ce9](https://github.com/a2aproject/a2a-js/commit/e6e8ce9af036f10ca020286fe4bfa649994e7b84))
+* **client:** cancel the SSE stream on teardown to avoid leaking connections ([#580](https://github.com/a2aproject/a2a-js/issues/580)) ([83269a5](https://github.com/a2aproject/a2a-js/commit/83269a5a30f7a4860df80fe12f80d8f2d532e8cf))
+* **grpc:** preserve null values in protobuf Struct ([#578](https://github.com/a2aproject/a2a-js/issues/578)) ([f447e4e](https://github.com/a2aproject/a2a-js/commit/f447e4e72332fd9f5aa32ba3fccd1464d2de4627)), closes [#576](https://github.com/a2aproject/a2a-js/issues/576)
+* resolve sdk compatibility bugs and add itk scenarios ([#568](https://github.com/a2aproject/a2a-js/issues/568)) ([b57f026](https://github.com/a2aproject/a2a-js/commit/b57f026f82b022eee16bd09907a9ecac0162784f))
+* **server:** await _handleProcessingError so blocking drains surface errors ([#579](https://github.com/a2aproject/a2a-js/issues/579)) ([5833652](https://github.com/a2aproject/a2a-js/commit/5833652fbe4eab1a3d10437b2d6db7b0fe22233f))
+* support GET for resubscribe route ([#569](https://github.com/a2aproject/a2a-js/issues/569)) ([8dd43d1](https://github.com/a2aproject/a2a-js/commit/8dd43d1484bb7bf4dfc786eca1c4ce2d40441d73))
+
+
+### Miscellaneous Chores
+
+* prepare for 1.0.0 stable release ([#596](https://github.com/a2aproject/a2a-js/issues/596)) ([1f7d3ef](https://github.com/a2aproject/a2a-js/commit/1f7d3efdfb38807896fe1b24b82284bb7fd910f8))
+
 ## [1.0.0-beta.0](https://github.com/a2aproject/a2a-js/compare/v1.0.0-alpha.0...v1.0.0-beta.0) (2026-07-01)
 
 The v0.3 backward-compatibility layer is now complete, marking this release as the first one bringing v1.0 and v0.3 support together.
