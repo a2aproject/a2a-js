@@ -2,6 +2,13 @@
 
 ## [1.0.0](https://github.com/a2aproject/a2a-js/compare/v1.0.0-beta.0...v1.0.0) (2026-07-22)
 
+`@a2a-js/sdk` is now generally available. This release promotes the v1.0 line to stable, implementing the full [A2A Protocol Specification v1.0](https://a2a-protocol.org/v1.0.0/specification/) across all three transports (JSON-RPC, HTTP+JSON/REST, gRPC), with opt-in v0.3 backward compatibility for staged migrations.
+
+Upgrading from `0.3.x`? See the [v0.3 → v1.0 migration guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0/docs/migration-guide.md).
+Interoperating with peers still on v0.3? See the [end-user v0.3 compatibility guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0/docs/compatibility-v0_3.md).
+
+Changes below cover what landed since `v1.0.0-beta.0` — for the complete v0.3 → v1.0 delta, see the [`1.0.0-beta.0`](#100-beta0-2026-07-01) and [`1.0.0-alpha.0`](#100-alpha0-2026-05-11) entries below.
+
 
 ### ⚠ BREAKING CHANGES
 
