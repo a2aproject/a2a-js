@@ -2,9 +2,9 @@ name: Run Linter & Formatter
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "epic/**" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "epic/**" ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
