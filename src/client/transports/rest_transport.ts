@@ -326,7 +326,7 @@ export class RestTransport implements Transport {
         }
       }
     } catch {
-      // Body wasn't JSON — fall through to a generic error.
+      // Body wasn't JSON — fall through to a REST-scoped A2AError.
     }
 
     const transportCtx = {

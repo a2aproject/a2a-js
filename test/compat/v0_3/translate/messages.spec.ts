@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toCompatMessage, toCoreMessage } from '../../../../src/compat/v0_3/translate/messages.js';
 import { A2AError } from '../../../../src/compat/v0_3/server/error.js';
-import { JSON_RPC_ERROR_CODE } from '../../../../src/errors/index.js';
+import { JSON_RPC_ERROR_CODE } from '../../../../src/errors/json_rpc.js';
 import { Role } from '../../../../src/types/pb/a2a.js';
 import type { Message as V1Message } from '../../../../src/types/pb/a2a.js';
 import type * as legacy from '../../../../src/compat/v0_3/types/types.js';

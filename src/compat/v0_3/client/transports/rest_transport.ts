@@ -15,12 +15,9 @@
  * `tasks/list`.
  */
 
-import {
-  A2A_ERROR_CLASSES,
-  InvalidAgentResponseError,
-  JSON_RPC_CODE_TO_ERROR,
-  UnsupportedOperationError,
-} from '../../../../errors/index.js';
+import { A2A_ERROR_CLASSES } from '../../../../errors/base.js';
+import { JSON_RPC_CODE_TO_ERROR } from '../../../../errors/json_rpc.js';
+import { InvalidAgentResponseError, UnsupportedOperationError } from '../../../../errors/index.js';
 import type { TransportProtocolName } from '../../../../core.js';
 import type { SendMessageResult } from '../../../../index.js';
 import type { RequestOptions } from '../../../../client/multitransport-client.js';

@@ -14,12 +14,8 @@
  * clients (see `server/grpc/grpc_service.ts`).
  */
 
-import {
-  A2A_ERROR_CODE,
-  A2AError,
-  isJsonRpcError,
-  JSON_RPC_ERROR_CODE,
-} from '../../../errors/index.js';
+import { A2A_ERROR_CODE, isJsonRpcError, JSON_RPC_ERROR_CODE } from '../../../errors/json_rpc.js';
+import { A2AError } from '../../../errors/index.js';
 import type { JSONRPCError } from '../types/types.js';
 
 /** v0.3 REST error body: bare `{ code, message, data? }`. */

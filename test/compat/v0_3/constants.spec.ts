@@ -29,7 +29,8 @@ import {
   isLegacyJsonRpcMethod,
   isV1JsonRpcMethod,
 } from '../../../src/compat/v0_3/constants.js';
-import { A2AError, isJsonRpcError, JSON_RPC_ERROR_CODE } from '../../../src/errors/index.js';
+import { A2AError, isJsonRpcError } from '../../../src/errors/index.js';
+import { JSON_RPC_ERROR_CODE } from '../../../src/errors/json_rpc.js';
 
 /** Reads the wire code from a thrown error: envelopeCode wins, else per-error map. */
 function wireCode(err: unknown): number | undefined {

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { JSONRPCErrorResponse } from '../src/core.js';
+import { A2A_ERROR_CLASSES, A2A_ERROR_SPECS } from '../src/errors/base.js';
+import { JSON_RPC_CODE_TO_ERROR, JSON_RPC_ERROR_CODE } from '../src/errors/json_rpc.js';
 import {
-  A2A_ERROR_CLASSES,
   A2A_ERROR_CODE,
   A2A_ERROR_DOMAIN,
-  A2A_ERROR_SPECS,
   A2AError,
   ContentTypeNotSupportedError,
   ERROR_INFO_TYPE,
@@ -17,8 +17,6 @@ import {
   InvalidAgentResponseError,
   isJsonRpcError,
   isRestError,
-  JSON_RPC_CODE_TO_ERROR,
-  JSON_RPC_ERROR_CODE,
   JsonRpcRequestMalformedError,
   JsonRpcTaskNotFoundError,
   JsonRpcTransportError as JSONRPCTransportError,

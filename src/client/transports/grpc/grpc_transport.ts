@@ -231,7 +231,7 @@ export class GrpcTransport implements Transport {
             options.signal.removeEventListener('abort', onAbort);
           }
           if (error) {
-            return reject(GrpcTransport.mapToError(error, method));
+            return reject(fromGrpcError(error, method));
           }
           resolve(converter(response));
         }
@@ -281,7 +281,7 @@ export class GrpcTransport implements Transport {
       }
     } catch (error) {
       if (this.isServiceError(error)) {
-        throw GrpcTransport.mapToError(error, method);
+        throw fromGrpcError(error, method);
       } else {
         throw new Error(`GRPC error for ${String(method)}!`, {
           cause: error,
@@ -307,16 +307,6 @@ export class GrpcTransport implements Transport {
       }
     }
     return metadata;
-  }
-
-  /**
-   * Maps a gRPC `ServiceError` to a semantic {@link import('../../../errors/index.js').GrpcA2AError}
-   * via `google.rpc.ErrorInfo` from `grpc-status-details-bin`. Falls
-   * back to `GrpcGenericError` preserving the gRPC status and details
-   * when no ErrorInfo is present.
-   */
-  private static mapToError(error: grpc.ServiceError, method?: keyof A2AServiceClient): Error {
-    return fromGrpcError(error, method ? String(method) : undefined);
   }
 }
 

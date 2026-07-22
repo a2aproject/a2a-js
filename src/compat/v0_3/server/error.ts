@@ -6,16 +6,17 @@
  * `METHOD_NOT_FOUND`) are preserved via `JsonRpc*Error.envelopeCode`.
  */
 
+import { A2A_ERROR_CLASSES, A2AError as BaseA2AError } from '../../../errors/base.js';
 import {
-  A2A_ERROR_CLASSES,
   A2A_ERROR_CODE,
-  A2AError as BaseA2AError,
-  ExtendedAgentCardNotConfiguredError,
   JSON_RPC_CODE_TO_ERROR,
   JSON_RPC_ERROR_CLASSES,
   JsonRpcRequestMalformedError,
   JsonRpcTransportError,
   JsonRpcUnsupportedOperationError,
+} from '../../../errors/json_rpc.js';
+import {
+  ExtendedAgentCardNotConfiguredError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
   TaskNotCancelableError,

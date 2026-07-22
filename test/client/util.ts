@@ -2,13 +2,9 @@ import { vi, Mock } from 'vitest';
 import { AGENT_CARD_PATH, JSON_CONTENT_TYPE } from '../../src/constants.js';
 import { Role, SendMessageResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { SendMessageResult } from '../../src/index.js';
-import {
-  A2A_ERROR_DOMAIN,
-  A2A_ERROR_SPECS,
-  ERROR_INFO_TYPE,
-  JSON_RPC_CODE_TO_ERROR,
-  REST_ERROR_STATUS_NAME,
-} from '../../src/errors/index.js';
+import { A2A_ERROR_DOMAIN, A2A_ERROR_SPECS, ERROR_INFO_TYPE } from '../../src/errors/base.js';
+import { JSON_RPC_CODE_TO_ERROR } from '../../src/errors/json_rpc.js';
+import { REST_ERROR_STATUS_NAME } from '../../src/errors/rest.js';
 
 export function extractRequestId(options?: RequestInit): number {
   if (!options?.body) {
