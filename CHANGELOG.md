@@ -22,14 +22,10 @@
 * **client:** bound SSE event size to prevent client-side memory exhaustion ([#582](https://github.com/a2aproject/a2a-js/issues/582)) ([e6e8ce9](https://github.com/a2aproject/a2a-js/commit/e6e8ce9af036f10ca020286fe4bfa649994e7b84))
 * **client:** cancel the SSE stream on teardown to avoid leaking connections ([#580](https://github.com/a2aproject/a2a-js/issues/580)) ([83269a5](https://github.com/a2aproject/a2a-js/commit/83269a5a30f7a4860df80fe12f80d8f2d532e8cf))
 * **grpc:** preserve null values in protobuf Struct ([#578](https://github.com/a2aproject/a2a-js/issues/578)) ([f447e4e](https://github.com/a2aproject/a2a-js/commit/f447e4e72332fd9f5aa32ba3fccd1464d2de4627)), closes [#576](https://github.com/a2aproject/a2a-js/issues/576)
-* resolve sdk compatibility bugs and add itk scenarios ([#568](https://github.com/a2aproject/a2a-js/issues/568)) ([b57f026](https://github.com/a2aproject/a2a-js/commit/b57f026f82b022eee16bd09907a9ecac0162784f))
+* resolve sdk compatibility bugs ([#568](https://github.com/a2aproject/a2a-js/issues/568)) ([b57f026](https://github.com/a2aproject/a2a-js/commit/b57f026f82b022eee16bd09907a9ecac0162784f))
 * **server:** await _handleProcessingError so blocking drains surface errors ([#579](https://github.com/a2aproject/a2a-js/issues/579)) ([5833652](https://github.com/a2aproject/a2a-js/commit/5833652fbe4eab1a3d10437b2d6db7b0fe22233f))
 * support GET for resubscribe route ([#569](https://github.com/a2aproject/a2a-js/issues/569)) ([8dd43d1](https://github.com/a2aproject/a2a-js/commit/8dd43d1484bb7bf4dfc786eca1c4ce2d40441d73))
 
-
-### Miscellaneous Chores
-
-* prepare for 1.0.0 stable release ([#596](https://github.com/a2aproject/a2a-js/issues/596)) ([1f7d3ef](https://github.com/a2aproject/a2a-js/commit/1f7d3efdfb38807896fe1b24b82284bb7fd910f8))
 
 ## [1.0.0-beta.0](https://github.com/a2aproject/a2a-js/compare/v1.0.0-alpha.0...v1.0.0-beta.0) (2026-07-01)
 
