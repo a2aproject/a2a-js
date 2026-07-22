@@ -20,7 +20,7 @@ over the protocol) and A2A **clients** (applications discovering and driving
 those agents) — one package, three wire transports (JSON-RPC,
 HTTP+JSON/REST, gRPC), and an opt-in compatibility layer for v0.3 peers.
 
-- 🚀 **v1.0 beta release** tracking [A2A Protocol Specification v1.0](https://a2a-protocol.org/v1.0.0/specification/).
+- 🚀 **v1.0 stable release** implementing [A2A Protocol Specification v1.0](https://a2a-protocol.org/v1.0.0/specification/).
 - 🔌 **Three transports** — JSON-RPC, HTTP+JSON/REST, and gRPC (Node-only),
   all backed by a single `DefaultRequestHandler`.
 - 🔄 **v0.3 backward compatibility** as an opt-in layer so v1.0 deployments
@@ -28,10 +28,10 @@ HTTP+JSON/REST, gRPC), and an opt-in compatibility layer for v0.3 peers.
 
 ## Installation
 
-You can install the A2A SDK using `npm`. The v1.0 beta release is now available:
+You can install the A2A SDK using `npm`:
 
 ```bash
-npm install @a2a-js/sdk@next
+npm install @a2a-js/sdk
 ```
 
 ### For Server Usage

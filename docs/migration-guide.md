@@ -14,7 +14,7 @@ model changes (renamed fields, restructured types, new operations), see:
 - Install the v1.0 SDK:
 
   ```bash
-  npm install @a2a-js/sdk@next
+  npm install @a2a-js/sdk
   ```
 
 > Migrating all v0.3 clients to v1.0 during upgrade is not required: the v1.0 SDK
