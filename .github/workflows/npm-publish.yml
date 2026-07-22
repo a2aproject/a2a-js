@@ -35,14 +35,8 @@ jobs:
             npm publish --provenance --access public --tag next
           else
             npm publish --provenance --access public
+            VERSION=$(node -p "require('./package.json').version")
+            npm dist-tag add "@a2a-js/sdk@${VERSION}" next
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-
-      - name: Point `next` tag at the stable release too
-        if: ${{ github.event.release.prerelease == false }}
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          npm dist-tag add "@a2a-js/sdk@${VERSION}" next
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
