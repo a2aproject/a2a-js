@@ -14,9 +14,9 @@ name: Run Build Tests
 
 on:
   push:
-    branches: [ "main", "epic/**" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "epic/**" ]
+    branches: [ "main" ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'

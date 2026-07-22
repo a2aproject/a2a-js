@@ -61,8 +61,7 @@ import { grpcService, A2AService } from '../../src/server/grpc/index.js';
 import { LegacyA2AService, legacyGrpcService } from '../../src/compat/v0_3/server/grpc/index.js';
 
 /**
- * SUTAgentExecutor implements the agent's core logic. Kept in lockstep
- * with `tck/agent/index.ts` so both SUTs answer the TCK identically.
+ * SUTAgentExecutor implements the agent's core logic used by the TCK.
  */
 class SUTAgentExecutor implements AgentExecutor {
   private runningTask: Set<string> = new Set();

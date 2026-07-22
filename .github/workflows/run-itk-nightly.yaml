@@ -6,24 +6,6 @@ on:
     # so the cross-SDK nightly artifacts upload roughly in parallel.
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual execution from the Actions tab
-  # Also fire on every push to `main` and `epic`. The `schedule:` and
-  # `workflow_dispatch:` triggers above only become live once this file
-  # lands on the repo's default branch (`main`) — until then the cron
-  # doesn't tick and the "Run workflow" button doesn't appear in the
-  # Actions UI. The `push:` trigger lets us validate the full nightly
-  # matrix (37 scenarios) and the rolling-metrics upload on the `epic`
-  # branch while it's still the active development branch, matching the
-  # PR workflow's `branches: ["main", "epic"]` configuration. Drop the
-  # `epic` entry once this is merged to `main` and the cron takes over.
-  push:
-    branches: ["main", "epic/**"]
-    paths:
-      - 'src/**'
-      - '!src/samples/**'
-      - 'itk/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/run-itk-nightly.yaml'
 
 permissions:
   # Required for `softprops/action-gh-release` to publish the rolling
