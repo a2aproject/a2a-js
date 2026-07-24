@@ -137,7 +137,7 @@
   "devDependencies": {
     "@bufbuild/buf": "^1.61.0",
     "@bufbuild/protobuf": "^2.10.2",
-    "@cloudflare/vitest-pool-workers": "^0.12.5",
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
     "@eslint/js": "^9.39.1",
     "@grpc/grpc-js": "^1.14.4",
     "@types/express": "^5.0.3",
