@@ -24,6 +24,9 @@ export interface AgentCardResolverOptions {
 
 export interface AgentCardResolver {
   resolve(baseUrl: string, path?: string): Promise<AgentCard>;
+
+  /** Normalizes an already-fetched card before client transport selection. */
+  normalizeAgentCard?(card: unknown): AgentCard;
 }
 
 export class DefaultAgentCardResolver implements AgentCardResolver {
@@ -52,7 +55,7 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
     return fetch(...args);
   }
 
-  /*
+  /**
    * In v0.3 there was structural drift between the JSON Schema data
    * model and the Protobuf-based data model for AgentCards: JSON Schema
    * uses a `"type"` discriminator, while Protobuf JSON uses the `oneof`
@@ -62,7 +65,7 @@ export class DefaultAgentCardResolver implements AgentCardResolver {
    * When `legacyCompat: { enabled: true }`, this method also detects
    * v0.3-shaped cards and translates them via the compat module.
    */
-  private normalizeAgentCard(card: unknown): AgentCard {
+  normalizeAgentCard(card: unknown): AgentCard {
     if (this.options?.legacyCompat?.enabled) {
       if (isLegacyAgentCard(card)) {
         return parseLegacyAgentCard(card);

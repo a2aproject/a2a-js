@@ -90,12 +90,18 @@ export class ClientFactory {
   }
 
   /**
-   * Creates a new client from the provided agent card. When the selected
-   * `AgentInterface` declares a non-empty `tenant`, the transport is
-   * wrapped with a {@link TenantTransportDecorator} so the default tenant
-   * is applied to every request.
+   * Creates a new client from the provided agent card. The configured resolver
+   * may normalize an already-fetched card before transport selection. When the
+   * selected `AgentInterface` declares a non-empty `tenant`, the transport is
+   * wrapped with a {@link TenantTransportDecorator} so the default tenant is
+   * applied to every request.
    */
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
+    const normalizedAgentCard = this.agentCardResolver.normalizeAgentCard?.(agentCard) ?? agentCard;
+    return this.createFromNormalizedAgentCard(normalizedAgentCard);
+  }
+
+  private async createFromNormalizedAgentCard(agentCard: AgentCard): Promise<Client> {
     const interfaces = agentCard.supportedInterfaces ?? [];
 
     const bestInterfacePerProtocol = new CaseInsensitiveMap<(typeof interfaces)[number]>();
@@ -146,7 +152,7 @@ export class ClientFactory {
    */
   async createFromUrl(baseUrl: string, path?: string): Promise<Client> {
     const agentCard = await this.agentCardResolver.resolve(baseUrl, path);
-    return this.createFromAgentCard(agentCard);
+    return this.createFromNormalizedAgentCard(agentCard);
   }
 }
 

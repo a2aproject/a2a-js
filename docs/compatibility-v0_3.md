@@ -153,9 +153,19 @@ const factory = new ClientFactory(
 const client = await factory.createFromUrl(serverUrl);
 ```
 
+If the card is fetched through an application-specific path, the same factory
+configuration also normalizes it before direct client creation:
+
+```ts
+const response = await fetch(customAgentCardUrl);
+const card = await response.json();
+const client = await factory.createFromAgentCard(card);
+```
+
 With those flags set:
 
-- `DefaultAgentCardResolver` inspects every fetched card. A pure v0.3 card
+- `DefaultAgentCardResolver` inspects fetched cards and cards passed directly to
+  `ClientFactory.createFromAgentCard`. A pure v0.3 card
   (top-level `url`, no `supportedInterfaces[]`, or a `protocolVersion` in
   `[0.3, 1.0)`) is translated to a v1.0 representation with
   `protocolVersion: '0.3'` stamped on each synthesized `AgentInterface`. A
