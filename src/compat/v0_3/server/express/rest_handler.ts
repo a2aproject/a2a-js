@@ -14,7 +14,11 @@ import express, {
 
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
 import { Extensions } from '../../../../extensions.js';
-import { ServerCallContext } from '../../../../server/context.js';
+import {
+  ServerCallContext,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../../../../server/context.js';
 import { UserBuilder, delegateAsyncIterator } from '../../../../server/express/common.js';
 import { type A2ARequestHandler } from '../../../../server/request_handler/a2a_request_handler.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../../../sse_utils.js';
@@ -49,6 +53,14 @@ import {
 export interface LegacyRestHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+  /**
+   * Custom builder for the per-request {@link ServerCallContext}. When
+   * omitted, {@link defaultServerCallContextBuilder} is used, which
+   * populates `context.state[STATE_HEADERS_KEY]` with the raw request
+   * headers. Auto-forwarded from the v1.0 `restHandler` options when
+   * this router is mounted via `legacyCompat: { enabled: true }`.
+   */
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /** Converts JSON parse errors from `express.json()` to v0.3-shaped 400 responses. */
@@ -118,11 +130,13 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
     const requestedVersion = req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION;
-    const context = new ServerCallContext({
-      requestedExtensions: Extensions.parseServiceParameter(
+    const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
+    const context = ctxBuilder({
+      extensions: Extensions.parseServiceParameter(
         req.header(LEGACY_HTTP_EXTENSION_HEADER) ?? req.header(HTTP_EXTENSION_HEADER)
       ),
       user,
+      headers: req.headers,
       requestedVersion,
       tenant: (req.params.tenant as string) || undefined,
     });

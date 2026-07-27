@@ -33,7 +33,11 @@ import {
 } from '../../grpc/pb/a2a.js';
 import { Empty } from '../../grpc/pb/google/protobuf/empty.js';
 import { A2ARequestHandler } from '../../../../server/request_handler/a2a_request_handler.js';
-import { ServerCallContext } from '../../../../server/context.js';
+import {
+  ServerCallContext,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../../../../server/context.js';
 import { Extensions } from '../../../../extensions.js';
 import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
@@ -78,10 +82,18 @@ import type {
   TaskPushNotificationConfig as V1TaskPushNotificationConfig,
 } from '../../../../types/pb/a2a.js';
 
-/** Same shape as v1.0 `GrpcServiceOptions`. */
+/** Options for the legacy v0.3 gRPC service handler. */
 export interface LegacyGrpcServiceOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
+  /**
+   * Custom builder for the per-request {@link ServerCallContext}. When
+   * omitted, {@link defaultServerCallContextBuilder} is used, which
+   * populates `context.state[STATE_HEADERS_KEY]` with the raw request
+   * metadata. Provide the same builder passed to the v1.0 `grpcService`
+   * so v0.3 traffic sees the same context shape.
+   */
+  contextBuilder?: ServerCallContextBuilder;
 }
 
 /**
@@ -107,7 +119,12 @@ export function legacyGrpcService(options: LegacyGrpcServiceOptions): A2AService
     converter: (res: TCoreRes) => TPbRes
   ): Promise<void> => {
     try {
-      const context = await _buildContext(call, options.userBuilder, requestHandler);
+      const context = await _buildContext(
+        call,
+        options.userBuilder,
+        requestHandler,
+        options.contextBuilder
+      );
       const coreRequest = parser(call.request);
       const result = await handler(coreRequest, context);
       call.sendMetadata(buildMetadata(context));
@@ -126,7 +143,12 @@ export function legacyGrpcService(options: LegacyGrpcServiceOptions): A2AService
     converter: (res: TCoreRes) => TPbRes
   ): Promise<void> => {
     try {
-      const context = await _buildContext(call, options.userBuilder, requestHandler);
+      const context = await _buildContext(
+        call,
+        options.userBuilder,
+        requestHandler,
+        options.contextBuilder
+      );
       const coreRequest = parser(call.request);
       const stream = handler(coreRequest, context);
       call.sendMetadata(buildMetadata(context));
@@ -461,7 +483,8 @@ const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
 const _buildContext = async (
   call: grpc.ServerUnaryCall<unknown, unknown> | grpc.ServerWritableStream<unknown, unknown>,
   userBuilder: UserBuilder,
-  requestHandler: A2ARequestHandler
+  requestHandler: A2ARequestHandler,
+  contextBuilder?: ServerCallContextBuilder
 ): Promise<ServerCallContext> => {
   const user = await userBuilder(call);
   // Accept both v0.3's `X-A2A-Extensions` and v1.0's `A2A-Extensions`.
@@ -475,9 +498,17 @@ const _buildContext = async (
   const versionHeaders = call.metadata.get(A2A_VERSION_HEADER.toLowerCase());
   const requestedVersion = versionHeaders.length > 0 ? versionHeaders[0].toString() : undefined;
 
-  const context = new ServerCallContext({
-    requestedExtensions: Extensions.parseServiceParameter(extensionString),
+  // Convert gRPC metadata to the transport-agnostic RequestHeaders shape.
+  const headers: Record<string, string | string[] | undefined> = {};
+  for (const [key, value] of Object.entries(call.metadata.getMap())) {
+    headers[key] = value.toString();
+  }
+
+  const ctxBuilder = contextBuilder ?? defaultServerCallContextBuilder;
+  const context = ctxBuilder({
+    extensions: Extensions.parseServiceParameter(extensionString),
     user,
+    headers,
     requestedVersion,
   });
 

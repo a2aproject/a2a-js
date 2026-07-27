@@ -16,6 +16,11 @@ import {
   type Task as V1Task,
 } from '../../../../../src/types/pb/a2a.js';
 import { decodeErrorInfo, decodeStatus } from '../../../../../src/errors/grpc/index.js';
+import {
+  STATE_HEADERS_KEY,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../../../../../src/server/context.js';
 
 // v0.3 GRPC interface so validateVersion accepts the defaulted '0.3'.
 const testAgentCard: V1AgentCard = {
@@ -505,6 +510,89 @@ describe('legacyGrpcService', () => {
 
       const [, context] = (mockRequestHandler.getTask as Mock).mock.calls[0];
       expect(context.requestedExtensions).toEqual(['legacy-ext-v1']);
+    });
+  });
+
+  describe('context builder', () => {
+    // Regression test: a custom `contextBuilder` set on the
+    // v0.3 compat gRPC service used to be silently dropped; the service
+    // hard-coded `new ServerCallContext(...)` and ignored operator hooks.
+
+    it('invokes the operator-supplied contextBuilder on each call', async () => {
+      const contextBuilder = vi.fn(defaultServerCallContextBuilder);
+      const svc = legacyGrpcService({
+        requestHandler: mockRequestHandler,
+        userBuilder: async () => ({ id: 'test-user' }) as any,
+        contextBuilder,
+      });
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(v1Task('t-1'));
+
+      const call = createMockUnaryCall({ name: 'tasks/t-1', historyLength: 0 });
+      const callback = vi.fn();
+      await svc.getTask(call, callback);
+
+      expect(contextBuilder).toHaveBeenCalledTimes(1);
+      const opts = contextBuilder.mock.calls[0]![0];
+      expect(opts.requestedVersion).to.equal('0.3');
+      // Metadata (converted to the transport-agnostic RequestHeaders
+      // shape) must be forwarded so the operator can key off it and
+      // so the default builder's header-stashing keeps working.
+      assert.isDefined(opts.headers);
+      expect(opts.headers[A2A_VERSION_HEADER.toLowerCase()]).to.equal('0.3');
+    });
+
+    it('lets a custom contextBuilder inject tenant into context.state', async () => {
+      // Mirrors the reporter's use case: pull a tenant identifier off
+      // a metadata header and stash it in `state` so the TaskStore /
+      // PushNotificationStore downstream can read it.
+      const tenantBuilder: ServerCallContextBuilder = (opts) => {
+        const ctx = defaultServerCallContextBuilder(opts);
+        const tenantHeader = opts.headers['x-tenant-id'];
+        ctx.state.set('tenantId', typeof tenantHeader === 'string' ? tenantHeader : undefined);
+        return ctx;
+      };
+      const svc = legacyGrpcService({
+        requestHandler: mockRequestHandler,
+        userBuilder: async () => ({ id: 'test-user' }) as any,
+        contextBuilder: tenantBuilder,
+      });
+      let observedTenant: unknown;
+      (mockRequestHandler.getTask as Mock).mockImplementation(async (_req, ctx) => {
+        observedTenant = ctx.state.get('tenantId');
+        return v1Task('t-tenant');
+      });
+
+      const call = createMockUnaryCall(
+        { name: 'tasks/t-tenant', historyLength: 0 },
+        { 'x-tenant-id': 'acme' }
+      );
+      const callback = vi.fn();
+      await svc.getTask(call, callback);
+
+      expect(observedTenant).to.equal('acme');
+    });
+
+    it('falls back to the default builder when contextBuilder is omitted', async () => {
+      // Without a custom builder, `defaultServerCallContextBuilder`
+      // must still run — this pre-populates `context.state[STATE_HEADERS_KEY]`
+      // with the raw metadata, mirroring the v1.0 gRPC path exactly.
+      let observedHeaders: unknown;
+      (mockRequestHandler.getTask as Mock).mockImplementation(async (_req, ctx) => {
+        observedHeaders = ctx.state.get(STATE_HEADERS_KEY);
+        return v1Task('t-default');
+      });
+
+      const call = createMockUnaryCall(
+        { name: 'tasks/t-default', historyLength: 0 },
+        { 'x-custom': 'v' }
+      );
+      const callback = vi.fn();
+      await handler.getTask(call, callback);
+
+      assert.isDefined(observedHeaders);
+      const headers = observedHeaders as Record<string, string>;
+      expect(headers[A2A_VERSION_HEADER.toLowerCase()]).to.equal('0.3');
+      expect(headers['x-custom']).to.equal('v');
     });
   });
 
