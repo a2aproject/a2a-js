@@ -514,7 +514,7 @@ describe('legacyGrpcService', () => {
   });
 
   describe('context builder', () => {
-    // Regression test for #600: a custom `contextBuilder` set on the
+    // Regression test: a custom `contextBuilder` set on the
     // v0.3 compat gRPC service used to be silently dropped; the service
     // hard-coded `new ServerCallContext(...)` and ignored operator hooks.
 

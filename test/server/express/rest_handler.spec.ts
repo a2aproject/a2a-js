@@ -1403,7 +1403,7 @@ describe('restHandler', () => {
 
     describe('context builder', () => {
       it('invokes the operator-supplied contextBuilder on the legacy path', async () => {
-        // Regression test for #600: a custom `contextBuilder` set on the
+        // Regression test: a custom `contextBuilder` set on the
         // v1.0 `restHandler` used to be silently dropped by the compat
         // router, which hard-coded `new ServerCallContext(...)`.
         const contextBuilder = vi.fn(defaultServerCallContextBuilder);
