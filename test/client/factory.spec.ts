@@ -10,6 +10,7 @@ import {
   JsonRpcTransportFactory,
 } from '../../src/client/transports/json_rpc_transport.js';
 import { LegacyJsonRpcTransport } from '../../src/compat/v0_3/client/transports/json_rpc_transport.js';
+import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
 
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
@@ -270,6 +271,21 @@ describe('ClientFactory', () => {
       expect(jsonRpcFactory.create).toHaveBeenCalledTimes(1);
     });
 
+    it('preserves direct-card behavior for resolvers without a card normalizer', async () => {
+      const cardResolver = {
+        resolve: vi.fn().mockResolvedValue(agentCard),
+      };
+      const factory = new ClientFactory({
+        transports: [mockTransportFactory1],
+        cardResolver,
+      });
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(mockTransportFactory1.create).toHaveBeenCalledTimes(1);
+    });
+
     it('should use card resolver with default path', async () => {
       const cardResolver = {
         resolve: vi.fn().mockResolvedValue(agentCard),
@@ -398,6 +414,67 @@ describe('ClientFactory', () => {
       expect(client).to.be.instanceOf(Client);
       expect(client.transport).to.be.instanceOf(LegacyJsonRpcTransport);
       expect(client.protocolVersion).to.equal('0.3');
+    });
+
+    it('normalizes a pure v0.3 card through the configured resolver', async () => {
+      const factory = new ClientFactory(
+        ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+          cardResolver: new DefaultAgentCardResolver({ legacyCompat: { enabled: true } }),
+          transports: [new JsonRpcTransportFactory({ legacyCompat: { enabled: true } })],
+        })
+      );
+      const legacyCard: Record<string, unknown> = {
+        name: 'Legacy Agent',
+        description: 'A v0.3 agent',
+        protocolVersion: '0.3.0',
+        version: '1.0.0',
+        url: 'https://v03.example/rpc',
+        skills: [],
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          stateTransitionHistory: false,
+        },
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+      };
+
+      const client = await factory.createFromAgentCard(legacyCard as unknown as AgentCard);
+
+      expect(client.transport).to.be.instanceOf(LegacyJsonRpcTransport);
+      expect(client.protocolVersion).to.equal('0.3');
+      expect((await client.getAgentCard()).supportedInterfaces).to.deep.equal([
+        {
+          url: 'https://v03.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3.0',
+        },
+      ]);
+    });
+
+    it('does not normalize a pure v0.3 card when resolver compatibility is disabled', async () => {
+      const factory = new ClientFactory(
+        ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+          cardResolver: new DefaultAgentCardResolver(),
+          transports: [new JsonRpcTransportFactory({ legacyCompat: { enabled: true } })],
+        })
+      );
+      const legacyCard: Record<string, unknown> = {
+        name: 'Legacy Agent',
+        description: 'A v0.3 agent',
+        protocolVersion: '0.3.0',
+        version: '1.0.0',
+        url: 'https://v03.example/rpc',
+        skills: [],
+        capabilities: {},
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+      };
+
+      await expect(factory.createFromAgentCard(legacyCard as unknown as AgentCard)).rejects.toThrow(
+        'No compatible transport found'
+      );
     });
   });
 
