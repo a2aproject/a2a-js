@@ -29,6 +29,11 @@ import {
 } from '../../../src/types/pb/a2a.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import { LegacyRestTransportHandler } from '../../../src/compat/v0_3/server/transports/rest/rest_transport_handler.js';
+import {
+  STATE_HEADERS_KEY,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../../../src/server/context.js';
 
 describe('restHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
@@ -1394,6 +1399,113 @@ describe('restHandler', () => {
         .expect(201);
 
       assert.equal(response.headers['x-a2a-extensions'], 'legacy-ext');
+    });
+
+    describe('context builder', () => {
+      it('invokes the operator-supplied contextBuilder on the legacy path', async () => {
+        // Regression test for #600: a custom `contextBuilder` set on the
+        // v1.0 `restHandler` used to be silently dropped by the compat
+        // router, which hard-coded `new ServerCallContext(...)`.
+        const contextBuilder = vi.fn(defaultServerCallContextBuilder);
+        const app = express();
+        app.use(
+          restHandler({
+            requestHandler: mockRequestHandler,
+            userBuilder: UserBuilder.noAuthentication,
+            legacyCompat: { enabled: true },
+            contextBuilder,
+          })
+        );
+        legacySendMessageStub.mockResolvedValue({
+          kind: 'task',
+          id: 'legacy-task-cb',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        });
+
+        await request(app)
+          .post('/v1/message:send')
+          .set('A2A-Version', '0.3')
+          .send(legacyMessageBody)
+          .expect(201);
+
+        expect(contextBuilder).toHaveBeenCalledTimes(1);
+        const opts = contextBuilder.mock.calls[0]![0];
+        expect(opts.requestedVersion).to.equal('0.3');
+        // The custom builder must receive the raw headers — not just so
+        // the operator can key off them, but so the default builder's
+        // header-stashing behavior isn't silently regressed.
+        assert.isDefined(opts.headers);
+        assert.equal(opts.headers['a2a-version'], '0.3');
+      });
+
+      it('lets a custom contextBuilder inject tenant into context.state', async () => {
+        // Mirrors the reporter's use case: pull a tenant identifier off
+        // an auth header and stash it in `state` so the TaskStore /
+        // PushNotificationStore downstream can read it.
+        const tenantBuilder: ServerCallContextBuilder = (opts) => {
+          const ctx = defaultServerCallContextBuilder(opts);
+          const tenantHeader = opts.headers['x-tenant-id'];
+          ctx.state.set('tenantId', typeof tenantHeader === 'string' ? tenantHeader : undefined);
+          return ctx;
+        };
+        const app = express();
+        app.use(
+          restHandler({
+            requestHandler: mockRequestHandler,
+            userBuilder: UserBuilder.noAuthentication,
+            legacyCompat: { enabled: true },
+            contextBuilder: tenantBuilder,
+          })
+        );
+        let observedTenant: unknown;
+        legacySendMessageStub.mockImplementation(async (_params, context) => {
+          observedTenant = context.state.get('tenantId');
+          return {
+            kind: 'task',
+            id: 'legacy-task-tenant',
+            contextId: 'ctx',
+            status: { state: 'working' },
+          };
+        });
+
+        await request(app)
+          .post('/v1/message:send')
+          .set('A2A-Version', '0.3')
+          .set('X-Tenant-Id', 'acme')
+          .send(legacyMessageBody)
+          .expect(201);
+
+        expect(observedTenant).to.equal('acme');
+      });
+
+      it('falls back to the default builder when contextBuilder is omitted', async () => {
+        // Without a custom builder, `defaultServerCallContextBuilder`
+        // must still run — this pre-populates `context.state[STATE_HEADERS_KEY]`
+        // with the raw headers, mirroring the v1.0 REST path exactly.
+        let observedHeaders: unknown;
+        legacySendMessageStub.mockImplementation(async (_params, context) => {
+          observedHeaders = context.state.get(STATE_HEADERS_KEY);
+          return {
+            kind: 'task',
+            id: 'legacy-task-default',
+            contextId: 'ctx',
+            status: { state: 'working' },
+          };
+        });
+
+        await request(dualApp)
+          .post('/v1/message:send')
+          .set('A2A-Version', '0.3')
+          .set('X-Custom', 'v')
+          .send(legacyMessageBody)
+          .expect(201);
+
+        assert.isDefined(observedHeaders);
+        const headers = observedHeaders as Record<string, string>;
+        expect(headers['a2a-version']).to.equal('0.3');
+        expect(headers['x-custom']).to.equal('v');
+      });
     });
   });
 });
