@@ -12,8 +12,9 @@ export type AgentCardSignatureGenerator = (agentCard: AgentCard) => Promise<Agen
 /**
  * Creates an {@link AgentCardSignatureGenerator} that signs an agent card
  * using JWS (Flattened JSON Serialization) with the provided private key.
- * The `signatures` field is excluded from the payload before
- * canonicalization. The `protectedHeader` MUST include `alg`, `kid`, `typ`.
+ * The payload is produced by {@link canonicalizeAgentCard}, which excludes
+ * the `signatures` field. The `protectedHeader` MUST include `alg`, `kid`,
+ * `typ`.
  *
  * @example
  * ```ts
@@ -31,8 +32,7 @@ export function generateAgentCardSignature(
   header?: jose.JWSHeaderParameters
 ): AgentCardSignatureGenerator {
   return async (agentCard: AgentCard): Promise<AgentCard> => {
-    const { signatures: existingSignatures, ...cardWithoutSignatures } = agentCard;
-    const canonicalPayload = canonicalizeAgentCard(cardWithoutSignatures);
+    const canonicalPayload = canonicalizeAgentCard(agentCard);
 
     const signBuilder = new jose.FlattenedSign(
       new TextEncoder().encode(canonicalPayload)
@@ -52,7 +52,7 @@ export function generateAgentCardSignature(
 
     return {
       ...agentCard,
-      signatures: [...(existingSignatures ?? []), agentCardSignature],
+      signatures: [...(agentCard.signatures ?? []), agentCardSignature],
     };
   };
 }
@@ -64,6 +64,10 @@ export type AgentCardSignatureVerifier = (agentCard: AgentCard) => Promise<void>
  * Creates an {@link AgentCardSignatureVerifier} that succeeds if at least
  * one signature on the card verifies against a key returned by
  * `retrievePublicKey(kid, jku)`.
+ *
+ * Note that the payload is normalized by {@link canonicalizeAgentCard}, so
+ * fields outside the v1.0 schema are not covered by the signature and a
+ * successful verification says nothing about them.
  *
  * @example
  * ```ts
@@ -84,15 +88,7 @@ export function verifyAgentCardSignature(
       throw new Error('No signatures found on agent card to verify.');
     }
 
-    // Round-trip through AgentCard.fromJSON/toJSON to normalize the card:
-    // strip non-schema fields and omit fields with default values. Mirrors
-    // the Python SDK's MessageToDict behaviour.
-    const normalizedCard = AgentCard.toJSON(AgentCard.fromJSON(agentCard)) as Record<
-      string,
-      unknown
-    >;
-    delete normalizedCard.signatures;
-    const canonicalPayload = canonicalizeAgentCard(normalizedCard as Omit<AgentCard, 'signatures'>);
+    const canonicalPayload = canonicalizeAgentCard(agentCard);
     const payloadBytes = new TextEncoder().encode(canonicalPayload);
     const encodedPayload = jose.base64url.encode(payloadBytes);
 
@@ -172,12 +168,27 @@ function jcsStringify(value: unknown): string {
 }
 
 /**
- * Canonicalizes an agent card using JCS (RFC 8785) for signing /
- * verification. The `signatures` field MUST be excluded from `agentCard`
- * before calling this.
+ * Canonicalizes an agent card for signing / verification, per spec §8.4.1.
+ *
+ * The card is first round-tripped through `AgentCard.fromJSON` /
+ * `AgentCard.toJSON`, which drops fields outside the v1.0 schema and omits
+ * fields whose value equals the protobuf default (the JS equivalent of the
+ * Python SDK's `MessageToDict`). The `signatures` field is then excluded to
+ * avoid a circular dependency, and the result is serialized with JCS
+ * (RFC 8785).
+ *
+ * Both the signing and the verification path MUST go through this function.
+ *
+ * Passing a card that still carries `signatures` is fine; they are stripped
+ * here.
  */
-export function canonicalizeAgentCard(agentCard: Omit<AgentCard, 'signatures'>): string {
-  const cleaned = cleanEmpty(agentCard);
+export function canonicalizeAgentCard(
+  agentCard: AgentCard | Omit<AgentCard, 'signatures'>
+): string {
+  const normalized = AgentCard.toJSON(AgentCard.fromJSON(agentCard)) as Record<string, unknown>;
+  delete normalized.signatures;
+
+  const cleaned = cleanEmpty(normalized);
   if (!cleaned) {
     return '{}';
   }

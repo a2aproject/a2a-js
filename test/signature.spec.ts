@@ -88,6 +88,50 @@ describe('Agent Card Signature', () => {
 
       expect(canonicalizeAgentCard(card1 as any)).toBe(canonicalizeAgentCard(card2 as any));
     });
+
+    it('should omit fields set to their protobuf default value', () => {
+      mockAgentCard.capabilities!.extensions = [
+        {
+          uri: 'urn:example:extension',
+          description: 'Example',
+          required: false,
+          params: undefined,
+        },
+      ];
+
+      const parsed = JSON.parse(canonicalizeAgentCard(mockAgentCard));
+
+      // `required` is a plain proto3 bool, so `false` is the default and must
+      // not appear in the canonical form (spec 8.4.1).
+      expect(parsed.capabilities.extensions[0]).toEqual({
+        uri: 'urn:example:extension',
+        description: 'Example',
+      });
+    });
+
+    it('should exclude signatures whether or not the caller stripped them', () => {
+      const { signatures: _, ...cardWithoutSignatures } = mockAgentCard;
+      void _;
+
+      const withSignatures = canonicalizeAgentCard({
+        ...mockAgentCard,
+        signatures: [{ protected: 'p', signature: 's', header: undefined }],
+      });
+
+      expect(JSON.parse(withSignatures).signatures).toBeUndefined();
+      expect(withSignatures).toBe(canonicalizeAgentCard(cardWithoutSignatures));
+    });
+
+    it('should ignore fields outside the v1.0 schema', () => {
+      const cardWithExtraFields = {
+        ...mockAgentCard,
+        url: 'http://localhost:8080',
+        preferredTransport: 'JSONRPC',
+        protocolVersion: '0.3',
+      } as AgentCard;
+
+      expect(canonicalizeAgentCard(cardWithExtraFields)).toBe(canonicalizeAgentCard(mockAgentCard));
+    });
   });
 
   describe('generateAgentCardSignature', () => {
@@ -219,6 +263,54 @@ describe('Agent Card Signature', () => {
 
       const verifier = verifyAgentCardSignature(mockRetrieveKey);
       await expect(verifier(cardWithExtraFields as AgentCard)).resolves.not.toThrow();
+    });
+
+    // Regression test: the signer canonicalized the card as supplied while the
+    // verifier canonicalized the proto-normalized card, so a card carrying an
+    // explicit protobuf default was rejected by its own verifier.
+    it('should verify a card carrying explicit protobuf default values', async () => {
+      mockAgentCard.capabilities!.extensions = [
+        {
+          uri: 'urn:example:extension',
+          description: 'Example',
+          required: false,
+          params: undefined,
+        },
+      ];
+
+      const signer = generateAgentCardSignature(privateKey, {
+        alg: ALG,
+        kid: 'test-key-1',
+        typ: 'JOSE',
+      });
+      const signedCard = await signer(mockAgentCard);
+
+      const verifier = verifyAgentCardSignature(mockRetrieveKey);
+      await expect(verifier(signedCard)).resolves.not.toThrow();
+    });
+
+    it('should verify a card signed with non-schema fields present', async () => {
+      const cardWithExtraFields = {
+        ...mockAgentCard,
+        url: 'http://localhost:8080',
+        preferredTransport: 'JSONRPC',
+        protocolVersion: '0.3',
+      } as AgentCard;
+
+      const signer = generateAgentCardSignature(privateKey, {
+        alg: ALG,
+        kid: 'test-key-1',
+        typ: 'JOSE',
+      });
+      const signedCard = await signer(cardWithExtraFields);
+
+      const verifier = verifyAgentCardSignature(mockRetrieveKey);
+      // Valid with the extra fields still attached...
+      await expect(verifier(signedCard)).resolves.not.toThrow();
+      // ...and still valid once a peer drops them.
+      await expect(
+        verifier({ ...mockAgentCard, signatures: signedCard.signatures })
+      ).resolves.not.toThrow();
     });
 
     it('should pass jku to retrievePublicKey when present in header', async () => {

@@ -118,12 +118,11 @@ async function main() {
 
   // Step 3: Verify canonicalization produces deterministic output
   console.log('--- Step 3: Verify canonicalization ---');
-  const { signatures: _, ...cardWithoutSignatures } = rawCard;
-  void _;
-  const canonical = canonicalizeAgentCard(cardWithoutSignatures);
+  // `signatures` are excluded by canonicalizeAgentCard itself.
+  const canonical = canonicalizeAgentCard(rawCard);
   console.log(`  Canonical form (first 200 chars): ${canonical.substring(0, 200)}...`);
   // Run it twice to confirm determinism
-  const canonical2 = canonicalizeAgentCard(cardWithoutSignatures);
+  const canonical2 = canonicalizeAgentCard(rawCard);
   if (canonical === canonical2) {
     console.log('  PASS: Canonicalization is deterministic.\n');
   } else {
