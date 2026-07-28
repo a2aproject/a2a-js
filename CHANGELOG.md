@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1](https://github.com/a2aproject/a2a-js/compare/v1.0.0...v1.0.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **compat/v0_3:** call context builder for compatibility layer ([#604](https://github.com/a2aproject/a2a-js/issues/604)) ([771836c](https://github.com/a2aproject/a2a-js/commit/771836c3ff7122424529012252a3358d7b40d39b)), closes [#600](https://github.com/a2aproject/a2a-js/issues/600)
+* normalize legacy cards in createFromAgentCard ([#602](https://github.com/a2aproject/a2a-js/issues/602)) ([9807a66](https://github.com/a2aproject/a2a-js/commit/9807a66402444ccf27e4ce08dd96578d814119f2)), closes [#601](https://github.com/a2aproject/a2a-js/issues/601)
+* **signature:** canonicalize the same payload when signing and verifying ([#606](https://github.com/a2aproject/a2a-js/issues/606)) ([7415e0e](https://github.com/a2aproject/a2a-js/commit/7415e0e655908dbdc8229ff99205a6fe9eae8be2))
+
 ## [1.0.0](https://github.com/a2aproject/a2a-js/compare/v1.0.0-beta.0...v1.0.0) (2026-07-22)
 
 `@a2a-js/sdk` is now generally available. This release promotes the v1.0 line to stable, implementing the full [A2A Protocol Specification v1.0](https://a2a-protocol.org/v1.0.0/specification/) across all three transports (JSON-RPC, HTTP+JSON/REST, gRPC), with opt-in v0.3 backward compatibility for staged migrations.
