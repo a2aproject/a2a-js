@@ -49,7 +49,7 @@ jobs:
           cache: 'npm'
 
       - name: Install Node dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run Error Handling Tests
         run: bash itk/run_error_tests.sh
