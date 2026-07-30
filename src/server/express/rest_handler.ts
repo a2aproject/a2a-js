@@ -11,8 +11,10 @@ import {
   RestTransportHandler,
   HTTP_STATUS,
   mapErrorToStatus,
+  parseIncludeArtifacts,
   toHTTPError,
 } from '../transports/rest/rest_transport_handler.js';
+import { serializeListTasksResponse } from '../transports/list_tasks_serializer.js';
 import {
   ServerCallContext,
   ServerCallContextBuilder,
@@ -447,7 +449,12 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('get', '/tasks', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTasks(req.query, context);
-    sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, ListTasksResponse);
+    const includeArtifacts = parseIncludeArtifacts(req.query.includeArtifacts);
+    sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, {
+      ...ListTasksResponse,
+      toJSON: (message: ListTasksResponse) =>
+        serializeListTasksResponse(message, { includeArtifacts }),
+    });
   });
 
   /**

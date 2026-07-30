@@ -221,6 +221,119 @@ describe('JsonRpcTransportHandler', () => {
     });
   });
 
+  describe('ListTasks serialization (§3.1.4)', () => {
+    const listTasks = async (params: Record<string, unknown>) => {
+      const response = (await transportHandler.handle(
+        { jsonrpc: '2.0', method: 'ListTasks', id: 1, params },
+        defaultContext
+      )) as { result: Record<string, unknown> };
+      return response.result;
+    };
+
+    const taskWithArtifacts = (artifacts: unknown[]): Record<string, unknown> => ({
+      id: 'task-1',
+      contextId: 'ctx-1',
+      status: { state: 'TASK_STATE_COMPLETED' },
+      artifacts,
+      history: [],
+      metadata: undefined,
+    });
+
+    it('emits the required pagination fields for an empty page', async () => {
+      // Default ProtoJSON elides all four at their default values, but
+      // §3.1.4 requires `nextPageToken` to always be present (empty string
+      // on the final page), and the reference SDKs emit the other three too.
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+        tasks: [],
+        nextPageToken: '',
+        pageSize: 20,
+        totalSize: 0,
+      });
+
+      expect(await listTasks({ pageSize: 20 })).toEqual({
+        tasks: [],
+        nextPageToken: '',
+        pageSize: 20,
+        totalSize: 0,
+      });
+    });
+
+    it('preserves populated pagination values', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+        tasks: [taskWithArtifacts([])],
+        nextPageToken: 'cursor-2',
+        pageSize: 10,
+        totalSize: 5,
+      });
+
+      const result = await listTasks({ pageSize: 10 });
+
+      expect(result.nextPageToken).toBe('cursor-2');
+      expect(result.pageSize).toBe(10);
+      expect(result.totalSize).toBe(5);
+      expect(result.tasks).toHaveLength(1);
+    });
+
+    it('omits artifacts entirely when includeArtifacts is false', async () => {
+      // §3.1.4: the artifacts field MUST be omitted entirely, and "should not
+      // be present as an empty array or null value". Guards against the
+      // always-emit behaviour above ever being applied recursively.
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+        tasks: [taskWithArtifacts([])],
+        nextPageToken: '',
+        pageSize: 20,
+        totalSize: 1,
+      });
+
+      const result = await listTasks({ pageSize: 20, includeArtifacts: false });
+
+      expect((result.tasks as unknown[])[0]).not.toHaveProperty('artifacts');
+    });
+
+    it('omits artifacts when includeArtifacts is not supplied', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+        tasks: [taskWithArtifacts([])],
+        nextPageToken: '',
+        pageSize: 20,
+        totalSize: 1,
+      });
+
+      const result = await listTasks({ pageSize: 20 });
+
+      expect((result.tasks as unknown[])[0]).not.toHaveProperty('artifacts');
+    });
+
+    it('emits an empty artifacts array when includeArtifacts is true', async () => {
+      // §3.1.4: when requested, artifacts "should be included with its actual
+      // content (which may be an empty array if the task has no artifacts)".
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+        tasks: [taskWithArtifacts([])],
+        nextPageToken: '',
+        pageSize: 20,
+        totalSize: 1,
+      });
+
+      const result = await listTasks({ pageSize: 20, includeArtifacts: true });
+
+      expect((result.tasks as unknown[])[0]).toHaveProperty('artifacts', []);
+    });
+
+    it('keeps populated artifacts when includeArtifacts is true', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+        tasks: [taskWithArtifacts([{ artifactId: 'a-1', parts: [], name: 'report' }])],
+        nextPageToken: '',
+        pageSize: 20,
+        totalSize: 1,
+      });
+
+      const result = await listTasks({ pageSize: 20, includeArtifacts: true });
+
+      const artifacts = (result.tasks as Record<string, unknown>[])[0].artifacts as unknown[];
+      expect(artifacts).toHaveLength(1);
+      expect(artifacts[0]).toMatchObject({ artifactId: 'a-1' });
+    });
+  });
+
   describe('Error mapping', () => {
     it('should map RequestMalformedError to code and message', async () => {
       const mappedError = JsonRpcTransportHandler.mapToJSONRPCError(
