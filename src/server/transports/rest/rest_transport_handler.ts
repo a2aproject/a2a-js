@@ -32,6 +32,10 @@ import {
 
 export { HTTP_STATUS, mapErrorToStatus, toHTTPError };
 
+export function parseIncludeArtifacts(value: unknown): boolean {
+  return value === 'true' || value === true;
+}
+
 /**
  * Handles the REST transport layer, routing requests to an
  * {@link A2ARequestHandler}. Performs type conversion, validation, and
@@ -115,8 +119,7 @@ export class RestTransportHandler {
       pageToken: (queryParams.pageToken as string) || '',
       historyLength: queryParams.historyLength ? Number(queryParams.historyLength) : undefined,
       statusTimestampAfter: (queryParams.statusTimestampAfter as string) || undefined,
-      includeArtifacts:
-        queryParams.includeArtifacts === 'true' || queryParams.includeArtifacts === true,
+      includeArtifacts: parseIncludeArtifacts(queryParams.includeArtifacts),
     };
 
     return this.requestHandler.listTasks(params, context);

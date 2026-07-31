@@ -475,6 +475,74 @@ describe('restHandler', () => {
         'Should default to TASK_STATE_UNSPECIFIED (0)'
       );
     });
+
+    describe('response field presence (§3.1.4)', () => {
+      it('should emit the required pagination fields for an empty page', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 0,
+        });
+
+        const response = await request(app)
+          .get('/tasks?pageSize=20')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        assert.deepEqual(response.body, {
+          tasks: [],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 0,
+        });
+      });
+
+      it('should omit artifacts entirely when includeArtifacts is false', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [testTask],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 1,
+        });
+
+        const response = await request(app)
+          .get('/tasks?includeArtifacts=false')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        expect(response.body.tasks[0]).not.toHaveProperty('artifacts');
+      });
+
+      it('should omit artifacts when includeArtifacts is not supplied', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [testTask],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 1,
+        });
+
+        const response = await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
+
+        expect(response.body.tasks[0]).not.toHaveProperty('artifacts');
+      });
+
+      it('should emit an empty artifacts array when includeArtifacts is true', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [testTask],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 1,
+        });
+
+        const response = await request(app)
+          .get('/tasks?includeArtifacts=true')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        assert.deepEqual(response.body.tasks[0].artifacts, []);
+      });
+    });
   });
 
   describe('/tasks/:taskId:subscribe', () => {
