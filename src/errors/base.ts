@@ -43,6 +43,19 @@ export interface A2AErrorOptions {
 }
 
 /**
+ * Realm-wide brand carried by every {@link A2AError}.
+ *
+ * The package ships one bundle per entry point and each bundle inlines
+ * its own copy of this module, so constructor identity is not shared:
+ * a plain `instanceof` fails for an error that crosses an entry
+ * boundary — e.g. a `TaskNotFoundError` from `@a2a-js/sdk/errors`
+ * reaching the adapter inside `@a2a-js/sdk/server/express`.
+ * `Symbol.for` resolves in the global registry, so every copy agrees
+ * on this key.
+ */
+const A2A_ERROR_BRAND: unique symbol = Symbol.for('@a2a-js/sdk.A2AError');
+
+/**
  * Base class for every SDK error and the concrete fallback used when
  * no semantic subclass matches (e.g. an unknown wire code). Carries
  * the spec-aligned `reason`, structured `metadata`, and a stable
@@ -58,6 +71,36 @@ export class A2AError extends Error {
   public readonly reason: string = 'INTERNAL_ERROR';
   /** Optional `google.rpc.ErrorInfo.metadata`. */
   public readonly metadata?: Record<string, string>;
+  /** @see {@link A2A_ERROR_BRAND} — defined on the prototype below. */
+  declare readonly [A2A_ERROR_BRAND]: true;
+
+  /**
+   * Makes `instanceof` immune to this module being duplicated across
+   * entry-point bundles: the brand stands in for constructor identity.
+   *
+   * Inherited by every subclass, so `err instanceof TaskNotFoundError`
+   * stays exact — subclasses are matched by name up the prototype
+   * chain, the same identity `error.name` and the registry tables below
+   * already key on. Their names come from the runtime strings in
+   * `specs`, so a bundler cannot rename them; the base class, whose
+   * name *is* a renameable binding, is answered by the brand alone.
+   */
+  static [Symbol.hasInstance](this: { name: string }, value: unknown): boolean {
+    if (typeof value !== 'object' || value === null || !(A2A_ERROR_BRAND in value)) return false;
+    // `Symbol.hasInstance` is looked up on the right-hand side, so `this`
+    // and this closure always come from the same copy of the module.
+    if ((this as unknown) === A2AError) return true;
+    for (
+      let proto: object | null = Object.getPrototypeOf(value);
+      proto !== null;
+      proto = Object.getPrototypeOf(proto)
+    ) {
+      if ((proto as { constructor?: { name?: string } }).constructor?.name === this.name) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   constructor(options?: A2AErrorOptions | string) {
     const opts = typeof options === 'string' ? { message: options } : options;
@@ -81,6 +124,9 @@ export class A2AError extends Error {
     };
   }
 }
+
+// Non-enumerable so the brand stays out of spreads and `console.log`.
+Object.defineProperty(A2AError.prototype, A2A_ERROR_BRAND, { value: true });
 
 /**
  * Registry row for one semantic error class. Only holds the fields
