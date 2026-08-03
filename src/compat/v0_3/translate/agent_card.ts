@@ -101,7 +101,7 @@ export function toCompatAgentCapabilities(core: V1AgentCapabilities): legacy.Age
   const result: legacy.AgentCapabilities1 = {};
   if (core.streaming !== undefined) result.streaming = core.streaming;
   if (core.pushNotifications !== undefined) result.pushNotifications = core.pushNotifications;
-  if (core.extensions.length > 0) {
+  if (core.extensions && core.extensions.length > 0) {
     result.extensions = core.extensions.map(toCompatAgentExtension);
   }
   return result;
@@ -112,7 +112,7 @@ export function toCoreAgentSkill(compat: legacy.AgentSkill): V1AgentSkill {
     id: compat.id,
     name: compat.name,
     description: compat.description,
-    tags: [...compat.tags],
+    tags: compat.tags ? [...compat.tags] : [],
     examples: compat.examples ? [...compat.examples] : [],
     inputModes: compat.inputModes ? [...compat.inputModes] : [],
     outputModes: compat.outputModes ? [...compat.outputModes] : [],
@@ -125,12 +125,12 @@ export function toCompatAgentSkill(core: V1AgentSkill): legacy.AgentSkill {
     id: core.id,
     name: core.name,
     description: core.description,
-    tags: [...core.tags],
+    tags: core.tags ? [...core.tags] : [],
   };
-  if (core.examples.length > 0) result.examples = [...core.examples];
-  if (core.inputModes.length > 0) result.inputModes = [...core.inputModes];
-  if (core.outputModes.length > 0) result.outputModes = [...core.outputModes];
-  if (core.securityRequirements.length > 0) {
+  if (core.examples && core.examples.length > 0) result.examples = [...core.examples];
+  if (core.inputModes && core.inputModes.length > 0) result.inputModes = [...core.inputModes];
+  if (core.outputModes && core.outputModes.length > 0) result.outputModes = [...core.outputModes];
+  if (core.securityRequirements && core.securityRequirements.length > 0) {
     result.security = core.securityRequirements.map(toCompatSecurityRequirement);
   }
   return result;
@@ -170,7 +170,7 @@ export function toCoreAgentCard(compat: legacy.AgentCard): V1AgentCard {
   const additional = compat.additionalInterfaces?.map(toCoreAgentInterface) ?? [];
   const supportedInterfaces = [primary, ...additional];
 
-  const capabilities = toCoreAgentCapabilities(compat.capabilities);
+  const capabilities = toCoreAgentCapabilities(compat.capabilities ?? {});
   if (compat.supportsAuthenticatedExtendedCard !== undefined) {
     capabilities.extendedAgentCard = compat.supportsAuthenticatedExtendedCard;
   }
@@ -191,9 +191,9 @@ export function toCoreAgentCard(compat: legacy.AgentCard): V1AgentCard {
         )
       : {},
     securityRequirements: compat.security ? compat.security.map(toCoreSecurityRequirement) : [],
-    defaultInputModes: [...compat.defaultInputModes],
-    defaultOutputModes: [...compat.defaultOutputModes],
-    skills: compat.skills.map(toCoreAgentSkill),
+    defaultInputModes: compat.defaultInputModes ? [...compat.defaultInputModes] : [],
+    defaultOutputModes: compat.defaultOutputModes ? [...compat.defaultOutputModes] : [],
+    skills: compat.skills ? compat.skills.map(toCoreAgentSkill) : [],
     signatures: compat.signatures ? compat.signatures.map(toCoreAgentCardSignature) : [],
   };
 
@@ -256,7 +256,7 @@ export function toCompatAgentCard(
       : undefined;
 
   const securitySchemes =
-    Object.keys(core.securitySchemes).length > 0
+    core.securitySchemes && Object.keys(core.securitySchemes).length > 0
       ? Object.fromEntries(
           Object.entries(core.securitySchemes).map(([key, scheme]) => [
             key,
@@ -275,9 +275,9 @@ export function toCompatAgentCard(
     preferredTransport: primary.protocolBinding,
     protocolVersion: emittedProtocolVersion,
     capabilities,
-    defaultInputModes: [...core.defaultInputModes],
-    defaultOutputModes: [...core.defaultOutputModes],
-    skills: core.skills.map(toCompatAgentSkill),
+    defaultInputModes: core.defaultInputModes ? [...core.defaultInputModes] : [],
+    defaultOutputModes: core.defaultOutputModes ? [...core.defaultOutputModes] : [],
+    skills: (core.skills ?? []).map(toCompatAgentSkill),
   };
 
   if (additionalInterfaces.length > 0) {
@@ -292,10 +292,10 @@ export function toCompatAgentCard(
     result.supportsAuthenticatedExtendedCard = supportsExtendedCard;
   }
   if (securitySchemes !== undefined) result.securitySchemes = securitySchemes;
-  if (core.securityRequirements.length > 0) {
+  if (core.securityRequirements && core.securityRequirements.length > 0) {
     result.security = core.securityRequirements.map(toCompatSecurityRequirement);
   }
-  if (core.signatures.length > 0) {
+  if (core.signatures && core.signatures.length > 0) {
     result.signatures = core.signatures.map(toCompatAgentCardSignature);
   }
 

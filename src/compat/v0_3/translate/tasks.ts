@@ -61,10 +61,10 @@ export function toCompatTask(coreTask: V1Task): legacy.Task {
     status: coreTask.status ? toCompatTaskStatus(coreTask.status) : { state: 'unknown' },
   };
 
-  if (coreTask.history.length > 0) {
+  if (coreTask.history && coreTask.history.length > 0) {
     result.history = coreTask.history.map(toCompatMessage);
   }
-  if (coreTask.artifacts.length > 0) {
+  if (coreTask.artifacts && coreTask.artifacts.length > 0) {
     result.artifacts = coreTask.artifacts.map(toCompatArtifact);
   }
   const metadata = deepCloneMetadata(coreTask.metadata);

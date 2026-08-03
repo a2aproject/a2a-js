@@ -472,5 +472,131 @@ describe('agent_card', () => {
         expect(out).toEqual([]);
       });
     });
+
+    describe('robust to missing v1.0 array/object fields', () => {
+      function partialV1Card(overrides: Partial<V1AgentCard> = {}): V1AgentCard {
+        return {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/legacy',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '0.3',
+            },
+          ],
+          provider: undefined,
+          capabilities: {
+            streaming: undefined,
+            pushNotifications: undefined,
+            extensions: undefined as unknown as never[],
+            extendedAgentCard: undefined,
+          },
+          securitySchemes: undefined as unknown as V1AgentCard['securitySchemes'],
+          securityRequirements: undefined as unknown as V1AgentCard['securityRequirements'],
+          defaultInputModes: undefined as unknown as V1AgentCard['defaultInputModes'],
+          defaultOutputModes: undefined as unknown as V1AgentCard['defaultOutputModes'],
+          skills: undefined as unknown as V1AgentCard['skills'],
+          signatures: undefined as unknown as V1AgentCard['signatures'],
+          ...overrides,
+        };
+      }
+
+      it('does not crash when every declared-required array/object field is missing at once', () => {
+        expect(() => toCompatAgentCard(partialV1Card())).not.toThrow();
+        const compat = toCompatAgentCard(partialV1Card());
+        expect(compat.url).toBe('https://api.example/legacy');
+        expect(compat.defaultInputModes).toEqual([]);
+        expect(compat.defaultOutputModes).toEqual([]);
+        expect(compat.skills).toEqual([]);
+        expect(compat.securitySchemes).toBeUndefined();
+        expect(compat.security).toBeUndefined();
+        expect(compat.signatures).toBeUndefined();
+      });
+
+      it('toCompatAgentCapabilities does not crash when extensions is missing', () => {
+        const compat = toCompatAgentCapabilities({
+          streaming: true,
+          pushNotifications: false,
+          extensions: undefined as unknown as never[],
+          extendedAgentCard: undefined,
+        });
+        expect(compat.streaming).toBe(true);
+        expect(compat.pushNotifications).toBe(false);
+        expect(compat.extensions).toBeUndefined();
+      });
+
+      it('toCompatAgentSkill does not crash when tags is missing', () => {
+        const compat = toCompatAgentSkill({
+          id: 's1',
+          name: 'Skill',
+          description: 'desc',
+          tags: undefined as unknown as string[],
+          examples: undefined as unknown as string[],
+          inputModes: undefined as unknown as string[],
+          outputModes: undefined as unknown as string[],
+          securityRequirements: undefined as unknown as never[],
+        });
+        expect(compat.tags).toEqual([]);
+        expect(compat.examples).toBeUndefined();
+        expect(compat.inputModes).toBeUndefined();
+        expect(compat.outputModes).toBeUndefined();
+        expect(compat.security).toBeUndefined();
+      });
+    });
+
+    describe('toCoreAgentCard robust to missing v0.3 array/object fields', () => {
+      function partialCompatCard(overrides: Partial<legacy.AgentCard> = {}): legacy.AgentCard {
+        return {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          url: 'https://api.example/a2a',
+          preferredTransport: 'JSONRPC',
+          protocolVersion: '0.3',
+          capabilities: undefined as unknown as legacy.AgentCapabilities1,
+          defaultInputModes: undefined as unknown as string[],
+          defaultOutputModes: undefined as unknown as string[],
+          skills: undefined as unknown as legacy.AgentSkill[],
+          ...overrides,
+        };
+      }
+
+      it('does not crash when capabilities is missing', () => {
+        expect(() =>
+          toCoreAgentCard(
+            partialCompatCard({
+              defaultInputModes: [],
+              defaultOutputModes: [],
+              skills: [],
+            })
+          )
+        ).not.toThrow();
+      });
+
+      it('does not crash when defaultInputModes / defaultOutputModes / skills are missing', () => {
+        expect(() => toCoreAgentCard(partialCompatCard({ capabilities: {} }))).not.toThrow();
+        const core = toCoreAgentCard(partialCompatCard({ capabilities: {} }));
+        expect(core.defaultInputModes).toEqual([]);
+        expect(core.defaultOutputModes).toEqual([]);
+        expect(core.skills).toEqual([]);
+      });
+
+      it('does not crash when every declared-required field is missing at once', () => {
+        expect(() => toCoreAgentCard(partialCompatCard())).not.toThrow();
+      });
+
+      it('toCoreAgentSkill does not crash when tags is missing', () => {
+        const skill = {
+          id: 's1',
+          name: 'Skill',
+          description: 'desc',
+        } as unknown as legacy.AgentSkill;
+        expect(() => toCoreAgentSkill(skill)).not.toThrow();
+        expect(toCoreAgentSkill(skill).tags).toEqual([]);
+      });
+    });
   });
 });

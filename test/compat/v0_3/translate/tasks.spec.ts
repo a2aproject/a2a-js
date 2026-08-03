@@ -248,4 +248,38 @@ describe('tasks', () => {
       expect(toCompatTask(toCoreTask(compat))).toEqual(compat);
     });
   });
+
+  describe('toCompatTask tolerates missing v1.0 array fields', () => {
+    function makePartialCore(overrides: Partial<V1Task> = {}): V1Task {
+      return {
+        id: 't1',
+        contextId: 'ctx',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: '' },
+        history: undefined as unknown as V1Task['history'],
+        artifacts: undefined as unknown as V1Task['artifacts'],
+        metadata: undefined,
+        ...overrides,
+      };
+    }
+
+    it('does not crash when history is missing', () => {
+      const core = makePartialCore({ artifacts: [] });
+      expect(() => toCompatTask(core)).not.toThrow();
+      expect(toCompatTask(core).history).toBeUndefined();
+    });
+
+    it('does not crash when artifacts is missing', () => {
+      const core = makePartialCore({ history: [] });
+      expect(() => toCompatTask(core)).not.toThrow();
+      expect(toCompatTask(core).artifacts).toBeUndefined();
+    });
+
+    it('does not crash when both are missing', () => {
+      const core = makePartialCore();
+      expect(() => toCompatTask(core)).not.toThrow();
+      const compat = toCompatTask(core);
+      expect(compat.history).toBeUndefined();
+      expect(compat.artifacts).toBeUndefined();
+    });
+  });
 });

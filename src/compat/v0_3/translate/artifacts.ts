@@ -7,12 +7,12 @@ import type { Artifact as V1Artifact } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
 
-function nonEmptyString(value: string): string | undefined {
-  return value === '' ? undefined : value;
+function nonEmptyString(value: string | undefined | null): string | undefined {
+  return value == null || value === '' ? undefined : value;
 }
 
-function nonEmptyArray<T>(value: T[]): T[] | undefined {
-  return value.length === 0 ? undefined : [...value];
+function nonEmptyArray<T>(value: T[] | undefined | null): T[] | undefined {
+  return value == null || value.length === 0 ? undefined : [...value];
 }
 
 export function toCoreArtifact(compatArtifact: legacy.Artifact): V1Artifact {
@@ -20,7 +20,7 @@ export function toCoreArtifact(compatArtifact: legacy.Artifact): V1Artifact {
     artifactId: compatArtifact.artifactId,
     name: compatArtifact.name ?? '',
     description: compatArtifact.description ?? '',
-    parts: compatArtifact.parts.map(toCorePart),
+    parts: compatArtifact.parts ? compatArtifact.parts.map(toCorePart) : [],
     metadata: deepCloneMetadata(compatArtifact.metadata),
     extensions: compatArtifact.extensions ? [...compatArtifact.extensions] : [],
   };
@@ -29,7 +29,7 @@ export function toCoreArtifact(compatArtifact: legacy.Artifact): V1Artifact {
 export function toCompatArtifact(coreArtifact: V1Artifact): legacy.Artifact {
   const result: legacy.Artifact = {
     artifactId: coreArtifact.artifactId,
-    parts: coreArtifact.parts.map(toCompatPart),
+    parts: (coreArtifact.parts ?? []).map(toCompatPart),
   };
 
   const name = nonEmptyString(coreArtifact.name);

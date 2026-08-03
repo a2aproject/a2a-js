@@ -93,6 +93,17 @@ describe('requests', () => {
       const back = toCompatSendMessageConfiguration(toCoreSendMessageConfiguration(compat));
       expect(back.acceptedOutputModes).toEqual([]);
     });
+
+    it('does not crash when acceptedOutputModes is missing on the core side', () => {
+      const compat = toCompatSendMessageConfiguration({
+        acceptedOutputModes: undefined as unknown as string[],
+        taskPushNotificationConfig: undefined,
+        historyLength: undefined,
+        returnImmediately: false,
+      });
+      expect(compat.acceptedOutputModes).toEqual([]);
+      expect(compat.blocking).toBe(true);
+    });
   });
 
   describe('SendMessageRequest', () => {
@@ -176,6 +187,32 @@ describe('requests', () => {
           'r1'
         )
       ).toThrow(A2AError);
+    });
+
+    it('does not crash when the v1 message omits referenceTaskIds/extensions/parts', () => {
+      const core = {
+        tenant: '',
+        message: {
+          messageId: 'msg-1',
+          contextId: '',
+          taskId: '',
+          role: Role.ROLE_USER,
+        } as unknown as V1SendMessageRequest['message'],
+        configuration: undefined,
+        metadata: undefined,
+      } as V1SendMessageRequest;
+
+      expect(() => toCompatSendMessageRequest(core, 'req-1')).not.toThrow();
+      expect(() => toCompatSendStreamingMessageRequest(core, 'req-1')).not.toThrow();
+
+      const compat = toCompatSendStreamingMessageRequest(core, 'req-1');
+      expect(compat.method).toBe('message/stream');
+      expect(compat.params.message).toEqual({
+        kind: 'message',
+        messageId: 'msg-1',
+        role: 'user',
+        parts: [],
+      });
     });
   });
 

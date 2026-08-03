@@ -85,4 +85,37 @@ describe('artifacts', () => {
       expect(toCompatArtifact(toCoreArtifact(compat))).toEqual(compat);
     });
   });
+
+  describe('tolerates missing array fields', () => {
+    it('toCompatArtifact does not crash when extensions is missing', () => {
+      const core = {
+        artifactId: 'a1',
+        name: '',
+        description: '',
+        parts: [],
+        metadata: undefined,
+      } as unknown as V1Artifact;
+      expect(() => toCompatArtifact(core)).not.toThrow();
+      const compat = toCompatArtifact(core);
+      expect(compat.extensions).toBeUndefined();
+    });
+
+    it('toCompatArtifact does not crash when parts is missing', () => {
+      const core = {
+        artifactId: 'a1',
+        name: '',
+        description: '',
+        metadata: undefined,
+        extensions: [],
+      } as unknown as V1Artifact;
+      expect(() => toCompatArtifact(core)).not.toThrow();
+      expect(toCompatArtifact(core).parts).toEqual([]);
+    });
+
+    it('toCoreArtifact does not crash when parts is missing on a v0.3 artifact', () => {
+      const compat = { artifactId: 'a1' } as unknown as legacy.Artifact;
+      expect(() => toCoreArtifact(compat)).not.toThrow();
+      expect(toCoreArtifact(compat).parts).toEqual([]);
+    });
+  });
 });

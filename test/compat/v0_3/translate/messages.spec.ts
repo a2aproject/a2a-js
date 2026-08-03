@@ -220,4 +220,74 @@ describe('messages', () => {
       expect(nested.tags).toEqual(['a', 'b']);
     });
   });
+
+  describe('tolerates missing v1.0 array fields', () => {
+    function makePartialCore(overrides: Partial<V1Message> = {}): V1Message {
+      return {
+        messageId: 'msg-1',
+        contextId: '',
+        taskId: '',
+        role: Role.ROLE_USER,
+        parts: undefined as unknown as V1Message['parts'],
+        metadata: undefined,
+        extensions: undefined as unknown as V1Message['extensions'],
+        referenceTaskIds: undefined as unknown as V1Message['referenceTaskIds'],
+        ...overrides,
+      };
+    }
+
+    it('does not crash when referenceTaskIds is missing', () => {
+      const core = makePartialCore({
+        parts: [{ content: { $case: 'text', value: 'hi' } } as V1Message['parts'][number]],
+        extensions: [],
+      });
+      expect(() => toCompatMessage(core)).not.toThrow();
+      const compat = toCompatMessage(core);
+      expect(compat.referenceTaskIds).toBeUndefined();
+    });
+
+    it('does not crash when extensions is missing', () => {
+      const core = makePartialCore({
+        parts: [],
+        referenceTaskIds: [],
+      });
+      expect(() => toCompatMessage(core)).not.toThrow();
+      const compat = toCompatMessage(core);
+      expect(compat.extensions).toBeUndefined();
+    });
+
+    it('does not crash when parts is missing', () => {
+      const core = makePartialCore({
+        extensions: [],
+        referenceTaskIds: [],
+      });
+      expect(() => toCompatMessage(core)).not.toThrow();
+      const compat = toCompatMessage(core);
+      expect(compat.parts).toEqual([]);
+    });
+
+    it('does not crash when every optional-in-practice field is missing at once', () => {
+      const core = makePartialCore();
+      expect(() => toCompatMessage(core)).not.toThrow();
+      expect(toCompatMessage(core)).toEqual({
+        kind: 'message',
+        messageId: 'msg-1',
+        role: 'user',
+        parts: [],
+      });
+    });
+
+    it('tolerates null just like undefined', () => {
+      const core = makePartialCore({
+        parts: null as unknown as V1Message['parts'],
+        extensions: null as unknown as V1Message['extensions'],
+        referenceTaskIds: null as unknown as V1Message['referenceTaskIds'],
+      });
+      expect(() => toCompatMessage(core)).not.toThrow();
+      const compat = toCompatMessage(core);
+      expect(compat.parts).toEqual([]);
+      expect(compat.extensions).toBeUndefined();
+      expect(compat.referenceTaskIds).toBeUndefined();
+    });
+  });
 });

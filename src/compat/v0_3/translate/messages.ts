@@ -10,12 +10,12 @@ import type { Message as V1Message } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
 
-function nonEmptyString(value: string): string | undefined {
-  return value === '' ? undefined : value;
+function nonEmptyString(value: string | undefined | null): string | undefined {
+  return value == null || value === '' ? undefined : value;
 }
 
-function nonEmptyArray<T>(value: T[]): T[] | undefined {
-  return value.length === 0 ? undefined : [...value];
+function nonEmptyArray<T>(value: T[] | undefined | null): T[] | undefined {
+  return value == null || value.length === 0 ? undefined : [...value];
 }
 
 export function toCoreMessage(compatMsg: legacy.Message): V1Message {
@@ -48,7 +48,7 @@ export function toCompatMessage(coreMsg: V1Message): legacy.Message {
     kind: 'message',
     messageId: coreMsg.messageId,
     role: toCompatRole(coreMsg.role),
-    parts: coreMsg.parts.map(toCompatPart),
+    parts: (coreMsg.parts ?? []).map(toCompatPart),
   };
 
   const contextId = nonEmptyString(coreMsg.contextId);
