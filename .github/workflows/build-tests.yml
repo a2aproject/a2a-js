@@ -37,6 +37,7 @@ jobs:
         cache: 'npm'
     - run: npm ci
     - run: npm run build
+    - run: npm run api-report
     # Strip ALL three optional peer deps so esbuild sees the same
     # module graph a non-gRPC, non-Express consumer would. Any
     # Workers-safe entrypoint that leaks one of them fails to resolve.

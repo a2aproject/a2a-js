@@ -26,3 +26,16 @@ Here are some additional things to keep in mind during the process:
 
 - **Test your changes.** Before you submit a pull request, make sure that your changes work as expected.
 - **Be patient.** It may take some time for your pull request to be reviewed and merged.
+
+### Public API reports
+
+The SDK tracks the TypeScript API exposed by every entry in `package.json#exports`. After changing
+an exported type or signature, rebuild the package and update the checked-in API reports:
+
+```sh
+npm run build
+npm run api-report:update
+```
+
+Review and commit the changes under `etc/api/` with your code. Pull request builds run
+`npm run api-report` and fail when the generated API surface does not match those reports.
