@@ -31,6 +31,7 @@ import type {
 } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
+import { requireArray, requireObject } from './_validate.js';
 
 // Default when the v0.3 card omits `preferredTransport`.
 const DEFAULT_PREFERRED_TRANSPORT = 'JSONRPC';
@@ -112,7 +113,7 @@ export function toCoreAgentSkill(compat: legacy.AgentSkill): V1AgentSkill {
     id: compat.id,
     name: compat.name,
     description: compat.description,
-    tags: compat.tags ? [...compat.tags] : [],
+    tags: [...requireArray(compat.tags, 'skill.tags')],
     examples: compat.examples ? [...compat.examples] : [],
     inputModes: compat.inputModes ? [...compat.inputModes] : [],
     outputModes: compat.outputModes ? [...compat.outputModes] : [],
@@ -125,7 +126,7 @@ export function toCompatAgentSkill(core: V1AgentSkill): legacy.AgentSkill {
     id: core.id,
     name: core.name,
     description: core.description,
-    tags: core.tags ? [...core.tags] : [],
+    tags: [...requireArray(core.tags, 'skill.tags')],
   };
   if (core.examples && core.examples.length > 0) result.examples = [...core.examples];
   if (core.inputModes && core.inputModes.length > 0) result.inputModes = [...core.inputModes];
@@ -170,7 +171,9 @@ export function toCoreAgentCard(compat: legacy.AgentCard): V1AgentCard {
   const additional = compat.additionalInterfaces?.map(toCoreAgentInterface) ?? [];
   const supportedInterfaces = [primary, ...additional];
 
-  const capabilities = toCoreAgentCapabilities(compat.capabilities ?? {});
+  const capabilities = toCoreAgentCapabilities(
+    requireObject(compat.capabilities, 'agentCard.capabilities')
+  );
   if (compat.supportsAuthenticatedExtendedCard !== undefined) {
     capabilities.extendedAgentCard = compat.supportsAuthenticatedExtendedCard;
   }
@@ -191,9 +194,11 @@ export function toCoreAgentCard(compat: legacy.AgentCard): V1AgentCard {
         )
       : {},
     securityRequirements: compat.security ? compat.security.map(toCoreSecurityRequirement) : [],
-    defaultInputModes: compat.defaultInputModes ? [...compat.defaultInputModes] : [],
-    defaultOutputModes: compat.defaultOutputModes ? [...compat.defaultOutputModes] : [],
-    skills: compat.skills ? compat.skills.map(toCoreAgentSkill) : [],
+    defaultInputModes: [...requireArray(compat.defaultInputModes, 'agentCard.defaultInputModes')],
+    defaultOutputModes: [
+      ...requireArray(compat.defaultOutputModes, 'agentCard.defaultOutputModes'),
+    ],
+    skills: requireArray(compat.skills, 'agentCard.skills').map(toCoreAgentSkill),
     signatures: compat.signatures ? compat.signatures.map(toCoreAgentCardSignature) : [],
   };
 
@@ -275,9 +280,9 @@ export function toCompatAgentCard(
     preferredTransport: primary.protocolBinding,
     protocolVersion: emittedProtocolVersion,
     capabilities,
-    defaultInputModes: core.defaultInputModes ? [...core.defaultInputModes] : [],
-    defaultOutputModes: core.defaultOutputModes ? [...core.defaultOutputModes] : [],
-    skills: (core.skills ?? []).map(toCompatAgentSkill),
+    defaultInputModes: [...requireArray(core.defaultInputModes, 'agentCard.defaultInputModes')],
+    defaultOutputModes: [...requireArray(core.defaultOutputModes, 'agentCard.defaultOutputModes')],
+    skills: requireArray(core.skills, 'agentCard.skills').map(toCompatAgentSkill),
   };
 
   if (additionalInterfaces.length > 0) {

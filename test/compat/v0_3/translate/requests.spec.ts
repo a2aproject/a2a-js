@@ -189,7 +189,7 @@ describe('requests', () => {
       ).toThrow(A2AError);
     });
 
-    it('does not crash when the v1 message omits referenceTaskIds/extensions/parts', () => {
+    it('does not crash when the v1 message omits referenceTaskIds and extensions', () => {
       const core = {
         tenant: '',
         message: {
@@ -197,6 +197,7 @@ describe('requests', () => {
           contextId: '',
           taskId: '',
           role: Role.ROLE_USER,
+          parts: [],
         } as unknown as V1SendMessageRequest['message'],
         configuration: undefined,
         metadata: undefined,

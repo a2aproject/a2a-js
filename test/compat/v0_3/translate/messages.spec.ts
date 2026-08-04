@@ -221,14 +221,14 @@ describe('messages', () => {
     });
   });
 
-  describe('tolerates missing v1.0 array fields', () => {
+  describe('tolerates missing v0.3-optional fields', () => {
     function makePartialCore(overrides: Partial<V1Message> = {}): V1Message {
       return {
         messageId: 'msg-1',
         contextId: '',
         taskId: '',
         role: Role.ROLE_USER,
-        parts: undefined as unknown as V1Message['parts'],
+        parts: [],
         metadata: undefined,
         extensions: undefined as unknown as V1Message['extensions'],
         referenceTaskIds: undefined as unknown as V1Message['referenceTaskIds'],
@@ -237,36 +237,18 @@ describe('messages', () => {
     }
 
     it('does not crash when referenceTaskIds is missing', () => {
-      const core = makePartialCore({
-        parts: [{ content: { $case: 'text', value: 'hi' } } as V1Message['parts'][number]],
-        extensions: [],
-      });
+      const core = makePartialCore({ extensions: [] });
       expect(() => toCompatMessage(core)).not.toThrow();
-      const compat = toCompatMessage(core);
-      expect(compat.referenceTaskIds).toBeUndefined();
+      expect(toCompatMessage(core).referenceTaskIds).toBeUndefined();
     });
 
     it('does not crash when extensions is missing', () => {
-      const core = makePartialCore({
-        parts: [],
-        referenceTaskIds: [],
-      });
+      const core = makePartialCore({ referenceTaskIds: [] });
       expect(() => toCompatMessage(core)).not.toThrow();
-      const compat = toCompatMessage(core);
-      expect(compat.extensions).toBeUndefined();
+      expect(toCompatMessage(core).extensions).toBeUndefined();
     });
 
-    it('does not crash when parts is missing', () => {
-      const core = makePartialCore({
-        extensions: [],
-        referenceTaskIds: [],
-      });
-      expect(() => toCompatMessage(core)).not.toThrow();
-      const compat = toCompatMessage(core);
-      expect(compat.parts).toEqual([]);
-    });
-
-    it('does not crash when every optional-in-practice field is missing at once', () => {
+    it('does not crash when both optional array fields are missing at once', () => {
       const core = makePartialCore();
       expect(() => toCompatMessage(core)).not.toThrow();
       expect(toCompatMessage(core)).toEqual({
@@ -277,17 +259,32 @@ describe('messages', () => {
       });
     });
 
-    it('tolerates null just like undefined', () => {
+    it('tolerates null just like undefined for optional fields', () => {
       const core = makePartialCore({
-        parts: null as unknown as V1Message['parts'],
         extensions: null as unknown as V1Message['extensions'],
         referenceTaskIds: null as unknown as V1Message['referenceTaskIds'],
       });
       expect(() => toCompatMessage(core)).not.toThrow();
       const compat = toCompatMessage(core);
-      expect(compat.parts).toEqual([]);
       expect(compat.extensions).toBeUndefined();
       expect(compat.referenceTaskIds).toBeUndefined();
+    });
+  });
+
+  describe('reports informative errors for missing required fields', () => {
+    it('toCompatMessage throws A2AError.invalidParams when parts is missing', () => {
+      const core = {
+        messageId: 'msg-1',
+        contextId: '',
+        taskId: '',
+        role: Role.ROLE_USER,
+        parts: undefined,
+        metadata: undefined,
+        extensions: [],
+        referenceTaskIds: [],
+      } as unknown as V1Message;
+      expect(() => toCompatMessage(core)).toThrowError(A2AError);
+      expect(() => toCompatMessage(core)).toThrow(/message\.parts is required/);
     });
   });
 });

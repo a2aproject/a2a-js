@@ -6,6 +6,7 @@ import { toCompatPart, toCorePart } from './parts.js';
 import type { Artifact as V1Artifact } from '../../../types/pb/a2a.js';
 import type * as legacy from '../types/types.js';
 import { deepCloneMetadata } from './_clone.js';
+import { requireArray } from './_validate.js';
 
 function nonEmptyString(value: string | undefined | null): string | undefined {
   return value == null || value === '' ? undefined : value;
@@ -20,7 +21,7 @@ export function toCoreArtifact(compatArtifact: legacy.Artifact): V1Artifact {
     artifactId: compatArtifact.artifactId,
     name: compatArtifact.name ?? '',
     description: compatArtifact.description ?? '',
-    parts: compatArtifact.parts ? compatArtifact.parts.map(toCorePart) : [],
+    parts: requireArray(compatArtifact.parts, 'artifact.parts').map(toCorePart),
     metadata: deepCloneMetadata(compatArtifact.metadata),
     extensions: compatArtifact.extensions ? [...compatArtifact.extensions] : [],
   };
@@ -29,7 +30,7 @@ export function toCoreArtifact(compatArtifact: legacy.Artifact): V1Artifact {
 export function toCompatArtifact(coreArtifact: V1Artifact): legacy.Artifact {
   const result: legacy.Artifact = {
     artifactId: coreArtifact.artifactId,
-    parts: (coreArtifact.parts ?? []).map(toCompatPart),
+    parts: requireArray(coreArtifact.parts, 'artifact.parts').map(toCompatPart),
   };
 
   const name = nonEmptyString(coreArtifact.name);
