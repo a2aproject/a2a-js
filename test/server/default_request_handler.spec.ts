@@ -2049,6 +2049,76 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(result.tasks[1].id, fakeTask1.id);
   });
 
+  describe('listTasks: status filter', () => {
+    const listedTask: Task = {
+      id: 'task-status-filter',
+      contextId: 'ctx-status-filter',
+      status: {
+        state: TaskState.TASK_STATE_COMPLETED,
+        message: undefined,
+        timestamp: new Date().toISOString(),
+      },
+      artifacts: [],
+      metadata: {},
+      history: [],
+    };
+
+    beforeEach(async () => {
+      await mockTaskStore.save(listedTask, serverCallContext);
+    });
+
+    it('returns every task when the wire request omits status', async () => {
+      const params = ListTasksRequest.fromJSON({ pageSize: 10 });
+      assert.equal(
+        params.status,
+        TaskState.TASK_STATE_UNSPECIFIED,
+        'an omitted status must deserialize to the zero value'
+      );
+
+      const result = await handler.listTasks(params, serverCallContext);
+
+      assert.lengthOf(result.tasks, 1, 'an unfiltered list must not filter anything out');
+      assert.equal(result.tasks[0].id, listedTask.id);
+      assert.equal(result.totalSize, 1);
+    });
+
+    it('returns every task when status is explicitly TASK_STATE_UNSPECIFIED', async () => {
+      const params = ListTasksRequest.fromJSON({ pageSize: 10 });
+      params.status = TaskState.TASK_STATE_UNSPECIFIED;
+
+      const result = await handler.listTasks(params, serverCallContext);
+
+      assert.lengthOf(result.tasks, 1);
+      assert.equal(result.totalSize, 1);
+    });
+
+    it('still filters when a real status is supplied', async () => {
+      const matching = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: 'TASK_STATE_COMPLETED' }),
+        serverCallContext
+      );
+      assert.lengthOf(matching.tasks, 1);
+      assert.equal(matching.totalSize, 1);
+
+      const nonMatching = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: 'TASK_STATE_WORKING' }),
+        serverCallContext
+      );
+      assert.lengthOf(nonMatching.tasks, 0);
+      assert.equal(nonMatching.totalSize, 0);
+    });
+
+    it('matches nothing for an unrecognized status rather than listing everything', async () => {
+      const params = ListTasksRequest.fromJSON({ pageSize: 10, status: 'NOT_A_REAL_STATE' });
+      assert.equal(params.status, TaskState.UNRECOGNIZED);
+
+      const result = await handler.listTasks(params, serverCallContext);
+
+      assert.lengthOf(result.tasks, 0);
+      assert.equal(result.totalSize, 0);
+    });
+  });
+
   it('listTasks: should throw RequestMalformedError if pageSize is < 1', async () => {
     const params: ListTasksRequest = {
       tenant: '',
