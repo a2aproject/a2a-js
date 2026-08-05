@@ -20,6 +20,7 @@ import { VersionNotSupportedError } from '../../../../src/errors/index.js';
 import type {
   AgentCard as V1AgentCard,
   AgentInterface as V1AgentInterface,
+  AgentSkill as V1AgentSkill,
 } from '../../../../src/types/pb/a2a.js';
 import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
 
@@ -470,6 +471,176 @@ describe('agent_card', () => {
           'JSONRPC',
         ]);
         expect(out).toEqual([]);
+      });
+    });
+
+    describe('robust to missing v0.3-optional fields on incoming core object', () => {
+      function partialV1Card(overrides: Partial<V1AgentCard> = {}): V1AgentCard {
+        return {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/legacy',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '0.3',
+            },
+          ],
+          provider: undefined,
+          capabilities: {
+            streaming: undefined,
+            pushNotifications: undefined,
+            extensions: undefined as unknown as never[],
+            extendedAgentCard: undefined,
+          },
+          securitySchemes: undefined as unknown as V1AgentCard['securitySchemes'],
+          securityRequirements: undefined as unknown as V1AgentCard['securityRequirements'],
+          defaultInputModes: [],
+          defaultOutputModes: [],
+          skills: [],
+          signatures: undefined as unknown as V1AgentCard['signatures'],
+          ...overrides,
+        };
+      }
+
+      it('does not crash when every optional field is missing at once', () => {
+        expect(() => toCompatAgentCard(partialV1Card())).not.toThrow();
+        const compat = toCompatAgentCard(partialV1Card());
+        expect(compat.url).toBe('https://api.example/legacy');
+        expect(compat.securitySchemes).toBeUndefined();
+        expect(compat.security).toBeUndefined();
+        expect(compat.signatures).toBeUndefined();
+      });
+
+      it('toCompatAgentCapabilities does not crash when extensions is missing', () => {
+        const compat = toCompatAgentCapabilities({
+          streaming: true,
+          pushNotifications: false,
+          extensions: undefined as unknown as never[],
+          extendedAgentCard: undefined,
+        });
+        expect(compat.streaming).toBe(true);
+        expect(compat.pushNotifications).toBe(false);
+        expect(compat.extensions).toBeUndefined();
+      });
+
+      it('toCompatAgentSkill does not crash when all optional arrays are missing', () => {
+        const compat = toCompatAgentSkill({
+          id: 's1',
+          name: 'Skill',
+          description: 'desc',
+          tags: ['t'],
+          examples: undefined as unknown as string[],
+          inputModes: undefined as unknown as string[],
+          outputModes: undefined as unknown as string[],
+          securityRequirements: undefined as unknown as never[],
+        });
+        expect(compat.tags).toEqual(['t']);
+        expect(compat.examples).toBeUndefined();
+        expect(compat.inputModes).toBeUndefined();
+        expect(compat.outputModes).toBeUndefined();
+        expect(compat.security).toBeUndefined();
+      });
+    });
+
+    describe('reports informative errors for missing required fields', () => {
+      it.each([['skill.tags', { id: 's1', name: 'Skill', description: 'desc' }]] as const)(
+        'toCoreAgentSkill throws when %s is missing',
+        (path, skill) => {
+          expect(() => toCoreAgentSkill(skill as unknown as legacy.AgentSkill)).toThrow(
+            new RegExp(`${path.replace('.', '\\.')} is required`)
+          );
+        }
+      );
+
+      it('toCompatAgentSkill throws when tags is missing', () => {
+        const core = {
+          id: 's1',
+          name: 'Skill',
+          description: 'desc',
+          examples: [],
+          inputModes: [],
+          outputModes: [],
+          securityRequirements: [],
+        } as unknown as V1AgentSkill;
+        expect(() => toCompatAgentSkill(core)).toThrow(/skill\.tags is required/);
+      });
+
+      it('toCoreAgentCard throws when capabilities is missing', () => {
+        const compat = {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          url: 'https://api.example/a2a',
+          preferredTransport: 'JSONRPC',
+          protocolVersion: '0.3',
+          defaultInputModes: [],
+          defaultOutputModes: [],
+          skills: [],
+        } as unknown as legacy.AgentCard;
+        expect(() => toCoreAgentCard(compat)).toThrow(/agentCard\.capabilities is required/);
+      });
+
+      it.each([
+        ['agentCard.defaultInputModes', 'defaultInputModes'],
+        ['agentCard.defaultOutputModes', 'defaultOutputModes'],
+        ['agentCard.skills', 'skills'],
+      ] as const)('toCoreAgentCard throws when %s is missing', (path, missingField) => {
+        const compat = {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          url: 'https://api.example/a2a',
+          preferredTransport: 'JSONRPC',
+          protocolVersion: '0.3',
+          capabilities: {},
+          defaultInputModes: [],
+          defaultOutputModes: [],
+          skills: [],
+        } as unknown as Record<string, unknown>;
+        delete compat[missingField];
+        expect(() => toCoreAgentCard(compat as unknown as legacy.AgentCard)).toThrow(
+          new RegExp(`${path.replace('.', '\\.')} is required`)
+        );
+      });
+
+      it.each([
+        ['agentCard.defaultInputModes', 'defaultInputModes'],
+        ['agentCard.defaultOutputModes', 'defaultOutputModes'],
+        ['agentCard.skills', 'skills'],
+      ] as const)('toCompatAgentCard throws when %s is missing', (path, missingField) => {
+        const core = {
+          name: 'Agent',
+          description: 'desc',
+          version: '1.2.3',
+          supportedInterfaces: [
+            {
+              url: 'https://api.example/legacy',
+              protocolBinding: 'JSONRPC',
+              tenant: '',
+              protocolVersion: '0.3',
+            },
+          ],
+          provider: undefined,
+          capabilities: {
+            streaming: undefined,
+            pushNotifications: undefined,
+            extensions: [],
+            extendedAgentCard: undefined,
+          },
+          securitySchemes: {},
+          securityRequirements: [],
+          defaultInputModes: [],
+          defaultOutputModes: [],
+          skills: [],
+          signatures: [],
+        } as unknown as Record<string, unknown>;
+        delete core[missingField];
+        expect(() => toCompatAgentCard(core as unknown as V1AgentCard)).toThrow(
+          new RegExp(`${path.replace('.', '\\.')} is required`)
+        );
       });
     });
   });

@@ -545,3 +545,77 @@ describe('JSON-RPC roundtrip', () => {
     expect(isJsonRpcError(rebuilt)).toBe(true);
   });
 });
+
+describe('cross-entry error identity', () => {
+  // The published bundle inlines this module into every entry point
+  // (`@a2a-js/sdk/errors`, `@a2a-js/sdk/server/express`, …), so an error
+  // can be constructed by one copy and inspected by another.
+  // `vi.resetModules()` reproduces that split in-process. Regression test
+  // for issue, where the duplicate copy made the Express JSON-RPC adapter
+  // downgrade every semantic error to InternalError (-32603).
+  async function loadSecondCopy() {
+    vi.resetModules();
+    return import('../src/errors/index.js');
+  }
+
+  it('is actually testing two distinct copies', async () => {
+    const other = await loadSecondCopy();
+    expect(other.A2AError).not.toBe(A2AError);
+    expect(other.TaskNotFoundError).not.toBe(TaskNotFoundError);
+  });
+
+  it('matches instanceof across copies', async () => {
+    const other = await loadSecondCopy();
+    const err = new other.TaskNotFoundError();
+
+    expect(err).toBeInstanceOf(A2AError);
+    expect(err).toBeInstanceOf(TaskNotFoundError);
+    expect(err).toBeInstanceOf(Error);
+    // Transport subclasses resolve through the whole chain.
+    expect(new other.JsonRpcTaskNotFoundError()).toBeInstanceOf(TaskNotFoundError);
+  });
+
+  it('does not over-match', async () => {
+    const other = await loadSecondCopy();
+
+    expect(new other.TaskNotFoundError()).not.toBeInstanceOf(RequestMalformedError);
+    expect(new other.A2AError()).not.toBeInstanceOf(TaskNotFoundError);
+    expect(new Error('plain')).not.toBeInstanceOf(A2AError);
+    expect({}).not.toBeInstanceOf(A2AError);
+    expect(null).not.toBeInstanceOf(A2AError);
+    expect('boom').not.toBeInstanceOf(A2AError);
+  });
+
+  it('survives a bundler renaming one of the duplicated class bindings', async () => {
+    const other = await loadSecondCopy();
+    // A downstream bundler that pulls two entry points into one output
+    // renames the colliding binding — esbuild emits
+    // `var A2AError2 = class extends Error {}` — and an anonymous class
+    // expression takes its `.name` from that binding. Only the base
+    // class is exposed to this: the semantic subclasses are built from
+    // the runtime strings in `specs`, which no bundler rewrites.
+    Object.defineProperty(other.A2AError, 'name', { value: 'A2AError2' });
+    const err = new other.TaskNotFoundError();
+
+    expect(err).toBeInstanceOf(A2AError);
+    expect(err).toBeInstanceOf(TaskNotFoundError);
+    expect(err).not.toBeInstanceOf(RequestMalformedError);
+    expect(toJsonRpcError(err).code).toBe(A2A_ERROR_CODE.TASK_NOT_FOUND);
+    expect(restStatusFor(err)).toBe(HTTP_STATUS.NOT_FOUND);
+  });
+
+  it('serializes to the semantic wire code across copies', async () => {
+    const other = await loadSecondCopy();
+    const err = new other.TaskNotFoundError();
+
+    expect(toJsonRpcError(err).code).toBe(A2A_ERROR_CODE.TASK_NOT_FOUND);
+    expect(toJsonRpcError(new other.TaskNotCancelableError()).code).toBe(
+      A2A_ERROR_CODE.TASK_NOT_CANCELABLE
+    );
+    expect(restStatusFor(err)).toBe(HTTP_STATUS.NOT_FOUND);
+    expect(toRestErrorBody(err, restStatusFor(err)).error).toMatchObject({
+      status: 'NOT_FOUND',
+      details: [{ reason: 'TASK_NOT_FOUND' }],
+    });
+  });
+});

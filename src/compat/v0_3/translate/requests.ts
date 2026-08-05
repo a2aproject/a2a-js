@@ -65,7 +65,7 @@ export function toCompatSendMessageConfiguration(
   // absent/empty on the wire, so a round-trip from an explicit `[]`
   // stays stable; the only effect is callers who originally omitted it
   // see `[]` on the return path.
-  result.acceptedOutputModes = [...core.acceptedOutputModes];
+  result.acceptedOutputModes = core.acceptedOutputModes ? [...core.acceptedOutputModes] : [];
   if (core.historyLength !== undefined) result.historyLength = core.historyLength;
   if (core.taskPushNotificationConfig) {
     result.pushNotificationConfig = toCompatPushNotificationConfig(core.taskPushNotificationConfig);

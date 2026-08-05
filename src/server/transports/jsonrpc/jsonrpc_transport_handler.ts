@@ -12,10 +12,10 @@ import {
   DeleteTaskPushNotificationConfigRequest,
   ListTaskPushNotificationConfigsRequest,
   ListTasksRequest,
-  ListTasksResponse,
   ListTaskPushNotificationConfigsResponse,
   AgentCard,
 } from '../../../index.js';
+import { serializeListTasksResponse } from '../list_tasks_serializer.js';
 import {
   A2A_ERROR_CODE,
   type ErrorDetail,
@@ -152,14 +152,14 @@ export class JsonRpcTransportHandler {
               await this.requestHandler.getTask(GetTaskRequest.fromJSON(rpcRequest.params), context)
             );
             break;
-          case 'ListTasks':
-            result = ListTasksResponse.toJSON(
-              await this.requestHandler.listTasks(
-                ListTasksRequest.fromJSON(rpcRequest.params),
-                context
-              )
+          case 'ListTasks': {
+            const listTasksRequest = ListTasksRequest.fromJSON(rpcRequest.params);
+            result = serializeListTasksResponse(
+              await this.requestHandler.listTasks(listTasksRequest, context),
+              { includeArtifacts: listTasksRequest.includeArtifacts }
             );
             break;
+          }
           case 'CancelTask':
             result = Task.toJSON(
               await this.requestHandler.cancelTask(
