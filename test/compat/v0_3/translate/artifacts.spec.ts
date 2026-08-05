@@ -3,6 +3,7 @@ import {
   toCompatArtifact,
   toCoreArtifact,
 } from '../../../../src/compat/v0_3/translate/artifacts.js';
+import { A2AError } from '../../../../src/compat/v0_3/server/error.js';
 import type { Artifact as V1Artifact } from '../../../../src/types/pb/a2a.js';
 import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
 
@@ -83,6 +84,34 @@ describe('artifacts', () => {
         extensions: ['ext'],
       };
       expect(toCompatArtifact(toCoreArtifact(compat))).toEqual(compat);
+    });
+  });
+
+  describe('tolerates missing v0.3-optional fields', () => {
+    it('toCompatArtifact does not crash when extensions is missing', () => {
+      const core = {
+        artifactId: 'a1',
+        name: '',
+        description: '',
+        parts: [],
+        metadata: undefined,
+      } as unknown as V1Artifact;
+      expect(() => toCompatArtifact(core)).not.toThrow();
+      expect(toCompatArtifact(core).extensions).toBeUndefined();
+    });
+  });
+
+  describe('reports informative errors for missing required fields', () => {
+    it('toCompatArtifact throws A2AError.invalidParams when parts is missing', () => {
+      const core = { artifactId: 'a1' } as unknown as V1Artifact;
+      expect(() => toCompatArtifact(core)).toThrowError(A2AError);
+      expect(() => toCompatArtifact(core)).toThrow(/artifact\.parts is required/);
+    });
+
+    it('toCoreArtifact throws A2AError.invalidParams when parts is missing', () => {
+      const compat = { artifactId: 'a1' } as unknown as legacy.Artifact;
+      expect(() => toCoreArtifact(compat)).toThrowError(A2AError);
+      expect(() => toCoreArtifact(compat)).toThrow(/artifact\.parts is required/);
     });
   });
 });
