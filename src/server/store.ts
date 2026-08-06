@@ -1,4 +1,4 @@
-import { Task, ListTasksRequest, ListTasksResponse } from '../index.js';
+import { Task, ListTasksRequest, ListTasksResponse, TaskState } from '../index.js';
 import { ServerCallContext } from './context.js';
 import { DEFAULT_PAGE_SIZE } from '../constants.js';
 import { RequestMalformedError } from '../errors/index.js';
@@ -81,7 +81,7 @@ export class InMemoryTaskStore implements TaskStore {
       tasks = tasks.filter((task) => task.contextId === contextId);
     }
 
-    if (status !== undefined) {
+    if (status !== undefined && status !== TaskState.TASK_STATE_UNSPECIFIED) {
       tasks = tasks.filter((task) => task.status?.state === status);
     }
 

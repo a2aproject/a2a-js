@@ -10,7 +10,15 @@ import {
   RequestContext,
 } from '../src/server/index.js';
 import { AgentEvent } from '../src/server/events/execution_event_bus.js';
-import { AgentCard, Message, Role, Task, TaskState, StreamResponse } from '../src/index.js';
+import {
+  AgentCard,
+  ListTasksRequest,
+  Message,
+  Role,
+  Task,
+  TaskState,
+  StreamResponse,
+} from '../src/index.js';
 import {
   TaskNotFoundError,
   TaskNotCancelableError,
@@ -179,6 +187,69 @@ describe('Client E2E tests', () => {
             metadata: {},
           });
           expect(removeUndefinedFields(actual)).to.deep.equal(removeUndefinedFields(expected));
+        });
+      });
+
+      describe('listTasks', () => {
+        const storedTask: Task = {
+          id: 'list-1',
+          contextId: 'list-ctx',
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        };
+
+        const listParams: ListTasksRequest = {
+          tenant: '',
+          contextId: '',
+          status: TaskState.TASK_STATE_UNSPECIFIED,
+          pageSize: 10,
+          pageToken: '',
+          historyLength: undefined,
+          statusTimestampAfter: undefined,
+          includeArtifacts: false,
+        };
+
+        beforeEach(async () => {
+          agentExecutor.events = [AgentEvent.task(storedTask)];
+          const seedClient = await clientFactory.createFromAgentCard(agentCard);
+          await seedClient.sendMessage({
+            tenant: '',
+            message: createTestMessage('seed', 'seed'),
+            configuration: undefined,
+            metadata: {},
+          });
+        });
+
+        it('should list tasks when no status filter is supplied', async () => {
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          const result = await client.listTasks(listParams);
+
+          expect(result.tasks).to.have.lengthOf(1);
+          expect(result.tasks[0].id).to.equal(storedTask.id);
+          expect(result.totalSize).to.equal(1);
+        });
+
+        it('should still honour an explicit status filter', async () => {
+          const client = await clientFactory.createFromAgentCard(agentCard);
+
+          const matching = await client.listTasks({
+            ...listParams,
+            status: TaskState.TASK_STATE_COMPLETED,
+          });
+          expect(matching.tasks).to.have.lengthOf(1);
+
+          const nonMatching = await client.listTasks({
+            ...listParams,
+            status: TaskState.TASK_STATE_WORKING,
+          });
+          expect(nonMatching.tasks).to.have.lengthOf(0);
         });
       });
 
