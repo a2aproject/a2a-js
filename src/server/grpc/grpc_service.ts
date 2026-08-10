@@ -101,8 +101,43 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       );
       const stream = await handler(call.request, context);
       call.sendMetadata(buildMetadata(context));
-      for await (const responsePart of stream) {
-        call.write(responsePart);
+
+      // gRPC emits 'cancelled' when the client disconnects mid-stream.
+      // Without a listener the server would keep draining the generator
+      // and holding its resources (execution event queue, store reads,
+      // executor bus) even though nobody consumes the writes anymore
+      // (BUG-39). The write loop races `iterator.next()` against the
+      // cancellation signal so it always terminates; `iterator.return()`
+      // then closes the generator best-effort so its `finally` blocks
+      // (e.g. `ExecutionEventQueue.stop()`) run promptly. (A generator
+      // parked on an await that never resolves cannot be closed, but the
+      // loop still exits and the call still ends.)
+      const iterator = stream[Symbol.asyncIterator]();
+      let cancelled = false;
+      let resolveCancel: (() => void) | undefined;
+      const cancelSignal = new Promise<void>((resolve) => {
+        resolveCancel = resolve;
+      });
+      const onCancelled = (): void => {
+        cancelled = true;
+        resolveCancel?.();
+        void iterator.return?.(undefined);
+      };
+      call.on('cancelled', onCancelled);
+      try {
+        for (;;) {
+          if (cancelled) break;
+          const result = (await Promise.race([
+            iterator.next(),
+            cancelSignal.then(
+              (): IteratorResult<TRes, void> => ({ done: true, value: undefined })
+            ),
+          ])) as IteratorResult<TRes>;
+          if (result.done) break;
+          call.write(result.value);
+        }
+      } finally {
+        call.off('cancelled', onCancelled);
       }
     } catch (error) {
       call.emit('error', mapToError(error));
