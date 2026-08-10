@@ -2375,7 +2375,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
 
     await expect(
-      handler.getTaskPushNotificationConfig({ tenant: '', taskId, id: 'missing' }, serverCallContext)
+      handler.getTaskPushNotificationConfig(
+        { tenant: '', taskId, id: 'missing' },
+        serverCallContext
+      )
     ).rejects.toThrow(TaskNotFoundError);
   });
 
