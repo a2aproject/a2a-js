@@ -3480,9 +3480,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     ).rejects.toThrow(TaskNotCancelableError);
 
     // The CANCELED write must never reach the store.
-    expect(
-      saved.some((t) => t.status?.state === TaskState.TASK_STATE_CANCELED)
-    ).toBe(false);
+    expect(saved.some((t) => t.status?.state === TaskState.TASK_STATE_CANCELED)).toBe(false);
   });
 
   it('should use contextId from incomingMessage if present (contextId assignment logic)', async () => {
