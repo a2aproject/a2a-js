@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { formatSSEEvent, formatSSEErrorEvent, parseSseStream, SseEvent } from '../src/sse_utils.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import {
+  formatSSEEvent,
+  formatSSEErrorEvent,
+  parseSseStream,
+  SseEvent,
+  writeSseStream,
+} from '../src/sse_utils.js';
 
 const MOCK_CHUNK_SIZE = 2;
 
@@ -385,5 +391,86 @@ describe('SSE Utils', () => {
       expect(events).toHaveLength(1);
       expect(JSON.parse(events[0].data)).toEqual(event);
     });
+  });
+});
+
+describe('writeSseStream (server-side hardening, BUG-09)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const makeRes = () => {
+    const chunks: string[] = [];
+    return {
+      chunks,
+      res: {
+        write: (chunk: string) => {
+          chunks.push(chunk);
+        },
+        writableEnded: false,
+      },
+    };
+  };
+
+  async function* frames(items: string[]) {
+    for (const item of items) {
+      yield item;
+    }
+  }
+
+  it('prefixes every data frame with a monotonically increasing id field', async () => {
+    const { chunks, res } = makeRes();
+    await writeSseStream(res, frames([formatSSEEvent({ step: 1 }), formatSSEEvent({ step: 2 })]));
+
+    expect(chunks).toEqual([
+      'id: 1\ndata: {"step":1}\n\n',
+      'id: 2\ndata: {"step":2}\n\n',
+    ]);
+  });
+
+  it('emits keep-alive comment frames while idle', async () => {
+    vi.useFakeTimers();
+    const { chunks, res } = makeRes();
+
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    async function* gatedFrames() {
+      yield formatSSEEvent({ step: 1 });
+      await gate;
+      yield formatSSEEvent({ step: 2 });
+    }
+
+    const pending = writeSseStream(res, gatedFrames(), { heartbeatIntervalMs: 100 });
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(chunks.join('')).toContain(': keep-alive\n\n');
+
+    release();
+    await pending;
+    expect(chunks.join('')).toContain('id: 2\ndata: {"step":2}\n\n');
+  });
+
+  it('stops the stream when no event arrives within the idle timeout', async () => {
+    vi.useFakeTimers();
+    const { chunks, res } = makeRes();
+
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    async function* gatedFrames() {
+      yield formatSSEEvent({ step: 1 });
+      await gate;
+      yield formatSSEEvent({ step: 2 });
+    }
+
+    const pending = writeSseStream(res, gatedFrames(), { idleTimeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(100);
+
+    await pending;
+    // The first frame was written; the idle timeout stopped the stream
+    // before the second frame could be produced.
+    expect(chunks.join('')).toContain('id: 1\ndata: {"step":1}\n\n');
+    expect(chunks.join('')).not.toContain('step 2');
+
+    release();
   });
 });
