@@ -122,8 +122,7 @@ export class JsonRpcTransportHandler {
           // explicitly for the resubscribe snapshot trimming.
           const subscribeParams: SubscribeToTaskRequest & { historyLength?: number } =
             SubscribeToTaskRequest.fromJSON(params);
-          const rawHistoryLength = (params as Record<string, unknown> | undefined)
-            ?.historyLength;
+          const rawHistoryLength = (params as Record<string, unknown> | undefined)?.historyLength;
           if (rawHistoryLength !== undefined) {
             subscribeParams.historyLength = Number(rawHistoryLength);
           }
