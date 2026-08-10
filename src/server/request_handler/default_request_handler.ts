@@ -608,8 +608,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // stays closed for concurrent callers.
     if (this.executingTaskIds.has(taskId)) {
       throw new UnsupportedOperationError(
-        `Task ${taskId} is already being processed; ` +
-          `concurrent sendMessage is not supported.`
+        `Task ${taskId} is already being processed; ` + `concurrent sendMessage is not supported.`
       );
     }
     this.executingTaskIds.add(taskId);
@@ -726,8 +725,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     if (this.executingTaskIds.has(taskId)) {
       throw new UnsupportedOperationError(
-        `Task ${taskId} is already being processed; ` +
-          `concurrent sendMessage is not supported.`
+        `Task ${taskId} is already being processed; ` + `concurrent sendMessage is not supported.`
       );
     }
     this.executingTaskIds.add(taskId);
