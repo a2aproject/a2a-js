@@ -6,7 +6,7 @@ import express, {
   NextFunction,
 } from 'express';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
+import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent, writeSseStream } from '../../sse_utils.js';
 import {
   RestTransportHandler,
   HTTP_STATUS,
@@ -60,6 +60,13 @@ export interface RestHandlerOptions {
    */
   legacyCompat?: { enabled: boolean };
   contextBuilder?: ServerCallContextBuilder;
+  /**
+   * Optional inactivity timeout (ms) for SSE streams. When no event has
+   * been written within this window, the stream is closed, bounding how
+   * long a half-dead client can hold server resources (BUG-09).
+   * `0` (default) disables the timeout.
+   */
+  sseIdleTimeoutMs?: number;
 }
 
 /** Catches JSON parse errors from `express.json()` and maps them to A2A. */
@@ -139,7 +146,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     // surface as ContentTypeNotSupportedError, not as the generic
     // 400 that `express.json()` would produce after silently skipping.
     restContentTypeGuard,
-    express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE], strict: false }),
+    // Explicit body-size cap (BUG-10 / CWE-400): Express has no default
+    // limit, so a client could stream an unbounded JSON payload into
+    // memory. 10 MB is generous for A2A messages/tasks (large files are
+    // referenced via FileWithUri parts).
+    express.json({ type: [JSON_CONTENT_TYPE, A2A_CONTENT_TYPE], strict: false, limit: '10mb' }),
     restErrorHandler
   );
 
@@ -214,14 +225,18 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     res.flushHeaders();
 
     try {
-      if (!firstResult.done) {
-        const result = StreamResponse.toJSON(firstResult.value);
-        res.write(formatSSEEvent(result));
-      }
-      for await (const event of delegateAsyncIterator(iterator)) {
-        const result = StreamResponse.toJSON(event);
-        res.write(formatSSEEvent(result));
-      }
+      // Keep-alive comment frames and monotonic `id:` fields are added by
+      // `writeSseStream` (BUG-09); the optional `sseIdleTimeoutMs` bounds
+      // idle connections.
+      const frames = (async function* sseFrames(): AsyncGenerator<string, void, undefined> {
+        if (!firstResult.done) {
+          yield formatSSEEvent(StreamResponse.toJSON(firstResult.value));
+        }
+        for await (const event of delegateAsyncIterator(iterator)) {
+          yield formatSSEEvent(StreamResponse.toJSON(event));
+        }
+      })();
+      await writeSseStream(res, frames, { idleTimeoutMs: options.sseIdleTimeoutMs ?? 0 });
     } catch (streamError: unknown) {
       console.error('SSE streaming error:', streamError);
       if (!res.writableEnded) {
