@@ -76,9 +76,9 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     const loaded = await store.load(taskId, context);
     expect(loaded).toHaveLength(50);
 
-    await expect(
-      store.save(taskId, context, makeConfig({ id: 'cfg-overflow' }))
-    ).rejects.toThrow(RequestMalformedError);
+    await expect(store.save(taskId, context, makeConfig({ id: 'cfg-overflow' }))).rejects.toThrow(
+      RequestMalformedError
+    );
   });
 
   it('still allows overwriting an existing config id at the cap (BUG-42)', async () => {
