@@ -736,6 +736,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    if (!taskId || taskId.trim() === '') {
+      throw new RequestMalformedError('Task ID is required');
+    }
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -767,6 +770,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    if (!taskId || taskId.trim() === '') {
+      throw new RequestMalformedError('Task ID is required');
+    }
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
