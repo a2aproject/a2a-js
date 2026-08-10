@@ -62,19 +62,22 @@ export async function writeSseStream(
 
   // Heartbeat: fires on the min(heartbeat, idle) cadence so an idle
   // stream is detected at least as often as it would be heartbeated.
-  const heartbeatTimer = setInterval(() => {
-    if (stopped || res.writableEnded) return;
-    const now = Date.now();
-    if (idleTimeoutMs > 0 && now - lastActivity >= idleTimeoutMs) {
-      // Idle too long — stop the loop; the caller ends the response.
-      stopped = true;
-      return;
-    }
-    if (now - lastActivity >= heartbeatIntervalMs) {
-      res.write(': keep-alive\n\n');
-      lastActivity = now;
-    }
-  }, Math.min(heartbeatIntervalMs, idleTimeoutMs > 0 ? idleTimeoutMs : heartbeatIntervalMs));
+  const heartbeatTimer = setInterval(
+    () => {
+      if (stopped || res.writableEnded) return;
+      const now = Date.now();
+      if (idleTimeoutMs > 0 && now - lastActivity >= idleTimeoutMs) {
+        // Idle too long — stop the loop; the caller ends the response.
+        stopped = true;
+        return;
+      }
+      if (now - lastActivity >= heartbeatIntervalMs) {
+        res.write(': keep-alive\n\n');
+        lastActivity = now;
+      }
+    },
+    Math.min(heartbeatIntervalMs, idleTimeoutMs > 0 ? idleTimeoutMs : heartbeatIntervalMs)
+  );
   // Do not keep the process alive for a heartbeat alone.
   (heartbeatTimer as unknown as { unref?: () => void }).unref?.();
 

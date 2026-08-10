@@ -422,10 +422,7 @@ describe('writeSseStream (server-side hardening, BUG-09)', () => {
     const { chunks, res } = makeRes();
     await writeSseStream(res, frames([formatSSEEvent({ step: 1 }), formatSSEEvent({ step: 2 })]));
 
-    expect(chunks).toEqual([
-      'id: 1\ndata: {"step":1}\n\n',
-      'id: 2\ndata: {"step":2}\n\n',
-    ]);
+    expect(chunks).toEqual(['id: 1\ndata: {"step":1}\n\n', 'id: 2\ndata: {"step":2}\n\n']);
   });
 
   it('emits keep-alive comment frames while idle', async () => {
