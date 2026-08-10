@@ -8,6 +8,7 @@ import {
 import { ServerCallContext } from './context.js';
 import { AgentExecutionEvent, assertUnreachableEvent } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
+import { TERMINAL_STATE_LIST } from './utils.js';
 
 /**
  * Per-(tenant, owner, taskId) write serializer shared across every
@@ -237,6 +238,25 @@ export class ResultManager {
 
     const task = await this.loadPersistedTask(updateEvent.taskId, 'status update');
     if (!task || task.id !== updateEvent.taskId) {
+      this.currentTask = task;
+      return;
+    }
+
+    // Terminal tasks are immutable (BUG-43): a late status update must
+    // not roll a COMPLETED/FAILED/CANCELED/REJECTED task back into a
+    // non-terminal state (or a different terminal state). Same-state
+    // terminal updates (e.g. a final COMPLETED message arriving after the
+    // COMPLETED status) are still applied.
+    const persistedState = task.status?.state;
+    if (
+      persistedState !== undefined &&
+      TERMINAL_STATE_LIST.includes(persistedState) &&
+      updateEvent.status?.state !== persistedState
+    ) {
+      console.warn(
+        `ResultManager: ignoring status update ${updateEvent.status?.state} for terminal ` +
+          `task ${task.id} (${persistedState})`
+      );
       this.currentTask = task;
       return;
     }
