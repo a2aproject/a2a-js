@@ -1767,6 +1767,45 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(result.history![1].messageId, 'h3', 'should return most recent messages');
   });
 
+  it('getTask: should reject historyLength above the upper bound (§3.2.4, BUG-14)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'oldest'),
+      createTestMessage('h2', 'newest'),
+    ];
+    const fakeTask = createTestTask('task-history-cap', history);
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    await expect(
+      handler.getTask({ id: fakeTask.id, tenant: '', historyLength: 1001 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('getTask: should reject NaN historyLength from malformed JSON-RPC payloads (§3.2.4, BUG-14)', async () => {
+    const fakeTask = createTestTask('task-history-nan');
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    await expect(
+      handler.getTask({ id: fakeTask.id, tenant: '', historyLength: NaN }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('listTasks: should reject historyLength above the upper bound (§3.2.4, BUG-14)', async () => {
+    const request: ListTasksRequest = {
+      tenant: '',
+      contextId: '',
+      status: TaskState.TASK_STATE_UNSPECIFIED,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 1001,
+      statusTimestampAfter: undefined,
+      includeArtifacts: undefined,
+    };
+
+    await expect(handler.listTasks(request, serverCallContext)).rejects.toThrow(
+      RequestMalformedError
+    );
+  });
+
   it('sendMessage: should apply historyLength=0 to omit history from task result (§3.2.4)', async () => {
     const contextId = 'ctx-send-hist-0';
 

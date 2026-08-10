@@ -29,6 +29,7 @@ import {
   toRestErrorBody as toHTTPError,
   UnsupportedOperationError,
 } from '../../../errors/index.js';
+import { MAX_HISTORY_LENGTH } from '../../../constants.js';
 
 export { HTTP_STATUS, mapErrorToStatus, toHTTPError };
 
@@ -204,6 +205,11 @@ export class RestTransportHandler {
     }
     if (parsed < 0) {
       throw new RequestMalformedError('historyLength must be non-negative');
+    }
+    if (parsed > MAX_HISTORY_LENGTH) {
+      throw new RequestMalformedError(
+        `historyLength must not exceed ${MAX_HISTORY_LENGTH}`
+      );
     }
     return parsed;
   }
