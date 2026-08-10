@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { InMemoryPushNotificationStore } from '../../src/server/push_notification/push_notification_store.js';
+import {
+  InMemoryPushNotificationStore,
+  MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK,
+} from '../../src/server/push_notification/push_notification_store.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';
 import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/constants.js';
+import { RequestMalformedError } from '../../src/errors/index.js';
 
 function makeConfig(
   overrides: Partial<TaskPushNotificationConfig> = {}
@@ -60,6 +64,37 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     expect(loaded[0].id).toMatch(UUIDV4_RE);
     expect(loaded[1].id).toMatch(UUIDV4_RE);
     expect(loaded[0].id).not.toBe(loaded[1].id);
+  });
+
+  it('rejects a new config beyond the per-task cap (BUG-42)', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const taskId = 'task-capped';
+
+    for (let i = 0; i < 50; i++) {
+      await store.save(taskId, context, makeConfig({ id: `cfg-${i}` }));
+    }
+    const loaded = await store.load(taskId, context);
+    expect(loaded).toHaveLength(50);
+
+    await expect(
+      store.save(taskId, context, makeConfig({ id: 'cfg-overflow' }))
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('still allows overwriting an existing config id at the cap (BUG-42)', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const taskId = 'task-capped-overwrite';
+
+    for (let i = 0; i < 50; i++) {
+      await store.save(taskId, context, makeConfig({ id: `cfg-${i}` }));
+    }
+
+    // Overwriting an existing id must not count against the cap.
+    await store.save(taskId, context, makeConfig({ id: 'cfg-0', url: 'http://updated/' }));
+
+    const loaded = await store.load(taskId, context);
+    expect(loaded).toHaveLength(50);
+    expect(loaded.find((c) => c.id === 'cfg-0')?.url).toBe('http://updated/');
   });
 
   it('delete() matches against the config id', async () => {

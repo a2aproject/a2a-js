@@ -1,8 +1,18 @@
 import { TaskPushNotificationConfig } from '../../index.js';
 import { A2A_LEGACY_PROTOCOL_VERSION } from '../../constants.js';
+import { RequestMalformedError } from '../../errors/index.js';
 import { ServerCallContext } from '../context.js';
 import { OwnerResolver, resolveUserScope } from '../owner_resolver.js';
 import { ScopedStore } from '../utils.js';
+
+/**
+ * Upper bound on the number of push-notification configs a single task
+ * may register (BUG-42, CWE-400). Each entry consumes memory and can
+ * trigger an outbound HTTP request per task update, so an unbounded list
+ * lets a client register an unlimited number of webhooks. Mirrors the
+ * caps enforced by the other A2A SDKs.
+ */
+export const MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK = 50;
 
 /**
  * A push-notification config bundled with the A2A wire version it was
@@ -77,6 +87,18 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     const bucket = this._scopedStore.getOrCreateBucket(context);
     const entries = bucket.get(taskId) || [];
 
+    const existingIndex = entries.findIndex(
+      (entry) => entry.config.id === pushNotificationConfig.id
+    );
+    // Cap the number of configs per task. Only NEW configs count against
+    // the limit — overwriting an existing id at the cap stays valid.
+    if (existingIndex === -1 && entries.length >= MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK) {
+      throw new RequestMalformedError(
+        `Cannot register more than ${MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK} push notification ` +
+          `configs for task ${taskId}.`
+      );
+    }
+
     // id is the *result* of Create, not an input requirement — id-less
     // Creates must produce distinct records, not silently upsert.
     if (!pushNotificationConfig.id) {
@@ -87,9 +109,6 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     // populates a value when constructed via the normal transport path.
     const wireVersion = context.requestedVersion || A2A_LEGACY_PROTOCOL_VERSION;
 
-    const existingIndex = entries.findIndex(
-      (entry) => entry.config.id === pushNotificationConfig.id
-    );
     if (existingIndex !== -1) {
       entries.splice(existingIndex, 1);
     }
