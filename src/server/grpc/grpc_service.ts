@@ -129,9 +129,7 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
           if (cancelled) break;
           const result = (await Promise.race([
             iterator.next(),
-            cancelSignal.then(
-              (): IteratorResult<TRes, void> => ({ done: true, value: undefined })
-            ),
+            cancelSignal.then((): IteratorResult<TRes, void> => ({ done: true, value: undefined })),
           ])) as IteratorResult<TRes>;
           if (result.done) break;
           call.write(result.value);
