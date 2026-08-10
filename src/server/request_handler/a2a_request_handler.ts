@@ -57,7 +57,7 @@ export interface A2ARequestHandler {
   ): Promise<void>;
 
   resubscribe(
-    params: SubscribeToTaskRequest,
+    params: SubscribeToTaskRequest & { historyLength?: number },
     context: ServerCallContext
   ): AsyncGenerator<StreamResponse, void, undefined>;
 

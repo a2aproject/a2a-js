@@ -323,6 +323,26 @@ describe('RestTransportHandler', () => {
         mockContext
       );
     });
+
+    it('should pass a parsed historyLength through to the request handler (BUG-13)', async () => {
+      async function* mockStream() {
+        yield testTask;
+      }
+      (mockRequestHandler.resubscribe as Mock).mockResolvedValue(mockStream());
+
+      await transportHandler.resubscribe('task-1', mockContext, '', '10');
+
+      expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: '', historyLength: 10 },
+        mockContext
+      );
+    });
+
+    it('should throw InvalidParams if historyLength is invalid (BUG-13)', async () => {
+      await expect(
+        transportHandler.resubscribe('task-1', mockContext, '', 'invalid')
+      ).rejects.toThrow('historyLength must be a valid integer');
+    });
   });
 
   describe('Push Notification Config', () => {

@@ -388,7 +388,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const stream = await restTransportHandler.resubscribe(
       req.params.taskId,
       context,
-      (req.query.tenant as string) || ''
+      (req.query.tenant as string) || '',
+      req.query.historyLength
     );
     await sendStreamResponse(res, stream, context);
   };

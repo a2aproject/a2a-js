@@ -19,6 +19,7 @@ import {
   ListTasksResponse,
   TaskState,
   ListTaskPushNotificationConfigsResponse,
+  SubscribeToTaskRequest,
 } from '../../../index.js';
 import { taskStateFromJSON } from '../../../types/pb/a2a.js';
 import {
@@ -128,10 +129,18 @@ export class RestTransportHandler {
   async resubscribe(
     taskId: string,
     context: ServerCallContext,
-    tenant?: string
+    tenant?: string,
+    historyLength?: unknown
   ): Promise<AsyncGenerator<StreamResponse, void, undefined>> {
     await this.requireCapability('streaming');
-    return this.requestHandler.resubscribe({ id: taskId, tenant: tenant || '' }, context);
+    const params: SubscribeToTaskRequest & { historyLength?: number } = {
+      id: taskId,
+      tenant: tenant || '',
+    };
+    if (historyLength !== undefined) {
+      params.historyLength = this.parseHistoryLength(historyLength);
+    }
+    return this.requestHandler.resubscribe(params, context);
   }
 
   async createTaskPushNotificationConfig(
