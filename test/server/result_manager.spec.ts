@@ -931,7 +931,11 @@ describe('concurrent ResultManagers on the same taskId', () => {
         AgentEvent.statusUpdate({
           taskId,
           contextId,
-          status: { state: TaskState.TASK_STATE_COMPLETED, message: finalMessage, timestamp: undefined },
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: finalMessage,
+            timestamp: undefined,
+          },
           metadata: {},
         })
       );
