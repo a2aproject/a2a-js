@@ -796,33 +796,41 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       );
     } else {
       // Mark the task as cancelled directly. We do not wait for the
-      // executor to actually cancel processing.
-      task.status = {
-        state: TaskState.TASK_STATE_CANCELED,
-        message: {
-          role: Role.ROLE_AGENT,
-          messageId: crypto.randomUUID(),
+      // executor to actually cancel processing. Routing through the
+      // ResultManager — instead of mutating `task` and saving directly —
+      // applies the per-(tenant, owner, taskId) write lock and the
+      // terminal-state guard, so a concurrent status update (e.g.
+      // COMPLETED published by a racing executor) cannot be clobbered by
+      // the CANCELED write or vice versa.
+      const cancelMessage: Message = {
+        role: Role.ROLE_AGENT,
+        messageId: crypto.randomUUID(),
+        taskId: task.id,
+        contextId: task.contextId,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Task cancellation requested by user.' },
+            mediaType: 'text/plain',
+            filename: '',
+            metadata: {},
+          },
+        ],
+        metadata: {},
+        extensions: [],
+        referenceTaskIds: [],
+      };
+      await new ResultManager(this.taskStore, context).processEvent(
+        AgentEvent.statusUpdate({
           taskId: task.id,
           contextId: task.contextId,
-          parts: [
-            {
-              content: { $case: 'text', value: 'Task cancellation requested by user.' },
-              mediaType: 'text/plain',
-              filename: '',
-              metadata: {},
-            },
-          ],
+          status: {
+            state: TaskState.TASK_STATE_CANCELED,
+            message: cancelMessage,
+            timestamp: new Date().toISOString(),
+          },
           metadata: {},
-          extensions: [],
-          referenceTaskIds: [],
-        },
-        timestamp: new Date().toISOString(),
-      };
-      if (task.status?.message) {
-        task.history = [...(task.history || []), task.status.message];
-      }
-
-      await this.taskStore.save(task, context);
+        })
+      );
     }
 
     const latestTask = await this.taskStore.load(taskId, context);
