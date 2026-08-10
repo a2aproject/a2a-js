@@ -6,7 +6,12 @@ import express, {
   NextFunction,
 } from 'express';
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
-import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent, writeSseStream } from '../../sse_utils.js';
+import {
+  SSE_HEADERS,
+  formatSSEEvent,
+  formatSSEErrorEvent,
+  writeSseStream,
+} from '../../sse_utils.js';
 import {
   RestTransportHandler,
   HTTP_STATUS,
