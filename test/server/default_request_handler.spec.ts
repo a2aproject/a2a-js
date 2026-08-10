@@ -208,6 +208,131 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect((mockAgentExecutor as MockAgentExecutor).execute).toHaveBeenCalledTimes(1);
   });
 
+  it('sendMessage: rejects a second send while the executor is still running (BUG-38)', async () => {
+    const taskId = 'task-inflight';
+    // Pre-create the task in WORKING state so `_createRequestContext`'s
+    // terminal-state check passes.
+    await mockTaskStore.save(createTestTask(taskId), serverCallContext);
+
+    let releaseExecutor: (() => void) | undefined;
+    const executorGate = new Promise<void>((resolve) => {
+      releaseExecutor = resolve;
+    });
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      // Hold the executor open so the task stays "in flight".
+      await executorGate;
+      // End at INPUT_REQUIRED (non-terminal) so a follow-up send is
+      // still legal once the executor settles.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const firstParams: SendMessageRequest = {
+      message: { ...createTestMessage('msg-inflight-1', 'first'), taskId },
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+    const firstSend = handler.sendMessage(firstParams, serverCallContext);
+
+    // Wait until the first executor has started (in-flight mark is set).
+    await vi.waitFor(() => {
+      expect(mockAgentExecutor.execute).toHaveBeenCalled();
+    });
+
+    // A second send on the same WORKING task must be rejected — before,
+    // it started a second executor (Go: ErrExecutionInProgress; Python
+    // V2: ActiveTaskRegistry).
+    const secondParams: SendMessageRequest = {
+      message: { ...createTestMessage('msg-inflight-2', 'second'), taskId },
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+    await expect(handler.sendMessage(secondParams, serverCallContext)).rejects.toThrow(
+      UnsupportedOperationError
+    );
+    // The rejected send must not have started a second executor.
+    expect((mockAgentExecutor as MockAgentExecutor).execute).toHaveBeenCalledTimes(1);
+
+    releaseExecutor!();
+    await firstSend;
+
+    // Once the executor settles, a follow-up send on the same task is
+    // allowed again (multi-turn INPUT_REQUIRED flow must keep working).
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const followUp = await handler.sendMessage(secondParams, serverCallContext);
+    assert(followUp);
+    expect((mockAgentExecutor as MockAgentExecutor).execute).toHaveBeenCalledTimes(2);
+  });
+
   it('sendMessage: (blocking) should return a task in a completed state with an artifact', async () => {
     const params: SendMessageRequest = {
       message: createTestMessage('msg-2', 'Do a task'),
