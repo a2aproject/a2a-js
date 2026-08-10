@@ -117,9 +117,7 @@ export class RestTransportHandler {
         isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
       );
       if (status === TaskState.UNRECOGNIZED) {
-        throw new RequestMalformedError(
-          `Invalid status filter: ${String(queryParams.status)}`
-        );
+        throw new RequestMalformedError(`Invalid status filter: ${String(queryParams.status)}`);
       }
     }
 
