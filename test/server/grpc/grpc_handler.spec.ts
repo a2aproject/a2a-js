@@ -200,6 +200,23 @@ describe('grpcHandler', () => {
       );
       expect(call.end).toHaveBeenCalled();
     });
+
+    it('sanitizes raw internal error messages in gRPC error details (BUG-12)', async () => {
+      (mockRequestHandler.sendMessageStream as Mock).mockRejectedValue(
+        new Error('leaked stack: /app/db.js:42')
+      );
+      const call = createMockWritableStream({});
+
+      await handler.sendStreamingMessage(call);
+
+      expect(call.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({
+          code: grpc.status.UNKNOWN,
+          details: 'An unexpected error occurred.',
+        })
+      );
+    });
   });
 
   describe('listTasks', () => {

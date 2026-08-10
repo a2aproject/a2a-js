@@ -634,6 +634,6 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
     expect(savedFailed!.status.message?.role).toBe(Role.ROLE_AGENT);
     expect(
       (savedFailed!.status.message?.parts[0].content as { $case: 'text'; value: string }).value
-    ).toContain(errorMessage);
+    ).toBe('Event processing loop failed.');
   });
 });
