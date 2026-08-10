@@ -215,9 +215,7 @@ export class RestTransportHandler {
       throw new RequestMalformedError('historyLength must be non-negative');
     }
     if (parsed > MAX_HISTORY_LENGTH) {
-      throw new RequestMalformedError(
-        `historyLength must not exceed ${MAX_HISTORY_LENGTH}`
-      );
+      throw new RequestMalformedError(`historyLength must not exceed ${MAX_HISTORY_LENGTH}`);
     }
     return parsed;
   }
