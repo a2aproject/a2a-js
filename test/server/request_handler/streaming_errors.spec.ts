@@ -134,7 +134,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     expect(
       (statusPayload.value.status?.message?.parts[0].content as { $case: 'text'; value: string })
         .value
-    ).toContain(errorMessage);
+    ).toBe('Agent execution failed.');
   });
 
   it('synthetic Task is reachable via taskStore after the stream closes', async () => {
@@ -246,7 +246,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     expect(failed.value.status?.state).toBe(TaskState.TASK_STATE_FAILED);
     expect(
       (failed.value.status?.message?.parts[0].content as { $case: 'text'; value: string }).value
-    ).toContain(errorMessage);
+    ).toBe('Agent execution failed.');
   });
 
   it('synthetic Task uses the explicit taskId the client supplied on the incoming message', async () => {

@@ -305,3 +305,20 @@ export function specForError(error: unknown): A2AErrorSpec | undefined {
   if (!(error instanceof Error)) return undefined;
   return A2A_ERROR_SPECS[error.name];
 }
+
+/**
+ * Returns a client-safe message for an error being serialized onto the
+ * wire. Semantic {@link A2AError} messages are deliberate protocol
+ * messages and are kept verbatim; unknown/internal errors (stack traces,
+ * file paths, library names — CWE-209) are replaced with a generic
+ * string. The internal detail is logged server-side so diagnostics are
+ * not lost.
+ */
+export function clientSafeErrorMessage(error: unknown): string {
+  if (error instanceof A2AError) {
+    return error.message;
+  }
+  const detail = (error instanceof Error && error.message) || String(error);
+  console.error('A2A: sanitizing internal error before sending to client:', detail);
+  return 'An unexpected error occurred.';
+}

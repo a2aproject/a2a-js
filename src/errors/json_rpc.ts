@@ -12,6 +12,7 @@ import {
   A2A_ERROR_SPECS,
   A2AError,
   type A2AErrorOptions,
+  clientSafeErrorMessage,
   type ErrorDetail,
 } from './base.js';
 
@@ -200,8 +201,13 @@ export function toJsonRpcError(error: unknown): {
     const code = JSON_RPC_ERROR_CODE[error.name] ?? A2A_ERROR_CODE.INTERNAL_ERROR;
     return { code, message: error.message, data: [error.toErrorInfo()] };
   }
-  const message = (error instanceof Error && error.message) || 'An unexpected error occurred.';
-  return { code: A2A_ERROR_CODE.INTERNAL_ERROR, message };
+  // Unknown/internal errors: keep the error code semantics but replace
+  // the message with a generic string (CWE-209) — the detail is logged
+  // by `clientSafeErrorMessage`.
+  return {
+    code: A2A_ERROR_CODE.INTERNAL_ERROR,
+    message: clientSafeErrorMessage(error),
+  };
 }
 
 /**

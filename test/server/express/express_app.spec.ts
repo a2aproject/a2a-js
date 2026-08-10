@@ -316,7 +316,9 @@ describe('A2AExpressApp', () => {
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.equal(response.body.id, 'generic-error-test');
-      assert.equal(response.body.error.message, 'Generic error');
+      // Internal error messages are sanitized (BUG-12 / CWE-209): the
+      // raw 'Generic error' is logged server-side, not sent to the client.
+      assert.equal(response.body.error.message, 'An unexpected error occurred.');
     });
 
     it('should handle request without id', async () => {
