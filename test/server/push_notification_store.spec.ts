@@ -70,11 +70,11 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     const taskId = 'task-capped';
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK; i++) {
       await store.save(taskId, context, makeConfig({ id: `cfg-${i}` }));
     }
     const loaded = await store.load(taskId, context);
-    expect(loaded).toHaveLength(50);
+    expect(loaded).toHaveLength(MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK);
 
     await expect(store.save(taskId, context, makeConfig({ id: 'cfg-overflow' }))).rejects.toThrow(
       RequestMalformedError
@@ -85,7 +85,7 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     const taskId = 'task-capped-overwrite';
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK; i++) {
       await store.save(taskId, context, makeConfig({ id: `cfg-${i}` }));
     }
 
@@ -93,7 +93,7 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     await store.save(taskId, context, makeConfig({ id: 'cfg-0', url: 'http://updated/' }));
 
     const loaded = await store.load(taskId, context);
-    expect(loaded).toHaveLength(50);
+    expect(loaded).toHaveLength(MAX_PUSH_NOTIFICATION_CONFIGS_PER_TASK);
     expect(loaded.find((c) => c.id === 'cfg-0')?.url).toBe('http://updated/');
   });
 
