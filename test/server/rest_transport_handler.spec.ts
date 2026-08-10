@@ -281,6 +281,12 @@ describe('RestTransportHandler', () => {
         'historyLength must be non-negative'
       );
     });
+
+    it('should throw InvalidParams if historyLength exceeds the upper bound (BUG-14)', async () => {
+      await expect(transportHandler.getTask('task-1', mockContext, '1001')).rejects.toThrow(
+        'historyLength must not exceed 1000'
+      );
+    });
   });
 
   describe('listTasks', () => {
@@ -339,6 +345,12 @@ describe('RestTransportHandler', () => {
       await expect(
         transportHandler.listTasks({ historyLength: 'abc' }, mockContext)
       ).rejects.toThrow('historyLength must be a valid integer');
+    });
+
+    it('should throw InvalidParams if historyLength exceeds the upper bound (BUG-14)', async () => {
+      await expect(
+        transportHandler.listTasks({ historyLength: '1001' }, mockContext)
+      ).rejects.toThrow('historyLength must not exceed 1000');
     });
   });
 
