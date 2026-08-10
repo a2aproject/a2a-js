@@ -275,6 +275,67 @@ describe('RestTransportHandler', () => {
     });
   });
 
+  describe('listTasks', () => {
+    const mockListResponse: ListTasksResponse = {
+      tasks: [],
+      nextPageToken: '',
+      pageSize: 0,
+      totalSize: 0,
+    };
+
+    it('should delegate parsed query params to the request handler', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      const result = await transportHandler.listTasks(
+        {
+          pageSize: '10',
+          pageToken: 'abc',
+          historyLength: '5',
+          contextId: 'ctx-1',
+        },
+        mockContext
+      );
+
+      expect(result).toEqual(mockListResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        {
+          tenant: '',
+          contextId: 'ctx-1',
+          status: TaskState.TASK_STATE_UNSPECIFIED,
+          pageSize: 10,
+          pageToken: 'abc',
+          historyLength: 5,
+          statusTimestampAfter: undefined,
+          includeArtifacts: false,
+        },
+        mockContext
+      );
+    });
+
+    it('should throw InvalidParams for an invalid status filter string (BUG-37)', async () => {
+      await expect(
+        transportHandler.listTasks({ status: 'bogus-status' }, mockContext)
+      ).rejects.toThrow('Invalid status filter');
+    });
+
+    it('should throw InvalidParams for an out-of-range numeric status filter (BUG-37)', async () => {
+      await expect(transportHandler.listTasks({ status: '99' }, mockContext)).rejects.toThrow(
+        'Invalid status filter'
+      );
+    });
+
+    it('should pass a valid status filter through to the request handler (BUG-37)', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: 'TASK_STATE_COMPLETED' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.TASK_STATE_COMPLETED }),
+        mockContext
+      );
+    });
+  });
+
   describe('cancelTask', () => {
     it('should cancel task by ID', async () => {
       const cancelledTask = {

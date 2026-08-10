@@ -450,17 +450,19 @@ describe('restHandler', () => {
       );
     });
 
-    it('should treat unrecognized status values as UNRECOGNIZED (-1)', async () => {
-      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
+    it('should reject unrecognized status values with 400 instead of silently filtering (BUG-37)', async () => {
+      // Regression: an invalid status used to be silently converted to
+      // UNRECOGNIZED (-1) and applied as a filter matching nothing.
+      // It must now surface as a 400 INVALID_ARGUMENT, mirroring
+      // Python's ParseDict behavior.
+      const response = await request(app)
+        .get('/tasks?status=INVALID_VALUE')
+        .set('A2A-Version', '1.0')
+        .expect(400);
 
-      await request(app).get('/tasks?status=INVALID_VALUE').set('A2A-Version', '1.0').expect(200);
-
-      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
-      assert.equal(
-        callArgs.status,
-        TaskState.UNRECOGNIZED,
-        'Unrecognized status should return UNRECOGNIZED (-1)'
-      );
+      assert.equal(response.body.error.status, 'INVALID_ARGUMENT');
+      assert.equal(response.body.error.details[0].reason, 'INVALID_PARAMS');
+      expect(mockRequestHandler.listTasks).not.toHaveBeenCalled();
     });
 
     it('should default to TASK_STATE_UNSPECIFIED when status is not provided', async () => {
