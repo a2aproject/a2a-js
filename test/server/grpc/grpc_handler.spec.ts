@@ -212,7 +212,7 @@ describe('grpcHandler', () => {
       expect(call.end).toHaveBeenCalled();
     });
 
-    it('stops the generator when the client cancels mid-stream (BUG-39)', async () => {
+    it('stops the generator when the client cancels mid-stream', async () => {
       let generatorClosed = false;
       let releaseGate: (() => void) | undefined;
       // The generator blocks on this gate until the test releases it —
