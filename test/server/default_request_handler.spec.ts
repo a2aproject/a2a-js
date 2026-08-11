@@ -3578,7 +3578,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect((mockAgentExecutor as MockAgentExecutor).cancelTask).not.toHaveBeenCalled();
   });
 
-  it('cancelTask: does not clobber a task a concurrent executor just completed (BUG-44)', async () => {
+  it('cancelTask: does not clobber a task a concurrent executor just completed', async () => {
     // Regression: cancel used load→check→mutate→save with no lock, so a
     // COMPLETED status written by a racing executor between the check and
     // the save could be overwritten with CANCELED (or the CANCELED write

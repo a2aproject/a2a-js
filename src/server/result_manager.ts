@@ -242,7 +242,7 @@ export class ResultManager {
       return;
     }
 
-    // Terminal tasks are immutable (BUG-43): a late status update must
+    // Terminal tasks are immutable: a late status update must
     // not roll a COMPLETED/FAILED/CANCELED/REJECTED task back into a
     // non-terminal state (or a different terminal state). Same-state
     // terminal updates (e.g. a final COMPLETED message arriving after the
