@@ -207,7 +207,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect((mockAgentExecutor as MockAgentExecutor).execute).toHaveBeenCalledTimes(1);
   });
 
-  it('sendMessage: rejects a second send while the executor is still running (BUG-38)', async () => {
+  it('sendMessage: rejects a second send while the executor is still running', async () => {
     const taskId = 'task-inflight';
     // Pre-create the task in WORKING state so `_createRequestContext`'s
     // terminal-state check passes.
