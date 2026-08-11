@@ -780,7 +780,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // applies the per-(tenant, owner, taskId) write lock and the
       // terminal-state guard, so a concurrent status update (e.g.
       // COMPLETED published by a racing executor) cannot be clobbered by
-      // the CANCELED write or vice versa (BUG-44).
+      // the CANCELED write or vice versa.
       const cancelMessage: Message = {
         role: Role.ROLE_AGENT,
         messageId: uuidv4(),

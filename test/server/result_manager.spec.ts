@@ -846,7 +846,7 @@ describe('concurrent ResultManagers on the same taskId', () => {
     expect((finalB!.history ?? []).map((m) => m.messageId)).not.toContain('A-user');
   });
 
-  describe('terminal-state guard (BUG-43)', () => {
+  describe('terminal-state guard', () => {
     it('ignores a status update that would roll a terminal task back to a non-terminal state', async () => {
       const taskId = 'task-terminal-immutable';
       const contextId = 'ctx-terminal-immutable';
