@@ -7,8 +7,12 @@ import {
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
 import { InMemoryPushNotificationStore } from '../../src/server/push_notification/push_notification_store.js';
 import { ServerCallContext } from '../../src/server/context.js';
-import { StreamResponse, TaskState } from '../../src/types/pb/a2a.js';
+import { AgentCard, StreamResponse, Task, TaskState } from '../../src/types/pb/a2a.js';
 import { A2A_PROTOCOL_VERSION } from '../../src/constants.js';
+import { DefaultRequestHandler } from '../../src/server/request_handler/default_request_handler.js';
+import { InMemoryTaskStore } from '../../src/server/store.js';
+import { DefaultExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
+import { MockAgentExecutor } from './mocks/agent-executor.mock.js';
 
 describe('isBlockedPushIp', () => {
   it('blocks loopback, private, link-local, CGNAT, benchmarking, multicast', () => {
@@ -134,5 +138,64 @@ describe('DefaultPushNotificationSender SSRF guard', () => {
     expect(fetchSpy).toHaveBeenCalled();
     expect(fetchSpy.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
     fetchSpy.mockRestore();
+  });
+});
+
+describe('create-time push URL validation', () => {
+  const agentCard: AgentCard = {
+    name: 'Push Agent',
+    description: 'test',
+    version: '1.0.0',
+    provider: undefined,
+    documentationUrl: '',
+    supportedInterfaces: [
+      { url: 'http://localhost/a2a', protocolBinding: 'HTTP+JSON', tenant: '', protocolVersion: '1.0' },
+    ],
+    capabilities: { extensions: [], streaming: true, pushNotifications: true },
+    securitySchemes: {},
+    securityRequirements: [],
+    defaultInputModes: ['text/plain'],
+    defaultOutputModes: ['text/plain'],
+    skills: [],
+    signatures: [],
+  };
+
+  it('rejects private URLs on createTaskPushNotificationConfig', async () => {
+    const taskStore = new InMemoryTaskStore();
+    const pushStore = new InMemoryPushNotificationStore();
+    const handler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      new MockAgentExecutor(),
+      new DefaultExecutionEventBusManager(),
+      pushStore
+    );
+    const ctx = new ServerCallContext();
+    const taskId = 't-create';
+    await taskStore.save(
+      {
+        id: taskId,
+        contextId: 'c',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      } satisfies Task,
+      ctx
+    );
+
+    await expect(
+      handler.createTaskPushNotificationConfig(
+        {
+          tenant: '',
+          taskId,
+          id: '',
+          url: 'http://169.254.169.254/latest/meta-data/',
+          token: '',
+          authentication: undefined,
+        },
+        ctx
+      )
+    ).rejects.toThrow(/invalid push config endpoint URL/);
   });
 });

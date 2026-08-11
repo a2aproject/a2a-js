@@ -144,7 +144,10 @@ describe('Push Notification Integration Tests', () => {
       mockAgentExecutor,
       executionEventBusManager,
       pushNotificationStore,
-      pushNotificationSender
+      pushNotificationSender,
+      undefined,
+      undefined,
+      true
     );
   });
 
@@ -588,7 +591,10 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender
+        customPushNotificationSender,
+        undefined,
+        undefined,
+        true
       );
 
       const pushConfig: TaskPushNotificationConfig = {
@@ -769,7 +775,10 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender
+        customPushNotificationSender,
+        undefined,
+        undefined,
+        true
       );
 
       const pushConfig1: TaskPushNotificationConfig = {

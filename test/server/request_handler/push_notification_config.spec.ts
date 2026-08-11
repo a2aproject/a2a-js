@@ -92,13 +92,13 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     await taskStore.save(makeTask(taskId), serverContext);
 
     const result = await handler.createTaskPushNotificationConfig(
-      makeIdLessConfig(taskId, 'https://example.test/webhook-1'),
+      makeIdLessConfig(taskId, 'https://example.com/webhook-1'),
       serverContext
     );
 
     expect(result.id).toMatch(UUIDV4_RE);
     expect(result.taskId).toBe(taskId);
-    expect(result.url).toBe('https://example.test/webhook-1');
+    expect(result.url).toBe('https://example.com/webhook-1');
 
     // Verify persistence: the record returned must be the one in the
     // store, not a reflection of the input.
@@ -116,11 +116,11 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     await taskStore.save(makeTask(taskId), serverContext);
 
     const first = await handler.createTaskPushNotificationConfig(
-      makeIdLessConfig(taskId, 'https://example.test/webhook-A'),
+      makeIdLessConfig(taskId, 'https://example.com/webhook-A'),
       serverContext
     );
     const second = await handler.createTaskPushNotificationConfig(
-      makeIdLessConfig(taskId, 'https://example.test/webhook-B'),
+      makeIdLessConfig(taskId, 'https://example.com/webhook-B'),
       serverContext
     );
 
@@ -132,8 +132,8 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     expect(stored).toHaveLength(2);
     expect(stored.map((c) => c.id).sort()).toEqual([first.id, second.id].sort());
     expect(stored.map((c) => c.url).sort()).toEqual([
-      'https://example.test/webhook-A',
-      'https://example.test/webhook-B',
+      'https://example.com/webhook-A',
+      'https://example.com/webhook-B',
     ]);
   });
 
@@ -145,14 +145,14 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
       tenant: '',
       taskId,
       id: 'caller-chosen-id',
-      url: 'https://example.test/webhook-explicit',
+      url: 'https://example.com/webhook-explicit',
       token: 'shh',
       authentication: undefined,
     };
     const result = await handler.createTaskPushNotificationConfig(params, serverContext);
 
     expect(result.id).toBe('caller-chosen-id');
-    expect(result.url).toBe('https://example.test/webhook-explicit');
+    expect(result.url).toBe('https://example.com/webhook-explicit');
 
     // The returned object must be a deep clone, not the input reference —
     // caller-side mutations of the returned value must not reach the
@@ -161,7 +161,7 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     expect(result).not.toBe(params);
     result.url = 'https://attacker.test/';
     const stored = await pushNotificationStore.load(taskId, serverContext);
-    expect(stored[0].url).toBe('https://example.test/webhook-explicit');
+    expect(stored[0].url).toBe('https://example.com/webhook-explicit');
   });
 
   it('listTaskPushNotificationConfigs returns every entry after mixed id-less + explicit Creates', async () => {
@@ -169,7 +169,7 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     await taskStore.save(makeTask(taskId), serverContext);
 
     const idless1 = await handler.createTaskPushNotificationConfig(
-      makeIdLessConfig(taskId, 'https://example.test/wh-1'),
+      makeIdLessConfig(taskId, 'https://example.com/wh-1'),
       serverContext
     );
     const explicit = await handler.createTaskPushNotificationConfig(
@@ -177,14 +177,14 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
         tenant: '',
         taskId,
         id: 'pinned',
-        url: 'https://example.test/wh-2',
+        url: 'https://example.com/wh-2',
         token: '',
         authentication: undefined,
       },
       serverContext
     );
     const idless2 = await handler.createTaskPushNotificationConfig(
-      makeIdLessConfig(taskId, 'https://example.test/wh-3'),
+      makeIdLessConfig(taskId, 'https://example.com/wh-3'),
       serverContext
     );
 
@@ -197,4 +197,19 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     const idsSeen = list.configs.map((c) => c.id).sort();
     expect(idsSeen).toEqual([idless1.id, explicit.id, idless2.id].sort());
   });
+  it('rejects private push webhook URLs at create time (SSRF)', async () => {
+    const taskId = 'task-ssrf-create';
+    await taskStore.save(makeTask(taskId), serverContext);
+
+    await expect(
+      handler.createTaskPushNotificationConfig(
+        makeIdLessConfig(taskId, 'http://127.0.0.1/hook'),
+        serverContext
+      )
+    ).rejects.toThrow(/invalid push config endpoint URL/);
+
+    const stored = await pushNotificationStore.load(taskId, serverContext);
+    expect(stored).toHaveLength(0);
+  });
+
 });
