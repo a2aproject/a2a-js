@@ -23,7 +23,7 @@ export interface SseStreamWriterOptions {
   /**
    * Keep-alive interval in ms. While no event has been written for this
    * long, an SSE comment frame (`: keep-alive`) is emitted so proxies and
-   * load balancers do not terminate the idle connection (BUG-09).
+   * load balancers do not terminate the idle connection.
    * Defaults to {@link SSE_HEARTBEAT_INTERVAL_MS}.
    */
   heartbeatIntervalMs?: number;
@@ -40,7 +40,7 @@ export interface SseStreamWriterOptions {
  * Writes pre-formatted SSE frames (strings starting with `data: `) to an
  * Express-style response, adding:
  * - a monotonically increasing `id:` field to every data frame, so
- *   clients can implement resumable subscriptions (BUG-09),
+ *   clients can implement resumable subscriptions,
  * - keep-alive comment frames while the stream is idle,
  * - an optional inactivity timeout that stops the stream.
  *

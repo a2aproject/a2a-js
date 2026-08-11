@@ -394,7 +394,7 @@ describe('SSE Utils', () => {
   });
 });
 
-describe('writeSseStream (server-side hardening, BUG-09)', () => {
+describe('writeSseStream (server-side hardening)', () => {
   afterEach(() => {
     vi.useRealTimers();
   });

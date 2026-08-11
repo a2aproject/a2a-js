@@ -68,7 +68,7 @@ export interface RestHandlerOptions {
   /**
    * Optional inactivity timeout (ms) for SSE streams. When no event has
    * been written within this window, the stream is closed, bounding how
-   * long a half-dead client can hold server resources (BUG-09).
+   * long a half-dead client can hold server resources.
    * `0` (default) disables the timeout.
    */
   sseIdleTimeoutMs?: number;
@@ -151,7 +151,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     // surface as ContentTypeNotSupportedError, not as the generic
     // 400 that `express.json()` would produce after silently skipping.
     restContentTypeGuard,
-    // Explicit body-size cap (BUG-10 / CWE-400): Express has no default
+    // Explicit body-size cap (CWE-400): Express has no default
     // limit, so a client could stream an unbounded JSON payload into
     // memory. 10 MB is generous for A2A messages/tasks (large files are
     // referenced via FileWithUri parts).
@@ -231,7 +231,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
 
     try {
       // Keep-alive comment frames and monotonic `id:` fields are added by
-      // `writeSseStream` (BUG-09); the optional `sseIdleTimeoutMs` bounds
+      // `writeSseStream`; the optional `sseIdleTimeoutMs` bounds
       // idle connections.
       const frames = (async function* sseFrames(): AsyncGenerator<string, void, undefined> {
         if (!firstResult.done) {
