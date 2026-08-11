@@ -11,6 +11,7 @@ import {
   PushNotificationSerializer,
   V1PushNotificationSerializer,
 } from './push_notification_serializer.js';
+import { pushUrlValidationError } from './push_url_validation.js';
 
 export interface DefaultPushNotificationSenderOptions {
   /** Timeout in milliseconds for the abort controller. Defaults to 5000ms. */
@@ -22,6 +23,14 @@ export interface DefaultPushNotificationSenderOptions {
    * @deprecated Use `pushConfig.authentication` with `AuthenticationInfo`.
    */
   tokenHeaderName?: string;
+  /**
+   * Push-notification URLs are client-supplied and the server POSTs to them,
+   * which makes them an SSRF vector (cloud metadata, internal services).
+   * By default each URL is validated at dispatch time and non-public targets
+   * are dropped. Set this to true only when legitimate webhooks live on
+   * private or loopback networks (validation is then skipped).
+   */
+  allowPrivatePushUrls?: boolean;
   /**
    * Per-wire-version push-notification serializers. The sender always
    * registers a built-in `'1.0'` serializer
@@ -42,7 +51,9 @@ export interface DefaultPushNotificationSenderOptions {
 export class DefaultPushNotificationSender implements PushNotificationSender {
   private readonly pushNotificationStore: PushNotificationStore;
   private notificationChain: Map<string, Promise<unknown>>;
-  private readonly options: Required<Omit<DefaultPushNotificationSenderOptions, 'serializers'>>;
+  private readonly options: Required<
+    Omit<DefaultPushNotificationSenderOptions, 'serializers'>
+  >;
   private readonly serializers: Map<string, PushNotificationSerializer>;
   private readonly fallbackSerializer: PushNotificationSerializer;
   // Avoid log spam when many notifications target the same unknown version.
@@ -57,6 +68,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     this.options = {
       timeout: options.timeout ?? 5000,
       tokenHeaderName: options.tokenHeaderName ?? 'X-A2A-Notification-Token',
+      allowPrivatePushUrls: options.allowPrivatePushUrls ?? false,
     };
 
     // Seed with the built-in v1.0 serializer, then overlay user-supplied
@@ -212,6 +224,17 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   ): Promise<void> {
     const { config: pushConfig, wireVersion } = storedConfig;
     const url = pushConfig.url;
+
+    if (!this.options.allowPrivatePushUrls) {
+      const validationError = await pushUrlValidationError(url);
+      if (validationError) {
+        console.warn(
+          `Push-notification URL for task_id=${taskId} rejected: ${validationError}`
+        );
+        return;
+      }
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
@@ -219,6 +242,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       const serializer = this._resolveSerializer(wireVersion);
       const { body, contentType } = serializer.serialize(streamResponse);
 
+      // Do not follow redirects: validation covers the initial URL only.
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -227,6 +251,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         },
         body,
         signal: controller.signal,
+        redirect: 'error',
       });
 
       if (!response.ok) {
