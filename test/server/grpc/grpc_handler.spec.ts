@@ -201,7 +201,7 @@ describe('grpcHandler', () => {
       expect(call.end).toHaveBeenCalled();
     });
 
-    it('sanitizes raw internal error messages in gRPC error details (BUG-12)', async () => {
+    it('sanitizes raw internal error messages in gRPC error details', async () => {
       (mockRequestHandler.sendMessageStream as Mock).mockRejectedValue(
         new Error('leaked stack: /app/db.js:42')
       );

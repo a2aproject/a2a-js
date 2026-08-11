@@ -316,7 +316,7 @@ describe('A2AExpressApp', () => {
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.equal(response.body.id, 'generic-error-test');
-      // Internal error messages are sanitized (BUG-12 / CWE-209): the
+      // Internal error messages are sanitized (CWE-209): the
       // raw 'Generic error' is logged server-side, not sent to the client.
       assert.equal(response.body.error.message, 'An unexpected error occurred.');
     });

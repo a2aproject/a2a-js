@@ -620,7 +620,7 @@ describe('cross-entry error identity', () => {
   });
 });
 
-describe('internal error message sanitization (BUG-12 / CWE-209)', () => {
+describe('internal error message sanitization (CWE-209)', () => {
   it('toRestErrorBody replaces raw Error messages with a generic string', () => {
     const body = toRestErrorBody(new Error('leaked: /app/src/db.js:42 InternalFailure'), 500);
     expect(body.error.message).toBe('An unexpected error occurred.');
