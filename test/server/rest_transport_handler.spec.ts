@@ -324,7 +324,7 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should pass a parsed historyLength through to the request handler (BUG-13)', async () => {
+    it('should pass a parsed historyLength through to the request handler', async () => {
       async function* mockStream() {
         yield testTask;
       }
@@ -338,7 +338,7 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should throw InvalidParams if historyLength is invalid (BUG-13)', async () => {
+    it('should throw InvalidParams if historyLength is invalid', async () => {
       await expect(
         transportHandler.resubscribe('task-1', mockContext, '', 'invalid')
       ).rejects.toThrow('historyLength must be a valid integer');

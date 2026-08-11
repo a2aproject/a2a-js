@@ -177,7 +177,7 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
     await expect(generator.next()).rejects.toThrow(UnsupportedOperationError);
   });
 
-  it('trims the snapshot history when historyLength is provided (BUG-13)', async () => {
+  it('trims the snapshot history when historyLength is provided', async () => {
     // Regression: resubscribe previously yielded the full task without
     // applying `_applyHistoryLengthSemantics`, letting a resubscriber
     // bypass the client-imposed history limit that getTask/listTasks
@@ -224,7 +224,7 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
     expect(payload.value.history?.map((m) => m.messageId)).toEqual(['m2', 'm3']);
   });
 
-  it('omits history entirely when historyLength is 0 (BUG-13)', async () => {
+  it('omits history entirely when historyLength is 0', async () => {
     const taskId = 'task-trim-zero';
     const contextId = `ctx-${taskId}`;
     const persisted: Task = {
@@ -261,7 +261,7 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
     expect(payload.value.history).toEqual([]);
   });
 
-  it('rejects non-integer historyLength with RequestMalformedError (BUG-13)', async () => {
+  it('rejects non-integer historyLength with RequestMalformedError', async () => {
     const taskId = 'task-trim-nan';
     await taskStore.save(makeTask(taskId), serverContext);
 
@@ -272,7 +272,7 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
     await expect(generator.next()).rejects.toThrow(RequestMalformedError);
   });
 
-  it('rejects negative historyLength with RequestMalformedError (BUG-13)', async () => {
+  it('rejects negative historyLength with RequestMalformedError', async () => {
     const taskId = 'task-trim-negative';
     await taskStore.save(makeTask(taskId), serverContext);
 
