@@ -248,7 +248,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
 
-  it('rejects a scheme with empty credentials instead of silently dropping the Authorization header (BUG-40)', async () => {
+  it('rejects a scheme with empty credentials instead of silently dropping the Authorization header', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const sender = new DefaultPushNotificationSender(store, {
       allowPrivateNetworks: true,
@@ -271,7 +271,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     );
   });
 
-  it('rejects a scheme with blank credentials (BUG-40)', async () => {
+  it('rejects a scheme with blank credentials', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const sender = new DefaultPushNotificationSender(store, {
       allowPrivateNetworks: true,
@@ -294,7 +294,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     );
   });
 
-  it('rejects credentials containing CR/LF to prevent header injection (BUG-34)', async () => {
+  it('rejects credentials containing CR/LF to prevent header injection', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const sender = new DefaultPushNotificationSender(store, {
       allowPrivateNetworks: true,

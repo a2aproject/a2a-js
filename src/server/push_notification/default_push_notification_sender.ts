@@ -210,10 +210,10 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    * `pushConfig.authentication` (scheme + credentials) → `Authorization`
    * header; otherwise `pushConfig.token` → legacy token header.
    *
-   * A configured `scheme` with missing/blank credentials is an error
-   * (BUG-40) — silently dropping the Authorization header would let the
+   * A configured `scheme` with missing/blank credentials is an error —
+   * silently dropping the Authorization header would let the
    * webhook reject the push with an auth error that is hard to diagnose.
-   * Credentials containing CR/LF are rejected (BUG-34) so a client cannot
+   * Credentials containing CR/LF are rejected so a client cannot
    * inject extra HTTP headers via the concatenated header value.
    */
   private _buildAuthHeaders(pushConfig: TaskPushNotificationConfig): Record<string, string> {
