@@ -274,7 +274,7 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should throw InvalidParams if historyLength exceeds the upper bound (BUG-14)', async () => {
+    it('should throw InvalidParams if historyLength exceeds the upper bound', async () => {
       await expect(transportHandler.getTask('task-1', mockContext, '1001')).rejects.toThrow(
         'historyLength must not exceed 1000'
       );

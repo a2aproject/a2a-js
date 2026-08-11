@@ -1767,7 +1767,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(result.history![1].messageId, 'h3', 'should return most recent messages');
   });
 
-  it('getTask: should reject historyLength above the upper bound (§3.2.4, BUG-14)', async () => {
+  it('getTask: should reject historyLength above the upper bound (§3.2.4)', async () => {
     const history: Message[] = [
       createTestMessage('h1', 'oldest'),
       createTestMessage('h2', 'newest'),
@@ -1780,7 +1780,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     ).rejects.toThrow(RequestMalformedError);
   });
 
-  it('getTask: should reject NaN historyLength from malformed JSON-RPC payloads (§3.2.4, BUG-14)', async () => {
+  it('getTask: should reject NaN historyLength from malformed JSON-RPC payloads (§3.2.4)', async () => {
     const fakeTask = createTestTask('task-history-nan');
     await mockTaskStore.save(fakeTask, serverCallContext);
 
@@ -1789,7 +1789,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     ).rejects.toThrow(RequestMalformedError);
   });
 
-  it('listTasks: should reject historyLength above the upper bound (§3.2.4, BUG-14)', async () => {
+  it('listTasks: should reject historyLength above the upper bound (§3.2.4)', async () => {
     const request: ListTasksRequest = {
       tenant: '',
       contextId: '',
