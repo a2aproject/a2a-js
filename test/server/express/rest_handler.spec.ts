@@ -450,7 +450,7 @@ describe('restHandler', () => {
       );
     });
 
-    it('should reject unrecognized status values with 400 instead of silently filtering (BUG-37)', async () => {
+    it('should reject unrecognized status values with 400 instead of silently filtering', async () => {
       // Regression: an invalid status used to be silently converted to
       // UNRECOGNIZED (-1) and applied as a filter matching nothing.
       // It must now surface as a 400 INVALID_ARGUMENT, mirroring

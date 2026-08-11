@@ -111,7 +111,7 @@ export class RestTransportHandler {
     if (queryParams.status) {
       // `taskStateFromJSON` (generated from a2a.proto) maps unknown
       // strings/numbers to `UNRECOGNIZED`; reject them instead of
-      // silently applying a filter that matches nothing (BUG-37,
+      // silently applying a filter that matches nothing,
       // mirroring Python's ParseDict behavior).
       status = taskStateFromJSON(
         isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)

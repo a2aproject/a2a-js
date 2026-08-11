@@ -258,7 +258,7 @@ describe('JsonRpcTransportHandler', () => {
       });
     });
 
-    it('rejects an invalid status filter with INVALID_PARAMS instead of silently returning empty results (BUG-37)', async () => {
+    it('rejects an invalid status filter with INVALID_PARAMS instead of silently returning empty results', async () => {
       const response = (await transportHandler.handle(
         { jsonrpc: '2.0', method: 'ListTasks', id: 1, params: { status: 'bogus-status' } },
         defaultContext
