@@ -47,7 +47,7 @@ export interface JsonRpcHandlerOptions {
   /**
    * Optional inactivity timeout (ms) for SSE streams. When no event has
    * been written within this window, the stream is closed, bounding how
-   * long a half-dead client can hold server resources (BUG-09).
+   * long a half-dead client can hold server resources.
    * `0` (default) disables the timeout.
    */
   sseIdleTimeoutMs?: number;
@@ -96,7 +96,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   // would silently ignore the body and the dispatcher would surface a
   // misleading InvalidParamsError (-32602).
   router.use(contentTypeGuard);
-  // Explicit body-size cap (BUG-10 / CWE-400): Express has no default
+  // Explicit body-size cap (CWE-400): Express has no default
   // limit; 10 MB is generous for A2A JSON-RPC payloads.
   router.use(express.json({ limit: '10mb' }), jsonErrorHandler);
 
@@ -148,7 +148,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           });
           res.flushHeaders();
           try {
-            // Keep-alive + monotonic `id:` fields via writeSseStream (BUG-09).
+            // Keep-alive + monotonic `id:` fields via writeSseStream.
             await writeSseStream(
               res,
               (async function* sseFrames(): AsyncGenerator<string, void, undefined> {
@@ -204,7 +204,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         res.flushHeaders();
 
         try {
-          // Keep-alive + monotonic `id:` fields via writeSseStream (BUG-09).
+          // Keep-alive + monotonic `id:` fields via writeSseStream.
           const frames = (async function* sseFrames(): AsyncGenerator<string, void, undefined> {
             if (!firstResult.done) {
               yield formatSSEEvent(firstResult.value);
