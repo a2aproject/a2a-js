@@ -66,7 +66,7 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     expect(loaded[0].id).not.toBe(loaded[1].id);
   });
 
-  it('rejects a new config beyond the per-task cap (BUG-42)', async () => {
+  it('rejects a new config beyond the per-task cap', async () => {
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     const taskId = 'task-capped';
 
@@ -81,7 +81,7 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     );
   });
 
-  it('still allows overwriting an existing config id at the cap (BUG-42)', async () => {
+  it('still allows overwriting an existing config id at the cap', async () => {
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     const taskId = 'task-capped-overwrite';
 

@@ -8,7 +8,7 @@ import { ScopedStore } from '../utils.js';
 
 /**
  * Upper bound on the number of push-notification configs a single task
- * may register (BUG-42, CWE-400). Each entry consumes memory and can
+ * may register (CWE-400). Each entry consumes memory and can
  * trigger an outbound HTTP request per task update, so an unbounded list
  * lets a client register an unlimited number of webhooks. Mirrors the
  * caps enforced by the other A2A SDKs.
