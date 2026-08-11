@@ -2360,7 +2360,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(getResponse.url).to.equal(pushConfig.url);
   });
 
-  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when no configs exist (BUG-36)', async () => {
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when no configs exist', async () => {
     const taskId = 'task-no-config';
     await mockTaskStore.save(
       {
@@ -2382,7 +2382,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     ).rejects.toThrow(TaskNotFoundError);
   });
 
-  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when the config id is unknown (BUG-36)', async () => {
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when the config id is unknown', async () => {
     const taskId = 'task-unknown-config-id';
     await mockTaskStore.save(
       {
