@@ -312,19 +312,19 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should throw InvalidParams for an invalid status filter string (BUG-37)', async () => {
+    it('should throw InvalidParams for an invalid status filter string', async () => {
       await expect(
         transportHandler.listTasks({ status: 'bogus-status' }, mockContext)
       ).rejects.toThrow('Invalid status filter');
     });
 
-    it('should throw InvalidParams for an out-of-range numeric status filter (BUG-37)', async () => {
+    it('should throw InvalidParams for an out-of-range numeric status filter', async () => {
       await expect(transportHandler.listTasks({ status: '99' }, mockContext)).rejects.toThrow(
         'Invalid status filter'
       );
     });
 
-    it('should pass a valid status filter through to the request handler (BUG-37)', async () => {
+    it('should pass a valid status filter through to the request handler', async () => {
       (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
 
       await transportHandler.listTasks({ status: 'TASK_STATE_COMPLETED' }, mockContext);

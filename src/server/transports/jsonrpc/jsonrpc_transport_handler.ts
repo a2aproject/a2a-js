@@ -156,7 +156,7 @@ export class JsonRpcTransportHandler {
           case 'ListTasks': {
             const listTasksRequest = ListTasksRequest.fromJSON(rpcRequest.params);
             if (listTasksRequest.status === TaskState.UNRECOGNIZED) {
-              // Reject invalid status filters (BUG-37) — `taskStateFromJSON`
+              // Reject invalid status filters — `taskStateFromJSON`
               // maps unknown values to `UNRECOGNIZED`, which would otherwise
               // silently filter to an empty result set.
               throw new RequestMalformedError('Invalid status filter');
