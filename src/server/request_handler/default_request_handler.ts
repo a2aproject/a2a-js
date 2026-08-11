@@ -98,7 +98,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   /**
    * Task IDs whose agent executor is currently running (added before the
    * executor starts, removed when it settles). Used to reject a second
-   * `message/send` while the first is still executing (BUG-38) — mirrors
+   * `message/send` while the first is still executing — mirrors
    * Go's `ErrExecutionInProgress` and Python V2's `ActiveTaskRegistry`.
    * The flag is tied to the *executor's* lifecycle, not the bus's, so
    * INPUT_REQUIRED / AUTH_REQUIRED pauses (executor settled, bus kept
@@ -585,7 +585,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        // The executor has settled — release the in-flight guard (BUG-38).
+        // The executor has settled — release the in-flight guard.
         this.executingTaskIds.delete(taskId);
         this._settleBus(taskId, eventBus, snapshotTracker().state);
       });
@@ -602,7 +602,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Reject a second send while the previous executor for this task is
     // still running. Checked synchronously BEFORE any await so two
-    // concurrent requests cannot both pass the check (BUG-38).
+    // concurrent requests cannot both pass the check.
     if (incomingMessage.taskId && this.executingTaskIds.has(incomingMessage.taskId)) {
       throw new UnsupportedOperationError(
         `Task ${incomingMessage.taskId} is already being processed; ` +
@@ -724,7 +724,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('message.messageId is required for streaming.');
     }
 
-    // Same in-flight guard as `sendMessage` (BUG-38): a second executor
+    // Same in-flight guard as `sendMessage`: a second executor
     // must not be started for a task whose executor is still running.
     if (incomingMessage.taskId && this.executingTaskIds.has(incomingMessage.taskId)) {
       throw new UnsupportedOperationError(
