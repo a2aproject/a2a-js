@@ -1121,7 +1121,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * `NaN` from a malformed JSON-RPC payload) are rejected with
    * `RequestMalformedError` — without the cap, a client could request an
    * arbitrarily large history and `slice(-NaN)` → `slice(0)` would leak
-   * the full history (BUG-14 / CWE-400).
+   * the full history (CWE-400).
    */
   private _applyHistoryLengthSemantics(task: Task, params: { historyLength?: number }): void {
     if (params.historyLength !== undefined) {
