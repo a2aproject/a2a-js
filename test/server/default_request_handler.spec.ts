@@ -1709,13 +1709,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(events[0].payload?.$case, 'task');
   });
 
-  it('getTask: should reject an empty taskId with RequestMalformedError (BUG-16)', async () => {
+  it('getTask: should reject an empty taskId with RequestMalformedError', async () => {
     await expect(
       handler.getTask({ id: '', tenant: '', historyLength: 0 }, serverCallContext)
     ).rejects.toThrow(RequestMalformedError);
   });
 
-  it('getTask: should reject a whitespace-only taskId with RequestMalformedError (BUG-16)', async () => {
+  it('getTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
     await expect(
       handler.getTask({ id: '   ', tenant: '', historyLength: 0 }, serverCallContext)
     ).rejects.toThrow(RequestMalformedError);
@@ -3247,13 +3247,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
-  it('cancelTask: should reject an empty taskId with RequestMalformedError (BUG-16)', async () => {
+  it('cancelTask: should reject an empty taskId with RequestMalformedError', async () => {
     await expect(
       handler.cancelTask({ id: '', tenant: '', metadata: {} }, serverCallContext)
     ).rejects.toThrow(RequestMalformedError);
   });
 
-  it('cancelTask: should reject a whitespace-only taskId with RequestMalformedError (BUG-16)', async () => {
+  it('cancelTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
     await expect(
       handler.cancelTask({ id: ' \t ', tenant: '', metadata: {} }, serverCallContext)
     ).rejects.toThrow(RequestMalformedError);
