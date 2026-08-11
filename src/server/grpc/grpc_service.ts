@@ -105,8 +105,8 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       // gRPC emits 'cancelled' when the client disconnects mid-stream.
       // Without a listener the server would keep draining the generator
       // and holding its resources (execution event queue, store reads,
-      // executor bus) even though nobody consumes the writes anymore
-      // (BUG-39). The write loop races `iterator.next()` against the
+      // executor bus) even though nobody consumes the writes anymore.
+      // The write loop races `iterator.next()` against the
       // cancellation signal so it always terminates; `iterator.return()`
       // then closes the generator best-effort so its `finally` blocks
       // (e.g. `ExecutionEventQueue.stop()`) run promptly. (A generator
