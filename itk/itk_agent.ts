@@ -24,7 +24,7 @@ import {
   UserBuilder,
   restHandler,
 } from '../src/server/express/index.js';
-import { Instruction, CallAgent } from './a2a-itk/agents/ts/v10/pb/instruction.js';
+import { Instruction, CallAgent } from './pb/instruction.js';
 import {
   ClientFactory,
   ClientFactoryOptions,
