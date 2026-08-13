@@ -18,6 +18,8 @@ cleanup() {
   docker rmi itk_service > /dev/null 2>&1 || true
   rm -rf a2a-itk > /dev/null 2>&1 || true
   rm -rf pyproto > /dev/null 2>&1 || true
+  rm -rf pb > /dev/null 2>&1 || true
+  rm -rf protos > /dev/null 2>&1 || true
   rm -f instruction.proto > /dev/null 2>&1 || true
   rm -f raw_results.json > /dev/null 2>&1 || true
   echo "Done. Final exit code: $RESULT"
@@ -54,26 +56,18 @@ uv run --with grpcio-tools python -m grpc_tools.protoc \
 # Fix imports in generated file
 sed -i 's/^import instruction_pb2 as instruction__pb2/from . import instruction_pb2 as instruction__pb2/' pyproto/instruction_pb2_grpc.py
 
-# 3a. Regenerate the TypeScript proto bindings consumed by itk_agent.ts.
-# The committed `pb/instruction.ts` in a2a-itk can lag behind the source
-# `.proto` (e.g. when fields like `CallAgent.behavior` are added), so always
-# regenerate from the authoritative `instruction.proto` we just copied. Buf
-# requires the proto to live under the directory referenced by `buf.gen.yaml`
-# (`./protos`); we stage it there for generation and clean up afterwards.
-# Path is `a2a-itk/agents/ts/v10/`, four levels deep from the script — buf
-# is invoked from that directory so the `../../../..` prefix resolves to the
-# script's own working directory, and then `../node_modules` reaches the
-# a2a-js SDK root.
-TS_PB_DIR="a2a-itk/agents/ts/v10"
-mkdir -p "${TS_PB_DIR}/protos"
-cp instruction.proto "${TS_PB_DIR}/protos/instruction.proto"
-(cd "${TS_PB_DIR}" && ../../../../../node_modules/.bin/buf generate)
-rm -rf "${TS_PB_DIR}/protos"
+# 3a. Regenerate TypeScript proto bindings for itk_agent.ts using the SDK's
+# own itk/buf.gen.yaml (out: ./pb, inputs: ./protos).
+mkdir -p protos
+cp instruction.proto protos/instruction.proto
+../node_modules/.bin/buf generate
+rm -rf protos
 
-# 4. Build jit itk_service docker image from a2a-itk root (the Dockerfile
-# lives at the repo root in a2a-itk, not under a subdirectory like in
-# a2a-samples).
-docker build -t itk_service a2a-itk
+# 4. Build jit itk_service docker image from a2a-itk root (skipped in CI
+# where the workflow builds via docker/build-push-action for GHA caching).
+if [ "${ITK_SKIP_BUILD:-0}" != "1" ]; then
+  docker build -t itk_service a2a-itk
+fi
 
 # 5. Start docker service
 # Mount the repo root (a2a-js) and the itk directory
@@ -90,17 +84,26 @@ if [ "${ITK_LOG_LEVEL^^}" = "DEBUG" ]; then
   DOCKER_MOUNT_LOGS="-v $ITK_DIR/logs:/app/logs"
 fi
 
+mkdir -p "$HOME/.cache/a2a-itk-launcher"
+
 docker run -d --name itk-service \
   -v "$A2A_JS_ROOT:/app/agents/repo" \
   -v "$ITK_DIR:/app/agents/repo/itk" \
+  -v "$HOME/.cache/a2a-itk-launcher:/root/.cache/a2a-itk" \
   $DOCKER_MOUNT_LOGS \
   -e ITK_LOG_LEVEL="$ITK_LOG_LEVEL" \
+  -e ITK_ENTRYPOINT="${ITK_ENTRYPOINT:-itk_service_v2.py}" \
+  -e ITK_READINESS_TIMEOUT="${ITK_READINESS_TIMEOUT:-180}" \
+  -e ITK_MAX_WORKERS="${ITK_MAX_WORKERS:-2}" \
   -p 8000:8000 \
   itk_service
 
 # 5.1. Fix dubious ownership for git (needed for uv-dynamic-versioning)
 docker exec itk-service git config --global --add safe.directory /app/agents/repo
 docker exec itk-service git config --global --add safe.directory /app/agents/repo/itk
+# Launcher's peer checkouts under /root/.cache/a2a-itk are host-owned; trust
+# only repos under the launcher cache dir so container-side git accepts them.
+docker exec itk-service bash -lc 'while IFS= read -r -d "" d; do git config --global --add safe.directory "${d%/.git}"; done < <(find /root/.cache/a2a-itk -type d -name .git -print0)'
 
 # 6. Verify service is up and send post request
 MAX_RETRIES=30
