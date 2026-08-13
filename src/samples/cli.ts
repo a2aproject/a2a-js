@@ -2,7 +2,7 @@
 
 import readline from 'node:readline';
 import crypto from 'node:crypto';
-import { GoogleAuth } from 'google-auth-library';
+import { parseArgs } from 'node:util';
 
 import {
   TaskStatusUpdateEvent,
@@ -17,13 +17,12 @@ import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/p
 import { AgentExecutionEvent, AgentEvent } from '../server/index.js';
 
 import {
-  AuthenticationHandler,
   ClientFactory,
   ClientFactoryOptions,
-  createAuthenticatingFetchWithRetry,
   DefaultAgentCardResolver,
   JsonRpcTransportFactory,
   RestTransportFactory,
+  ServiceParameters,
 } from '../client/index.js';
 import { GrpcTransportFactory } from '../client/transports/grpc/grpc_transport.js';
 
@@ -75,66 +74,96 @@ function agentCardFromTransport(url: string, transport?: string): AgentCard {
   };
 }
 
-// Application Default Credentials required for A2A agent running on Agent Engine.
-export class ADCHandler implements AuthenticationHandler {
-  private auth = new GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-  });
+// --- CLI Arguments ---
+const USAGE = `A2A Terminal Client
 
-  async headers(): Promise<Record<string, string>> {
-    const client = await this.auth.getClient();
-    const token = await client.getAccessToken();
-    if (token?.token) {
-      return { Authorization: `Bearer ${token.token}` };
+Usage: a2a:cli [url] [flags]
+
+  --transport <name>   Force a transport: JSONRPC, HTTP+JSON, GRPC.
+                       Default: the first match between the agent card and this client.
+  --auth <creds>       Shorthand for --svc-param "Authorization=<creds>",
+                       e.g. --auth "Bearer $(gcloud auth print-access-token)".
+  --svc-param <k=v>    Service parameter sent with every request, as an HTTP header
+                       (JSON-RPC / REST) or request metadata (gRPC). Repeatable.
+  --card-path <path>   Agent card path relative to the url. Default: ${AGENT_CARD_PATH}.
+  --no-agent-card      Skip discovery and synthesize a card from the url and --transport.
+  --help               Show this message.
+`;
+
+function exitWithUsage(message: string): never {
+  console.error(colorize('red', message));
+  console.error(USAGE);
+  process.exit(2);
+}
+
+function parseCliArgs() {
+  try {
+    return parseArgs({
+      args: process.argv.slice(2),
+      allowPositionals: true,
+      options: {
+        transport: { type: 'string' },
+        auth: { type: 'string' },
+        'svc-param': { type: 'string', multiple: true },
+        'card-path': { type: 'string' },
+        'no-agent-card': { type: 'boolean' },
+        help: { type: 'boolean' },
+      },
+    });
+  } catch (err) {
+    return exitWithUsage(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** Merges `--auth` and every `--svc-param key=value` into one parameter map. */
+function toServiceParameters(auth: string | undefined, params: string[]): ServiceParameters {
+  const serviceParameters: ServiceParameters = auth ? { Authorization: auth } : {};
+  for (const param of params) {
+    const eq = param.indexOf('='); // Split on the first `=`; values may contain more.
+    if (eq < 1) {
+      exitWithUsage(`--svc-param expects "key=value", got "${param}".`);
     }
-    throw new Error('Failed to retrieve ADC access token.');
+    serviceParameters[param.slice(0, eq)] = param.slice(eq + 1);
   }
+  return serviceParameters;
+}
 
-  async shouldRetryWithHeaders(
-    _req: RequestInit,
-    res: Response
-  ): Promise<Record<string, string> | undefined> {
-    if (res.status !== 401 && res.status !== 403) return undefined;
-    return this.headers();
-  }
+/** Agent card discovery bypasses the transports, so it needs its own headers. */
+function fetchWithHeaders(headers: ServiceParameters): typeof fetch {
+  return (input, init) => {
+    const merged = new Headers(headers);
+    new Headers(init?.headers).forEach((value, key) => merged.set(key, value));
+    return fetch(input, { ...init, headers: merged });
+  };
 }
 
 // --- State ---
 let currentTaskId: string | undefined = undefined; // Initialize as undefined
 let currentContextId: string | undefined = undefined; // Initialize as undefined
 
-const preferredTransport = process.argv
-  .find((arg) => arg.startsWith('--transport='))
-  ?.split('=')[1];
-const serverUrlArg = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
-const serverUrl = serverUrlArg || 'http://localhost:41241'; // Agent's base URL
-
-const buildAgentCardFromTransport = process.argv.includes('--no-agent-card');
-const useAdcAuth =
-  process.argv.includes('--google-auth') || process.argv.includes('--agent-engine');
-
-let fetchImpl: typeof fetch = fetch;
-let agentCardPath = AGENT_CARD_PATH;
-if (useAdcAuth) {
-  fetchImpl = createAuthenticatingFetchWithRetry(fetch, new ADCHandler());
+const { values: flags, positionals } = parseCliArgs();
+if (flags.help) {
+  console.log(USAGE);
+  process.exit(0);
 }
-if (process.argv.includes('--agent-engine')) {
-  agentCardPath = 'a2a/extendedAgentCard'; // Agent Engine doesn't use well-known public agent card endpoint.
-}
+
+const serverUrl = positionals[0] ?? 'http://localhost:41241'; // Agent's base URL
+const serviceParameters = toServiceParameters(flags.auth, flags['svc-param'] ?? []);
+
 const factory = new ClientFactory(
   ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
-    cardResolver: new DefaultAgentCardResolver({ fetchImpl }),
+    cardResolver: new DefaultAgentCardResolver({ fetchImpl: fetchWithHeaders(serviceParameters) }),
     transports: [
-      new JsonRpcTransportFactory({ fetchImpl }),
-      new RestTransportFactory({ fetchImpl }),
+      new JsonRpcTransportFactory(),
+      new RestTransportFactory(),
       new GrpcTransportFactory(),
     ],
-    preferredTransports: preferredTransport ? [preferredTransport] : undefined,
+    preferredTransports: flags.transport ? [flags.transport] : undefined,
   })
 );
-const client = buildAgentCardFromTransport
-  ? await factory.createFromAgentCard(agentCardFromTransport(serverUrl, preferredTransport))
-  : await factory.createFromUrl(serverUrl, agentCardPath);
+const client = flags['no-agent-card']
+  ? await factory.createFromAgentCard(agentCardFromTransport(serverUrl, flags.transport))
+  : await factory.createFromUrl(serverUrl, flags['card-path']);
 let agentName = 'Agent'; // Default, try to get from agent card later
 
 // --- Readline Setup ---
@@ -261,19 +290,19 @@ function printMessageContent(message: Message) {
 async function fetchAndDisplayAgentCard() {
   // Use the client's getAgentCard method.
   // The client was initialized with serverUrl, which is the agent's base URL.
-  if (buildAgentCardFromTransport) {
+  if (flags['no-agent-card']) {
     console.log(colorize('dim', `Using synthesized agent card (no discovery) for: ${serverUrl}`));
   } else {
     console.log(colorize('dim', `Attempting to fetch agent card from agent at: ${serverUrl}`));
   }
   try {
     // client.getAgentCard() uses the agentBaseUrl provided during client construction
-    const card: AgentCard = await client.getAgentCard();
+    const card: AgentCard = await client.getAgentCard({ serviceParameters });
     agentName = card.name || 'Agent'; // Update global agent name
     console.log(
       colorize(
         'green',
-        buildAgentCardFromTransport ? `✓ Using Synthesized Agent Card:` : `✓ Agent Card Found:`
+        flags['no-agent-card'] ? `✓ Using Synthesized Agent Card:` : `✓ Agent Card Found:`
       )
     );
     console.log(`  Name:        ${colorize('bright', agentName)}`);
@@ -314,9 +343,6 @@ async function fetchAndDisplayAgentCard() {
 async function main() {
   console.log(colorize('bright', `A2A Terminal Client`));
   console.log(colorize('dim', `Agent Base URL: ${serverUrl}`));
-  if (useAdcAuth) {
-    console.log(colorize('dim', `Auth: ${colorize('green', 'Google ADC (Bearer token)')}`));
-  }
 
   await fetchAndDisplayAgentCard(); // Fetch the card before starting the loop
 
@@ -403,7 +429,7 @@ async function main() {
     try {
       console.log(colorize('red', 'Sending message...'));
       // Use sendMessageStream
-      const stream = client.sendMessageStream(params);
+      const stream = client.sendMessageStream(params, { serviceParameters });
 
       // Iterate over the events from the stream
       for await (const event of stream) {

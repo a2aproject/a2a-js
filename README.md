@@ -96,7 +96,7 @@ Each sample directory has its own `README.md` with run instructions.
 | [`authentication`](src/samples/authentication/)                                 | Server-side Bearer/JWT authentication using Passport, including a `UserBuilder` that propagates the authenticated user into the agent context. |
 | [`extensions`](src/samples/extensions/)                                         | A2A protocol extension implemented as an `AgentExecutor` decorator that adds metadata to outgoing events.                                      |
 | [`client/interceptors`](src/samples/client/interceptors/)                       | Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.                                   |
-| [`cli.ts`](src/samples/cli.ts)                                                  | Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with optional Google ADC authentication.                                       |
+| [`cli.ts`](src/samples/cli.ts)                                                  | Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with `--auth` / `--svc-param` header injection.                                |
 | [`agents/compat-v1-server`](src/samples/agents/compat-v1-server/)               | v1.0-native server with `legacyCompat: { enabled: true }` on every transport — JSON-RPC, REST, gRPC, agent card, and push notifications.       |
 | [`agents/compat-v1-client`](src/samples/agents/compat-v1-client/)               | v1.0-native client driving both the compat-aware server above and a hand-rolled mock v0.3 server in-process; pairs with `compat-v1-server`.    |
 
@@ -214,8 +214,8 @@ headers and retry on 401/403 responses.
 
 See the [`client/interceptors`](src/samples/client/interceptors/) sample for
 header injection + per-call `AbortSignal.timeout(...)`, and the
-[`cli.ts`](src/samples/cli.ts) sample for an `AuthenticationHandler` based on
-Google Application Default Credentials.
+[`cli.ts`](src/samples/cli.ts) sample for passing `--auth "Bearer $TOKEN"` as
+per-call `serviceParameters`.
 
 ### Authentication (server side)
 
