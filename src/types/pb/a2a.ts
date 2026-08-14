@@ -1049,7 +1049,7 @@ export const TaskStatus: MessageFns<TaskStatus> = {
     return {
       state: isSet(object.state) ? taskStateFromJSON(object.state) : 0,
       message: isSet(object.message) ? Message.fromJSON(object.message) : undefined,
-      timestamp: isSet(object.timestamp) ? globalThis.String(object.timestamp) : undefined,
+      timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
     };
   },
 
@@ -2414,9 +2414,9 @@ export const ListTasksRequest: MessageFns<ListTasksRequest> = {
         ? globalThis.Number(object.history_length)
         : undefined,
       statusTimestampAfter: isSet(object.statusTimestampAfter)
-        ? globalThis.String(object.statusTimestampAfter)
+        ? fromJsonTimestamp(object.statusTimestampAfter)
         : isSet(object.status_timestamp_after)
-        ? globalThis.String(object.status_timestamp_after)
+        ? fromJsonTimestamp(object.status_timestamp_after)
         : undefined,
       includeArtifacts: isSet(object.includeArtifacts)
         ? globalThis.Boolean(object.includeArtifacts)
@@ -2746,6 +2746,21 @@ function isObject(value: any): boolean {
 
 function isSet(value: any): boolean {
   return value !== null && value !== undefined;
+}
+
+function fromJsonTimestamp(o: any): string {
+  if (o instanceof globalThis.Date) {
+    return o.toISOString();
+  } else if (typeof o === "string" && o.trim() !== "") {
+    const d = new globalThis.Date(o);
+    if (!globalThis.isNaN(d.getTime())) {
+      if (o.endsWith("Z") || o.endsWith("z")) {
+        return o;
+      }
+      return d.toISOString().replace(/\.000Z$/, "Z");
+    }
+  }
+  throw new globalThis.Error(`Value is not a valid timestamp: ${JSON.stringify(o)}`);
 }
 
 export interface MessageFns<T> {
