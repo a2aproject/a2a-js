@@ -3231,7 +3231,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
             message: undefined,
             timestamp: undefined,
           },
-          final: true,
           metadata: {},
         })
       );
