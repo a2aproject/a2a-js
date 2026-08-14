@@ -501,8 +501,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskByState.set(task.status.state, task);
     });
     (mockTaskStore as MockTaskStore).load.mockImplementation(async (id) => {
+      // Match InMemoryTaskStore semantics: load returns deep copies so
+      // the ResultManager's in-place edits cannot leak into storage.
       for (const t of [...taskByState.values()].reverse()) {
-        if (t.id === id) return t;
+        if (t.id === id) return structuredClone(t);
       }
       return undefined;
     });
@@ -3426,6 +3428,59 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       expect(error.message).to.contain('Task not cancelable');
     }
     expect((mockAgentExecutor as MockAgentExecutor).cancelTask).not.toHaveBeenCalled();
+  });
+
+  it('cancelTask: does not clobber a task a concurrent executor just completed', async () => {
+    // Regression: cancel used load→check→mutate→save with no lock, so a
+    // COMPLETED status written by a racing executor between the check and
+    // the save could be overwritten with CANCELED (or the CANCELED write
+    // lost). cancelTask now routes the no-bus path through ResultManager,
+    // whose per-task write lock and terminal-state guard make the
+    // transition atomic; if the executor already finished, the cancel
+    // fails cleanly instead of corrupting the task.
+    const taskId = 'task-cancel-race';
+    const contextId = 'ctx-cancel-race';
+    const workTask: Task = {
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    const completedTask: Task = {
+      ...structuredClone(workTask),
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    };
+
+    const saved: Task[] = [];
+    let loadCount = 0;
+    const racingStore: TaskStore = {
+      save: async (task) => {
+        saved.push(structuredClone(task));
+      },
+      load: async () => {
+        loadCount += 1;
+        // First load (cancel's initial check) sees WORKING; the racing
+        // executor completes the task before ResultManager re-loads
+        // inside its write lock.
+        return loadCount === 1 ? structuredClone(workTask) : structuredClone(completedTask);
+      },
+      list: async () => ({ tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 }),
+    };
+    const racingHandler = new DefaultRequestHandler(
+      testAgentCard,
+      racingStore,
+      mockAgentExecutor,
+      executionEventBusManager
+    );
+
+    await expect(
+      racingHandler.cancelTask({ id: taskId, tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(TaskNotCancelableError);
+
+    // The CANCELED write must never reach the store.
+    expect(saved.some((t) => t.status?.state === TaskState.TASK_STATE_CANCELED)).toBe(false);
   });
 
   it('should use contextId from incomingMessage if present (contextId assignment logic)', async () => {

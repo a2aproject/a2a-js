@@ -557,8 +557,10 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
       taskByState.set(task.status.state, task);
     });
     failingStore.load.mockImplementation(async (id: string) => {
+      // Match InMemoryTaskStore semantics: load returns deep copies so
+      // the ResultManager's in-place edits cannot leak into storage.
       for (const t of [...taskByState.values()].reverse()) {
-        if (t.id === id) return t;
+        if (t.id === id) return structuredClone(t);
       }
       return undefined;
     });

@@ -17,6 +17,8 @@ import {
   RequestContext,
   ExecutionEventBus,
   AgentEvent,
+  InMemoryPushNotificationStore,
+  DefaultPushNotificationSender,
 } from '../src/server/index.js';
 import {
   agentCardHandler,
@@ -738,9 +740,25 @@ async function main() {
 
   const taskStore: TaskStore = new InMemoryTaskStore();
   const agentExecutor: AgentExecutor = new ItkAgentExecutor();
+  // The ITK harness registers push webhooks on loopback (its own local
+  // notification server), so the sender must opt out of the default
+  // SSRF guard that rejects private/loopback targets — mirroring the Go
+  // SDK's `AllowPrivateNetworks` for trusted internal webhooks.
+  const pushNotificationStore = new InMemoryPushNotificationStore();
+  const pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore, {
+    allowPrivateNetworks: true,
+  });
   // DefaultRequestHandler auto-creates push notification store and sender
-  // when agentCard.capabilities.pushNotifications is true.
-  const requestHandler = new DefaultRequestHandler(agentCard, taskStore, agentExecutor);
+  // when agentCard.capabilities.pushNotifications is true; pass explicit
+  // components here so the sender opts out of the SSRF guard.
+  const requestHandler = new DefaultRequestHandler(
+    agentCard,
+    taskStore,
+    agentExecutor,
+    undefined, // eventBusManager (use default)
+    pushNotificationStore,
+    pushNotificationSender
+  );
 
   const app = express();
 

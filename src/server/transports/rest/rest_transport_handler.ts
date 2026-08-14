@@ -107,6 +107,14 @@ export class RestTransportHandler {
     queryParams: Record<string, unknown>,
     context: ServerCallContext
   ): Promise<ListTasksResponse> {
+    const pageSize = queryParams.pageSize ? parseInt(String(queryParams.pageSize), 10) : undefined;
+    if (pageSize !== undefined && (isNaN(pageSize) || pageSize < 1 || pageSize > 100)) {
+      throw new RequestMalformedError('pageSize must be an integer between 1 and 100');
+    }
+    const historyLength = queryParams.historyLength
+      ? this.parseHistoryLength(queryParams.historyLength)
+      : undefined;
+
     const params: ListTasksRequest = {
       tenant: (queryParams.tenant as string) || '',
       contextId: (queryParams.contextId as string) || '',
@@ -115,9 +123,9 @@ export class RestTransportHandler {
             isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
           )
         : TaskState.TASK_STATE_UNSPECIFIED,
-      pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : undefined,
+      pageSize,
       pageToken: (queryParams.pageToken as string) || '',
-      historyLength: queryParams.historyLength ? Number(queryParams.historyLength) : undefined,
+      historyLength,
       statusTimestampAfter: (queryParams.statusTimestampAfter as string) || undefined,
       includeArtifacts: parseIncludeArtifacts(queryParams.includeArtifacts),
     };
