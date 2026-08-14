@@ -1070,6 +1070,17 @@ export const TaskStatus: MessageFns<TaskStatus> = {
 
 export const Part: MessageFns<Part> = {
   fromJSON(object: any): Part {
+    const contentKeys = [
+      isSet(object.text) ? "text" : undefined,
+      isSet(object.raw) ? "raw" : undefined,
+      isSet(object.url) ? "url" : undefined,
+      isSet(object.data) ? "data" : undefined,
+    ].filter((k): k is string => k !== undefined);
+    if (contentKeys.length > 1) {
+      throw new globalThis.Error(
+        `Message type "lf.a2a.v1.Part" should not have multiple "content" oneof fields: ${contentKeys.join(", ")}`
+      );
+    }
     return {
       content: isSet(object.text)
         ? { $case: "text", value: globalThis.String(object.text) }
