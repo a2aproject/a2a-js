@@ -54,6 +54,7 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
+import { isLegacyVersion } from '../../version_utils.js';
 import {
   AUTH_REQUIRED_STATE_LIST,
   INTERRUPTED_STATE_LIST,
@@ -73,6 +74,12 @@ export interface DefaultRequestHandlerOptions {
    * the default list.
    */
   keepBusAliveStates?: TaskState[];
+}
+
+/** Destination a mapped {@link StreamResponse} is headed for. */
+enum StreamResponseDeliveryTarget {
+  ClientStream = 'clientStream',
+  PushNotification = 'pushNotification',
 }
 
 /**
@@ -271,7 +278,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          const streamResponse = await this._mapEventToStreamResponse(event, context);
+          const streamResponse = this._mapEventToStreamResponse(
+            event,
+            context,
+            resultManager,
+            StreamResponseDeliveryTarget.PushNotification
+          );
           await this._sendPushNotificationIfNeeded(context, streamResponse);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
@@ -708,14 +720,29 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         await resultManager.processEvent(event);
 
-        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        const streamResponse = this._mapEventToStreamResponse(
+          event,
+          context,
+          resultManager,
+          StreamResponseDeliveryTarget.ClientStream
+        );
         if (streamResponse.payload?.$case === 'task') {
           this._applyHistoryLengthSemantics(
             streamResponse.payload.value,
             params.configuration ?? {}
           );
         }
-        await this._sendPushNotificationIfNeeded(context, streamResponse);
+
+        // v0.3 push carries the full Task on every trigger; v1 mirrors the stream.
+        const pushNotificationResponse = isLegacyVersion(context.requestedVersion)
+          ? this._mapEventToStreamResponse(
+              event,
+              context,
+              resultManager,
+              StreamResponseDeliveryTarget.PushNotification
+            )
+          : streamResponse;
+        await this._sendPushNotificationIfNeeded(context, pushNotificationResponse);
         yield streamResponse;
       }
     } finally {
@@ -976,29 +1003,41 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   /**
-   * Maps an {@link AgentExecutionEvent} to a `StreamResponse`. For Task
-   * events the full task is loaded from the store to include accumulated
-   * history and artifacts.
+   * Maps an {@link AgentExecutionEvent} to a `StreamResponse`, resolving
+   * Task events from the {@link ResultManager} snapshot. For a legacy
+   * (v0.3) push notification, status/artifact updates are replaced by the
+   * full Task, which v0.3 always sends; the client stream and v1.0 keep
+   * the raw event.
    */
-  private async _mapEventToStreamResponse(
+  private _mapEventToStreamResponse(
     event: AgentExecutionEvent,
-    context: ServerCallContext
-  ): Promise<StreamResponse> {
+    context: ServerCallContext,
+    resultManager: ResultManager,
+    deliveryTarget: StreamResponseDeliveryTarget
+  ): StreamResponse {
     switch (event.kind) {
       case 'task': {
-        const taskId = event.data.id;
-        const fullTask = await this.taskStore.load(taskId, context).catch((error): Task | null => {
-          console.warn('Failed to load full task from store, falling back to event data:', error);
-          return null;
-        });
-        return { payload: { $case: 'task', value: fullTask || event.data } };
+        const currentTask = resultManager.getCurrentTask();
+        const taskValue = currentTask ? structuredClone(currentTask) : event.data;
+        return { payload: { $case: 'task', value: taskValue } };
       }
       case 'message':
         return { payload: { $case: 'message', value: event.data } };
       case 'statusUpdate':
-        return { payload: { $case: 'statusUpdate', value: event.data } };
-      case 'artifactUpdate':
-        return { payload: { $case: 'artifactUpdate', value: event.data } };
+      case 'artifactUpdate': {
+        const isLegacyPushNotification =
+          deliveryTarget === StreamResponseDeliveryTarget.PushNotification &&
+          isLegacyVersion(context.requestedVersion);
+
+        const currentTask = isLegacyPushNotification ? resultManager.getCurrentTask() : undefined;
+        if (currentTask) {
+          return { payload: { $case: 'task', value: structuredClone(currentTask) } };
+        }
+
+        return event.kind === 'statusUpdate'
+          ? { payload: { $case: 'statusUpdate', value: event.data } }
+          : { payload: { $case: 'artifactUpdate', value: event.data } };
+      }
       default:
         assertUnreachableEvent(event);
     }
