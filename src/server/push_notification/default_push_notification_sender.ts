@@ -1,5 +1,6 @@
 import { TaskPushNotificationConfig, StreamResponse } from '../../index.js';
 import {
+  A2A_VERSION_HEADER,
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
   ProtocolVersion,
@@ -171,10 +172,13 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    * falling back to v1.0 (with a one-time warning) when no entry is
    * registered.
    */
-  private _resolveSerializer(wireVersion: string): PushNotificationSerializer {
+  private _resolveSerializer(wireVersion: string): {
+    serializer: PushNotificationSerializer;
+    wireVersion: string;
+  } {
     const serializer = this.serializers.get(wireVersion);
     if (serializer) {
-      return serializer;
+      return { serializer, wireVersion };
     }
     if (!this.warnedMissingSerializers.has(wireVersion)) {
       this.warnedMissingSerializers.add(wireVersion);
@@ -184,7 +188,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
           `DefaultPushNotificationSenderOptions.serializers to silence this warning.`
       );
     }
-    return this.fallbackSerializer;
+    // The fallback body is v1.0, so advertise the version that matches the
+    // actual wire representation rather than the unknown stored version.
+    return { serializer: this.fallbackSerializer, wireVersion: A2A_PROTOCOL_VERSION };
   }
 
   /**
@@ -216,13 +222,15 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
     try {
-      const serializer = this._resolveSerializer(wireVersion);
+      const resolved = this._resolveSerializer(wireVersion);
+      const serializer = resolved.serializer;
       const { body, contentType } = serializer.serialize(streamResponse);
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': contentType,
+          [A2A_VERSION_HEADER]: resolved.wireVersion,
           ...this._buildAuthHeaders(pushConfig),
         },
         body,

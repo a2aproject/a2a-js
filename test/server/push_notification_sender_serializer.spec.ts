@@ -24,6 +24,7 @@ import {
   A2A_CONTENT_TYPE,
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
+  A2A_VERSION_HEADER,
   ProtocolVersion,
 } from '../../src/constants.js';
 
@@ -132,6 +133,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
     expect(received[0].body).toEqual(StreamResponse.toJSON(makeStatusUpdate('task-v1')));
   });
 
@@ -151,6 +153,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
     expect(received[0].body).toEqual({ kind: 'task', fake: 'v0.3-body' });
   });
 
@@ -173,9 +176,17 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     await sender.send(makeStatusUpdate('task-mix'), ctxV1);
 
     expect(received).toHaveLength(2);
-    const bodies = received.map((r) => r.rawBody).sort();
-    expect(bodies).toContain('{"v":"0.3"}');
-    expect(bodies.some((b) => b.includes('"statusUpdate"'))).toBe(true);
+    const byVersion = new Map(
+      received.map((r) => [r.headers[A2A_VERSION_HEADER.toLowerCase()], r])
+    );
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.rawBody).toBe('{"v":"0.3"}');
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.headers['content-type']).toBe(
+      'application/json'
+    );
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.body).toEqual(
+      StreamResponse.toJSON(makeStatusUpdate('task-mix'))
+    );
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
 
   it('falls back to the v1.0 serializer with a one-time warning for unknown wire versions', async () => {
@@ -194,6 +205,8 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     // Both dispatches must produce v1.0 bodies.
     for (const r of received) {
       expect(r.headers['content-type']).toBe(A2A_CONTENT_TYPE);
+      expect(r.headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
+      expect(r.body).toEqual(StreamResponse.toJSON(makeStatusUpdate('task-unknown')));
     }
     // Only one warning despite two missing-serializer lookups.
     const matching = warn.mock.calls.filter((args) =>
@@ -236,6 +249,24 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['authorization']).toBe('Bearer token-xyz');
+    expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
+  });
+
+  it('preserves the legacy token header alongside the version header', async () => {
+    const sender = new DefaultPushNotificationSender(store);
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save(
+      'task-token',
+      ctxV1,
+      makeConfig(`${baseUrl}/notify`, { token: 'legacy-token' })
+    );
+
+    await sender.send(makeStatusUpdate('task-token'), ctxV1);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].headers['x-a2a-notification-token']).toBe('legacy-token');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
 
