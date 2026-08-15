@@ -13,6 +13,8 @@ import {
   V1PushNotificationSerializer,
 } from './push_notification_serializer.js';
 
+const HTTP_HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
 export interface DefaultPushNotificationSenderOptions {
   /** Timeout in milliseconds for the abort controller. Defaults to 5000ms. */
   timeout?: number;
@@ -58,6 +60,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     this.pushNotificationStore = pushNotificationStore;
     this.notificationChain = new Map();
     const tokenHeaderName = options.tokenHeaderName ?? 'X-A2A-Notification-Token';
+    if (!HTTP_HEADER_NAME_PATTERN.test(tokenHeaderName)) {
+      throw new TypeError('tokenHeaderName must be a valid HTTP header name');
+    }
     const normalizedTokenHeaderName = tokenHeaderName.toLowerCase();
     if (
       normalizedTokenHeaderName === 'content-type' ||
