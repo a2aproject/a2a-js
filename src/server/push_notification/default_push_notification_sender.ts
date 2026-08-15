@@ -20,6 +20,8 @@ export interface DefaultPushNotificationSenderOptions {
    * Custom header name for the legacy token (defaults to
    * `X-A2A-Notification-Token`). Used only when `pushConfig.token` is set
    * and `pushConfig.authentication` is not.
+   * Must not be `Content-Type` or `A2A-Version` (case-insensitive), because
+   * those headers describe the serialized protocol body.
    * @deprecated Use `pushConfig.authentication` with `AuthenticationInfo`.
    */
   tokenHeaderName?: string;
@@ -55,9 +57,17 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   ) {
     this.pushNotificationStore = pushNotificationStore;
     this.notificationChain = new Map();
+    const tokenHeaderName = options.tokenHeaderName ?? 'X-A2A-Notification-Token';
+    const normalizedTokenHeaderName = tokenHeaderName.toLowerCase();
+    if (
+      normalizedTokenHeaderName === 'content-type' ||
+      normalizedTokenHeaderName === A2A_VERSION_HEADER.toLowerCase()
+    ) {
+      throw new TypeError(`tokenHeaderName must not override ${tokenHeaderName}`);
+    }
     this.options = {
       timeout: options.timeout ?? 5000,
-      tokenHeaderName: options.tokenHeaderName ?? 'X-A2A-Notification-Token',
+      tokenHeaderName,
     };
 
     // Seed with the built-in v1.0 serializer, then overlay user-supplied

@@ -270,6 +270,15 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
 
+  it.each([A2A_VERSION_HEADER, A2A_VERSION_HEADER.toLowerCase(), 'Content-Type', 'content-type'])(
+    'rejects a legacy token header that collides with protocol header %s',
+    (tokenHeaderName) => {
+      expect(() => new DefaultPushNotificationSender(store, { tokenHeaderName })).toThrowError(
+        TypeError
+      );
+    }
+  );
+
   it('delivers message payloads with task association per §4.3.3', async () => {
     // Push notifications accept all four StreamResponse payload
     // variants. The built-in v1.0 serializer encodes the message as part

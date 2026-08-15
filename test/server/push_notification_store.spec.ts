@@ -174,6 +174,43 @@ describe('InMemoryPushNotificationStore.loadWithMetadata() wire-version capture'
     expect(loaded[0].config.url).toBe('http://example.test/changed');
   });
 
+  it('snapshots reused config objects so versions and authentication remain independent', async () => {
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
+    const reused = makeConfig({
+      id: 'v1-cfg',
+      url: 'http://example.test/v1',
+      token: 'token-v1',
+    });
+
+    await store.save('task-reused-object', ctxV1, reused);
+    reused.id = 'v03-cfg';
+    reused.url = 'http://example.test/v03';
+    reused.token = 'token-v03';
+    await store.save('task-reused-object', ctxV03, reused);
+
+    const loaded = await store.loadWithMetadata('task-reused-object', ctxV1);
+    expect(loaded).toHaveLength(2);
+    expect(loaded).toEqual([
+      {
+        config: makeConfig({
+          id: 'v1-cfg',
+          url: 'http://example.test/v1',
+          token: 'token-v1',
+        }),
+        wireVersion: A2A_PROTOCOL_VERSION,
+      },
+      {
+        config: makeConfig({
+          id: 'v03-cfg',
+          url: 'http://example.test/v03',
+          token: 'token-v03',
+        }),
+        wireVersion: A2A_LEGACY_PROTOCOL_VERSION,
+      },
+    ]);
+  });
+
   it('returns deep-cloned wrappers so caller mutations cannot reach internal state', async () => {
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save(
