@@ -95,7 +95,10 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   }
 
   async send(streamResponse: StreamResponse, context: ServerCallContext): Promise<void> {
-    const taskId = this._getTaskId(streamResponse);
+    // Snapshot before the first await so callers cannot mutate an event while
+    // it is loading configs or queued behind another send for the same task.
+    const responseSnapshot = structuredClone(streamResponse);
+    const taskId = this._getTaskId(responseSnapshot);
     // Stand-alone messages with no task association can't have a
     // registered push config — skip the store round-trip.
     if (!taskId) {
@@ -116,7 +119,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       .then(async () => {
         const dispatches = storedConfigs.map(async (storedConfig) => {
           try {
-            await this._dispatchNotification(streamResponse, storedConfig, taskId);
+            await this._dispatchNotification(responseSnapshot, storedConfig, taskId);
           } catch (error) {
             console.error(
               `Error sending push notification for task_id=${taskId} to URL: ${storedConfig.config.url}. Error:`,
@@ -239,7 +242,10 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     try {
       const resolved = this._resolveSerializer(wireVersion);
       const serializer = resolved.serializer;
-      const { body, contentType } = serializer.serialize(streamResponse);
+      // Each config gets an isolated event object. Custom serializers are
+      // user-supplied code and must not be able to mutate the payload seen by
+      // another version's dispatch (or the caller's original event).
+      const { body, contentType } = serializer.serialize(structuredClone(streamResponse));
 
       const response = await fetch(url, {
         method: 'POST',

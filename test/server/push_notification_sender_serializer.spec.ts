@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
-import express, { Request, Response } from 'express';
+import express, { Request, Response as ExpressResponse } from 'express';
 
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
 import {
@@ -98,7 +98,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     const app = express();
     // Accept any content type so the webhook can decode either v1.0 or v0.3.
     app.use(express.text({ type: '*/*' }));
-    app.post('/notify', (req: Request, res: Response) => {
+    app.post('/notify', (req: Request, res: ExpressResponse) => {
       const rawBody = typeof req.body === 'string' ? req.body : '';
       received.push({
         body: rawBody ? JSON.parse(rawBody) : undefined,
@@ -187,6 +187,66 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       StreamResponse.toJSON(makeStatusUpdate('task-mix'))
     );
     expect(byVersion.get(A2A_PROTOCOL_VERSION)?.headers['content-type']).toBe(A2A_CONTENT_TYPE);
+  });
+
+  it('isolates serializers from mutating the shared StreamResponse payload', async () => {
+    const mutatingV03Serializer: PushNotificationSerializer = {
+      serialize(response): SerializedPushNotification {
+        response.payload = undefined;
+        return { body: '{"wire":"0.3"}', contentType: 'application/json' };
+      },
+    };
+    const sender = new DefaultPushNotificationSender(store, {
+      serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: mutatingV03Serializer },
+    });
+    const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save(
+      'task-event-isolation',
+      ctxV03,
+      makeConfig(`${baseUrl}/notify`, { id: 'v03' })
+    );
+    await store.save('task-event-isolation', ctxV1, makeConfig(`${baseUrl}/notify`, { id: 'v1' }));
+    const response = makeStatusUpdate('task-event-isolation');
+
+    await sender.send(response, ctxV1);
+
+    const byVersion = new Map(
+      received.map((r) => [r.headers[A2A_VERSION_HEADER.toLowerCase()], r])
+    );
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.rawBody).toBe('{"wire":"0.3"}');
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.body).toEqual(StreamResponse.toJSON(response));
+    expect(response.payload).toBeDefined();
+  });
+
+  it('snapshots an event before it waits behind an in-flight same-task send', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save('task-queued-event', context, makeConfig('https://example.test/webhook'));
+    const releases: Array<() => void> = [];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        await new Promise<Response>((resolve) => {
+          releases.push(() => resolve(new Response(null, { status: 200 })));
+        })
+    );
+    const sender = new DefaultPushNotificationSender(store);
+    const firstEvent = makeStatusUpdate('task-queued-event', 'first');
+    const secondEvent = makeStatusUpdate('task-queued-event', 'second');
+
+    const first = sender.send(firstEvent, context);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const second = sender.send(secondEvent, context);
+    secondEvent.payload = undefined;
+
+    releases.shift()?.();
+    await first;
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    releases.shift()?.();
+    await second;
+
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual(
+      StreamResponse.toJSON(makeStatusUpdate('task-queued-event', 'second'))
+    );
   });
 
   it('falls back to the v1.0 serializer with a one-time warning for unknown wire versions', async () => {
