@@ -330,6 +330,29 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
 
+  it('does not expose webhook URL or auth secrets in failure logs', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const secretUrl = 'https://user:password@example.test/private-hook?token=query-secret';
+    await store.save(
+      'task-sensitive-log',
+      context,
+      makeConfig(secretUrl, { id: 'safe-config-id', token: 'header-secret' })
+    );
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 500, statusText: 'probe failure' })
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sender = new DefaultPushNotificationSender(store);
+
+    await sender.send(makeStatusUpdate('task-sensitive-log'), context);
+
+    const logged = error.mock.calls.flat().map(String).join(' ');
+    expect(logged).toContain('config_id=safe-config-id');
+    expect(logged).not.toContain('password');
+    expect(logged).not.toContain('query-secret');
+    expect(logged).not.toContain('header-secret');
+  });
+
   it.each([A2A_VERSION_HEADER, A2A_VERSION_HEADER.toLowerCase(), 'Content-Type', 'content-type'])(
     'rejects a legacy token header that collides with protocol header %s',
     (tokenHeaderName) => {

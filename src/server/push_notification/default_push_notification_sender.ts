@@ -122,7 +122,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
             await this._dispatchNotification(responseSnapshot, storedConfig, taskId);
           } catch (error) {
             console.error(
-              `Error sending push notification for task_id=${taskId} to URL: ${storedConfig.config.url}. Error:`,
+              `Error sending push notification for task_id=${taskId}, config_id=${storedConfig.config.id}. Error:`,
               error
             );
           }
@@ -262,7 +262,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      console.info(`Push notification sent for task_id=${taskId} to URL: ${url}`);
+      console.info(`Push notification sent for task_id=${taskId}, config_id=${pushConfig.id}`);
     } finally {
       clearTimeout(timeoutId);
     }
