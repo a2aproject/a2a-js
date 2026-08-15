@@ -320,6 +320,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
     expect(received[0].rawBody).toBe('{"v":"0.3-fallback"}');
     expect(customStore.load).toHaveBeenCalledTimes(1);
   });
@@ -347,6 +348,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
     expect(received[0].rawBody).toBe('{"v":"defensive-0.3"}');
   });
 
