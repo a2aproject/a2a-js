@@ -309,16 +309,21 @@ A v1.0-only deployment delivers every push as a `StreamResponse` envelope
 with `Content-Type: application/a2a+json`. With the compat layer enabled, the
 sender (`createLegacyAwarePushNotificationSender`) routes per webhook:
 
-| Wire version the webhook was registered under   | Body shape                                                                                                                   | Content-Type           |
-| :---------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- | :--------------------- |
-| `1.0`                                           | `StreamResponse` envelope                                                                                                    | `application/a2a+json` |
-| `0.3` (or absent `A2A-Version` at registration) | The bare event object (v0.3 `Task`, `TaskStatusUpdateEvent`, or `TaskArtifactUpdateEvent` discriminated by its `kind` field) | `application/json`     |
+| Wire version the webhook was registered under   | Body shape                                                                                                                   | Content-Type           | Outgoing `A2A-Version` |
+| :---------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- | :--------------------- | :--------------------- |
+| `1.0`                                           | `StreamResponse` envelope                                                                                                    | `application/a2a+json` | `1.0`                  |
+| `0.3` (or absent `A2A-Version` at registration) | The bare event object (v0.3 `Task`, `TaskStatusUpdateEvent`, or `TaskArtifactUpdateEvent` discriminated by its `kind` field) | `application/json`     | `0.3`                  |
 
 Routing is anchored on the `requestedVersion` recorded **when the webhook was
 registered** (captured by `InMemoryPushNotificationStore` on `save()` and
 exposed via `loadWithMetadata`), not the version of the request that
 triggered the delivery. A v0.3-registered webhook keeps receiving v0.3 bodies
 even when the task is later driven by a v1.0 client.
+
+The outgoing version header identifies the serializer and body actually used
+for that webhook. If a stored version has no registered serializer, the sender
+falls back to the v1.0 serializer and sends `A2A-Version: 1.0`; it does not
+repeat the unknown stored value and create a header/body mismatch.
 
 > **Caveat for custom `PushNotificationStore` implementations.**
 > `loadWithMetadata` is optional. If your custom store does not implement

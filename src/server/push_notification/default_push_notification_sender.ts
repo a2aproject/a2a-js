@@ -14,6 +14,7 @@ import {
 } from './push_notification_serializer.js';
 
 const HTTP_HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const PROTOCOL_VERSION_PATTERN = /^[0-9]+\.[0-9]+$/;
 
 export interface DefaultPushNotificationSenderOptions {
   /** Timeout in milliseconds for the abort controller. Defaults to 5000ms. */
@@ -38,8 +39,7 @@ export interface DefaultPushNotificationSenderOptions {
    * When a stored config carries a wire version with no registered
    * serializer, the sender logs a warning and falls back to `'1.0'`.
    *
-   * The typed key set is a developer affordance; the underlying registry
-   * accepts any string at runtime.
+   * Runtime keys must use the protocol's `Major.Minor` format.
    */
   serializers?: Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
 }
@@ -85,6 +85,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     if (options.serializers) {
       for (const [version, serializer] of Object.entries(options.serializers)) {
         if (serializer) {
+          if (!PROTOCOL_VERSION_PATTERN.test(version)) {
+            throw new TypeError('serializer version keys must use Major.Minor format');
+          }
           this.serializers.set(version, serializer);
         }
       }
@@ -105,24 +108,39 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       return;
     }
 
-    const storedConfigs = await this._loadStoredConfigs(taskId, context);
-    if (!storedConfigs || storedConfigs.length === 0) {
-      return;
-    }
-
     const lastPromise = this.notificationChain.get(taskId) ?? Promise.resolve();
+    // Start loading immediately, but convert either outcome to data so a fast
+    // load failure cannot settle this queue entry ahead of an earlier send.
+    // Deferring the store call by one microtask also reserves the chain slot
+    // before a custom store can re-enter send().
+    const storedConfigsResult = Promise.resolve()
+      .then(() => this._loadStoredConfigs(taskId, context))
+      .then((configs) => structuredClone(configs))
+      .then(
+        (storedConfigs) => ({ ok: true as const, storedConfigs }),
+        (error: unknown) => ({ ok: false as const, error })
+      );
     // Chain promises so notifications for the same task are sent
     // sequentially; once resolved the GC can clean them up so memory
     // doesn't grow linearly with the number of notifications sent.
     const newPromise = lastPromise
       .catch(() => {})
       .then(async () => {
+        const result = await storedConfigsResult;
+        if (result.ok === false) {
+          throw result.error;
+        }
+        const storedConfigs = result.storedConfigs;
+        if (!storedConfigs || storedConfigs.length === 0) {
+          return;
+        }
+
         const dispatches = storedConfigs.map(async (storedConfig) => {
           try {
             await this._dispatchNotification(responseSnapshot, storedConfig, taskId);
           } catch (error) {
             console.error(
-              `Error sending push notification for task_id=${taskId}, config_id=${storedConfig.config.id}. Error:`,
+              `Error sending push notification for task_id=${taskId} to URL: ${storedConfig.config.url}. Error:`,
               error
             );
           }
@@ -262,7 +280,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      console.info(`Push notification sent for task_id=${taskId}, config_id=${pushConfig.id}`);
+      console.info(`Push notification sent for task_id=${taskId} to URL: ${url}`);
     } finally {
       clearTimeout(timeoutId);
     }

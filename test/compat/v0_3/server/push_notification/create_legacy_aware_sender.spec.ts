@@ -14,7 +14,11 @@ import {
   TaskPushNotificationConfig,
   TaskState,
 } from '../../../../../src/types/pb/a2a.js';
-import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../../../../src/constants.js';
+import {
+  A2A_LEGACY_PROTOCOL_VERSION,
+  A2A_PROTOCOL_VERSION,
+  A2A_VERSION_HEADER,
+} from '../../../../../src/constants.js';
 import {
   PushNotificationSerializer,
   SerializedPushNotification,
@@ -95,6 +99,7 @@ describe('createLegacyAwarePushNotificationSender', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
     // Body should be the bare event object (V03 shape), not wrapped.
     expect(received[0].body.kind).toBe('status-update');
     expect(received[0].body).not.toHaveProperty('jsonrpc');
@@ -110,8 +115,36 @@ describe('createLegacyAwarePushNotificationSender', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/a2a+json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
     // v1.0 body is the wrapped StreamResponse.
     expect(received[0].body).toHaveProperty('statusUpdate');
+  });
+
+  it('keeps header, content type, and body aligned for mixed-version registrations', async () => {
+    const sender = createLegacyAwarePushNotificationSender(store);
+    const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const v03Config = makeConfig();
+    v03Config.id = 'cfg-v03';
+    const v1Config = makeConfig();
+    v1Config.id = 'cfg-v1';
+    await store.save('task-mixed', ctxV03, v03Config);
+    await store.save('task-mixed', ctxV1, v1Config);
+
+    await sender.send(makeStatusUpdate('task-mixed'), ctxV1);
+
+    expect(received).toHaveLength(2);
+    const byVersion = new Map(
+      received.map((entry) => [entry.headers[A2A_VERSION_HEADER.toLowerCase()], entry])
+    );
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.headers['content-type']).toBe(
+      'application/json'
+    );
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.body.kind).toBe('status-update');
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.headers['content-type']).toBe(
+      'application/a2a+json'
+    );
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.body).toHaveProperty('statusUpdate');
   });
 
   it('lets user-supplied serializers[0.3] override the pre-registered V03 serializer', async () => {

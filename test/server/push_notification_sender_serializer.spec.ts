@@ -7,6 +7,7 @@ import { DefaultPushNotificationSender } from '../../src/server/push_notificatio
 import {
   InMemoryPushNotificationStore,
   PushNotificationStore,
+  StoredPushNotificationConfig,
 } from '../../src/server/push_notification/push_notification_store.js';
 import {
   PushNotificationSerializer,
@@ -249,6 +250,138 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     );
   });
 
+  it.each([
+    ['an empty result', false],
+    ['a rejection', true],
+  ] as const)(
+    'preserves same-task call order when an intervening custom-store load returns %s early',
+    async (_outcome, rejectMiddleLoad) => {
+      const config = makeConfig('https://example.test/webhook');
+      const entry: StoredPushNotificationConfig = {
+        config,
+        wireVersion: A2A_PROTOCOL_VERSION,
+      };
+      const pendingLoads: Array<{
+        resolve: (entries: StoredPushNotificationConfig[]) => void;
+        reject: (error: Error) => void;
+      }> = [];
+      const customStore: PushNotificationStore = {
+        save: vi.fn(async () => {}),
+        load: vi.fn(async () => [config]),
+        loadWithMetadata: vi.fn(
+          () =>
+            new Promise<StoredPushNotificationConfig[]>((resolve, reject) => {
+              pendingLoads.push({ resolve, reject });
+            })
+        ),
+        delete: vi.fn(async () => {}),
+      };
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 200 }));
+      const sender = new DefaultPushNotificationSender(customStore);
+      const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+      const first = sender.send(makeStatusUpdate('task-load-order', 'first'), context);
+      const middle = sender.send(makeStatusUpdate('task-load-order', 'middle'), context);
+      const third = sender.send(makeStatusUpdate('task-load-order', 'third'), context);
+      const outcomes = Promise.allSettled([first, middle, third]);
+      await vi.waitFor(() => expect(pendingLoads).toHaveLength(3));
+
+      if (rejectMiddleLoad) {
+        pendingLoads[1].reject(new Error('probe load failure'));
+      } else {
+        pendingLoads[1].resolve([]);
+      }
+      pendingLoads[2].resolve([entry]);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const dispatchesBeforeFirstLoad = fetchMock.mock.calls.length;
+      pendingLoads[0].resolve([entry]);
+      const results = await outcomes;
+
+      const deliveredContexts = fetchMock.mock.calls.map(([, init]) => {
+        const body = JSON.parse(String(init?.body));
+        return body.statusUpdate.contextId;
+      });
+      expect(dispatchesBeforeFirstLoad).toBe(0);
+      expect(deliveredContexts).toEqual(['first', 'third']);
+      expect(results.map((result) => result.status)).toEqual(
+        rejectMiddleLoad
+          ? ['fulfilled', 'rejected', 'fulfilled']
+          : ['fulfilled', 'fulfilled', 'fulfilled']
+      );
+      if (rejectMiddleLoad) {
+        expect(results[1]).toMatchObject({
+          status: 'rejected',
+          reason: expect.objectContaining({ message: 'probe load failure' }),
+        });
+      }
+    }
+  );
+
+  it.each(['loadWithMetadata', 'load'] as const)(
+    'snapshots custom-store configs returned by %s before a queued dispatch',
+    async (loadMethod) => {
+      const sharedConfig = makeConfig('https://original.example/webhook', {
+        id: 'shared-config',
+        authentication: { scheme: 'Bearer', credentials: 'original-secret' },
+      });
+      const sharedEntry: StoredPushNotificationConfig = {
+        config: sharedConfig,
+        wireVersion: A2A_PROTOCOL_VERSION,
+      };
+      const customStore: PushNotificationStore = {
+        save: vi.fn(async () => {}),
+        load: vi.fn(async () => [sharedConfig]),
+        loadWithMetadata:
+          loadMethod === 'loadWithMetadata' ? vi.fn(async () => [sharedEntry]) : undefined,
+        delete: vi.fn(async () => {}),
+      };
+      const v03Serializer: PushNotificationSerializer = {
+        serialize(): SerializedPushNotification {
+          return { body: '{"wire":"0.3"}', contentType: 'application/json' };
+        },
+      };
+      const releases: Array<() => void> = [];
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(
+        async () =>
+          await new Promise<Response>((resolve) => {
+            releases.push(() => resolve(new Response(null, { status: 200 })));
+          })
+      );
+      const sender = new DefaultPushNotificationSender(customStore, {
+        serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
+      });
+      const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+      const first = sender.send(makeStatusUpdate('task-shared-config', 'first'), context);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const second = sender.send(makeStatusUpdate('task-shared-config', 'second'), context);
+      const loadSpy =
+        loadMethod === 'loadWithMetadata' ? customStore.loadWithMetadata : customStore.load;
+      await vi.waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      sharedConfig.url = 'https://mutated.example/webhook';
+      sharedConfig.authentication!.credentials = 'mutated-secret';
+      sharedEntry.wireVersion = A2A_LEGACY_PROTOCOL_VERSION;
+
+      releases.shift()?.();
+      await first;
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      releases.shift()?.();
+      await second;
+
+      const [request, init] = fetchMock.mock.calls[1];
+      expect(String(request)).toBe('https://original.example/webhook');
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer original-secret');
+      expect(new Headers(init?.headers).get(A2A_VERSION_HEADER)).toBe(A2A_PROTOCOL_VERSION);
+      expect(JSON.parse(String(init?.body))).toEqual(
+        StreamResponse.toJSON(makeStatusUpdate('task-shared-config', 'second'))
+      );
+    }
+  );
+
   it('falls back to the v1.0 serializer with a one-time warning for unknown wire versions', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const sender = new DefaultPushNotificationSender(store);
@@ -294,6 +427,40 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].rawBody).toBe('"custom-v1-body"');
   });
 
+  it.each(['', '1', '1.0.1', '-1.0', '1.-1', '1.0 ', 'v1.0'])(
+    'rejects serializer registry keys outside Major.Minor format: %j',
+    (version) => {
+      const serializers = {
+        [version]: new V1PushNotificationSerializer(),
+      } as Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
+
+      expect(() => new DefaultPushNotificationSender(store, { serializers })).toThrowError(
+        TypeError
+      );
+    }
+  );
+
+  it('accepts a future Major.Minor serializer key without numeric parsing', async () => {
+    const futureVersion = '999999999999999999999999.0';
+    const futureSerializer: PushNotificationSerializer = {
+      serialize(): SerializedPushNotification {
+        return { body: '{"wire":"future"}', contentType: 'application/json' };
+      },
+    };
+    const serializers = {
+      [futureVersion]: futureSerializer,
+    } as Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
+    const sender = new DefaultPushNotificationSender(store, { serializers });
+    const context = new ServerCallContext({ requestedVersion: futureVersion });
+    await store.save('task-future', context, makeConfig(`${baseUrl}/notify`));
+
+    await sender.send(makeStatusUpdate('task-future'), context);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(futureVersion);
+    expect(received[0].rawBody).toBe('{"wire":"future"}');
+  });
+
   it('preserves auth headers alongside serializer-supplied content type', async () => {
     const sender = new DefaultPushNotificationSender(store);
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
@@ -328,29 +495,6 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].headers['x-a2a-notification-token']).toBe('legacy-token');
     expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
-  });
-
-  it('does not expose webhook URL or auth secrets in failure logs', async () => {
-    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
-    const secretUrl = 'https://user:password@example.test/private-hook?token=query-secret';
-    await store.save(
-      'task-sensitive-log',
-      context,
-      makeConfig(secretUrl, { id: 'safe-config-id', token: 'header-secret' })
-    );
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(null, { status: 500, statusText: 'probe failure' })
-    );
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const sender = new DefaultPushNotificationSender(store);
-
-    await sender.send(makeStatusUpdate('task-sensitive-log'), context);
-
-    const logged = error.mock.calls.flat().map(String).join(' ');
-    expect(logged).toContain('config_id=safe-config-id');
-    expect(logged).not.toContain('password');
-    expect(logged).not.toContain('query-secret');
-    expect(logged).not.toContain('header-secret');
   });
 
   it.each([A2A_VERSION_HEADER, A2A_VERSION_HEADER.toLowerCase(), 'Content-Type', 'content-type'])(

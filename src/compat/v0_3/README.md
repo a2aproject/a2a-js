@@ -90,7 +90,7 @@ This is implemented by two pieces working together:
 
 1. **`PushNotificationStore` captures the wire version.** The `InMemoryPushNotificationStore` (and any conforming implementation) reads `context.requestedVersion` on `save()` and persists it alongside the config as a `StoredPushNotificationConfig { config, wireVersion }`. The wire version is surfaced via the optional `loadWithMetadata` read method.
 
-2. **`DefaultPushNotificationSender` routes per wire version.** The sender prefers `loadWithMetadata` when the store implements it, otherwise falls back to `load` and defaults every entry to wire version `'0.3'` per spec §3.6.2's absent-header rule. It always registers `V1PushNotificationSerializer` under `'1.0'` and falls back to it (with a one-time warning per unknown version) when no serializer is registered for the entry's version.
+2. **`DefaultPushNotificationSender` routes per wire version.** The sender prefers `loadWithMetadata` when the store implements it. Otherwise it falls back to `load` and uses the triggering request's wire version for every entry, defaulting to `'0.3'` per spec §3.6.2 only when that request carries no version. It always registers `V1PushNotificationSerializer` under `'1.0'` and falls back to it (with a one-time warning per unknown version) when no serializer is registered for the entry's version. Each webhook POST sends an `A2A-Version` header matching the serializer and body actually used; an unknown stored version that falls back to v1.0 is therefore advertised as `1.0`.
 
 ### Enabling v0.3 push delivery
 
@@ -106,7 +106,7 @@ const sender = createLegacyAwarePushNotificationSender(store);
 // Hand both to your DefaultRequestHandler as usual.
 ```
 
-v1.0-registered webhooks continue to receive the canonical `StreamResponse` body with `application/a2a+json`; v0.3-registered webhooks receive the bare-event JSON with `application/json`. Custom serializers (or overrides for the built-in `'0.3'` / `'1.0'` entries) can be supplied via the `serializers` option; user-supplied entries take precedence.
+v1.0-registered webhooks continue to receive the canonical `StreamResponse` body with `application/a2a+json` and `A2A-Version: 1.0`; v0.3-registered webhooks receive the bare-event JSON with `application/json` and `A2A-Version: 0.3`. Custom serializers (or overrides for the built-in `'0.3'` / `'1.0'` entries) can be supplied via the `serializers` option; user-supplied entries take precedence, and each key must use `Major.Minor` format.
 
 ### Caveat for custom `PushNotificationStore` implementations
 
