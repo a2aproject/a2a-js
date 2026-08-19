@@ -8,13 +8,15 @@ import {
 } from '../../../src/server/index.js';
 import {
   AgentCard,
+  Role,
+  SendMessageRequest,
   Task,
   TaskPushNotificationConfig,
   TaskState,
 } from '../../../src/types/pb/a2a.js';
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import { ServerCallContext } from '../../../src/server/context.js';
-import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
+import { fakeTaskExecute, MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
 // id-less Create assigns a server-side UUID. Regression guard for the
 // pre-fix `id ||= taskId` collapse that overwrote configs.
@@ -162,6 +164,66 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     result.url = 'https://attacker.test/';
     const stored = await pushNotificationStore.load(taskId, serverContext);
     expect(stored[0].url).toBe('https://example.test/webhook-explicit');
+  });
+
+  it('isolates sendMessage inline push config from later caller mutations', async () => {
+    // sendMessage passes params.configuration.taskPushNotificationConfig
+    // straight into save. Mutating that object after Create must not
+    // rewrite the webhook DefaultPushNotificationSender will POST to.
+    const executor = new MockAgentExecutor();
+    executor.execute.mockImplementation(fakeTaskExecute);
+    handler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      executor,
+      new DefaultExecutionEventBusManager(),
+      pushNotificationStore
+    );
+
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      id: 'c1',
+      url: 'https://example.test/hook',
+      token: 'tok',
+      authentication: undefined,
+    };
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        messageId: 'msg-push-iso',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'hi' },
+            mediaType: 'text/plain',
+            filename: '',
+            metadata: undefined,
+          },
+        ],
+        taskId: '',
+        contextId: '',
+        extensions: [],
+        metadata: {},
+        referenceTaskIds: [],
+      },
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: config,
+        returnImmediately: false,
+      },
+    };
+
+    const result = (await handler.sendMessage(params, serverContext)) as Task;
+    config.url = 'https://attacker.test/';
+    config.token = 'stolen';
+
+    const stored = await pushNotificationStore.load(result.id, serverContext);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].id).toBe('c1');
+    expect(stored[0].url).toBe('https://example.test/hook');
+    expect(stored[0].token).toBe('tok');
   });
 
   it('listTaskPushNotificationConfigs returns every entry after mixed id-less + explicit Creates', async () => {
