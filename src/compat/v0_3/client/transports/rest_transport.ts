@@ -146,7 +146,7 @@ export class LegacyRestTransport implements Transport {
       toCompatTaskPushNotificationConfig(params)
     );
     const body = LegacyProtoTaskPushNotificationConfig.toJSON(protoConfig);
-    const path = `/v1/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`;
+    const path = `/v1/tasks/${encodeURIComponent(params.taskId ?? '')}/pushNotificationConfigs`;
     const result = await this._sendRequestJson(
       'POST',
       path,

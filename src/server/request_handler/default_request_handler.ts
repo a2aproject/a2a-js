@@ -822,6 +822,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    if (!taskId) {
+      throw new TaskNotFoundError(`Task ID is required`);
+    }
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
