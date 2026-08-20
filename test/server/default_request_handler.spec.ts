@@ -336,10 +336,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       TaskState.TASK_STATE_FAILED,
       'Task status should be failed'
     );
-    assert.include(
+    // The raw executor error is sanitized (CWE-209) — the client-facing
+    // message is generic while the detail is logged server-side.
+    assert.equal(
       (blockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
-      errorMessage,
-      'Error message should be in the status'
+      'Agent execution failed.'
     );
   });
 
@@ -529,7 +530,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(finalTaskSaved!.status.message!.role, Role.ROLE_AGENT);
     assert.equal(
       (finalTaskSaved!.status.message!.parts[0].content as { $case: 'text'; value: string }).value,
-      `Event processing loop failed: ${errorMessage}`
+      'Event processing loop failed.'
     );
   });
 
@@ -557,10 +558,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       TaskState.TASK_STATE_FAILED,
       'Task status should be failed'
     );
-    assert.include(
+    assert.equal(
       (nonBlockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
-      errorMessage,
-      'Error message should be in the status'
+      'Agent execution failed.'
     );
   });
 
