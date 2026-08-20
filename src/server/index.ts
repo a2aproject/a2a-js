@@ -46,6 +46,10 @@ export { validateVersion, getSupportedVersions } from './version.js';
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';
 export { DefaultPushNotificationSender } from './push_notification/default_push_notification_sender.js';
 export type { DefaultPushNotificationSenderOptions } from './push_notification/default_push_notification_sender.js';
+export {
+  isBlockedPushIp,
+  pushUrlValidationError,
+} from './push_notification/push_url_validation.js';
 export type {
   PushNotificationStore,
   StoredPushNotificationConfig,

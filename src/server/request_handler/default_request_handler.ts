@@ -52,6 +52,7 @@ import {
 } from '../push_notification/push_notification_store.js';
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
+import { pushUrlValidationError } from '../push_notification/push_url_validation.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
 import {
@@ -82,6 +83,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly pushNotificationSender?: PushNotificationSender;
   private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
+  private readonly allowPrivatePushUrls: boolean;
 
   constructor(
     agentCard: AgentCard,
@@ -91,7 +93,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
     extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider,
-    agentCardSignatureGenerator?: AgentCardSignatureGenerator
+    agentCardSignatureGenerator?: AgentCardSignatureGenerator,
+    allowPrivatePushUrls: boolean = false
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
@@ -99,11 +102,33 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.eventBusManager = eventBusManager;
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
+    this.allowPrivatePushUrls = allowPrivatePushUrls;
 
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
       this.pushNotificationSender =
-        pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
+        pushNotificationSender ||
+        new DefaultPushNotificationSender(this.pushNotificationStore, {
+          allowPrivatePushUrls: this.allowPrivatePushUrls,
+        });
+    }
+  }
+
+  /**
+   * Reject client-supplied push webhook URLs that are not safe to POST to.
+   * Skipped when {@link allowPrivatePushUrls} is true (trusted internal webhooks).
+   */
+  private async _assertPushConfigUrlAllowed(
+    config: TaskPushNotificationConfig
+  ): Promise<void> {
+    if (this.allowPrivatePushUrls) {
+      return;
+    }
+    const validationError = await pushUrlValidationError(config.url);
+    if (validationError) {
+      throw new RequestMalformedError(
+        `invalid push config endpoint URL: ${validationError}`
+      );
     }
   }
 
@@ -578,6 +603,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
+      await this._assertPushConfigUrlAllowed(params.configuration.taskPushNotificationConfig);
       await this.pushNotificationStore?.save(
         taskId,
         context,
@@ -674,6 +700,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
+      await this._assertPushConfigUrlAllowed(params.configuration.taskPushNotificationConfig);
       await this.pushNotificationStore?.save(
         taskId,
         context,
@@ -825,6 +852,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
     }
 
+    await this._assertPushConfigUrlAllowed(params);
     await this.pushNotificationStore?.save(taskId, context, params);
     return structuredClone(params);
   }
