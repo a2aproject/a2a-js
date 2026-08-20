@@ -177,8 +177,7 @@
     "itk-agent": "tsx itk/itk_agent.ts"
   },
   "dependencies": {
-    "jose": "^6.2.3",
-    "uuid": "^14.0.0"
+    "jose": "^6.2.3"
   },
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.10.2",
