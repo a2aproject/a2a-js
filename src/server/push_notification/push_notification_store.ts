@@ -94,7 +94,9 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
       entries.splice(existingIndex, 1);
     }
 
-    entries.push({ config: pushNotificationConfig, wireVersion });
+    // Snapshot after assigning the id so later caller mutation or reuse of
+    // the same object cannot alter a previously stored config or its version.
+    entries.push({ config: structuredClone(pushNotificationConfig), wireVersion });
     bucket.set(taskId, entries);
   }
 

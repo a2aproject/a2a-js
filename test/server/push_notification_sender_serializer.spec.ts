@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
-import express, { Request, Response } from 'express';
+import express, { Request, Response as ExpressResponse } from 'express';
 
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
 import {
   InMemoryPushNotificationStore,
   PushNotificationStore,
+  StoredPushNotificationConfig,
 } from '../../src/server/push_notification/push_notification_store.js';
 import {
   PushNotificationSerializer,
@@ -24,6 +25,7 @@ import {
   A2A_CONTENT_TYPE,
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
+  A2A_VERSION_HEADER,
   ProtocolVersion,
 } from '../../src/constants.js';
 
@@ -97,7 +99,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     const app = express();
     // Accept any content type so the webhook can decode either v1.0 or v0.3.
     app.use(express.text({ type: '*/*' }));
-    app.post('/notify', (req: Request, res: Response) => {
+    app.post('/notify', (req: Request, res: ExpressResponse) => {
       const rawBody = typeof req.body === 'string' ? req.body : '';
       received.push({
         body: rawBody ? JSON.parse(rawBody) : undefined,
@@ -132,6 +134,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
     expect(received[0].body).toEqual(StreamResponse.toJSON(makeStatusUpdate('task-v1')));
   });
 
@@ -151,6 +154,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
     expect(received[0].body).toEqual({ kind: 'task', fake: 'v0.3-body' });
   });
 
@@ -173,10 +177,210 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     await sender.send(makeStatusUpdate('task-mix'), ctxV1);
 
     expect(received).toHaveLength(2);
-    const bodies = received.map((r) => r.rawBody).sort();
-    expect(bodies).toContain('{"v":"0.3"}');
-    expect(bodies.some((b) => b.includes('"statusUpdate"'))).toBe(true);
+    const byVersion = new Map(
+      received.map((r) => [r.headers[A2A_VERSION_HEADER.toLowerCase()], r])
+    );
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.rawBody).toBe('{"v":"0.3"}');
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.headers['content-type']).toBe(
+      'application/json'
+    );
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.body).toEqual(
+      StreamResponse.toJSON(makeStatusUpdate('task-mix'))
+    );
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
+
+  it('isolates serializers from mutating the shared StreamResponse payload', async () => {
+    const mutatingV03Serializer: PushNotificationSerializer = {
+      serialize(response): SerializedPushNotification {
+        response.payload = undefined;
+        return { body: '{"wire":"0.3"}', contentType: 'application/json' };
+      },
+    };
+    const sender = new DefaultPushNotificationSender(store, {
+      serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: mutatingV03Serializer },
+    });
+    const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save(
+      'task-event-isolation',
+      ctxV03,
+      makeConfig(`${baseUrl}/notify`, { id: 'v03' })
+    );
+    await store.save('task-event-isolation', ctxV1, makeConfig(`${baseUrl}/notify`, { id: 'v1' }));
+    const response = makeStatusUpdate('task-event-isolation');
+
+    await sender.send(response, ctxV1);
+
+    const byVersion = new Map(
+      received.map((r) => [r.headers[A2A_VERSION_HEADER.toLowerCase()], r])
+    );
+    expect(byVersion.get(A2A_LEGACY_PROTOCOL_VERSION)?.rawBody).toBe('{"wire":"0.3"}');
+    expect(byVersion.get(A2A_PROTOCOL_VERSION)?.body).toEqual(StreamResponse.toJSON(response));
+    expect(response.payload).toBeDefined();
+  });
+
+  it('snapshots an event before it waits behind an in-flight same-task send', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save('task-queued-event', context, makeConfig('https://example.test/webhook'));
+    const releases: Array<() => void> = [];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        await new Promise<Response>((resolve) => {
+          releases.push(() => resolve(new Response(null, { status: 200 })));
+        })
+    );
+    const sender = new DefaultPushNotificationSender(store);
+    const firstEvent = makeStatusUpdate('task-queued-event', 'first');
+    const secondEvent = makeStatusUpdate('task-queued-event', 'second');
+
+    const first = sender.send(firstEvent, context);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const second = sender.send(secondEvent, context);
+    secondEvent.payload = undefined;
+
+    releases.shift()?.();
+    await first;
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    releases.shift()?.();
+    await second;
+
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual(
+      StreamResponse.toJSON(makeStatusUpdate('task-queued-event', 'second'))
+    );
+  });
+
+  it.each([
+    ['an empty result', false],
+    ['a rejection', true],
+  ] as const)(
+    'preserves same-task call order when an intervening custom-store load returns %s early',
+    async (_outcome, rejectMiddleLoad) => {
+      const config = makeConfig('https://example.test/webhook');
+      const entry: StoredPushNotificationConfig = {
+        config,
+        wireVersion: A2A_PROTOCOL_VERSION,
+      };
+      const pendingLoads: Array<{
+        resolve: (entries: StoredPushNotificationConfig[]) => void;
+        reject: (error: Error) => void;
+      }> = [];
+      const customStore: PushNotificationStore = {
+        save: vi.fn(async () => {}),
+        load: vi.fn(async () => [config]),
+        loadWithMetadata: vi.fn(
+          () =>
+            new Promise<StoredPushNotificationConfig[]>((resolve, reject) => {
+              pendingLoads.push({ resolve, reject });
+            })
+        ),
+        delete: vi.fn(async () => {}),
+      };
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 200 }));
+      const sender = new DefaultPushNotificationSender(customStore);
+      const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+      const first = sender.send(makeStatusUpdate('task-load-order', 'first'), context);
+      const middle = sender.send(makeStatusUpdate('task-load-order', 'middle'), context);
+      const third = sender.send(makeStatusUpdate('task-load-order', 'third'), context);
+      const outcomes = Promise.allSettled([first, middle, third]);
+      await vi.waitFor(() => expect(pendingLoads).toHaveLength(3));
+
+      if (rejectMiddleLoad) {
+        pendingLoads[1].reject(new Error('probe load failure'));
+      } else {
+        pendingLoads[1].resolve([]);
+      }
+      pendingLoads[2].resolve([entry]);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const dispatchesBeforeFirstLoad = fetchMock.mock.calls.length;
+      pendingLoads[0].resolve([entry]);
+      const results = await outcomes;
+
+      const deliveredContexts = fetchMock.mock.calls.map(([, init]) => {
+        const body = JSON.parse(String(init?.body));
+        return body.statusUpdate.contextId;
+      });
+      expect(dispatchesBeforeFirstLoad).toBe(0);
+      expect(deliveredContexts).toEqual(['first', 'third']);
+      expect(results.map((result) => result.status)).toEqual(
+        rejectMiddleLoad
+          ? ['fulfilled', 'rejected', 'fulfilled']
+          : ['fulfilled', 'fulfilled', 'fulfilled']
+      );
+      if (rejectMiddleLoad) {
+        expect(results[1]).toMatchObject({
+          status: 'rejected',
+          reason: expect.objectContaining({ message: 'probe load failure' }),
+        });
+      }
+    }
+  );
+
+  it.each(['loadWithMetadata', 'load'] as const)(
+    'snapshots custom-store configs returned by %s before a queued dispatch',
+    async (loadMethod) => {
+      const sharedConfig = makeConfig('https://original.example/webhook', {
+        id: 'shared-config',
+        authentication: { scheme: 'Bearer', credentials: 'original-secret' },
+      });
+      const sharedEntry: StoredPushNotificationConfig = {
+        config: sharedConfig,
+        wireVersion: A2A_PROTOCOL_VERSION,
+      };
+      const customStore: PushNotificationStore = {
+        save: vi.fn(async () => {}),
+        load: vi.fn(async () => [sharedConfig]),
+        loadWithMetadata:
+          loadMethod === 'loadWithMetadata' ? vi.fn(async () => [sharedEntry]) : undefined,
+        delete: vi.fn(async () => {}),
+      };
+      const v03Serializer: PushNotificationSerializer = {
+        serialize(): SerializedPushNotification {
+          return { body: '{"wire":"0.3"}', contentType: 'application/json' };
+        },
+      };
+      const releases: Array<() => void> = [];
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(
+        async () =>
+          await new Promise<Response>((resolve) => {
+            releases.push(() => resolve(new Response(null, { status: 200 })));
+          })
+      );
+      const sender = new DefaultPushNotificationSender(customStore, {
+        serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
+      });
+      const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+      const first = sender.send(makeStatusUpdate('task-shared-config', 'first'), context);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const second = sender.send(makeStatusUpdate('task-shared-config', 'second'), context);
+      const loadSpy =
+        loadMethod === 'loadWithMetadata' ? customStore.loadWithMetadata : customStore.load;
+      await vi.waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      sharedConfig.url = 'https://mutated.example/webhook';
+      sharedConfig.authentication!.credentials = 'mutated-secret';
+      sharedEntry.wireVersion = A2A_LEGACY_PROTOCOL_VERSION;
+
+      releases.shift()?.();
+      await first;
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      releases.shift()?.();
+      await second;
+
+      const [request, init] = fetchMock.mock.calls[1];
+      expect(String(request)).toBe('https://original.example/webhook');
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer original-secret');
+      expect(new Headers(init?.headers).get(A2A_VERSION_HEADER)).toBe(A2A_PROTOCOL_VERSION);
+      expect(JSON.parse(String(init?.body))).toEqual(
+        StreamResponse.toJSON(makeStatusUpdate('task-shared-config', 'second'))
+      );
+    }
+  );
 
   it('falls back to the v1.0 serializer with a one-time warning for unknown wire versions', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -194,6 +398,8 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     // Both dispatches must produce v1.0 bodies.
     for (const r of received) {
       expect(r.headers['content-type']).toBe(A2A_CONTENT_TYPE);
+      expect(r.headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
+      expect(r.body).toEqual(StreamResponse.toJSON(makeStatusUpdate('task-unknown')));
     }
     // Only one warning despite two missing-serializer lookups.
     const matching = warn.mock.calls.filter((args) =>
@@ -221,6 +427,40 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].rawBody).toBe('"custom-v1-body"');
   });
 
+  it.each(['', '1', '1.0.1', '-1.0', '1.-1', '1.0 ', 'v1.0'])(
+    'rejects serializer registry keys outside Major.Minor format: %j',
+    (version) => {
+      const serializers = {
+        [version]: new V1PushNotificationSerializer(),
+      } as Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
+
+      expect(() => new DefaultPushNotificationSender(store, { serializers })).toThrowError(
+        TypeError
+      );
+    }
+  );
+
+  it('accepts a future Major.Minor serializer key without numeric parsing', async () => {
+    const futureVersion = '999999999999999999999999.0';
+    const futureSerializer: PushNotificationSerializer = {
+      serialize(): SerializedPushNotification {
+        return { body: '{"wire":"future"}', contentType: 'application/json' };
+      },
+    };
+    const serializers = {
+      [futureVersion]: futureSerializer,
+    } as Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
+    const sender = new DefaultPushNotificationSender(store, { serializers });
+    const context = new ServerCallContext({ requestedVersion: futureVersion });
+    await store.save('task-future', context, makeConfig(`${baseUrl}/notify`));
+
+    await sender.send(makeStatusUpdate('task-future'), context);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(futureVersion);
+    expect(received[0].rawBody).toBe('{"wire":"future"}');
+  });
+
   it('preserves auth headers alongside serializer-supplied content type', async () => {
     const sender = new DefaultPushNotificationSender(store);
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
@@ -237,7 +477,43 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received).toHaveLength(1);
     expect(received[0].headers['authorization']).toBe('Bearer token-xyz');
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
   });
+
+  it('preserves the legacy token header alongside the version header', async () => {
+    const sender = new DefaultPushNotificationSender(store);
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save(
+      'task-token',
+      ctxV1,
+      makeConfig(`${baseUrl}/notify`, { token: 'legacy-token' })
+    );
+
+    await sender.send(makeStatusUpdate('task-token'), ctxV1);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].headers['x-a2a-notification-token']).toBe('legacy-token');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
+    expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
+  });
+
+  it.each([A2A_VERSION_HEADER, A2A_VERSION_HEADER.toLowerCase(), 'Content-Type', 'content-type'])(
+    'rejects a legacy token header that collides with protocol header %s',
+    (tokenHeaderName) => {
+      expect(() => new DefaultPushNotificationSender(store, { tokenHeaderName })).toThrowError(
+        TypeError
+      );
+    }
+  );
+
+  it.each(['', ' ', 'Bad Header', 'bad:header', 'bad\nheader'])(
+    'rejects invalid legacy token header name %j',
+    (tokenHeaderName) => {
+      expect(() => new DefaultPushNotificationSender(store, { tokenHeaderName })).toThrowError(
+        TypeError
+      );
+    }
+  );
 
   it('delivers message payloads with task association per §4.3.3', async () => {
     // Push notifications accept all four StreamResponse payload
@@ -289,6 +565,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
     expect(received[0].rawBody).toBe('{"v":"0.3-fallback"}');
     expect(customStore.load).toHaveBeenCalledTimes(1);
   });
@@ -316,6 +593,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
     expect(received[0].rawBody).toBe('{"v":"defensive-0.3"}');
   });
 

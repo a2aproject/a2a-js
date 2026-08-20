@@ -1,5 +1,6 @@
 import { TaskPushNotificationConfig, StreamResponse } from '../../index.js';
 import {
+  A2A_VERSION_HEADER,
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
   ProtocolVersion,
@@ -12,6 +13,9 @@ import {
   V1PushNotificationSerializer,
 } from './push_notification_serializer.js';
 
+const HTTP_HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const PROTOCOL_VERSION_PATTERN = /^[0-9]+\.[0-9]+$/;
+
 export interface DefaultPushNotificationSenderOptions {
   /** Timeout in milliseconds for the abort controller. Defaults to 5000ms. */
   timeout?: number;
@@ -19,6 +23,8 @@ export interface DefaultPushNotificationSenderOptions {
    * Custom header name for the legacy token (defaults to
    * `X-A2A-Notification-Token`). Used only when `pushConfig.token` is set
    * and `pushConfig.authentication` is not.
+   * Must not be `Content-Type` or `A2A-Version` (case-insensitive), because
+   * those headers describe the serialized protocol body.
    * @deprecated Use `pushConfig.authentication` with `AuthenticationInfo`.
    */
   tokenHeaderName?: string;
@@ -33,8 +39,7 @@ export interface DefaultPushNotificationSenderOptions {
    * When a stored config carries a wire version with no registered
    * serializer, the sender logs a warning and falls back to `'1.0'`.
    *
-   * The typed key set is a developer affordance; the underlying registry
-   * accepts any string at runtime.
+   * Runtime keys must use the protocol's `Major.Minor` format.
    */
   serializers?: Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
 }
@@ -54,9 +59,20 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   ) {
     this.pushNotificationStore = pushNotificationStore;
     this.notificationChain = new Map();
+    const tokenHeaderName = options.tokenHeaderName ?? 'X-A2A-Notification-Token';
+    if (!HTTP_HEADER_NAME_PATTERN.test(tokenHeaderName)) {
+      throw new TypeError('tokenHeaderName must be a valid HTTP header name');
+    }
+    const normalizedTokenHeaderName = tokenHeaderName.toLowerCase();
+    if (
+      normalizedTokenHeaderName === 'content-type' ||
+      normalizedTokenHeaderName === A2A_VERSION_HEADER.toLowerCase()
+    ) {
+      throw new TypeError(`tokenHeaderName must not override ${tokenHeaderName}`);
+    }
     this.options = {
       timeout: options.timeout ?? 5000,
-      tokenHeaderName: options.tokenHeaderName ?? 'X-A2A-Notification-Token',
+      tokenHeaderName,
     };
 
     // Seed with the built-in v1.0 serializer, then overlay user-supplied
@@ -69,6 +85,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     if (options.serializers) {
       for (const [version, serializer] of Object.entries(options.serializers)) {
         if (serializer) {
+          if (!PROTOCOL_VERSION_PATTERN.test(version)) {
+            throw new TypeError('serializer version keys must use Major.Minor format');
+          }
           this.serializers.set(version, serializer);
         }
       }
@@ -79,28 +98,46 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   }
 
   async send(streamResponse: StreamResponse, context: ServerCallContext): Promise<void> {
-    const taskId = this._getTaskId(streamResponse);
+    // Snapshot before the first await so callers cannot mutate an event while
+    // it is loading configs or queued behind another send for the same task.
+    const responseSnapshot = structuredClone(streamResponse);
+    const taskId = this._getTaskId(responseSnapshot);
     // Stand-alone messages with no task association can't have a
     // registered push config — skip the store round-trip.
     if (!taskId) {
       return;
     }
 
-    const storedConfigs = await this._loadStoredConfigs(taskId, context);
-    if (!storedConfigs || storedConfigs.length === 0) {
-      return;
-    }
-
     const lastPromise = this.notificationChain.get(taskId) ?? Promise.resolve();
+    // Start loading immediately, but convert either outcome to data so a fast
+    // load failure cannot settle this queue entry ahead of an earlier send.
+    // Deferring the store call by one microtask also reserves the chain slot
+    // before a custom store can re-enter send().
+    const storedConfigsResult = Promise.resolve()
+      .then(() => this._loadStoredConfigs(taskId, context))
+      .then((configs) => structuredClone(configs))
+      .then(
+        (storedConfigs) => ({ ok: true as const, storedConfigs }),
+        (error: unknown) => ({ ok: false as const, error })
+      );
     // Chain promises so notifications for the same task are sent
     // sequentially; once resolved the GC can clean them up so memory
     // doesn't grow linearly with the number of notifications sent.
     const newPromise = lastPromise
       .catch(() => {})
       .then(async () => {
+        const result = await storedConfigsResult;
+        if (result.ok === false) {
+          throw result.error;
+        }
+        const storedConfigs = result.storedConfigs;
+        if (!storedConfigs || storedConfigs.length === 0) {
+          return;
+        }
+
         const dispatches = storedConfigs.map(async (storedConfig) => {
           try {
-            await this._dispatchNotification(streamResponse, storedConfig, taskId);
+            await this._dispatchNotification(responseSnapshot, storedConfig, taskId);
           } catch (error) {
             console.error(
               `Error sending push notification for task_id=${taskId} to URL: ${storedConfig.config.url}. Error:`,
@@ -171,10 +208,13 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    * falling back to v1.0 (with a one-time warning) when no entry is
    * registered.
    */
-  private _resolveSerializer(wireVersion: string): PushNotificationSerializer {
+  private _resolveSerializer(wireVersion: string): {
+    serializer: PushNotificationSerializer;
+    wireVersion: string;
+  } {
     const serializer = this.serializers.get(wireVersion);
     if (serializer) {
-      return serializer;
+      return { serializer, wireVersion };
     }
     if (!this.warnedMissingSerializers.has(wireVersion)) {
       this.warnedMissingSerializers.add(wireVersion);
@@ -184,7 +224,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
           `DefaultPushNotificationSenderOptions.serializers to silence this warning.`
       );
     }
-    return this.fallbackSerializer;
+    // The fallback body is v1.0, so advertise the version that matches the
+    // actual wire representation rather than the unknown stored version.
+    return { serializer: this.fallbackSerializer, wireVersion: A2A_PROTOCOL_VERSION };
   }
 
   /**
@@ -216,13 +258,18 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
     try {
-      const serializer = this._resolveSerializer(wireVersion);
-      const { body, contentType } = serializer.serialize(streamResponse);
+      const resolved = this._resolveSerializer(wireVersion);
+      const serializer = resolved.serializer;
+      // Each config gets an isolated event object. Custom serializers are
+      // user-supplied code and must not be able to mutate the payload seen by
+      // another version's dispatch (or the caller's original event).
+      const { body, contentType } = serializer.serialize(structuredClone(streamResponse));
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': contentType,
+          [A2A_VERSION_HEADER]: resolved.wireVersion,
           ...this._buildAuthHeaders(pushConfig),
         },
         body,
