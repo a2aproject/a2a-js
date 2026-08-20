@@ -581,7 +581,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this.pushNotificationStore?.save(
         taskId,
         context,
-        params.configuration.taskPushNotificationConfig
+        structuredClone(params.configuration.taskPushNotificationConfig)
       );
     }
 
@@ -677,7 +677,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this.pushNotificationStore?.save(
         taskId,
         context,
-        params.configuration.taskPushNotificationConfig
+        structuredClone(params.configuration.taskPushNotificationConfig)
       );
     }
 
