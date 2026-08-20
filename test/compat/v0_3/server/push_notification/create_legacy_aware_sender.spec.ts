@@ -87,7 +87,9 @@ describe('createLegacyAwarePushNotificationSender', () => {
   }
 
   it('pre-registers the V03 serializer under the legacy version key', async () => {
-    const sender = createLegacyAwarePushNotificationSender(store);
+    const sender = createLegacyAwarePushNotificationSender(store, {
+      allowPrivateNetworks: true,
+    });
     const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
     await store.save('task-v03', ctxV03, makeConfig());
 
@@ -102,7 +104,9 @@ describe('createLegacyAwarePushNotificationSender', () => {
   });
 
   it('still uses the v1.0 serializer for v1.0-tagged configs', async () => {
-    const sender = createLegacyAwarePushNotificationSender(store);
+    const sender = createLegacyAwarePushNotificationSender(store, {
+      allowPrivateNetworks: true,
+    });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-v1', ctxV1, makeConfig());
 
@@ -121,6 +125,7 @@ describe('createLegacyAwarePushNotificationSender', () => {
       },
     };
     const sender = createLegacyAwarePushNotificationSender(store, {
+      allowPrivateNetworks: true,
       serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: customV03 },
     });
     const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
@@ -135,6 +140,7 @@ describe('createLegacyAwarePushNotificationSender', () => {
 
   it('passes other options (timeout, tokenHeaderName) through', async () => {
     const sender = createLegacyAwarePushNotificationSender(store, {
+      allowPrivateNetworks: true,
       tokenHeaderName: 'X-My-Token',
     });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
