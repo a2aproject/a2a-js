@@ -178,7 +178,7 @@
   },
   "dependencies": {
     "jose": "^6.2.3",
-    "uuid": "^11.1.0"
+    "uuid": "^14.0.0"
   },
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.10.2",
