@@ -12,6 +12,7 @@ export default defineConfig({
     'src/client/transports/grpc/index.ts',
     // v0.3 compat layer.
     'src/compat/v0_3/index.ts',
+    'src/compat/v0_3/translate/index.ts',
     'src/compat/v0_3/server/index.ts',
     'src/compat/v0_3/server/express/index.ts',
     'src/compat/v0_3/server/grpc/index.ts',

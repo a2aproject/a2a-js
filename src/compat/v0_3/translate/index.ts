@@ -12,3 +12,10 @@ export * from './requests.js';
 export * from './security.js';
 export * from './tasks.js';
 export * from './versions.js';
+
+/**
+ * The v0.3 wire types the `toCore*` translators accept, namespaced to keep them
+ * clear of their v1.0 counterparts, which the package root exports under the
+ * same names.
+ */
+export type * as legacy from '../types/types.js';
