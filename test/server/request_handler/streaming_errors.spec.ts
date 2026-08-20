@@ -328,6 +328,66 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeUndefined();
   });
 
+  it('keeps the event bus alive when the final state is configured', async () => {
+    let observedRequestTaskId = '';
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      observedRequestTaskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+    });
+
+    const configuredHandler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      mockExecutor,
+      eventBusManager,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { keepBusAliveStates: [TaskState.TASK_STATE_COMPLETED] }
+    );
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-stream-err-configured', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    for await (const _event of configuredHandler.sendMessageStream(params, serverContext)) {
+      void _event;
+    }
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeDefined();
+  });
+
   it('does not leak the published-task listener on the success path (regression: gemini-code-assist)', async () => {
     // Regression for the listener leak gemini-code-assist flagged on
     // PR #525: `trackLatestPublishedTask` registers a listener on the
