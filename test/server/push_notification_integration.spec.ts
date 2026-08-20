@@ -281,16 +281,14 @@ describe('Push Notification Integration Tests', () => {
         secondNotification.body,
         StreamResponse.toJSON({
           payload: {
-            $case: 'statusUpdate',
+            $case: 'task',
             value: {
-              taskId: taskId,
-              contextId: contextId,
+              ...expectedTaskResult,
               status: {
                 state: TaskState.TASK_STATE_WORKING,
                 message: undefined,
                 timestamp: undefined,
               },
-              metadata: {},
             },
           },
         })
@@ -301,17 +299,8 @@ describe('Push Notification Integration Tests', () => {
         thirdNotification.body,
         StreamResponse.toJSON({
           payload: {
-            $case: 'statusUpdate',
-            value: {
-              taskId: taskId,
-              contextId: contextId,
-              status: {
-                state: TaskState.TASK_STATE_COMPLETED,
-                message: undefined,
-                timestamp: undefined,
-              },
-              metadata: {},
-            },
+            $case: 'task',
+            value: expectedTaskResult,
           },
         })
       );

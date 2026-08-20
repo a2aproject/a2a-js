@@ -55,6 +55,7 @@ import { MockPushNotificationSender } from './mocks/push_notification_sender.moc
 import { ServerCallContext } from '../../src/server/context.js';
 import { MockTaskStore } from './mocks/task_store.mock.js';
 import { TERMINAL_STATE_LIST } from '../../src/server/utils.js';
+import { A2A_PROTOCOL_VERSION } from '../../src/constants.js';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let handler: A2ARequestHandler;
@@ -2637,7 +2638,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(result.nextPageToken).to.equal('');
   });
 
-  it('should send push notification when task update is received', async () => {
+  it('sends a full Task push for every update when no version header is set (defaults to v0.3)', async () => {
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -2711,44 +2712,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     assert.deepEqual(firstCallResponse, expectedFirstResponse);
 
-    // Verify second call (working state)
     const secondCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[1][0] as StreamResponse;
     const expectedSecondResponse: StreamResponse = {
       payload: {
-        $case: 'statusUpdate',
+        $case: 'task',
         value: {
-          taskId: taskId,
-          contextId: contextId,
+          ...expectedTask,
           status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-          metadata: {},
         },
       },
     };
     assert.deepEqual(secondCallResponse, expectedSecondResponse);
 
-    // Verify third call (completed state)
     const thirdCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[2][0] as StreamResponse;
     const expectedThirdResponse: StreamResponse = {
       payload: {
-        $case: 'statusUpdate',
-        value: {
-          taskId: taskId,
-          contextId: contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          metadata: {},
-        },
+        $case: 'task',
+        value: expectedTask,
       },
     };
     assert.deepEqual(thirdCallResponse, expectedThirdResponse);
   });
 
-  it('sendMessageStream: should send push notification when task update is received', async () => {
+  it('sendMessageStream: yields raw events to the client but pushes a full Task when no version header is set (defaults to v0.3)', async () => {
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -2843,38 +2831,25 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     };
     assert.deepEqual(firstCallResponse, expectedFirstResponse);
 
-    // Verify second call (working state)
     const secondCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[1][0] as StreamResponse;
     const expectedSecondResponse: StreamResponse = {
       payload: {
-        $case: 'statusUpdate',
+        $case: 'task',
         value: {
-          taskId: taskId,
-          contextId: contextId,
+          ...expectedTask,
           status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-          metadata: {},
         },
       },
     };
     assert.deepEqual(secondCallResponse, expectedSecondResponse);
 
-    // Verify third call (completed state)
     const thirdCallResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[2][0] as StreamResponse;
     const expectedThirdResponse: StreamResponse = {
       payload: {
-        $case: 'statusUpdate',
-        value: {
-          taskId: taskId,
-          contextId: contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          metadata: {},
-        },
+        $case: 'task',
+        value: expectedTask,
       },
     };
     assert.deepEqual(thirdCallResponse, expectedThirdResponse);
@@ -2952,7 +2927,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(offendingCalls).toHaveLength(0);
   });
 
-  it('should send push notification when statusUpdate event is received', async () => {
+  it('converts a statusUpdate trigger into a full Task push when no version header is set (defaults to v0.3)', async () => {
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -3035,10 +3010,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
     const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[1][0] as StreamResponse;
-    expect(callResponse.payload.$case).toBe('statusUpdate');
+    expect(callResponse.payload.$case).toBe('task');
+    expect((callResponse.payload as { value: Task }).value.status?.state).toBe(
+      TaskState.TASK_STATE_WORKING
+    );
   });
 
-  it('should send push notification when artifactUpdate event is received', async () => {
+  it('converts an artifactUpdate trigger into a full Task push when no version header is set (defaults to v0.3)', async () => {
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -3123,7 +3101,210 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
     const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[1][0] as StreamResponse;
-    expect(callResponse.payload.$case).toBe('artifactUpdate');
+    expect(callResponse.payload.$case).toBe('task');
+    expect((callResponse.payload as { value: Task }).value.artifacts).toHaveLength(1);
+  });
+
+  it('preserves the raw statusUpdate push body when the request sets version v1.0', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const contextV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const contextId = 'ctx-push-status-v1';
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-status-v1', 'Test status push v1'),
+        contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: {
+          tenant: '',
+          taskId: '',
+          url: 'https://push-v1.com',
+          id: 'push-v1',
+          token: 'token-v1',
+          authentication: undefined,
+        },
+      } as SendMessageConfiguration,
+    };
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+    await handler.sendMessage(params, contextV1);
+
+    const secondCall = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    expect(secondCall.payload.$case).toBe('statusUpdate');
+    expect((secondCall.payload as { value: TaskStatusUpdateEvent }).value.status?.state).toBe(
+      TaskState.TASK_STATE_WORKING
+    );
+  });
+
+  it('preserves the raw artifactUpdate push body when the request sets version v1.0', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const contextV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const contextId = 'ctx-push-artifact-v1';
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-artifact-v1', 'Test artifact push v1'),
+        contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: {
+          tenant: '',
+          taskId: '',
+          url: 'https://push-v1.com',
+          id: 'push-v1',
+          token: 'token-v1',
+          authentication: undefined,
+        },
+      } as SendMessageConfiguration,
+    };
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          artifact: {
+            artifactId: 'art-v1',
+            name: 'file.txt',
+            description: '',
+            parts: [
+              {
+                content: { $case: 'text', value: 'hello' },
+                mediaType: 'text/plain',
+                filename: 'file.txt',
+                metadata: {},
+              },
+            ],
+            metadata: {},
+            extensions: [],
+          },
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    await handler.sendMessage(params, contextV1);
+
+    const secondCall = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    expect(secondCall.payload.$case).toBe('artifactUpdate');
+  });
+
+  it('mirrors the historyLength-trimmed stream in the push body when the request sets version v1.0', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const contextV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const contextId = 'ctx-push-stream-v1';
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-stream-v1', 'Stream push mirror v1'),
+        contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: {
+          tenant: '',
+          taskId: '',
+          url: 'https://push-stream-v1.com',
+          id: 'push-stream-v1',
+          token: 'token-stream-v1',
+          authentication: undefined,
+        },
+        historyLength: 0,
+        acceptedOutputModes: [],
+      } as SendMessageConfiguration,
+    };
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, contextV1)) {
+      events.push(event);
+    }
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
+      3
+    );
+
+    const pushCalls = (
+      mockPushNotificationSender as MockPushNotificationSender
+    ).send.mock.calls.map((call) => call[0] as StreamResponse);
+
+    assert.equal(events[0].payload?.$case, 'task');
+    assert.lengthOf(
+      (events[0].payload as { value: Task }).value.history!,
+      0,
+      'historyLength=0 should trim the streamed task history'
+    );
+    assert.deepEqual(pushCalls[0], events[0], 'v1 push must mirror the trimmed stream task event');
+    assert.deepEqual(pushCalls[1], events[1], 'v1 push must mirror the raw statusUpdate event');
+    assert.deepEqual(pushCalls[2], events[2], 'v1 push must mirror the raw statusUpdate event');
+    assert.equal(pushCalls[1].payload?.$case, 'statusUpdate');
+    assert.equal(pushCalls[2].payload?.$case, 'statusUpdate');
   });
 
   it('Push Notification methods should throw error if task does not exist', async () => {

@@ -337,7 +337,7 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
 
     const completedCalls = pushNotificationSender.send.mock.calls.filter(([response]) => {
       const r = response as StreamResponse;
-      if (r.payload?.$case !== 'statusUpdate') return false;
+      if (r.payload?.$case !== 'task') return false;
       return r.payload.value.status?.state === TaskState.TASK_STATE_COMPLETED;
     });
     expect(completedCalls.length).toBe(1);
