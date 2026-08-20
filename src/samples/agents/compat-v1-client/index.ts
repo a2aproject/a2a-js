@@ -30,7 +30,6 @@
  */
 
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
 
 import {
   Message,
@@ -218,7 +217,7 @@ function buildSendMessageRequest(
     tenant: '',
     metadata: {},
     message: {
-      messageId: uuidv4(),
+      messageId: crypto.randomUUID(),
       role: Role.ROLE_USER,
       parts: [
         {

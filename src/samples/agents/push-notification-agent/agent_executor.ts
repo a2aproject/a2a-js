@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import {
   Task,
   TaskState,
@@ -103,7 +101,7 @@ export class PushNotificationAgentExecutor implements AgentExecutor {
             state: TaskState.TASK_STATE_WORKING,
             message: {
               role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
+              messageId: crypto.randomUUID(),
               parts: [
                 {
                   content: {
@@ -130,7 +128,7 @@ export class PushNotificationAgentExecutor implements AgentExecutor {
 
       // 3. Publish an artifact with the result.
       const resultArtifact: Artifact = {
-        artifactId: uuidv4(),
+        artifactId: crypto.randomUUID(),
         name: 'Result',
         description: 'The final result from the long-running agent.',
         parts: [

@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import {
   A2AError,
   ExtendedAgentCardNotConfiguredError,
@@ -176,7 +174,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       task.history = [...(task.history || []), incomingMessage];
       await this.taskStore.save(task, context);
     }
-    const taskId = incomingMessage.taskId || uuidv4();
+    const taskId = incomingMessage.taskId || crypto.randomUUID();
     const referenceTaskIds =
       (incomingMessage as Message & { referenceTaskIds?: string[] }).referenceTaskIds || [];
 
@@ -191,7 +189,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
       }
     }
-    const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
+    const contextId = incomingMessage.contextId || task?.contextId || crypto.randomUUID();
 
     const agentCard = await this.getAgentCard();
     const agentExtensions = agentCard.capabilities?.extensions ?? [];
@@ -391,7 +389,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             state: TaskState.TASK_STATE_FAILED,
             message: {
               role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
+              messageId: crypto.randomUUID(),
               taskId: requestContext.taskId,
               contextId: finalMessageForAgent.contextId!,
               parts: [
@@ -495,7 +493,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               state: TaskState.TASK_STATE_FAILED,
               message: {
                 role: Role.ROLE_AGENT,
-                messageId: uuidv4(),
+                messageId: crypto.randomUUID(),
                 taskId: requestContext.taskId,
                 contextId: finalMessageForAgent.contextId!,
                 parts: [
@@ -532,7 +530,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             state: TaskState.TASK_STATE_FAILED,
             message: {
               role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
+              messageId: crypto.randomUUID(),
               taskId: errorTaskId,
               contextId: errorContextId,
               parts: [
@@ -780,7 +778,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         state: TaskState.TASK_STATE_CANCELED,
         message: {
           role: Role.ROLE_AGENT,
-          messageId: uuidv4(),
+          messageId: crypto.randomUUID(),
           taskId: task.id,
           contextId: task.contextId,
           parts: [
@@ -1039,7 +1037,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           state: TaskState.TASK_STATE_FAILED,
           message: {
             role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
+            messageId: crypto.randomUUID(),
             taskId: currentTask.id,
             contextId: currentTask.contextId,
             parts: [
