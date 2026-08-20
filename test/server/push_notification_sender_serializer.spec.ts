@@ -124,7 +124,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   });
 
   it('uses the built-in v1.0 serializer for v1.0-tagged configs (regression)', async () => {
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
+    });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-v1', ctxV1, makeConfig(`${baseUrl}/notify`));
 
@@ -142,6 +144,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
       serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
     });
     const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
@@ -161,6 +164,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
       serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
     });
 
@@ -180,7 +184,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
   it('falls back to the v1.0 serializer with a one-time warning for unknown wire versions', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
+    });
     // Register two configs under an unknown wire version on the same task so
     // we can verify the warning is emitted only once per instance per
     // unknown version.
@@ -209,6 +215,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
       serializers: { [A2A_PROTOCOL_VERSION]: customV1 },
     });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
@@ -222,7 +229,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   });
 
   it('preserves auth headers alongside serializer-supplied content type', async () => {
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
+    });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save(
       'task-auth',
@@ -243,7 +252,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     // Push notifications accept all four StreamResponse payload
     // variants. The built-in v1.0 serializer encodes the message as part
     // of the canonical StreamResponse JSON wrapper.
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
+    });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-msg', ctxV1, makeConfig(`${baseUrl}/notify`));
 
@@ -257,7 +268,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   it('silently skips dispatch for stand-alone messages (no task association)', async () => {
     // Message-only stream pattern: no taskId means no config can ever
     // match. Sender returns silently without hitting the store.
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, {
+      allowPrivateNetworks: true,
+    });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
 
     await sender.send(makeMessage(''), ctxV1);
@@ -281,6 +294,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(customStore, {
+      allowPrivateNetworks: true,
       serializers: { [ProtocolVersion.V0_3]: v03Serializer },
     });
     const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
@@ -308,6 +322,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(customStore, {
+      allowPrivateNetworks: true,
       serializers: { [ProtocolVersion.V0_3]: v03Serializer },
     });
     const ctxEmpty = new ServerCallContext({ requestedVersion: '' });
@@ -333,7 +348,9 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     };
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Default sender — only the built-in V1 serializer. No compat opt-in.
-    const sender = new DefaultPushNotificationSender(customStore);
+    const sender = new DefaultPushNotificationSender(customStore, {
+      allowPrivateNetworks: true,
+    });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
 
     await sender.send(makeStatusUpdate('task-bare-v1'), ctxV1);
@@ -345,6 +362,114 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     // No warnings of any kind — pure v1.0 users have no reason to see
     // compat-layer logs.
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('DefaultPushNotificationSender SSRF guard', () => {
+  let store: InMemoryPushNotificationStore;
+  const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+  beforeEach(() => {
+    store = new InMemoryPushNotificationStore();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    'http://127.0.0.1:8080/notify',
+    'http://10.0.0.5/notify',
+    'http://172.16.0.1/notify',
+    'http://192.168.1.1/notify',
+    'http://169.254.169.254/latest/meta-data/',
+    'http://[::1]/notify',
+    'http://[fc00::1]/notify',
+    'http://localhost:8080/notify',
+    'http://metadata.google.internal/notify',
+    'http://metadata.azure.com/notify',
+    'ftp://example.com/notify',
+  ])('rejects blocked push URL %s without calling fetch', async (url) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const sender = new DefaultPushNotificationSender(store);
+    await store.save('task-ssrf', ctxV1, makeConfig(url));
+
+    await sender.send(makeStatusUpdate('task-ssrf'), ctxV1);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('allows public URLs to be dispatched', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new globalThis.Response(null, { status: 200 }));
+    const sender = new DefaultPushNotificationSender(store);
+    await store.save('task-public', ctxV1, makeConfig('http://example.com/notify'));
+
+    await sender.send(makeStatusUpdate('task-public'), ctxV1);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][0]).toBe('http://example.com/notify');
+  });
+
+  it('does not follow redirects to blocked targets', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new globalThis.Response(null, {
+        status: 302,
+        headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+      })
+    );
+    const sender = new DefaultPushNotificationSender(store);
+    await store.save('task-redirect', ctxV1, makeConfig('http://example.com/notify'));
+
+    await sender.send(makeStatusUpdate('task-redirect'), ctxV1);
+
+    // The initial URL is fetched once; the redirect hop to a blocked
+    // target must be rejected without a second fetch.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('strips the notification token on cross-host redirects', async () => {
+    const capturedHeaders: Record<string, string>[] = [];
+    const responses = [
+      new globalThis.Response(null, {
+        status: 302,
+        headers: { location: 'http://webhook2.example.com/notify' },
+      }),
+      new globalThis.Response(null, { status: 200 }),
+    ];
+    // Capture a snapshot of the headers at call time: the sender mutates
+    // its headers object (dropping the token) after a redirect hop, so a
+    // post-hoc read of the recorded call args would see the mutated state.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      capturedHeaders.push({ ...((init as RequestInit).headers as Record<string, string>) });
+      return responses.shift()!;
+    });
+    const sender = new DefaultPushNotificationSender(store);
+    await store.save(
+      'task-token',
+      ctxV1,
+      makeConfig('http://webhook1.example.com/notify', { token: 'secret-token' })
+    );
+
+    await sender.send(makeStatusUpdate('task-token'), ctxV1);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(capturedHeaders).toHaveLength(2);
+    expect(capturedHeaders[0]['X-A2A-Notification-Token']).toBe('secret-token');
+    expect(capturedHeaders[1]['X-A2A-Notification-Token']).toBeUndefined();
+  });
+
+  it('allowPrivateNetworks: true permits loopback webhooks', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new globalThis.Response(null, { status: 200 }));
+    const sender = new DefaultPushNotificationSender(store, { allowPrivateNetworks: true });
+    await store.save('task-loopback', ctxV1, makeConfig('http://127.0.0.1:8080/notify'));
+
+    await sender.send(makeStatusUpdate('task-loopback'), ctxV1);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
 

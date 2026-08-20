@@ -14,7 +14,15 @@ import {
   PushNotificationNotSupportedError,
   UnsupportedOperationError,
 } from '../../src/errors/index.js';
-import { AgentCard, Task, Message, Role, TaskState, TaskStatus } from '../../src/index.js';
+import {
+  AgentCard,
+  Task,
+  Message,
+  Role,
+  TaskState,
+  TaskStatus,
+  ListTasksResponse,
+} from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 
 describe('RestTransportHandler', () => {
@@ -272,6 +280,65 @@ describe('RestTransportHandler', () => {
       await expect(transportHandler.getTask('task-1', mockContext, '-5')).rejects.toThrow(
         'historyLength must be non-negative'
       );
+    });
+  });
+
+  describe('listTasks', () => {
+    const mockListResponse: ListTasksResponse = {
+      tasks: [],
+      nextPageToken: '',
+      pageSize: 0,
+      totalSize: 0,
+    };
+
+    it('should delegate parsed query params to the request handler', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      const result = await transportHandler.listTasks(
+        {
+          pageSize: '10',
+          pageToken: 'abc',
+          historyLength: '5',
+          contextId: 'ctx-1',
+        },
+        mockContext
+      );
+
+      expect(result).toEqual(mockListResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        {
+          tenant: '',
+          contextId: 'ctx-1',
+          status: TaskState.TASK_STATE_UNSPECIFIED,
+          pageSize: 10,
+          pageToken: 'abc',
+          historyLength: 5,
+          statusTimestampAfter: undefined,
+          includeArtifacts: false,
+        },
+        mockContext
+      );
+    });
+
+    it('should throw InvalidParams if pageSize is not a number', async () => {
+      await expect(transportHandler.listTasks({ pageSize: 'abc' }, mockContext)).rejects.toThrow(
+        'pageSize must be an integer between 1 and 100'
+      );
+    });
+
+    it('should throw InvalidParams if pageSize is out of range', async () => {
+      await expect(transportHandler.listTasks({ pageSize: '0' }, mockContext)).rejects.toThrow(
+        'pageSize must be an integer between 1 and 100'
+      );
+      await expect(transportHandler.listTasks({ pageSize: '101' }, mockContext)).rejects.toThrow(
+        'pageSize must be an integer between 1 and 100'
+      );
+    });
+
+    it('should throw InvalidParams if historyLength is not a number', async () => {
+      await expect(
+        transportHandler.listTasks({ historyLength: 'abc' }, mockContext)
+      ).rejects.toThrow('historyLength must be a valid integer');
     });
   });
 
