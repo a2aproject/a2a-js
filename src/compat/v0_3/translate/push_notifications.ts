@@ -34,7 +34,7 @@ export function toCompatAuthenticationInfo(
   core: V1AuthenticationInfo
 ): legacy.PushNotificationAuthenticationInfo {
   const result: legacy.PushNotificationAuthenticationInfo = {
-    schemes: core.scheme !== '' ? [core.scheme] : [],
+    schemes: core.scheme ? [core.scheme] : [],
   };
   const credentials = nonEmpty(core.credentials);
   if (credentials !== undefined) result.credentials = credentials;
@@ -102,7 +102,7 @@ export function toCompatTaskPushNotificationConfig(
   core: V1TaskPushNotificationConfig
 ): legacy.TaskPushNotificationConfig {
   return {
-    taskId: core.taskId,
+    taskId: core.taskId ?? '',
     pushNotificationConfig: toCompatPushNotificationConfig(core),
   };
 }

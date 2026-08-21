@@ -114,7 +114,7 @@ export class RestTransport implements Transport {
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
     const path = this._buildPath(
-      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      `/tasks/${encodeURIComponent(params.taskId ?? '')}/pushNotificationConfigs`,
       params.tenant
     );
     const response = await this._sendRequest<

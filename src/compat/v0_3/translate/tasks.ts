@@ -57,7 +57,7 @@ export function toCompatTask(coreTask: V1Task): legacy.Task {
   const result: legacy.Task = {
     kind: 'task',
     id: coreTask.id,
-    contextId: coreTask.contextId,
+    contextId: coreTask.contextId ?? '',
     status: coreTask.status ? toCompatTaskStatus(coreTask.status) : { state: 'unknown' },
   };
 
@@ -96,7 +96,7 @@ export function toCompatTaskStatusUpdateEvent(
   const result: legacy.TaskStatusUpdateEvent = {
     kind: 'status-update',
     taskId: coreEvent.taskId,
-    contextId: coreEvent.contextId,
+    contextId: coreEvent.contextId ?? '',
     status,
     final: FINAL_LEGACY_STATES.has(status.state),
   };
@@ -128,10 +128,10 @@ export function toCompatTaskArtifactUpdateEvent(
   const result: legacy.TaskArtifactUpdateEvent = {
     kind: 'artifact-update',
     taskId: coreEvent.taskId,
-    contextId: coreEvent.contextId,
+    contextId: coreEvent.contextId ?? '',
     artifact: toCompatArtifact(coreEvent.artifact),
-    append: coreEvent.append,
-    lastChunk: coreEvent.lastChunk,
+    append: coreEvent.append ?? false,
+    lastChunk: coreEvent.lastChunk ?? false,
   };
   const metadata = deepCloneMetadata(coreEvent.metadata);
   if (metadata !== undefined) result.metadata = metadata;

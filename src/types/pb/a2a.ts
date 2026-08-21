@@ -148,12 +148,12 @@ export interface SendMessageConfiguration {
    * A list of media types the client is prepared to accept for response parts.
    * Agents SHOULD use this to tailor their output.
    */
-  acceptedOutputModes: string[];
+  acceptedOutputModes?: string[] | undefined;
   /**
    * Configuration for the agent to send push notifications for task updates.
    * Task id should be empty when sending this configuration in a `SendMessage` request.
    */
-  taskPushNotificationConfig:
+  taskPushNotificationConfig?:
     | TaskPushNotificationConfig
     | undefined;
   /**
@@ -172,7 +172,7 @@ export interface SendMessageConfiguration {
    * terminal (`COMPLETED`, `FAILED`, `CANCELED`, `REJECTED`) or interrupted
    * (`INPUT_REQUIRED`, `AUTH_REQUIRED`) state before returning.
    */
-  returnImmediately: boolean;
+  returnImmediately?: boolean | undefined;
 }
 
 /**
@@ -191,23 +191,21 @@ export interface Task {
    * Unique identifier (e.g. UUID) for the contextual collection of interactions
    * (tasks and messages).
    */
-  contextId: string;
+  contextId?: string | undefined;
   /** The current status of a `Task`, including `state` and a `message`. */
-  status:
-    | TaskStatus
-    | undefined;
+  status: TaskStatus;
   /** A set of output artifacts for a `Task`. */
-  artifacts: Artifact[];
+  artifacts?: Artifact[] | undefined;
   /**
    * protolint:disable REPEATED_FIELD_NAMES_PLURALIZED
    * The history of interactions from a `Task`.
    */
-  history: Message[];
+  history?: Message[] | undefined;
   /**
    * protolint:enable REPEATED_FIELD_NAMES_PLURALIZED
    * A key/value object to store custom metadata about a task.
    */
-  metadata: { [key: string]: any } | undefined;
+  metadata?: { [key: string]: any } | undefined;
 }
 
 /** A container for the status of a task */
@@ -215,14 +213,14 @@ export interface TaskStatus {
   /** The current state of this task. */
   state: TaskState;
   /** A message associated with the status. */
-  message:
+  message?:
     | Message
     | undefined;
   /**
    * ISO 8601 Timestamp when the status was recorded.
    * Example: "2023-10-27T10:00:00Z"
    */
-  timestamp: string | undefined;
+  timestamp?: string | undefined;
 }
 
 /**
@@ -246,16 +244,16 @@ export interface Part {
     { $case: "data"; value: any | undefined }
     | undefined;
   /** Optional. metadata associated with this part. */
-  metadata:
+  metadata?:
     | { [key: string]: any }
     | undefined;
   /** An optional `filename` for the file (e.g., "document.pdf"). */
-  filename: string;
+  filename?: string | undefined;
   /**
    * The `media_type` (MIME type) of the part content (e.g., "text/plain", "application/json", "image/png").
    * This field is available for all part types.
    */
-  mediaType: string;
+  mediaType?: string | undefined;
 }
 
 /**
@@ -270,21 +268,21 @@ export interface Message {
   /** The unique identifier (e.g. UUID) of the message. This is created by the message creator. */
   messageId: string;
   /** Optional. The context id of the message. If set, the message will be associated with the given context. */
-  contextId: string;
+  contextId?: string | undefined;
   /** Optional. The task id of the message. If set, the message will be associated with the given task. */
-  taskId: string;
+  taskId?: string | undefined;
   /** Identifies the sender of the message. */
   role: Role;
   /** Parts is the container of the message content. */
   parts: Part[];
   /** Optional. Any metadata to provide along with the message. */
-  metadata:
+  metadata?:
     | { [key: string]: any }
     | undefined;
   /** The URIs of extensions that are present or contributed to this Message. */
-  extensions: string[];
+  extensions?: string[] | undefined;
   /** A list of task IDs that this message references for additional context. */
-  referenceTaskIds: string[];
+  referenceTaskIds?: string[] | undefined;
 }
 
 /** Artifacts represent task outputs. */
@@ -292,17 +290,17 @@ export interface Artifact {
   /** Unique identifier (e.g. UUID) for the artifact. It must be unique within a task. */
   artifactId: string;
   /** A human readable name for the artifact. */
-  name: string;
+  name?: string | undefined;
   /** Optional. A human readable description of the artifact. */
-  description: string;
+  description?: string | undefined;
   /** The content of the artifact. Must contain at least one part. */
   parts: Part[];
   /** Optional. Metadata included with the artifact. */
-  metadata:
+  metadata?:
     | { [key: string]: any }
     | undefined;
   /** The URIs of extensions that are present or contributed to this Artifact. */
-  extensions: string[];
+  extensions?: string[] | undefined;
 }
 
 /** An event sent by the agent to notify the client of a change in a task's status. */
@@ -312,11 +310,9 @@ export interface TaskStatusUpdateEvent {
   /** The ID of the context that the task belongs to. */
   contextId: string;
   /** The new status of the task. */
-  status:
-    | TaskStatus
-    | undefined;
+  status: TaskStatus;
   /** Optional. Metadata associated with the task update. */
-  metadata: { [key: string]: any } | undefined;
+  metadata?: { [key: string]: any } | undefined;
 }
 
 /** A task delta where an artifact has been generated. */
@@ -326,18 +322,16 @@ export interface TaskArtifactUpdateEvent {
   /** The ID of the context that this task belongs to. */
   contextId: string;
   /** The artifact that was generated or updated. */
-  artifact:
-    | Artifact
-    | undefined;
+  artifact: Artifact;
   /**
    * If true, the content of this artifact should be appended to a previously
    * sent artifact with the same ID.
    */
-  append: boolean;
+  append?: boolean | undefined;
   /** If true, this is the final chunk of the artifact. */
-  lastChunk: boolean;
+  lastChunk?: boolean | undefined;
   /** Optional. Metadata associated with the artifact update. */
-  metadata: { [key: string]: any } | undefined;
+  metadata?: { [key: string]: any } | undefined;
 }
 
 /** Defines authentication details, used for push notifications. */
@@ -349,7 +343,7 @@ export interface AuthenticationInfo {
    */
   scheme: string;
   /** Push Notification credentials. Format depends on the scheme (e.g., token for Bearer). */
-  credentials: string;
+  credentials?: string | undefined;
 }
 
 /**
@@ -369,7 +363,7 @@ export interface AgentInterface {
    */
   protocolBinding: string;
   /** Tenant ID to be used in the request when calling the agent. */
-  tenant: string;
+  tenant?: string | undefined;
   /**
    * The version of the A2A protocol this interface exposes.
    * Use the latest supported minor version per major version.
@@ -399,7 +393,7 @@ export interface AgentCard {
   /** Ordered list of supported interfaces. The first entry is preferred. */
   supportedInterfaces: AgentInterface[];
   /** The service provider of the agent. */
-  provider:
+  provider?:
     | AgentProvider
     | undefined;
   /**
@@ -412,13 +406,11 @@ export interface AgentCard {
     | string
     | undefined;
   /** A2A Capability set supported by the agent. */
-  capabilities:
-    | AgentCapabilities
-    | undefined;
+  capabilities: AgentCapabilities;
   /** The security scheme details used for authenticating with this agent. */
-  securitySchemes: { [key: string]: SecurityScheme };
+  securitySchemes?: { [key: string]: SecurityScheme } | undefined;
   /** Security requirements for contacting the agent. */
-  securityRequirements: SecurityRequirement[];
+  securityRequirements?: SecurityRequirement[] | undefined;
   /**
    * protolint:enable REPEATED_FIELD_NAMES_PLURALIZED
    * The set of interaction modes that the agent supports across all skills.
@@ -434,7 +426,7 @@ export interface AgentCard {
    */
   skills: AgentSkill[];
   /** JSON Web Signatures computed for this `AgentCard`. */
-  signatures: AgentCardSignature[];
+  signatures?: AgentCardSignature[] | undefined;
   /** Optional. A URL to an icon for the agent. */
   iconUrl?: string | undefined;
 }
@@ -469,7 +461,7 @@ export interface AgentCapabilities {
     | boolean
     | undefined;
   /** A list of protocol extensions supported by the agent. */
-  extensions: AgentExtension[];
+  extensions?: AgentExtension[] | undefined;
   /** Indicates if the agent supports providing an extended agent card when authenticated. */
   extendedAgentCard?: boolean | undefined;
 }
@@ -477,13 +469,13 @@ export interface AgentCapabilities {
 /** A declaration of a protocol extension supported by an Agent. */
 export interface AgentExtension {
   /** The unique URI identifying the extension. */
-  uri: string;
+  uri?: string | undefined;
   /** A human-readable description of how this agent uses the extension. */
-  description: string;
+  description?: string | undefined;
   /** If true, the client must understand and comply with the extension's requirements. */
-  required: boolean;
+  required?: boolean | undefined;
   /** Optional. Extension-specific configuration parameters. */
-  params: { [key: string]: any } | undefined;
+  params?: { [key: string]: any } | undefined;
 }
 
 /** Represents a distinct capability or function that an agent can perform. */
@@ -497,13 +489,13 @@ export interface AgentSkill {
   /** A set of keywords describing the skill's capabilities. */
   tags: string[];
   /** Example prompts or scenarios that this skill can handle. */
-  examples: string[];
+  examples?: string[] | undefined;
   /** The set of supported input media types for this skill, overriding the agent's defaults. */
-  inputModes: string[];
+  inputModes?: string[] | undefined;
   /** The set of supported output media types for this skill, overriding the agent's defaults. */
-  outputModes: string[];
+  outputModes?: string[] | undefined;
   /** Security schemes necessary for this skill. */
-  securityRequirements: SecurityRequirement[];
+  securityRequirements?: SecurityRequirement[] | undefined;
 }
 
 /**
@@ -521,26 +513,26 @@ export interface AgentCardSignature {
   /** Required. The computed signature, base64url-encoded. */
   signature: string;
   /** The unprotected JWS header values. */
-  header: { [key: string]: any } | undefined;
+  header?: { [key: string]: any } | undefined;
 }
 
 /** A container associating a push notification configuration with a specific task. */
 export interface TaskPushNotificationConfig {
   /** Optional. Tenant ID. */
-  tenant: string;
+  tenant?: string | undefined;
   /**
    * The push notification configuration details.
    * A unique identifier (e.g. UUID) for this push notification configuration.
    */
-  id: string;
+  id?: string | undefined;
   /** The ID of the task this configuration is associated with. */
-  taskId: string;
+  taskId?: string | undefined;
   /** The URL where the notification should be sent. */
   url: string;
   /** A token unique for this task or session. */
-  token: string;
+  token?: string | undefined;
   /** Authentication information required to send the notification. */
-  authentication: AuthenticationInfo | undefined;
+  authentication?: AuthenticationInfo | undefined;
 }
 
 /**
@@ -549,13 +541,13 @@ export interface TaskPushNotificationConfig {
  */
 export interface StringList {
   /** The individual string values. */
-  list: string[];
+  list?: string[] | undefined;
 }
 
 /** Defines the security requirements for an agent. */
 export interface SecurityRequirement {
   /** A map of security schemes to the required scopes. */
-  schemes: { [key: string]: StringList };
+  schemes?: { [key: string]: StringList } | undefined;
 }
 
 export interface SecurityRequirement_SchemesEntry {
@@ -591,7 +583,7 @@ export interface SecurityScheme {
 /** Defines a security scheme using an API key. */
 export interface APIKeySecurityScheme {
   /** An optional description for the security scheme. */
-  description: string;
+  description?: string | undefined;
   /** The location of the API key. Valid values are "query", "header", or "cookie". */
   location: string;
   /** The name of the header, query, or cookie parameter to be used. */
@@ -601,7 +593,7 @@ export interface APIKeySecurityScheme {
 /** Defines a security scheme using HTTP authentication. */
 export interface HTTPAuthSecurityScheme {
   /** An optional description for the security scheme. */
-  description: string;
+  description?: string | undefined;
   /**
    * The name of the HTTP Authentication scheme to be used in the Authorization header,
    * as defined in RFC7235 (e.g., "Bearer").
@@ -612,28 +604,26 @@ export interface HTTPAuthSecurityScheme {
    * A hint to the client to identify how the bearer token is formatted (e.g., "JWT").
    * Primarily for documentation purposes.
    */
-  bearerFormat: string;
+  bearerFormat?: string | undefined;
 }
 
 /** Defines a security scheme using OAuth 2.0. */
 export interface OAuth2SecurityScheme {
   /** An optional description for the security scheme. */
-  description: string;
+  description?: string | undefined;
   /** An object containing configuration information for the supported OAuth 2.0 flows. */
-  flows:
-    | OAuthFlows
-    | undefined;
+  flows: OAuthFlows;
   /**
    * URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).
    * TLS is required.
    */
-  oauth2MetadataUrl: string;
+  oauth2MetadataUrl?: string | undefined;
 }
 
 /** Defines a security scheme using OpenID Connect. */
 export interface OpenIdConnectSecurityScheme {
   /** An optional description for the security scheme. */
-  description: string;
+  description?: string | undefined;
   /** The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata. */
   openIdConnectUrl: string;
 }
@@ -641,7 +631,7 @@ export interface OpenIdConnectSecurityScheme {
 /** Defines a security scheme using mTLS authentication. */
 export interface MutualTlsSecurityScheme {
   /** An optional description for the security scheme. */
-  description: string;
+  description?: string | undefined;
 }
 
 /** Defines the configuration for the supported OAuth 2.0 flows. */
@@ -672,14 +662,14 @@ export interface AuthorizationCodeOAuthFlow {
   /** The token URL to be used for this flow. */
   tokenUrl: string;
   /** The URL to be used for obtaining refresh tokens. */
-  refreshUrl: string;
+  refreshUrl?: string | undefined;
   /** The available scopes for the OAuth2 security scheme. */
   scopes: { [key: string]: string };
   /**
    * Indicates if PKCE (RFC 7636) is required for this flow.
    * PKCE should always be used for public clients and is recommended for all clients.
    */
-  pkceRequired: boolean;
+  pkceRequired?: boolean | undefined;
 }
 
 export interface AuthorizationCodeOAuthFlow_ScopesEntry {
@@ -692,7 +682,7 @@ export interface ClientCredentialsOAuthFlow {
   /** The token URL to be used for this flow. */
   tokenUrl: string;
   /** The URL to be used for obtaining refresh tokens. */
-  refreshUrl: string;
+  refreshUrl?: string | undefined;
   /** The available scopes for the OAuth2 security scheme. */
   scopes: { [key: string]: string };
 }
@@ -708,17 +698,17 @@ export interface ImplicitOAuthFlow {
    * The authorization URL to be used for this flow. This MUST be in the
    * form of a URL. The OAuth2 standard requires the use of TLS
    */
-  authorizationUrl: string;
+  authorizationUrl?: string | undefined;
   /**
    * The URL to be used for obtaining refresh tokens. This MUST be in the
    * form of a URL. The OAuth2 standard requires the use of TLS.
    */
-  refreshUrl: string;
+  refreshUrl?: string | undefined;
   /**
    * The available scopes for the OAuth2 security scheme. A map between the
    * scope name and a short description for it. The map MAY be empty.
    */
-  scopes: { [key: string]: string };
+  scopes?: { [key: string]: string } | undefined;
 }
 
 export interface ImplicitOAuthFlow_ScopesEntry {
@@ -732,17 +722,17 @@ export interface PasswordOAuthFlow {
    * The token URL to be used for this flow. This MUST be in the form of a URL.
    * The OAuth2 standard requires the use of TLS.
    */
-  tokenUrl: string;
+  tokenUrl?: string | undefined;
   /**
    * The URL to be used for obtaining refresh tokens. This MUST be in the
    * form of a URL. The OAuth2 standard requires the use of TLS.
    */
-  refreshUrl: string;
+  refreshUrl?: string | undefined;
   /**
    * The available scopes for the OAuth2 security scheme. A map between the
    * scope name and a short description for it. The map MAY be empty.
    */
-  scopes: { [key: string]: string };
+  scopes?: { [key: string]: string } | undefined;
 }
 
 export interface PasswordOAuthFlow_ScopesEntry {
@@ -761,7 +751,7 @@ export interface DeviceCodeOAuthFlow {
   /** The token URL to be used for this flow. */
   tokenUrl: string;
   /** The URL to be used for obtaining refresh tokens. */
-  refreshUrl: string;
+  refreshUrl?: string | undefined;
   /** The available scopes for the OAuth2 security scheme. */
   scopes: { [key: string]: string };
 }
@@ -774,23 +764,21 @@ export interface DeviceCodeOAuthFlow_ScopesEntry {
 /** Represents a request for the `SendMessage` method. */
 export interface SendMessageRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** The message to send to the agent. */
-  message:
-    | Message
-    | undefined;
+  message: Message;
   /** Configuration for the send request. */
-  configuration:
+  configuration?:
     | SendMessageConfiguration
     | undefined;
   /** A flexible key-value map for passing additional context or parameters. */
-  metadata: { [key: string]: any } | undefined;
+  metadata?: { [key: string]: any } | undefined;
 }
 
 /** Represents a request for the `GetTask` method. */
 export interface GetTaskRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** The resource ID of the task to retrieve. */
   id: string;
   /**
@@ -805,11 +793,11 @@ export interface GetTaskRequest {
 /** Parameters for listing tasks with optional filtering criteria. */
 export interface ListTasksRequest {
   /** Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** Filter tasks by context ID to get tasks from a specific conversation or session. */
-  contextId: string;
+  contextId?: string | undefined;
   /** Filter tasks by their current status state. */
-  status: TaskState;
+  status?: TaskState | undefined;
   /**
    * The maximum number of tasks to return. The service may return fewer than this value.
    * If unspecified, at most 50 tasks will be returned.
@@ -824,7 +812,7 @@ export interface ListTasksRequest {
    * `ListTasksResponse.next_page_token`.
    * Provide this to retrieve the subsequent page.
    */
-  pageToken: string;
+  pageToken?: string | undefined;
   /** The maximum number of messages to include in each task's history. */
   historyLength?:
     | number
@@ -833,7 +821,7 @@ export interface ListTasksRequest {
    * Filter tasks which have a status updated after the provided timestamp in ISO 8601 format (e.g., "2023-10-27T10:00:00Z").
    * Only tasks with a status timestamp time greater than or equal to this value will be returned.
    */
-  statusTimestampAfter:
+  statusTimestampAfter?:
     | string
     | undefined;
   /**
@@ -858,17 +846,17 @@ export interface ListTasksResponse {
 /** Represents a request for the `CancelTask` method. */
 export interface CancelTaskRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** The resource ID of the task to cancel. */
   id: string;
   /** A flexible key-value map for passing additional context or parameters. */
-  metadata: { [key: string]: any } | undefined;
+  metadata?: { [key: string]: any } | undefined;
 }
 
 /** Represents a request for the `GetTaskPushNotificationConfig` method. */
 export interface GetTaskPushNotificationConfigRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** The parent task resource ID. */
   taskId: string;
   /** The resource ID of the configuration to retrieve. */
@@ -878,7 +866,7 @@ export interface GetTaskPushNotificationConfigRequest {
 /** Represents a request for the `DeleteTaskPushNotificationConfig` method. */
 export interface DeleteTaskPushNotificationConfigRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** The parent task resource ID. */
   taskId: string;
   /** The resource ID of the configuration to delete. */
@@ -888,7 +876,7 @@ export interface DeleteTaskPushNotificationConfigRequest {
 /** Represents a request for the `SubscribeToTask` method. */
 export interface SubscribeToTaskRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** The resource ID of the task to subscribe to. */
   id: string;
 }
@@ -896,19 +884,19 @@ export interface SubscribeToTaskRequest {
 /** Represents a request for the `ListTaskPushNotificationConfigs` method. */
 export interface ListTaskPushNotificationConfigsRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
   /** The parent task resource ID. */
   taskId: string;
   /** The maximum number of configurations to return. */
-  pageSize: number;
+  pageSize?: number | undefined;
   /** A page token received from a previous `ListTaskPushNotificationConfigsRequest` call. */
-  pageToken: string;
+  pageToken?: string | undefined;
 }
 
 /** Represents a request for the `GetExtendedAgentCard` method. */
 export interface GetExtendedAgentCardRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
-  tenant: string;
+  tenant?: string | undefined;
 }
 
 /** Represents the response for the `SendMessage` method. */
@@ -949,9 +937,9 @@ export interface StreamResponse {
  */
 export interface ListTaskPushNotificationConfigsResponse {
   /** The list of push notification configurations. */
-  configs: TaskPushNotificationConfig[];
+  configs?: TaskPushNotificationConfig[] | undefined;
   /** A token to retrieve the next page of results, or empty if there are no more results in the list. */
-  nextPageToken: string;
+  nextPageToken?: string | undefined;
 }
 
 export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
@@ -993,7 +981,7 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
     if (message.historyLength !== undefined) {
       obj.historyLength = Math.round(message.historyLength);
     }
-    if (message.returnImmediately !== false) {
+    if (message.returnImmediately !== false && message.returnImmediately !== undefined) {
       obj.returnImmediately = message.returnImmediately;
     }
     return obj;
@@ -1009,7 +997,7 @@ export const Task: MessageFns<Task> = {
         : isSet(object.context_id)
         ? globalThis.String(object.context_id)
         : "",
-      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : undefined,
+      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : (undefined as any),
       artifacts: globalThis.Array.isArray(object?.artifacts)
         ? object.artifacts.map((e: any) => Artifact.fromJSON(e))
         : [],
@@ -1022,10 +1010,10 @@ export const Task: MessageFns<Task> = {
 
   toJSON(message: Task): unknown {
     const obj: any = {};
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       obj.contextId = message.contextId;
     }
     if (message.status !== undefined) {
@@ -1055,7 +1043,7 @@ export const TaskStatus: MessageFns<TaskStatus> = {
 
   toJSON(message: TaskStatus): unknown {
     const obj: any = {};
-    if (message.state !== 0) {
+    if (message.state !== 0 && message.state !== undefined) {
       obj.state = taskStateToJSON(message.state);
     }
     if (message.message !== undefined) {
@@ -1104,10 +1092,10 @@ export const Part: MessageFns<Part> = {
     if (message.metadata !== undefined) {
       obj.metadata = message.metadata;
     }
-    if (message.filename !== "") {
+    if (message.filename !== "" && message.filename !== undefined) {
       obj.filename = message.filename;
     }
-    if (message.mediaType !== "") {
+    if (message.mediaType !== "" && message.mediaType !== undefined) {
       obj.mediaType = message.mediaType;
     }
     return obj;
@@ -1150,16 +1138,16 @@ export const Message: MessageFns<Message> = {
 
   toJSON(message: Message): unknown {
     const obj: any = {};
-    if (message.messageId !== "") {
+    if (message.messageId !== "" && message.messageId !== undefined) {
       obj.messageId = message.messageId;
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       obj.contextId = message.contextId;
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
-    if (message.role !== 0) {
+    if (message.role !== 0 && message.role !== undefined) {
       obj.role = roleToJSON(message.role);
     }
     if (message.parts?.length) {
@@ -1200,13 +1188,13 @@ export const Artifact: MessageFns<Artifact> = {
 
   toJSON(message: Artifact): unknown {
     const obj: any = {};
-    if (message.artifactId !== "") {
+    if (message.artifactId !== "" && message.artifactId !== undefined) {
       obj.artifactId = message.artifactId;
     }
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       obj.name = message.name;
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
     if (message.parts?.length) {
@@ -1235,17 +1223,17 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
         : isSet(object.context_id)
         ? globalThis.String(object.context_id)
         : "",
-      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : undefined,
+      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : (undefined as any),
       metadata: isObject(object.metadata) ? object.metadata : undefined,
     };
   },
 
   toJSON(message: TaskStatusUpdateEvent): unknown {
     const obj: any = {};
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       obj.contextId = message.contextId;
     }
     if (message.status !== undefined) {
@@ -1271,7 +1259,7 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
         : isSet(object.context_id)
         ? globalThis.String(object.context_id)
         : "",
-      artifact: isSet(object.artifact) ? Artifact.fromJSON(object.artifact) : undefined,
+      artifact: isSet(object.artifact) ? Artifact.fromJSON(object.artifact) : (undefined as any),
       append: isSet(object.append) ? globalThis.Boolean(object.append) : false,
       lastChunk: isSet(object.lastChunk)
         ? globalThis.Boolean(object.lastChunk)
@@ -1284,19 +1272,19 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
 
   toJSON(message: TaskArtifactUpdateEvent): unknown {
     const obj: any = {};
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       obj.contextId = message.contextId;
     }
     if (message.artifact !== undefined) {
       obj.artifact = Artifact.toJSON(message.artifact);
     }
-    if (message.append !== false) {
+    if (message.append !== false && message.append !== undefined) {
       obj.append = message.append;
     }
-    if (message.lastChunk !== false) {
+    if (message.lastChunk !== false && message.lastChunk !== undefined) {
       obj.lastChunk = message.lastChunk;
     }
     if (message.metadata !== undefined) {
@@ -1316,10 +1304,10 @@ export const AuthenticationInfo: MessageFns<AuthenticationInfo> = {
 
   toJSON(message: AuthenticationInfo): unknown {
     const obj: any = {};
-    if (message.scheme !== "") {
+    if (message.scheme !== "" && message.scheme !== undefined) {
       obj.scheme = message.scheme;
     }
-    if (message.credentials !== "") {
+    if (message.credentials !== "" && message.credentials !== undefined) {
       obj.credentials = message.credentials;
     }
     return obj;
@@ -1346,16 +1334,16 @@ export const AgentInterface: MessageFns<AgentInterface> = {
 
   toJSON(message: AgentInterface): unknown {
     const obj: any = {};
-    if (message.url !== "") {
+    if (message.url !== "" && message.url !== undefined) {
       obj.url = message.url;
     }
-    if (message.protocolBinding !== "") {
+    if (message.protocolBinding !== "" && message.protocolBinding !== undefined) {
       obj.protocolBinding = message.protocolBinding;
     }
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.protocolVersion !== "") {
+    if (message.protocolVersion !== "" && message.protocolVersion !== undefined) {
       obj.protocolVersion = message.protocolVersion;
     }
     return obj;
@@ -1379,7 +1367,7 @@ export const AgentCard: MessageFns<AgentCard> = {
         : isSet(object.documentation_url)
         ? globalThis.String(object.documentation_url)
         : undefined,
-      capabilities: isSet(object.capabilities) ? AgentCapabilities.fromJSON(object.capabilities) : undefined,
+      capabilities: isSet(object.capabilities) ? AgentCapabilities.fromJSON(object.capabilities) : (undefined as any),
       securitySchemes: isObject(object.securitySchemes)
         ? (globalThis.Object.entries(object.securitySchemes) as [string, any][]).reduce(
           (acc: { [key: string]: SecurityScheme }, [key, value]: [string, any]) => {
@@ -1428,10 +1416,10 @@ export const AgentCard: MessageFns<AgentCard> = {
 
   toJSON(message: AgentCard): unknown {
     const obj: any = {};
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       obj.name = message.name;
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
     if (message.supportedInterfaces?.length) {
@@ -1440,7 +1428,7 @@ export const AgentCard: MessageFns<AgentCard> = {
     if (message.provider !== undefined) {
       obj.provider = AgentProvider.toJSON(message.provider);
     }
-    if (message.version !== "") {
+    if (message.version !== "" && message.version !== undefined) {
       obj.version = message.version;
     }
     if (message.documentationUrl !== undefined) {
@@ -1570,13 +1558,13 @@ export const AgentExtension: MessageFns<AgentExtension> = {
 
   toJSON(message: AgentExtension): unknown {
     const obj: any = {};
-    if (message.uri !== "") {
+    if (message.uri !== "" && message.uri !== undefined) {
       obj.uri = message.uri;
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
-    if (message.required !== false) {
+    if (message.required !== false && message.required !== undefined) {
       obj.required = message.required;
     }
     if (message.params !== undefined) {
@@ -1614,13 +1602,13 @@ export const AgentSkill: MessageFns<AgentSkill> = {
 
   toJSON(message: AgentSkill): unknown {
     const obj: any = {};
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       obj.name = message.name;
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
     if (message.tags?.length) {
@@ -1653,10 +1641,10 @@ export const AgentCardSignature: MessageFns<AgentCardSignature> = {
 
   toJSON(message: AgentCardSignature): unknown {
     const obj: any = {};
-    if (message.protected !== "") {
+    if (message.protected !== "" && message.protected !== undefined) {
       obj.protected = message.protected;
     }
-    if (message.signature !== "") {
+    if (message.signature !== "" && message.signature !== undefined) {
       obj.signature = message.signature;
     }
     if (message.header !== undefined) {
@@ -1684,19 +1672,19 @@ export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> 
 
   toJSON(message: TaskPushNotificationConfig): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
-    if (message.url !== "") {
+    if (message.url !== "" && message.url !== undefined) {
       obj.url = message.url;
     }
-    if (message.token !== "") {
+    if (message.token !== "" && message.token !== undefined) {
       obj.token = message.token;
     }
     if (message.authentication !== undefined) {
@@ -1760,7 +1748,7 @@ export const SecurityRequirement_SchemesEntry: MessageFns<SecurityRequirement_Sc
 
   toJSON(message: SecurityRequirement_SchemesEntry): unknown {
     const obj: any = {};
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       obj.key = message.key;
     }
     if (message.value !== undefined) {
@@ -1831,13 +1819,13 @@ export const APIKeySecurityScheme: MessageFns<APIKeySecurityScheme> = {
 
   toJSON(message: APIKeySecurityScheme): unknown {
     const obj: any = {};
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
-    if (message.location !== "") {
+    if (message.location !== "" && message.location !== undefined) {
       obj.location = message.location;
     }
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       obj.name = message.name;
     }
     return obj;
@@ -1859,13 +1847,13 @@ export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
 
   toJSON(message: HTTPAuthSecurityScheme): unknown {
     const obj: any = {};
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
-    if (message.scheme !== "") {
+    if (message.scheme !== "" && message.scheme !== undefined) {
       obj.scheme = message.scheme;
     }
-    if (message.bearerFormat !== "") {
+    if (message.bearerFormat !== "" && message.bearerFormat !== undefined) {
       obj.bearerFormat = message.bearerFormat;
     }
     return obj;
@@ -1876,7 +1864,7 @@ export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
   fromJSON(object: any): OAuth2SecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : "",
-      flows: isSet(object.flows) ? OAuthFlows.fromJSON(object.flows) : undefined,
+      flows: isSet(object.flows) ? OAuthFlows.fromJSON(object.flows) : (undefined as any),
       oauth2MetadataUrl: isSet(object.oauth2MetadataUrl)
         ? globalThis.String(object.oauth2MetadataUrl)
         : isSet(object.oauth2_metadata_url)
@@ -1887,13 +1875,13 @@ export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
 
   toJSON(message: OAuth2SecurityScheme): unknown {
     const obj: any = {};
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
     if (message.flows !== undefined) {
       obj.flows = OAuthFlows.toJSON(message.flows);
     }
-    if (message.oauth2MetadataUrl !== "") {
+    if (message.oauth2MetadataUrl !== "" && message.oauth2MetadataUrl !== undefined) {
       obj.oauth2MetadataUrl = message.oauth2MetadataUrl;
     }
     return obj;
@@ -1914,10 +1902,10 @@ export const OpenIdConnectSecurityScheme: MessageFns<OpenIdConnectSecurityScheme
 
   toJSON(message: OpenIdConnectSecurityScheme): unknown {
     const obj: any = {};
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
-    if (message.openIdConnectUrl !== "") {
+    if (message.openIdConnectUrl !== "" && message.openIdConnectUrl !== undefined) {
       obj.openIdConnectUrl = message.openIdConnectUrl;
     }
     return obj;
@@ -1931,7 +1919,7 @@ export const MutualTlsSecurityScheme: MessageFns<MutualTlsSecurityScheme> = {
 
   toJSON(message: MutualTlsSecurityScheme): unknown {
     const obj: any = {};
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       obj.description = message.description;
     }
     return obj;
@@ -2015,13 +2003,13 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
 
   toJSON(message: AuthorizationCodeOAuthFlow): unknown {
     const obj: any = {};
-    if (message.authorizationUrl !== "") {
+    if (message.authorizationUrl !== "" && message.authorizationUrl !== undefined) {
       obj.authorizationUrl = message.authorizationUrl;
     }
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       obj.tokenUrl = message.tokenUrl;
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       obj.refreshUrl = message.refreshUrl;
     }
     if (message.scopes) {
@@ -2033,7 +2021,7 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
         });
       }
     }
-    if (message.pkceRequired !== false) {
+    if (message.pkceRequired !== false && message.pkceRequired !== undefined) {
       obj.pkceRequired = message.pkceRequired;
     }
     return obj;
@@ -2087,10 +2075,10 @@ export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> 
 
   toJSON(message: ClientCredentialsOAuthFlow): unknown {
     const obj: any = {};
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       obj.tokenUrl = message.tokenUrl;
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       obj.refreshUrl = message.refreshUrl;
     }
     if (message.scopes) {
@@ -2116,10 +2104,10 @@ export const ClientCredentialsOAuthFlow_ScopesEntry: MessageFns<ClientCredential
 
   toJSON(message: ClientCredentialsOAuthFlow_ScopesEntry): unknown {
     const obj: any = {};
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       obj.key = message.key;
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       obj.value = message.value;
     }
     return obj;
@@ -2153,10 +2141,10 @@ export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
 
   toJSON(message: ImplicitOAuthFlow): unknown {
     const obj: any = {};
-    if (message.authorizationUrl !== "") {
+    if (message.authorizationUrl !== "" && message.authorizationUrl !== undefined) {
       obj.authorizationUrl = message.authorizationUrl;
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       obj.refreshUrl = message.refreshUrl;
     }
     if (message.scopes) {
@@ -2182,10 +2170,10 @@ export const ImplicitOAuthFlow_ScopesEntry: MessageFns<ImplicitOAuthFlow_ScopesE
 
   toJSON(message: ImplicitOAuthFlow_ScopesEntry): unknown {
     const obj: any = {};
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       obj.key = message.key;
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       obj.value = message.value;
     }
     return obj;
@@ -2219,10 +2207,10 @@ export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
 
   toJSON(message: PasswordOAuthFlow): unknown {
     const obj: any = {};
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       obj.tokenUrl = message.tokenUrl;
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       obj.refreshUrl = message.refreshUrl;
     }
     if (message.scopes) {
@@ -2248,10 +2236,10 @@ export const PasswordOAuthFlow_ScopesEntry: MessageFns<PasswordOAuthFlow_ScopesE
 
   toJSON(message: PasswordOAuthFlow_ScopesEntry): unknown {
     const obj: any = {};
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       obj.key = message.key;
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       obj.value = message.value;
     }
     return obj;
@@ -2290,13 +2278,13 @@ export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
 
   toJSON(message: DeviceCodeOAuthFlow): unknown {
     const obj: any = {};
-    if (message.deviceAuthorizationUrl !== "") {
+    if (message.deviceAuthorizationUrl !== "" && message.deviceAuthorizationUrl !== undefined) {
       obj.deviceAuthorizationUrl = message.deviceAuthorizationUrl;
     }
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       obj.tokenUrl = message.tokenUrl;
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       obj.refreshUrl = message.refreshUrl;
     }
     if (message.scopes) {
@@ -2322,10 +2310,10 @@ export const DeviceCodeOAuthFlow_ScopesEntry: MessageFns<DeviceCodeOAuthFlow_Sco
 
   toJSON(message: DeviceCodeOAuthFlow_ScopesEntry): unknown {
     const obj: any = {};
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       obj.key = message.key;
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       obj.value = message.value;
     }
     return obj;
@@ -2336,7 +2324,7 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
   fromJSON(object: any): SendMessageRequest {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : "",
-      message: isSet(object.message) ? Message.fromJSON(object.message) : undefined,
+      message: isSet(object.message) ? Message.fromJSON(object.message) : (undefined as any),
       configuration: isSet(object.configuration) ? SendMessageConfiguration.fromJSON(object.configuration) : undefined,
       metadata: isObject(object.metadata) ? object.metadata : undefined,
     };
@@ -2344,7 +2332,7 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
 
   toJSON(message: SendMessageRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
     if (message.message !== undefined) {
@@ -2375,10 +2363,10 @@ export const GetTaskRequest: MessageFns<GetTaskRequest> = {
 
   toJSON(message: GetTaskRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
     if (message.historyLength !== undefined) {
@@ -2428,19 +2416,19 @@ export const ListTasksRequest: MessageFns<ListTasksRequest> = {
 
   toJSON(message: ListTasksRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       obj.contextId = message.contextId;
     }
-    if (message.status !== 0) {
+    if (message.status !== 0 && message.status !== undefined) {
       obj.status = taskStateToJSON(message.status);
     }
     if (message.pageSize !== undefined) {
       obj.pageSize = Math.round(message.pageSize);
     }
-    if (message.pageToken !== "") {
+    if (message.pageToken !== "" && message.pageToken !== undefined) {
       obj.pageToken = message.pageToken;
     }
     if (message.historyLength !== undefined) {
@@ -2483,13 +2471,13 @@ export const ListTasksResponse: MessageFns<ListTasksResponse> = {
     if (message.tasks?.length) {
       obj.tasks = message.tasks.map((e) => Task.toJSON(e));
     }
-    if (message.nextPageToken !== "") {
+    if (message.nextPageToken !== "" && message.nextPageToken !== undefined) {
       obj.nextPageToken = message.nextPageToken;
     }
-    if (message.pageSize !== 0) {
+    if (message.pageSize !== 0 && message.pageSize !== undefined) {
       obj.pageSize = Math.round(message.pageSize);
     }
-    if (message.totalSize !== 0) {
+    if (message.totalSize !== 0 && message.totalSize !== undefined) {
       obj.totalSize = Math.round(message.totalSize);
     }
     return obj;
@@ -2507,10 +2495,10 @@ export const CancelTaskRequest: MessageFns<CancelTaskRequest> = {
 
   toJSON(message: CancelTaskRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
     if (message.metadata !== undefined) {
@@ -2535,13 +2523,13 @@ export const GetTaskPushNotificationConfigRequest: MessageFns<GetTaskPushNotific
 
   toJSON(message: GetTaskPushNotificationConfigRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
     return obj;
@@ -2563,13 +2551,13 @@ export const DeleteTaskPushNotificationConfigRequest: MessageFns<DeleteTaskPushN
 
   toJSON(message: DeleteTaskPushNotificationConfigRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
     return obj;
@@ -2586,10 +2574,10 @@ export const SubscribeToTaskRequest: MessageFns<SubscribeToTaskRequest> = {
 
   toJSON(message: SubscribeToTaskRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       obj.id = message.id;
     }
     return obj;
@@ -2620,16 +2608,16 @@ export const ListTaskPushNotificationConfigsRequest: MessageFns<ListTaskPushNoti
 
   toJSON(message: ListTaskPushNotificationConfigsRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
-    if (message.pageSize !== 0) {
+    if (message.pageSize !== 0 && message.pageSize !== undefined) {
       obj.pageSize = Math.round(message.pageSize);
     }
-    if (message.pageToken !== "") {
+    if (message.pageToken !== "" && message.pageToken !== undefined) {
       obj.pageToken = message.pageToken;
     }
     return obj;
@@ -2643,7 +2631,7 @@ export const GetExtendedAgentCardRequest: MessageFns<GetExtendedAgentCardRequest
 
   toJSON(message: GetExtendedAgentCardRequest): unknown {
     const obj: any = {};
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       obj.tenant = message.tenant;
     }
     return obj;
@@ -2725,7 +2713,7 @@ export const ListTaskPushNotificationConfigsResponse: MessageFns<ListTaskPushNot
     if (message.configs?.length) {
       obj.configs = message.configs.map((e) => TaskPushNotificationConfig.toJSON(e));
     }
-    if (message.nextPageToken !== "") {
+    if (message.nextPageToken !== "" && message.nextPageToken !== undefined) {
       obj.nextPageToken = message.nextPageToken;
     }
     return obj;

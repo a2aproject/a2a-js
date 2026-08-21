@@ -95,7 +95,7 @@ function createBaseSendMessageConfiguration(): SendMessageConfiguration {
 
 export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
   encode(message: SendMessageConfiguration, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.acceptedOutputModes) {
+    for (const v of message.acceptedOutputModes ?? []) {
       writer.uint32(10).string(v!);
     }
     if (message.taskPushNotificationConfig !== undefined) {
@@ -104,7 +104,7 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
     if (message.historyLength !== undefined) {
       writer.uint32(24).int32(message.historyLength);
     }
-    if (message.returnImmediately !== false) {
+    if (message.returnImmediately !== false && message.returnImmediately !== undefined) {
       writer.uint32(32).bool(message.returnImmediately);
     }
     return writer;
@@ -122,7 +122,7 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
             break;
           }
 
-          message.acceptedOutputModes.push(reader.string());
+          (message.acceptedOutputModes ??= []).push(reader.string());
           continue;
         }
         case 2: {
@@ -160,24 +160,24 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
 };
 
 function createBaseTask(): Task {
-  return { id: "", contextId: "", status: undefined, artifacts: [], history: [], metadata: undefined };
+  return { id: "", contextId: "", status: undefined as any, artifacts: [], history: [], metadata: undefined };
 }
 
 export const Task: MessageFns<Task> = {
   encode(message: Task, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(10).string(message.id);
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       writer.uint32(18).string(message.contextId);
     }
     if (message.status !== undefined) {
       TaskStatus.encode(message.status, writer.uint32(26).fork()).join();
     }
-    for (const v of message.artifacts) {
+    for (const v of message.artifacts ?? []) {
       Artifact.encode(v!, writer.uint32(34).fork()).join();
     }
-    for (const v of message.history) {
+    for (const v of message.history ?? []) {
       Message.encode(v!, writer.uint32(42).fork()).join();
     }
     if (message.metadata !== undefined) {
@@ -222,7 +222,7 @@ export const Task: MessageFns<Task> = {
             break;
           }
 
-          message.artifacts.push(Artifact.decode(reader, reader.uint32()));
+          (message.artifacts ??= []).push(Artifact.decode(reader, reader.uint32()));
           continue;
         }
         case 5: {
@@ -230,7 +230,7 @@ export const Task: MessageFns<Task> = {
             break;
           }
 
-          message.history.push(Message.decode(reader, reader.uint32()));
+          (message.history ??= []).push(Message.decode(reader, reader.uint32()));
           continue;
         }
         case 6: {
@@ -257,7 +257,7 @@ function createBaseTaskStatus(): TaskStatus {
 
 export const TaskStatus: MessageFns<TaskStatus> = {
   encode(message: TaskStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.state !== 0) {
+    if (message.state !== 0 && message.state !== undefined) {
       writer.uint32(8).int32(message.state);
     }
     if (message.message !== undefined) {
@@ -333,10 +333,10 @@ export const Part: MessageFns<Part> = {
     if (message.metadata !== undefined) {
       Struct.encode(Struct.wrap(message.metadata), writer.uint32(42).fork()).join();
     }
-    if (message.filename !== "") {
+    if (message.filename !== "" && message.filename !== undefined) {
       writer.uint32(50).string(message.filename);
     }
-    if (message.mediaType !== "") {
+    if (message.mediaType !== "" && message.mediaType !== undefined) {
       writer.uint32(58).string(message.mediaType);
     }
     return writer;
@@ -430,28 +430,28 @@ function createBaseMessage(): Message {
 
 export const Message: MessageFns<Message> = {
   encode(message: Message, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.messageId !== "") {
+    if (message.messageId !== "" && message.messageId !== undefined) {
       writer.uint32(10).string(message.messageId);
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       writer.uint32(18).string(message.contextId);
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(26).string(message.taskId);
     }
-    if (message.role !== 0) {
+    if (message.role !== 0 && message.role !== undefined) {
       writer.uint32(32).int32(message.role);
     }
-    for (const v of message.parts) {
+    for (const v of message.parts ?? []) {
       Part.encode(v!, writer.uint32(42).fork()).join();
     }
     if (message.metadata !== undefined) {
       Struct.encode(Struct.wrap(message.metadata), writer.uint32(50).fork()).join();
     }
-    for (const v of message.extensions) {
+    for (const v of message.extensions ?? []) {
       writer.uint32(58).string(v!);
     }
-    for (const v of message.referenceTaskIds) {
+    for (const v of message.referenceTaskIds ?? []) {
       writer.uint32(66).string(v!);
     }
     return writer;
@@ -501,7 +501,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.parts.push(Part.decode(reader, reader.uint32()));
+          (message.parts ??= []).push(Part.decode(reader, reader.uint32()));
           continue;
         }
         case 6: {
@@ -517,7 +517,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.extensions.push(reader.string());
+          (message.extensions ??= []).push(reader.string());
           continue;
         }
         case 8: {
@@ -525,7 +525,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.referenceTaskIds.push(reader.string());
+          (message.referenceTaskIds ??= []).push(reader.string());
           continue;
         }
       }
@@ -544,22 +544,22 @@ function createBaseArtifact(): Artifact {
 
 export const Artifact: MessageFns<Artifact> = {
   encode(message: Artifact, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.artifactId !== "") {
+    if (message.artifactId !== "" && message.artifactId !== undefined) {
       writer.uint32(10).string(message.artifactId);
     }
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       writer.uint32(18).string(message.name);
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(26).string(message.description);
     }
-    for (const v of message.parts) {
+    for (const v of message.parts ?? []) {
       Part.encode(v!, writer.uint32(34).fork()).join();
     }
     if (message.metadata !== undefined) {
       Struct.encode(Struct.wrap(message.metadata), writer.uint32(42).fork()).join();
     }
-    for (const v of message.extensions) {
+    for (const v of message.extensions ?? []) {
       writer.uint32(50).string(v!);
     }
     return writer;
@@ -601,7 +601,7 @@ export const Artifact: MessageFns<Artifact> = {
             break;
           }
 
-          message.parts.push(Part.decode(reader, reader.uint32()));
+          (message.parts ??= []).push(Part.decode(reader, reader.uint32()));
           continue;
         }
         case 5: {
@@ -617,7 +617,7 @@ export const Artifact: MessageFns<Artifact> = {
             break;
           }
 
-          message.extensions.push(reader.string());
+          (message.extensions ??= []).push(reader.string());
           continue;
         }
       }
@@ -631,15 +631,15 @@ export const Artifact: MessageFns<Artifact> = {
 };
 
 function createBaseTaskStatusUpdateEvent(): TaskStatusUpdateEvent {
-  return { taskId: "", contextId: "", status: undefined, metadata: undefined };
+  return { taskId: "", contextId: "", status: undefined as any, metadata: undefined };
 }
 
 export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
   encode(message: TaskStatusUpdateEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(10).string(message.taskId);
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       writer.uint32(18).string(message.contextId);
     }
     if (message.status !== undefined) {
@@ -701,24 +701,24 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
 };
 
 function createBaseTaskArtifactUpdateEvent(): TaskArtifactUpdateEvent {
-  return { taskId: "", contextId: "", artifact: undefined, append: false, lastChunk: false, metadata: undefined };
+  return { taskId: "", contextId: "", artifact: undefined as any, append: false, lastChunk: false, metadata: undefined };
 }
 
 export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
   encode(message: TaskArtifactUpdateEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(10).string(message.taskId);
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       writer.uint32(18).string(message.contextId);
     }
     if (message.artifact !== undefined) {
       Artifact.encode(message.artifact, writer.uint32(26).fork()).join();
     }
-    if (message.append !== false) {
+    if (message.append !== false && message.append !== undefined) {
       writer.uint32(32).bool(message.append);
     }
-    if (message.lastChunk !== false) {
+    if (message.lastChunk !== false && message.lastChunk !== undefined) {
       writer.uint32(40).bool(message.lastChunk);
     }
     if (message.metadata !== undefined) {
@@ -798,10 +798,10 @@ function createBaseAuthenticationInfo(): AuthenticationInfo {
 
 export const AuthenticationInfo: MessageFns<AuthenticationInfo> = {
   encode(message: AuthenticationInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.scheme !== "") {
+    if (message.scheme !== "" && message.scheme !== undefined) {
       writer.uint32(10).string(message.scheme);
     }
-    if (message.credentials !== "") {
+    if (message.credentials !== "" && message.credentials !== undefined) {
       writer.uint32(18).string(message.credentials);
     }
     return writer;
@@ -846,16 +846,16 @@ function createBaseAgentInterface(): AgentInterface {
 
 export const AgentInterface: MessageFns<AgentInterface> = {
   encode(message: AgentInterface, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.url !== "") {
+    if (message.url !== "" && message.url !== undefined) {
       writer.uint32(10).string(message.url);
     }
-    if (message.protocolBinding !== "") {
+    if (message.protocolBinding !== "" && message.protocolBinding !== undefined) {
       writer.uint32(18).string(message.protocolBinding);
     }
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(26).string(message.tenant);
     }
-    if (message.protocolVersion !== "") {
+    if (message.protocolVersion !== "" && message.protocolVersion !== undefined) {
       writer.uint32(34).string(message.protocolVersion);
     }
     return writer;
@@ -918,7 +918,7 @@ function createBaseAgentCard(): AgentCard {
     provider: undefined,
     version: "",
     documentationUrl: undefined,
-    capabilities: undefined,
+    capabilities: undefined as any,
     securitySchemes: {},
     securityRequirements: [],
     defaultInputModes: [],
@@ -931,19 +931,19 @@ function createBaseAgentCard(): AgentCard {
 
 export const AgentCard: MessageFns<AgentCard> = {
   encode(message: AgentCard, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       writer.uint32(10).string(message.name);
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(18).string(message.description);
     }
-    for (const v of message.supportedInterfaces) {
+    for (const v of message.supportedInterfaces ?? []) {
       AgentInterface.encode(v!, writer.uint32(26).fork()).join();
     }
     if (message.provider !== undefined) {
       AgentProvider.encode(message.provider, writer.uint32(34).fork()).join();
     }
-    if (message.version !== "") {
+    if (message.version !== "" && message.version !== undefined) {
       writer.uint32(42).string(message.version);
     }
     if (message.documentationUrl !== undefined) {
@@ -952,22 +952,22 @@ export const AgentCard: MessageFns<AgentCard> = {
     if (message.capabilities !== undefined) {
       AgentCapabilities.encode(message.capabilities, writer.uint32(58).fork()).join();
     }
-    Object.entries(message.securitySchemes).forEach(([key, value]) => {
+    if (message.securitySchemes) Object.entries(message.securitySchemes).forEach(([key, value]) => {
       AgentCard_SecuritySchemesEntry.encode({ key: key as any, value }, writer.uint32(66).fork()).join();
     });
-    for (const v of message.securityRequirements) {
+    for (const v of message.securityRequirements ?? []) {
       SecurityRequirement.encode(v!, writer.uint32(74).fork()).join();
     }
-    for (const v of message.defaultInputModes) {
+    for (const v of message.defaultInputModes ?? []) {
       writer.uint32(82).string(v!);
     }
-    for (const v of message.defaultOutputModes) {
+    for (const v of message.defaultOutputModes ?? []) {
       writer.uint32(90).string(v!);
     }
-    for (const v of message.skills) {
+    for (const v of message.skills ?? []) {
       AgentSkill.encode(v!, writer.uint32(98).fork()).join();
     }
-    for (const v of message.signatures) {
+    for (const v of message.signatures ?? []) {
       AgentCardSignature.encode(v!, writer.uint32(106).fork()).join();
     }
     if (message.iconUrl !== undefined) {
@@ -1004,7 +1004,7 @@ export const AgentCard: MessageFns<AgentCard> = {
             break;
           }
 
-          message.supportedInterfaces.push(AgentInterface.decode(reader, reader.uint32()));
+          (message.supportedInterfaces ??= []).push(AgentInterface.decode(reader, reader.uint32()));
           continue;
         }
         case 4: {
@@ -1046,7 +1046,7 @@ export const AgentCard: MessageFns<AgentCard> = {
 
           const entry8 = AgentCard_SecuritySchemesEntry.decode(reader, reader.uint32());
           if (entry8.value !== undefined) {
-            message.securitySchemes[entry8.key] = entry8.value;
+            (message.securitySchemes ??= {})[entry8.key] = entry8.value;
           }
           continue;
         }
@@ -1055,7 +1055,7 @@ export const AgentCard: MessageFns<AgentCard> = {
             break;
           }
 
-          message.securityRequirements.push(SecurityRequirement.decode(reader, reader.uint32()));
+          (message.securityRequirements ??= []).push(SecurityRequirement.decode(reader, reader.uint32()));
           continue;
         }
         case 10: {
@@ -1063,7 +1063,7 @@ export const AgentCard: MessageFns<AgentCard> = {
             break;
           }
 
-          message.defaultInputModes.push(reader.string());
+          (message.defaultInputModes ??= []).push(reader.string());
           continue;
         }
         case 11: {
@@ -1071,7 +1071,7 @@ export const AgentCard: MessageFns<AgentCard> = {
             break;
           }
 
-          message.defaultOutputModes.push(reader.string());
+          (message.defaultOutputModes ??= []).push(reader.string());
           continue;
         }
         case 12: {
@@ -1079,7 +1079,7 @@ export const AgentCard: MessageFns<AgentCard> = {
             break;
           }
 
-          message.skills.push(AgentSkill.decode(reader, reader.uint32()));
+          (message.skills ??= []).push(AgentSkill.decode(reader, reader.uint32()));
           continue;
         }
         case 13: {
@@ -1087,7 +1087,7 @@ export const AgentCard: MessageFns<AgentCard> = {
             break;
           }
 
-          message.signatures.push(AgentCardSignature.decode(reader, reader.uint32()));
+          (message.signatures ??= []).push(AgentCardSignature.decode(reader, reader.uint32()));
           continue;
         }
         case 14: {
@@ -1114,7 +1114,7 @@ function createBaseAgentCard_SecuritySchemesEntry(): AgentCard_SecuritySchemesEn
 
 export const AgentCard_SecuritySchemesEntry: MessageFns<AgentCard_SecuritySchemesEntry> = {
   encode(message: AgentCard_SecuritySchemesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       writer.uint32(10).string(message.key);
     }
     if (message.value !== undefined) {
@@ -1162,10 +1162,10 @@ function createBaseAgentProvider(): AgentProvider {
 
 export const AgentProvider: MessageFns<AgentProvider> = {
   encode(message: AgentProvider, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.url !== "") {
+    if (message.url !== "" && message.url !== undefined) {
       writer.uint32(10).string(message.url);
     }
-    if (message.organization !== "") {
+    if (message.organization !== "" && message.organization !== undefined) {
       writer.uint32(18).string(message.organization);
     }
     return writer;
@@ -1216,7 +1216,7 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
     if (message.pushNotifications !== undefined) {
       writer.uint32(16).bool(message.pushNotifications);
     }
-    for (const v of message.extensions) {
+    for (const v of message.extensions ?? []) {
       AgentExtension.encode(v!, writer.uint32(26).fork()).join();
     }
     if (message.extendedAgentCard !== undefined) {
@@ -1253,7 +1253,7 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
             break;
           }
 
-          message.extensions.push(AgentExtension.decode(reader, reader.uint32()));
+          (message.extensions ??= []).push(AgentExtension.decode(reader, reader.uint32()));
           continue;
         }
         case 4: {
@@ -1280,13 +1280,13 @@ function createBaseAgentExtension(): AgentExtension {
 
 export const AgentExtension: MessageFns<AgentExtension> = {
   encode(message: AgentExtension, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.uri !== "") {
+    if (message.uri !== "" && message.uri !== undefined) {
       writer.uint32(10).string(message.uri);
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(18).string(message.description);
     }
-    if (message.required !== false) {
+    if (message.required !== false && message.required !== undefined) {
       writer.uint32(24).bool(message.required);
     }
     if (message.params !== undefined) {
@@ -1359,28 +1359,28 @@ function createBaseAgentSkill(): AgentSkill {
 
 export const AgentSkill: MessageFns<AgentSkill> = {
   encode(message: AgentSkill, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(10).string(message.id);
     }
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       writer.uint32(18).string(message.name);
     }
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(26).string(message.description);
     }
-    for (const v of message.tags) {
+    for (const v of message.tags ?? []) {
       writer.uint32(34).string(v!);
     }
-    for (const v of message.examples) {
+    for (const v of message.examples ?? []) {
       writer.uint32(42).string(v!);
     }
-    for (const v of message.inputModes) {
+    for (const v of message.inputModes ?? []) {
       writer.uint32(50).string(v!);
     }
-    for (const v of message.outputModes) {
+    for (const v of message.outputModes ?? []) {
       writer.uint32(58).string(v!);
     }
-    for (const v of message.securityRequirements) {
+    for (const v of message.securityRequirements ?? []) {
       SecurityRequirement.encode(v!, writer.uint32(66).fork()).join();
     }
     return writer;
@@ -1422,7 +1422,7 @@ export const AgentSkill: MessageFns<AgentSkill> = {
             break;
           }
 
-          message.tags.push(reader.string());
+          (message.tags ??= []).push(reader.string());
           continue;
         }
         case 5: {
@@ -1430,7 +1430,7 @@ export const AgentSkill: MessageFns<AgentSkill> = {
             break;
           }
 
-          message.examples.push(reader.string());
+          (message.examples ??= []).push(reader.string());
           continue;
         }
         case 6: {
@@ -1438,7 +1438,7 @@ export const AgentSkill: MessageFns<AgentSkill> = {
             break;
           }
 
-          message.inputModes.push(reader.string());
+          (message.inputModes ??= []).push(reader.string());
           continue;
         }
         case 7: {
@@ -1446,7 +1446,7 @@ export const AgentSkill: MessageFns<AgentSkill> = {
             break;
           }
 
-          message.outputModes.push(reader.string());
+          (message.outputModes ??= []).push(reader.string());
           continue;
         }
         case 8: {
@@ -1454,7 +1454,7 @@ export const AgentSkill: MessageFns<AgentSkill> = {
             break;
           }
 
-          message.securityRequirements.push(SecurityRequirement.decode(reader, reader.uint32()));
+          (message.securityRequirements ??= []).push(SecurityRequirement.decode(reader, reader.uint32()));
           continue;
         }
       }
@@ -1473,10 +1473,10 @@ function createBaseAgentCardSignature(): AgentCardSignature {
 
 export const AgentCardSignature: MessageFns<AgentCardSignature> = {
   encode(message: AgentCardSignature, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.protected !== "") {
+    if (message.protected !== "" && message.protected !== undefined) {
       writer.uint32(10).string(message.protected);
     }
-    if (message.signature !== "") {
+    if (message.signature !== "" && message.signature !== undefined) {
       writer.uint32(18).string(message.signature);
     }
     if (message.header !== undefined) {
@@ -1532,19 +1532,19 @@ function createBaseTaskPushNotificationConfig(): TaskPushNotificationConfig {
 
 export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> = {
   encode(message: TaskPushNotificationConfig, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(18).string(message.id);
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(26).string(message.taskId);
     }
-    if (message.url !== "") {
+    if (message.url !== "" && message.url !== undefined) {
       writer.uint32(34).string(message.url);
     }
-    if (message.token !== "") {
+    if (message.token !== "" && message.token !== undefined) {
       writer.uint32(42).string(message.token);
     }
     if (message.authentication !== undefined) {
@@ -1624,7 +1624,7 @@ function createBaseStringList(): StringList {
 
 export const StringList: MessageFns<StringList> = {
   encode(message: StringList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.list) {
+    for (const v of message.list ?? []) {
       writer.uint32(10).string(v!);
     }
     return writer;
@@ -1642,7 +1642,7 @@ export const StringList: MessageFns<StringList> = {
             break;
           }
 
-          message.list.push(reader.string());
+          (message.list ??= []).push(reader.string());
           continue;
         }
       }
@@ -1661,7 +1661,7 @@ function createBaseSecurityRequirement(): SecurityRequirement {
 
 export const SecurityRequirement: MessageFns<SecurityRequirement> = {
   encode(message: SecurityRequirement, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    Object.entries(message.schemes).forEach(([key, value]) => {
+    if (message.schemes) Object.entries(message.schemes).forEach(([key, value]) => {
       SecurityRequirement_SchemesEntry.encode({ key: key as any, value }, writer.uint32(10).fork()).join();
     });
     return writer;
@@ -1681,7 +1681,7 @@ export const SecurityRequirement: MessageFns<SecurityRequirement> = {
 
           const entry1 = SecurityRequirement_SchemesEntry.decode(reader, reader.uint32());
           if (entry1.value !== undefined) {
-            message.schemes[entry1.key] = entry1.value;
+            (message.schemes ??= {})[entry1.key] = entry1.value;
           }
           continue;
         }
@@ -1701,7 +1701,7 @@ function createBaseSecurityRequirement_SchemesEntry(): SecurityRequirement_Schem
 
 export const SecurityRequirement_SchemesEntry: MessageFns<SecurityRequirement_SchemesEntry> = {
   encode(message: SecurityRequirement_SchemesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       writer.uint32(10).string(message.key);
     }
     if (message.value !== undefined) {
@@ -1847,13 +1847,13 @@ function createBaseAPIKeySecurityScheme(): APIKeySecurityScheme {
 
 export const APIKeySecurityScheme: MessageFns<APIKeySecurityScheme> = {
   encode(message: APIKeySecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(10).string(message.description);
     }
-    if (message.location !== "") {
+    if (message.location !== "" && message.location !== undefined) {
       writer.uint32(18).string(message.location);
     }
-    if (message.name !== "") {
+    if (message.name !== "" && message.name !== undefined) {
       writer.uint32(26).string(message.name);
     }
     return writer;
@@ -1906,13 +1906,13 @@ function createBaseHTTPAuthSecurityScheme(): HTTPAuthSecurityScheme {
 
 export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
   encode(message: HTTPAuthSecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(10).string(message.description);
     }
-    if (message.scheme !== "") {
+    if (message.scheme !== "" && message.scheme !== undefined) {
       writer.uint32(18).string(message.scheme);
     }
-    if (message.bearerFormat !== "") {
+    if (message.bearerFormat !== "" && message.bearerFormat !== undefined) {
       writer.uint32(26).string(message.bearerFormat);
     }
     return writer;
@@ -1960,18 +1960,18 @@ export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
 };
 
 function createBaseOAuth2SecurityScheme(): OAuth2SecurityScheme {
-  return { description: "", flows: undefined, oauth2MetadataUrl: "" };
+  return { description: "", flows: undefined as any, oauth2MetadataUrl: "" };
 }
 
 export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
   encode(message: OAuth2SecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(10).string(message.description);
     }
     if (message.flows !== undefined) {
       OAuthFlows.encode(message.flows, writer.uint32(18).fork()).join();
     }
-    if (message.oauth2MetadataUrl !== "") {
+    if (message.oauth2MetadataUrl !== "" && message.oauth2MetadataUrl !== undefined) {
       writer.uint32(26).string(message.oauth2MetadataUrl);
     }
     return writer;
@@ -2024,10 +2024,10 @@ function createBaseOpenIdConnectSecurityScheme(): OpenIdConnectSecurityScheme {
 
 export const OpenIdConnectSecurityScheme: MessageFns<OpenIdConnectSecurityScheme> = {
   encode(message: OpenIdConnectSecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(10).string(message.description);
     }
-    if (message.openIdConnectUrl !== "") {
+    if (message.openIdConnectUrl !== "" && message.openIdConnectUrl !== undefined) {
       writer.uint32(18).string(message.openIdConnectUrl);
     }
     return writer;
@@ -2072,7 +2072,7 @@ function createBaseMutualTlsSecurityScheme(): MutualTlsSecurityScheme {
 
 export const MutualTlsSecurityScheme: MessageFns<MutualTlsSecurityScheme> = {
   encode(message: MutualTlsSecurityScheme, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.description !== "") {
+    if (message.description !== "" && message.description !== undefined) {
       writer.uint32(10).string(message.description);
     }
     return writer;
@@ -2198,19 +2198,19 @@ function createBaseAuthorizationCodeOAuthFlow(): AuthorizationCodeOAuthFlow {
 
 export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> = {
   encode(message: AuthorizationCodeOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.authorizationUrl !== "") {
+    if (message.authorizationUrl !== "" && message.authorizationUrl !== undefined) {
       writer.uint32(10).string(message.authorizationUrl);
     }
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       writer.uint32(18).string(message.tokenUrl);
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       writer.uint32(26).string(message.refreshUrl);
     }
-    Object.entries(message.scopes).forEach(([key, value]) => {
+    if (message.scopes) Object.entries(message.scopes).forEach(([key, value]) => {
       AuthorizationCodeOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(34).fork()).join();
     });
-    if (message.pkceRequired !== false) {
+    if (message.pkceRequired !== false && message.pkceRequired !== undefined) {
       writer.uint32(40).bool(message.pkceRequired);
     }
     return writer;
@@ -2254,7 +2254,7 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
 
           const entry4 = AuthorizationCodeOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
           if (entry4.value !== undefined) {
-            message.scopes[entry4.key] = entry4.value;
+            (message.scopes ??= {})[entry4.key] = entry4.value;
           }
           continue;
         }
@@ -2282,10 +2282,10 @@ function createBaseAuthorizationCodeOAuthFlow_ScopesEntry(): AuthorizationCodeOA
 
 export const AuthorizationCodeOAuthFlow_ScopesEntry: MessageFns<AuthorizationCodeOAuthFlow_ScopesEntry> = {
   encode(message: AuthorizationCodeOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       writer.uint32(10).string(message.key);
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       writer.uint32(18).string(message.value);
     }
     return writer;
@@ -2330,13 +2330,13 @@ function createBaseClientCredentialsOAuthFlow(): ClientCredentialsOAuthFlow {
 
 export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> = {
   encode(message: ClientCredentialsOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       writer.uint32(10).string(message.tokenUrl);
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       writer.uint32(18).string(message.refreshUrl);
     }
-    Object.entries(message.scopes).forEach(([key, value]) => {
+    if (message.scopes) Object.entries(message.scopes).forEach(([key, value]) => {
       ClientCredentialsOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(26).fork()).join();
     });
     return writer;
@@ -2372,7 +2372,7 @@ export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> 
 
           const entry3 = ClientCredentialsOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
           if (entry3.value !== undefined) {
-            message.scopes[entry3.key] = entry3.value;
+            (message.scopes ??= {})[entry3.key] = entry3.value;
           }
           continue;
         }
@@ -2392,10 +2392,10 @@ function createBaseClientCredentialsOAuthFlow_ScopesEntry(): ClientCredentialsOA
 
 export const ClientCredentialsOAuthFlow_ScopesEntry: MessageFns<ClientCredentialsOAuthFlow_ScopesEntry> = {
   encode(message: ClientCredentialsOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       writer.uint32(10).string(message.key);
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       writer.uint32(18).string(message.value);
     }
     return writer;
@@ -2440,13 +2440,13 @@ function createBaseImplicitOAuthFlow(): ImplicitOAuthFlow {
 
 export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
   encode(message: ImplicitOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.authorizationUrl !== "") {
+    if (message.authorizationUrl !== "" && message.authorizationUrl !== undefined) {
       writer.uint32(10).string(message.authorizationUrl);
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       writer.uint32(18).string(message.refreshUrl);
     }
-    Object.entries(message.scopes).forEach(([key, value]) => {
+    if (message.scopes) Object.entries(message.scopes).forEach(([key, value]) => {
       ImplicitOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(26).fork()).join();
     });
     return writer;
@@ -2482,7 +2482,7 @@ export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
 
           const entry3 = ImplicitOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
           if (entry3.value !== undefined) {
-            message.scopes[entry3.key] = entry3.value;
+            (message.scopes ??= {})[entry3.key] = entry3.value;
           }
           continue;
         }
@@ -2502,10 +2502,10 @@ function createBaseImplicitOAuthFlow_ScopesEntry(): ImplicitOAuthFlow_ScopesEntr
 
 export const ImplicitOAuthFlow_ScopesEntry: MessageFns<ImplicitOAuthFlow_ScopesEntry> = {
   encode(message: ImplicitOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       writer.uint32(10).string(message.key);
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       writer.uint32(18).string(message.value);
     }
     return writer;
@@ -2550,13 +2550,13 @@ function createBasePasswordOAuthFlow(): PasswordOAuthFlow {
 
 export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
   encode(message: PasswordOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       writer.uint32(10).string(message.tokenUrl);
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       writer.uint32(18).string(message.refreshUrl);
     }
-    Object.entries(message.scopes).forEach(([key, value]) => {
+    if (message.scopes) Object.entries(message.scopes).forEach(([key, value]) => {
       PasswordOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(26).fork()).join();
     });
     return writer;
@@ -2592,7 +2592,7 @@ export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
 
           const entry3 = PasswordOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
           if (entry3.value !== undefined) {
-            message.scopes[entry3.key] = entry3.value;
+            (message.scopes ??= {})[entry3.key] = entry3.value;
           }
           continue;
         }
@@ -2612,10 +2612,10 @@ function createBasePasswordOAuthFlow_ScopesEntry(): PasswordOAuthFlow_ScopesEntr
 
 export const PasswordOAuthFlow_ScopesEntry: MessageFns<PasswordOAuthFlow_ScopesEntry> = {
   encode(message: PasswordOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       writer.uint32(10).string(message.key);
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       writer.uint32(18).string(message.value);
     }
     return writer;
@@ -2660,16 +2660,16 @@ function createBaseDeviceCodeOAuthFlow(): DeviceCodeOAuthFlow {
 
 export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
   encode(message: DeviceCodeOAuthFlow, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.deviceAuthorizationUrl !== "") {
+    if (message.deviceAuthorizationUrl !== "" && message.deviceAuthorizationUrl !== undefined) {
       writer.uint32(10).string(message.deviceAuthorizationUrl);
     }
-    if (message.tokenUrl !== "") {
+    if (message.tokenUrl !== "" && message.tokenUrl !== undefined) {
       writer.uint32(18).string(message.tokenUrl);
     }
-    if (message.refreshUrl !== "") {
+    if (message.refreshUrl !== "" && message.refreshUrl !== undefined) {
       writer.uint32(26).string(message.refreshUrl);
     }
-    Object.entries(message.scopes).forEach(([key, value]) => {
+    if (message.scopes) Object.entries(message.scopes).forEach(([key, value]) => {
       DeviceCodeOAuthFlow_ScopesEntry.encode({ key: key as any, value }, writer.uint32(34).fork()).join();
     });
     return writer;
@@ -2713,7 +2713,7 @@ export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
 
           const entry4 = DeviceCodeOAuthFlow_ScopesEntry.decode(reader, reader.uint32());
           if (entry4.value !== undefined) {
-            message.scopes[entry4.key] = entry4.value;
+            (message.scopes ??= {})[entry4.key] = entry4.value;
           }
           continue;
         }
@@ -2733,10 +2733,10 @@ function createBaseDeviceCodeOAuthFlow_ScopesEntry(): DeviceCodeOAuthFlow_Scopes
 
 export const DeviceCodeOAuthFlow_ScopesEntry: MessageFns<DeviceCodeOAuthFlow_ScopesEntry> = {
   encode(message: DeviceCodeOAuthFlow_ScopesEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
+    if (message.key !== "" && message.key !== undefined) {
       writer.uint32(10).string(message.key);
     }
-    if (message.value !== "") {
+    if (message.value !== "" && message.value !== undefined) {
       writer.uint32(18).string(message.value);
     }
     return writer;
@@ -2776,12 +2776,12 @@ export const DeviceCodeOAuthFlow_ScopesEntry: MessageFns<DeviceCodeOAuthFlow_Sco
 };
 
 function createBaseSendMessageRequest(): SendMessageRequest {
-  return { tenant: "", message: undefined, configuration: undefined, metadata: undefined };
+  return { tenant: "", message: undefined as any, configuration: undefined, metadata: undefined };
 }
 
 export const SendMessageRequest: MessageFns<SendMessageRequest> = {
   encode(message: SendMessageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
     if (message.message !== undefined) {
@@ -2851,10 +2851,10 @@ function createBaseGetTaskRequest(): GetTaskRequest {
 
 export const GetTaskRequest: MessageFns<GetTaskRequest> = {
   encode(message: GetTaskRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(18).string(message.id);
     }
     if (message.historyLength !== undefined) {
@@ -2919,19 +2919,19 @@ function createBaseListTasksRequest(): ListTasksRequest {
 
 export const ListTasksRequest: MessageFns<ListTasksRequest> = {
   encode(message: ListTasksRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       writer.uint32(18).string(message.contextId);
     }
-    if (message.status !== 0) {
+    if (message.status !== 0 && message.status !== undefined) {
       writer.uint32(24).int32(message.status);
     }
     if (message.pageSize !== undefined) {
       writer.uint32(32).int32(message.pageSize);
     }
-    if (message.pageToken !== "") {
+    if (message.pageToken !== "" && message.pageToken !== undefined) {
       writer.uint32(42).string(message.pageToken);
     }
     if (message.historyLength !== undefined) {
@@ -3033,16 +3033,16 @@ function createBaseListTasksResponse(): ListTasksResponse {
 
 export const ListTasksResponse: MessageFns<ListTasksResponse> = {
   encode(message: ListTasksResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.tasks) {
+    for (const v of message.tasks ?? []) {
       Task.encode(v!, writer.uint32(10).fork()).join();
     }
-    if (message.nextPageToken !== "") {
+    if (message.nextPageToken !== "" && message.nextPageToken !== undefined) {
       writer.uint32(18).string(message.nextPageToken);
     }
-    if (message.pageSize !== 0) {
+    if (message.pageSize !== 0 && message.pageSize !== undefined) {
       writer.uint32(24).int32(message.pageSize);
     }
-    if (message.totalSize !== 0) {
+    if (message.totalSize !== 0 && message.totalSize !== undefined) {
       writer.uint32(32).int32(message.totalSize);
     }
     return writer;
@@ -3060,7 +3060,7 @@ export const ListTasksResponse: MessageFns<ListTasksResponse> = {
             break;
           }
 
-          message.tasks.push(Task.decode(reader, reader.uint32()));
+          (message.tasks ??= []).push(Task.decode(reader, reader.uint32()));
           continue;
         }
         case 2: {
@@ -3103,10 +3103,10 @@ function createBaseCancelTaskRequest(): CancelTaskRequest {
 
 export const CancelTaskRequest: MessageFns<CancelTaskRequest> = {
   encode(message: CancelTaskRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(18).string(message.id);
     }
     if (message.metadata !== undefined) {
@@ -3162,13 +3162,13 @@ function createBaseGetTaskPushNotificationConfigRequest(): GetTaskPushNotificati
 
 export const GetTaskPushNotificationConfigRequest: MessageFns<GetTaskPushNotificationConfigRequest> = {
   encode(message: GetTaskPushNotificationConfigRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(18).string(message.taskId);
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(26).string(message.id);
     }
     return writer;
@@ -3221,13 +3221,13 @@ function createBaseDeleteTaskPushNotificationConfigRequest(): DeleteTaskPushNoti
 
 export const DeleteTaskPushNotificationConfigRequest: MessageFns<DeleteTaskPushNotificationConfigRequest> = {
   encode(message: DeleteTaskPushNotificationConfigRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(18).string(message.taskId);
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(26).string(message.id);
     }
     return writer;
@@ -3280,10 +3280,10 @@ function createBaseSubscribeToTaskRequest(): SubscribeToTaskRequest {
 
 export const SubscribeToTaskRequest: MessageFns<SubscribeToTaskRequest> = {
   encode(message: SubscribeToTaskRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
-    if (message.id !== "") {
+    if (message.id !== "" && message.id !== undefined) {
       writer.uint32(18).string(message.id);
     }
     return writer;
@@ -3328,16 +3328,16 @@ function createBaseListTaskPushNotificationConfigsRequest(): ListTaskPushNotific
 
 export const ListTaskPushNotificationConfigsRequest: MessageFns<ListTaskPushNotificationConfigsRequest> = {
   encode(message: ListTaskPushNotificationConfigsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(34).string(message.tenant);
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(10).string(message.taskId);
     }
-    if (message.pageSize !== 0) {
+    if (message.pageSize !== 0 && message.pageSize !== undefined) {
       writer.uint32(16).int32(message.pageSize);
     }
-    if (message.pageToken !== "") {
+    if (message.pageToken !== "" && message.pageToken !== undefined) {
       writer.uint32(26).string(message.pageToken);
     }
     return writer;
@@ -3398,7 +3398,7 @@ function createBaseGetExtendedAgentCardRequest(): GetExtendedAgentCardRequest {
 
 export const GetExtendedAgentCardRequest: MessageFns<GetExtendedAgentCardRequest> = {
   encode(message: GetExtendedAgentCardRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tenant !== "") {
+    if (message.tenant !== "" && message.tenant !== undefined) {
       writer.uint32(10).string(message.tenant);
     }
     return writer;
@@ -3557,10 +3557,10 @@ function createBaseListTaskPushNotificationConfigsResponse(): ListTaskPushNotifi
 
 export const ListTaskPushNotificationConfigsResponse: MessageFns<ListTaskPushNotificationConfigsResponse> = {
   encode(message: ListTaskPushNotificationConfigsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.configs) {
+    for (const v of message.configs ?? []) {
       TaskPushNotificationConfig.encode(v!, writer.uint32(10).fork()).join();
     }
-    if (message.nextPageToken !== "") {
+    if (message.nextPageToken !== "" && message.nextPageToken !== undefined) {
       writer.uint32(18).string(message.nextPageToken);
     }
     return writer;
@@ -3578,7 +3578,7 @@ export const ListTaskPushNotificationConfigsResponse: MessageFns<ListTaskPushNot
             break;
           }
 
-          message.configs.push(TaskPushNotificationConfig.decode(reader, reader.uint32()));
+          (message.configs ??= []).push(TaskPushNotificationConfig.decode(reader, reader.uint32()));
           continue;
         }
         case 2: {

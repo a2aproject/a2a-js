@@ -10,7 +10,7 @@ export class ToProto {
           value: params,
         },
       };
-    } else if ('artifacts' in params) {
+    } else if ('id' in params || 'artifacts' in params || 'status' in params) {
       return {
         payload: {
           $case: 'task',

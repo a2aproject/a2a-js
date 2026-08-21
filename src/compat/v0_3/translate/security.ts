@@ -40,7 +40,10 @@ export function toCompatSecurityRequirement(core: V1SecurityRequirement): {
   [k: string]: string[];
 } {
   return Object.fromEntries(
-    Object.entries(core.schemes).map(([scheme, stringList]) => [scheme, [...stringList.list]])
+    Object.entries(core.schemes ?? {}).map(([scheme, stringList]) => [
+      scheme,
+      [...(stringList.list ?? [])],
+    ])
   );
 }
 
@@ -267,21 +270,21 @@ export function toCompatOAuthFlows(core: V1OAuthFlows): legacy.OAuthFlows {
     case 'implicit': {
       const v = flow.value;
       result.implicit = {
-        authorizationUrl: v.authorizationUrl,
+        authorizationUrl: v.authorizationUrl ?? '',
         scopes: { ...v.scopes },
       };
       const refresh = nonEmpty(v.refreshUrl);
-      if (refresh !== undefined) result.implicit.refreshUrl = refresh;
+      if (refresh !== undefined && result.implicit) result.implicit.refreshUrl = refresh;
       break;
     }
     case 'password': {
       const v = flow.value;
       result.password = {
-        tokenUrl: v.tokenUrl,
+        tokenUrl: v.tokenUrl ?? '',
         scopes: { ...v.scopes },
       };
       const refresh = nonEmpty(v.refreshUrl);
-      if (refresh !== undefined) result.password.refreshUrl = refresh;
+      if (refresh !== undefined && result.password) result.password.refreshUrl = refresh;
       break;
     }
     case 'deviceCode':
