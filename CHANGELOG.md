@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.0](https://github.com/a2aproject/a2a-js/compare/v1.0.1...v1.1.0) (2026-08-21)
+
+
+### Features
+
+* make event bus keep-alive states configurable ([#669](https://github.com/a2aproject/a2a-js/issues/669)) ([f844dad](https://github.com/a2aproject/a2a-js/commit/f844dad4d76e0f895c2d3a1d791db81ac59880fc)), closes [#620](https://github.com/a2aproject/a2a-js/issues/620)
+
+
+### Bug Fixes
+
+* Add serialization for listTasks input/output parameters. ([#610](https://github.com/a2aproject/a2a-js/issues/610)) ([c863497](https://github.com/a2aproject/a2a-js/commit/c86349797e62c030e46ab7af4fda14a96f50cde7))
+* clone push notification configs before storing ([#662](https://github.com/a2aproject/a2a-js/issues/662)) ([4d175a0](https://github.com/a2aproject/a2a-js/commit/4d175a0ebb274e6b01a2bb1f9f13d9cc372ed1da))
+* **compat/v0_3/translate:** add null and undefined checks to array and string fields ([#618](https://github.com/a2aproject/a2a-js/issues/618)) ([108736b](https://github.com/a2aproject/a2a-js/commit/108736b9bdde5a29c620ef0e25df714aac117def))
+* **deps:** replace `uuid` package with `crypto.randomUUID()` ([#665](https://github.com/a2aproject/a2a-js/issues/665)) ([636b060](https://github.com/a2aproject/a2a-js/commit/636b06027a315171b6b400f6edc96fdc9b0aa47a))
+* Do not filter tasks in ListTasks if task state is unspecified ([#622](https://github.com/a2aproject/a2a-js/issues/622)) ([1c6eb32](https://github.com/a2aproject/a2a-js/commit/1c6eb32487aab1d56b5685a13e62ab75d153cebb))
+* **errors:** global error branding via Symbol.hasInstance to fix instanceof checks across bundle entry points ([#612](https://github.com/a2aproject/a2a-js/issues/612)) ([cc33173](https://github.com/a2aproject/a2a-js/commit/cc33173bbd2343253b8544413ff685d801621cb1))
+* **scripts:** update generate script to use buf and remove obsolete generateTypes ([#653](https://github.com/a2aproject/a2a-js/issues/653)) ([8bf3cd3](https://github.com/a2aproject/a2a-js/commit/8bf3cd3b540e35dcb36c78be5c7f23d78a96c971))
+
 ## [1.0.1](https://github.com/a2aproject/a2a-js/compare/v1.0.0...v1.0.1) (2026-07-28)
 
 
