@@ -71,7 +71,7 @@ export function toCoreAgentExtension(compat: legacy.AgentExtension): V1AgentExte
 }
 
 export function toCompatAgentExtension(core: V1AgentExtension): legacy.AgentExtension {
-  const result: legacy.AgentExtension = { uri: core.uri };
+  const result: legacy.AgentExtension = { uri: core.uri ?? '' };
   const description = nonEmpty(core.description);
   if (description !== undefined) result.description = description;
   // Always emit `required` so the consumer sees the explicit declaration.

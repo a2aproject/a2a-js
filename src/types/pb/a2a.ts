@@ -193,9 +193,7 @@ export interface Task {
    */
   contextId?: string | undefined;
   /** The current status of a `Task`, including `state` and a `message`. */
-  status?:
-    | TaskStatus
-    | undefined;
+  status: TaskStatus;
   /** A set of output artifacts for a `Task`. */
   artifacts?: Artifact[] | undefined;
   /**
@@ -292,7 +290,7 @@ export interface Artifact {
   /** Unique identifier (e.g. UUID) for the artifact. It must be unique within a task. */
   artifactId: string;
   /** A human readable name for the artifact. */
-  name: string;
+  name?: string | undefined;
   /** Optional. A human readable description of the artifact. */
   description?: string | undefined;
   /** The content of the artifact. Must contain at least one part. */
@@ -310,11 +308,9 @@ export interface TaskStatusUpdateEvent {
   /** The ID of the task that has changed. */
   taskId: string;
   /** The ID of the context that the task belongs to. */
-  contextId?: string | undefined;
+  contextId: string;
   /** The new status of the task. */
-  status:
-    | TaskStatus
-    | undefined;
+  status: TaskStatus;
   /** Optional. Metadata associated with the task update. */
   metadata?: { [key: string]: any } | undefined;
 }
@@ -324,11 +320,9 @@ export interface TaskArtifactUpdateEvent {
   /** The ID of the task for this artifact. */
   taskId: string;
   /** The ID of the context that this task belongs to. */
-  contextId?: string | undefined;
+  contextId: string;
   /** The artifact that was generated or updated. */
-  artifact?:
-    | Artifact
-    | undefined;
+  artifact: Artifact;
   /**
    * If true, the content of this artifact should be appended to a previously
    * sent artifact with the same ID.
@@ -347,7 +341,7 @@ export interface AuthenticationInfo {
    * Examples: `Bearer`, `Basic`, `Digest`.
    * Scheme names are case-insensitive per [RFC 9110 Section 11.1](https://www.rfc-editor.org/rfc/rfc9110#section-11.1).
    */
-  scheme?: string | undefined;
+  scheme: string;
   /** Push Notification credentials. Format depends on the scheme (e.g., token for Bearer). */
   credentials?: string | undefined;
 }
@@ -375,7 +369,7 @@ export interface AgentInterface {
    * Use the latest supported minor version per major version.
    * Examples: "0.3", "1.0"
    */
-  protocolVersion?: string | undefined;
+  protocolVersion: string;
 }
 
 /**
@@ -412,9 +406,7 @@ export interface AgentCard {
     | string
     | undefined;
   /** A2A Capability set supported by the agent. */
-  capabilities?:
-    | AgentCapabilities
-    | undefined;
+  capabilities: AgentCapabilities;
   /** The security scheme details used for authenticating with this agent. */
   securitySchemes?: { [key: string]: SecurityScheme } | undefined;
   /** Security requirements for contacting the agent. */
@@ -424,15 +416,15 @@ export interface AgentCard {
    * The set of interaction modes that the agent supports across all skills.
    * This can be overridden per skill. Defined as media types.
    */
-  defaultInputModes?: string[] | undefined;
+  defaultInputModes: string[];
   /** The media types supported as outputs from this agent. */
-  defaultOutputModes?: string[] | undefined;
+  defaultOutputModes: string[];
   /**
    * Skills represent the abilities of an agent.
    * It is largely a descriptive concept but represents a more focused set of behaviors that the
    * agent is likely to succeed at.
    */
-  skills?: AgentSkill[] | undefined;
+  skills: AgentSkill[];
   /** JSON Web Signatures computed for this `AgentCard`. */
   signatures?: AgentCardSignature[] | undefined;
   /** Optional. A URL to an icon for the agent. */
@@ -477,7 +469,7 @@ export interface AgentCapabilities {
 /** A declaration of a protocol extension supported by an Agent. */
 export interface AgentExtension {
   /** The unique URI identifying the extension. */
-  uri: string;
+  uri?: string | undefined;
   /** A human-readable description of how this agent uses the extension. */
   description?: string | undefined;
   /** If true, the client must understand and comply with the extension's requirements. */
@@ -493,9 +485,9 @@ export interface AgentSkill {
   /** A human-readable name for the skill. */
   name: string;
   /** A detailed description of the skill. */
-  description?: string | undefined;
+  description: string;
   /** A set of keywords describing the skill's capabilities. */
-  tags?: string[] | undefined;
+  tags: string[];
   /** Example prompts or scenarios that this skill can handle. */
   examples?: string[] | undefined;
   /** The set of supported input media types for this skill, overriding the agent's defaults. */
@@ -549,13 +541,13 @@ export interface TaskPushNotificationConfig {
  */
 export interface StringList {
   /** The individual string values. */
-  list: string[];
+  list?: string[] | undefined;
 }
 
 /** Defines the security requirements for an agent. */
 export interface SecurityRequirement {
   /** A map of security schemes to the required scopes. */
-  schemes: { [key: string]: StringList };
+  schemes?: { [key: string]: StringList } | undefined;
 }
 
 export interface SecurityRequirement_SchemesEntry {
@@ -620,9 +612,7 @@ export interface OAuth2SecurityScheme {
   /** An optional description for the security scheme. */
   description?: string | undefined;
   /** An object containing configuration information for the supported OAuth 2.0 flows. */
-  flows?:
-    | OAuthFlows
-    | undefined;
+  flows: OAuthFlows;
   /**
    * URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).
    * TLS is required.
@@ -674,7 +664,7 @@ export interface AuthorizationCodeOAuthFlow {
   /** The URL to be used for obtaining refresh tokens. */
   refreshUrl?: string | undefined;
   /** The available scopes for the OAuth2 security scheme. */
-  scopes?: { [key: string]: string } | undefined;
+  scopes: { [key: string]: string };
   /**
    * Indicates if PKCE (RFC 7636) is required for this flow.
    * PKCE should always be used for public clients and is recommended for all clients.
@@ -694,7 +684,7 @@ export interface ClientCredentialsOAuthFlow {
   /** The URL to be used for obtaining refresh tokens. */
   refreshUrl?: string | undefined;
   /** The available scopes for the OAuth2 security scheme. */
-  scopes?: { [key: string]: string } | undefined;
+  scopes: { [key: string]: string };
 }
 
 export interface ClientCredentialsOAuthFlow_ScopesEntry {
@@ -708,7 +698,7 @@ export interface ImplicitOAuthFlow {
    * The authorization URL to be used for this flow. This MUST be in the
    * form of a URL. The OAuth2 standard requires the use of TLS
    */
-  authorizationUrl: string;
+  authorizationUrl?: string | undefined;
   /**
    * The URL to be used for obtaining refresh tokens. This MUST be in the
    * form of a URL. The OAuth2 standard requires the use of TLS.
@@ -732,7 +722,7 @@ export interface PasswordOAuthFlow {
    * The token URL to be used for this flow. This MUST be in the form of a URL.
    * The OAuth2 standard requires the use of TLS.
    */
-  tokenUrl: string;
+  tokenUrl?: string | undefined;
   /**
    * The URL to be used for obtaining refresh tokens. This MUST be in the
    * form of a URL. The OAuth2 standard requires the use of TLS.
@@ -763,7 +753,7 @@ export interface DeviceCodeOAuthFlow {
   /** The URL to be used for obtaining refresh tokens. */
   refreshUrl?: string | undefined;
   /** The available scopes for the OAuth2 security scheme. */
-  scopes?: { [key: string]: string } | undefined;
+  scopes: { [key: string]: string };
 }
 
 export interface DeviceCodeOAuthFlow_ScopesEntry {
@@ -776,9 +766,7 @@ export interface SendMessageRequest {
   /** Optional. Tenant ID, provided as a path parameter. */
   tenant?: string | undefined;
   /** The message to send to the agent. */
-  message:
-    | Message
-    | undefined;
+  message: Message;
   /** Configuration for the send request. */
   configuration?:
     | SendMessageConfiguration
@@ -848,11 +836,11 @@ export interface ListTasksResponse {
   /** Array of tasks matching the specified criteria. */
   tasks: Task[];
   /** A token to retrieve the next page of results, or empty if there are no more results in the list. */
-  nextPageToken?: string | undefined;
+  nextPageToken: string;
   /** The page size used for this response. */
-  pageSize?: number | undefined;
+  pageSize: number;
   /** Total number of tasks available (before pagination). */
-  totalSize?: number | undefined;
+  totalSize: number;
 }
 
 /** Represents a request for the `CancelTask` method. */
@@ -949,9 +937,9 @@ export interface StreamResponse {
  */
 export interface ListTaskPushNotificationConfigsResponse {
   /** The list of push notification configurations. */
-  configs: TaskPushNotificationConfig[];
+  configs?: TaskPushNotificationConfig[] | undefined;
   /** A token to retrieve the next page of results, or empty if there are no more results in the list. */
-  nextPageToken: string;
+  nextPageToken?: string | undefined;
 }
 
 export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
@@ -1009,7 +997,7 @@ export const Task: MessageFns<Task> = {
         : isSet(object.context_id)
         ? globalThis.String(object.context_id)
         : "",
-      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : undefined,
+      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : (undefined as any),
       artifacts: globalThis.Array.isArray(object?.artifacts)
         ? object.artifacts.map((e: any) => Artifact.fromJSON(e))
         : [],
@@ -1235,7 +1223,7 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
         : isSet(object.context_id)
         ? globalThis.String(object.context_id)
         : "",
-      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : undefined,
+      status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : (undefined as any),
       metadata: isObject(object.metadata) ? object.metadata : undefined,
     };
   },
@@ -1271,7 +1259,7 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
         : isSet(object.context_id)
         ? globalThis.String(object.context_id)
         : "",
-      artifact: isSet(object.artifact) ? Artifact.fromJSON(object.artifact) : undefined,
+      artifact: isSet(object.artifact) ? Artifact.fromJSON(object.artifact) : (undefined as any),
       append: isSet(object.append) ? globalThis.Boolean(object.append) : false,
       lastChunk: isSet(object.lastChunk)
         ? globalThis.Boolean(object.lastChunk)
@@ -1379,7 +1367,7 @@ export const AgentCard: MessageFns<AgentCard> = {
         : isSet(object.documentation_url)
         ? globalThis.String(object.documentation_url)
         : undefined,
-      capabilities: isSet(object.capabilities) ? AgentCapabilities.fromJSON(object.capabilities) : undefined,
+      capabilities: isSet(object.capabilities) ? AgentCapabilities.fromJSON(object.capabilities) : (undefined as any),
       securitySchemes: isObject(object.securitySchemes)
         ? (globalThis.Object.entries(object.securitySchemes) as [string, any][]).reduce(
           (acc: { [key: string]: SecurityScheme }, [key, value]: [string, any]) => {
@@ -1876,7 +1864,7 @@ export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
   fromJSON(object: any): OAuth2SecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : "",
-      flows: isSet(object.flows) ? OAuthFlows.fromJSON(object.flows) : undefined,
+      flows: isSet(object.flows) ? OAuthFlows.fromJSON(object.flows) : (undefined as any),
       oauth2MetadataUrl: isSet(object.oauth2MetadataUrl)
         ? globalThis.String(object.oauth2MetadataUrl)
         : isSet(object.oauth2_metadata_url)
@@ -2336,7 +2324,7 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
   fromJSON(object: any): SendMessageRequest {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : "",
-      message: isSet(object.message) ? Message.fromJSON(object.message) : undefined,
+      message: isSet(object.message) ? Message.fromJSON(object.message) : (undefined as any),
       configuration: isSet(object.configuration) ? SendMessageConfiguration.fromJSON(object.configuration) : undefined,
       metadata: isObject(object.metadata) ? object.metadata : undefined,
     };

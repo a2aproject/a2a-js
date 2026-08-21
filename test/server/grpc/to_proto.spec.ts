@@ -24,7 +24,7 @@ describe('ToProto', () => {
       const task: proto.Task = {
         id: 'task-123',
         contextId: '',
-        status: undefined,
+        status: { state: proto.TaskState.TASK_STATE_WORKING },
         history: [],
         artifacts: [],
         metadata: undefined,
@@ -34,9 +34,10 @@ describe('ToProto', () => {
       expect((result.payload as { value: proto.Task }).value).toBe(task);
     });
 
-    it('should wrap minimal Task (without artifacts or status) in SendMessageResponse', () => {
+    it('should wrap minimal Task (without optional artifacts, history, contextId) in SendMessageResponse', () => {
       const task: proto.Task = {
         id: 'task-123',
+        status: { state: proto.TaskState.TASK_STATE_SUBMITTED },
       };
       const result = ToProto.messageSendResult(task);
       expect(result.payload?.$case).toBe('task');

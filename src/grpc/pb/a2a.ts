@@ -160,7 +160,7 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
 };
 
 function createBaseTask(): Task {
-  return { id: "", contextId: "", status: undefined, artifacts: [], history: [], metadata: undefined };
+  return { id: "", contextId: "", status: undefined as any, artifacts: [], history: [], metadata: undefined };
 }
 
 export const Task: MessageFns<Task> = {
@@ -631,7 +631,7 @@ export const Artifact: MessageFns<Artifact> = {
 };
 
 function createBaseTaskStatusUpdateEvent(): TaskStatusUpdateEvent {
-  return { taskId: "", contextId: "", status: undefined, metadata: undefined };
+  return { taskId: "", contextId: "", status: undefined as any, metadata: undefined };
 }
 
 export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
@@ -701,7 +701,7 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
 };
 
 function createBaseTaskArtifactUpdateEvent(): TaskArtifactUpdateEvent {
-  return { taskId: "", contextId: "", artifact: undefined, append: false, lastChunk: false, metadata: undefined };
+  return { taskId: "", contextId: "", artifact: undefined as any, append: false, lastChunk: false, metadata: undefined };
 }
 
 export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
@@ -918,7 +918,7 @@ function createBaseAgentCard(): AgentCard {
     provider: undefined,
     version: "",
     documentationUrl: undefined,
-    capabilities: undefined,
+    capabilities: undefined as any,
     securitySchemes: {},
     securityRequirements: [],
     defaultInputModes: [],
@@ -1960,7 +1960,7 @@ export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
 };
 
 function createBaseOAuth2SecurityScheme(): OAuth2SecurityScheme {
-  return { description: "", flows: undefined, oauth2MetadataUrl: "" };
+  return { description: "", flows: undefined as any, oauth2MetadataUrl: "" };
 }
 
 export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
@@ -2776,7 +2776,7 @@ export const DeviceCodeOAuthFlow_ScopesEntry: MessageFns<DeviceCodeOAuthFlow_Sco
 };
 
 function createBaseSendMessageRequest(): SendMessageRequest {
-  return { tenant: "", message: undefined, configuration: undefined, metadata: undefined };
+  return { tenant: "", message: undefined as any, configuration: undefined, metadata: undefined };
 }
 
 export const SendMessageRequest: MessageFns<SendMessageRequest> = {
