@@ -40,3 +40,11 @@ export const A2A_CONTENT_TYPE = 'application/a2a+json';
 
 /** Default page size for listing tasks. */
 export const DEFAULT_PAGE_SIZE = 50;
+
+/**
+ * Upper bound for `historyLength` on any request. The A2A spec lets the
+ * server apply a lower limit than requested; capping here prevents a
+ * client from forcing the server to serialize unbounded task history
+ * (CWE-400). Mirrors the cap enforced by the other A2A SDKs.
+ */
+export const MAX_HISTORY_LENGTH = 1000;
