@@ -1077,7 +1077,7 @@ export const Part: MessageFns<Part> = {
         ? { $case: "raw", value: Buffer.from(bytesFromBase64(object.raw)) }
         : isSet(object.url)
         ? { $case: "url", value: globalThis.String(object.url) }
-        : isSet(object.data)
+        : object.data !== undefined
         ? { $case: "data", value: object.data }
         : undefined,
       metadata: isObject(object.metadata) ? object.metadata : undefined,
