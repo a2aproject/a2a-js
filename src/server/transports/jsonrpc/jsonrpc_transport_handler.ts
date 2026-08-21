@@ -110,10 +110,24 @@ export class JsonRpcTransportHandler {
         if (!agentCard.capabilities?.streaming) {
           throw new UnsupportedOperationError(`Method ${method} requires streaming capability.`);
         }
-        const agentEventStream =
-          method === 'SendStreamingMessage'
-            ? this.requestHandler.sendMessageStream(SendMessageRequest.fromJSON(params), context)
-            : this.requestHandler.resubscribe(SubscribeToTaskRequest.fromJSON(params), context);
+        let agentEventStream: AsyncGenerator<StreamResponse, void, undefined>;
+        if (method === 'SendStreamingMessage') {
+          agentEventStream = this.requestHandler.sendMessageStream(
+            SendMessageRequest.fromJSON(params),
+            context
+          );
+        } else {
+          // `historyLength` is not part of the canonical
+          // `SubscribeToTaskRequest` wire type, so carry it through
+          // explicitly for the resubscribe snapshot trimming.
+          const subscribeParams: SubscribeToTaskRequest & { historyLength?: number } =
+            SubscribeToTaskRequest.fromJSON(params);
+          const rawHistoryLength = (params as Record<string, unknown> | undefined)?.historyLength;
+          if (rawHistoryLength !== undefined) {
+            subscribeParams.historyLength = Number(rawHistoryLength);
+          }
+          agentEventStream = this.requestHandler.resubscribe(subscribeParams, context);
+        }
 
         // Wrap the agent event stream into a JSON-RPC result stream.
         // Errors thrown by `agentEventStream` propagate out of the

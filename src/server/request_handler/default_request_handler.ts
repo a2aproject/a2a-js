@@ -906,7 +906,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   async *resubscribe(
-    params: SubscribeToTaskRequest,
+    params: SubscribeToTaskRequest & { historyLength?: number },
     context: ServerCallContext
   ): AsyncGenerator<StreamResponse, void, undefined> {
     if (!this.agentCard.capabilities?.streaming) {
@@ -914,6 +914,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const taskId = params.id;
+
+    // historyLength is not part of the canonical `SubscribeToTaskRequest`
+    // wire type, so validate it here (mirrors `parseHistoryLength` in the
+    // REST transport). NaN would otherwise bypass the `<= 0` check and
+    // `slice(-NaN)` → `slice(0)` would yield the full history.
+    if (params.historyLength !== undefined && !Number.isInteger(params.historyLength)) {
+      throw new RequestMalformedError('historyLength must be a valid non-negative integer');
+    }
+    if ((params.historyLength ?? 0) < 0) {
+      throw new RequestMalformedError('historyLength must be non-negative');
+    }
 
     // Attach to the event bus BEFORE loading the task from the store so
     // we don't miss events published between the load and subscription.
@@ -932,7 +943,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
 
       // The first event MUST be a Task representing the current state at
-      // the time of subscription.
+      // the time of subscription. Apply `historyLength` trimming just like
+      // `getTask`/`listTasks` so a resubscriber cannot bypass the
+      // client-imposed history limit.
+      this._applyHistoryLengthSemantics(task, params);
       yield { payload: { $case: 'task', value: task } };
 
       // No active event bus means no live executor to drain from — but

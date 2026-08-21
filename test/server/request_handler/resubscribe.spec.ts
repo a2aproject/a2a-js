@@ -8,6 +8,7 @@ import {
 } from '../../../src/server/index.js';
 import {
   AgentCard,
+  Message,
   StreamResponse,
   Task,
   TaskState,
@@ -16,7 +17,11 @@ import {
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
-import { TaskNotFoundError, UnsupportedOperationError } from '../../../src/errors/index.js';
+import {
+  TaskNotFoundError,
+  UnsupportedOperationError,
+  RequestMalformedError,
+} from '../../../src/errors/index.js';
 import { TERMINAL_STATE_LIST } from '../../../src/server/utils.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
@@ -170,6 +175,112 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
       serverContext
     );
     await expect(generator.next()).rejects.toThrow(UnsupportedOperationError);
+  });
+
+  it('trims the snapshot history when historyLength is provided', async () => {
+    // Regression: resubscribe previously yielded the full task without
+    // applying `_applyHistoryLengthSemantics`, letting a resubscriber
+    // bypass the client-imposed history limit that getTask/listTasks
+    // enforce (CWE-200 information disclosure).
+    const taskId = 'task-trim';
+    const contextId = `ctx-${taskId}`;
+    const makeMsg = (messageId: string): Message => ({
+      messageId,
+      role: 1 as const,
+      parts: [
+        {
+          content: { $case: 'text' as const, value: messageId },
+          mediaType: 'text/plain',
+          filename: '',
+          metadata: {},
+        },
+      ],
+      contextId,
+      taskId,
+      extensions: [],
+      metadata: {},
+      referenceTaskIds: [],
+    });
+    const persisted: Task = {
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [makeMsg('m1'), makeMsg('m2'), makeMsg('m3')],
+      metadata: {},
+    };
+    await taskStore.save(persisted, serverContext);
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.resubscribe(
+      { id: taskId, tenant: '', historyLength: 2 },
+      serverContext
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toHaveLength(1);
+    const payload = events[0].payload as { $case: 'task'; value: Task };
+    expect(payload.value.history?.map((m) => m.messageId)).toEqual(['m2', 'm3']);
+  });
+
+  it('omits history entirely when historyLength is 0', async () => {
+    const taskId = 'task-trim-zero';
+    const contextId = `ctx-${taskId}`;
+    const persisted: Task = {
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [
+        {
+          messageId: 'm1',
+          role: 1 as const,
+          parts: [],
+          contextId,
+          taskId,
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+      ],
+      metadata: {},
+    };
+    await taskStore.save(persisted, serverContext);
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.resubscribe(
+      { id: taskId, tenant: '', historyLength: 0 },
+      serverContext
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toHaveLength(1);
+    const payload = events[0].payload as { $case: 'task'; value: Task };
+    expect(payload.value.history).toEqual([]);
+  });
+
+  it('rejects non-integer historyLength with RequestMalformedError', async () => {
+    const taskId = 'task-trim-nan';
+    await taskStore.save(makeTask(taskId), serverContext);
+
+    const generator = handler.resubscribe(
+      { id: taskId, tenant: '', historyLength: NaN },
+      serverContext
+    );
+    await expect(generator.next()).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('rejects negative historyLength with RequestMalformedError', async () => {
+    const taskId = 'task-trim-negative';
+    await taskStore.save(makeTask(taskId), serverContext);
+
+    const generator = handler.resubscribe(
+      { id: taskId, tenant: '', historyLength: -1 },
+      serverContext
+    );
+    await expect(generator.next()).rejects.toThrow(RequestMalformedError);
   });
 
   it('yields the snapshot first and then forwards live bus events when a bus IS active', async () => {
