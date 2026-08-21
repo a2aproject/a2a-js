@@ -14,7 +14,15 @@ import {
   PushNotificationNotSupportedError,
   UnsupportedOperationError,
 } from '../../src/errors/index.js';
-import { AgentCard, Task, Message, Role, TaskState, TaskStatus } from '../../src/index.js';
+import {
+  AgentCard,
+  Task,
+  Message,
+  Role,
+  TaskState,
+  TaskStatus,
+  ListTasksResponse,
+} from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 
 describe('RestTransportHandler', () => {
