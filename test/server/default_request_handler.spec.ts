@@ -2360,6 +2360,61 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(getResponse.url).to.equal(pushConfig.url);
   });
 
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when no configs exist', async () => {
+    const taskId = 'task-no-config';
+    await mockTaskStore.save(
+      {
+        id: taskId,
+        contextId: 'ctx-no-config',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
+      },
+      serverCallContext
+    );
+
+    await expect(
+      handler.getTaskPushNotificationConfig(
+        { tenant: '', taskId, id: 'missing' },
+        serverCallContext
+      )
+    ).rejects.toThrow(TaskNotFoundError);
+  });
+
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when the config id is unknown', async () => {
+    const taskId = 'task-unknown-config-id';
+    await mockTaskStore.save(
+      {
+        id: taskId,
+        contextId: 'ctx-unknown-config-id',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
+      },
+      serverCallContext
+    );
+    await handler.createTaskPushNotificationConfig(
+      {
+        tenant: '',
+        taskId,
+        id: 'config-known',
+        url: 'https://example.com/notify',
+        token: '',
+        authentication: undefined,
+      },
+      serverCallContext
+    );
+
+    await expect(
+      handler.getTaskPushNotificationConfig(
+        { tenant: '', taskId, id: 'config-unknown' },
+        serverCallContext
+      )
+    ).rejects.toThrow(TaskNotFoundError);
+  });
+
   it('createTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
     const taskId = 'task-overwrite';
     await mockTaskStore.save(
