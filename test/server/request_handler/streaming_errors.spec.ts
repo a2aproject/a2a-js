@@ -328,22 +328,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeUndefined();
   });
 
-  it.each([
-    {
-      description: 'when configured states replace the defaults',
-      keepBusAliveStates: [TaskState.TASK_STATE_COMPLETED],
-      messageId: 'msg-stream-err-configured-override',
-    },
-    {
-      description: 'when configured states extend the defaults',
-      keepBusAliveStates: [
-        TaskState.TASK_STATE_INPUT_REQUIRED,
-        TaskState.TASK_STATE_AUTH_REQUIRED,
-        TaskState.TASK_STATE_COMPLETED,
-      ],
-      messageId: 'msg-stream-err-configured-extended',
-    },
-  ])('keeps the event bus alive $description', async ({ keepBusAliveStates, messageId }) => {
+  it('keeps the event bus alive when configured states replace the defaults', async () => {
     let observedRequestTaskId = '';
     mockExecutor.execute.mockImplementation(async (ctx, bus) => {
       observedRequestTaskId = ctx.taskId;
@@ -384,11 +369,11 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       undefined,
       undefined,
       undefined,
-      { keepBusAliveStates }
+      { keepBusAliveStates: [TaskState.TASK_STATE_COMPLETED] }
     );
 
     const params: SendMessageRequest = {
-      message: makeMessage(messageId, 'kick off'),
+      message: makeMessage('msg-stream-err-configured-override', 'kick off'),
       tenant: '',
       configuration: undefined,
       metadata: {},
@@ -401,6 +386,102 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeDefined();
+  });
+
+  it('persists a late event after the executor returns in a configured non-terminal state', async () => {
+    let observedRequestTaskId = '';
+    let executorReturned = false;
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      observedRequestTaskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      executorReturned = true;
+    });
+
+    const configuredHandler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      mockExecutor,
+      eventBusManager,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        keepBusAliveStates: [
+          TaskState.TASK_STATE_INPUT_REQUIRED,
+          TaskState.TASK_STATE_AUTH_REQUIRED,
+          TaskState.TASK_STATE_WORKING,
+        ],
+      }
+    );
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-stream-err-configured-working', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    const iterator = configuredHandler
+      .sendMessageStream(params, serverContext)
+      [Symbol.asyncIterator]();
+
+    const first = await iterator.next();
+    expect(first.done).toBe(false);
+    const firstPayload = (first.value as StreamResponse).payload as {
+      $case: 'task';
+      value: Task;
+    };
+    expect(firstPayload.$case).toBe('task');
+    expect(firstPayload.value.status?.state).toBe(TaskState.TASK_STATE_WORKING);
+
+    // Let the executor's `.finally()` settle before publishing again. WORKING
+    // is configured, so the bus and the original stream consumer must remain
+    // active even though the executor has returned.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(executorReturned).toBe(true);
+    const eventBus = eventBusManager.getByTaskId(observedRequestTaskId);
+    expect(eventBus).toBeDefined();
+
+    const lateEventPromise = iterator.next();
+    eventBus!.publish(
+      AgentEvent.statusUpdate({
+        taskId: observedRequestTaskId,
+        contextId: firstPayload.value.contextId,
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        metadata: {},
+      })
+    );
+
+    const lateEvent = await lateEventPromise;
+    expect(lateEvent.done).toBe(false);
+    const latePayload = (lateEvent.value as StreamResponse).payload as {
+      $case: 'statusUpdate';
+      value: TaskStatusUpdateEvent;
+    };
+    expect(latePayload.$case).toBe('statusUpdate');
+    expect(latePayload.value.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+
+    const storedTask = await taskStore.load(observedRequestTaskId, serverContext);
+    expect(storedTask?.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
   });
 
   it('does not leak the published-task listener on the success path (regression: gemini-code-assist)', async () => {
