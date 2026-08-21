@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 import {
   AgentExecutor,
   ExecutionEventBus,
@@ -23,7 +22,7 @@ export class AuthenticationAgentExecutor implements AgentExecutor {
       finalText = `The request is not coming from an authenticated user.`;
     }
     const finalMessage: Message = {
-      messageId: uuidv4(),
+      messageId: crypto.randomUUID(),
       role: Role.ROLE_AGENT,
       parts: [
         {
