@@ -134,7 +134,9 @@ describe('Push Notification Integration Tests', () => {
     mockAgentExecutor = new MockAgentExecutor();
     const executionEventBusManager = new DefaultExecutionEventBusManager();
     pushNotificationStore = new InMemoryPushNotificationStore();
-    pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
+    pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore, {
+      allowPrivateNetworks: true,
+    });
     pushNotificationSenderSpy = vi.spyOn(pushNotificationSender, 'send');
     defaultContext = new ServerCallContext();
 
@@ -578,6 +580,7 @@ describe('Push Notification Integration Tests', () => {
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
         {
+          allowPrivateNetworks: true,
           tokenHeaderName: 'X-Custom-Auth-Token',
         }
       );
@@ -760,6 +763,7 @@ describe('Push Notification Integration Tests', () => {
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
         {
+          allowPrivateNetworks: true,
           tokenHeaderName: 'X-Custom-Token',
         }
       );
