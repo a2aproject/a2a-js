@@ -68,6 +68,9 @@ export interface DefaultRequestHandlerOptions {
   /**
    * Task states that keep the execution event bus alive after the agent
    * executor returns. Defaults to INPUT_REQUIRED and AUTH_REQUIRED.
+   * To add another keep-alive state while preserving those defaults, include
+   * both default states and the additional state. Any custom value overrides
+   * the default list.
    */
   keepBusAliveStates?: TaskState[];
 }

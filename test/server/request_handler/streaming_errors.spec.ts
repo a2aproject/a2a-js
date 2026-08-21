@@ -328,7 +328,22 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeUndefined();
   });
 
-  it('keeps the event bus alive when the final state is configured', async () => {
+  it.each([
+    {
+      description: 'when configured states replace the defaults',
+      keepBusAliveStates: [TaskState.TASK_STATE_COMPLETED],
+      messageId: 'msg-stream-err-configured-override',
+    },
+    {
+      description: 'when configured states extend the defaults',
+      keepBusAliveStates: [
+        TaskState.TASK_STATE_INPUT_REQUIRED,
+        TaskState.TASK_STATE_AUTH_REQUIRED,
+        TaskState.TASK_STATE_COMPLETED,
+      ],
+      messageId: 'msg-stream-err-configured-extended',
+    },
+  ])('keeps the event bus alive $description', async ({ keepBusAliveStates, messageId }) => {
     let observedRequestTaskId = '';
     mockExecutor.execute.mockImplementation(async (ctx, bus) => {
       observedRequestTaskId = ctx.taskId;
@@ -369,11 +384,11 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       undefined,
       undefined,
       undefined,
-      { keepBusAliveStates: [TaskState.TASK_STATE_COMPLETED] }
+      { keepBusAliveStates }
     );
 
     const params: SendMessageRequest = {
-      message: makeMessage('msg-stream-err-configured', 'kick off'),
+      message: makeMessage(messageId, 'kick off'),
       tenant: '',
       configuration: undefined,
       metadata: {},
