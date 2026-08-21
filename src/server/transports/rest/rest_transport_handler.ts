@@ -107,14 +107,24 @@ export class RestTransportHandler {
     queryParams: Record<string, unknown>,
     context: ServerCallContext
   ): Promise<ListTasksResponse> {
+    let status: TaskState = TaskState.TASK_STATE_UNSPECIFIED;
+    if (queryParams.status) {
+      // `taskStateFromJSON` (generated from a2a.proto) maps unknown
+      // strings/numbers to `UNRECOGNIZED`; reject them instead of
+      // silently applying a filter that matches nothing,
+      // mirroring Python's ParseDict behavior).
+      status = taskStateFromJSON(
+        isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
+      );
+      if (status === TaskState.UNRECOGNIZED) {
+        throw new RequestMalformedError(`Invalid status filter: ${String(queryParams.status)}`);
+      }
+    }
+
     const params: ListTasksRequest = {
       tenant: (queryParams.tenant as string) || '',
       contextId: (queryParams.contextId as string) || '',
-      status: queryParams.status
-        ? taskStateFromJSON(
-            isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
-          )
-        : TaskState.TASK_STATE_UNSPECIFIED,
+      status,
       pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : undefined,
       pageToken: (queryParams.pageToken as string) || '',
       historyLength: queryParams.historyLength ? Number(queryParams.historyLength) : undefined,

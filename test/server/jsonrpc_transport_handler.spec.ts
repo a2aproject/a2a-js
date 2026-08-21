@@ -258,6 +258,16 @@ describe('JsonRpcTransportHandler', () => {
       });
     });
 
+    it('rejects an invalid status filter with INVALID_PARAMS instead of silently returning empty results', async () => {
+      const response = (await transportHandler.handle(
+        { jsonrpc: '2.0', method: 'ListTasks', id: 1, params: { status: 'bogus-status' } },
+        defaultContext
+      )) as JSONRPCErrorResponse;
+
+      expect(response.error.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
+      expect(mockRequestHandler.listTasks).not.toHaveBeenCalled();
+    });
+
     it('preserves populated pagination values', async () => {
       (mockRequestHandler.listTasks as Mock).mockResolvedValue({
         tasks: [taskWithArtifacts([])],
