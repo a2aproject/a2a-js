@@ -54,7 +54,6 @@ import { PushNotificationSender } from '../push_notification/push_notification_s
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
 import { DEFAULT_PAGE_SIZE } from '../../constants.js';
-import { isLegacyVersion } from '../../version_utils.js';
 import {
   AUTH_REQUIRED_STATE_LIST,
   INTERRUPTED_STATE_LIST,
@@ -74,12 +73,6 @@ export interface DefaultRequestHandlerOptions {
    * the default list.
    */
   keepBusAliveStates?: TaskState[];
-}
-
-/** Destination a mapped {@link StreamResponse} is headed for. */
-enum StreamResponseDeliveryTarget {
-  ClientStream = 'clientStream',
-  PushNotification = 'pushNotification',
 }
 
 /**
@@ -278,13 +271,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          const streamResponse = this._mapEventToStreamResponse(
-            event,
+          const streamResponse = this._mapEventToStreamResponse(event, context, resultManager);
+          await this._sendPushNotificationIfNeeded(
             context,
-            resultManager,
-            StreamResponseDeliveryTarget.PushNotification
+            streamResponse,
+            structuredClone(resultManager.getCurrentTask())
           );
-          await this._sendPushNotificationIfNeeded(context, streamResponse);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -720,12 +712,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         await resultManager.processEvent(event);
 
-        const streamResponse = this._mapEventToStreamResponse(
-          event,
-          context,
-          resultManager,
-          StreamResponseDeliveryTarget.ClientStream
-        );
+        const streamResponse = this._mapEventToStreamResponse(event, context, resultManager);
         if (streamResponse.payload?.$case === 'task') {
           this._applyHistoryLengthSemantics(
             streamResponse.payload.value,
@@ -733,16 +720,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           );
         }
 
-        // v0.3 push carries the full Task on every trigger; v1 mirrors the stream.
-        const pushNotificationResponse = isLegacyVersion(context.requestedVersion)
-          ? this._mapEventToStreamResponse(
-              event,
-              context,
-              resultManager,
-              StreamResponseDeliveryTarget.PushNotification
-            )
-          : streamResponse;
-        await this._sendPushNotificationIfNeeded(context, pushNotificationResponse);
+        await this._sendPushNotificationIfNeeded(
+          context,
+          streamResponse,
+          structuredClone(resultManager.getCurrentTask())
+        );
         yield streamResponse;
       }
     } finally {
@@ -1012,8 +994,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private _mapEventToStreamResponse(
     event: AgentExecutionEvent,
     context: ServerCallContext,
-    resultManager: ResultManager,
-    deliveryTarget: StreamResponseDeliveryTarget
+    resultManager: ResultManager
   ): StreamResponse {
     switch (event.kind) {
       case 'task': {
@@ -1025,15 +1006,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         return { payload: { $case: 'message', value: event.data } };
       case 'statusUpdate':
       case 'artifactUpdate': {
-        const isLegacyPushNotification =
-          deliveryTarget === StreamResponseDeliveryTarget.PushNotification &&
-          isLegacyVersion(context.requestedVersion);
-
-        const currentTask = isLegacyPushNotification ? resultManager.getCurrentTask() : undefined;
-        if (currentTask) {
-          return { payload: { $case: 'task', value: structuredClone(currentTask) } };
-        }
-
         return event.kind === 'statusUpdate'
           ? { payload: { $case: 'statusUpdate', value: event.data } }
           : { payload: { $case: 'artifactUpdate', value: event.data } };
@@ -1051,10 +1023,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
-    streamResponse: StreamResponse
+    streamResponse: StreamResponse,
+    task?: Task
   ): Promise<void> {
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
+      this.pushNotificationSender.send(streamResponse, context, task).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }

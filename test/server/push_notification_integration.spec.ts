@@ -7,6 +7,7 @@ import { DefaultRequestHandler } from '../../src/server/request_handler/default_
 import { InMemoryTaskStore } from '../../src/server/store.js';
 import { InMemoryPushNotificationStore } from '../../src/server/push_notification/push_notification_store.js';
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
+import { createLegacyAwarePushNotificationSender } from '../../src/compat/v0_3/server/push_notification/index.js';
 import { DefaultExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import {
   AgentCard,
@@ -276,19 +277,26 @@ describe('Push Notification Integration Tests', () => {
         })
       );
 
+      // The default sender has only the built-in v1.0 serializer, so a
+      // v0.3-defaulted context falls back to v1.0: the webhook receives the
+      // raw stream events (a Task for the initial submitted event, then
+      // statusUpdate events). The v0.3 full-Task shape is exercised by the
+      // legacy-aware sender test below and the V03 serializer unit tests.
       const secondNotification = receivedNotifications[1];
       assert.deepEqual(
         secondNotification.body,
         StreamResponse.toJSON({
           payload: {
-            $case: 'task',
+            $case: 'statusUpdate',
             value: {
-              ...expectedTaskResult,
+              taskId,
+              contextId,
               status: {
                 state: TaskState.TASK_STATE_WORKING,
                 message: undefined,
                 timestamp: undefined,
               },
+              metadata: {},
             },
           },
         })
@@ -299,11 +307,81 @@ describe('Push Notification Integration Tests', () => {
         thirdNotification.body,
         StreamResponse.toJSON({
           payload: {
-            $case: 'task',
-            value: expectedTaskResult,
+            $case: 'statusUpdate',
+            value: {
+              taskId,
+              contextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              metadata: {},
+            },
           },
         })
       );
+    });
+
+    it('forwards the full Task to a v0.3 webhook as a bare v0.3 Task body via the legacy-aware sender', async () => {
+      // End-to-end proof of the reverted behavior: when the v0.3 serializer
+      // is registered (createLegacyAwarePushNotificationSender) and the
+      // request defaults to v0.3, every status update is delivered to the
+      // webhook as the full Task rendered in the bare v0.3 shape
+      // (kind: "task"), not as a status-update event.
+      const v03Store = new InMemoryPushNotificationStore();
+      const v03Sender = createLegacyAwarePushNotificationSender(v03Store);
+      const v03Handler = new DefaultRequestHandler(
+        testAgentCard,
+        new InMemoryTaskStore(),
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager(),
+        v03Store,
+        v03Sender
+      );
+      const v03SenderSpy = vi.spyOn(v03Sender, 'send') as unknown as PushNotificationSenderSpy;
+
+      const contextId = 'ctx-v03-e2e';
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          ...createTestMessage('Full task via v0.3 webhook'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        configuration: {
+          taskPushNotificationConfig: {
+            tenant: '',
+            taskId: '',
+            id: 'v03-config',
+            url: `${testServerUrl}/notify`,
+            token: 'v03-token',
+            authentication: undefined,
+          },
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        await fakeTaskExecute(ctx, bus);
+      });
+
+      await v03Handler.sendMessage(params, defaultContext);
+      await waitForPushNotifications(v03SenderSpy);
+
+      assert.lengthOf(receivedNotifications, 3);
+      for (const notification of receivedNotifications) {
+        // Bare v0.3 Task shape — no v1 wrapper, no status-update event.
+        assert.equal(notification.body.kind, 'task');
+        assert.notProperty(notification.body, 'statusUpdate');
+        assert.equal(notification.headers['content-type'], 'application/json');
+      }
+      const states = receivedNotifications.map((n) => n.body.status?.state);
+      assert.includeMembers(states, ['submitted', 'working', 'completed']);
     });
 
     it('should handle multiple push notification endpoints for the same task', async () => {
