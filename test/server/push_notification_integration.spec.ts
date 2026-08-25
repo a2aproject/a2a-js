@@ -277,11 +277,6 @@ describe('Push Notification Integration Tests', () => {
         })
       );
 
-      // The default sender has only the built-in v1.0 serializer, so a
-      // v0.3-defaulted context falls back to v1.0: the webhook receives the
-      // raw stream events (a Task for the initial submitted event, then
-      // statusUpdate events). The v0.3 full-Task shape is exercised by the
-      // legacy-aware sender test below and the V03 serializer unit tests.
       const secondNotification = receivedNotifications[1];
       assert.deepEqual(
         secondNotification.body,
@@ -289,8 +284,8 @@ describe('Push Notification Integration Tests', () => {
           payload: {
             $case: 'statusUpdate',
             value: {
-              taskId,
-              contextId,
+              taskId: taskId,
+              contextId: contextId,
               status: {
                 state: TaskState.TASK_STATE_WORKING,
                 message: undefined,
@@ -309,8 +304,8 @@ describe('Push Notification Integration Tests', () => {
           payload: {
             $case: 'statusUpdate',
             value: {
-              taskId,
-              contextId,
+              taskId: taskId,
+              contextId: contextId,
               status: {
                 state: TaskState.TASK_STATE_COMPLETED,
                 message: undefined,
@@ -324,11 +319,6 @@ describe('Push Notification Integration Tests', () => {
     });
 
     it('forwards the full Task to a v0.3 webhook as a bare v0.3 Task body via the legacy-aware sender', async () => {
-      // End-to-end proof of the reverted behavior: when the v0.3 serializer
-      // is registered (createLegacyAwarePushNotificationSender) and the
-      // request defaults to v0.3, every status update is delivered to the
-      // webhook as the full Task rendered in the bare v0.3 shape
-      // (kind: "task"), not as a status-update event.
       const v03Store = new InMemoryPushNotificationStore();
       const v03Sender = createLegacyAwarePushNotificationSender(v03Store);
       const v03Handler = new DefaultRequestHandler(
@@ -375,7 +365,6 @@ describe('Push Notification Integration Tests', () => {
 
       assert.lengthOf(receivedNotifications, 3);
       for (const notification of receivedNotifications) {
-        // Bare v0.3 Task shape — no v1 wrapper, no status-update event.
         assert.equal(notification.body.kind, 'task');
         assert.notProperty(notification.body, 'statusUpdate');
         assert.equal(notification.headers['content-type'], 'application/json');

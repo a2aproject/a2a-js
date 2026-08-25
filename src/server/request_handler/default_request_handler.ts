@@ -271,11 +271,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          const streamResponse = this._mapEventToStreamResponse(event, context, resultManager);
+          const streamResponse = await this._mapEventToStreamResponse(event, context);
           await this._sendPushNotificationIfNeeded(
             context,
             streamResponse,
-            structuredClone(resultManager.getCurrentTask())
+            resultManager.getCurrentTask()
           );
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
@@ -712,7 +712,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         await resultManager.processEvent(event);
 
-        const streamResponse = this._mapEventToStreamResponse(event, context, resultManager);
+        const streamResponse = await this._mapEventToStreamResponse(event, context);
         if (streamResponse.payload?.$case === 'task') {
           this._applyHistoryLengthSemantics(
             streamResponse.payload.value,
@@ -723,7 +723,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await this._sendPushNotificationIfNeeded(
           context,
           streamResponse,
-          structuredClone(resultManager.getCurrentTask())
+          resultManager.getCurrentTask()
         );
         yield streamResponse;
       }
@@ -991,24 +991,25 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * full Task, which v0.3 always sends; the client stream and v1.0 keep
    * the raw event.
    */
-  private _mapEventToStreamResponse(
+  private async _mapEventToStreamResponse(
     event: AgentExecutionEvent,
-    context: ServerCallContext,
-    resultManager: ResultManager
-  ): StreamResponse {
+    context: ServerCallContext
+  ): Promise<StreamResponse> {
     switch (event.kind) {
       case 'task': {
-        const currentTask = resultManager.getCurrentTask();
-        const taskValue = currentTask ? structuredClone(currentTask) : event.data;
-        return { payload: { $case: 'task', value: taskValue } };
+        const taskId = event.data.id;
+        const fullTask = await this.taskStore.load(taskId, context).catch((error): Task | null => {
+          console.warn('Failed to load full task from store, falling back to event data:', error);
+          return null;
+        });
+        return { payload: { $case: 'task', value: fullTask || event.data } };
       }
       case 'message':
         return { payload: { $case: 'message', value: event.data } };
       case 'statusUpdate':
+        return { payload: { $case: 'statusUpdate', value: event.data } };
       case 'artifactUpdate': {
-        return event.kind === 'statusUpdate'
-          ? { payload: { $case: 'statusUpdate', value: event.data } }
-          : { payload: { $case: 'artifactUpdate', value: event.data } };
+        return { payload: { $case: 'artifactUpdate', value: event.data } };
       }
       default:
         assertUnreachableEvent(event);
