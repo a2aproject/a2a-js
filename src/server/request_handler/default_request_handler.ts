@@ -985,11 +985,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   }
 
   /**
-   * Maps an {@link AgentExecutionEvent} to a `StreamResponse`, resolving
-   * Task events from the {@link ResultManager} snapshot. For a legacy
-   * (v0.3) push notification, status/artifact updates are replaced by the
-   * full Task, which v0.3 always sends; the client stream and v1.0 keep
-   * the raw event.
+   * Maps an {@link AgentExecutionEvent} to a `StreamResponse`. For Task
+   * events the full task is loaded from the store to include accumulated
+   * history and artifacts.
    */
   private async _mapEventToStreamResponse(
     event: AgentExecutionEvent,
@@ -1008,9 +1006,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         return { payload: { $case: 'message', value: event.data } };
       case 'statusUpdate':
         return { payload: { $case: 'statusUpdate', value: event.data } };
-      case 'artifactUpdate': {
+      case 'artifactUpdate':
         return { payload: { $case: 'artifactUpdate', value: event.data } };
-      }
       default:
         assertUnreachableEvent(event);
     }
