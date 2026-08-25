@@ -272,7 +272,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         try {
           const streamResponse = await this._mapEventToStreamResponse(event, context);
-          await this._sendPushNotificationIfNeeded(context, streamResponse);
+          await this._sendPushNotificationIfNeeded(
+            context,
+            streamResponse,
+            structuredClone(resultManager.getCurrentTask())
+          );
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -715,7 +719,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             params.configuration ?? {}
           );
         }
-        await this._sendPushNotificationIfNeeded(context, streamResponse);
+
+        await this._sendPushNotificationIfNeeded(
+          context,
+          streamResponse,
+          resultManager.getCurrentTask()
+        );
         yield streamResponse;
       }
     } finally {
@@ -1012,10 +1021,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
-    streamResponse: StreamResponse
+    streamResponse: StreamResponse,
+    task?: Task
   ): Promise<void> {
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
+      this.pushNotificationSender.send(streamResponse, context, task).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }

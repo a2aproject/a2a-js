@@ -7,6 +7,7 @@ import { DefaultRequestHandler } from '../../src/server/request_handler/default_
 import { InMemoryTaskStore } from '../../src/server/store.js';
 import { InMemoryPushNotificationStore } from '../../src/server/push_notification/push_notification_store.js';
 import { DefaultPushNotificationSender } from '../../src/server/push_notification/default_push_notification_sender.js';
+import { createLegacyAwarePushNotificationSender } from '../../src/compat/v0_3/server/push_notification/index.js';
 import { DefaultExecutionEventBusManager } from '../../src/server/events/execution_event_bus_manager.js';
 import {
   AgentCard,
@@ -315,6 +316,128 @@ describe('Push Notification Integration Tests', () => {
           },
         })
       );
+    });
+
+    it('forwards the full Task to a v0.3 webhook as a bare v0.3 Task body via the legacy-aware sender', async () => {
+      const v03Store = new InMemoryPushNotificationStore();
+      const v03Sender = createLegacyAwarePushNotificationSender(v03Store);
+      const v03Handler = new DefaultRequestHandler(
+        testAgentCard,
+        new InMemoryTaskStore(),
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager(),
+        v03Store,
+        v03Sender
+      );
+      const v03SenderSpy = vi.spyOn(v03Sender, 'send') as unknown as PushNotificationSenderSpy;
+
+      const contextId = 'ctx-v03-e2e';
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          ...createTestMessage('Full task via v0.3 webhook'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        configuration: {
+          taskPushNotificationConfig: {
+            tenant: '',
+            taskId: '',
+            id: 'v03-config',
+            url: `${testServerUrl}/notify`,
+            token: 'v03-token',
+            authentication: undefined,
+          },
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        await fakeTaskExecute(ctx, bus);
+      });
+
+      await v03Handler.sendMessage(params, defaultContext);
+      await waitForPushNotifications(v03SenderSpy);
+
+      assert.lengthOf(receivedNotifications, 3);
+      const historyLengths = receivedNotifications.map((n) => n.body.history?.length ?? 0);
+      assert.deepEqual(historyLengths, [1, 1, 1]);
+
+      for (const notification of receivedNotifications) {
+        assert.equal(notification.body.kind, 'task');
+        assert.notProperty(notification.body, 'statusUpdate');
+        assert.equal(notification.headers['content-type'], 'application/json');
+      }
+      const states = receivedNotifications.map((n) => n.body.status?.state);
+      assert.includeMembers(states, ['submitted', 'working', 'completed']);
+    });
+
+    it('forwards the full Task to a v0.3 webhook as a bare v0.3 Task body via the legacy-aware sender when streaming', async () => {
+      const v03Store = new InMemoryPushNotificationStore();
+      const v03Sender = createLegacyAwarePushNotificationSender(v03Store);
+      const v03Handler = new DefaultRequestHandler(
+        testAgentCard,
+        new InMemoryTaskStore(),
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager(),
+        v03Store,
+        v03Sender
+      );
+      const v03SenderSpy = vi.spyOn(v03Sender, 'send') as unknown as PushNotificationSenderSpy;
+
+      const contextId = 'ctx-v03-e2e-stream';
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          ...createTestMessage('Full task via v0.3 webhook streaming'),
+          contextId,
+          extensions: [],
+          metadata: {},
+        },
+        configuration: {
+          taskPushNotificationConfig: {
+            tenant: '',
+            taskId: '',
+            id: 'v03-config-stream',
+            url: `${testServerUrl}/notify`,
+            token: 'v03-token',
+            authentication: undefined,
+          },
+          historyLength: 0,
+          returnImmediately: false,
+          acceptedOutputModes: [],
+        },
+      };
+
+      mockAgentExecutor.execute.mockImplementation(async (ctx, bus) => {
+        await fakeTaskExecute(ctx, bus);
+      });
+
+      // Drain the stream so execution completes and all triggers fire.
+      const events: StreamResponse[] = [];
+      const generator = v03Handler.sendMessageStream(params, defaultContext);
+      for await (const event of generator) {
+        events.push(event);
+      }
+      await waitForPushNotifications(v03SenderSpy);
+
+      assert.isNotEmpty(events);
+      assert.lengthOf(receivedNotifications, 3);
+      const historyLengths = receivedNotifications.map((n) => n.body.history?.length ?? 0);
+      assert.deepEqual(historyLengths, [1, 1, 1]);
+
+      for (const notification of receivedNotifications) {
+        assert.equal(notification.body.kind, 'task');
+        assert.notProperty(notification.body, 'statusUpdate');
+        assert.equal(notification.headers['content-type'], 'application/json');
+      }
+      const states = receivedNotifications.map((n) => n.body.status?.state);
+      assert.includeMembers(states, ['submitted', 'working', 'completed']);
     });
 
     it('should handle multiple push notification endpoints for the same task', async () => {
