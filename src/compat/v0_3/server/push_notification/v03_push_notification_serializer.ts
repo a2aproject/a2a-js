@@ -27,7 +27,7 @@ export class V03PushNotificationSerializer implements PushNotificationSerializer
     let legacyEvent: unknown;
     switch (payload.$case) {
       case 'task':
-        legacyEvent = toCompatTask(payload.value);
+        legacyEvent = toCompatTask(task || payload.value);
         break;
       case 'message':
         legacyEvent = toCompatMessage(payload.value);

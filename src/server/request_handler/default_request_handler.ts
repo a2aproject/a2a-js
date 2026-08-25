@@ -275,7 +275,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           await this._sendPushNotificationIfNeeded(
             context,
             streamResponse,
-            resultManager.getCurrentTask()
+            structuredClone(resultManager.getCurrentTask())
           );
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
