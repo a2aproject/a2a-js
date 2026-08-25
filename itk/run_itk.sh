@@ -1,211 +1,56 @@
 #!/bin/bash
-set -ex
+# ITK harness for a2a-js — a thin shim over a2a-itk's shared driver.
+#
+# Everything that used to live here (clone, image build, container start,
+# readiness poll, POST /run, result reporting, nightly metrics) is now in
+# a2a-itk/scripts/run_itk_shared.sh, which all five SDK repos share. Only the
+# genuinely TS-specific part stays: generating the proto bindings.
+#
+# Scenarios come from the shared role-based set in a2a-itk rather than a
+# scenarios.json in this repo — see a2a-itk/scenarios/traversal/.
+set -e
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-cd "$(dirname "$0")"
+ITK_SDK_NAME=js
+# This SDK is keyed as `ts` in matrix.yaml — its agent ids are ts_v10 / ts_v03
+# — so the shared driver has to be told, or `sut_sdk` would name an SDK the
+# matrix has never heard of.
+ITK_MATRIX_SDK=ts
+ITK_SCENARIO_SET=shared
 
-# Set default log level
-export ITK_LOG_LEVEL="${ITK_LOG_LEVEL:-INFO}"
+itk_generate_protos() {
+  # Python stubs: the launcher's own tooling reads these when it drives a
+  # mounted checkout.
+  mkdir -p pyproto
+  touch pyproto/__init__.py
+  uv run --with grpcio-tools python -m grpc_tools.protoc \
+      -I. \
+      --python_out=pyproto \
+      --grpc_python_out=pyproto \
+      instruction.proto
+  sed -i 's/^import instruction_pb2 as instruction__pb2/from . import instruction_pb2 as instruction__pb2/' \
+      pyproto/instruction_pb2_grpc.py
 
-# Initialize default exit code
-RESULT=1
-
-# Cleanup function to be called on exit
-cleanup() {
-  set +x
-  echo "Cleaning up artifacts..."
-  docker stop itk-service > /dev/null 2>&1 || true
-  docker rm itk-service > /dev/null 2>&1 || true
-  docker rmi itk_service > /dev/null 2>&1 || true
-  rm -rf a2a-itk > /dev/null 2>&1 || true
-  rm -rf pyproto > /dev/null 2>&1 || true
-  rm -rf pb > /dev/null 2>&1 || true
-  rm -rf protos > /dev/null 2>&1 || true
-  rm -f instruction.proto > /dev/null 2>&1 || true
-  rm -f raw_results.json > /dev/null 2>&1 || true
-  echo "Done. Final exit code: $RESULT"
+  # TS bindings for itk_agent.ts, via this repo's own buf.gen.yaml
+  # (out: ./pb, inputs: ./protos).
+  mkdir -p protos
+  cp instruction.proto protos/instruction.proto
+  ../node_modules/.bin/buf generate
+  rm -rf protos
 }
 
-# Register cleanup function to run on script exit
-trap cleanup EXIT
+itk_extra_cleanup() {
+  rm -rf pyproto pb protos
+}
 
-# 1. Pull a2a-itk and checkout revision. We use a2a-itk (not a2a-samples) so
-# the ITK proto includes the newer `ResubscribeBehavior` / `hold_task` fields
-# the v0.3 reference baselines (go_v03, python_v03) already consume — required
-# for the resubscribe behavior scenarios below. a2a-itk is also the
-# repository used by the a2a-python / a2a-go ITK harnesses (see
-# `a2a-python/itk/run_itk.sh`), so all SDKs run against the same source of
-# truth.
+# --- bootstrap -------------------------------------------------------------
+# The shared driver lives in a2a-itk, so the checkout has to exist before it
+# can be sourced. CI has already placed it here via actions/checkout; locally
+# we clone it from a2aproject/a2a-itk.
 : "${A2A_ITK_REVISION:?A2A_ITK_REVISION environment variable must be set}"
-
-if [ ! -d "a2a-itk" ]; then
-  git clone -b "$A2A_ITK_REVISION" https://github.com/a2aproject/a2a-itk.git a2a-itk --depth 1
+if [ ! -d a2a-itk ]; then
+  git clone https://github.com/a2aproject/a2a-itk.git a2a-itk
+  git -C a2a-itk checkout "$A2A_ITK_REVISION"
 fi
 
-# 2. Copy instruction.proto from a2a-itk
-cp a2a-itk/protos/instruction.proto ./instruction.proto
-
-# 3. Build pyproto library
-mkdir -p pyproto
-touch pyproto/__init__.py
-uv run --with grpcio-tools python -m grpc_tools.protoc \
-    -I. \
-    --python_out=pyproto \
-    --grpc_python_out=pyproto \
-    instruction.proto
-
-# Fix imports in generated file
-sed -i 's/^import instruction_pb2 as instruction__pb2/from . import instruction_pb2 as instruction__pb2/' pyproto/instruction_pb2_grpc.py
-
-# 3a. Regenerate TypeScript proto bindings for itk_agent.ts using the SDK's
-# own itk/buf.gen.yaml (out: ./pb, inputs: ./protos).
-mkdir -p protos
-cp instruction.proto protos/instruction.proto
-../node_modules/.bin/buf generate
-rm -rf protos
-
-# 4. Build jit itk_service docker image from a2a-itk root (skipped in CI
-# where the workflow builds via docker/build-push-action for GHA caching).
-if [ "${ITK_SKIP_BUILD:-0}" != "1" ]; then
-  docker build -t itk_service a2a-itk
-fi
-
-# 5. Start docker service
-# Mount the repo root (a2a-js) and the itk directory
-A2A_JS_ROOT="$(pwd)/.."
-ITK_DIR="$(pwd)"
-
-# Stop existing container if any
-docker rm -f itk-service || true
-
-# Create logs directory if debug
-DOCKER_MOUNT_LOGS=""
-if [ "${ITK_LOG_LEVEL^^}" = "DEBUG" ]; then
-  mkdir -p "$ITK_DIR/logs"
-  DOCKER_MOUNT_LOGS="-v $ITK_DIR/logs:/app/logs"
-fi
-
-mkdir -p "$HOME/.cache/a2a-itk-launcher"
-
-docker run -d --name itk-service \
-  -v "$A2A_JS_ROOT:/app/agents/repo" \
-  -v "$ITK_DIR:/app/agents/repo/itk" \
-  -v "$HOME/.cache/a2a-itk-launcher:/root/.cache/a2a-itk" \
-  $DOCKER_MOUNT_LOGS \
-  -e ITK_LOG_LEVEL="$ITK_LOG_LEVEL" \
-  -e ITK_ENTRYPOINT="${ITK_ENTRYPOINT:-itk_service_v2.py}" \
-  -e ITK_READINESS_TIMEOUT="${ITK_READINESS_TIMEOUT:-180}" \
-  -e ITK_MAX_WORKERS="${ITK_MAX_WORKERS:-2}" \
-  -p 8000:8000 \
-  itk_service
-
-# 5.1. Fix dubious ownership for git (needed for uv-dynamic-versioning)
-docker exec itk-service git config --global --add safe.directory /app/agents/repo
-docker exec itk-service git config --global --add safe.directory /app/agents/repo/itk
-# Launcher's peer checkouts under /root/.cache/a2a-itk are host-owned; trust
-# only repos under the launcher cache dir so container-side git accepts them.
-docker exec itk-service bash -lc 'while IFS= read -r -d "" d; do git config --global --add safe.directory "${d%/.git}"; done < <(find /root/.cache/a2a-itk -type d -name .git -print0)'
-
-# 6. Verify service is up and send post request
-MAX_RETRIES=30
-echo "Waiting for ITK service to start on 127.0.0.1:8000..."
-set +e
-for i in $(seq 1 $MAX_RETRIES); do
-  if curl -s http://127.0.0.1:8000/ > /dev/null; then
-    echo "Service is up!"
-    break
-  fi
-  echo "Still waiting... ($i/$MAX_RETRIES)"
-  sleep 2
-done
-
-# If we reached the end of the loop without success
-if ! curl -s http://127.0.0.1:8000/ > /dev/null; then
-  echo "Error: ITK service failed to start on port 8000"
-  docker logs itk-service
-  exit 1
-fi
-
-# 7. Pick the scenarios file. The PR set (`scenarios.json`) is the small,
-# fast matrix that runs on every PR — currently a 22-scenario coverage of
-# v1.0 native + v0.3 compat + resubscribe across all three transports,
-# end-to-end with the go_v10 / go_v03 / python_v03 baselines. The nightly
-# set (`scenarios_full.json`) adds tri-SDK and quad-SDK star topologies
-# (every peer talks to current) on top of the PR set — exercising
-# heterogeneous-SDK mixtures that are too expensive to run on every PR
-# but catch cross-SDK regressions that the PR set's 2-node euler cycles
-# cannot.
-SCENARIO_FILE="scenarios.json"
-if [ "${ITK_NIGHTLY_RUN^^}" = "TRUE" ]; then
-  SCENARIO_FILE="scenarios_full.json"
-fi
-
-echo "ITK Service is up! Sending compatibility test request using $SCENARIO_FILE..."
-RESPONSE=$(curl -s -X POST http://127.0.0.1:8000/run \
-  -H "Content-Type: application/json" \
-  -d "@$SCENARIO_FILE")
-
-if [ "${ITK_NIGHTLY_RUN^^}" = "TRUE" ]; then
-  # Nightly path: persist raw results and let a2a-itk's metrics processor
-  # merge them into the rolling history JSON published as a release asset
-  # on the `nightly-metrics` tag. Matches a2a-python's and a2a-go's
-  # nightly artifact format so downstream dashboards can ingest all three
-  # SDKs uniformly.
-  echo "Nightly run detected. Saving raw results and running process_results.py..."
-  echo "$RESPONSE" > raw_results.json
-  python3 a2a-itk/scripts/process_results.py \
-    --history_output_file itk_js.json \
-    --history_url https://github.com/a2aproject/a2a-js/releases/download/nightly-metrics/itk_js.json
-  RESULT=$?
-  # Also print a human-readable summary so the GHA log still shows what
-  # passed / failed, even though the canonical record is in itk_js.json.
-  echo "--------------------------------------------------------"
-  echo "NIGHTLY ITK SUMMARY:"
-  echo "--------------------------------------------------------"
-  echo "$RESPONSE" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    all_passed = data.get('all_passed', False)
-    results = data.get('results', {})
-    for test, passed in results.items():
-        status = 'PASSED' if (passed.get('passed') if isinstance(passed, dict) else passed) else 'FAILED'
-        print(f'{test}: {status}')
-    print('--------------------------------------------------------')
-    print(f'OVERALL STATUS: {\"PASSED\" if all_passed else \"FAILED\"}')
-except Exception as e:
-    print(f'Error parsing results: {e}')
-"
-else
-  echo "--------------------------------------------------------"
-  echo "ITK TEST RESULTS:"
-  echo "--------------------------------------------------------"
-  echo "$RESPONSE" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    all_passed = data.get('all_passed', False)
-    results = data.get('results', {})
-    for test, passed in results.items():
-        status = 'PASSED' if (passed.get('passed') if isinstance(passed, dict) else passed) else 'FAILED'
-        print(f'{test}: {status}')
-    print('--------------------------------------------------------')
-    print(f'OVERALL STATUS: {\"PASSED\" if all_passed else \"FAILED\"}')
-    if not all_passed:
-        sys.exit(1)
-except Exception as e:
-    print(f'Error parsing results: {e}')
-    print(f'Raw response: {data if \"data\" in locals() else \"no data\"}')
-    sys.exit(1)
-"
-  RESULT=$?
-fi
-set -e
-
-if [ $RESULT -ne 0 ]; then
-  echo "Tests failed. Container logs:"
-  docker logs itk-service
-fi
-echo "--------------------------------------------------------"
-
-# Final exit result will be captured by trap cleanup
-exit $RESULT
+source a2a-itk/scripts/run_itk_shared.sh
