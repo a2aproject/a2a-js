@@ -53,7 +53,7 @@ import {
 import { PushNotificationSender } from '../push_notification/push_notification_sender.js';
 import { DefaultPushNotificationSender } from '../push_notification/default_push_notification_sender.js';
 import { ServerCallContext } from '../context.js';
-import { DEFAULT_PAGE_SIZE } from '../../constants.js';
+import { DEFAULT_PAGE_SIZE, MAX_HISTORY_LENGTH } from '../../constants.js';
 import {
   AUTH_REQUIRED_STATE_LIST,
   INTERRUPTED_STATE_LIST,
@@ -754,6 +754,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
     }
 
+    if (
+      params.historyLength !== undefined &&
+      (!Number.isInteger(params.historyLength) ||
+        params.historyLength < 0 ||
+        params.historyLength > MAX_HISTORY_LENGTH)
+    ) {
+      throw new RequestMalformedError(
+        `historyLength must be a non-negative integer no greater than ${MAX_HISTORY_LENGTH}`
+      );
+    }
+
     if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
       throw new RequestMalformedError('statusTimestampAfter must be a valid ISO 8601 date string');
     }
@@ -1126,10 +1137,25 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * Applies `historyLength` semantics:
    * - undefined: return all history
    * - 0: omit history
-   * - N > 0: return at most N most recent messages
+   * - 0 < N <= {@link MAX_HISTORY_LENGTH}: return at most N most recent messages
+   *
+   * Values above {@link MAX_HISTORY_LENGTH} (or non-integer values, e.g.
+   * `NaN` from a malformed JSON-RPC payload) are rejected with
+   * `RequestMalformedError` — without the cap, a client could request an
+   * arbitrarily large history and `slice(-NaN)` → `slice(0)` would leak
+   * the full history (CWE-400).
    */
   private _applyHistoryLengthSemantics(task: Task, params: { historyLength?: number }): void {
     if (params.historyLength !== undefined) {
+      if (
+        !Number.isInteger(params.historyLength) ||
+        params.historyLength < 0 ||
+        params.historyLength > MAX_HISTORY_LENGTH
+      ) {
+        throw new RequestMalformedError(
+          `historyLength must be a non-negative integer no greater than ${MAX_HISTORY_LENGTH}`
+        );
+      }
       if (params.historyLength <= 0) {
         task.history = [];
       } else {
