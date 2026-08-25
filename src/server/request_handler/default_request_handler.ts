@@ -271,7 +271,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          const streamResponse = await this._mapEventToStreamResponse(event, context);
+          const streamResponse = this._mapEventToStreamResponse(event, resultManager);
           await this._sendPushNotificationIfNeeded(context, streamResponse);
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
@@ -708,7 +708,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         await resultManager.processEvent(event);
 
-        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        const streamResponse = this._mapEventToStreamResponse(event, resultManager);
         if (streamResponse.payload?.$case === 'task') {
           this._applyHistoryLengthSemantics(
             streamResponse.payload.value,
@@ -980,17 +980,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * events the full task is loaded from the store to include accumulated
    * history and artifacts.
    */
-  private async _mapEventToStreamResponse(
+  private _mapEventToStreamResponse(
     event: AgentExecutionEvent,
-    context: ServerCallContext
-  ): Promise<StreamResponse> {
+    resultManager: ResultManager
+  ): StreamResponse {
     switch (event.kind) {
       case 'task': {
-        const taskId = event.data.id;
-        const fullTask = await this.taskStore.load(taskId, context).catch((error): Task | null => {
-          console.warn('Failed to load full task from store, falling back to event data:', error);
-          return null;
-        });
+        const fullTask = resultManager.getCurrentTask();
         return { payload: { $case: 'task', value: fullTask || event.data } };
       }
       case 'message':
