@@ -12,7 +12,6 @@ import {
   Message,
   Role,
   SendMessageRequest,
-  StreamResponse,
   Task,
   TaskState,
 } from '../../../src/types/pb/a2a.js';
@@ -335,10 +334,12 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
     const sendsAfterRelease = pushNotificationSender.send.mock.calls.length;
     expect(sendsAfterRelease).toBeGreaterThan(sendsBeforeRelease);
 
-    const completedCalls = pushNotificationSender.send.mock.calls.filter(([response]) => {
-      const r = response as StreamResponse;
-      if (r.payload?.$case !== 'statusUpdate') return false;
-      return r.payload.value.status?.state === TaskState.TASK_STATE_COMPLETED;
+    // The COMPLETED event reaches the sender as a raw statusUpdate; the
+    // current full Task is forwarded as the third argument. Assert on the
+    // forwarded Task rather than the stream payload's `$case`.
+    const completedCalls = pushNotificationSender.send.mock.calls.filter((call) => {
+      const task = call[2] as Task | undefined;
+      return task?.status?.state === TaskState.TASK_STATE_COMPLETED;
     });
     expect(completedCalls.length).toBe(1);
     expect(observedTaskId).not.toBe('');

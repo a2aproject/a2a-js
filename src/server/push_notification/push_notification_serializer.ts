@@ -1,4 +1,4 @@
-import { StreamResponse } from '../../index.js';
+import { StreamResponse, Task } from '../../index.js';
 import { A2A_CONTENT_TYPE } from '../../constants.js';
 
 /** HTTP body and content type for a single push-notification dispatch. */
@@ -20,7 +20,7 @@ export interface SerializedPushNotification {
  * over, so v0.3-registered webhooks keep receiving v0.3-shaped payloads.
  */
 export interface PushNotificationSerializer {
-  serialize(streamResponse: StreamResponse): SerializedPushNotification;
+  serialize(streamResponse: StreamResponse, task?: Task): SerializedPushNotification;
 }
 
 /**
@@ -29,7 +29,7 @@ export interface PushNotificationSerializer {
  * `application/a2a+json`.
  */
 export class V1PushNotificationSerializer implements PushNotificationSerializer {
-  serialize(streamResponse: StreamResponse): SerializedPushNotification {
+  serialize(streamResponse: StreamResponse, _task?: Task): SerializedPushNotification {
     return {
       body: JSON.stringify(StreamResponse.toJSON(streamResponse)),
       contentType: A2A_CONTENT_TYPE,
