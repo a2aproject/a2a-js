@@ -138,8 +138,9 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         return payload.value.id;
       case 'statusUpdate':
       case 'artifactUpdate':
-      case 'message':
         return payload.value.taskId;
+      case 'message':
+        return payload.value.taskId ?? '';
       default: {
         const _exhaustive: never = payload;
         throw new Error(`Unknown payload case: ${(_exhaustive as { $case: string }).$case}`);

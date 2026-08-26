@@ -374,7 +374,7 @@ export function toCompatListTaskPushNotificationConfigSuccessResponse(
   return {
     id: requestId,
     jsonrpc: '2.0',
-    result: core.configs.map((cfg) => toCompatTaskPushNotificationConfig(cfg)),
+    result: (core.configs ?? []).map((cfg) => toCompatTaskPushNotificationConfig(cfg)),
   };
 }
 

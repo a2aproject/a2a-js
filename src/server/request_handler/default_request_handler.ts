@@ -211,8 +211,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // The client MUST declare support for every required extension.
     const requestedSet = new Set(context.requestedExtensions ?? []);
     const missingRequired = agentExtensions
-      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
-      .map((ext) => ext.uri);
+      .filter((ext) => ext.required && ext.uri && !requestedSet.has(ext.uri))
+      .map((ext) => ext.uri as string);
 
     if (missingRequired.length > 0) {
       throw new ExtensionSupportRequiredError(
@@ -438,7 +438,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(
           AgentEvent.statusUpdate({
             taskId: errorTask.id,
-            contextId: errorTask.contextId,
+            contextId: errorTask.contextId ?? '',
             status: errorTask.status,
             metadata: {},
           })
@@ -843,6 +843,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    if (!taskId) {
+      throw new TaskNotFoundError(`Task ID is required`);
+    }
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -1056,7 +1059,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (currentTask) {
       const statusUpdateFailed: TaskStatusUpdateEvent = {
         taskId: currentTask.id,
-        contextId: currentTask.contextId,
+        contextId: currentTask.contextId ?? '',
         status: {
           state: TaskState.TASK_STATE_FAILED,
           message: {
