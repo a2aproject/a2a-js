@@ -29,15 +29,6 @@ jobs:
           node-version: 24
           registry-url: 'https://wombat-dressing-room.appspot.com/'
 
-      # To be removed once the workflow stabilizes.
-      - name: Report token source
-        run: |
-          if [ -n "${{ secrets.NPM_TOKEN_OVERRIDE }}" ]; then
-            echo "Using NPM_TOKEN_OVERRIDE"
-          else
-            echo "Using NPM_TOKEN"
-          fi
-
       - name: Publish to NPM
         run: |
           if [ "${{ github.event.release.prerelease }}" = "true" ]; then
@@ -48,4 +39,4 @@ jobs:
             npm dist-tag add "@a2a-js/sdk@${VERSION}" next
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_OVERRIDE || secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
