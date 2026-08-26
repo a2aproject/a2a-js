@@ -95,6 +95,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
   private readonly keepBusAliveStates: Set<TaskState>;
 
+  /**
+   * Task IDs whose agent executor is currently running (added before the
+   * executor starts, removed when it settles). Used to reject a second
+   * `message/send` while the first is still executing — mirrors
+   * Go's `ErrExecutionInProgress` and Python V2's `ActiveTaskRegistry`.
+   * The flag is tied to the *executor's* lifecycle, not the bus's, so
+   * INPUT_REQUIRED / AUTH_REQUIRED pauses (executor settled, bus kept
+   * alive for follow-ups) correctly allow the next turn.
+   */
+  private readonly executingTaskIds = new Set<string>();
+
   constructor(
     agentCard: AgentCard,
     taskStore: TaskStore,
@@ -445,6 +456,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       })
       .finally(() => {
+        // The executor has settled — release the in-flight guard so a
+        // follow-up sendMessage is allowed again (INPUT_REQUIRED /
+        // AUTH_REQUIRED keep the bus alive but no longer block sends).
+        this.executingTaskIds.delete(taskId);
         // Close the bus for terminal tasks; keep it alive for
         // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
         // resubscribers can still attach.
@@ -570,6 +585,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
+        // The executor has settled — release the in-flight guard.
+        this.executingTaskIds.delete(taskId);
         this._settleBus(taskId, eventBus, snapshotTracker().state);
       });
   }
@@ -583,6 +600,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('message.messageId is required.');
     }
 
+    // Reject a second send while the previous executor for this task is
+    // still running. Checked synchronously BEFORE any await so two
+    // concurrent requests cannot both pass the check.
+    if (incomingMessage.taskId && this.executingTaskIds.has(incomingMessage.taskId)) {
+      throw new UnsupportedOperationError(
+        `Task ${incomingMessage.taskId} is already being processed; ` +
+          `concurrent sendMessage is not supported.`
+      );
+    }
+
     // Default to blocking behavior if 'returnImmediately' is not explicitly true.
     const isBlocking = params.configuration?.returnImmediately !== true;
     const resultManager = new ResultManager(this.taskStore, context);
@@ -592,81 +619,99 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const taskId = requestContext.taskId;
     const finalMessageForAgent = requestContext.userMessage;
 
-    if (
-      params.configuration?.taskPushNotificationConfig &&
-      this.agentCard.capabilities?.pushNotifications
-    ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        structuredClone(params.configuration.taskPushNotificationConfig)
+    // Re-check after the awaits in `_createRequestContext`; mark in-flight
+    // before the next await so the window between check and executor start
+    // stays closed for concurrent callers.
+    if (this.executingTaskIds.has(taskId)) {
+      throw new UnsupportedOperationError(
+        `Task ${taskId} is already being processed; ` + `concurrent sendMessage is not supported.`
       );
     }
+    this.executingTaskIds.add(taskId);
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
-    // Attach the queue before kicking off the executor so no events are missed.
-    const eventQueue = new ExecutionEventQueue(eventBus);
+    try {
+      if (
+        params.configuration?.taskPushNotificationConfig &&
+        this.agentCard.capabilities?.pushNotifications
+      ) {
+        await this.pushNotificationStore?.save(
+          taskId,
+          context,
+          structuredClone(params.configuration.taskPushNotificationConfig)
+        );
+      }
 
-    // Run the executor in the background. Bus cleanup is tied to the
-    // executor's lifecycle, not the consumer's, so a `tasks/resubscribe`
-    // arriving after the consumer settles can still find the bus while
-    // the executor is still publishing.
-    this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
+      const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+      // Attach the queue before kicking off the executor so no events are missed.
+      const eventQueue = new ExecutionEventQueue(eventBus);
 
-    const historyLengthConfig = params.configuration;
+      // Run the executor in the background. Bus cleanup is tied to the
+      // executor's lifecycle, not the consumer's, so a `tasks/resubscribe`
+      // arriving after the consumer settles can still find the bus while
+      // the executor is still publishing.
+      this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
 
-    if (isBlocking) {
-      // Blocking mode normally resolves after the full event drain
-      // finishes. AUTH_REQUIRED is the exception: the caller is handed
-      // a snapshot as soon as the AUTH_REQUIRED status update is
-      // observed, and the drain detaches into the background so the
-      // executor can keep publishing on the same bus.
-      return new Promise<Message | Task>((resolve, reject) => {
-        const pending = this._processEvents(taskId, resultManager, eventQueue, context, {
-          authRequiredSnapshotResolver: (snapshot) => {
-            this._applyHistoryLengthSemantics(snapshot, historyLengthConfig ?? {});
-            resolve(snapshot);
-            this._continueDraining(taskId, pending);
-          },
-          // Pre-AUTH_REQUIRED drain errors reject the outer promise so
-          // `await sendMessage(...)` throws. Post-AUTH_REQUIRED drain
-          // errors fall into `_handleProcessingError`'s "first result
-          // already sent" branch (persisting FAILED via ResultManager)
-          // and the `reject` call here becomes a no-op because Promise
-          // settlement is one-shot.
-          firstResultRejector: reject,
+      const historyLengthConfig = params.configuration;
+
+      if (isBlocking) {
+        // Blocking mode normally resolves after the full event drain
+        // finishes. AUTH_REQUIRED is the exception: the caller is handed
+        // a snapshot as soon as the AUTH_REQUIRED status update is
+        // observed, and the drain detaches into the background so the
+        // executor can keep publishing on the same bus.
+        return new Promise<Message | Task>((resolve, reject) => {
+          const pending = this._processEvents(taskId, resultManager, eventQueue, context, {
+            authRequiredSnapshotResolver: (snapshot) => {
+              this._applyHistoryLengthSemantics(snapshot, historyLengthConfig ?? {});
+              resolve(snapshot);
+              this._continueDraining(taskId, pending);
+            },
+            // Pre-AUTH_REQUIRED drain errors reject the outer promise so
+            // `await sendMessage(...)` throws. Post-AUTH_REQUIRED drain
+            // errors fall into `_handleProcessingError`'s "first result
+            // already sent" branch (persisting FAILED via ResultManager)
+            // and the `reject` call here becomes a no-op because Promise
+            // settlement is one-shot.
+            firstResultRejector: reject,
+          });
+          pending
+            .then(() => {
+              const finalResult = resultManager.getFinalResult();
+              if (!finalResult) {
+                reject(
+                  new A2AError(
+                    'Agent execution finished without a result, and no task context found.'
+                  )
+                );
+                return;
+              }
+              if (isTask(finalResult)) {
+                this._applyHistoryLengthSemantics(finalResult, historyLengthConfig ?? {});
+              }
+              resolve(finalResult);
+            })
+            .catch(reject);
         });
-        pending
-          .then(() => {
-            const finalResult = resultManager.getFinalResult();
-            if (!finalResult) {
-              reject(
-                new A2AError(
-                  'Agent execution finished without a result, and no task context found.'
-                )
-              );
-              return;
-            }
-            if (isTask(finalResult)) {
-              this._applyHistoryLengthSemantics(finalResult, historyLengthConfig ?? {});
-            }
-            resolve(finalResult);
-          })
-          .catch(reject);
-      });
-    } else {
-      // Non-blocking mode resolves with the first task/message event.
-      return new Promise<Message | Task>((resolve, reject) => {
-        this._processEvents(taskId, resultManager, eventQueue, context, {
-          firstResultResolver: (result) => {
-            if (isTask(result)) {
-              this._applyHistoryLengthSemantics(result, historyLengthConfig ?? {});
-            }
-            resolve(result);
-          },
-          firstResultRejector: reject,
+      } else {
+        // Non-blocking mode resolves with the first task/message event.
+        return new Promise<Message | Task>((resolve, reject) => {
+          this._processEvents(taskId, resultManager, eventQueue, context, {
+            firstResultResolver: (result) => {
+              if (isTask(result)) {
+                this._applyHistoryLengthSemantics(result, historyLengthConfig ?? {});
+              }
+              resolve(result);
+            },
+            firstResultRejector: reject,
+          });
         });
-      });
+      }
+    } catch (error) {
+      // Only reached when setup between the in-flight mark and the
+      // executor start fails; the executor's own `.finally` removes the
+      // mark on the success path.
+      this.executingTaskIds.delete(taskId);
+      throw error;
     }
   }
 
@@ -679,31 +724,56 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('message.messageId is required for streaming.');
     }
 
+    // Same in-flight guard as `sendMessage`: a second executor
+    // must not be started for a task whose executor is still running.
+    if (incomingMessage.taskId && this.executingTaskIds.has(incomingMessage.taskId)) {
+      throw new UnsupportedOperationError(
+        `Task ${incomingMessage.taskId} is already being processed; ` +
+          `concurrent sendMessage is not supported.`
+      );
+    }
+
     const resultManager = new ResultManager(this.taskStore, context);
     resultManager.setContext(incomingMessage);
 
     const requestContext = await this._createRequestContext(params, context);
     const taskId = requestContext.taskId;
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
-    const eventQueue = new ExecutionEventQueue(eventBus);
-
-    if (
-      params.configuration?.taskPushNotificationConfig &&
-      this.agentCard.capabilities?.pushNotifications
-    ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        structuredClone(params.configuration.taskPushNotificationConfig)
+    if (this.executingTaskIds.has(taskId)) {
+      throw new UnsupportedOperationError(
+        `Task ${taskId} is already being processed; ` + `concurrent sendMessage is not supported.`
       );
     }
+    this.executingTaskIds.add(taskId);
 
-    // Run the executor in the background. Bus cleanup is tied to the
-    // executor's lifecycle, not the consumer's, so a client that
-    // disconnects this stream early can still attach via
-    // `tasks/resubscribe` while the executor keeps running.
-    this._runStreamExecutor(taskId, eventBus, requestContext);
+    let eventBus: ExecutionEventBus;
+    let eventQueue: ExecutionEventQueue;
+    try {
+      eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+      eventQueue = new ExecutionEventQueue(eventBus);
+
+      if (
+        params.configuration?.taskPushNotificationConfig &&
+        this.agentCard.capabilities?.pushNotifications
+      ) {
+        await this.pushNotificationStore?.save(
+          taskId,
+          context,
+          structuredClone(params.configuration.taskPushNotificationConfig)
+        );
+      }
+
+      // Run the executor in the background. Bus cleanup is tied to the
+      // executor's lifecycle, not the consumer's, so a client that
+      // disconnects this stream early can still attach via
+      // `tasks/resubscribe` while the executor keeps running.
+      this._runStreamExecutor(taskId, eventBus, requestContext);
+    } catch (error) {
+      // Setup failed before the executor started — release the in-flight
+      // mark (the executor's own `.finally` handles the success path).
+      this.executingTaskIds.delete(taskId);
+      throw error;
+    }
 
     let streamPattern = StreamPattern.UNDETERMINED;
     try {
@@ -729,7 +799,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     } finally {
       // Detach THIS consumer's queue; the bus stays alive until the
-      // executor settles.
+      // executor settles. The in-flight mark is deliberately NOT cleared
+      // here — the executor's `.finally` clears it when it settles, so an
+      // early client disconnect cannot unlock a second executor.
       eventQueue.stop();
     }
   }
