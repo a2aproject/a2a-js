@@ -64,6 +64,17 @@ import {
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors/index.js';
 
+export interface DefaultRequestHandlerOptions {
+  /**
+   * Task states that keep the execution event bus alive after the agent
+   * executor returns. Defaults to INPUT_REQUIRED and AUTH_REQUIRED.
+   * To add another keep-alive state while preserving those defaults, include
+   * both default states and the additional state. Any custom value overrides
+   * the default list.
+   */
+  keepBusAliveStates?: TaskState[];
+}
+
 /**
  * Default implementation of the A2A request handler.
  *
@@ -82,6 +93,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly pushNotificationSender?: PushNotificationSender;
   private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
+  private readonly keepBusAliveStates: Set<TaskState>;
 
   constructor(
     agentCard: AgentCard,
@@ -91,7 +103,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     pushNotificationStore?: PushNotificationStore,
     pushNotificationSender?: PushNotificationSender,
     extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider,
-    agentCardSignatureGenerator?: AgentCardSignatureGenerator
+    agentCardSignatureGenerator?: AgentCardSignatureGenerator,
+    options: DefaultRequestHandlerOptions = {}
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
@@ -99,6 +112,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.eventBusManager = eventBusManager;
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
+    this.keepBusAliveStates = new Set(options.keepBusAliveStates ?? INTERRUPTED_STATE_LIST);
 
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
@@ -258,7 +272,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         try {
           const streamResponse = await this._mapEventToStreamResponse(event, context);
-          await this._sendPushNotificationIfNeeded(context, streamResponse);
+          await this._sendPushNotificationIfNeeded(
+            context,
+            streamResponse,
+            structuredClone(resultManager.getCurrentTask())
+          );
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -437,15 +455,15 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   /**
    * Settles the event bus once the executor returns. Terminal states
    * (and the bare-Message stream pattern) close the bus immediately;
-   * interrupted states (INPUT_REQUIRED, AUTH_REQUIRED) keep it alive
-   * so follow-up sends and resubscribers can still attach.
+   * states configured in `keepBusAliveStates` keep it alive so follow-up
+   * sends and resubscribers can still attach.
    */
   private _settleBus(
     taskId: string,
     eventBus: ExecutionEventBus,
     lastState: TaskState | undefined
   ): void {
-    if (lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState)) {
+    if (lastState !== undefined && this.keepBusAliveStates.has(lastState)) {
       return;
     }
     eventBus.finished();
@@ -701,7 +719,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             params.configuration ?? {}
           );
         }
-        await this._sendPushNotificationIfNeeded(context, streamResponse);
+
+        await this._sendPushNotificationIfNeeded(
+          context,
+          streamResponse,
+          resultManager.getCurrentTask()
+        );
         yield streamResponse;
       }
     } finally {
@@ -1001,10 +1024,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
-    streamResponse: StreamResponse
+    streamResponse: StreamResponse,
+    task?: Task
   ): Promise<void> {
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
+      this.pushNotificationSender.send(streamResponse, context, task).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }
