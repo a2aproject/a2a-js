@@ -875,13 +875,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const configs = (await this.pushNotificationStore?.load(taskId, context)) || [];
     if (configs.length === 0) {
-      throw new A2AError(`Push notification config not found for task ${taskId}.`);
+      // Semantic TaskNotFoundError (rather than a bare A2AError) so REST
+      // maps this to 404 and JSON-RPC to -32001, matching Python's
+      // behavior. A bare A2AError previously surfaced as 500 / -32603.
+      throw new TaskNotFoundError(`Push notification config not found for task ${taskId}.`);
     }
 
     const config = configs.find((c) => c.id === params.id);
 
     if (!config) {
-      throw new A2AError(
+      throw new TaskNotFoundError(
         `Push notification config with id '${params.id}' not found for task ${taskId}.`
       );
     }
