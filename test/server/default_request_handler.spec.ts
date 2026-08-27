@@ -3356,19 +3356,32 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           url: 'https://x.com',
           token: 'token-x',
           authentication: undefined,
-        },
+        } as TaskPushNotificationConfig,
       },
       {
         name: 'getTaskPushNotificationConfig',
-        params: { tenant: '', taskId: nonExistentTaskId, id: 'cfg-x' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as GetTaskPushNotificationConfigRequest,
       },
       {
         name: 'listTaskPushNotificationConfigs',
-        params: { tenant: '', taskId: nonExistentTaskId, pageSize: 0, pageToken: '' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          pageSize: 0,
+          pageToken: '',
+        } as ListTaskPushNotificationConfigsRequest,
       },
       {
         name: 'deleteTaskPushNotificationConfig',
-        params: { tenant: '', taskId: nonExistentTaskId, id: 'cfg-x' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as DeleteTaskPushNotificationConfigRequest,
       },
     ];
 
