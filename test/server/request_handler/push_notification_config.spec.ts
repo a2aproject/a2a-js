@@ -222,6 +222,7 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     const stored = await pushNotificationStore.load(result.id, serverContext);
     expect(stored).toHaveLength(1);
     expect(stored[0].id).toBe('c1');
+    expect(stored[0].taskId).toBe(result.id);
     expect(stored[0].url).toBe('https://example.test/hook');
     expect(stored[0].token).toBe('tok');
   });
