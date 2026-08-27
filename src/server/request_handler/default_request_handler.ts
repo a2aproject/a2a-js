@@ -752,7 +752,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   ): Promise<ListTasksResponse> {
     const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
 
-    if (pageSize < 1 || pageSize > 100) {
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
     }
 
