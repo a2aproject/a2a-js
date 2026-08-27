@@ -1007,7 +1007,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     switch (event.kind) {
       case 'task': {
         const fullTask = resultManager.getCurrentTask();
-        return { payload: { $case: 'task', value: fullTask ? structuredClone(fullTask) : event.data } };
+        return {
+          payload: { $case: 'task', value: fullTask ? structuredClone(fullTask) : event.data },
+        };
       }
       case 'message':
         return { payload: { $case: 'message', value: event.data } };
