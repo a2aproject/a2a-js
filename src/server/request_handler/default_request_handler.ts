@@ -165,6 +165,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
 
+    const agentCard = await this.getAgentCard();
+    const agentExtensions = agentCard.capabilities?.extensions ?? [];
+
+    // The client MUST declare support for every required extension.
+    const requestedSet = new Set(context.requestedExtensions ?? []);
+    const missingRequired = agentExtensions
+      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
+      .map((ext) => ext.uri);
+
+    if (missingRequired.length > 0) {
+      throw new ExtensionSupportRequiredError(
+        `Client must declare support for required extensions: ${missingRequired.join(', ')}`
+      );
+    }
+
     if (incomingMessage.taskId) {
       task = await this.taskStore.load(incomingMessage.taskId, context);
       if (!task) {
@@ -205,21 +220,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     }
     const contextId = incomingMessage.contextId || task?.contextId || crypto.randomUUID();
-
-    const agentCard = await this.getAgentCard();
-    const agentExtensions = agentCard.capabilities?.extensions ?? [];
-
-    // The client MUST declare support for every required extension.
-    const requestedSet = new Set(context.requestedExtensions ?? []);
-    const missingRequired = agentExtensions
-      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
-      .map((ext) => ext.uri);
-
-    if (missingRequired.length > 0) {
-      throw new ExtensionSupportRequiredError(
-        `Client must declare support for required extensions: ${missingRequired.join(', ')}`
-      );
-    }
 
     // Narrow the client-requested set to extensions the agent actually
     // exposes. Mutate in place — the transport layer holds a reference
