@@ -450,11 +450,16 @@ describe('restHandler', () => {
       );
     });
 
-    it('should reject unrecognized status values with 400 instead of silently filtering', async () => {
+    it('should surface the request handler RequestMalformedError for an unrecognized status as 400 INVALID_ARGUMENT', async () => {
       // Regression: an invalid status used to be silently converted to
       // UNRECOGNIZED (-1) and applied as a filter matching nothing.
-      // It must now surface as a 400 INVALID_ARGUMENT, mirroring
-      // Python's ParseDict behavior.
+      // Validation now lives in DefaultRequestHandler; the REST layer must
+      // map it to 400 INVALID_ARGUMENT, mirroring Python's ParseDict
+      // behavior.
+      (mockRequestHandler.listTasks as Mock).mockRejectedValue(
+        new RequestMalformedError('Invalid status filter: -1')
+      );
+
       const response = await request(app)
         .get('/tasks?status=INVALID_VALUE')
         .set('A2A-Version', '1.0')
@@ -462,7 +467,6 @@ describe('restHandler', () => {
 
       assert.equal(response.body.error.status, 'INVALID_ARGUMENT');
       assert.equal(response.body.error.details[0].reason, 'INVALID_PARAMS');
-      expect(mockRequestHandler.listTasks).not.toHaveBeenCalled();
     });
 
     it('should default to TASK_STATE_UNSPECIFIED when status is not provided', async () => {

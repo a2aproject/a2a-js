@@ -320,15 +320,27 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should throw InvalidParams for an invalid status filter string', async () => {
-      await expect(
-        transportHandler.listTasks({ status: 'bogus-status' }, mockContext)
-      ).rejects.toThrow('Invalid status filter');
+    it('should forward an unrecognized status filter as UNRECOGNIZED for the request handler to reject', async () => {
+      // Parsing is the transport's job; validation lives in
+      // DefaultRequestHandler so every transport behaves identically.
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: 'bogus-status' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.UNRECOGNIZED }),
+        mockContext
+      );
     });
 
-    it('should throw InvalidParams for an out-of-range numeric status filter', async () => {
-      await expect(transportHandler.listTasks({ status: '99' }, mockContext)).rejects.toThrow(
-        'Invalid status filter'
+    it('should forward an out-of-range numeric status filter as UNRECOGNIZED for the request handler to reject', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: '99' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.UNRECOGNIZED }),
+        mockContext
       );
     });
 

@@ -14,7 +14,6 @@ import {
   ListTasksRequest,
   ListTaskPushNotificationConfigsResponse,
   AgentCard,
-  TaskState,
 } from '../../../index.js';
 import { serializeListTasksResponse } from '../list_tasks_serializer.js';
 import {
@@ -155,12 +154,6 @@ export class JsonRpcTransportHandler {
             break;
           case 'ListTasks': {
             const listTasksRequest = ListTasksRequest.fromJSON(rpcRequest.params);
-            if (listTasksRequest.status === TaskState.UNRECOGNIZED) {
-              // Reject invalid status filters — `taskStateFromJSON`
-              // maps unknown values to `UNRECOGNIZED`, which would otherwise
-              // silently filter to an empty result set.
-              throw new RequestMalformedError('Invalid status filter');
-            }
             result = serializeListTasksResponse(
               await this.requestHandler.listTasks(listTasksRequest, context),
               { includeArtifacts: listTasksRequest.includeArtifacts }

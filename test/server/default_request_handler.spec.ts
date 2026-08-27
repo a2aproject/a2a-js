@@ -2111,14 +2111,49 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       assert.equal(nonMatching.totalSize, 0);
     });
 
-    it('matches nothing for an unrecognized status rather than listing everything', async () => {
+    it('rejects an unrecognized status filter with RequestMalformedError', async () => {
+      // Regression: an unknown status used to deserialize to the synthetic
+      // UNRECOGNIZED (-1) sentinel and silently match nothing. Validation
+      // lives in the request handler so every transport (JSON-RPC, REST,
+      // gRPC) rejects malformed filters identically.
       const params = ListTasksRequest.fromJSON({ pageSize: 10, status: 'NOT_A_REAL_STATE' });
       assert.equal(params.status, TaskState.UNRECOGNIZED);
 
-      const result = await handler.listTasks(params, serverCallContext);
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an unrecognized status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
 
-      assert.lengthOf(result.tasks, 0);
-      assert.equal(result.totalSize, 0);
+    it('rejects an out-of-range numeric status filter (gRPC-style raw decode) with RequestMalformedError', async () => {
+      const params: ListTasksRequest = {
+        tenant: '',
+        contextId: '',
+        status: 99 as TaskState,
+        pageSize: 10,
+        pageToken: '',
+        historyLength: 0,
+        statusTimestampAfter: undefined,
+        includeArtifacts: false,
+      };
+
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an out-of-range status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
+
+    it('accepts a valid numeric status filter passed through from a transport', async () => {
+      const result = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: TaskState.TASK_STATE_COMPLETED }),
+        serverCallContext
+      );
+      assert.lengthOf(result.tasks, 1);
+      assert.equal(result.totalSize, 1);
     });
   });
 
