@@ -1,13 +1,6 @@
 #!/bin/bash
 # ITK harness for a2a-js — a thin shim over a2a-itk's shared driver.
-#
-# Everything that used to live here (clone, image build, container start,
-# readiness poll, POST /run, result reporting, nightly metrics) is now in
-# a2a-itk/scripts/run_itk_shared.sh, which all five SDK repos share. Only the
-# genuinely TS-specific part stays: generating the proto bindings.
-#
-# Scenarios come from the shared role-based set in a2a-itk rather than a
-# scenarios.json in this repo — see a2a-itk/scenarios/traversal/.
+
 set -e
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -44,9 +37,6 @@ itk_extra_cleanup() {
 }
 
 # --- bootstrap -------------------------------------------------------------
-# The shared driver lives in a2a-itk, so the checkout has to exist before it
-# can be sourced. CI has already placed it here via actions/checkout; locally
-# we clone it from a2aproject/a2a-itk.
 : "${A2A_ITK_REVISION:?A2A_ITK_REVISION environment variable must be set}"
 if [ ! -d a2a-itk ]; then
   git clone https://github.com/a2aproject/a2a-itk.git a2a-itk
