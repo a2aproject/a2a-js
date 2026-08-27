@@ -58,6 +58,7 @@ import {
   AUTH_REQUIRED_STATE_LIST,
   INTERRUPTED_STATE_LIST,
   TERMINAL_STATE_LIST,
+  VALID_TASK_STATE_LIST,
   isTask,
   StreamPattern,
 } from '../utils.js';
@@ -753,6 +754,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     if (pageSize < 1 || pageSize > 100) {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
+    }
+
+    // Validate the state filter against the real enum so an unrecognized
+    // value — protobufjs' UNRECOGNIZED (-1) sentinel from JSON-RPC/REST
+    // parsing, or a raw out-of-range number from gRPC decoding — surfaces
+    // as RequestMalformedError instead of silently matching nothing.
+    if (params.status !== undefined && !VALID_TASK_STATE_LIST.includes(params.status)) {
+      throw new RequestMalformedError(`Invalid status filter: ${String(params.status)}`);
     }
 
     if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
