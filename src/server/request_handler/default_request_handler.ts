@@ -58,6 +58,7 @@ import {
   AUTH_REQUIRED_STATE_LIST,
   INTERRUPTED_STATE_LIST,
   TERMINAL_STATE_LIST,
+  VALID_TASK_STATE_LIST,
   isTask,
   StreamPattern,
 } from '../utils.js';
@@ -736,6 +737,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -754,6 +756,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
     }
 
+    // Validate the state filter against the real enum so an unrecognized
+    // value — protobufjs' UNRECOGNIZED (-1) sentinel from JSON-RPC/REST
+    // parsing, or a raw out-of-range number from gRPC decoding — surfaces
+    // as RequestMalformedError instead of silently matching nothing.
+    if (params.status !== undefined && !VALID_TASK_STATE_LIST.includes(params.status)) {
+      throw new RequestMalformedError(`Invalid status filter: ${String(params.status)}`);
+    }
+
     if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
       throw new RequestMalformedError('statusTimestampAfter must be a valid ISO 8601 date string');
     }
@@ -767,6 +777,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -851,6 +862,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -868,6 +880,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -899,6 +912,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -918,6 +932,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -934,6 +949,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
 
     // Attach to the event bus BEFORE loading the task from the store so
     // we don't miss events published between the load and subscription.
@@ -1130,6 +1146,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             `Stream ordering violation: received ${event.kind} in task lifecycle stream.`
           );
         return currentPattern;
+    }
+  }
+
+  /**
+   * A missing or whitespace-only task ID is malformed input: reject it
+   * with `RequestMalformedError` (-32602 / HTTP 400) instead of letting
+   * the task store surface `TaskNotFoundError` (-32001 / HTTP 404).
+   */
+  private _requireValidTaskId(taskId: string | undefined): void {
+    if (!taskId || taskId.trim() === '') {
+      throw new RequestMalformedError('Task ID is required');
     }
   }
 

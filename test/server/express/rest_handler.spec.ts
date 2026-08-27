@@ -450,17 +450,23 @@ describe('restHandler', () => {
       );
     });
 
-    it('should treat unrecognized status values as UNRECOGNIZED (-1)', async () => {
-      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
-
-      await request(app).get('/tasks?status=INVALID_VALUE').set('A2A-Version', '1.0').expect(200);
-
-      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
-      assert.equal(
-        callArgs.status,
-        TaskState.UNRECOGNIZED,
-        'Unrecognized status should return UNRECOGNIZED (-1)'
+    it('should surface the request handler RequestMalformedError for an unrecognized status as 400 INVALID_ARGUMENT', async () => {
+      // Regression: an invalid status used to be silently converted to
+      // UNRECOGNIZED (-1) and applied as a filter matching nothing.
+      // Validation now lives in DefaultRequestHandler; the REST layer must
+      // map it to 400 INVALID_ARGUMENT, mirroring Python's ParseDict
+      // behavior.
+      (mockRequestHandler.listTasks as Mock).mockRejectedValue(
+        new RequestMalformedError('Invalid status filter: -1')
       );
+
+      const response = await request(app)
+        .get('/tasks?status=INVALID_VALUE')
+        .set('A2A-Version', '1.0')
+        .expect(400);
+
+      assert.equal(response.body.error.status, 'INVALID_ARGUMENT');
+      assert.equal(response.body.error.details[0].reason, 'INVALID_PARAMS');
     });
 
     it('should default to TASK_STATE_UNSPECIFIED when status is not provided', async () => {
