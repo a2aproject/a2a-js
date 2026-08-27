@@ -58,6 +58,7 @@ import {
   AUTH_REQUIRED_STATE_LIST,
   INTERRUPTED_STATE_LIST,
   TERMINAL_STATE_LIST,
+  VALID_TASK_STATE_LIST,
   isTask,
   StreamPattern,
 } from '../utils.js';
@@ -736,6 +737,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -754,6 +756,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
     }
 
+    // Validate the state filter against the real enum so an unrecognized
+    // value — protobufjs' UNRECOGNIZED (-1) sentinel from JSON-RPC/REST
+    // parsing, or a raw out-of-range number from gRPC decoding — surfaces
+    // as RequestMalformedError instead of silently matching nothing.
+    if (params.status !== undefined && !VALID_TASK_STATE_LIST.includes(params.status)) {
+      throw new RequestMalformedError(`Invalid status filter: ${String(params.status)}`);
+    }
+
     if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
       throw new RequestMalformedError('statusTimestampAfter must be a valid ISO 8601 date string');
     }
@@ -767,6 +777,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -796,33 +807,41 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       );
     } else {
       // Mark the task as cancelled directly. We do not wait for the
-      // executor to actually cancel processing.
-      task.status = {
-        state: TaskState.TASK_STATE_CANCELED,
-        message: {
-          role: Role.ROLE_AGENT,
-          messageId: crypto.randomUUID(),
+      // executor to actually cancel processing. Routing through the
+      // ResultManager — instead of mutating `task` and saving directly —
+      // applies the per-(tenant, owner, taskId) write lock and the
+      // terminal-state guard, so a concurrent status update (e.g.
+      // COMPLETED published by a racing executor) cannot be clobbered by
+      // the CANCELED write or vice versa.
+      const cancelMessage: Message = {
+        role: Role.ROLE_AGENT,
+        messageId: crypto.randomUUID(),
+        taskId: task.id,
+        contextId: task.contextId,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Task cancellation requested by user.' },
+            mediaType: 'text/plain',
+            filename: '',
+            metadata: {},
+          },
+        ],
+        metadata: {},
+        extensions: [],
+        referenceTaskIds: [],
+      };
+      await new ResultManager(this.taskStore, context).processEvent(
+        AgentEvent.statusUpdate({
           taskId: task.id,
           contextId: task.contextId,
-          parts: [
-            {
-              content: { $case: 'text', value: 'Task cancellation requested by user.' },
-              mediaType: 'text/plain',
-              filename: '',
-              metadata: {},
-            },
-          ],
+          status: {
+            state: TaskState.TASK_STATE_CANCELED,
+            message: cancelMessage,
+            timestamp: new Date().toISOString(),
+          },
           metadata: {},
-          extensions: [],
-          referenceTaskIds: [],
-        },
-        timestamp: new Date().toISOString(),
-      };
-      if (task.status?.message) {
-        task.history = [...(task.history || []), task.status.message];
-      }
-
-      await this.taskStore.save(task, context);
+        })
+      );
     }
 
     const latestTask = await this.taskStore.load(taskId, context);
@@ -843,6 +862,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -860,6 +880,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -867,13 +888,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const configs = (await this.pushNotificationStore?.load(taskId, context)) || [];
     if (configs.length === 0) {
-      throw new A2AError(`Push notification config not found for task ${taskId}.`);
+      // Semantic TaskNotFoundError (rather than a bare A2AError) so REST
+      // maps this to 404 and JSON-RPC to -32001, matching Python's
+      // behavior. A bare A2AError previously surfaced as 500 / -32603.
+      throw new TaskNotFoundError(`Push notification config not found for task ${taskId}.`);
     }
 
     const config = configs.find((c) => c.id === params.id);
 
     if (!config) {
-      throw new A2AError(
+      throw new TaskNotFoundError(
         `Push notification config with id '${params.id}' not found for task ${taskId}.`
       );
     }
@@ -888,6 +912,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -907,6 +932,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -923,6 +949,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
 
     // Attach to the event bus BEFORE loading the task from the store so
     // we don't miss events published between the load and subscription.
@@ -1119,6 +1146,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             `Stream ordering violation: received ${event.kind} in task lifecycle stream.`
           );
         return currentPattern;
+    }
+  }
+
+  /**
+   * A missing or whitespace-only task ID is malformed input: reject it
+   * with `RequestMalformedError` (-32602 / HTTP 400) instead of letting
+   * the task store surface `TaskNotFoundError` (-32001 / HTTP 404).
+   */
+  private _requireValidTaskId(taskId: string | undefined): void {
+    if (!taskId || taskId.trim() === '') {
+      throw new RequestMalformedError('Task ID is required');
     }
   }
 

@@ -502,8 +502,10 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskByState.set(task.status.state, task);
     });
     (mockTaskStore as MockTaskStore).load.mockImplementation(async (id) => {
+      // Match InMemoryTaskStore semantics: load returns deep copies so
+      // the ResultManager's in-place edits cannot leak into storage.
       for (const t of [...taskByState.values()].reverse()) {
-        if (t.id === id) return t;
+        if (t.id === id) return structuredClone(t);
       }
       return undefined;
     });
@@ -1710,6 +1712,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(events[0].payload?.$case, 'task');
   });
 
+  it('getTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('getTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '   ', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
   it('getTask: should return an existing task from the store', async () => {
     const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);
@@ -2109,14 +2123,49 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       assert.equal(nonMatching.totalSize, 0);
     });
 
-    it('matches nothing for an unrecognized status rather than listing everything', async () => {
+    it('rejects an unrecognized status filter with RequestMalformedError', async () => {
+      // Regression: an unknown status used to deserialize to the synthetic
+      // UNRECOGNIZED (-1) sentinel and silently match nothing. Validation
+      // lives in the request handler so every transport (JSON-RPC, REST,
+      // gRPC) rejects malformed filters identically.
       const params = ListTasksRequest.fromJSON({ pageSize: 10, status: 'NOT_A_REAL_STATE' });
       assert.equal(params.status, TaskState.UNRECOGNIZED);
 
-      const result = await handler.listTasks(params, serverCallContext);
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an unrecognized status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
 
-      assert.lengthOf(result.tasks, 0);
-      assert.equal(result.totalSize, 0);
+    it('rejects an out-of-range numeric status filter (gRPC-style raw decode) with RequestMalformedError', async () => {
+      const params: ListTasksRequest = {
+        tenant: '',
+        contextId: '',
+        status: 99 as TaskState,
+        pageSize: 10,
+        pageToken: '',
+        historyLength: 0,
+        statusTimestampAfter: undefined,
+        includeArtifacts: false,
+      };
+
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an out-of-range status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
+
+    it('accepts a valid numeric status filter passed through from a transport', async () => {
+      const result = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: TaskState.TASK_STATE_COMPLETED }),
+        serverCallContext
+      );
+      assert.lengthOf(result.tasks, 1);
+      assert.equal(result.totalSize, 1);
     });
   });
 
@@ -2359,6 +2408,61 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
     expect(getResponse.id).to.equal(taskId);
     expect(getResponse.url).to.equal(pushConfig.url);
+  });
+
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when no configs exist', async () => {
+    const taskId = 'task-no-config';
+    await mockTaskStore.save(
+      {
+        id: taskId,
+        contextId: 'ctx-no-config',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
+      },
+      serverCallContext
+    );
+
+    await expect(
+      handler.getTaskPushNotificationConfig(
+        { tenant: '', taskId, id: 'missing' },
+        serverCallContext
+      )
+    ).rejects.toThrow(TaskNotFoundError);
+  });
+
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when the config id is unknown', async () => {
+    const taskId = 'task-unknown-config-id';
+    await mockTaskStore.save(
+      {
+        id: taskId,
+        contextId: 'ctx-unknown-config-id',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
+      },
+      serverCallContext
+    );
+    await handler.createTaskPushNotificationConfig(
+      {
+        tenant: '',
+        taskId,
+        id: 'config-known',
+        url: 'https://example.com/notify',
+        token: '',
+        authentication: undefined,
+      },
+      serverCallContext
+    );
+
+    await expect(
+      handler.getTaskPushNotificationConfig(
+        { tenant: '', taskId, id: 'config-unknown' },
+        serverCallContext
+      )
+    ).rejects.toThrow(TaskNotFoundError);
   });
 
   it('createTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
@@ -3276,34 +3380,43 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('Push Notification methods should throw error if task does not exist', async () => {
     const nonExistentTaskId = 'task-non-existent';
-    const config: TaskPushNotificationConfig = {
-      tenant: '',
-      taskId: '',
-      id: 'cfg-x',
-      url: 'https://x.com',
-      token: 'token-x',
-      authentication: undefined,
-    };
 
     const methodsToTest = [
       {
         name: 'createTaskPushNotificationConfig',
         params: {
-          name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/${config.id}`,
-          pushNotificationConfig: config,
-        },
+          tenant: '',
+          id: 'cfg-x',
+          taskId: nonExistentTaskId,
+          url: 'https://x.com',
+          token: 'token-x',
+          authentication: undefined,
+        } as TaskPushNotificationConfig,
       },
       {
         name: 'getTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as GetTaskPushNotificationConfigRequest,
       },
       {
         name: 'listTaskPushNotificationConfigs',
-        params: { parent: `tasks/${nonExistentTaskId}`, pageSize: 0, pageToken: '' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          pageSize: 0,
+          pageToken: '',
+        } as ListTaskPushNotificationConfigsRequest,
       },
       {
         name: 'deleteTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as DeleteTaskPushNotificationConfigRequest,
       },
     ];
 
@@ -3380,6 +3493,81 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } catch (error: any) {
         expect(error).to.be.instanceOf(PushNotificationNotSupportedError);
       }
+    }
+  });
+
+  it('cancelTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: '', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('cancelTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: ' \t ', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('resubscribe: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const generator = handler.resubscribe({ id: badId, tenant: '' }, serverCallContext);
+      await expect(generator.next()).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('createTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: TaskPushNotificationConfig = {
+        tenant: '',
+        id: 'config-1',
+        taskId: badId,
+        url: 'https://example.com/notify',
+        token: 'secret-token',
+        authentication: undefined,
+      };
+      await expect(
+        handler.createTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('getTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: GetTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.getTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('listTaskPushNotificationConfigs: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: ListTaskPushNotificationConfigsRequest = {
+        tenant: '',
+        taskId: badId,
+        pageSize: 10,
+        pageToken: '',
+      };
+      await expect(
+        handler.listTaskPushNotificationConfigs(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('deleteTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: DeleteTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.deleteTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
     }
   });
 
@@ -3574,6 +3762,59 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       expect(error.message).to.contain('Task not cancelable');
     }
     expect((mockAgentExecutor as MockAgentExecutor).cancelTask).not.toHaveBeenCalled();
+  });
+
+  it('cancelTask: does not clobber a task a concurrent executor just completed', async () => {
+    // Regression: cancel used load→check→mutate→save with no lock, so a
+    // COMPLETED status written by a racing executor between the check and
+    // the save could be overwritten with CANCELED (or the CANCELED write
+    // lost). cancelTask now routes the no-bus path through ResultManager,
+    // whose per-task write lock and terminal-state guard make the
+    // transition atomic; if the executor already finished, the cancel
+    // fails cleanly instead of corrupting the task.
+    const taskId = 'task-cancel-race';
+    const contextId = 'ctx-cancel-race';
+    const workTask: Task = {
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    const completedTask: Task = {
+      ...structuredClone(workTask),
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    };
+
+    const saved: Task[] = [];
+    let loadCount = 0;
+    const racingStore: TaskStore = {
+      save: async (task) => {
+        saved.push(structuredClone(task));
+      },
+      load: async () => {
+        loadCount += 1;
+        // First load (cancel's initial check) sees WORKING; the racing
+        // executor completes the task before ResultManager re-loads
+        // inside its write lock.
+        return loadCount === 1 ? structuredClone(workTask) : structuredClone(completedTask);
+      },
+      list: async () => ({ tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 }),
+    };
+    const racingHandler = new DefaultRequestHandler(
+      testAgentCard,
+      racingStore,
+      mockAgentExecutor,
+      executionEventBusManager
+    );
+
+    await expect(
+      racingHandler.cancelTask({ id: taskId, tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(TaskNotCancelableError);
+
+    // The CANCELED write must never reach the store.
+    expect(saved.some((t) => t.status?.state === TaskState.TASK_STATE_CANCELED)).toBe(false);
   });
 
   it('should use contextId from incomingMessage if present (contextId assignment logic)', async () => {
