@@ -3345,34 +3345,30 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('Push Notification methods should throw error if task does not exist', async () => {
     const nonExistentTaskId = 'task-non-existent';
-    const config: TaskPushNotificationConfig = {
-      tenant: '',
-      taskId: '',
-      id: 'cfg-x',
-      url: 'https://x.com',
-      token: 'token-x',
-      authentication: undefined,
-    };
 
     const methodsToTest = [
       {
         name: 'createTaskPushNotificationConfig',
         params: {
-          name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/${config.id}`,
-          pushNotificationConfig: config,
+          tenant: '',
+          id: 'cfg-x',
+          taskId: nonExistentTaskId,
+          url: 'https://x.com',
+          token: 'token-x',
+          authentication: undefined,
         },
       },
       {
         name: 'getTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: { tenant: '', taskId: nonExistentTaskId, id: 'cfg-x' },
       },
       {
         name: 'listTaskPushNotificationConfigs',
-        params: { parent: `tasks/${nonExistentTaskId}`, pageSize: 0, pageToken: '' },
+        params: { tenant: '', taskId: nonExistentTaskId, pageSize: 0, pageToken: '' },
       },
       {
         name: 'deleteTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: { tenant: '', taskId: nonExistentTaskId, id: 'cfg-x' },
       },
     ];
 
@@ -3462,6 +3458,69 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await expect(
       handler.cancelTask({ id: ' \t ', tenant: '', metadata: {} }, serverCallContext)
     ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('resubscribe: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const generator = handler.resubscribe({ id: badId, tenant: '' }, serverCallContext);
+      await expect(generator.next()).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('createTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: TaskPushNotificationConfig = {
+        tenant: '',
+        id: 'config-1',
+        taskId: badId,
+        url: 'https://example.com/notify',
+        token: 'secret-token',
+        authentication: undefined,
+      };
+      await expect(
+        handler.createTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('getTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: GetTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.getTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('listTaskPushNotificationConfigs: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: ListTaskPushNotificationConfigsRequest = {
+        tenant: '',
+        taskId: badId,
+        pageSize: 10,
+        pageToken: '',
+      };
+      await expect(
+        handler.listTaskPushNotificationConfigs(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('deleteTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: DeleteTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.deleteTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
   });
 
   it('cancelTask: should cancel a running task and notify listeners', async () => {
