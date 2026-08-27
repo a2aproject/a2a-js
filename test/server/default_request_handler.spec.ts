@@ -1712,6 +1712,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(events[0].payload?.$case, 'task');
   });
 
+  it('getTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('getTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '   ', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
   it('getTask: should return an existing task from the store', async () => {
     const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);
@@ -3333,34 +3345,43 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('Push Notification methods should throw error if task does not exist', async () => {
     const nonExistentTaskId = 'task-non-existent';
-    const config: TaskPushNotificationConfig = {
-      tenant: '',
-      taskId: '',
-      id: 'cfg-x',
-      url: 'https://x.com',
-      token: 'token-x',
-      authentication: undefined,
-    };
 
     const methodsToTest = [
       {
         name: 'createTaskPushNotificationConfig',
         params: {
-          name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/${config.id}`,
-          pushNotificationConfig: config,
-        },
+          tenant: '',
+          id: 'cfg-x',
+          taskId: nonExistentTaskId,
+          url: 'https://x.com',
+          token: 'token-x',
+          authentication: undefined,
+        } as TaskPushNotificationConfig,
       },
       {
         name: 'getTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as GetTaskPushNotificationConfigRequest,
       },
       {
         name: 'listTaskPushNotificationConfigs',
-        params: { parent: `tasks/${nonExistentTaskId}`, pageSize: 0, pageToken: '' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          pageSize: 0,
+          pageToken: '',
+        } as ListTaskPushNotificationConfigsRequest,
       },
       {
         name: 'deleteTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as DeleteTaskPushNotificationConfigRequest,
       },
     ];
 
@@ -3437,6 +3458,81 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } catch (error: any) {
         expect(error).to.be.instanceOf(PushNotificationNotSupportedError);
       }
+    }
+  });
+
+  it('cancelTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: '', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('cancelTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: ' \t ', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('resubscribe: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const generator = handler.resubscribe({ id: badId, tenant: '' }, serverCallContext);
+      await expect(generator.next()).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('createTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: TaskPushNotificationConfig = {
+        tenant: '',
+        id: 'config-1',
+        taskId: badId,
+        url: 'https://example.com/notify',
+        token: 'secret-token',
+        authentication: undefined,
+      };
+      await expect(
+        handler.createTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('getTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: GetTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.getTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('listTaskPushNotificationConfigs: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: ListTaskPushNotificationConfigsRequest = {
+        tenant: '',
+        taskId: badId,
+        pageSize: 10,
+        pageToken: '',
+      };
+      await expect(
+        handler.listTaskPushNotificationConfigs(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('deleteTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: DeleteTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.deleteTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
     }
   });
 
