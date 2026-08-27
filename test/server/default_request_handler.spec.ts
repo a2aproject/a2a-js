@@ -1724,6 +1724,32 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     ).rejects.toThrow(RequestMalformedError);
   });
 
+  it('sendMessage: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        messageId: 'msg-ws-taskid',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'hi' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: '',
+        taskId: '   ',
+        extensions: [],
+        metadata: {},
+      },
+    } as SendMessageRequest;
+    await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(
+      RequestMalformedError
+    );
+  });
+
   it('getTask: should return an existing task from the store', async () => {
     const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);
