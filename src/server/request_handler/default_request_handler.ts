@@ -166,6 +166,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     let referenceTasks: Task[] | undefined;
 
     if (incomingMessage.taskId) {
+      this._requireValidTaskId(incomingMessage.taskId);
       task = await this.taskStore.load(incomingMessage.taskId, context);
       if (!task) {
         throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
@@ -597,11 +598,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        structuredClone(params.configuration.taskPushNotificationConfig)
-      );
+      const pushConfig = structuredClone(params.configuration.taskPushNotificationConfig);
+      pushConfig.taskId = taskId;
+      await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
@@ -693,11 +692,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        structuredClone(params.configuration.taskPushNotificationConfig)
-      );
+      const pushConfig = structuredClone(params.configuration.taskPushNotificationConfig);
+      pushConfig.taskId = taskId;
+      await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
     // Run the executor in the background. Bus cleanup is tied to the

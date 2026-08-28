@@ -219,6 +219,31 @@ describe('JsonRpcTransportHandler', () => {
         expect.anything()
       );
     });
+
+    it('should accept GetExtendedAgentCard without params', async () => {
+      (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockResolvedValue({
+        name: 'test-agent',
+        description: '',
+        url: 'http://example.test',
+        version: '1.0',
+        capabilities: {},
+        defaultInputModes: [],
+        defaultOutputModes: [],
+        skills: [],
+      });
+      const request = {
+        jsonrpc: '2.0',
+        method: 'GetExtendedAgentCard',
+        id: 1,
+      };
+      const response = (await transportHandler.handle(request, defaultContext)) as {
+        result?: unknown;
+        error?: unknown;
+      };
+      expect(response.error).toBeUndefined();
+      expect(response.result).toBeDefined();
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalled();
+    });
   });
 
   describe('ListTasks serialization (§3.1.4)', () => {
