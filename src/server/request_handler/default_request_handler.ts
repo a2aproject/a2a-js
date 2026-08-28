@@ -598,11 +598,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        structuredClone(params.configuration.taskPushNotificationConfig)
-      );
+      const pushConfig = structuredClone(params.configuration.taskPushNotificationConfig);
+      pushConfig.taskId = taskId;
+      await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
@@ -694,11 +692,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        structuredClone(params.configuration.taskPushNotificationConfig)
-      );
+      const pushConfig = structuredClone(params.configuration.taskPushNotificationConfig);
+      pushConfig.taskId = taskId;
+      await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
     // Run the executor in the background. Bus cleanup is tied to the
