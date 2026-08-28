@@ -270,9 +270,9 @@ export interface Message {
   /** The unique identifier (e.g. UUID) of the message. This is created by the message creator. */
   messageId: string;
   /** Optional. The context id of the message. If set, the message will be associated with the given context. */
-  contextId: string;
+  contextId?: string | undefined;
   /** Optional. The task id of the message. If set, the message will be associated with the given task. */
-  taskId: string;
+  taskId?: string | undefined;
   /** Identifies the sender of the message. */
   role: Role;
   /** Parts is the container of the message content. */
@@ -1153,10 +1153,10 @@ export const Message: MessageFns<Message> = {
     if (message.messageId !== "") {
       obj.messageId = message.messageId;
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       obj.contextId = message.contextId;
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       obj.taskId = message.taskId;
     }
     if (message.role !== 0) {

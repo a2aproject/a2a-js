@@ -433,10 +433,10 @@ export const Message: MessageFns<Message> = {
     if (message.messageId !== "") {
       writer.uint32(10).string(message.messageId);
     }
-    if (message.contextId !== "") {
+    if (message.contextId !== "" && message.contextId !== undefined) {
       writer.uint32(18).string(message.contextId);
     }
-    if (message.taskId !== "") {
+    if (message.taskId !== "" && message.taskId !== undefined) {
       writer.uint32(26).string(message.taskId);
     }
     if (message.role !== 0) {
