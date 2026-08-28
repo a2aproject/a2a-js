@@ -227,6 +227,68 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
     expect(stored[0].token).toBe('tok');
   });
 
+  it('stamps the resolved taskId on sendMessageStream inline push config', async () => {
+    const executor = new MockAgentExecutor();
+    executor.execute.mockImplementation(fakeTaskExecute);
+    handler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      executor,
+      new DefaultExecutionEventBusManager(),
+      pushNotificationStore
+    );
+
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      id: 'c-stream',
+      url: 'https://example.test/hook-stream',
+      token: 'tok-stream',
+      authentication: undefined,
+    };
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        messageId: 'msg-push-iso-stream',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'hi' },
+            mediaType: 'text/plain',
+            filename: '',
+            metadata: undefined,
+          },
+        ],
+        taskId: '',
+        contextId: '',
+        extensions: [],
+        metadata: {},
+        referenceTaskIds: [],
+      },
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: config,
+        returnImmediately: false,
+      },
+    };
+
+    let taskId = '';
+    for await (const event of handler.sendMessageStream(params, serverContext)) {
+      if (event.payload?.$case === 'task') {
+        taskId = event.payload.value.id;
+      }
+    }
+
+    config.url = 'https://attacker.test/';
+    const stored = await pushNotificationStore.load(taskId, serverContext);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].id).toBe('c-stream');
+    expect(stored[0].taskId).toBe(taskId);
+    expect(stored[0].url).toBe('https://example.test/hook-stream');
+    expect(stored[0].token).toBe('tok-stream');
+  });
+
   it('listTaskPushNotificationConfigs returns every entry after mixed id-less + explicit Creates', async () => {
     const taskId = 'task-list-after-multi';
     await taskStore.save(makeTask(taskId), serverContext);
