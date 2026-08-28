@@ -166,6 +166,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     let referenceTasks: Task[] | undefined;
 
     if (incomingMessage.taskId) {
+      this._requireValidTaskId(incomingMessage.taskId);
       task = await this.taskStore.load(incomingMessage.taskId, context);
       if (!task) {
         throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
