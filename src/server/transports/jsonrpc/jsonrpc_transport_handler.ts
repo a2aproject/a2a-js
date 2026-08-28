@@ -203,7 +203,7 @@ export class JsonRpcTransportHandler {
           case 'GetExtendedAgentCard':
             result = AgentCard.toJSON(
               await this.requestHandler.getAuthenticatedExtendedAgentCard(
-                GetExtendedAgentCardRequest.fromJSON(rpcRequest.params),
+                GetExtendedAgentCardRequest.fromJSON(rpcRequest.params ?? {}),
                 context
               )
             );
