@@ -72,6 +72,12 @@ export interface DefaultRequestHandlerOptions {
    * To add another keep-alive state while preserving those defaults, include
    * both default states and the additional state. Any custom value overrides
    * the default list.
+   *
+   * This option decides the fate of the bus from the last state observed on
+   * it, which only works for a bus that delivers its events before the
+   * executor returns. A bus that defers delivery should instead implement
+   * {@link ExecutionEventBusManager.settleByTaskId}, which takes precedence
+   * and makes this option inert.
    */
   keepBusAliveStates?: TaskState[];
 }
@@ -459,12 +465,23 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * (and the bare-Message stream pattern) close the bus immediately;
    * states configured in `keepBusAliveStates` keep it alive so follow-up
    * sends and resubscribers can still attach.
+   *
+   * A bus manager that implements
+   * {@link ExecutionEventBusManager.settleByTaskId} takes full ownership of
+   * this decision instead: we delegate and do no teardown of our own, so
+   * `keepBusAliveStates` does not apply. That seam exists for buses whose
+   * delivery is deferred, where `lastState` is still `undefined` when the
+   * executor returns and no state-based policy can work.
    */
   private _settleBus(
     taskId: string,
     eventBus: ExecutionEventBus,
     lastState: TaskState | undefined
   ): void {
+    if (this.eventBusManager.settleByTaskId) {
+      this.eventBusManager.settleByTaskId(taskId, eventBus, lastState);
+      return;
+    }
     if (lastState !== undefined && this.keepBusAliveStates.has(lastState)) {
       return;
     }

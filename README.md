@@ -198,6 +198,25 @@ See the spec section
 and the [`push-notification-agent`](src/samples/agents/push-notification-agent/)
 sample (which includes a runnable webhook receiver).
 
+### Custom event bus and task store
+
+`TaskStore`, `ExecutionEventBus` and `ExecutionEventBusManager` are all
+constructor-injected into `DefaultRequestHandler`, so you can back them with a
+database, a cache, or a message broker instead of the in-process defaults.
+
+One caveat applies to a bus that does not deliver events synchronously. When the
+agent executor returns, the handler decides whether to tear that task's bus down
+from the last state it saw published, so a bus that batches or persists events
+before handing them to subscribers has shown the handler nothing by that point
+and its bus is released too early. Such a bus should take over the decision by
+implementing the optional `settleByTaskId` on its manager and settling from its
+own drain instead.
+
+See the doc comments on
+[`ExecutionEventBusManager`](src/server/events/execution_event_bus_manager.ts)
+for the full contract, and `test/integration/delayed_event_bus.spec.ts` for a
+worked example against a bus that withholds every batch.
+
 ### Client customization
 
 `@a2a-js/sdk/client` exposes a transport-agnostic `CallInterceptor` interface
