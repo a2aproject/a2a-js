@@ -183,8 +183,11 @@
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.11.0",
+    "better-sqlite3": "*",
     "express": "^4.21.2 || ^5.1.0",
-    "kysely": "^0.29.5"
+    "kysely": "^0.29.5",
+    "mysql2": "*",
+    "pg": "*"
   },
   "peerDependenciesMeta": {
     "express": {
@@ -198,6 +201,18 @@
     },
     "kysely": {
       "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
     }
+  },
+  "bin": {
+    "a2a-db": "./dist/cli/a2a_db.js"
   }
 }

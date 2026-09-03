@@ -17,6 +17,8 @@ export default defineConfig({
     'src/compat/v0_3/server/grpc/index.ts',
     'src/compat/v0_3/client/index.ts',
     'src/compat/v0_3/client/transports/grpc/index.ts',
+    // `a2a-db` CLI. Node-only, so deliberately absent from test-build:workers-safe.
+    'src/cli/a2a_db.ts',
   ],
   format: ['esm', 'cjs'],
   dts: true,
