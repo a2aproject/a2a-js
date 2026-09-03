@@ -8,7 +8,7 @@
     "url": "git+https://github.com/a2aproject/a2a-js.git"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -150,6 +150,7 @@
     "eslint-plugin-prettier": "^5.5.4",
     "express": "^5.1.0",
     "json-schema-to-typescript": "^15.0.4",
+    "kysely": "^0.29.5",
     "prettier": "^3.6.2",
     "supertest": "^7.1.4",
     "tsup": "^8.5.0",
@@ -182,7 +183,8 @@
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.11.0",
-    "express": "^4.21.2 || ^5.1.0"
+    "express": "^4.21.2 || ^5.1.0",
+    "kysely": "^0.29.5"
   },
   "peerDependenciesMeta": {
     "express": {
@@ -192,6 +194,9 @@
       "optional": true
     },
     "@bufbuild/protobuf": {
+      "optional": true
+    },
+    "kysely": {
       "optional": true
     }
   }
