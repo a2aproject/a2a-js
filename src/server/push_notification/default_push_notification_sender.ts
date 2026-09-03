@@ -224,6 +224,15 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       const serializer = this._resolveSerializer(wireVersion);
       const { body, contentType } = serializer.serialize(streamResponse, task);
 
+      if (pushConfig.authentication && pushConfig.authentication.credentials) {
+        const { schemes, credentials } = pushConfig.authentication;
+        if (schemes.includes('Bearer')) {
+          headers['Authorization'] = `Bearer ${credentials}`;
+        } else if (schemes.includes('Basic')) {
+          headers['Authorization'] = `Basic ${credentials}`;
+        }
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
