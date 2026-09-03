@@ -344,6 +344,29 @@ describe('RestTransportHandler', () => {
       );
     });
 
+    it('should forward historyLength=0 instead of dropping it', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ historyLength: '0' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ historyLength: 0 }),
+        mockContext
+      );
+    });
+
+    it('should reject a non-numeric pageSize', async () => {
+      await expect(transportHandler.listTasks({ pageSize: 'abc' }, mockContext)).rejects.toThrow(
+        /pageSize must be a valid integer/
+      );
+    });
+
+    it('should reject pageSize=0', async () => {
+      await expect(transportHandler.listTasks({ pageSize: '0' }, mockContext)).rejects.toThrow(
+        /pageSize must be between 1 and 100/
+      );
+    });
+
     it('should pass a valid status filter through to the request handler', async () => {
       (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
 
