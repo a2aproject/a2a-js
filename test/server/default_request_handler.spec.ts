@@ -4518,8 +4518,41 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       const context = new ServerCallContext();
 
       await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
-        requiredExtensionUri
+        ExtensionSupportRequiredError
       );
+    });
+
+    it('should not persist a follow-up that is rejected for a missing required extension', async () => {
+      const existing = createTestTask('task-ext-followup');
+      const saveSpy = vi.spyOn(mockTaskStore, 'save');
+      await mockTaskStore.save(existing, new ServerCallContext());
+      saveSpy.mockClear();
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-followup',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'follow-up' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: existing.contextId,
+          taskId: existing.id,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      await expect(requiredExtHandler.sendMessage(params, new ServerCallContext())).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+      expect(saveSpy).not.toHaveBeenCalled();
     });
 
     it('should accept requests that declare the required extension', async () => {
