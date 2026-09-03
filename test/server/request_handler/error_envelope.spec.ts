@@ -172,7 +172,7 @@ describe('DefaultRequestHandler synthetic error Task id (blocking path)', () => 
     expect(loaded.status.state).toBe(TaskState.TASK_STATE_FAILED);
     expect(
       (loaded.status.message?.parts[0].content as { $case: 'text'; value: string }).value
-    ).toContain(errorMessage);
+    ).toBe('Agent execution failed.');
   });
 
   it('synthetic Task carries the original user message in history so subsequent reads see what the client sent', async () => {
