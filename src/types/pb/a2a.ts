@@ -1772,6 +1772,25 @@ export const SecurityRequirement_SchemesEntry: MessageFns<SecurityRequirement_Sc
 
 export const SecurityScheme: MessageFns<SecurityScheme> = {
   fromJSON(object: any): SecurityScheme {
+    if (isSet(object.scheme) && typeof object.scheme === "object" && "$case" in object.scheme) {
+      const caseName = object.scheme.$case;
+      const val = object.scheme.value;
+      if (caseName === "apiKeySecurityScheme") {
+        return { scheme: { $case: "apiKeySecurityScheme", value: APIKeySecurityScheme.fromJSON(val) } };
+      }
+      if (caseName === "httpAuthSecurityScheme") {
+        return { scheme: { $case: "httpAuthSecurityScheme", value: HTTPAuthSecurityScheme.fromJSON(val) } };
+      }
+      if (caseName === "oauth2SecurityScheme") {
+        return { scheme: { $case: "oauth2SecurityScheme", value: OAuth2SecurityScheme.fromJSON(val) } };
+      }
+      if (caseName === "openIdConnectSecurityScheme") {
+        return { scheme: { $case: "openIdConnectSecurityScheme", value: OpenIdConnectSecurityScheme.fromJSON(val) } };
+      }
+      if (caseName === "mtlsSecurityScheme") {
+        return { scheme: { $case: "mtlsSecurityScheme", value: MutualTlsSecurityScheme.fromJSON(val) } };
+      }
+    }
     return {
       scheme: isSet(object.apiKeySecurityScheme)
         ? { $case: "apiKeySecurityScheme", value: APIKeySecurityScheme.fromJSON(object.apiKeySecurityScheme) }
@@ -1940,6 +1959,25 @@ export const MutualTlsSecurityScheme: MessageFns<MutualTlsSecurityScheme> = {
 
 export const OAuthFlows: MessageFns<OAuthFlows> = {
   fromJSON(object: any): OAuthFlows {
+    if (isSet(object.flow) && typeof object.flow === "object" && "$case" in object.flow) {
+      const caseName = object.flow.$case;
+      const val = object.flow.value;
+      if (caseName === "authorizationCode") {
+        return { flow: { $case: "authorizationCode", value: AuthorizationCodeOAuthFlow.fromJSON(val) } };
+      }
+      if (caseName === "clientCredentials") {
+        return { flow: { $case: "clientCredentials", value: ClientCredentialsOAuthFlow.fromJSON(val) } };
+      }
+      if (caseName === "implicit") {
+        return { flow: { $case: "implicit", value: ImplicitOAuthFlow.fromJSON(val) } };
+      }
+      if (caseName === "password") {
+        return { flow: { $case: "password", value: PasswordOAuthFlow.fromJSON(val) } };
+      }
+      if (caseName === "deviceCode") {
+        return { flow: { $case: "deviceCode", value: DeviceCodeOAuthFlow.fromJSON(val) } };
+      }
+    }
     return {
       flow: isSet(object.authorizationCode)
         ? { $case: "authorizationCode", value: AuthorizationCodeOAuthFlow.fromJSON(object.authorizationCode) }
