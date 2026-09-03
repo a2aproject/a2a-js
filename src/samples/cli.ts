@@ -213,7 +213,7 @@ function printAgentEvent(event: AgentExecutionEvent) {
     }
 
     console.log(
-      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId})`
+      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, String(taskStateToJSON(state!)))} (Task: ${update.taskId}, Context: ${update.contextId})`
     );
 
     if (update.status?.message) {
