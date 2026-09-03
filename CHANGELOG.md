@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.0](https://github.com/a2aproject/a2a-js/compare/v1.1.0...v1.2.0) (2026-09-03)
+
+
+### Features
+
+* **itk:** use shared scenarios ([#672](https://github.com/a2aproject/a2a-js/issues/672)) ([07a7db4](https://github.com/a2aproject/a2a-js/commit/07a7db401e58db09b3c83119a84bdf1847f24aa6))
+
+
+### Bug Fixes
+
+* accept GetExtendedAgentCard JSON-RPC calls with omitted params ([#687](https://github.com/a2aproject/a2a-js/issues/687)) ([047d970](https://github.com/a2aproject/a2a-js/commit/047d97033ae4b4f48bee3d1b752c717e7a476a48))
+* guard terminal state transitions and make cancelTask atomic ([#636](https://github.com/a2aproject/a2a-js/issues/636)) ([7b87c94](https://github.com/a2aproject/a2a-js/commit/7b87c9480bfa643f9d2b2eaf06988b3d3a95de25))
+* reject empty task IDs with RequestMalformedError in getTask/cancelTask ([#629](https://github.com/a2aproject/a2a-js/issues/629)) ([71aae97](https://github.com/a2aproject/a2a-js/commit/71aae970a3187d8259c1c4eb08ac235f487c6876))
+* reject invalid ListTasks status filters with RequestMalformedError ([#631](https://github.com/a2aproject/a2a-js/issues/631)) ([a881fae](https://github.com/a2aproject/a2a-js/commit/a881faea5da2cd265f9dcac02c616b97de3bbb7f))
+* reject whitespace-only taskId on sendMessage ([#689](https://github.com/a2aproject/a2a-js/issues/689)) ([85227a0](https://github.com/a2aproject/a2a-js/commit/85227a011e70112d8eee7053845148f21cf96bf3))
+* return 404/-32001 for missing push notification configs ([#630](https://github.com/a2aproject/a2a-js/issues/630)) ([34f06e3](https://github.com/a2aproject/a2a-js/commit/34f06e3be3905970de7db24888f2d1c305a5a86c))
+* stamp the resolved taskId onto sendMessage push configs ([#688](https://github.com/a2aproject/a2a-js/issues/688)) ([cfb19a8](https://github.com/a2aproject/a2a-js/commit/cfb19a8ef0ffc2da3d2c14361cdb3dd82069dfc8))
+
 ## [1.1.0](https://github.com/a2aproject/a2a-js/compare/v1.0.1...v1.1.0) (2026-08-26)
 
 
