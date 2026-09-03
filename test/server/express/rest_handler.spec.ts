@@ -719,6 +719,33 @@ describe('restHandler', () => {
           .calls[0][0];
         assert.equal(passedConfig.id, '');
       });
+
+      it('should use the path taskId when the body omits taskId', async () => {
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        await request(app)
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({
+            url: 'http://127.0.0.1:9999/webhook',
+          })
+          .expect(201);
+
+        const passedConfig = (mockRequestHandler.createTaskPushNotificationConfig as Mock).mock
+          .calls[0][0];
+        assert.equal(passedConfig.taskId, 'task-1');
+      });
+
+      it('should reject a body taskId that disagrees with the path', async () => {
+        await request(app)
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({
+            url: 'http://127.0.0.1:9999/webhook',
+            taskId: 'other-task',
+          })
+          .expect(400);
+      });
     });
 
     describe('GET /tasks/:taskId/pushNotificationConfigs', () => {

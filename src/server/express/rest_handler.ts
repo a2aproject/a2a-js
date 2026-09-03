@@ -471,6 +471,11 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
     const params = TaskPushNotificationConfig.fromJSON(req.body ?? {});
+    const pathTaskId = req.params.taskId ?? '';
+    if (params.taskId && params.taskId !== pathTaskId) {
+      throw new RequestMalformedError('taskId in the body must match the path');
+    }
+    params.taskId = pathTaskId;
     const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
     sendResponse<TaskPushNotificationConfig>(
       res,
