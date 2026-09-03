@@ -94,6 +94,70 @@ describe('JsonRpcTransport', () => {
     });
   });
 
+  describe('JSON-RPC response validation', () => {
+    it.each([
+      ['missing', undefined],
+      ['invalid', '1.0'],
+    ])('rejects unary responses with a %s jsonrpc version', async (_description, jsonrpc) => {
+      mockFetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ...(jsonrpc === undefined ? {} : { jsonrpc }),
+            result: { ok: true },
+            id: 1,
+          }),
+          { status: 200 }
+        )
+      );
+
+      await expect(transport.callExtensionMethod('test/method', {})).rejects.toThrow(
+        "expected 'jsonrpc' to be exactly '2.0'"
+      );
+    });
+
+    it.each([
+      ['missing', undefined],
+      ['invalid', '1.0'],
+    ])('rejects SSE events with a %s jsonrpc version', async (_description, jsonrpc) => {
+      const event: Record<string, unknown> = {
+        ...(jsonrpc === undefined ? {} : { jsonrpc }),
+        result: {
+          message: {
+            messageId: 'response-msg-1',
+            role: 'ROLE_AGENT',
+            parts: [],
+          },
+        },
+        id: 1,
+      };
+      mockFetch.mockResolvedValue(
+        new Response(`data: ${JSON.stringify(event)}\n\n`, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      );
+
+      const request: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: 'test-msg-1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: undefined,
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
+      };
+      const stream = transport.sendMessageStream(request);
+
+      await expect(stream.next()).rejects.toThrow("expected 'jsonrpc' to be exactly '2.0'");
+    });
+  });
+
   describe('TaskPushNotificationConfig', () => {
     it('createTaskPushNotificationConfig should send correct params and return config', async () => {
       const config: TaskPushNotificationConfig = {
