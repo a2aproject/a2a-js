@@ -195,13 +195,30 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    * Builds the auth headers for a push notification request. Priority:
    * `pushConfig.authentication` (scheme + credentials) → `Authorization`
    * header; otherwise `pushConfig.token` → legacy token header.
+   *
+   * A configured `scheme` with missing/blank credentials is an error —
+   * silently dropping the Authorization header would let the
+   * webhook reject the push with an auth error that is hard to diagnose.
+   * Credentials containing CR/LF are rejected so a client cannot
+   * inject extra HTTP headers via the concatenated header value.
    */
   private _buildAuthHeaders(pushConfig: TaskPushNotificationConfig): Record<string, string> {
     const headers: Record<string, string> = {};
 
-    if (pushConfig.authentication?.scheme && pushConfig.authentication?.credentials) {
-      headers['Authorization'] =
-        `${pushConfig.authentication.scheme} ${pushConfig.authentication.credentials}`;
+    if (pushConfig.authentication?.scheme) {
+      const credentials = pushConfig.authentication.credentials;
+      if (!credentials || credentials.trim() === '') {
+        throw new Error(
+          `Push notification authentication scheme '${pushConfig.authentication.scheme}' ` +
+            `requires non-empty credentials.`
+        );
+      }
+      if (/[\r\n]/.test(credentials)) {
+        throw new Error(
+          'Push notification authentication credentials must not contain CR/LF characters.'
+        );
+      }
+      headers['Authorization'] = `${pushConfig.authentication.scheme} ${credentials}`;
     } else if (pushConfig.token) {
       headers[this.options.tokenHeaderName] = pushConfig.token;
     }
