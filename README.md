@@ -9,7 +9,7 @@
    <h2 align="center">
    <img src="https://raw.githubusercontent.com/a2aproject/A2A/refs/heads/main/docs/assets/a2a_logo/color/SVG/a2a_color.svg" width="800" alt="Agent2Agent Protocol Logo"/>
    </h2>
-   <h3 align="center">A JavaScript library that helps run agentic applications as A2AServers following the <a href="https://google-a2a.github.io/A2A">Agent2Agent (A2A) Protocol</a>.</h3>
+   <h3 align="center">A JavaScript library that helps run agentic applications as A2AServers following the <a href="https://a2a-protocol.org/">Agent2Agent (A2A) Protocol</a>.</h3>
 </html>
 
 <!-- markdownlint-enable no-inline-html -->
@@ -271,8 +271,8 @@ end-to-end demonstration across every transport.
 
 ## License
 
-This project is licensed under the terms of the [Apache 2.0 License](https://raw.githubusercontent.com/google-a2a/a2a-python/refs/heads/main/LICENSE).
+This project is licensed under the terms of the [Apache 2.0 License](LICENSE).
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/google-a2a/a2a-js/blob/main/CONTRIBUTING.md) for contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
