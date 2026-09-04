@@ -23,6 +23,10 @@ export default defineWorkersConfig(
         // (sibling pure-unit serializer tests stay in the edge suite).
         'test/server/push_notification_sender_serializer.spec.ts',
         'test/compat/v0_3/server/push_notification/create_legacy_aware_sender.spec.ts',
+        // Migrations run against a real database: native drivers and temp files, neither
+        // of which workerd has. Migrating is an operator step, never something a Worker
+        // does, so this is permanent rather than pending.
+        'test/server/database_migrations.spec.ts',
         // Node modules should always be excluded
         '**/node_modules/**',
       ],
