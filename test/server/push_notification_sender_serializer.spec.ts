@@ -24,6 +24,7 @@ import {
   A2A_CONTENT_TYPE,
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
+  A2A_VERSION_HEADER,
   ProtocolVersion,
 } from '../../src/constants.js';
 
@@ -176,6 +177,31 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     const bodies = received.map((r) => r.rawBody).sort();
     expect(bodies).toContain('{"v":"0.3"}');
     expect(bodies.some((b) => b.includes('"statusUpdate"'))).toBe(true);
+  });
+
+  it('stamps the dispatched wire version onto the A2A-Version header', async () => {
+    // Without this header a receiver has to inspect the body shape to tell
+    // a v1.0 push apart from a legacyCompat v0.3 one. See #647.
+    const v03Serializer: PushNotificationSerializer = {
+      serialize(): SerializedPushNotification {
+        return { body: '{"kind":"task"}', contentType: 'application/json' };
+      },
+    };
+    const sender = new DefaultPushNotificationSender(store, {
+      serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
+    });
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
+
+    await store.save('task-header-v1', ctxV1, makeConfig(`${baseUrl}/notify`));
+    await sender.send(makeStatusUpdate('task-header-v1'), ctxV1);
+
+    await store.save('task-header-v03', ctxV03, makeConfig(`${baseUrl}/notify`));
+    await sender.send(makeStatusUpdate('task-header-v03'), ctxV03);
+
+    expect(received).toHaveLength(2);
+    expect(received[0].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_PROTOCOL_VERSION);
+    expect(received[1].headers[A2A_VERSION_HEADER.toLowerCase()]).toBe(A2A_LEGACY_PROTOCOL_VERSION);
   });
 
   it('falls back to the v1.0 serializer with a one-time warning for unknown wire versions', async () => {

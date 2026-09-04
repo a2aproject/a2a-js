@@ -2,6 +2,7 @@ import { TaskPushNotificationConfig, StreamResponse, Task } from '../../index.js
 import {
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
+  A2A_VERSION_HEADER,
   ProtocolVersion,
 } from '../../constants.js';
 import { ServerCallContext } from '../context.js';
@@ -228,6 +229,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         method: 'POST',
         headers: {
           'Content-Type': contentType,
+          [A2A_VERSION_HEADER]: wireVersion,
           ...this._buildAuthHeaders(pushConfig),
         },
         body,
