@@ -494,8 +494,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTaskPushNotificationConfigs(
       req.params.taskId as string,
-      context,
-      (req.query.tenant as string) || ''
+      req.query,
+      context
     );
     sendResponse<ListTaskPushNotificationConfigsResponse>(
       res,
