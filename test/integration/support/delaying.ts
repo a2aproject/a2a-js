@@ -62,6 +62,7 @@ export class DelayingExecutionEventBus implements ExecutionEventBus {
   private readonly delegate: ExecutionEventBus;
   private readonly delayMs: number;
   private readonly pending: Array<() => void> = [];
+  private readonly drainCallbacks = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   /** Total events handed to the delegate; useful for delivery assertions. */
@@ -109,9 +110,24 @@ export class DelayingExecutionEventBus implements ExecutionEventBus {
     return this;
   }
 
+  /**
+   * Registers a callback invoked once per batch, after every event in it has
+   * been handed to every subscriber. A real deferred bus knows when its reader
+   * loop finished a batch; this is that signal. Acting on it — rather than
+   * inside an event dispatch — is what lets an owner tear the bus down without
+   * stripping a subscriber that has not been given the event yet.
+   *
+   * @returns a function that detaches the callback.
+   */
+  onDrained(callback: () => void): () => void {
+    this.drainCallbacks.add(callback);
+    return () => this.drainCallbacks.delete(callback);
+  }
+
   /** Drops anything still queued and cancels the pending flush. */
   dispose(): void {
     this.pending.length = 0;
+    this.drainCallbacks.clear();
     if (this.timer !== undefined) {
       clearTimeout(this.timer);
       this.timer = undefined;
@@ -129,6 +145,8 @@ export class DelayingExecutionEventBus implements ExecutionEventBus {
       this.timer = undefined;
       const batch = this.pending.splice(0, this.pending.length);
       for (const action of batch) action();
+      // Copy: a callback may settle the bus and mutate this set.
+      for (const callback of [...this.drainCallbacks]) callback();
       if (this.pending.length > 0) this.scheduleFlush();
     }, this.delayMs);
   }
@@ -152,7 +170,6 @@ export class DelayingExecutionEventBusManager implements ExecutionEventBusManage
     if (!bus) {
       bus = new DelayingExecutionEventBus(this.delayMs);
       this.buses.set(taskId, bus);
-      this.onBusCreated(taskId, bus);
     }
     return bus;
   }
@@ -174,55 +191,86 @@ export class DelayingExecutionEventBusManager implements ExecutionEventBusManage
   disposeAll(): void {
     for (const taskId of [...this.buses.keys()]) this.cleanupByTaskId(taskId);
   }
+}
 
-  protected onBusCreated(_taskId: string, _bus: DelayingExecutionEventBus): void {}
+/** True for the events that mean a task will publish nothing further. */
+function endsTheTask(event: AgentExecutionEvent): boolean {
+  if (event.kind === 'message') return true;
+  if (event.kind !== 'statusUpdate' && event.kind !== 'task') return false;
+  const state = event.data.status?.state;
+  return state !== undefined && TERMINAL_STATE_LIST.includes(state);
 }
 
 /**
  * The supported configuration for a deferred-delivery bus: it implements
- * `settleByTaskId` so the request handler performs no teardown, and settles
- * from its own drain instead — when a terminal status is actually *delivered*
- * to subscribers.
+ * `settleByTaskId`, takes ownership while events are still in flight, and
+ * settles from its own drain — when a terminal status is actually *delivered*
+ * to subscribers rather than merely published.
  */
 export class DeferredSettleBusManager extends DelayingExecutionEventBusManager {
-  /** Records handler settle requests so tests can assert delegation happened. */
+  /** Records handler settle offers so tests can assert delegation happened. */
   public readonly settleRequests: Array<{
     taskId: string;
     lastObservedState: TaskState | undefined;
+    tookOwnership: boolean;
   }> = [];
+
+  private readonly watchers = new Map<string, () => void>();
 
   settleByTaskId(
     taskId: string,
     _eventBus: ExecutionEventBus,
     lastObservedState: TaskState | undefined
-  ): void {
-    // Deliberately no teardown: our reader loop below decides when the task is
-    // really finished. `lastObservedState` is always undefined here because
-    // nothing has been delivered yet, which is exactly why the handler's
-    // state-based policy cannot be used.
-    this.settleRequests.push({ taskId, lastObservedState });
+  ): boolean {
+    // A terminal state has already reached subscribers — the executor outlived
+    // its own events. Nothing is left in flight, so let the handler settle this
+    // one the ordinary way.
+    const alreadyFinished =
+      lastObservedState !== undefined && TERMINAL_STATE_LIST.includes(lastObservedState);
+    this.settleRequests.push({ taskId, lastObservedState, tookOwnership: !alreadyFinished });
+    this.stopWatching(taskId);
+    if (alreadyFinished) return false;
+
+    const bus = this.buses.get(taskId);
+    if (!bus) return false;
+
+    // Events are still in flight. Take ownership and settle when they land.
+    //
+    // The terminal event is spotted by a listener, but the teardown happens on
+    // the bus's drain signal, once the whole batch has been handed to every
+    // subscriber. Tearing down from inside the dispatch instead would strip any
+    // subscriber registered after this listener — a `resubscribe` that attached
+    // while the task was still running — before it received the event.
+    let taskEnded = false;
+    const spot: EventListener = (event: AgentExecutionEvent) => {
+      if (endsTheTask(event)) taskEnded = true;
+    };
+    const detachDrain = bus.onDrained(() => {
+      if (!taskEnded) return;
+      if (this.buses.get(taskId) !== bus) return;
+      bus.finished();
+      this.cleanupByTaskId(taskId);
+    });
+
+    bus.on('event', spot);
+    this.watchers.set(taskId, () => {
+      detachDrain();
+      bus.off('event', spot);
+    });
+    return true;
   }
 
-  protected onBusCreated(taskId: string, bus: DelayingExecutionEventBus): void {
-    bus.on('event', (event: AgentExecutionEvent) => {
-      const state =
-        event.kind === 'statusUpdate' || event.kind === 'task'
-          ? event.data.status?.state
-          : undefined;
-      const isTerminal = state !== undefined && TERMINAL_STATE_LIST.includes(state);
-      if (!isTerminal && event.kind !== 'message') return;
+  override cleanupByTaskId(taskId: string): void {
+    this.stopWatching(taskId);
+    super.cleanupByTaskId(taskId);
+  }
 
-      // Settle on the next tick, not inline: this listener is registered
-      // before the handler's ExecutionEventQueue subscribes, and tearing the
-      // bus down mid-dispatch would strip the queue's listener before it sees
-      // this very event.
-      setTimeout(() => {
-        const current = this.buses.get(taskId);
-        if (current !== bus) return;
-        bus.finished();
-        this.cleanupByTaskId(taskId);
-      }, 0);
-    });
+  /** Detaches anything left watching this task from an earlier turn. */
+  private stopWatching(taskId: string): void {
+    const detach = this.watchers.get(taskId);
+    if (!detach) return;
+    this.watchers.delete(taskId);
+    detach();
   }
 }
 

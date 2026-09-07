@@ -21,9 +21,9 @@ interface SettleCall {
 }
 
 /**
- * Bus manager that implements the optional `settleByTaskId` seam and, by
- * default, declines to settle — the shape a database-backed bus uses when its
- * own reader loop decides when the task is really finished.
+ * Bus manager that takes ownership of every bus and then does nothing with it
+ * — the shape a database-backed bus uses when its own reader loop decides when
+ * the task is really finished.
  */
 class DeferringBusManager extends DefaultExecutionEventBusManager {
   public readonly settleCalls: SettleCall[] = [];
@@ -32,8 +32,26 @@ class DeferringBusManager extends DefaultExecutionEventBusManager {
     taskId: string,
     eventBus: ExecutionEventBus,
     lastObservedState: TaskState | undefined
-  ): void {
+  ): boolean {
     this.settleCalls.push({ taskId, eventBus, lastObservedState });
+    return true;
+  }
+}
+
+/**
+ * Bus manager that is offered every decision and declines all of them, so the
+ * handler's default policy applies exactly as if the method were absent.
+ */
+class DecliningBusManager extends DefaultExecutionEventBusManager {
+  public readonly settleCalls: SettleCall[] = [];
+
+  settleByTaskId(
+    taskId: string,
+    eventBus: ExecutionEventBus,
+    lastObservedState: TaskState | undefined
+  ): boolean {
+    this.settleCalls.push({ taskId, eventBus, lastObservedState });
+    return false;
   }
 }
 
@@ -212,8 +230,8 @@ describe('DefaultRequestHandler bus settle seam (ExecutionEventBusManager.settle
     });
   });
 
-  describe('manager with settleByTaskId (full delegation)', () => {
-    it('delegates from the sendMessage path and performs no teardown of its own', async () => {
+  describe('manager that takes ownership (settleByTaskId returns true)', () => {
+    it('is offered the decision from the sendMessage path, and the handler then does nothing', async () => {
       const eventBusManager = new DeferringBusManager();
       const cleanupSpy = vi.spyOn(eventBusManager, 'cleanupByTaskId');
       let observedTaskId = '';
@@ -235,7 +253,7 @@ describe('DefaultRequestHandler bus settle seam (ExecutionEventBusManager.settle
       expect(call.eventBus).toBe(eventBusManager.getByTaskId(observedTaskId));
       expect(call.lastObservedState).toBe(TaskState.TASK_STATE_COMPLETED);
 
-      // Full delegation: the handler must not finish or clean up itself.
+      // Ownership taken: the handler must not finish or clean up itself.
       expect(finishedSpy).toBeDefined();
       expect(finishedSpy!).not.toHaveBeenCalled();
       expect(cleanupSpy).not.toHaveBeenCalled();
@@ -269,11 +287,11 @@ describe('DefaultRequestHandler bus settle seam (ExecutionEventBusManager.settle
       expect(eventBusManager.getByTaskId(observedTaskId)).toBeDefined();
     });
 
-    it('receives undefined when nothing was observed, and declining to settle leaves the caller pending', async () => {
+    it('receives undefined when nothing was observed, and never settling leaves the caller pending', async () => {
       // An executor that published nothing is indistinguishable, through this
       // argument, from a bus that has not delivered yet — which is exactly why
-      // the seam exists. It is also the documented hazard: a manager that
-      // never settles such a bus leaves a blocking sendMessage hanging.
+      // the seam exists. It is also the documented hazard: an owner that never
+      // settles such a bus leaves a blocking sendMessage hanging.
       const eventBusManager = new DeferringBusManager();
       let observedTaskId = '';
       mockExecutor.execute.mockImplementation(async (ctx) => {
@@ -303,9 +321,9 @@ describe('DefaultRequestHandler bus settle seam (ExecutionEventBusManager.settle
       await expect(settled).resolves.toBe('rejected');
     });
 
-    it('takes precedence over keepBusAliveStates', async () => {
-      // COMPLETED is deliberately NOT in the keep-alive list, so the fallback
-      // path would tear the bus down here. The seam must win instead.
+    it('overrides keepBusAliveStates for that call', async () => {
+      // COMPLETED is deliberately NOT in the keep-alive list, so the default
+      // policy would tear the bus down here. Taking ownership must win.
       const eventBusManager = new DeferringBusManager();
       let observedTaskId = '';
       mockExecutor.execute.mockImplementation(async (ctx, bus) => {
@@ -322,16 +340,18 @@ describe('DefaultRequestHandler bus settle seam (ExecutionEventBusManager.settle
       expect(eventBusManager.getByTaskId(observedTaskId)).toBeDefined();
     });
 
-    it('a delegating manager can still settle by calling finished() and cleanupByTaskId()', async () => {
-      // Opting in does not forfeit the default outcome — it just moves who
-      // decides. This is the shape a reader loop uses once its drain is done.
+    it('an owner can still settle immediately by calling finished() and cleanupByTaskId()', async () => {
+      // Taking ownership does not forfeit the default outcome — it just moves
+      // who decides. This is the shape a reader loop uses once its drain is
+      // done.
       class EagerBusManager extends DefaultExecutionEventBusManager {
         public settleCount = 0;
 
-        settleByTaskId(taskId: string, eventBus: ExecutionEventBus): void {
+        settleByTaskId(taskId: string, eventBus: ExecutionEventBus): boolean {
           this.settleCount += 1;
           eventBus.finished();
           this.cleanupByTaskId(taskId);
+          return true;
         }
       }
 
@@ -350,6 +370,77 @@ describe('DefaultRequestHandler bus settle seam (ExecutionEventBusManager.settle
 
       expect(eventBusManager.settleCount).toBe(1);
       expect(eventBusManager.getByTaskId(observedTaskId)).toBeUndefined();
+    });
+  });
+
+  // Declining is what lets a manager intervene only where it needs to, instead
+  // of reimplementing the state policy for every task it does not care about.
+  describe('manager that declines (settleByTaskId returns false)', () => {
+    it('gets the default teardown for a terminal state', async () => {
+      const eventBusManager = new DecliningBusManager();
+      let observedTaskId = '';
+      mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+        observedTaskId = ctx.taskId;
+        publishTask(bus, ctx.taskId, ctx.contextId, TaskState.TASK_STATE_SUBMITTED);
+        publishStatus(bus, ctx.taskId, ctx.contextId, TaskState.TASK_STATE_COMPLETED);
+      });
+
+      await makeHandler(eventBusManager).sendMessage(makeParams('msg-decline-1'), serverContext);
+      await flushSettle();
+
+      expect(eventBusManager.settleCalls).toHaveLength(1);
+      expect(eventBusManager.getByTaskId(observedTaskId)).toBeUndefined();
+    });
+
+    it('still gets keepBusAliveStates applied', async () => {
+      const eventBusManager = new DecliningBusManager();
+      let observedTaskId = '';
+      mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+        observedTaskId = ctx.taskId;
+        publishTask(bus, ctx.taskId, ctx.contextId, TaskState.TASK_STATE_SUBMITTED);
+        publishStatus(bus, ctx.taskId, ctx.contextId, TaskState.TASK_STATE_COMPLETED);
+      });
+
+      const handler = makeHandler(eventBusManager, [TaskState.TASK_STATE_COMPLETED]);
+      await handler.sendMessage(makeParams('msg-decline-2'), serverContext);
+      await flushSettle();
+
+      expect(eventBusManager.settleCalls).toHaveLength(1);
+      expect(eventBusManager.getByTaskId(observedTaskId)).toBeDefined();
+    });
+
+    it('can own one task and decline another', async () => {
+      // Per-call, not per-manager: the distinction a static "I handle my own
+      // settling" flag could not express.
+      class SelectiveBusManager extends DefaultExecutionEventBusManager {
+        public readonly owned: string[] = [];
+
+        settleByTaskId(taskId: string): boolean {
+          const take = this.owned.length === 0;
+          if (take) this.owned.push(taskId);
+          return take;
+        }
+      }
+
+      const eventBusManager = new SelectiveBusManager();
+      const seen: string[] = [];
+      mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+        seen.push(ctx.taskId);
+        publishTask(bus, ctx.taskId, ctx.contextId, TaskState.TASK_STATE_SUBMITTED);
+        publishStatus(bus, ctx.taskId, ctx.contextId, TaskState.TASK_STATE_COMPLETED);
+      });
+
+      const handler = makeHandler(eventBusManager);
+      await handler.sendMessage(makeParams('msg-selective-1'), serverContext);
+      await flushSettle();
+      await handler.sendMessage(makeParams('msg-selective-2'), serverContext);
+      await flushSettle();
+
+      expect(seen).toHaveLength(2);
+      // First was claimed, so its bus survives; second was declined and torn
+      // down by the default policy.
+      expect(eventBusManager.getByTaskId(seen[0])).toBeDefined();
+      expect(eventBusManager.getByTaskId(seen[1])).toBeUndefined();
     });
   });
 

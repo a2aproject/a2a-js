@@ -206,11 +206,12 @@ database, a cache, or a message broker instead of the in-process defaults.
 
 One caveat applies to a bus that does not deliver events synchronously. When the
 agent executor returns, the handler decides whether to tear that task's bus down
-from the last state it saw published, so a bus that batches or persists events
+from the last state it saw delivered, so a bus that batches or persists events
 before handing them to subscribers has shown the handler nothing by that point
-and its bus is released too early. Such a bus should take over the decision by
-implementing the optional `settleByTaskId` on its manager and settling from its
-own drain instead.
+and its bus is released too early. Such a bus should implement the optional
+`settleByTaskId` on its manager, which is offered that decision first: return
+`true` to take ownership of the bus and settle it from your own drain, or
+`false` to let the handler apply its usual policy for that call.
 
 See the doc comments on
 [`ExecutionEventBusManager`](src/server/events/execution_event_bus_manager.ts)

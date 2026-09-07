@@ -32,45 +32,57 @@ export interface ExecutionEventBusManager {
   cleanupByTaskId(taskId: string): void;
 
   /**
-   * Optional. Decides the fate of a task's event bus once the agent executor
-   * returns. Implementations take **full ownership** of the outcome: while
-   * this method is present the request handler performs no teardown of its
-   * own, so an implementation that wants the default behaviour must call both
-   * `eventBus.finished()` and {@link cleanupByTaskId} itself.
+   * Optional. Offers the manager the chance to decide the fate of a task's
+   * event bus once the agent executor returns.
    *
-   * When omitted, the handler applies its own policy — see
-   * `DefaultRequestHandlerOptions.keepBusAliveStates`. That option is ignored
-   * entirely while this method is present.
+   * Return `true` to take ownership: the request handler then does nothing,
+   * and settling the bus — `eventBus.finished()` plus {@link cleanupByTaskId} —
+   * becomes this implementation's responsibility, whenever it judges the task
+   * to be finished.
    *
-   * `lastObservedState` is the most recent task state the handler saw
-   * published on the bus before the executor settled. It is `undefined` when
-   * nothing was observed, which has two very different causes:
+   * Return `false` to decline, in which case the handler applies its default
+   * policy for this call: close the bus unless the last observed state is one
+   * of `DefaultRequestHandlerOptions.keepBusAliveStates`. Declining is
+   * per-call, so a manager may own some tasks and leave others alone. Do not
+   * settle the bus yourself and also return `false`.
+   *
+   * When the method is omitted entirely the handler always applies its default
+   * policy.
+   *
+   * `lastObservedState` is the most recent task state *delivered* to
+   * subscribers before the executor returned. It is `undefined` when nothing
+   * was delivered, which has two very different causes:
    *
    * - the executor published no task or status event at all; or
-   * - the bus defers delivery, and the events have not been delivered *yet*.
+   * - the bus defers delivery, and the events have not arrived *yet*.
    *
-   * This argument cannot distinguish the two, so a bus that defers delivery
-   * should ignore it and settle from its own drain signal instead.
+   * The argument cannot distinguish the two. A bus with deferred delivery
+   * should therefore treat `undefined` as "not known yet", take ownership, and
+   * settle from its own drain — while still handling the case where a terminal
+   * state *was* delivered before the executor returned, which can happen when
+   * the executor outlives its own events.
    *
-   * Deferring is safe with respect to callers: `ExecutionEventQueue`
+   * Taking ownership is safe with respect to callers: `ExecutionEventQueue`
    * terminates on a `message`, a terminal status or an `INPUT_REQUIRED` event
    * and does not depend on `finished()`, so a blocking `sendMessage` still
    * resolves once the real terminal event is delivered. The converse is the
-   * risk to weigh: if this method never settles a bus whose executor never
-   * publishes a terminal state, that bus leaks and a blocking `sendMessage`
+   * risk to weigh: a bus whose owner never settles it, and whose executor
+   * never publishes a terminal state, leaks — and a blocking `sendMessage`
    * against it never resolves.
    *
    * @param taskId The task whose bus is being settled.
    * @param eventBus The bus itself, passed so implementations need not look
    *   it up again.
-   * @param lastObservedState Most recent state seen on the bus, or
+   * @param lastObservedState Most recent state delivered on the bus, or
    *   `undefined` — read the caveat above before branching on it.
+   * @returns `true` if this manager has taken ownership of the bus, `false` to
+   *   let the handler apply its default policy.
    */
   settleByTaskId?(
     taskId: string,
     eventBus: ExecutionEventBus,
     lastObservedState: TaskState | undefined
-  ): void;
+  ): boolean;
 }
 
 /**
@@ -78,8 +90,8 @@ export interface ExecutionEventBusManager {
  * task with a {@link DefaultExecutionEventBus}.
  *
  * Deliberately does not implement
- * {@link ExecutionEventBusManager.settleByTaskId}, so the request handler's
- * own settle policy stays in effect.
+ * {@link ExecutionEventBusManager.settleByTaskId}: delivery is synchronous, so
+ * the request handler's own state-based settle policy always applies.
  */
 export class DefaultExecutionEventBusManager implements ExecutionEventBusManager {
   private taskIdToBus: Map<string, ExecutionEventBus> = new Map();

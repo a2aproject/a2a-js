@@ -11,6 +11,7 @@ import {
   DeferredSettleBusManager,
   DelayingExecutionEventBusManager,
   settlesWithin,
+  sleep,
   waitFor,
 } from './support/delaying.js';
 import { agentCard, drain, lastState, makeParams } from './support/fixtures.js';
@@ -147,7 +148,7 @@ describe('delayed event bus (issue #620)', () => {
     expect(lastState(events)).toBe(TaskState.TASK_STATE_COMPLETED);
   });
 
-  it('the handler delegates the settle decision and observes no state', async () => {
+  it('the manager takes ownership because the handler observed no state', async () => {
     const executor = new CompletingExecutor();
     await makeHandler(executor).sendMessage(makeParams('delayed-bus-delegates'), serverContext);
 
@@ -156,6 +157,40 @@ describe('delayed event bus (issue #620)', () => {
     // The whole point: the executor published three events, yet the handler saw
     // none of them, so `keepBusAliveStates` could never have worked here.
     expect(busManager.settleRequests[0].lastObservedState).toBeUndefined();
+    expect(busManager.settleRequests[0].tookOwnership).toBe(true);
+  });
+
+  it('declines when the executor outlived its own events, letting the handler settle', async () => {
+    // The other half of the picture: a slow executor whose events are delivered
+    // while it is still running. Here the state IS known by settle time, there
+    // is nothing left in flight, and taking ownership would just mean waiting
+    // for an event that has already been and gone.
+    class SlowCompletingExecutor extends CompletingExecutor {
+      public returned = false;
+
+      override async execute(ctx: RequestContext, bus: ExecutionEventBus): Promise<void> {
+        await super.execute(ctx, bus);
+        await sleep(BUS_DELAY_MS * 4);
+        this.returned = true;
+      }
+    }
+
+    const executor = new SlowCompletingExecutor();
+    const result = (await makeHandler(executor).sendMessage(
+      makeParams('delayed-bus-executor-outlives'),
+      serverContext
+    )) as Task;
+    expect(result.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+
+    await waitFor(() => executor.returned, 'the slow executor to return');
+    await waitFor(() => busManager.settleRequests.length === 1, 'the settle offer');
+
+    expect(busManager.settleRequests[0].lastObservedState).toBe(TaskState.TASK_STATE_COMPLETED);
+    expect(busManager.settleRequests[0].tookOwnership).toBe(false);
+    await waitFor(
+      () => busManager.getByTaskId(executor.observed.taskId) === undefined,
+      'the handler to apply its default policy and release the bus'
+    );
   });
 
   it('keeps the bus alive past the executor, then releases it once the terminal event lands', async () => {
