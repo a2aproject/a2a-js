@@ -205,6 +205,42 @@ describe('JsonRpcTransportHandler', () => {
   });
 
   describe('Method handling', () => {
+    it.each([
+      { initialTenant: undefined, paramsTenant: 'tenant-a', expectedTenant: 'tenant-a' },
+      { initialTenant: 'configured', paramsTenant: 'tenant-a', expectedTenant: 'configured' },
+      { initialTenant: undefined, paramsTenant: undefined, expectedTenant: undefined },
+    ])(
+      'preserves the call context with tenant params: $paramsTenant',
+      async ({ initialTenant, paramsTenant, expectedTenant }) => {
+        class CustomContext extends ServerCallContext {
+          readonly marker = 'custom-context';
+        }
+        const context = new CustomContext({
+          tenant: initialTenant,
+          state: new Map([['trace', 'trace-a']]),
+          requestedVersion: '1.0',
+        });
+        context.addActivatedExtension('ext://before');
+        (mockRequestHandler.listTasks as Mock).mockImplementation((_params, received) => {
+          received.addActivatedExtension('ext://during');
+          return { tasks: [] };
+        });
+
+        await transportHandler.handle(
+          { jsonrpc: '2.0', method: 'ListTasks', id: 1, params: { tenant: paramsTenant } },
+          context
+        );
+
+        const received = (mockRequestHandler.listTasks as Mock).mock.calls[0][1];
+        expect(received).toBe(context);
+        expect(received).toBeInstanceOf(CustomContext);
+        expect(received.state.get('trace')).toBe('trace-a');
+        expect(received.tenant).toBe(expectedTenant);
+        expect(received.requestedVersion).toBe('1.0');
+        expect(context.activatedExtensions).toEqual(['ext://before', 'ext://during']);
+      }
+    );
+
     it('should pass tenant from params to getAuthenticatedExtendedAgentCard', async () => {
       const request = {
         jsonrpc: '2.0',

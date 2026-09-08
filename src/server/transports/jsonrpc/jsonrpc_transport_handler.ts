@@ -96,12 +96,7 @@ export class JsonRpcTransportHandler {
         | string
         | undefined;
       if (paramsTenant && !context.tenant) {
-        context = new ServerCallContext({
-          requestedExtensions: context.requestedExtensions,
-          user: context.user,
-          requestedVersion: context.requestedVersion,
-          tenant: paramsTenant,
-        });
+        context.setTenant(paramsTenant);
       }
 
       if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
