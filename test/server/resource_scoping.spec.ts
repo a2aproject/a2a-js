@@ -532,6 +532,24 @@ describe('DefaultExecutionEventBusManager scope isolation', () => {
     expect(manager.getByTaskId('task-1', ctxA)).toBe(busA);
   });
 
+  it('should default to one shared scope when the context is omitted', () => {
+    const bus = manager.createOrGetByTaskId('task-1');
+    expect(manager.getByTaskId('task-1')).to.equal(bus);
+
+    // The implicit scope is the same bucket an unauthenticated, untenanted
+    // request resolves to, so a context-less caller and a plain request agree.
+    expect(manager.getByTaskId('task-1', createContext())).to.equal(bus);
+
+    // ...and it stays separate from any real tenant scope.
+    expect(manager.getByTaskId('task-1', createContext('tenant-A'))).toBeUndefined();
+  });
+
+  it('should not let a context-less caller reach a tenant-scoped bus', () => {
+    const busA = manager.createOrGetByTaskId('collision-task', createContext('tenant-A'));
+    expect(manager.getByTaskId('collision-task')).toBeUndefined();
+    expect(manager.createOrGetByTaskId('collision-task')).to.not.equal(busA);
+  });
+
   it('should honour a custom OwnerResolver so co-owners share one bus', () => {
     const shared = new DefaultExecutionEventBusManager(() => 'shared-scope');
     const ctxAlice = createContext(undefined, new TestUser('alice'));

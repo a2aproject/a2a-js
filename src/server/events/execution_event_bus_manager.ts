@@ -4,12 +4,18 @@ import { ScopedStore } from '../utils.js';
 import { DefaultExecutionEventBus, ExecutionEventBus } from './execution_event_bus.js';
 
 /**
+ * Shared scope used when a caller omits the {@link ServerCallContext}: an
+ * empty tenant and the default `'unknown'` owner.
+ */
+const UNSCOPED_CONTEXT = new ServerCallContext();
+
+/**
  * Manages the live {@link ExecutionEventBus} for each active task.
  */
 export interface ExecutionEventBusManager {
-  createOrGetByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus;
-  getByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus | undefined;
-  cleanupByTaskId(taskId: string, context: ServerCallContext): void;
+  createOrGetByTaskId(taskId: string, context?: ServerCallContext): ExecutionEventBus;
+  getByTaskId(taskId: string, context?: ServerCallContext): ExecutionEventBus | undefined;
+  cleanupByTaskId(taskId: string, context?: ServerCallContext): void;
 }
 
 /**
@@ -26,8 +32,8 @@ export class DefaultExecutionEventBusManager implements ExecutionEventBusManager
     this._scopedBuses = new ScopedStore<ExecutionEventBus>(ownerResolver);
   }
 
-  public createOrGetByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus {
-    const bucket = this._scopedBuses.getOrCreateBucket(context);
+  public createOrGetByTaskId(taskId: string, context?: ServerCallContext): ExecutionEventBus {
+    const bucket = this._scopedBuses.getOrCreateBucket(context ?? UNSCOPED_CONTEXT);
     let bus = bucket.get(taskId);
     if (!bus) {
       bus = new DefaultExecutionEventBus();
@@ -36,13 +42,13 @@ export class DefaultExecutionEventBusManager implements ExecutionEventBusManager
     return bus;
   }
 
-  public getByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus | undefined {
-    return this._scopedBuses.getBucket(context)?.get(taskId);
+  public getByTaskId(taskId: string, context?: ServerCallContext): ExecutionEventBus | undefined {
+    return this._scopedBuses.getBucket(context ?? UNSCOPED_CONTEXT)?.get(taskId);
   }
 
   /** Removes the bus for the task. Call when the execution flow ends. */
-  public cleanupByTaskId(taskId: string, context: ServerCallContext): void {
-    const bucket = this._scopedBuses.getBucket(context);
+  public cleanupByTaskId(taskId: string, context?: ServerCallContext): void {
+    const bucket = this._scopedBuses.getBucket(context ?? UNSCOPED_CONTEXT);
     bucket?.get(taskId)?.removeAllListeners();
     bucket?.delete(taskId);
   }
