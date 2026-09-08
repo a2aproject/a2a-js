@@ -110,8 +110,13 @@ export class ServerCallContext {
    * Sets the tenant resolved by a transport without replacing this context.
    * Keeping the instance preserves custom state, subclasses, and extension
    * activations observed by the response layer.
+   *
+   * @throws {Error} If a tenant has already been set, including by the constructor.
    */
   public setTenant(tenant: string) {
+    if (this._tenant !== undefined) {
+      throw new Error('Tenant is already set.');
+    }
     this._tenant = tenant;
   }
 

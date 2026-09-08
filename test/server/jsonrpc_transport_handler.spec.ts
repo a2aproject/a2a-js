@@ -207,7 +207,7 @@ describe('JsonRpcTransportHandler', () => {
   describe('Method handling', () => {
     it.each([
       { initialTenant: undefined, paramsTenant: 'tenant-a', expectedTenant: 'tenant-a' },
-      { initialTenant: 'configured', paramsTenant: 'tenant-a', expectedTenant: 'configured' },
+      { initialTenant: 'configured', paramsTenant: undefined, expectedTenant: 'configured' },
       { initialTenant: undefined, paramsTenant: undefined, expectedTenant: undefined },
     ])(
       'preserves the call context with tenant params: $paramsTenant',
@@ -238,6 +238,27 @@ describe('JsonRpcTransportHandler', () => {
         expect(received.tenant).toBe(expectedTenant);
         expect(received.requestedVersion).toBe('1.0');
         expect(context.activatedExtensions).toEqual(['ext://before', 'ext://during']);
+      }
+    );
+
+    it.each(['configured', 'tenant-a'])(
+      'rejects tenant params %s when the context tenant is already set',
+      async (tenant) => {
+        const context = new ServerCallContext({ tenant: 'configured' });
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [] });
+
+        const response = await transportHandler.handle(
+          { jsonrpc: '2.0', method: 'ListTasks', id: 1, params: { tenant } },
+          context
+        );
+
+        expect(response).toEqual({
+          jsonrpc: '2.0',
+          id: 1,
+          error: { code: A2A_ERROR_CODE.INTERNAL_ERROR, message: 'Tenant is already set.' },
+        });
+        expect(context.tenant).toBe('configured');
+        expect(mockRequestHandler.listTasks).not.toHaveBeenCalled();
       }
     );
 

@@ -95,7 +95,7 @@ export class JsonRpcTransportHandler {
       const paramsTenant = (rpcRequest.params as Record<string, unknown> | undefined)?.tenant as
         | string
         | undefined;
-      if (paramsTenant && !context.tenant) {
+      if (paramsTenant) {
         context.setTenant(paramsTenant);
       }
 
