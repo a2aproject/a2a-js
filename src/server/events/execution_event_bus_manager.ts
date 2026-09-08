@@ -1,31 +1,49 @@
+import { ServerCallContext } from '../context.js';
+import { OwnerResolver, resolveUserScope } from '../owner_resolver.js';
+import { ScopedStore } from '../utils.js';
 import { DefaultExecutionEventBus, ExecutionEventBus } from './execution_event_bus.js';
 
+/**
+ * Manages the live {@link ExecutionEventBus} for each active task.
+ */
 export interface ExecutionEventBusManager {
-  createOrGetByTaskId(taskId: string): ExecutionEventBus;
-  getByTaskId(taskId: string): ExecutionEventBus | undefined;
-  cleanupByTaskId(taskId: string): void;
+  createOrGetByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus;
+  getByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus | undefined;
+  cleanupByTaskId(taskId: string, context: ServerCallContext): void;
 }
 
+/**
+ * Default {@link ExecutionEventBusManager}, scoped by (tenant, owner, taskId)
+ * via {@link ScopedStore} — the same partitioning {@link InMemoryTaskStore}
+ * applies, so bus routing and task authorization agree.
+ *
+ * Pass the SAME {@link OwnerResolver} as in the task store.
+ */
 export class DefaultExecutionEventBusManager implements ExecutionEventBusManager {
-  private taskIdToBus: Map<string, ExecutionEventBus> = new Map();
+  private readonly _scopedBuses: ScopedStore<ExecutionEventBus>;
 
-  public createOrGetByTaskId(taskId: string): ExecutionEventBus {
-    if (!this.taskIdToBus.has(taskId)) {
-      this.taskIdToBus.set(taskId, new DefaultExecutionEventBus());
-    }
-    return this.taskIdToBus.get(taskId)!;
+  constructor(ownerResolver: OwnerResolver = resolveUserScope) {
+    this._scopedBuses = new ScopedStore<ExecutionEventBus>(ownerResolver);
   }
 
-  public getByTaskId(taskId: string): ExecutionEventBus | undefined {
-    return this.taskIdToBus.get(taskId);
+  public createOrGetByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus {
+    const bucket = this._scopedBuses.getOrCreateBucket(context);
+    let bus = bucket.get(taskId);
+    if (!bus) {
+      bus = new DefaultExecutionEventBus();
+      bucket.set(taskId, bus);
+    }
+    return bus;
+  }
+
+  public getByTaskId(taskId: string, context: ServerCallContext): ExecutionEventBus | undefined {
+    return this._scopedBuses.getBucket(context)?.get(taskId);
   }
 
   /** Removes the bus for the task. Call when the execution flow ends. */
-  public cleanupByTaskId(taskId: string): void {
-    const bus = this.taskIdToBus.get(taskId);
-    if (bus) {
-      bus.removeAllListeners();
-    }
-    this.taskIdToBus.delete(taskId);
+  public cleanupByTaskId(taskId: string, context: ServerCallContext): void {
+    const bucket = this._scopedBuses.getBucket(context);
+    bucket?.get(taskId)?.removeAllListeners();
+    bucket?.delete(taskId);
   }
 }

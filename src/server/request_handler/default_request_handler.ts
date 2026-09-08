@@ -82,8 +82,8 @@ export interface DefaultRequestHandlerOptions {
  * Multi-tenant deployments: the transport layer extracts the tenant from
  * its protocol-specific source (REST path prefix, JSON-RPC `params.tenant`,
  * gRPC `tenant` field) and propagates it via `ServerCallContext.tenant`.
- * The built-in `InMemoryTaskStore` and `InMemoryPushNotificationStore`
- * scope data by `tenant` to provide isolation.
+ * The built-in `InMemoryTaskStore`, `InMemoryPushNotificationStore` and
+ * `DefaultExecutionEventBusManager` scope data by `tenant` to provide isolation.
  */
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
@@ -450,7 +450,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // Close the bus for terminal tasks; keep it alive for
         // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
         // resubscribers can still attach.
-        this._settleBus(taskId, eventBus, stateTracker());
+        this._settleBus(taskId, eventBus, stateTracker(), requestContext.context);
       });
   }
 
@@ -463,13 +463,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private _settleBus(
     taskId: string,
     eventBus: ExecutionEventBus,
-    lastState: TaskState | undefined
+    lastState: TaskState | undefined,
+    context: ServerCallContext
   ): void {
     if (lastState !== undefined && this.keepBusAliveStates.has(lastState)) {
       return;
     }
     eventBus.finished();
-    this.eventBusManager.cleanupByTaskId(taskId);
+    this.eventBusManager.cleanupByTaskId(taskId, context);
   }
 
   /**
@@ -572,7 +573,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        this._settleBus(taskId, eventBus, snapshotTracker().state);
+        this._settleBus(taskId, eventBus, snapshotTracker().state, requestContext.context);
       });
   }
 
@@ -603,7 +604,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     // Attach the queue before kicking off the executor so no events are missed.
     const eventQueue = new ExecutionEventQueue(eventBus);
 
@@ -685,7 +686,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const requestContext = await this._createRequestContext(params, context);
     const taskId = requestContext.taskId;
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     const eventQueue = new ExecutionEventQueue(eventBus);
 
     if (
@@ -790,7 +791,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
     }
 
-    const eventBus = this.eventBusManager.getByTaskId(taskId);
+    const eventBus = this.eventBusManager.getByTaskId(taskId, context);
 
     if (eventBus) {
       const eventQueue = new ExecutionEventQueue(eventBus);
@@ -950,7 +951,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Attach to the event bus BEFORE loading the task from the store so
     // we don't miss events published between the load and subscription.
-    const eventBus = this.eventBusManager.getByTaskId(taskId);
+    const eventBus = this.eventBusManager.getByTaskId(taskId, context);
     const eventQueue = eventBus ? new ExecutionEventQueue(eventBus) : undefined;
 
     try {
