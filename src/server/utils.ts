@@ -99,6 +99,21 @@ export enum StreamPattern {
 }
 
 /**
+ * Resolves the tenant and owner that scope a caller's data. Every store resolves it this way,
+ * so one caller reaches the same data through any of them.
+ *
+ * An absent tenant is the global bucket. The owner comes from the
+ * {@link OwnerResolver}, which supplies its own default for anonymous
+ * callers.
+ */
+export function callerScope(
+  context: ServerCallContext,
+  ownerResolver: OwnerResolver
+): { tenant: string; owner: string } {
+  return { tenant: context.tenant ?? '', owner: ownerResolver(context) };
+}
+
+/**
  * A generic triple-nested Map (tenant -> owner -> key -> value) providing
  * tenant- and owner-scoped data isolation. Both {@link InMemoryTaskStore}
  * and {@link InMemoryPushNotificationStore} delegate their scoping logic
@@ -112,33 +127,26 @@ export class ScopedStore<T> {
     this._ownerResolver = ownerResolver;
   }
 
-  private _tenantKey(context: ServerCallContext): string {
-    return context.tenant ?? '';
-  }
-
-  private _ownerKey(context: ServerCallContext): string {
-    return this._ownerResolver(context);
-  }
-
   /** Returns the owner-scoped bucket, or `undefined` if absent. */
   getBucket(context: ServerCallContext): Map<string, T> | undefined {
-    return this._store.get(this._tenantKey(context))?.get(this._ownerKey(context));
+    const { tenant, owner } = callerScope(context, this._ownerResolver);
+    return this._store.get(tenant)?.get(owner);
   }
 
   /** Returns the owner-scoped bucket, creating intermediate maps as needed. */
   getOrCreateBucket(context: ServerCallContext): Map<string, T> {
-    const tenantKey = this._tenantKey(context);
-    let tenantBucket = this._store.get(tenantKey);
+    const { tenant, owner } = callerScope(context, this._ownerResolver);
+
+    let tenantBucket = this._store.get(tenant);
     if (!tenantBucket) {
       tenantBucket = new Map();
-      this._store.set(tenantKey, tenantBucket);
+      this._store.set(tenant, tenantBucket);
     }
 
-    const ownerKey = this._ownerKey(context);
-    let ownerBucket = tenantBucket.get(ownerKey);
+    let ownerBucket = tenantBucket.get(owner);
     if (!ownerBucket) {
       ownerBucket = new Map();
-      tenantBucket.set(ownerKey, ownerBucket);
+      tenantBucket.set(owner, ownerBucket);
     }
 
     return ownerBucket;
