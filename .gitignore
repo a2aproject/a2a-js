@@ -181,3 +181,6 @@ testem.log
 .DS_Store
 Thumbs.db
 .nyc_output/
+
+# ITK protobuf instructions
+/itk/pb/*
