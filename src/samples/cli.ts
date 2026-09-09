@@ -13,7 +13,7 @@ import {
   Part, // Added for explicit Part typing
   AGENT_CARD_PATH,
 } from '../index.js';
-import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/pb/a2a.js';
+import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/codecs.js';
 import { AgentExecutionEvent, AgentEvent } from '../server/index.js';
 
 import {
@@ -213,7 +213,7 @@ function printAgentEvent(event: AgentExecutionEvent) {
     }
 
     console.log(
-      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId})`
+      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, String(taskStateToJSON(state!)))} (Task: ${update.taskId}, Context: ${update.contextId})`
     );
 
     if (update.status?.message) {
