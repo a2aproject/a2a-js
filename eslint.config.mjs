@@ -26,6 +26,22 @@ export default defineConfig(
     },
   },
   {
+    files: ['src/index.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/types/pb/a2a*', './types/pb/a2a*'],
+              message: 'Import from types/codecs instead of types/pb/a2a.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['test/**/*.ts', 'src/samples/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off', // Allow the usage of `any` in the test files and in samples
