@@ -663,6 +663,33 @@ export class ItkAgentExecutor implements AgentExecutor {
   }
 }
 
+/**
+ * What the card advertises — everything, unless the ACTS runner asked for less.
+ *
+ * Four ACTS tests assert that an agent *without* a capability answers
+ * UnsupportedOperationError, so their preconditions require the card not to
+ * advertise it and they can never run against a fully capable agent. The
+ * runner starts a second SUT with this variable set to reach them, and
+ * DefaultRequestHandler already gates those operations on this card, so
+ * publishing less is all it takes to refuse them.
+ */
+function actsCapabilities(): AgentCard['capabilities'] {
+  if (process.env.ITK_ACTS_REDUCED_CAPABILITIES) {
+    return {
+      streaming: false,
+      pushNotifications: false,
+      extensions: [],
+      extendedAgentCard: false,
+    };
+  }
+  return {
+    streaming: true,
+    pushNotifications: true,
+    extensions: [],
+    extendedAgentCard: true,
+  };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   let httpPort = 10102;
@@ -688,12 +715,7 @@ async function main() {
     name: 'ITK TS Agent',
     description: 'TypeScript agent using SDK for ITK tests.',
     version: '1.0.0',
-    capabilities: {
-      streaming: true,
-      pushNotifications: true,
-      extensions: [],
-      extendedAgentCard: true,
-    },
+    capabilities: actsCapabilities(),
     // Each binding declared twice — once at v1.0 and once at v0.3 — so
     // a v0.3 baseline peer (go_v03, python_v03) can dial every binding.
     // Strict per-interface advertisement: a binding is only reachable
