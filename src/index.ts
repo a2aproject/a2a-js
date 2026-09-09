@@ -5,9 +5,9 @@
  * server-only codebase.
  */
 
-import { Message, Task } from './types/pb/a2a.js';
+import { Message, Task } from './types/codecs.js';
 
-export * from './types/pb/a2a.js';
+export * from './types/codecs.js';
 export {
   AGENT_CARD_PATH,
   HTTP_EXTENSION_HEADER,
