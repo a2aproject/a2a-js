@@ -25,6 +25,7 @@ import {
   restHandler,
 } from '../src/server/express/index.js';
 import { Instruction, CallAgent } from './pb/instruction.js';
+import { behaviorFor, run as runActsBehavior } from './acts_behaviors.js';
 import {
   ClientFactory,
   ClientFactoryOptions,
@@ -63,6 +64,17 @@ export class ItkAgentExecutor implements AgentExecutor {
 
   async execute(context: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     console.log(`Executing task ${context.taskId}`);
+
+    // Dual mode. An ACTS conformance test names a `tck-*` behaviour in its
+    // first user message (ACTS §11); anything else is an ITK traversal
+    // carrying a protobuf Instruction. The branch is taken before any task is
+    // published, because one ACTS behaviour must answer with a bare Message
+    // and so must not open a task at all.
+    const actsBehavior = behaviorFor(context);
+    if (actsBehavior) {
+      await runActsBehavior(actsBehavior, context, eventBus);
+      return;
+    }
 
     // Publish initial task to satisfy ResultManager
     eventBus.publish(
@@ -732,7 +744,21 @@ async function main() {
     securityRequirements: [],
     defaultInputModes: ['text/plain', 'application/x-protobuf'],
     defaultOutputModes: ['text/plain'],
-    skills: [],
+    // Declared so ACTS's card tests assert on something real. `CARD-DISC-004`
+    // checks every skill has an id and a name, which an empty array satisfies
+    // vacuously.
+    skills: [
+      {
+        id: 'acts-behaviors',
+        name: 'ACTS behaviours',
+        description: 'Implements the ACTS §11 tck-* behaviour contract.',
+        tags: ['acts', 'conformance'],
+        examples: [],
+        inputModes: [],
+        outputModes: [],
+        securityRequirements: [],
+      },
+    ],
     signatures: [],
   };
 
