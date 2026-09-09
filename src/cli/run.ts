@@ -11,10 +11,10 @@ import {
   storeState,
 } from '../server/database/migrator.js';
 import type { StoreMigrations } from '../server/database/migrator.js';
-import { ALL_STORES } from '../server/database/stores.js';
+import { ALL_STORE_MIGRATIONS } from '../server/database/store_migrations.js';
 import { connect } from './connect.js';
 
-const STORE_IDS = ALL_STORES.map((store) => store.id);
+const STORE_IDS = ALL_STORE_MIGRATIONS.map((store) => store.id);
 
 const USAGE = `a2a-db — schema management for @a2a-js/sdk database stores
 
@@ -56,9 +56,9 @@ const OPTIONS = {
  * The stores `--store` names, or every store when it names none.
  */
 function selectStores(ids: readonly string[] | undefined): readonly StoreMigrations[] {
-  if (ids === undefined || ids.length === 0) return ALL_STORES;
+  if (ids === undefined || ids.length === 0) return ALL_STORE_MIGRATIONS;
   const wanted = new Set(ids);
-  return ALL_STORES.filter((store) => wanted.has(store.id));
+  return ALL_STORE_MIGRATIONS.filter((store) => wanted.has(store.id));
 }
 
 /**
