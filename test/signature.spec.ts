@@ -132,6 +132,48 @@ describe('Agent Card Signature', () => {
 
       expect(canonicalizeAgentCard(cardWithExtraFields)).toBe(canonicalizeAgentCard(mockAgentCard));
     });
+
+    it('should produce identical canonical payloads for plain JSON and AgentCard instance with securitySchemes (issue #663)', () => {
+      const cardWithSecurity = {
+        ...mockAgentCard,
+        securitySchemes: {
+          oidc: {
+            openIdConnectSecurityScheme: {
+              openIdConnectUrl: 'https://auth.example.com/.well-known/openid-configuration',
+            },
+          },
+          oauth: {
+            oauth2SecurityScheme: {
+              description: 'OAuth2 auth',
+              oauth2MetadataUrl: 'https://auth.example.com/.well-known/oauth-authorization-server',
+              flows: {
+                authorizationCode: {
+                  authorizationUrl: 'https://auth.example.com/oauth/authorize',
+                  tokenUrl: 'https://auth.example.com/oauth/token',
+                  scopes: { 'read:data': 'Read data' },
+                },
+              },
+            },
+          },
+          apiKey: {
+            apiKeySecurityScheme: {
+              name: 'X-API-Key',
+              location: 'header',
+            },
+          },
+        },
+      };
+
+      const fromPlain = canonicalizeAgentCard(cardWithSecurity as any);
+      const fromInstance = canonicalizeAgentCard(AgentCard.fromJSON(cardWithSecurity));
+
+      expect(fromPlain).toBe(fromInstance);
+      expect(fromPlain.includes('securitySchemes')).toBe(true);
+      expect(fromInstance.includes('securitySchemes')).toBe(true);
+      expect(fromInstance.includes('openIdConnectSecurityScheme')).toBe(true);
+      expect(fromInstance.includes('oauth2SecurityScheme')).toBe(true);
+      expect(fromInstance.includes('apiKeySecurityScheme')).toBe(true);
+    });
   });
 
   describe('generateAgentCardSignature', () => {
@@ -329,6 +371,37 @@ describe('Agent Card Signature', () => {
         'test-key-1',
         'https://example.com/.well-known/jwks.json'
       );
+    });
+
+    it('should verify signatures across different input forms (plain vs instance) with securitySchemes (issue #663)', async () => {
+      const cardWithSecurity = {
+        ...mockAgentCard,
+        securitySchemes: {
+          oidc: {
+            openIdConnectSecurityScheme: {
+              openIdConnectUrl: 'https://auth.example.com/.well-known/openid-configuration',
+            },
+          },
+        },
+      };
+
+      const signer = generateAgentCardSignature(privateKey, {
+        alg: ALG,
+        kid: 'test-key-1',
+        typ: 'JOSE',
+      });
+      const verifier = verifyAgentCardSignature(mockRetrieveKey);
+
+      // 1) Sign as AgentCard instance -> verify as plain JSON
+      const instanceCard = AgentCard.fromJSON(cardWithSecurity);
+      const signedInstance = await signer(instanceCard);
+      const plainSigned = AgentCard.toJSON(signedInstance) as AgentCard;
+      await expect(verifier(plainSigned)).resolves.not.toThrow();
+
+      // 2) Sign as plain JSON -> verify as AgentCard instance
+      const signedPlain = await signer(cardWithSecurity as any);
+      const instanceFromPlain = AgentCard.fromJSON(signedPlain);
+      await expect(verifier(instanceFromPlain)).resolves.not.toThrow();
     });
   });
 });
