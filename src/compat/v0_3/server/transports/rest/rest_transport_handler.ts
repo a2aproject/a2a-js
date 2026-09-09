@@ -206,7 +206,7 @@ export class LegacyRestTransportHandler {
       { taskId, pageSize: 0, pageToken: '', tenant: context.tenant ?? '' },
       context
     );
-    return result.configs.map((cfg) => toCompatTaskPushNotificationConfig(cfg));
+    return (result.configs ?? []).map((cfg) => toCompatTaskPushNotificationConfig(cfg));
   }
 
   async getTaskPushNotificationConfig(

@@ -213,8 +213,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // The client MUST declare support for every required extension.
     const requestedSet = new Set(context.requestedExtensions ?? []);
     const missingRequired = agentExtensions
-      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
-      .map((ext) => ext.uri);
+      .filter((ext) => ext.required && ext.uri && !requestedSet.has(ext.uri))
+      .map((ext) => ext.uri!);
 
     if (missingRequired.length > 0) {
       throw new ExtensionSupportRequiredError(
@@ -440,7 +440,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(
           AgentEvent.statusUpdate({
             taskId: errorTask.id,
-            contextId: errorTask.contextId,
+            contextId: errorTask.contextId ?? '',
             status: errorTask.status,
             metadata: {},
           })
@@ -831,7 +831,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await new ResultManager(this.taskStore, context).processEvent(
         AgentEvent.statusUpdate({
           taskId: task.id,
-          contextId: task.contextId,
+          contextId: task.contextId ?? '',
           status: {
             state: TaskState.TASK_STATE_CANCELED,
             message: cancelMessage,
@@ -1081,7 +1081,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (currentTask) {
       const statusUpdateFailed: TaskStatusUpdateEvent = {
         taskId: currentTask.id,
-        contextId: currentTask.contextId,
+        contextId: currentTask.contextId ?? '',
         status: {
           state: TaskState.TASK_STATE_FAILED,
           message: {
@@ -1152,7 +1152,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * with `RequestMalformedError` (-32602 / HTTP 400) instead of letting
    * the task store surface `TaskNotFoundError` (-32001 / HTTP 404).
    */
-  private _requireValidTaskId(taskId: string | undefined): void {
+  private _requireValidTaskId(taskId: string | undefined): asserts taskId is string {
     if (!taskId || taskId.trim() === '') {
       throw new RequestMalformedError('Task ID is required');
     }

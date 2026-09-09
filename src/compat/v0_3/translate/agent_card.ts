@@ -71,11 +71,11 @@ export function toCoreAgentExtension(compat: legacy.AgentExtension): V1AgentExte
 }
 
 export function toCompatAgentExtension(core: V1AgentExtension): legacy.AgentExtension {
-  const result: legacy.AgentExtension = { uri: core.uri };
+  const result: legacy.AgentExtension = { uri: core.uri ?? '' };
   const description = nonEmpty(core.description);
   if (description !== undefined) result.description = description;
   // Always emit `required` so the consumer sees the explicit declaration.
-  result.required = core.required;
+  result.required = core.required ?? false;
   const params = deepCloneMetadata(core.params);
   if (params !== undefined) result.params = params;
   return result;
@@ -125,7 +125,7 @@ export function toCompatAgentSkill(core: V1AgentSkill): legacy.AgentSkill {
   const result: legacy.AgentSkill = {
     id: core.id,
     name: core.name,
-    description: core.description,
+    description: core.description ?? '',
     tags: [...requireArray(core.tags, 'skill.tags')],
   };
   if (core.examples && core.examples.length > 0) result.examples = [...core.examples];
