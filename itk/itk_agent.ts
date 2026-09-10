@@ -786,9 +786,15 @@ async function main() {
 
   const taskStore: TaskStore = new InMemoryTaskStore();
   const agentExecutor: AgentExecutor = new ItkAgentExecutor();
-  // DefaultRequestHandler auto-creates push notification store and sender
-  // when agentCard.capabilities.pushNotifications is true.
-  const requestHandler = new DefaultRequestHandler(agentCard, taskStore, agentExecutor);
+  const requestHandler = new DefaultRequestHandler(
+    agentCard,
+    taskStore,
+    agentExecutor,
+    undefined,
+    undefined,
+    undefined,
+    agentCard
+  );
 
   const app = express();
 
