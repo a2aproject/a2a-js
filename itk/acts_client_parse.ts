@@ -236,7 +236,10 @@ export async function parse(operation: string, payload: unknown): Promise<unknow
         : { message: encode('message', result) };
     }
     if (operation === 'get_task') {
-      return encode('task', await client.getTask({ id: 'acts', historyLength: 0, tenant: '' } as never));
+      return encode(
+        'task',
+        await client.getTask({ id: 'acts', historyLength: 0, tenant: '' } as never)
+      );
     }
 
     return { error: { message: `unsupported client operation '${operation}'` } };
@@ -251,9 +254,7 @@ function isTask(result: unknown): result is Task {
 }
 
 /** Read `{operation, wire_payload}` out of the step's data part. */
-export function requestFrom(
-  data: unknown
-): { operation: string; payload: unknown } | undefined {
+export function requestFrom(data: unknown): { operation: string; payload: unknown } | undefined {
   if (typeof data !== 'object' || data === null) return undefined;
   const record = data as Record<string, unknown>;
   if (typeof record.operation !== 'string') return undefined;
