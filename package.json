@@ -8,7 +8,7 @@
     "url": "git+https://github.com/a2aproject/a2a-js.git"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -144,12 +144,16 @@
     "@types/node": "^22.13.14",
     "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^3.2.4",
+    "better-sqlite3": "^13.0.3",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "express": "^5.1.0",
     "json-schema-to-typescript": "^15.0.4",
+    "kysely": "^0.29.5",
+    "mysql2": "^3.24.3",
+    "pg": "^8.23.0",
     "prettier": "^3.6.2",
     "supertest": "^7.1.4",
     "tsup": "^8.5.0",
@@ -163,6 +167,7 @@
     "test": "vitest run",
     "test:edge": "vitest run --config vitest.edge.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:db": "./scripts/run_db_tests.sh",
     "install:samples": "npm --prefix src/samples install",
     "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint . --fix",
     "lint:ci": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint .",
@@ -182,7 +187,8 @@
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.11.0",
-    "express": "^4.21.2 || ^5.1.0"
+    "express": "^4.21.2 || ^5.1.0",
+    "kysely": "^0.29.5"
   },
   "peerDependenciesMeta": {
     "express": {
@@ -193,6 +199,12 @@
     },
     "@bufbuild/protobuf": {
       "optional": true
+    },
+    "kysely": {
+      "optional": true
     }
+  },
+  "bin": {
+    "a2a-db": "./dist/cli/a2a_db.js"
   }
 }

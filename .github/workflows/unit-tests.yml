@@ -17,10 +17,39 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       matrix:
-        node-version: [20, 22, 24]
+        node-version: [22, 24]
+    # The migration suite runs against every engine it supports.
+    #
+    # Both health checks go over TCP as the application user. While initialising, each
+    # image runs a temporary server that answers on its socket only, so a socket probe
+    # reports healthy seconds before the real server accepts a connection.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: a2a
+          POSTGRES_PASSWORD: a2a_password
+          POSTGRES_DB: a2a_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -h 127.0.0.1 -U a2a -d a2a_test" --health-interval 10s --health-timeout 5s --health-retries 5
+      mysql:
+        # 8.0 or newer: utf8mb4_0900_bin, the collation the key columns depend on, does
+        # not exist before it.
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: a2a_test
+          MYSQL_USER: a2a
+          MYSQL_PASSWORD: a2a_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --protocol=TCP -h 127.0.0.1 -u a2a -pa2a_password" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-node@v7
@@ -28,8 +57,16 @@ jobs:
         node-version: ${{ matrix.node-version }}
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
+    - name: Point the migration suite at the service containers
+      run: |
+        echo "POSTGRES_TEST_DSN=postgresql://a2a:a2a_password@localhost:5432/a2a_test" >> $GITHUB_ENV
+        echo "MYSQL_TEST_DSN=mysql://a2a:a2a_password@localhost:3306/a2a_test" >> $GITHUB_ENV
     - run: npm ci
+    # The suite skips an engine it cannot reach. Every engine is reachable here, so a
+    # skip would mean this job is misconfigured; the flag turns that into a failure.
     - run: npm test
+      env:
+        A2A_TEST_REQUIRE_ALL_ENGINES: '1'
 
   # Edge runtime tests use @edge-runtime/vm to emulate Cloudflare Workers,
   # Vercel Edge Functions, and similar environments. This ensures the SDK
