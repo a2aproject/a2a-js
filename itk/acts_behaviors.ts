@@ -206,7 +206,9 @@ export async function run(
 
   if (behavior === 'tck-message-response') {
     eventBus.publish(
-      AgentEvent.message(agentMessage(context, 'tck message response', `acts-msg-${context.taskId}`))
+      AgentEvent.message(
+        agentMessage(context, 'tck message response', `acts-msg-${context.taskId}`)
+      )
     );
     return;
   }
@@ -278,12 +280,7 @@ async function clientParseBehavior(
 
   const parsed = await clientParse.parse(request.operation, request.payload);
   publishArtifact(eventBus, context, [dataPart(parsed)], clientParse.BEHAVIOR);
-  publishStatus(
-    eventBus,
-    context,
-    TaskState.TASK_STATE_COMPLETED,
-    `${request.operation} parsed`
-  );
+  publishStatus(eventBus, context, TaskState.TASK_STATE_COMPLETED, `${request.operation} parsed`);
 }
 
 /**
