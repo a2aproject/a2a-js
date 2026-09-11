@@ -1,3 +1,58 @@
+import * as pb from "./pb/a2a.js";
+import { Role, TaskState } from "./pb/a2a.js";
+
+export type SendMessageConfiguration = pb.SendMessageConfiguration;
+export type Task = pb.Task;
+export type TaskStatus = pb.TaskStatus;
+export type Part = pb.Part;
+export type Message = pb.Message;
+export type Artifact = pb.Artifact;
+export type TaskStatusUpdateEvent = pb.TaskStatusUpdateEvent;
+export type TaskArtifactUpdateEvent = pb.TaskArtifactUpdateEvent;
+export type AuthenticationInfo = pb.AuthenticationInfo;
+export type AgentInterface = pb.AgentInterface;
+export type AgentCard = pb.AgentCard;
+export type AgentCard_SecuritySchemesEntry = pb.AgentCard_SecuritySchemesEntry;
+export type AgentProvider = pb.AgentProvider;
+export type AgentCapabilities = pb.AgentCapabilities;
+export type AgentExtension = pb.AgentExtension;
+export type AgentSkill = pb.AgentSkill;
+export type AgentCardSignature = pb.AgentCardSignature;
+export type TaskPushNotificationConfig = pb.TaskPushNotificationConfig;
+export type StringList = pb.StringList;
+export type SecurityRequirement = pb.SecurityRequirement;
+export type SecurityRequirement_SchemesEntry = pb.SecurityRequirement_SchemesEntry;
+export type SecurityScheme = pb.SecurityScheme;
+export type APIKeySecurityScheme = pb.APIKeySecurityScheme;
+export type HTTPAuthSecurityScheme = pb.HTTPAuthSecurityScheme;
+export type OAuth2SecurityScheme = pb.OAuth2SecurityScheme;
+export type OpenIdConnectSecurityScheme = pb.OpenIdConnectSecurityScheme;
+export type MutualTlsSecurityScheme = pb.MutualTlsSecurityScheme;
+export type OAuthFlows = pb.OAuthFlows;
+export type AuthorizationCodeOAuthFlow = pb.AuthorizationCodeOAuthFlow;
+export type AuthorizationCodeOAuthFlow_ScopesEntry = pb.AuthorizationCodeOAuthFlow_ScopesEntry;
+export type ClientCredentialsOAuthFlow = pb.ClientCredentialsOAuthFlow;
+export type ClientCredentialsOAuthFlow_ScopesEntry = pb.ClientCredentialsOAuthFlow_ScopesEntry;
+export type ImplicitOAuthFlow = pb.ImplicitOAuthFlow;
+export type ImplicitOAuthFlow_ScopesEntry = pb.ImplicitOAuthFlow_ScopesEntry;
+export type PasswordOAuthFlow = pb.PasswordOAuthFlow;
+export type PasswordOAuthFlow_ScopesEntry = pb.PasswordOAuthFlow_ScopesEntry;
+export type DeviceCodeOAuthFlow = pb.DeviceCodeOAuthFlow;
+export type DeviceCodeOAuthFlow_ScopesEntry = pb.DeviceCodeOAuthFlow_ScopesEntry;
+export type SendMessageRequest = pb.SendMessageRequest;
+export type GetTaskRequest = pb.GetTaskRequest;
+export type ListTasksRequest = pb.ListTasksRequest;
+export type ListTasksResponse = pb.ListTasksResponse;
+export type CancelTaskRequest = pb.CancelTaskRequest;
+export type GetTaskPushNotificationConfigRequest = pb.GetTaskPushNotificationConfigRequest;
+export type DeleteTaskPushNotificationConfigRequest = pb.DeleteTaskPushNotificationConfigRequest;
+export type SubscribeToTaskRequest = pb.SubscribeToTaskRequest;
+export type ListTaskPushNotificationConfigsRequest = pb.ListTaskPushNotificationConfigsRequest;
+export type GetExtendedAgentCardRequest = pb.GetExtendedAgentCardRequest;
+export type SendMessageResponse = pb.SendMessageResponse;
+export type StreamResponse = pb.StreamResponse;
+export type ListTaskPushNotificationConfigsResponse = pb.ListTaskPushNotificationConfigsResponse;
+
 export function taskStateFromJSON(object: any): TaskState {
   switch (object) {
     case 0:
