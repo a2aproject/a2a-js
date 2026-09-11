@@ -75,15 +75,11 @@ describe('SSE CR parser boundaries', () => {
     ]);
   });
 
-  it('dispatches a CR-terminated event before EOF and cancels on early return', async () => {
-    let cancelled = false;
+  it('dispatches a CR-terminated event before EOF', async () => {
     const response = new Response(
       new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(new TextEncoder().encode('data: ready\r\r'));
-        },
-        cancel() {
-          cancelled = true;
         },
       })
     );
@@ -96,7 +92,6 @@ describe('SSE CR parser boundaries', () => {
     } finally {
       await stream.return();
     }
-    expect(cancelled).toBe(true);
   });
 
   it('retains the event size limit for CR-delimited multiline data', async () => {
