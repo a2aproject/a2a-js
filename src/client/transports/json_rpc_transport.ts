@@ -33,6 +33,22 @@ import { pickMatchingInterface } from './pick_interface.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
 
+function assertJsonRpcResponseVersion(
+  response: unknown,
+  context: string
+): asserts response is Record<string, unknown> & { jsonrpc: '2.0' } {
+  if (
+    typeof response !== 'object' ||
+    response === null ||
+    !('jsonrpc' in response) ||
+    response.jsonrpc !== '2.0'
+  ) {
+    throw new Error(
+      `Invalid JSON-RPC response for ${context}: expected 'jsonrpc' to be exactly '2.0'.`
+    );
+  }
+}
+
 export interface JsonRpcTransportOptions {
   endpoint: string;
   fetchImpl?: typeof fetch;
@@ -249,12 +265,13 @@ export class JsonRpcTransport implements Transport {
       }
     }
 
-    const json = await httpResponse.json();
-    if ('error' in json) {
-      throw mapJsonRpcErrorToSdkError(json as JSONRPCErrorResponse);
+    const json: unknown = await httpResponse.json();
+    assertJsonRpcResponseVersion(json, method);
+    const rpcResponse = json as unknown as JSONRPCResponse<TResponsePayload>;
+    if ('error' in rpcResponse) {
+      throw mapJsonRpcErrorToSdkError(rpcResponse);
     }
 
-    const rpcResponse = json as JSONRPCSuccessResponse<TResponsePayload>;
     if (rpcResponse.id !== requestId) {
       throw new Error(
         `JSON-RPC response ID mismatch for method ${method}. Expected ${requestId}, got ${rpcResponse.id}.`
@@ -345,15 +362,17 @@ export class JsonRpcTransport implements Transport {
       throw new Error('Attempted to process empty SSE event data.');
     }
 
-    let a2aStreamResponse: JSONRPCResponse<StreamResponse>;
+    let parsedResponse: unknown;
     try {
-      a2aStreamResponse = JSON.parse(jsonData) as JSONRPCResponse<StreamResponse>;
+      parsedResponse = JSON.parse(jsonData);
     } catch (e) {
       throw new Error(
         `Failed to parse SSE event data: "${jsonData.substring(0, 100)}...". Original error: ${(e instanceof Error && e.message) || 'Unknown error'}`,
         { cause: e }
       );
     }
+    assertJsonRpcResponseVersion(parsedResponse, 'SSE event');
+    const a2aStreamResponse = parsedResponse as unknown as JSONRPCResponse<StreamResponse>;
 
     if (a2aStreamResponse.id !== originalRequestId) {
       throw new Error(
