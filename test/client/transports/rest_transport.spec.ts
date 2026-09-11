@@ -25,8 +25,8 @@ import {
 import {
   AgentCard,
   ListTaskPushNotificationConfigsResponse,
-  TaskPushNotificationConfig,
   TaskState,
+  TaskPushNotificationConfig,
 } from '../../../src/types/index.js';
 
 describe('RestTransport', () => {

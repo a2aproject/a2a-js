@@ -16,9 +16,9 @@ import {
 import { ServerCallContext } from '../../src/server/context.js';
 import {
   Role,
-  TaskState,
   StreamResponse,
   TaskPushNotificationConfig,
+  TaskState,
 } from '../../src/types/index.js';
 import {
   A2A_CONTENT_TYPE,
