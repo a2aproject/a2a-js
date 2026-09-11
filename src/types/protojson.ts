@@ -1,6 +1,16 @@
 import * as pb from './pb/a2a.js';
 import { Role, TaskState } from './pb/a2a.js';
 
+/**
+ * Decoded JSON handed to a `fromJSON` codec.
+ *
+ * Deliberately unconstrained: the value arrives off the wire unvalidated and
+ * each codec narrows the fields it reads. Typing it as `unknown` would force a
+ * cast at every field access without making the input any safer.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type JsonInput = any;
+
 export type SendMessageConfiguration = pb.SendMessageConfiguration;
 export type Task = pb.Task;
 export type TaskStatus = pb.TaskStatus;
@@ -53,7 +63,7 @@ export type SendMessageResponse = pb.SendMessageResponse;
 export type StreamResponse = pb.StreamResponse;
 export type ListTaskPushNotificationConfigsResponse = pb.ListTaskPushNotificationConfigsResponse;
 
-export function taskStateFromJSON(object: any): TaskState {
+export function taskStateFromJSON(object: JsonInput): TaskState {
   switch (object) {
     case 0:
     case 'TASK_STATE_UNSPECIFIED':
@@ -115,7 +125,7 @@ export function taskStateToJSON(object: TaskState): string {
   }
 }
 
-export function roleFromJSON(object: any): Role {
+export function roleFromJSON(object: JsonInput): Role {
   switch (object) {
     case 0:
     case 'ROLE_UNSPECIFIED':
@@ -148,12 +158,12 @@ export function roleToJSON(object: Role): string {
 }
 
 export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
-  fromJSON(object: any): SendMessageConfiguration {
+  fromJSON(object: JsonInput): SendMessageConfiguration {
     return {
       acceptedOutputModes: globalThis.Array.isArray(object?.acceptedOutputModes)
-        ? object.acceptedOutputModes.map((e: any) => globalThis.String(e))
+        ? object.acceptedOutputModes.map((e: unknown) => globalThis.String(e))
         : globalThis.Array.isArray(object?.accepted_output_modes)
-          ? object.accepted_output_modes.map((e: any) => globalThis.String(e))
+          ? object.accepted_output_modes.map((e: unknown) => globalThis.String(e))
           : [],
       taskPushNotificationConfig: isSet(object.taskPushNotificationConfig)
         ? TaskPushNotificationConfig.fromJSON(object.taskPushNotificationConfig)
@@ -174,7 +184,7 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
   },
 
   toJSON(message: SendMessageConfiguration): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.acceptedOutputModes?.length) {
       obj.acceptedOutputModes = message.acceptedOutputModes;
     }
@@ -194,7 +204,7 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
 };
 
 export const Task: MessageFns<Task> = {
-  fromJSON(object: any): Task {
+  fromJSON(object: JsonInput): Task {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : '',
       contextId: isSet(object.contextId)
@@ -204,17 +214,17 @@ export const Task: MessageFns<Task> = {
           : '',
       status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : undefined,
       artifacts: globalThis.Array.isArray(object?.artifacts)
-        ? object.artifacts.map((e: any) => Artifact.fromJSON(e))
+        ? object.artifacts.map((e: unknown) => Artifact.fromJSON(e))
         : [],
       history: globalThis.Array.isArray(object?.history)
-        ? object.history.map((e: any) => Message.fromJSON(e))
+        ? object.history.map((e: unknown) => Message.fromJSON(e))
         : [],
       metadata: isObject(object.metadata) ? object.metadata : undefined,
     };
   },
 
   toJSON(message: Task): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.id !== '') {
       obj.id = message.id;
     }
@@ -238,7 +248,7 @@ export const Task: MessageFns<Task> = {
 };
 
 export const TaskStatus: MessageFns<TaskStatus> = {
-  fromJSON(object: any): TaskStatus {
+  fromJSON(object: JsonInput): TaskStatus {
     return {
       state: isSet(object.state) ? taskStateFromJSON(object.state) : 0,
       message: isSet(object.message) ? Message.fromJSON(object.message) : undefined,
@@ -247,7 +257,7 @@ export const TaskStatus: MessageFns<TaskStatus> = {
   },
 
   toJSON(message: TaskStatus): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.state !== 0) {
       obj.state = taskStateToJSON(message.state);
     }
@@ -262,7 +272,7 @@ export const TaskStatus: MessageFns<TaskStatus> = {
 };
 
 export const Part: MessageFns<Part> = {
-  fromJSON(object: any): Part {
+  fromJSON(object: JsonInput): Part {
     return {
       content: isSet(object.text)
         ? { $case: 'text', value: globalThis.String(object.text) }
@@ -284,7 +294,7 @@ export const Part: MessageFns<Part> = {
   },
 
   toJSON(message: Part): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.content?.$case === 'text') {
       obj.text = message.content.value;
     } else if (message.content?.$case === 'raw') {
@@ -308,7 +318,7 @@ export const Part: MessageFns<Part> = {
 };
 
 export const Message: MessageFns<Message> = {
-  fromJSON(object: any): Message {
+  fromJSON(object: JsonInput): Message {
     return {
       messageId: isSet(object.messageId)
         ? globalThis.String(object.messageId)
@@ -327,22 +337,22 @@ export const Message: MessageFns<Message> = {
           : '',
       role: isSet(object.role) ? roleFromJSON(object.role) : 0,
       parts: globalThis.Array.isArray(object?.parts)
-        ? object.parts.map((e: any) => Part.fromJSON(e))
+        ? object.parts.map((e: unknown) => Part.fromJSON(e))
         : [],
       metadata: isObject(object.metadata) ? object.metadata : undefined,
       extensions: globalThis.Array.isArray(object?.extensions)
-        ? object.extensions.map((e: any) => globalThis.String(e))
+        ? object.extensions.map((e: unknown) => globalThis.String(e))
         : [],
       referenceTaskIds: globalThis.Array.isArray(object?.referenceTaskIds)
-        ? object.referenceTaskIds.map((e: any) => globalThis.String(e))
+        ? object.referenceTaskIds.map((e: unknown) => globalThis.String(e))
         : globalThis.Array.isArray(object?.reference_task_ids)
-          ? object.reference_task_ids.map((e: any) => globalThis.String(e))
+          ? object.reference_task_ids.map((e: unknown) => globalThis.String(e))
           : [],
     };
   },
 
   toJSON(message: Message): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.messageId !== '') {
       obj.messageId = message.messageId;
     }
@@ -372,7 +382,7 @@ export const Message: MessageFns<Message> = {
 };
 
 export const Artifact: MessageFns<Artifact> = {
-  fromJSON(object: any): Artifact {
+  fromJSON(object: JsonInput): Artifact {
     return {
       artifactId: isSet(object.artifactId)
         ? globalThis.String(object.artifactId)
@@ -382,17 +392,17 @@ export const Artifact: MessageFns<Artifact> = {
       name: isSet(object.name) ? globalThis.String(object.name) : '',
       description: isSet(object.description) ? globalThis.String(object.description) : '',
       parts: globalThis.Array.isArray(object?.parts)
-        ? object.parts.map((e: any) => Part.fromJSON(e))
+        ? object.parts.map((e: unknown) => Part.fromJSON(e))
         : [],
       metadata: isObject(object.metadata) ? object.metadata : undefined,
       extensions: globalThis.Array.isArray(object?.extensions)
-        ? object.extensions.map((e: any) => globalThis.String(e))
+        ? object.extensions.map((e: unknown) => globalThis.String(e))
         : [],
     };
   },
 
   toJSON(message: Artifact): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.artifactId !== '') {
       obj.artifactId = message.artifactId;
     }
@@ -416,7 +426,7 @@ export const Artifact: MessageFns<Artifact> = {
 };
 
 export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
-  fromJSON(object: any): TaskStatusUpdateEvent {
+  fromJSON(object: JsonInput): TaskStatusUpdateEvent {
     return {
       taskId: isSet(object.taskId)
         ? globalThis.String(object.taskId)
@@ -434,7 +444,7 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
   },
 
   toJSON(message: TaskStatusUpdateEvent): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.taskId !== '') {
       obj.taskId = message.taskId;
     }
@@ -452,7 +462,7 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
 };
 
 export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
-  fromJSON(object: any): TaskArtifactUpdateEvent {
+  fromJSON(object: JsonInput): TaskArtifactUpdateEvent {
     return {
       taskId: isSet(object.taskId)
         ? globalThis.String(object.taskId)
@@ -476,7 +486,7 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
   },
 
   toJSON(message: TaskArtifactUpdateEvent): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.taskId !== '') {
       obj.taskId = message.taskId;
     }
@@ -500,7 +510,7 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
 };
 
 export const AuthenticationInfo: MessageFns<AuthenticationInfo> = {
-  fromJSON(object: any): AuthenticationInfo {
+  fromJSON(object: JsonInput): AuthenticationInfo {
     return {
       scheme: isSet(object.scheme) ? globalThis.String(object.scheme) : '',
       credentials: isSet(object.credentials) ? globalThis.String(object.credentials) : '',
@@ -508,7 +518,7 @@ export const AuthenticationInfo: MessageFns<AuthenticationInfo> = {
   },
 
   toJSON(message: AuthenticationInfo): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.scheme !== '') {
       obj.scheme = message.scheme;
     }
@@ -520,7 +530,7 @@ export const AuthenticationInfo: MessageFns<AuthenticationInfo> = {
 };
 
 export const AgentInterface: MessageFns<AgentInterface> = {
-  fromJSON(object: any): AgentInterface {
+  fromJSON(object: JsonInput): AgentInterface {
     return {
       url: isSet(object.url) ? globalThis.String(object.url) : '',
       protocolBinding: isSet(object.protocolBinding)
@@ -538,7 +548,7 @@ export const AgentInterface: MessageFns<AgentInterface> = {
   },
 
   toJSON(message: AgentInterface): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.url !== '') {
       obj.url = message.url;
     }
@@ -556,14 +566,14 @@ export const AgentInterface: MessageFns<AgentInterface> = {
 };
 
 export const AgentCard: MessageFns<AgentCard> = {
-  fromJSON(object: any): AgentCard {
+  fromJSON(object: JsonInput): AgentCard {
     return {
       name: isSet(object.name) ? globalThis.String(object.name) : '',
       description: isSet(object.description) ? globalThis.String(object.description) : '',
       supportedInterfaces: globalThis.Array.isArray(object?.supportedInterfaces)
-        ? object.supportedInterfaces.map((e: any) => AgentInterface.fromJSON(e))
+        ? object.supportedInterfaces.map((e: unknown) => AgentInterface.fromJSON(e))
         : globalThis.Array.isArray(object?.supported_interfaces)
-          ? object.supported_interfaces.map((e: any) => AgentInterface.fromJSON(e))
+          ? object.supported_interfaces.map((e: unknown) => AgentInterface.fromJSON(e))
           : [],
       provider: isSet(object.provider) ? AgentProvider.fromJSON(object.provider) : undefined,
       version: isSet(object.version) ? globalThis.String(object.version) : '',
@@ -576,16 +586,16 @@ export const AgentCard: MessageFns<AgentCard> = {
         ? AgentCapabilities.fromJSON(object.capabilities)
         : undefined,
       securitySchemes: isObject(object.securitySchemes)
-        ? (globalThis.Object.entries(object.securitySchemes) as [string, any][]).reduce(
-            (acc: { [key: string]: SecurityScheme }, [key, value]: [string, any]) => {
+        ? (globalThis.Object.entries(object.securitySchemes) as [string, unknown][]).reduce(
+            (acc: { [key: string]: SecurityScheme }, [key, value]: [string, unknown]) => {
               acc[key] = SecurityScheme.fromJSON(value);
               return acc;
             },
             {}
           )
         : isObject(object.security_schemes)
-          ? (globalThis.Object.entries(object.security_schemes) as [string, any][]).reduce(
-              (acc: { [key: string]: SecurityScheme }, [key, value]: [string, any]) => {
+          ? (globalThis.Object.entries(object.security_schemes) as [string, unknown][]).reduce(
+              (acc: { [key: string]: SecurityScheme }, [key, value]: [string, unknown]) => {
                 acc[key] = SecurityScheme.fromJSON(value);
                 return acc;
               },
@@ -593,25 +603,25 @@ export const AgentCard: MessageFns<AgentCard> = {
             )
           : {},
       securityRequirements: globalThis.Array.isArray(object?.securityRequirements)
-        ? object.securityRequirements.map((e: any) => SecurityRequirement.fromJSON(e))
+        ? object.securityRequirements.map((e: unknown) => SecurityRequirement.fromJSON(e))
         : globalThis.Array.isArray(object?.security_requirements)
-          ? object.security_requirements.map((e: any) => SecurityRequirement.fromJSON(e))
+          ? object.security_requirements.map((e: unknown) => SecurityRequirement.fromJSON(e))
           : [],
       defaultInputModes: globalThis.Array.isArray(object?.defaultInputModes)
-        ? object.defaultInputModes.map((e: any) => globalThis.String(e))
+        ? object.defaultInputModes.map((e: unknown) => globalThis.String(e))
         : globalThis.Array.isArray(object?.default_input_modes)
-          ? object.default_input_modes.map((e: any) => globalThis.String(e))
+          ? object.default_input_modes.map((e: unknown) => globalThis.String(e))
           : [],
       defaultOutputModes: globalThis.Array.isArray(object?.defaultOutputModes)
-        ? object.defaultOutputModes.map((e: any) => globalThis.String(e))
+        ? object.defaultOutputModes.map((e: unknown) => globalThis.String(e))
         : globalThis.Array.isArray(object?.default_output_modes)
-          ? object.default_output_modes.map((e: any) => globalThis.String(e))
+          ? object.default_output_modes.map((e: unknown) => globalThis.String(e))
           : [],
       skills: globalThis.Array.isArray(object?.skills)
-        ? object.skills.map((e: any) => AgentSkill.fromJSON(e))
+        ? object.skills.map((e: unknown) => AgentSkill.fromJSON(e))
         : [],
       signatures: globalThis.Array.isArray(object?.signatures)
-        ? object.signatures.map((e: any) => AgentCardSignature.fromJSON(e))
+        ? object.signatures.map((e: unknown) => AgentCardSignature.fromJSON(e))
         : [],
       iconUrl: isSet(object.iconUrl)
         ? globalThis.String(object.iconUrl)
@@ -622,7 +632,7 @@ export const AgentCard: MessageFns<AgentCard> = {
   },
 
   toJSON(message: AgentCard): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.name !== '') {
       obj.name = message.name;
     }
@@ -650,10 +660,11 @@ export const AgentCard: MessageFns<AgentCard> = {
         SecurityScheme,
       ][];
       if (entries.length > 0) {
-        obj.securitySchemes = {};
+        const securitySchemes: Record<string, unknown> = {};
         entries.forEach(([k, v]) => {
-          obj.securitySchemes[k] = SecurityScheme.toJSON(v);
+          securitySchemes[k] = SecurityScheme.toJSON(v);
         });
+        obj.securitySchemes = securitySchemes;
       }
     }
     if (message.securityRequirements?.length) {
@@ -681,7 +692,7 @@ export const AgentCard: MessageFns<AgentCard> = {
 };
 
 export const AgentCard_SecuritySchemesEntry: MessageFns<AgentCard_SecuritySchemesEntry> = {
-  fromJSON(object: any): AgentCard_SecuritySchemesEntry {
+  fromJSON(object: JsonInput): AgentCard_SecuritySchemesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : '',
       value: isSet(object.value) ? SecurityScheme.fromJSON(object.value) : undefined,
@@ -689,7 +700,7 @@ export const AgentCard_SecuritySchemesEntry: MessageFns<AgentCard_SecurityScheme
   },
 
   toJSON(message: AgentCard_SecuritySchemesEntry): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.key !== '') {
       obj.key = message.key;
     }
@@ -701,7 +712,7 @@ export const AgentCard_SecuritySchemesEntry: MessageFns<AgentCard_SecurityScheme
 };
 
 export const AgentProvider: MessageFns<AgentProvider> = {
-  fromJSON(object: any): AgentProvider {
+  fromJSON(object: JsonInput): AgentProvider {
     return {
       url: isSet(object.url) ? globalThis.String(object.url) : '',
       organization: isSet(object.organization) ? globalThis.String(object.organization) : '',
@@ -709,7 +720,7 @@ export const AgentProvider: MessageFns<AgentProvider> = {
   },
 
   toJSON(message: AgentProvider): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.url !== '') {
       obj.url = message.url;
     }
@@ -721,7 +732,7 @@ export const AgentProvider: MessageFns<AgentProvider> = {
 };
 
 export const AgentCapabilities: MessageFns<AgentCapabilities> = {
-  fromJSON(object: any): AgentCapabilities {
+  fromJSON(object: JsonInput): AgentCapabilities {
     return {
       streaming: isSet(object.streaming) ? globalThis.Boolean(object.streaming) : undefined,
       pushNotifications: isSet(object.pushNotifications)
@@ -730,7 +741,7 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
           ? globalThis.Boolean(object.push_notifications)
           : undefined,
       extensions: globalThis.Array.isArray(object?.extensions)
-        ? object.extensions.map((e: any) => AgentExtension.fromJSON(e))
+        ? object.extensions.map((e: unknown) => AgentExtension.fromJSON(e))
         : [],
       extendedAgentCard: isSet(object.extendedAgentCard)
         ? globalThis.Boolean(object.extendedAgentCard)
@@ -741,7 +752,7 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
   },
 
   toJSON(message: AgentCapabilities): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.streaming !== undefined) {
       obj.streaming = message.streaming;
     }
@@ -759,7 +770,7 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
 };
 
 export const AgentExtension: MessageFns<AgentExtension> = {
-  fromJSON(object: any): AgentExtension {
+  fromJSON(object: JsonInput): AgentExtension {
     return {
       uri: isSet(object.uri) ? globalThis.String(object.uri) : '',
       description: isSet(object.description) ? globalThis.String(object.description) : '',
@@ -769,7 +780,7 @@ export const AgentExtension: MessageFns<AgentExtension> = {
   },
 
   toJSON(message: AgentExtension): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.uri !== '') {
       obj.uri = message.uri;
     }
@@ -787,37 +798,37 @@ export const AgentExtension: MessageFns<AgentExtension> = {
 };
 
 export const AgentSkill: MessageFns<AgentSkill> = {
-  fromJSON(object: any): AgentSkill {
+  fromJSON(object: JsonInput): AgentSkill {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : '',
       name: isSet(object.name) ? globalThis.String(object.name) : '',
       description: isSet(object.description) ? globalThis.String(object.description) : '',
       tags: globalThis.Array.isArray(object?.tags)
-        ? object.tags.map((e: any) => globalThis.String(e))
+        ? object.tags.map((e: unknown) => globalThis.String(e))
         : [],
       examples: globalThis.Array.isArray(object?.examples)
-        ? object.examples.map((e: any) => globalThis.String(e))
+        ? object.examples.map((e: unknown) => globalThis.String(e))
         : [],
       inputModes: globalThis.Array.isArray(object?.inputModes)
-        ? object.inputModes.map((e: any) => globalThis.String(e))
+        ? object.inputModes.map((e: unknown) => globalThis.String(e))
         : globalThis.Array.isArray(object?.input_modes)
-          ? object.input_modes.map((e: any) => globalThis.String(e))
+          ? object.input_modes.map((e: unknown) => globalThis.String(e))
           : [],
       outputModes: globalThis.Array.isArray(object?.outputModes)
-        ? object.outputModes.map((e: any) => globalThis.String(e))
+        ? object.outputModes.map((e: unknown) => globalThis.String(e))
         : globalThis.Array.isArray(object?.output_modes)
-          ? object.output_modes.map((e: any) => globalThis.String(e))
+          ? object.output_modes.map((e: unknown) => globalThis.String(e))
           : [],
       securityRequirements: globalThis.Array.isArray(object?.securityRequirements)
-        ? object.securityRequirements.map((e: any) => SecurityRequirement.fromJSON(e))
+        ? object.securityRequirements.map((e: unknown) => SecurityRequirement.fromJSON(e))
         : globalThis.Array.isArray(object?.security_requirements)
-          ? object.security_requirements.map((e: any) => SecurityRequirement.fromJSON(e))
+          ? object.security_requirements.map((e: unknown) => SecurityRequirement.fromJSON(e))
           : [],
     };
   },
 
   toJSON(message: AgentSkill): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.id !== '') {
       obj.id = message.id;
     }
@@ -849,7 +860,7 @@ export const AgentSkill: MessageFns<AgentSkill> = {
 };
 
 export const AgentCardSignature: MessageFns<AgentCardSignature> = {
-  fromJSON(object: any): AgentCardSignature {
+  fromJSON(object: JsonInput): AgentCardSignature {
     return {
       protected: isSet(object.protected) ? globalThis.String(object.protected) : '',
       signature: isSet(object.signature) ? globalThis.String(object.signature) : '',
@@ -858,7 +869,7 @@ export const AgentCardSignature: MessageFns<AgentCardSignature> = {
   },
 
   toJSON(message: AgentCardSignature): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.protected !== '') {
       obj.protected = message.protected;
     }
@@ -873,7 +884,7 @@ export const AgentCardSignature: MessageFns<AgentCardSignature> = {
 };
 
 export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> = {
-  fromJSON(object: any): TaskPushNotificationConfig {
+  fromJSON(object: JsonInput): TaskPushNotificationConfig {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
       id: isSet(object.id) ? globalThis.String(object.id) : '',
@@ -891,7 +902,7 @@ export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> 
   },
 
   toJSON(message: TaskPushNotificationConfig): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tenant !== '') {
       obj.tenant = message.tenant;
     }
@@ -915,16 +926,16 @@ export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> 
 };
 
 export const StringList: MessageFns<StringList> = {
-  fromJSON(object: any): StringList {
+  fromJSON(object: JsonInput): StringList {
     return {
       list: globalThis.Array.isArray(object?.list)
-        ? object.list.map((e: any) => globalThis.String(e))
+        ? object.list.map((e: unknown) => globalThis.String(e))
         : [],
     };
   },
 
   toJSON(message: StringList): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.list?.length) {
       obj.list = message.list;
     }
@@ -933,11 +944,11 @@ export const StringList: MessageFns<StringList> = {
 };
 
 export const SecurityRequirement: MessageFns<SecurityRequirement> = {
-  fromJSON(object: any): SecurityRequirement {
+  fromJSON(object: JsonInput): SecurityRequirement {
     return {
       schemes: isObject(object.schemes)
-        ? (globalThis.Object.entries(object.schemes) as [string, any][]).reduce(
-            (acc: { [key: string]: StringList }, [key, value]: [string, any]) => {
+        ? (globalThis.Object.entries(object.schemes) as [string, unknown][]).reduce(
+            (acc: { [key: string]: StringList }, [key, value]: [string, unknown]) => {
               acc[key] = StringList.fromJSON(value);
               return acc;
             },
@@ -948,14 +959,15 @@ export const SecurityRequirement: MessageFns<SecurityRequirement> = {
   },
 
   toJSON(message: SecurityRequirement): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.schemes) {
       const entries = globalThis.Object.entries(message.schemes) as [string, StringList][];
       if (entries.length > 0) {
-        obj.schemes = {};
+        const schemes: Record<string, unknown> = {};
         entries.forEach(([k, v]) => {
-          obj.schemes[k] = StringList.toJSON(v);
+          schemes[k] = StringList.toJSON(v);
         });
+        obj.schemes = schemes;
       }
     }
     return obj;
@@ -963,7 +975,7 @@ export const SecurityRequirement: MessageFns<SecurityRequirement> = {
 };
 
 export const SecurityRequirement_SchemesEntry: MessageFns<SecurityRequirement_SchemesEntry> = {
-  fromJSON(object: any): SecurityRequirement_SchemesEntry {
+  fromJSON(object: JsonInput): SecurityRequirement_SchemesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : '',
       value: isSet(object.value) ? StringList.fromJSON(object.value) : undefined,
@@ -971,7 +983,7 @@ export const SecurityRequirement_SchemesEntry: MessageFns<SecurityRequirement_Sc
   },
 
   toJSON(message: SecurityRequirement_SchemesEntry): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.key !== '') {
       obj.key = message.key;
     }
@@ -983,7 +995,7 @@ export const SecurityRequirement_SchemesEntry: MessageFns<SecurityRequirement_Sc
 };
 
 export const SecurityScheme: MessageFns<SecurityScheme> = {
-  fromJSON(object: any): SecurityScheme {
+  fromJSON(object: JsonInput): SecurityScheme {
     return {
       scheme: isSet(object.apiKeySecurityScheme)
         ? {
@@ -1044,7 +1056,7 @@ export const SecurityScheme: MessageFns<SecurityScheme> = {
   },
 
   toJSON(message: SecurityScheme): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.scheme?.$case === 'apiKeySecurityScheme') {
       obj.apiKeySecurityScheme = APIKeySecurityScheme.toJSON(message.scheme.value);
     } else if (message.scheme?.$case === 'httpAuthSecurityScheme') {
@@ -1061,7 +1073,7 @@ export const SecurityScheme: MessageFns<SecurityScheme> = {
 };
 
 export const APIKeySecurityScheme: MessageFns<APIKeySecurityScheme> = {
-  fromJSON(object: any): APIKeySecurityScheme {
+  fromJSON(object: JsonInput): APIKeySecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : '',
       location: isSet(object.location) ? globalThis.String(object.location) : '',
@@ -1070,7 +1082,7 @@ export const APIKeySecurityScheme: MessageFns<APIKeySecurityScheme> = {
   },
 
   toJSON(message: APIKeySecurityScheme): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.description !== '') {
       obj.description = message.description;
     }
@@ -1085,7 +1097,7 @@ export const APIKeySecurityScheme: MessageFns<APIKeySecurityScheme> = {
 };
 
 export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
-  fromJSON(object: any): HTTPAuthSecurityScheme {
+  fromJSON(object: JsonInput): HTTPAuthSecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : '',
       scheme: isSet(object.scheme) ? globalThis.String(object.scheme) : '',
@@ -1098,7 +1110,7 @@ export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
   },
 
   toJSON(message: HTTPAuthSecurityScheme): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.description !== '') {
       obj.description = message.description;
     }
@@ -1113,7 +1125,7 @@ export const HTTPAuthSecurityScheme: MessageFns<HTTPAuthSecurityScheme> = {
 };
 
 export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
-  fromJSON(object: any): OAuth2SecurityScheme {
+  fromJSON(object: JsonInput): OAuth2SecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : '',
       flows: isSet(object.flows) ? OAuthFlows.fromJSON(object.flows) : undefined,
@@ -1126,7 +1138,7 @@ export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
   },
 
   toJSON(message: OAuth2SecurityScheme): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.description !== '') {
       obj.description = message.description;
     }
@@ -1141,7 +1153,7 @@ export const OAuth2SecurityScheme: MessageFns<OAuth2SecurityScheme> = {
 };
 
 export const OpenIdConnectSecurityScheme: MessageFns<OpenIdConnectSecurityScheme> = {
-  fromJSON(object: any): OpenIdConnectSecurityScheme {
+  fromJSON(object: JsonInput): OpenIdConnectSecurityScheme {
     return {
       description: isSet(object.description) ? globalThis.String(object.description) : '',
       openIdConnectUrl: isSet(object.openIdConnectUrl)
@@ -1153,7 +1165,7 @@ export const OpenIdConnectSecurityScheme: MessageFns<OpenIdConnectSecurityScheme
   },
 
   toJSON(message: OpenIdConnectSecurityScheme): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.description !== '') {
       obj.description = message.description;
     }
@@ -1165,12 +1177,12 @@ export const OpenIdConnectSecurityScheme: MessageFns<OpenIdConnectSecurityScheme
 };
 
 export const MutualTlsSecurityScheme: MessageFns<MutualTlsSecurityScheme> = {
-  fromJSON(object: any): MutualTlsSecurityScheme {
+  fromJSON(object: JsonInput): MutualTlsSecurityScheme {
     return { description: isSet(object.description) ? globalThis.String(object.description) : '' };
   },
 
   toJSON(message: MutualTlsSecurityScheme): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.description !== '') {
       obj.description = message.description;
     }
@@ -1179,7 +1191,7 @@ export const MutualTlsSecurityScheme: MessageFns<MutualTlsSecurityScheme> = {
 };
 
 export const OAuthFlows: MessageFns<OAuthFlows> = {
-  fromJSON(object: any): OAuthFlows {
+  fromJSON(object: JsonInput): OAuthFlows {
     return {
       flow: isSet(object.authorizationCode)
         ? {
@@ -1220,7 +1232,7 @@ export const OAuthFlows: MessageFns<OAuthFlows> = {
   },
 
   toJSON(message: OAuthFlows): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.flow?.$case === 'authorizationCode') {
       obj.authorizationCode = AuthorizationCodeOAuthFlow.toJSON(message.flow.value);
     } else if (message.flow?.$case === 'clientCredentials') {
@@ -1237,7 +1249,7 @@ export const OAuthFlows: MessageFns<OAuthFlows> = {
 };
 
 export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> = {
-  fromJSON(object: any): AuthorizationCodeOAuthFlow {
+  fromJSON(object: JsonInput): AuthorizationCodeOAuthFlow {
     return {
       authorizationUrl: isSet(object.authorizationUrl)
         ? globalThis.String(object.authorizationUrl)
@@ -1255,8 +1267,8 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
           ? globalThis.String(object.refresh_url)
           : '',
       scopes: isObject(object.scopes)
-        ? (globalThis.Object.entries(object.scopes) as [string, any][]).reduce(
-            (acc: { [key: string]: string }, [key, value]: [string, any]) => {
+        ? (globalThis.Object.entries(object.scopes) as [string, unknown][]).reduce(
+            (acc: { [key: string]: string }, [key, value]: [string, unknown]) => {
               acc[key] = globalThis.String(value);
               return acc;
             },
@@ -1272,7 +1284,7 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
   },
 
   toJSON(message: AuthorizationCodeOAuthFlow): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.authorizationUrl !== '') {
       obj.authorizationUrl = message.authorizationUrl;
     }
@@ -1285,10 +1297,11 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
     if (message.scopes) {
       const entries = globalThis.Object.entries(message.scopes) as [string, string][];
       if (entries.length > 0) {
-        obj.scopes = {};
+        const scopes: Record<string, unknown> = {};
         entries.forEach(([k, v]) => {
-          obj.scopes[k] = v;
+          scopes[k] = v;
         });
+        obj.scopes = scopes;
       }
     }
     if (message.pkceRequired !== false) {
@@ -1300,7 +1313,7 @@ export const AuthorizationCodeOAuthFlow: MessageFns<AuthorizationCodeOAuthFlow> 
 
 export const AuthorizationCodeOAuthFlow_ScopesEntry: MessageFns<AuthorizationCodeOAuthFlow_ScopesEntry> =
   {
-    fromJSON(object: any): AuthorizationCodeOAuthFlow_ScopesEntry {
+    fromJSON(object: JsonInput): AuthorizationCodeOAuthFlow_ScopesEntry {
       return {
         key: isSet(object.key) ? globalThis.String(object.key) : '',
         value: isSet(object.value) ? globalThis.String(object.value) : '',
@@ -1308,7 +1321,7 @@ export const AuthorizationCodeOAuthFlow_ScopesEntry: MessageFns<AuthorizationCod
     },
 
     toJSON(message: AuthorizationCodeOAuthFlow_ScopesEntry): unknown {
-      const obj: any = {};
+      const obj: Record<string, unknown> = {};
       if (message.key !== '') {
         obj.key = message.key;
       }
@@ -1320,7 +1333,7 @@ export const AuthorizationCodeOAuthFlow_ScopesEntry: MessageFns<AuthorizationCod
   };
 
 export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> = {
-  fromJSON(object: any): ClientCredentialsOAuthFlow {
+  fromJSON(object: JsonInput): ClientCredentialsOAuthFlow {
     return {
       tokenUrl: isSet(object.tokenUrl)
         ? globalThis.String(object.tokenUrl)
@@ -1333,8 +1346,8 @@ export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> 
           ? globalThis.String(object.refresh_url)
           : '',
       scopes: isObject(object.scopes)
-        ? (globalThis.Object.entries(object.scopes) as [string, any][]).reduce(
-            (acc: { [key: string]: string }, [key, value]: [string, any]) => {
+        ? (globalThis.Object.entries(object.scopes) as [string, unknown][]).reduce(
+            (acc: { [key: string]: string }, [key, value]: [string, unknown]) => {
               acc[key] = globalThis.String(value);
               return acc;
             },
@@ -1345,7 +1358,7 @@ export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> 
   },
 
   toJSON(message: ClientCredentialsOAuthFlow): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tokenUrl !== '') {
       obj.tokenUrl = message.tokenUrl;
     }
@@ -1355,10 +1368,11 @@ export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> 
     if (message.scopes) {
       const entries = globalThis.Object.entries(message.scopes) as [string, string][];
       if (entries.length > 0) {
-        obj.scopes = {};
+        const scopes: Record<string, unknown> = {};
         entries.forEach(([k, v]) => {
-          obj.scopes[k] = v;
+          scopes[k] = v;
         });
+        obj.scopes = scopes;
       }
     }
     return obj;
@@ -1367,7 +1381,7 @@ export const ClientCredentialsOAuthFlow: MessageFns<ClientCredentialsOAuthFlow> 
 
 export const ClientCredentialsOAuthFlow_ScopesEntry: MessageFns<ClientCredentialsOAuthFlow_ScopesEntry> =
   {
-    fromJSON(object: any): ClientCredentialsOAuthFlow_ScopesEntry {
+    fromJSON(object: JsonInput): ClientCredentialsOAuthFlow_ScopesEntry {
       return {
         key: isSet(object.key) ? globalThis.String(object.key) : '',
         value: isSet(object.value) ? globalThis.String(object.value) : '',
@@ -1375,7 +1389,7 @@ export const ClientCredentialsOAuthFlow_ScopesEntry: MessageFns<ClientCredential
     },
 
     toJSON(message: ClientCredentialsOAuthFlow_ScopesEntry): unknown {
-      const obj: any = {};
+      const obj: Record<string, unknown> = {};
       if (message.key !== '') {
         obj.key = message.key;
       }
@@ -1387,7 +1401,7 @@ export const ClientCredentialsOAuthFlow_ScopesEntry: MessageFns<ClientCredential
   };
 
 export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
-  fromJSON(object: any): ImplicitOAuthFlow {
+  fromJSON(object: JsonInput): ImplicitOAuthFlow {
     return {
       authorizationUrl: isSet(object.authorizationUrl)
         ? globalThis.String(object.authorizationUrl)
@@ -1400,8 +1414,8 @@ export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
           ? globalThis.String(object.refresh_url)
           : '',
       scopes: isObject(object.scopes)
-        ? (globalThis.Object.entries(object.scopes) as [string, any][]).reduce(
-            (acc: { [key: string]: string }, [key, value]: [string, any]) => {
+        ? (globalThis.Object.entries(object.scopes) as [string, unknown][]).reduce(
+            (acc: { [key: string]: string }, [key, value]: [string, unknown]) => {
               acc[key] = globalThis.String(value);
               return acc;
             },
@@ -1412,7 +1426,7 @@ export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
   },
 
   toJSON(message: ImplicitOAuthFlow): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.authorizationUrl !== '') {
       obj.authorizationUrl = message.authorizationUrl;
     }
@@ -1422,10 +1436,11 @@ export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
     if (message.scopes) {
       const entries = globalThis.Object.entries(message.scopes) as [string, string][];
       if (entries.length > 0) {
-        obj.scopes = {};
+        const scopes: Record<string, unknown> = {};
         entries.forEach(([k, v]) => {
-          obj.scopes[k] = v;
+          scopes[k] = v;
         });
+        obj.scopes = scopes;
       }
     }
     return obj;
@@ -1433,7 +1448,7 @@ export const ImplicitOAuthFlow: MessageFns<ImplicitOAuthFlow> = {
 };
 
 export const ImplicitOAuthFlow_ScopesEntry: MessageFns<ImplicitOAuthFlow_ScopesEntry> = {
-  fromJSON(object: any): ImplicitOAuthFlow_ScopesEntry {
+  fromJSON(object: JsonInput): ImplicitOAuthFlow_ScopesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : '',
       value: isSet(object.value) ? globalThis.String(object.value) : '',
@@ -1441,7 +1456,7 @@ export const ImplicitOAuthFlow_ScopesEntry: MessageFns<ImplicitOAuthFlow_ScopesE
   },
 
   toJSON(message: ImplicitOAuthFlow_ScopesEntry): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.key !== '') {
       obj.key = message.key;
     }
@@ -1453,7 +1468,7 @@ export const ImplicitOAuthFlow_ScopesEntry: MessageFns<ImplicitOAuthFlow_ScopesE
 };
 
 export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
-  fromJSON(object: any): PasswordOAuthFlow {
+  fromJSON(object: JsonInput): PasswordOAuthFlow {
     return {
       tokenUrl: isSet(object.tokenUrl)
         ? globalThis.String(object.tokenUrl)
@@ -1466,8 +1481,8 @@ export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
           ? globalThis.String(object.refresh_url)
           : '',
       scopes: isObject(object.scopes)
-        ? (globalThis.Object.entries(object.scopes) as [string, any][]).reduce(
-            (acc: { [key: string]: string }, [key, value]: [string, any]) => {
+        ? (globalThis.Object.entries(object.scopes) as [string, unknown][]).reduce(
+            (acc: { [key: string]: string }, [key, value]: [string, unknown]) => {
               acc[key] = globalThis.String(value);
               return acc;
             },
@@ -1478,7 +1493,7 @@ export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
   },
 
   toJSON(message: PasswordOAuthFlow): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tokenUrl !== '') {
       obj.tokenUrl = message.tokenUrl;
     }
@@ -1488,10 +1503,11 @@ export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
     if (message.scopes) {
       const entries = globalThis.Object.entries(message.scopes) as [string, string][];
       if (entries.length > 0) {
-        obj.scopes = {};
+        const scopes: Record<string, unknown> = {};
         entries.forEach(([k, v]) => {
-          obj.scopes[k] = v;
+          scopes[k] = v;
         });
+        obj.scopes = scopes;
       }
     }
     return obj;
@@ -1499,7 +1515,7 @@ export const PasswordOAuthFlow: MessageFns<PasswordOAuthFlow> = {
 };
 
 export const PasswordOAuthFlow_ScopesEntry: MessageFns<PasswordOAuthFlow_ScopesEntry> = {
-  fromJSON(object: any): PasswordOAuthFlow_ScopesEntry {
+  fromJSON(object: JsonInput): PasswordOAuthFlow_ScopesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : '',
       value: isSet(object.value) ? globalThis.String(object.value) : '',
@@ -1507,7 +1523,7 @@ export const PasswordOAuthFlow_ScopesEntry: MessageFns<PasswordOAuthFlow_ScopesE
   },
 
   toJSON(message: PasswordOAuthFlow_ScopesEntry): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.key !== '') {
       obj.key = message.key;
     }
@@ -1519,7 +1535,7 @@ export const PasswordOAuthFlow_ScopesEntry: MessageFns<PasswordOAuthFlow_ScopesE
 };
 
 export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
-  fromJSON(object: any): DeviceCodeOAuthFlow {
+  fromJSON(object: JsonInput): DeviceCodeOAuthFlow {
     return {
       deviceAuthorizationUrl: isSet(object.deviceAuthorizationUrl)
         ? globalThis.String(object.deviceAuthorizationUrl)
@@ -1537,8 +1553,8 @@ export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
           ? globalThis.String(object.refresh_url)
           : '',
       scopes: isObject(object.scopes)
-        ? (globalThis.Object.entries(object.scopes) as [string, any][]).reduce(
-            (acc: { [key: string]: string }, [key, value]: [string, any]) => {
+        ? (globalThis.Object.entries(object.scopes) as [string, unknown][]).reduce(
+            (acc: { [key: string]: string }, [key, value]: [string, unknown]) => {
               acc[key] = globalThis.String(value);
               return acc;
             },
@@ -1549,7 +1565,7 @@ export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
   },
 
   toJSON(message: DeviceCodeOAuthFlow): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.deviceAuthorizationUrl !== '') {
       obj.deviceAuthorizationUrl = message.deviceAuthorizationUrl;
     }
@@ -1562,10 +1578,11 @@ export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
     if (message.scopes) {
       const entries = globalThis.Object.entries(message.scopes) as [string, string][];
       if (entries.length > 0) {
-        obj.scopes = {};
+        const scopes: Record<string, unknown> = {};
         entries.forEach(([k, v]) => {
-          obj.scopes[k] = v;
+          scopes[k] = v;
         });
+        obj.scopes = scopes;
       }
     }
     return obj;
@@ -1573,7 +1590,7 @@ export const DeviceCodeOAuthFlow: MessageFns<DeviceCodeOAuthFlow> = {
 };
 
 export const DeviceCodeOAuthFlow_ScopesEntry: MessageFns<DeviceCodeOAuthFlow_ScopesEntry> = {
-  fromJSON(object: any): DeviceCodeOAuthFlow_ScopesEntry {
+  fromJSON(object: JsonInput): DeviceCodeOAuthFlow_ScopesEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : '',
       value: isSet(object.value) ? globalThis.String(object.value) : '',
@@ -1581,7 +1598,7 @@ export const DeviceCodeOAuthFlow_ScopesEntry: MessageFns<DeviceCodeOAuthFlow_Sco
   },
 
   toJSON(message: DeviceCodeOAuthFlow_ScopesEntry): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.key !== '') {
       obj.key = message.key;
     }
@@ -1593,7 +1610,7 @@ export const DeviceCodeOAuthFlow_ScopesEntry: MessageFns<DeviceCodeOAuthFlow_Sco
 };
 
 export const SendMessageRequest: MessageFns<SendMessageRequest> = {
-  fromJSON(object: any): SendMessageRequest {
+  fromJSON(object: JsonInput): SendMessageRequest {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
       message: isSet(object.message) ? Message.fromJSON(object.message) : undefined,
@@ -1605,7 +1622,7 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
   },
 
   toJSON(message: SendMessageRequest): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tenant !== '') {
       obj.tenant = message.tenant;
     }
@@ -1623,7 +1640,7 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
 };
 
 export const GetTaskRequest: MessageFns<GetTaskRequest> = {
-  fromJSON(object: any): GetTaskRequest {
+  fromJSON(object: JsonInput): GetTaskRequest {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
       id: isSet(object.id) ? globalThis.String(object.id) : '',
@@ -1636,7 +1653,7 @@ export const GetTaskRequest: MessageFns<GetTaskRequest> = {
   },
 
   toJSON(message: GetTaskRequest): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tenant !== '') {
       obj.tenant = message.tenant;
     }
@@ -1651,7 +1668,7 @@ export const GetTaskRequest: MessageFns<GetTaskRequest> = {
 };
 
 export const ListTasksRequest: MessageFns<ListTasksRequest> = {
-  fromJSON(object: any): ListTasksRequest {
+  fromJSON(object: JsonInput): ListTasksRequest {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
       contextId: isSet(object.contextId)
@@ -1689,7 +1706,7 @@ export const ListTasksRequest: MessageFns<ListTasksRequest> = {
   },
 
   toJSON(message: ListTasksRequest): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tenant !== '') {
       obj.tenant = message.tenant;
     }
@@ -1719,10 +1736,10 @@ export const ListTasksRequest: MessageFns<ListTasksRequest> = {
 };
 
 export const ListTasksResponse: MessageFns<ListTasksResponse> = {
-  fromJSON(object: any): ListTasksResponse {
+  fromJSON(object: JsonInput): ListTasksResponse {
     return {
       tasks: globalThis.Array.isArray(object?.tasks)
-        ? object.tasks.map((e: any) => Task.fromJSON(e))
+        ? object.tasks.map((e: unknown) => Task.fromJSON(e))
         : [],
       nextPageToken: isSet(object.nextPageToken)
         ? globalThis.String(object.nextPageToken)
@@ -1743,7 +1760,7 @@ export const ListTasksResponse: MessageFns<ListTasksResponse> = {
   },
 
   toJSON(message: ListTasksResponse): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tasks?.length) {
       obj.tasks = message.tasks.map((e) => Task.toJSON(e));
     }
@@ -1761,7 +1778,7 @@ export const ListTasksResponse: MessageFns<ListTasksResponse> = {
 };
 
 export const CancelTaskRequest: MessageFns<CancelTaskRequest> = {
-  fromJSON(object: any): CancelTaskRequest {
+  fromJSON(object: JsonInput): CancelTaskRequest {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
       id: isSet(object.id) ? globalThis.String(object.id) : '',
@@ -1770,7 +1787,7 @@ export const CancelTaskRequest: MessageFns<CancelTaskRequest> = {
   },
 
   toJSON(message: CancelTaskRequest): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tenant !== '') {
       obj.tenant = message.tenant;
     }
@@ -1786,7 +1803,7 @@ export const CancelTaskRequest: MessageFns<CancelTaskRequest> = {
 
 export const GetTaskPushNotificationConfigRequest: MessageFns<GetTaskPushNotificationConfigRequest> =
   {
-    fromJSON(object: any): GetTaskPushNotificationConfigRequest {
+    fromJSON(object: JsonInput): GetTaskPushNotificationConfigRequest {
       return {
         tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
         taskId: isSet(object.taskId)
@@ -1799,7 +1816,7 @@ export const GetTaskPushNotificationConfigRequest: MessageFns<GetTaskPushNotific
     },
 
     toJSON(message: GetTaskPushNotificationConfigRequest): unknown {
-      const obj: any = {};
+      const obj: Record<string, unknown> = {};
       if (message.tenant !== '') {
         obj.tenant = message.tenant;
       }
@@ -1815,7 +1832,7 @@ export const GetTaskPushNotificationConfigRequest: MessageFns<GetTaskPushNotific
 
 export const DeleteTaskPushNotificationConfigRequest: MessageFns<DeleteTaskPushNotificationConfigRequest> =
   {
-    fromJSON(object: any): DeleteTaskPushNotificationConfigRequest {
+    fromJSON(object: JsonInput): DeleteTaskPushNotificationConfigRequest {
       return {
         tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
         taskId: isSet(object.taskId)
@@ -1828,7 +1845,7 @@ export const DeleteTaskPushNotificationConfigRequest: MessageFns<DeleteTaskPushN
     },
 
     toJSON(message: DeleteTaskPushNotificationConfigRequest): unknown {
-      const obj: any = {};
+      const obj: Record<string, unknown> = {};
       if (message.tenant !== '') {
         obj.tenant = message.tenant;
       }
@@ -1843,7 +1860,7 @@ export const DeleteTaskPushNotificationConfigRequest: MessageFns<DeleteTaskPushN
   };
 
 export const SubscribeToTaskRequest: MessageFns<SubscribeToTaskRequest> = {
-  fromJSON(object: any): SubscribeToTaskRequest {
+  fromJSON(object: JsonInput): SubscribeToTaskRequest {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
       id: isSet(object.id) ? globalThis.String(object.id) : '',
@@ -1851,7 +1868,7 @@ export const SubscribeToTaskRequest: MessageFns<SubscribeToTaskRequest> = {
   },
 
   toJSON(message: SubscribeToTaskRequest): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tenant !== '') {
       obj.tenant = message.tenant;
     }
@@ -1864,7 +1881,7 @@ export const SubscribeToTaskRequest: MessageFns<SubscribeToTaskRequest> = {
 
 export const ListTaskPushNotificationConfigsRequest: MessageFns<ListTaskPushNotificationConfigsRequest> =
   {
-    fromJSON(object: any): ListTaskPushNotificationConfigsRequest {
+    fromJSON(object: JsonInput): ListTaskPushNotificationConfigsRequest {
       return {
         tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
         taskId: isSet(object.taskId)
@@ -1886,7 +1903,7 @@ export const ListTaskPushNotificationConfigsRequest: MessageFns<ListTaskPushNoti
     },
 
     toJSON(message: ListTaskPushNotificationConfigsRequest): unknown {
-      const obj: any = {};
+      const obj: Record<string, unknown> = {};
       if (message.tenant !== '') {
         obj.tenant = message.tenant;
       }
@@ -1904,12 +1921,12 @@ export const ListTaskPushNotificationConfigsRequest: MessageFns<ListTaskPushNoti
   };
 
 export const GetExtendedAgentCardRequest: MessageFns<GetExtendedAgentCardRequest> = {
-  fromJSON(object: any): GetExtendedAgentCardRequest {
+  fromJSON(object: JsonInput): GetExtendedAgentCardRequest {
     return { tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '' };
   },
 
   toJSON(message: GetExtendedAgentCardRequest): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.tenant !== '') {
       obj.tenant = message.tenant;
     }
@@ -1918,7 +1935,7 @@ export const GetExtendedAgentCardRequest: MessageFns<GetExtendedAgentCardRequest
 };
 
 export const SendMessageResponse: MessageFns<SendMessageResponse> = {
-  fromJSON(object: any): SendMessageResponse {
+  fromJSON(object: JsonInput): SendMessageResponse {
     return {
       payload: isSet(object.task)
         ? { $case: 'task', value: Task.fromJSON(object.task) }
@@ -1929,7 +1946,7 @@ export const SendMessageResponse: MessageFns<SendMessageResponse> = {
   },
 
   toJSON(message: SendMessageResponse): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.payload?.$case === 'task') {
       obj.task = Task.toJSON(message.payload.value);
     } else if (message.payload?.$case === 'message') {
@@ -1940,7 +1957,7 @@ export const SendMessageResponse: MessageFns<SendMessageResponse> = {
 };
 
 export const StreamResponse: MessageFns<StreamResponse> = {
-  fromJSON(object: any): StreamResponse {
+  fromJSON(object: JsonInput): StreamResponse {
     return {
       payload: isSet(object.task)
         ? { $case: 'task', value: Task.fromJSON(object.task) }
@@ -1968,7 +1985,7 @@ export const StreamResponse: MessageFns<StreamResponse> = {
   },
 
   toJSON(message: StreamResponse): unknown {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     if (message.payload?.$case === 'task') {
       obj.task = Task.toJSON(message.payload.value);
     } else if (message.payload?.$case === 'message') {
@@ -1984,10 +2001,10 @@ export const StreamResponse: MessageFns<StreamResponse> = {
 
 export const ListTaskPushNotificationConfigsResponse: MessageFns<ListTaskPushNotificationConfigsResponse> =
   {
-    fromJSON(object: any): ListTaskPushNotificationConfigsResponse {
+    fromJSON(object: JsonInput): ListTaskPushNotificationConfigsResponse {
       return {
         configs: globalThis.Array.isArray(object?.configs)
-          ? object.configs.map((e: any) => TaskPushNotificationConfig.fromJSON(e))
+          ? object.configs.map((e: unknown) => TaskPushNotificationConfig.fromJSON(e))
           : [],
         nextPageToken: isSet(object.nextPageToken)
           ? globalThis.String(object.nextPageToken)
@@ -1998,7 +2015,7 @@ export const ListTaskPushNotificationConfigsResponse: MessageFns<ListTaskPushNot
     },
 
     toJSON(message: ListTaskPushNotificationConfigsResponse): unknown {
-      const obj: any = {};
+      const obj: Record<string, unknown> = {};
       if (message.configs?.length) {
         obj.configs = message.configs.map((e) => TaskPushNotificationConfig.toJSON(e));
       }
@@ -2017,15 +2034,15 @@ function base64FromBytes(arr: Uint8Array): string {
   return globalThis.Buffer.from(arr).toString('base64');
 }
 
-function isObject(value: any): boolean {
+function isObject(value: unknown): boolean {
   return typeof value === 'object' && value !== null;
 }
 
-function isSet(value: any): boolean {
+function isSet(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
 
 export interface MessageFns<T> {
-  fromJSON(object: any): T;
+  fromJSON(object: JsonInput): T;
   toJSON(message: T): unknown;
 }
