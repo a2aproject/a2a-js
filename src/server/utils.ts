@@ -1,3 +1,4 @@
+import { RequestMalformedError } from '../errors/index.js';
 import { TaskStatus, TaskState, Artifact, Task, Message } from '../index.js';
 import { ServerCallContext } from './context.js';
 import { OwnerResolver } from './owner_resolver.js';
@@ -111,6 +112,37 @@ export function callerScope(
   ownerResolver: OwnerResolver
 ): { tenant: string; owner: string } {
   return { tenant: context.tenant ?? '', owner: ownerResolver(context) };
+}
+
+/**
+ * Scope and identity fields are used as storage keys. They must be strings.
+ * '' is a valid one.
+ */
+export function requireKey(subject: string, field: string, value: string): void {
+  if (typeof value !== 'string') {
+    throw new Error(`${subject} has no ${field}`);
+  }
+}
+
+/**
+ * Wire format of a `ListTasks` page cursor: `<timestamp>|<id>`, base64. Every task store
+ * shares it, so a token means the same thing whichever one issued it.
+ */
+export function encodePageToken(timestamp: string, id: string): string {
+  return Buffer.from(`${timestamp}|${id}`).toString('base64');
+}
+
+export function decodePageToken(pageToken: string): { timestamp: string; id: string } {
+  try {
+    const [timestamp, ...idParts] = Buffer.from(pageToken, 'base64').toString('utf-8').split('|');
+    if (idParts.length === 0) {
+      throw new RequestMalformedError('Invalid page token format.');
+    }
+    return { timestamp, id: idParts.join('|') };
+  } catch (e) {
+    if (e instanceof RequestMalformedError) throw e;
+    throw new RequestMalformedError('Token is not a valid base64-encoded cursor.');
+  }
 }
 
 /**
