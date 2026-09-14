@@ -457,6 +457,18 @@ for (const engine of ENGINES) {
         expect(await store.load('task-1', globex)).toEqual([]);
       });
 
+      // An absent tenant is the global bucket, which is a tenant like any other.
+      it('isolates the global bucket from a named tenant', async () => {
+        const untenanted = makeContext();
+        const acme = makeContext({ tenant: 'acme' });
+        await store.save('task-1', untenanted, makeConfig({ url: 'https://global.test/' }));
+        await store.save('task-1', acme, makeConfig({ url: 'https://acme.test/' }));
+
+        expect(await rowsInTable()).toHaveLength(2);
+        expect((await store.load('task-1', untenanted))[0].url).toBe('https://global.test/');
+        expect((await store.load('task-1', acme))[0].url).toBe('https://acme.test/');
+      });
+
       it('allows the same task and config id in different tenants', async () => {
         const acme = makeContext({ tenant: 'acme' });
         const globex = makeContext({ tenant: 'globex' });
