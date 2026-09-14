@@ -122,6 +122,105 @@ describe('Client', () => {
     expect(result).to.equal(agentCard);
   });
 
+  it('should not update cached agentCard if signature verification fails on extended card', async () => {
+    const publicCard: AgentCard = {
+      ...agentCard,
+      name: 'Public Card',
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: true,
+        pushNotifications: false,
+      },
+    };
+    const extendedCard: AgentCard = {
+      ...agentCard,
+      name: 'Unverified Extended Card',
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: false,
+        pushNotifications: true,
+      },
+    };
+    client = new Client(transport, publicCard);
+
+    transport.getExtendedAgentCard.mockResolvedValue(extendedCard);
+
+    const verifier = vi.fn().mockRejectedValue(new Error('invalid signature'));
+
+    await expect(client.getAgentCard(undefined, verifier)).rejects.toThrow('invalid signature');
+    expect(verifier).toHaveBeenCalledTimes(1);
+    expect(verifier).toHaveBeenCalledWith(extendedCard);
+    expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(1);
+
+    // On subsequent call with passing verifier, transport is called again because original publicCard remained cached
+    const successVerifier = vi.fn().mockResolvedValue(undefined);
+    const result = await client.getAgentCard(undefined, successVerifier);
+
+    expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(2);
+    expect(successVerifier).toHaveBeenCalledWith(extendedCard);
+    expect(result).to.equal(extendedCard);
+  });
+
+  it('should update cached agentCard when signature verification succeeds', async () => {
+    const publicCard: AgentCard = {
+      ...agentCard,
+      name: 'Public Card',
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: true,
+        pushNotifications: false,
+      },
+    };
+    const extendedCard: AgentCard = {
+      ...agentCard,
+      name: 'Verified Extended Card',
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: false,
+        pushNotifications: true,
+      },
+    };
+    client = new Client(transport, publicCard);
+
+    transport.getExtendedAgentCard.mockResolvedValue(extendedCard);
+
+    const verifier = vi.fn().mockResolvedValue(undefined);
+    const result = await client.getAgentCard(undefined, verifier);
+
+    expect(result).to.equal(extendedCard);
+    expect(verifier).toHaveBeenCalledTimes(1);
+    expect(verifier).toHaveBeenCalledWith(extendedCard);
+    expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(1);
+
+    // Subsequent call should return cached extendedCard without invoking transport again
+    const cachedResult = await client.getAgentCard();
+    expect(cachedResult).to.equal(extendedCard);
+    expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('should verify current card when extendedAgentCard is not supported and verifySignature is provided', async () => {
+    const verifier = vi.fn().mockResolvedValue(undefined);
+    const result = await client.getAgentCard(undefined, verifier);
+
+    expect(transport.getExtendedAgentCard).not.toHaveBeenCalled();
+    expect(verifier).toHaveBeenCalledTimes(1);
+    expect(verifier).toHaveBeenCalledWith(agentCard);
+    expect(result).to.equal(agentCard);
+  });
+
+  it('should throw and preserve cached card when extendedAgentCard is not supported and verifier rejects', async () => {
+    const verifier = vi.fn().mockRejectedValue(new Error('card signature rejected'));
+
+    await expect(client.getAgentCard(undefined, verifier)).rejects.toThrow(
+      'card signature rejected'
+    );
+    expect(transport.getExtendedAgentCard).not.toHaveBeenCalled();
+    expect(verifier).toHaveBeenCalledTimes(1);
+
+    const result = await client.getAgentCard();
+    expect(result).to.equal(agentCard);
+  });
+
   it('should call transport.sendMessage with default returnImmediately=false', async () => {
     const params: SendMessageRequest = {
       message: {

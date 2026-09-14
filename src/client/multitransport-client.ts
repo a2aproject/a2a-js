@@ -89,16 +89,16 @@ export class Client {
     options?: RequestOptions,
     verifySignature?: AgentCardSignatureVerifier
   ): Promise<AgentCard> {
+    let card = this.agentCard;
     if (this.agentCard.capabilities?.extendedAgentCard) {
-      this.agentCard = await this.executeWithInterceptors(
-        { method: 'getAgentCard' },
-        options,
-        (_, options) => this.transport.getExtendedAgentCard({ tenant: '' }, options)
+      card = await this.executeWithInterceptors({ method: 'getAgentCard' }, options, (_, options) =>
+        this.transport.getExtendedAgentCard({ tenant: '' }, options)
       );
     }
     if (verifySignature) {
-      await verifySignature(this.agentCard);
+      await verifySignature(card);
     }
+    this.agentCard = card;
     return this.agentCard;
   }
 
