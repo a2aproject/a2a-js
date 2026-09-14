@@ -20,7 +20,6 @@ import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/con
 const TABLE = 'push_notification_configs';
 const LEDGER_TABLE = 'a2a_push_notification_store_migrations';
 const LOCK_TABLE = 'a2a_push_notification_store_migrations_lock';
-const ALL_COLUMNS = ['tenant', 'owner', 'task_id', 'config_id', 'config_data', 'protocol_version'];
 const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 class TestUser implements User {
@@ -167,62 +166,6 @@ for (const engine of ENGINES) {
 
     afterEach(async () => {
       await db?.destroy();
-    });
-
-    describe('initialize()', () => {
-      it('accepts a migrated table, and is idempotent', async () => {
-        await store.initialize();
-        await store.initialize();
-      });
-
-      it('rejects a database with no table, naming the fix', async () => {
-        await execute(`drop table ${TABLE}`);
-        const fresh = new DatabasePushNotificationStore(db);
-
-        await expect(fresh.initialize()).rejects.toThrow(/Cannot read table.*a2a-db upgrade/s);
-      });
-
-      // Rebuilt rather than `alter table drop column`: SQLite refuses that on a primary
-      // key column, and four of the six are the primary key.
-      it('initialize rejects a table missing a column', async () => {
-        for (const missing of ALL_COLUMNS) {
-          const remaining = ALL_COLUMNS.filter((column) => column !== missing);
-          const columns = remaining.map((column) => `${column} varchar(255)`).join(', ');
-          await execute(`drop table ${TABLE}`);
-          await execute(`create table ${TABLE} (${columns})`);
-
-          const fresh = new DatabasePushNotificationStore(db);
-          await expect(fresh.initialize(), `missing ${missing}`).rejects.toThrow(
-            /Cannot read table/
-          );
-        }
-      });
-
-      it('retries after a failure, so migrating does not need a restart', async () => {
-        await dropEverything();
-        const fresh = new DatabasePushNotificationStore(db);
-        await expect(fresh.initialize()).rejects.toThrow(/Cannot read table/);
-
-        await migrate();
-
-        await expect(fresh.initialize()).resolves.toBeUndefined();
-      });
-
-      it('guards every method so callers need not call it', async () => {
-        await dropEverything();
-        const fresh = new DatabasePushNotificationStore(db);
-
-        await expect(fresh.save('task-1', makeContext(), makeConfig())).rejects.toThrow(
-          /a2a-db upgrade/
-        );
-        await expect(fresh.load('task-1', makeContext())).rejects.toThrow(/a2a-db upgrade/);
-        await expect(fresh.loadWithMetadata('task-1', makeContext())).rejects.toThrow(
-          /a2a-db upgrade/
-        );
-        await expect(fresh.delete('task-1', makeContext(), 'cfg-1')).rejects.toThrow(
-          /a2a-db upgrade/
-        );
-      });
     });
 
     describe('save() and load()', () => {

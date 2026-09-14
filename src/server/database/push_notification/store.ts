@@ -32,7 +32,6 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
   private readonly db: Kysely<PushNotificationDatabase>;
   private readonly ownerResolver: OwnerResolver;
   private readonly dialect: DialectName;
-  private schemaCheck?: Promise<void>;
 
   constructor(
     db: Kysely<PushNotificationDatabase>,
@@ -43,43 +42,6 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
     // Fixed for the connection's lifetime, and rejects an engine we cannot
     // write to here rather than on the first save.
     this.dialect = dialectOf(db);
-  }
-
-  /**
-   * Checks the table is reachable and has the columns this store uses.
-   * Optional: every method does it anyway. Call it at startup to fail there
-   * instead of on the first request.
-   */
-  async initialize(): Promise<void> {
-    // Only success is cached, so migrating a database this store already
-    // rejected does not need a restart.
-    this.schemaCheck ??= this.checkSchema().catch((error: unknown) => {
-      this.schemaCheck = undefined;
-      throw error;
-    });
-    await this.schemaCheck;
-  }
-
-  /**
-   * A no-row select, so the engine resolves the table and every column the
-   * same way a real query would.
-   */
-  private async checkSchema(): Promise<void> {
-    try {
-      await this.db
-        .selectFrom(PUSH_NOTIFICATION_TABLE)
-        .select([...PUSH_NOTIFICATION_TABLE_COLUMNS])
-        .limit(0)
-        .execute();
-    } catch (cause) {
-      // Conditional, because this also catches an unreachable database, and
-      // telling someone to migrate through a refused connection is no help.
-      throw new Error(
-        `Cannot read table "${PUSH_NOTIFICATION_TABLE}": ${String(cause)}. ` +
-          `If it is missing or out of date, run "npx a2a-db upgrade".`,
-        { cause }
-      );
-    }
   }
 
   private scopeOf(taskId: string, context: ServerCallContext): PushNotificationConfigScope {
@@ -93,8 +55,6 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
     context: ServerCallContext,
     pushNotificationConfig: TaskPushNotificationConfig
   ): Promise<void> {
-    await this.initialize();
-
     // id is the *result* of Create, written onto the caller's object so it
     // observes what was assigned.
     if (!pushNotificationConfig.id) {
@@ -130,7 +90,6 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
     taskId: string,
     context: ServerCallContext
   ): Promise<StoredPushNotificationConfig[]> {
-    await this.initialize();
     const scope = this.scopeOf(taskId, context);
 
     const rows = await this.db
@@ -163,7 +122,6 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
       throw new Error('Deleting a push notification config needs its configId.');
     }
 
-    await this.initialize();
     const scope = this.scopeOf(taskId, context);
 
     await this.db
