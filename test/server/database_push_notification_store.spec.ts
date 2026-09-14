@@ -19,7 +19,7 @@ import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/con
 // Spelled out rather than imported from the store
 const TABLE = 'push_notification_configs';
 const LEDGER_TABLE = 'a2a_push_notification_store_migrations';
-const LOCK_TABLE = 'a2a_push_notification_store_migrations_lock';
+const LOCK_TABLE = 'a2a_migrations_lock';
 const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 class TestUser implements User {

@@ -3,6 +3,11 @@ import type { Kysely } from 'kysely';
 import type { Migration, MigrationResultSet, NoMigrations } from 'kysely/migration';
 
 /**
+ * Shared by every store.
+ */
+const MIGRATION_LOCK_TABLE = 'a2a_migrations_lock';
+
+/**
  * One store's migrations, and the ledger recording which have run.
  * Each store needs its own ledger.
  */
@@ -11,8 +16,6 @@ export interface StoreMigrations {
   readonly id: string;
   /** Deliberately not Kysely's default `kysely_migration`. */
   readonly ledgerTable: string;
-  /** Kysely takes the lock table's name separately. */
-  readonly lockTable: string;
   /** Applied in name order, which is why the `0001_` prefix fixes the sequence. */
   readonly migrations: Readonly<Record<string, Migration>>;
 }
@@ -23,7 +26,7 @@ function migratorFor<DB>(db: Kysely<DB>, store: StoreMigrations) {
     db,
     provider: { getMigrations: () => Promise.resolve(store.migrations) },
     migrationTableName: store.ledgerTable,
-    migrationLockTableName: store.lockTable,
+    migrationLockTableName: MIGRATION_LOCK_TABLE,
   });
 }
 
