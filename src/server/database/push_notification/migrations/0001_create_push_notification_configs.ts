@@ -21,15 +21,15 @@ const COLLATION: Readonly<Record<DialectName, string>> = {
  */
 function tableStatement<DB>(db: Kysely<DB>) {
   const collation = COLLATION[dialectOf(db)];
-  const varchar255 = sql.raw(`varchar(255) ${collation}`);
-  const varchar36 = sql.raw(`varchar(36) ${collation}`);
+  const collatedVarchar255 = sql.raw(`varchar(255) ${collation}`);
+  const collatedVarchar36 = sql.raw(`varchar(36) ${collation}`);
 
   return db.schema
     .createTable('push_notification_configs')
-    .addColumn('tenant', varchar255, (column) => column.notNull())
-    .addColumn('owner', varchar255, (column) => column.notNull())
-    .addColumn('task_id', varchar36, (column) => column.notNull())
-    .addColumn('config_id', varchar36, (column) => column.notNull())
+    .addColumn('tenant', collatedVarchar255, (column) => column.notNull())
+    .addColumn('owner', collatedVarchar255, (column) => column.notNull())
+    .addColumn('task_id', collatedVarchar36, (column) => column.notNull())
+    .addColumn('config_id', collatedVarchar36, (column) => column.notNull())
     .addColumn('config_data', 'text')
     .addColumn('protocol_version', 'varchar(255)')
     .addPrimaryKeyConstraint('push_notification_configs_pkey', [
