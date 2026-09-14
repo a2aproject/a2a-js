@@ -22,7 +22,6 @@ jobs:
       matrix:
         node-version: [22, 24]
     # The migration suite runs against every engine it supports.
-    #
     # Both health checks go over TCP as the application user. While initialising, each
     # image runs a temporary server that answers on its socket only, so a socket probe
     # reports healthy seconds before the real server accepts a connection.
@@ -57,15 +56,16 @@ jobs:
         node-version: ${{ matrix.node-version }}
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
-    - name: Point the migration suite at the service containers
-      run: |
-        echo "POSTGRES_TEST_DSN=postgresql://a2a:a2a_password@localhost:5432/a2a_test" >> $GITHUB_ENV
-        echo "MYSQL_TEST_DSN=mysql://a2a:a2a_password@localhost:3306/a2a_test" >> $GITHUB_ENV
     - run: npm ci
-    # The suite skips an engine it cannot reach. Every engine is reachable here, so a
-    # skip would mean this job is misconfigured; the flag turns that into a failure.
     - run: npm test
+    # Run apart, and serially: both suites drop and recreate the same tables.
+    # The suites skip an engine they cannot reach. Every engine is reachable here, so a
+    # skip would mean this job is misconfigured; the flag turns that into a failure.
+    - name: Database suites against PostgreSQL and MySQL
+      run: npx vitest run --no-file-parallelism test/server/database_migrations.spec.ts test/server/database_push_notification_store.spec.ts
       env:
+        POSTGRES_TEST_DSN: postgresql://a2a:a2a_password@localhost:5432/a2a_test
+        MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test
         A2A_TEST_REQUIRE_ALL_ENGINES: '1'
 
   # Edge runtime tests use @edge-runtime/vm to emulate Cloudflare Workers,

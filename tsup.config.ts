@@ -8,6 +8,7 @@ export default defineConfig({
     'src/server/index.ts',
     'src/server/express/index.ts',
     'src/server/grpc/index.ts',
+    'src/server/database/index.ts',
     'src/client/index.ts',
     'src/client/transports/grpc/index.ts',
     // v0.3 compat layer.

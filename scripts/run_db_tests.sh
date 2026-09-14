@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Runs the migration suite against real Postgres and MySQL in containers.
+# Runs the database suites against real Postgres and MySQL in containers.
 #
 # `npm test` on its own covers SQLite only: the Postgres and MySQL cases skip unless
 # POSTGRES_TEST_DSN / MYSQL_TEST_DSN are set. This starts the databases, sets those,
-# runs the suite, and tears the containers down again.
+# runs the suites, and tears the containers down again.
 #
 # CI does not use this script — it declares the same images as GitHub Actions
 # `services:` and exports the same variables.
@@ -24,11 +24,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 PG_NAME=a2a-test-postgres
 MY_NAME=a2a-test-mysql
-# Fully qualified: podman resolves no short names unless a search registry is configured,
-# and docker accepts the long form too.
 PG_IMAGE=docker.io/library/postgres:17-alpine
-# 8.0 or newer: utf8mb4_0900_bin, the collation the key columns depend on, does not
-# exist before it.
 MY_IMAGE=docker.io/library/mysql:8.0
 
 DB_NAME=a2a_test
@@ -39,7 +35,10 @@ DB_PASS=a2a_password
 PG_PORT="${PG_PORT:-55432}"
 MY_PORT="${MY_PORT:-33306}"
 
-SPEC=test/server/database_migrations.spec.ts
+SPECS=(
+  test/server/database_migrations.spec.ts
+  test/server/database_push_notification_store.spec.ts
+)
 
 debug=false
 stop=false
@@ -141,6 +140,6 @@ if [[ "${debug}" == true ]]; then
 fi
 
 cd "${ROOT}"
-# `${a[@]+…}` because an empty array under `set -u` is an error before bash 4.4, which
-# is what macOS ships as /bin/bash.
-npx vitest run "${SPEC}" ${vitest_args[@]+"${vitest_args[@]}"}
+
+# Serially: both suites drop and recreate the same tables.
+npx vitest run --no-file-parallelism "${SPECS[@]}" ${vitest_args[@]+"${vitest_args[@]}"}

@@ -4,4 +4,6 @@ import { PUSH_NOTIFICATION_STORE_MIGRATIONS } from './push_notification/migratio
 /**
  * Every store `a2a-db` manages.
  */
-export const ALL_STORES: readonly StoreMigrations[] = [PUSH_NOTIFICATION_STORE_MIGRATIONS];
+export const ALL_STORE_MIGRATIONS: readonly StoreMigrations[] = [
+  PUSH_NOTIFICATION_STORE_MIGRATIONS,
+];

@@ -30,6 +30,9 @@
       "server/grpc": [
         "./dist/server/grpc/index.d.ts"
       ],
+      "server/database": [
+        "./dist/server/database/index.d.ts"
+      ],
       "client": [
         "./dist/client/index.d.ts"
       ],
@@ -86,6 +89,11 @@
       "types": "./dist/server/grpc/index.d.ts",
       "import": "./dist/server/grpc/index.js",
       "require": "./dist/server/grpc/index.cjs"
+    },
+    "./server/database": {
+      "types": "./dist/server/database/index.d.ts",
+      "import": "./dist/server/database/index.js",
+      "require": "./dist/server/database/index.cjs"
     },
     "./client": {
       "types": "./dist/client/index.d.ts",
@@ -178,7 +186,8 @@
     "test-build:workers-safe": "esbuild ./dist/index.js ./dist/errors/index.js ./dist/client/index.js ./dist/server/index.js ./dist/compat/v0_3/index.js ./dist/compat/v0_3/client/index.js ./dist/compat/v0_3/server/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
     "test-build:grpc": "esbuild ./dist/errors/grpc/index.js ./dist/server/grpc/index.js ./dist/client/transports/grpc/index.js ./dist/compat/v0_3/server/grpc/index.js ./dist/compat/v0_3/client/transports/grpc/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
     "test-build:express": "esbuild ./dist/server/express/index.js ./dist/compat/v0_3/server/express/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
-    "test-build": "npm run test-build:workers-safe && npm run test-build:grpc && npm run test-build:express",
+    "test-build:database": "esbuild ./dist/server/database/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
+    "test-build": "npm run test-build:workers-safe && npm run test-build:grpc && npm run test-build:express && npm run test-build:database",
     "itk-agent": "tsx itk/itk_agent.ts"
   },
   "dependencies": {

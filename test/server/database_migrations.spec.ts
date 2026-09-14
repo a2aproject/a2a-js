@@ -13,7 +13,7 @@ import { run } from '../../src/cli/run.js';
 // Spelled out rather than imported from the store: a test that reads these from the code
 // it checks cannot catch a rename, and a renamed ledger makes a migrated database look
 // untouched.
-const STORE_ID = 'push-notification';
+const STORE_ID = 'push-notification-configs';
 const TABLE = 'push_notification_configs';
 const LEDGER_TABLE = 'a2a_push_notification_store_migrations';
 const LOCK_TABLE = 'a2a_push_notification_store_migrations_lock';
