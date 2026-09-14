@@ -144,11 +144,16 @@ export class RestTransportHandler {
 
   async listTaskPushNotificationConfigs(
     taskId: string,
-    context: ServerCallContext,
-    tenant?: string
+    queryParams: Record<string, unknown>,
+    context: ServerCallContext
   ): Promise<ListTaskPushNotificationConfigsResponse> {
     const result = await this.requestHandler.listTaskPushNotificationConfigs(
-      { taskId, pageSize: 0, pageToken: '', tenant: tenant || '' },
+      {
+        taskId,
+        pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : 0,
+        pageToken: (queryParams.pageToken as string) || '',
+        tenant: (queryParams.tenant as string) || '',
+      },
       context
     );
     return result;

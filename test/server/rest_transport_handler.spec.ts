@@ -471,12 +471,43 @@ describe('RestTransportHandler', () => {
 
         const result = await transportHandler.listTaskPushNotificationConfigs(
           'task-1',
+          {},
           mockContext
         );
 
         expect(result).to.deep.equal([mockConfig]);
         expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
           { taskId: 'task-1', pageSize: 0, pageToken: '', tenant: '' },
+          mockContext
+        );
+      });
+
+      it('should forward pageSize and pageToken from the query params', async () => {
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue([]);
+
+        await transportHandler.listTaskPushNotificationConfigs(
+          'task-1',
+          { pageSize: '7', pageToken: 'cursor-abc' },
+          mockContext
+        );
+
+        expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
+          { taskId: 'task-1', pageSize: 7, pageToken: 'cursor-abc', tenant: '' },
+          mockContext
+        );
+      });
+
+      it('should forward tenant from the query params', async () => {
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue([]);
+
+        await transportHandler.listTaskPushNotificationConfigs(
+          'task-1',
+          { tenant: 'tenant-a' },
+          mockContext
+        );
+
+        expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
+          { taskId: 'task-1', pageSize: 0, pageToken: '', tenant: 'tenant-a' },
           mockContext
         );
       });
