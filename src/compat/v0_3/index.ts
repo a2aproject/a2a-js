@@ -33,3 +33,4 @@ export {
   v1MethodToLegacyGrpc,
 } from './constants.js';
 export { duplicateInterfacesForLegacy } from './translate/agent_card.js';
+export { convertLegacyPushBody } from './convert_legacy_push_body.js';
