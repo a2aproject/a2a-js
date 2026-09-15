@@ -5,6 +5,33 @@ import { RequestMalformedError } from '../errors/index.js';
 import { OwnerResolver, resolveUserScope } from './owner_resolver.js';
 import { ScopedStore } from './utils.js';
 
+interface ListCursor {
+  timestamp: string;
+  id: string;
+}
+
+function encodeListCursor(timestamp: string, id: string): string {
+  return Buffer.from(`${timestamp}|${id}`).toString('base64');
+}
+
+function decodeListCursor(pageToken: string): ListCursor {
+  const decoded = Buffer.from(pageToken, 'base64').toString('utf-8');
+  const [timestamp, ...idParts] = decoded.split('|');
+  if (idParts.length === 0) {
+    throw new RequestMalformedError('Invalid page token format.');
+  }
+  return { timestamp, id: idParts.join('|') };
+}
+
+/** True when `task` sorts after `cursor` under (timestamp desc, id desc). */
+function sortsAfterListCursor(task: Task, cursor: ListCursor): boolean {
+  const timestamp = task.status?.timestamp || '';
+  if (timestamp !== cursor.timestamp) {
+    return timestamp.localeCompare(cursor.timestamp) < 0;
+  }
+  return task.id.localeCompare(cursor.id) < 0;
+}
+
 /**
  * Interface for task storage providers. Implementations SHOULD use
  * `context.tenant` (when present) and the authenticated caller's identity
@@ -106,23 +133,9 @@ export class InMemoryTaskStore implements TaskStore {
 
     if (pageToken) {
       try {
-        const decoded = Buffer.from(pageToken, 'base64').toString('utf-8');
-        const [cursorTimestamp, ...idParts] = decoded.split('|');
-        if (idParts.length === 0) {
-          throw new RequestMalformedError('Invalid page token format.');
-        }
-        const cursorId = idParts.join('|');
-
-        const cursorIndex = tasks.findIndex(
-          (task) => (task.status?.timestamp || '') === cursorTimestamp && task.id === cursorId
-        );
-
-        if (cursorIndex !== -1) {
-          tasks = tasks.slice(cursorIndex + 1);
-        } else {
-          // The cursor task may have been deleted between calls.
-          tasks = [];
-        }
+        const cursor = decodeListCursor(pageToken);
+        // Resume after the cursor even if that task was deleted between pages.
+        tasks = tasks.filter((task) => sortsAfterListCursor(task, cursor));
       } catch (e) {
         if (e instanceof RequestMalformedError) throw e;
         throw new RequestMalformedError('Token is not a valid base64-encoded cursor.');
@@ -143,7 +156,7 @@ export class InMemoryTaskStore implements TaskStore {
     if (paginatedTasks.length > 0 && tasks.length > paginatedTasks.length) {
       const lastTask = paginatedTasks[paginatedTasks.length - 1];
       const lastTime = lastTask.status?.timestamp || '';
-      nextPageToken = Buffer.from(`${lastTime}|${lastTask.id}`).toString('base64');
+      nextPageToken = encodeListCursor(lastTime, lastTask.id);
     }
 
     return {
