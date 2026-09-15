@@ -440,20 +440,38 @@ for (const engine of ENGINES) {
         expect(response.totalSize).toBe(3);
       });
 
-      it('strips artifacts by default, includes them when asked, and never trims history', async () => {
-        await store.save(
-          makeTask({ artifacts: [makeArtifact()], history: [makeMessage()] }),
-          context
-        );
+      it('strips artifacts by default and includes them when asked', async () => {
+        await store.save(makeTask({ artifacts: [makeArtifact()] }), context);
 
         const [stripped] = (await store.list(makeListRequest(), context)).tasks;
         expect(stripped.artifacts).toEqual([]);
-        // historyLength is the handler's to apply, after the store returns.
-        expect(stripped.history).toEqual([makeMessage()]);
 
         const [full] = (await store.list(makeListRequest({ includeArtifacts: true }), context))
           .tasks;
         expect(full.artifacts).toEqual([makeArtifact()]);
+      });
+
+      // Zero is the one historyLength expressible as a projection, so the store honours
+      // it by leaving the column unselected. Trimming to N is the handler's, after the
+      // store returns, which is why a positive length still comes back whole.
+      it('drops history for a non-positive historyLength and keeps it otherwise', async () => {
+        const first = makeMessage({ messageId: 'msg-1' });
+        const second = makeMessage({ messageId: 'msg-2' });
+        await store.save(makeTask({ history: [first, second] }), context);
+
+        const [unset] = (await store.list(makeListRequest(), context)).tasks;
+        expect(unset.history).toEqual([first, second]);
+
+        const [zero] = (await store.list(makeListRequest({ historyLength: 0 }), context)).tasks;
+        expect(zero.history).toEqual([]);
+
+        // Matches the handler, which treats any non-positive length as "omit".
+        const [negative] = (await store.list(makeListRequest({ historyLength: -1 }), context))
+          .tasks;
+        expect(negative.history).toEqual([]);
+
+        const [limited] = (await store.list(makeListRequest({ historyLength: 1 }), context)).tasks;
+        expect(limited.history).toEqual([first, second]);
       });
 
       it('returns an empty page for no matches and for a page size of zero', async () => {

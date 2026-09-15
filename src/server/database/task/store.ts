@@ -18,12 +18,24 @@ import {
   TASK_TABLE_COLUMNS,
   TASK_TABLE_KEY_COLUMNS,
   type TaskDatabase,
+  type TaskRow,
 } from './schema.js';
 import { fromTaskRow, statusLastUpdated, toTaskRow, type TaskScope } from './serialization.js';
 
-const TASK_TABLE_COLUMNS_WITHOUT_ARTIFACTS = TASK_TABLE_COLUMNS.filter(
-  (column) => column !== 'artifacts'
-);
+/**
+ * The columns a listing needs. A payload column the caller will not see is left
+ * unselected, so the engine never reads it.
+ */
+function listColumns(params: ListTasksRequest): readonly (keyof TaskRow)[] {
+  const skipped = new Set<keyof TaskRow>();
+  if (!params.includeArtifacts) {
+    skipped.add('artifacts');
+  }
+  if (params.historyLength !== undefined && params.historyLength <= 0) {
+    skipped.add('history');
+  }
+  return TASK_TABLE_COLUMNS.filter((column) => !skipped.has(column));
+}
 
 /** Cursor form of the sort key. 0 means no timestamp, which InMemoryTaskStore spells ''. */
 function cursorTimestamp(statusLastUpdated: number): string {
@@ -119,7 +131,7 @@ export class DatabaseTaskStore implements TaskStore {
 
   async list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse> {
     const scope = this.scopeOf(context);
-    const { pageSize = DEFAULT_PAGE_SIZE, pageToken, includeArtifacts = false } = params;
+    const { pageSize = DEFAULT_PAGE_SIZE, pageToken } = params;
     const filter = this.listFilter(scope, params);
 
     // Counted before paginating, so it reports the whole match, not the page.
@@ -133,7 +145,7 @@ export class DatabaseTaskStore implements TaskStore {
 
     let query = this.db
       .selectFrom(TASK_TABLE)
-      .select([...(includeArtifacts ? TASK_TABLE_COLUMNS : TASK_TABLE_COLUMNS_WITHOUT_ARTIFACTS)])
+      .select([...listColumns(params)])
       .where(filter)
       .orderBy('status_last_updated', 'desc')
       .orderBy('id', 'desc')
@@ -159,8 +171,10 @@ export class DatabaseTaskStore implements TaskStore {
     const tasks: Task[] = [];
     for (const row of page) {
       try {
-        // An unselected artifacts column reads as absent, which is an empty list.
-        tasks.push(fromTaskRow({ ...row, artifacts: row.artifacts ?? null }));
+        // An unselected payload column reads as absent, which is an empty value.
+        tasks.push(
+          fromTaskRow({ ...row, artifacts: row.artifacts ?? null, history: row.history ?? null })
+        );
       } catch (error) {
         // One unreadable row must not lose the rest, nor the rows behind it.
         console.error(
