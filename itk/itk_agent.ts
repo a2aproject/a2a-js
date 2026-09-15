@@ -25,6 +25,7 @@ import {
   restHandler,
 } from '../src/server/express/index.js';
 import { Instruction, CallAgent } from './pb/instruction.js';
+import { behaviorFor, run as runActsBehavior } from './acts_behaviors.js';
 import {
   ClientFactory,
   ClientFactoryOptions,
@@ -63,6 +64,17 @@ export class ItkAgentExecutor implements AgentExecutor {
 
   async execute(context: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     console.log(`Executing task ${context.taskId}`);
+
+    // Dual mode. An ACTS conformance test names a `tck-*` behaviour in its
+    // first user message (ACTS §11); anything else is an ITK traversal
+    // carrying a protobuf Instruction. The branch is taken before any task is
+    // published, because one ACTS behaviour must answer with a bare Message
+    // and so must not open a task at all.
+    const actsBehavior = behaviorFor(context);
+    if (actsBehavior) {
+      await runActsBehavior(actsBehavior, context, eventBus);
+      return;
+    }
 
     // Publish initial task to satisfy ResultManager
     eventBus.publish(
@@ -651,6 +663,33 @@ export class ItkAgentExecutor implements AgentExecutor {
   }
 }
 
+/**
+ * What the card advertises — everything, unless the ACTS runner asked for less.
+ *
+ * Four ACTS tests assert that an agent *without* a capability answers
+ * UnsupportedOperationError, so their preconditions require the card not to
+ * advertise it and they can never run against a fully capable agent. The
+ * runner starts a second SUT with this variable set to reach them, and
+ * DefaultRequestHandler already gates those operations on this card, so
+ * publishing less is all it takes to refuse them.
+ */
+function actsCapabilities(): AgentCard['capabilities'] {
+  if (process.env.ITK_ACTS_REDUCED_CAPABILITIES) {
+    return {
+      streaming: false,
+      pushNotifications: false,
+      extensions: [],
+      extendedAgentCard: false,
+    };
+  }
+  return {
+    streaming: true,
+    pushNotifications: true,
+    extensions: [],
+    extendedAgentCard: true,
+  };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   let httpPort = 10102;
@@ -676,12 +715,7 @@ async function main() {
     name: 'ITK TS Agent',
     description: 'TypeScript agent using SDK for ITK tests.',
     version: '1.0.0',
-    capabilities: {
-      streaming: true,
-      pushNotifications: true,
-      extensions: [],
-      extendedAgentCard: true,
-    },
+    capabilities: actsCapabilities(),
     // Each binding declared twice — once at v1.0 and once at v0.3 — so
     // a v0.3 baseline peer (go_v03, python_v03) can dial every binding.
     // Strict per-interface advertisement: a binding is only reachable
@@ -732,15 +766,35 @@ async function main() {
     securityRequirements: [],
     defaultInputModes: ['text/plain', 'application/x-protobuf'],
     defaultOutputModes: ['text/plain'],
-    skills: [],
+    // Declared so ACTS's card tests assert on something real. `CARD-DISC-004`
+    // checks every skill has an id and a name, which an empty array satisfies
+    // vacuously.
+    skills: [
+      {
+        id: 'acts-behaviors',
+        name: 'ACTS behaviours',
+        description: 'Implements the ACTS §11 tck-* behaviour contract.',
+        tags: ['acts', 'conformance'],
+        examples: [],
+        inputModes: [],
+        outputModes: [],
+        securityRequirements: [],
+      },
+    ],
     signatures: [],
   };
 
   const taskStore: TaskStore = new InMemoryTaskStore();
   const agentExecutor: AgentExecutor = new ItkAgentExecutor();
-  // DefaultRequestHandler auto-creates push notification store and sender
-  // when agentCard.capabilities.pushNotifications is true.
-  const requestHandler = new DefaultRequestHandler(agentCard, taskStore, agentExecutor);
+  const requestHandler = new DefaultRequestHandler(
+    agentCard,
+    taskStore,
+    agentExecutor,
+    undefined,
+    undefined,
+    undefined,
+    agentCard
+  );
 
   const app = express();
 
