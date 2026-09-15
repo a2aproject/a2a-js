@@ -33,3 +33,4 @@ export {
   v1MethodToLegacyGrpc,
 } from './constants.js';
 export { duplicateInterfacesForLegacy } from './translate/agent_card.js';
+export { legacyPushNotificationToV1StreamResponse } from './push_notification.js';
