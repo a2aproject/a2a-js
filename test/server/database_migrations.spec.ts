@@ -16,7 +16,7 @@ import { run } from '../../src/cli/run.js';
 const STORE_ID = 'push-notification-configs';
 const TABLE = 'push_notification_configs';
 const LEDGER_TABLE = 'a2a_push_notification_store_migrations';
-const LOCK_TABLE = 'a2a_push_notification_store_migrations_lock';
+const LOCK_TABLE = 'a2a_migrations_lock';
 const MIGRATION = '0001_create_push_notification_configs';
 const KEY_COLUMNS = ['tenant', 'owner', 'task_id', 'config_id'];
 const ALL_COLUMNS = [...KEY_COLUMNS, 'config_data', 'protocol_version'];

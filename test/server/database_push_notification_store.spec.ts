@@ -19,7 +19,7 @@ import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/con
 // Spelled out rather than imported from the store
 const TABLE = 'push_notification_configs';
 const LEDGER_TABLE = 'a2a_push_notification_store_migrations';
-const LOCK_TABLE = 'a2a_push_notification_store_migrations_lock';
+const LOCK_TABLE = 'a2a_migrations_lock';
 const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 class TestUser implements User {
@@ -455,6 +455,18 @@ for (const engine of ENGINES) {
 
         expect(await store.load('task-1', acme)).toHaveLength(1);
         expect(await store.load('task-1', globex)).toEqual([]);
+      });
+
+      // An absent tenant is the global bucket, which is a tenant like any other.
+      it('isolates the global bucket from a named tenant', async () => {
+        const untenanted = makeContext();
+        const acme = makeContext({ tenant: 'acme' });
+        await store.save('task-1', untenanted, makeConfig({ url: 'https://global.test/' }));
+        await store.save('task-1', acme, makeConfig({ url: 'https://acme.test/' }));
+
+        expect(await rowsInTable()).toHaveLength(2);
+        expect((await store.load('task-1', untenanted))[0].url).toBe('https://global.test/');
+        expect((await store.load('task-1', acme))[0].url).toBe('https://acme.test/');
       });
 
       it('allows the same task and config id in different tenants', async () => {

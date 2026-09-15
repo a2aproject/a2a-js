@@ -107,8 +107,8 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
       } catch (error) {
         // One unreadable row must not lose the rest.
         console.error(
-          `Skipping push notification config "${row.config_id}" for task ` +
-            `"${row.task_id}" owned by "${scope.owner}": it could not be read.`,
+          `Skipping push notification config "${row.config_id}" on task "${row.task_id}" ` +
+            `for owner "${scope.owner}" in tenant "${scope.tenant}": it could not be read.`,
           error
         );
       }

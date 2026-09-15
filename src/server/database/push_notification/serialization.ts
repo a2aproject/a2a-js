@@ -1,6 +1,7 @@
 import { A2A_LEGACY_PROTOCOL_VERSION } from '../../../constants.js';
 import { TaskPushNotificationConfig } from '../../../types/pb/a2a.js';
 import type { StoredPushNotificationConfig } from '../../push_notification/push_notification_store.js';
+import { requireKey } from '../../utils.js';
 import type { PushNotificationConfigRow } from './schema.js';
 
 export interface PushNotificationConfigScope {
@@ -12,23 +13,19 @@ export interface PushNotificationConfigScope {
 /** Held in columns, so they are dropped from the payload. */
 const COLUMN_BACKED_FIELDS = ['tenant', 'id', 'taskId'] as const;
 
-/** Format of config_data. Written, never read. */
-const CONFIG_DATA_FORMAT = '1.0';
+/** Format of the payload columns. Written, never read. */
+const PAYLOAD_FORMAT = '1.0';
 
-function requireKey(field: string, value: string): void {
-  if (typeof value !== 'string') {
-    throw new Error(`push notification config has no ${field}`);
-  }
-}
+const SUBJECT = 'push notification config';
 
 export function toPushNotificationConfigRow(
   scope: PushNotificationConfigScope,
   stored: StoredPushNotificationConfig
 ): PushNotificationConfigRow {
-  requireKey('tenant', scope.tenant);
-  requireKey('owner', scope.owner);
-  requireKey('task id', scope.taskId);
-  requireKey('id', stored.config.id);
+  requireKey(SUBJECT, 'tenant', scope.tenant);
+  requireKey(SUBJECT, 'owner', scope.owner);
+  requireKey(SUBJECT, 'task id', scope.taskId);
+  requireKey(SUBJECT, 'id', stored.config.id);
 
   // toJSON returns a fresh object, so deleting cannot reach the config.
   const payload = TaskPushNotificationConfig.toJSON(stored.config) as Record<string, unknown>;
@@ -42,7 +39,7 @@ export function toPushNotificationConfigRow(
     task_id: scope.taskId,
     config_id: stored.config.id,
     config_data: JSON.stringify({ ...payload, wireVersion: stored.wireVersion }),
-    protocol_version: CONFIG_DATA_FORMAT,
+    protocol_version: PAYLOAD_FORMAT,
   };
 }
 
