@@ -115,9 +115,15 @@ export class RestTransportHandler {
             isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
           )
         : TaskState.TASK_STATE_UNSPECIFIED,
-      pageSize: queryParams.pageSize ? Number(queryParams.pageSize) : undefined,
+      pageSize:
+        queryParams.pageSize !== undefined && queryParams.pageSize !== ''
+          ? this.parsePageSize(queryParams.pageSize)
+          : undefined,
       pageToken: (queryParams.pageToken as string) || '',
-      historyLength: queryParams.historyLength ? Number(queryParams.historyLength) : undefined,
+      historyLength:
+        queryParams.historyLength !== undefined && queryParams.historyLength !== ''
+          ? this.parseHistoryLength(queryParams.historyLength)
+          : undefined,
       statusTimestampAfter: (queryParams.statusTimestampAfter as string) || undefined,
       includeArtifacts: parseIncludeArtifacts(queryParams.includeArtifacts),
     };
@@ -204,6 +210,17 @@ export class RestTransportHandler {
     }
     if (parsed < 0) {
       throw new RequestMalformedError('historyLength must be non-negative');
+    }
+    return parsed;
+  }
+
+  private parsePageSize(value: unknown): number {
+    const parsed = parseInt(String(value), 10);
+    if (isNaN(parsed) || String(parsed) !== String(value).trim()) {
+      throw new RequestMalformedError('pageSize must be a valid integer');
+    }
+    if (parsed < 1 || parsed > 100) {
+      throw new RequestMalformedError('pageSize must be between 1 and 100');
     }
     return parsed;
   }
