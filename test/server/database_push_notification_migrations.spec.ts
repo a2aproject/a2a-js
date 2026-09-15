@@ -21,6 +21,10 @@ const MIGRATION = '0001_create_push_notification_configs';
 const KEY_COLUMNS = ['tenant', 'owner', 'task_id', 'config_id'];
 const ALL_COLUMNS = [...KEY_COLUMNS, 'config_data', 'protocol_version'];
 
+// `upgrade` with no --store migrates every registered store, so the teardown has to
+// clear the task store's tables too or they outlive the test on a shared server.
+const OTHER_STORE_TABLES = ['tasks', 'a2a_task_store_migrations'];
+
 /**
  * What differs between engines: how to reach a database, how the binary collation is
  * spelled, and how to read back the three things Kysely's portable introspector does not
@@ -189,13 +193,13 @@ afterEach(() => {
 
 // Reported rather than dropped, so a run against fewer engines than intended is visible.
 for (const label of UNCONFIGURED) {
-  describe.skip(`a2a-db migrations on ${label}`, () => {
+  describe.skip(`a2a-db push notification migrations on ${label}`, () => {
     it('has no database to run against', () => {});
   });
 }
 
 for (const engine of ENGINES) {
-  describe(`a2a-db migrations on ${engine.name}`, () => {
+  describe(`a2a-db push notification migrations on ${engine.name}`, () => {
     let url: string;
 
     /**
@@ -216,7 +220,7 @@ for (const engine of ENGINES) {
       url = engine.freshUrl();
       // SQLite gets a new file each time; the shared servers need the last run cleared.
       await introspect(async (db) => {
-        for (const table of [TABLE, LEDGER_TABLE, LOCK_TABLE]) {
+        for (const table of [TABLE, LEDGER_TABLE, LOCK_TABLE, ...OTHER_STORE_TABLES]) {
           await sql.raw(`drop table if exists ${table}`).execute(db);
         }
       });

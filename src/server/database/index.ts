@@ -8,3 +8,6 @@ export type {
   PushNotificationConfigRow,
   PushNotificationDatabase,
 } from './push_notification/schema.js';
+
+export { TASK_TABLE } from './task/schema.js';
+export type { TaskDatabase, TaskRow } from './task/schema.js';

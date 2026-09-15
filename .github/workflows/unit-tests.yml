@@ -58,11 +58,15 @@ jobs:
         cache: 'npm'
     - run: npm ci
     - run: npm test
-    # Run apart, and serially: both suites drop and recreate the same tables.
+    # Run apart, and serially: the suites drop and recreate the same tables.
     # The suites skip an engine they cannot reach. Every engine is reachable here, so a
     # skip would mean this job is misconfigured; the flag turns that into a failure.
     - name: Database suites against PostgreSQL and MySQL
-      run: npx vitest run --no-file-parallelism test/server/database_migrations.spec.ts test/server/database_push_notification_store.spec.ts
+      run: >-
+        npx vitest run --no-file-parallelism
+        test/server/database_push_notification_migrations.spec.ts
+        test/server/database_push_notification_store.spec.ts
+        test/server/database_task_migrations.spec.ts
       env:
         POSTGRES_TEST_DSN: postgresql://a2a:a2a_password@localhost:5432/a2a_test
         MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test

@@ -26,7 +26,8 @@ export default defineWorkersConfig(
         // Migrations run against a real database: native drivers and temp files, neither
         // of which workerd has. Migrating is an operator step, never something a Worker
         // does, so this is permanent rather than pending.
-        'test/server/database_migrations.spec.ts',
+        'test/server/database_push_notification_migrations.spec.ts',
+        'test/server/database_task_migrations.spec.ts',
         // The store suite drives a real database through the same native drivers.
         'test/server/database_push_notification_store.spec.ts',
         // Node modules should always be excluded
