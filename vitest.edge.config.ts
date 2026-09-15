@@ -28,8 +28,9 @@ export default defineWorkersConfig(
         // does, so this is permanent rather than pending.
         'test/server/database_push_notification_migrations.spec.ts',
         'test/server/database_task_migrations.spec.ts',
-        // The store suite drives a real database through the same native drivers.
+        // The store suites drive a real database through the same native drivers.
         'test/server/database_push_notification_store.spec.ts',
+        'test/server/database_task_store.spec.ts',
         // Node modules should always be excluded
         '**/node_modules/**',
       ],

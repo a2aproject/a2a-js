@@ -67,6 +67,7 @@ jobs:
         test/server/database_push_notification_migrations.spec.ts
         test/server/database_push_notification_store.spec.ts
         test/server/database_task_migrations.spec.ts
+        test/server/database_task_store.spec.ts
       env:
         POSTGRES_TEST_DSN: postgresql://a2a:a2a_password@localhost:5432/a2a_test
         MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test
