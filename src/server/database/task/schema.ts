@@ -11,7 +11,8 @@ export interface TaskRow {
   owner: string;
   id: string;
   context_id: string;
-  status_last_updated: number;
+  /** `bigint`, which PostgreSQL's driver reads back as a string. */
+  status_last_updated: number | string;
   status_state: string | null;
   status: string | null;
   artifacts: string | null;
