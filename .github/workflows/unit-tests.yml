@@ -62,7 +62,7 @@ jobs:
     # The suites skip an engine they cannot reach. Every engine is reachable here, so a
     # skip would mean this job is misconfigured; the flag turns that into a failure.
     - name: Database suites against PostgreSQL and MySQL
-      run: npx vitest run --no-file-parallelism test/server/database_migrations.spec.ts test/server/database_push_notification_store.spec.ts
+      run: npx vitest run --no-file-parallelism test/server/database_push_notification_migrations.spec.ts test/server/database_push_notification_store.spec.ts
       env:
         POSTGRES_TEST_DSN: postgresql://a2a:a2a_password@localhost:5432/a2a_test
         MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test

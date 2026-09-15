@@ -189,13 +189,13 @@ afterEach(() => {
 
 // Reported rather than dropped, so a run against fewer engines than intended is visible.
 for (const label of UNCONFIGURED) {
-  describe.skip(`a2a-db migrations on ${label}`, () => {
+  describe.skip(`a2a-db push notification migrations on ${label}`, () => {
     it('has no database to run against', () => {});
   });
 }
 
 for (const engine of ENGINES) {
-  describe(`a2a-db migrations on ${engine.name}`, () => {
+  describe(`a2a-db push notification migrations on ${engine.name}`, () => {
     let url: string;
 
     /**
