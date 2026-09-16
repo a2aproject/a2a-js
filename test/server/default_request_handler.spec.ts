@@ -38,7 +38,7 @@ import {
   SendMessageConfiguration,
   ListTasksRequest,
   StreamResponse,
-} from '../../src/types/pb/a2a.js';
+} from '../../src/types/index.js';
 import {
   DefaultExecutionEventBusManager,
   ExecutionEventBusManager,

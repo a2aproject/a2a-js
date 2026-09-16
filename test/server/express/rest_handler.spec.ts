@@ -26,7 +26,7 @@ import {
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
-} from '../../../src/types/pb/a2a.js';
+} from '../../../src/types/index.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import { LegacyRestTransportHandler } from '../../../src/compat/v0_3/server/transports/rest/rest_transport_handler.js';
 import {
