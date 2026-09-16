@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        node-version: [22, 24]
+        node-version: ['20.0.0', 22, 24]
     # The migration suite runs against every engine it supports.
     # Both health checks go over TCP as the application user. While initialising, each
     # image runs a temporary server that answers on its socket only, so a socket probe

@@ -1,11 +1,29 @@
-import { Migrator } from 'kysely/migration';
 import type { Kysely } from 'kysely';
-import type { Migration, MigrationResultSet, NoMigrations } from 'kysely/migration';
+// Types only, so nothing here resolves at runtime. Kysely 0.28 has no such subpath,
+// but these never reach an emitted declaration, because nothing public re-exports
+// this module. Exporting one would break consumers on 0.28. The class itself is a
+// value, so it is still loaded at runtime from whichever path kysely has.
+import type {
+  Migration,
+  MigrationResultSet,
+  Migrator,
+  MigratorProps,
+  NoMigrations,
+} from 'kysely/migration';
 
 /**
  * Shared by every store.
  */
 const MIGRATION_LOCK_TABLE = 'a2a_migrations_lock';
+
+type MigratorConstructor = new (props: MigratorProps) => Migrator;
+
+/** The two runtime values this module needs, from whichever path exports them. */
+interface LoadedMigration {
+  readonly Migrator: MigratorConstructor;
+  /** Kysely's own sentinel for "revert everything". */
+  readonly NO_MIGRATIONS: NoMigrations;
+}
 
 /**
  * One store's migrations, and the ledger recording which have run.
@@ -20,8 +38,46 @@ export interface StoreMigrations {
   readonly migrations: Readonly<Record<string, Migration>>;
 }
 
+/**
+ * Kept non-literal, so type-checking does not demand a subpath the installed kysely
+ * may not have.
+ */
+async function loadModule(specifier: string): Promise<Record<string, unknown>> {
+  return (await import(specifier)) as Record<string, unknown>;
+}
+
+let loaded: Promise<LoadedMigration> | undefined;
+
+/** `kysely/migration` on 0.29 and later, the package root before that. */
+function migrationModule(): Promise<LoadedMigration> {
+  loaded ??= (async () => {
+    for (const specifier of ['kysely/migration', 'kysely']) {
+      let module: Record<string, unknown>;
+      try {
+        module = await loadModule(specifier);
+      } catch {
+        continue;
+      }
+      const migrator = module.Migrator;
+      const noMigrations = module.NO_MIGRATIONS;
+      if (typeof migrator === 'function' && typeof noMigrations === 'object' && noMigrations) {
+        return {
+          Migrator: migrator as MigratorConstructor,
+          NO_MIGRATIONS: noMigrations as NoMigrations,
+        };
+      }
+    }
+    throw new Error(
+      'This kysely exports no Migrator and NO_MIGRATIONS from either "kysely/migration" ' +
+        'or "kysely". @a2a-js/sdk supports kysely 0.28 and later.'
+    );
+  })();
+  return loaded;
+}
+
 /** Generic in `DB`, because Kysely's schema parameter is invariant. */
-function migratorFor<DB>(db: Kysely<DB>, store: StoreMigrations) {
+async function migratorFor<DB>(db: Kysely<DB>, store: StoreMigrations): Promise<Migrator> {
+  const { Migrator } = await migrationModule();
   return new Migrator({
     db,
     provider: { getMigrations: () => Promise.resolve(store.migrations) },
@@ -54,13 +110,13 @@ export async function storeState<DB>(
   db: Kysely<DB>,
   store: StoreMigrations
 ): Promise<readonly MigrationState[]> {
-  const migrations = await migratorFor(db, store).getMigrations();
+  const migrations = await (await migratorFor(db, store)).getMigrations();
   return migrations.map(({ name, executedAt }) => ({ name, executedAt }));
 }
 
 /** Applies every migration the ledger has not already recorded. */
 export async function migrateStore<DB>(db: Kysely<DB>, store: StoreMigrations): Promise<void> {
-  throwOnFailure(store, await migratorFor(db, store).migrateToLatest());
+  throwOnFailure(store, await (await migratorFor(db, store)).migrateToLatest());
 }
 
 /** The revision name meaning "before any migration ran". */
@@ -73,13 +129,18 @@ export function migrationNames(store: StoreMigrations): string[] {
   return Object.keys(store.migrations).sort();
 }
 
-/** Migrates up or down until the ledger reads `target`. */
+/**
+ * Migrates up or down until the ledger reads `target`, which is a migration name or
+ * {@link BASE}. Kysely spells "revert everything" as its own sentinel.
+ */
 export async function migrateStoreTo<DB>(
   db: Kysely<DB>,
   store: StoreMigrations,
-  target: string | NoMigrations
+  target: string
 ): Promise<void> {
-  throwOnFailure(store, await migratorFor(db, store).migrateTo(target));
+  const { NO_MIGRATIONS } = await migrationModule();
+  const resolved = target === BASE ? NO_MIGRATIONS : target;
+  throwOnFailure(store, await (await migratorFor(db, store)).migrateTo(resolved));
 }
 
 /**
@@ -90,7 +151,7 @@ export async function rollbackStore<DB>(
   db: Kysely<DB>,
   store: StoreMigrations
 ): Promise<string | undefined> {
-  const result = await migratorFor(db, store).migrateDown();
+  const result = await (await migratorFor(db, store)).migrateDown();
   throwOnFailure(store, result);
   return result.results?.find((entry) => entry.status === 'Success')?.migrationName;
 }

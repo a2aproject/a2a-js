@@ -1,7 +1,5 @@
 import { parseArgs } from 'node:util';
 
-import { NO_MIGRATIONS } from 'kysely/migration';
-
 import {
   BASE,
   migrateStore,
@@ -158,7 +156,7 @@ export async function run(
       }
     } else {
       for (const store of stores) {
-        await migrateStoreTo(db, store, target === BASE ? NO_MIGRATIONS : target);
+        await migrateStoreTo(db, store, target);
         output.log(`${store.id}: now at ${target}`);
       }
     }

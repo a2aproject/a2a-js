@@ -18,6 +18,8 @@ const TABLE = 'tasks';
 const LEDGER_TABLE = 'a2a_task_store_migrations';
 const LOCK_TABLE = 'a2a_migrations_lock';
 const MIGRATION = '0001_create_tasks';
+/** The revision the CLI translates into Kysely's NO_MIGRATIONS. */
+const BASE = 'base';
 const KEY_COLUMNS = ['tenant', 'owner', 'id'];
 const COLLATED_COLUMNS = [...KEY_COLUMNS, 'context_id', 'status_state'];
 const ALL_COLUMNS = [
@@ -462,6 +464,20 @@ for (const engine of ENGINES) {
 
       expect(code).toBe(0);
       expect(out).toContain('nothing to revert');
+    });
+
+    // "base" is the one target the store does not name: it becomes Kysely's own
+    // NO_MIGRATIONS sentinel, which lives behind the same runtime load as the
+    // migrator. The table going away is what proves the translation happened.
+    it('downgrade base reverts every migration and empties the ledger', async () => {
+      await cli('upgrade');
+
+      const { code, out } = await cli('downgrade', BASE);
+
+      expect(code).toBe(0);
+      expect(out).toContain(`now at ${BASE}`);
+      expect(await tableNames()).not.toContain(TABLE);
+      expect((await cli('status')).out).toContain('pending');
     });
 
     it('upgrade after downgrade recreates an identical table', async () => {
