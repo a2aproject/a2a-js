@@ -184,3 +184,8 @@ Thumbs.db
 
 # ITK protobuf instructions
 /itk/pb/*
+
+# ACTS conformance run output
+/itk/acts-report-*.json
+/itk/acts_results_*.json
+/itk/acts_js.json

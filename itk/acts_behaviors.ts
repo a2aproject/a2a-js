@@ -127,14 +127,28 @@ export function behaviorFor(context: RequestContext): string | undefined {
   return undefined;
 }
 
-function agentMessage(context: RequestContext, text: string, id: string): Message {
+/**
+ * An agent message.
+ *
+ * `taskId` is carried only when the message belongs to a task. A `Message` the
+ * agent returns instead of opening a task has no task to point at, and the
+ * schema says as much: for server messages `context_id` must be provided and
+ * `task_id` only if a task was created. Serializing an id for a task that does
+ * not exist is what `DM-FMT-003` catches.
+ */
+function agentMessage(
+  context: RequestContext,
+  text: string,
+  id: string,
+  opts: { taskless?: boolean } = {}
+): Message {
   return {
     messageId: id,
     parts: [textPart(text)],
     role: Role.ROLE_AGENT,
     metadata: {},
     contextId: context.contextId,
-    taskId: context.taskId,
+    taskId: opts.taskless ? '' : context.taskId,
     extensions: [],
     referenceTaskIds: [],
   };
@@ -207,7 +221,9 @@ export async function run(
   if (behavior === 'tck-message-response') {
     eventBus.publish(
       AgentEvent.message(
-        agentMessage(context, 'tck message response', `acts-msg-${context.taskId}`)
+        agentMessage(context, 'tck message response', `acts-msg-${context.taskId}`, {
+          taskless: true,
+        })
       )
     );
     return;

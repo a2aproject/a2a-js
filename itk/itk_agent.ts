@@ -669,12 +669,14 @@ export class ItkAgentExecutor implements AgentExecutor {
  * Four ACTS tests assert that an agent *without* a capability answers
  * UnsupportedOperationError, so their preconditions require the card not to
  * advertise it and they can never run against a fully capable agent. The
- * runner starts a second SUT with this variable set to reach them, and
- * DefaultRequestHandler already gates those operations on this card, so
- * publishing less is all it takes to refuse them.
+ * runner starts a second SUT with this variable set to reach them.
+ *
+ * `DefaultRequestHandler` gates push notifications, the extended card and
+ * resubscription on this block, and the JSON-RPC transport handler gates
+ * `sendMessageStream`, so publishing less is all it takes to refuse them.
  */
 function actsCapabilities(): AgentCard['capabilities'] {
-  if (process.env.ITK_ACTS_REDUCED_CAPABILITIES) {
+  if (reducedCapabilities()) {
     return {
       streaming: false,
       pushNotifications: false,
@@ -689,6 +691,162 @@ function actsCapabilities(): AgentCard['capabilities'] {
     extendedAgentCard: true,
   };
 }
+
+function reducedCapabilities(): boolean {
+  return Boolean(process.env.ITK_ACTS_REDUCED_CAPABILITIES);
+}
+
+/**
+ * Credentials the ACTS runner presents. Not secrets: the runner attaches the
+ * valid one to every abstract operation and offers the insufficient one from
+ * `SEC-EXTCARD-002` and `SEC-AUTH-002`, so a fixture has to recognise both to
+ * answer 200 / 403 / 401 as those tests require.
+ */
+const ACTS_VALID_TOKEN = 'itk-valid-token';
+const ACTS_INSUFFICIENT_TOKEN = 'itk-insufficient-token';
+const ACTS_SECURITY_SCHEME = 'bearerAuth';
+
+/**
+ * Whether to require a credential on the ordinary operation endpoints.
+ *
+ * Off unless `ITK_ACTS_AUTH` is set, and nothing in the harness sets it. Two
+ * reasons, and the second is the one that decides it:
+ *
+ *  - ITK traversal peers dial this agent with no credential at all, so
+ *    enforcing during a traversal run would fail every scenario that calls us.
+ *    An environment switch alone would handle that, since the two suites run
+ *    as separate processes.
+ *  - The ACTS runner attaches its credential to *abstract operations only*;
+ *    `dispatch_raw` drops it, which is what keeps the unauthenticated
+ *    `SEC-AUTH-001` / `SEC-EXTCARD-001` probes meaningful. But then every
+ *    other raw step is unauthenticated too, and fifteen of them expect to
+ *    succeed — `JSONRPC-ENV-001`, `DM-FMT-001`, `CORE-ERR-006`,
+ *    `REST-STATUS-001` and the rest. An absent `Authorization` header means
+ *    "reject me" in one test and "serve me" in the next, and no server can
+ *    tell the two apart.
+ *
+ * Measured, with the switch on: **fourteen** raw steps fail on a 401 (twelve
+ * over JSON-RPC, two over REST) and the five `SEC-AUTH-*` tests pass. The
+ * fifteenth, `JSONRPC-CT-001`, passes either way — it asserts only that the
+ * response content type is JSON, which a 401 error document also satisfies.
+ *
+ * What the switch buys is now real, where it used to be nothing: those five
+ * tests gated on `capabilities.authentication`, a member `AgentCapabilities`
+ * does not have, so they skipped against every agent whatever this flag said.
+ * They gate on `preconditions.authentication` instead, read off the card's
+ * `securitySchemes` and `securityRequirements` — which is why leaving the
+ * default off keeps them skipping honestly ("not applicable to this agent")
+ * rather than failing.
+ *
+ * The extended-card endpoint is *not* covered by this switch — see
+ * {@link extendedCardGuard}.
+ */
+function authEnforced(): boolean {
+  return Boolean(process.env.ITK_ACTS_AUTH);
+}
+
+/**
+ * The schemes the card advertises. Declared only when the agent actually
+ * enforces them: a card claiming a scheme it does not check would be a lie,
+ * and it is what the `authentication` precondition of the `SEC-AUTH-*` tests
+ * reads to decide whether they are applicable at all.
+ */
+function actsSecuritySchemes(): AgentCard['securitySchemes'] {
+  if (!authEnforced()) return {};
+  return {
+    [ACTS_SECURITY_SCHEME]: {
+      scheme: {
+        $case: 'httpAuthSecurityScheme',
+        value: {
+          description: 'Bearer token presented by the ACTS runner.',
+          scheme: 'Bearer',
+          bearerFormat: 'opaque',
+        },
+      },
+    },
+  };
+}
+
+function actsSecurityRequirements(): AgentCard['securityRequirements'] {
+  if (!authEnforced()) return [];
+  return [{ schemes: { [ACTS_SECURITY_SCHEME]: { list: [] } } }];
+}
+
+/** A `google.rpc.Status` body, the shape A2A §11.6 requires of an error. */
+function statusBody(code: number, status: string, message: string, reason: string) {
+  return {
+    error: {
+      code,
+      status,
+      message,
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+          reason,
+          domain: 'a2a-protocol.org',
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * Rejects a request that carries no usable credential.
+ *
+ * Three outcomes, because the tests distinguish them: the valid token passes,
+ * the insufficient one authenticates but does not authorize (403), and
+ * anything else — including nothing at all — fails authentication (401). The
+ * `WWW-Authenticate` challenge is what §3.3.2 asks for on the 401.
+ */
+function requireCredential(): express.RequestHandler {
+  return (req, res, next) => {
+    const presented = /^Bearer\s+(.+)$/i.exec(req.header('authorization') ?? '')?.[1]?.trim();
+    if (presented === ACTS_VALID_TOKEN) {
+      next();
+      return;
+    }
+    if (presented === ACTS_INSUFFICIENT_TOKEN) {
+      res
+        .status(403)
+        .json(
+          statusBody(
+            403,
+            'PERMISSION_DENIED',
+            'Token lacks the required scope.',
+            'PERMISSION_DENIED'
+          )
+        );
+      return;
+    }
+    res
+      .status(401)
+      .set('WWW-Authenticate', `Bearer realm="a2a", scheme="${ACTS_SECURITY_SCHEME}"`)
+      .json(statusBody(401, 'UNAUTHENTICATED', 'A bearer token is required.', 'UNAUTHENTICATED'));
+  };
+}
+
+/**
+ * Authentication for `GET /extendedAgentCard`, always on.
+ *
+ * Independent of {@link authEnforced} because it costs traversal nothing —
+ * nothing in the traversal suite fetches an extended card — and because A2A
+ * §13.3 makes it unconditional: the operation MUST require authentication.
+ * Scoped to the REST route on purpose. An `ExtendedAgentCardProvider` on the
+ * request handler would fire on every binding, and the JSON-RPC and gRPC
+ * bindings carry the runner's credential on the abstract operation already,
+ * so gating there would break `CARD-EXT-001` to no benefit.
+ */
+function extendedCardGuard(): express.RequestHandler {
+  return requireCredential();
+}
+
+/**
+ * The public agent card stays reachable without a credential.
+ *
+ * A2A §8.2 makes the well-known URL the discovery mechanism and §7.3 has the
+ * client learn which schemes it needs *from that card*, so requiring one to
+ * read it is circular. The ITK readiness probe also fetches it unauthenticated.
+ */
 
 async function main() {
   const args = process.argv.slice(2);
@@ -762,8 +920,8 @@ async function main() {
       organization: 'A2A Samples',
       url: 'https://example.com/a2a-samples',
     },
-    securitySchemes: {},
-    securityRequirements: [],
+    securitySchemes: actsSecuritySchemes(),
+    securityRequirements: actsSecurityRequirements(),
     defaultInputModes: ['text/plain', 'application/x-protobuf'],
     defaultOutputModes: ['text/plain'],
     // Declared so ACTS's card tests assert on something real. `CARD-DISC-004`
@@ -840,7 +998,16 @@ async function main() {
     `${restPath}/${AGENT_CARD_PATH}`,
     agentCardHandler({ agentCardProvider: requestHandler, legacyCompat })
   );
-  app.use(jsonRpcPath, express.json());
+
+  // Registered after the card mounts, so the public card stays reachable, and
+  // before the transport handlers, so nothing reaches an operation without a
+  // credential. The extended card is guarded whatever the mode.
+  app.use(`${restPath}/extendedAgentCard`, extendedCardGuard());
+  if (authEnforced()) {
+    app.use(jsonRpcPath, requireCredential());
+    app.use(restPath, requireCredential());
+  }
+
   app.use(
     jsonRpcPath,
     jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication, legacyCompat })
