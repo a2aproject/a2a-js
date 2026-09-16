@@ -30,8 +30,7 @@
  * recovers it from the task history.
  */
 
-import { Message, TaskState, Role, Task } from '../src/index.js';
-import { Part } from '../src/types/pb/a2a.js';
+import { Message, Part, TaskState, Role, Task } from '../src/index.js';
 import { RequestContext, ExecutionEventBus, AgentEvent } from '../src/server/index.js';
 import * as clientParse from './acts_client_parse.js';
 

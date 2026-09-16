@@ -25,12 +25,7 @@
  * for the operation — so `expect_parsed` reads exactly like `expect.body`.
  */
 
-import { AgentCard, Task } from '../src/index.js';
-import {
-  AgentCard as AgentCardCodec,
-  Message as MessageCodec,
-  Task as TaskCodec,
-} from '../src/types/pb/a2a.js';
+import { AgentCard, Message, Task } from '../src/index.js';
 import {
   ClientFactory,
   ClientFactoryOptions,
@@ -181,9 +176,9 @@ function asError(err: unknown, payload: unknown): Record<string, unknown> {
  * `MessageToDict` does on the python side.
  */
 function encode(kind: 'task' | 'message' | 'card', value: unknown): unknown {
-  if (kind === 'task') return TaskCodec.toJSON(value as never);
-  if (kind === 'message') return MessageCodec.toJSON(value as never);
-  return AgentCardCodec.toJSON(value as never);
+  if (kind === 'task') return Task.toJSON(value as never);
+  if (kind === 'message') return Message.toJSON(value as never);
+  return AgentCard.toJSON(value as never);
 }
 
 /**
