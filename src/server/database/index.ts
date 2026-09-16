@@ -9,5 +9,6 @@ export type {
   PushNotificationDatabase,
 } from './push_notification/schema.js';
 
+export { DatabaseTaskStore } from './task/store.js';
 export { TASK_TABLE } from './task/schema.js';
 export type { TaskDatabase, TaskRow } from './task/schema.js';
