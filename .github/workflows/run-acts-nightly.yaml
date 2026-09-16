@@ -1,9 +1,12 @@
-name: Run ITK (Nightly)
+name: Run ACTS (Nightly)
+
+# Conformance counterpart of `run-itk-nightly.yaml`, on the same schedule.
+# Separate workflows so neither shows up red for the other's failure and each
+# can be re-run on its own.
 
 on:
   schedule:
-    # 02:00 UTC daily, matching a2a-python's and a2a-go's nightly windows
-    # so the cross-SDK nightly artifacts upload roughly in parallel.
+    # 02:00 UTC daily, alongside the traversal nightly.
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual execution from the Actions tab
 
@@ -12,27 +15,19 @@ permissions:
   # `nightly-metrics` prerelease asset.
   contents: write
 
-# Only cancel earlier in-flight runs for the SAME git ref. Without the
-# `github.head_ref || github.ref` scoping, a manual `workflow_dispatch`
-# on a feature branch would cancel a concurrently running scheduled
-# cron (or vice-versa). The release-asset upload step targets the same
-# `nightly-metrics` tag's `itk_js.json` across all triggers, but
-# `softprops/action-gh-release` does an idempotent per-file overwrite
-# (last writer wins), so concurrent uploads from different refs cannot
-# corrupt the artifact — they can at worst lose one run's history
-# append, which is acceptable. Matches the PR workflow's pattern in
-# `.github/workflows/run-itk.yaml`.
+# Only cancel earlier in-flight runs for the SAME git ref, so a manual
+# `workflow_dispatch` on a feature branch cannot cancel a running cron.
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.ref }}'
   cancel-in-progress: true
 
 jobs:
-  nightly:
-    name: Nightly ITK Run
+  acts:
+    name: Nightly ACTS Run
     runs-on: ubuntu-latest
 
     env:
-      # Same pin as the PR workflow — see `.github/workflows/run-itk.yaml`.
+      # Same pin as the PR workflow — see `.github/workflows/run-acts.yaml`.
       A2A_ITK_REVISION: main
 
     steps:
@@ -78,33 +73,41 @@ jobs:
           restore-keys: |
             itk-launcher-${{ runner.os }}-
 
-      - name: Run Error Handling Tests
-        run: bash itk/run_error_tests.sh
-
-      - name: Run Nightly ITK Tests
+      - name: Run Nightly ACTS Conformance
         run: bash run_itk.sh
         working-directory: itk
         env:
           A2A_ITK_REVISION: ${{ env.A2A_ITK_REVISION }}
-          # `ITK_NIGHTLY_RUN=True` selects the shared nightly set
-          # (`a2a-itk/scenarios/traversal/nightly.yaml` — this SDK against
-          # every peer in matrix.yaml) and routes results through
-          # `a2a-itk/scripts/process_results.py` to produce the rolling
-          # `itk_js.json` history file consumed by the release asset.
+          ITK_ACTS_RUN: "1"
+          ITK_ACTS_TRANSPORTS: jsonrpc,grpc,rest
+          # Unlike the PR tier this does NOT gate on conformance: a `must`
+          # failure is the metric being recorded, not a broken run. The step
+          # fails only if the service errored or the report came back
+          # malformed, which is exactly when publishing should be skipped.
           ITK_NIGHTLY_RUN: "True"
           ITK_SKIP_BUILD: "1"
 
-      - name: Upload Results to Rolling Release
+      - name: Upload ACTS reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: acts-reports-js-nightly
+          path: itk/acts-report-*.json
+          if-no-files-found: warn
+          # Outlives the rolling asset's 7-run window, so every entry it
+          # carries still has its full report to link to.
+          retention-days: 30
+
+      - name: Upload ACTS Results to Rolling Release
         uses: softprops/action-gh-release@v3
         with:
-          # Reuses a single, permanent prerelease tag so the asset URL
-          # (`.../releases/download/nightly-metrics/itk_js.json`) is
-          # stable for dashboards and for `process_results.py`'s
-          # next-run history fetch. Matches a2a-python (`itk_python.json`)
-          # and a2a-go (`itk_go.json`) — one file per SDK on the same tag.
+          # The conformance counterpart of `itk_js.json`, on the same permanent
+          # tag: `process_acts_results.py` fetches
+          # `.../download/nightly-metrics/acts_js.json`, appends one entry
+          # covering all three bindings, and the upload puts it back.
           tag_name: nightly-metrics
           prerelease: true
           files: |
-            itk/itk_js.json
+            itk/acts_js.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
