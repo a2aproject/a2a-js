@@ -331,7 +331,7 @@ export class Client {
   }): SendMessageRequest {
     const result = {
       ...params,
-      configuration: params.configuration ?? ({} as SendMessageConfiguration),
+      configuration: { ...params.configuration } as SendMessageConfiguration,
     };
 
     result.configuration.acceptedOutputModes =
