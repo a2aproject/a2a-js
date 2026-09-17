@@ -38,7 +38,7 @@ import {
   SendMessageConfiguration,
   ListTasksRequest,
   StreamResponse,
-} from '../../src/types/pb/a2a.js';
+} from '../../src/types/index.js';
 import {
   DefaultExecutionEventBusManager,
   ExecutionEventBusManager,
@@ -1452,7 +1452,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     // Create an active event bus
-    const bus = executionEventBusManager.createOrGetByTaskId(taskId);
+    const bus = executionEventBusManager.createOrGetByTaskId(taskId, serverCallContext);
 
     const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
