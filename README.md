@@ -9,7 +9,7 @@
    <h2 align="center">
    <img src="https://raw.githubusercontent.com/a2aproject/A2A/refs/heads/main/docs/assets/a2a_logo/color/SVG/a2a_color.svg" width="800" alt="Agent2Agent Protocol Logo"/>
    </h2>
-   <h3 align="center">A JavaScript library that helps run agentic applications as A2AServers following the <a href="https://google-a2a.github.io/A2A">Agent2Agent (A2A) Protocol</a>.</h3>
+   <h3 align="center">A JavaScript library that helps run agentic applications as A2AServers following the <a href="https://a2a-protocol.org/">Agent2Agent (A2A) Protocol</a>.</h3>
 </html>
 
 <!-- markdownlint-enable no-inline-html -->
@@ -198,6 +198,26 @@ See the spec section
 and the [`push-notification-agent`](src/samples/agents/push-notification-agent/)
 sample (which includes a runnable webhook receiver).
 
+### Custom event bus and task store
+
+`TaskStore`, `ExecutionEventBus` and `ExecutionEventBusManager` are all
+constructor-injected into `DefaultRequestHandler`, so you can back them with a
+database, a cache, or a message broker instead of the in-process defaults.
+
+One caveat applies to a bus that does not deliver events synchronously. When the
+agent executor returns, the handler decides whether to tear that task's bus down
+from the last state it saw delivered, so a bus that batches or persists events
+before handing them to subscribers has shown the handler nothing by that point
+and its bus is released too early. Such a bus should implement the optional
+`settleByTaskId` on its manager, which is offered that decision first: return
+`true` to take ownership of the bus and settle it from your own drain, or
+`false` to let the handler apply its usual policy for that call.
+
+See the doc comments on
+[`ExecutionEventBusManager`](src/server/events/execution_event_bus_manager.ts)
+for the full contract, and `test/integration/delayed_event_bus.spec.ts` for a
+worked example against a bus that withholds every batch.
+
 ### Client customization
 
 `@a2a-js/sdk/client` exposes a transport-agnostic `CallInterceptor` interface
@@ -271,8 +291,8 @@ end-to-end demonstration across every transport.
 
 ## License
 
-This project is licensed under the terms of the [Apache 2.0 License](https://raw.githubusercontent.com/google-a2a/a2a-python/refs/heads/main/LICENSE).
+This project is licensed under the terms of the [Apache 2.0 License](LICENSE).
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/google-a2a/a2a-js/blob/main/CONTRIBUTING.md) for contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.

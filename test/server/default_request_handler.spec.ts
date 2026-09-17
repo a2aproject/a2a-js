@@ -38,7 +38,7 @@ import {
   SendMessageConfiguration,
   ListTasksRequest,
   StreamResponse,
-} from '../../src/types/pb/a2a.js';
+} from '../../src/types/index.js';
 import {
   DefaultExecutionEventBusManager,
   ExecutionEventBusManager,
@@ -1452,7 +1452,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     // Create an active event bus
-    const bus = executionEventBusManager.createOrGetByTaskId(taskId);
+    const bus = executionEventBusManager.createOrGetByTaskId(taskId, serverCallContext);
 
     const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
@@ -1722,6 +1722,32 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await expect(
       handler.getTask({ id: '   ', tenant: '', historyLength: 0 }, serverCallContext)
     ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('sendMessage: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        messageId: 'msg-ws-taskid',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'hi' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: '',
+        taskId: '   ',
+        extensions: [],
+        metadata: {},
+      },
+    } as SendMessageRequest;
+    await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(
+      RequestMalformedError
+    );
   });
 
   it('getTask: should return an existing task from the store', async () => {
