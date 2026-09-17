@@ -31,8 +31,8 @@ async function loadModule(specifier: string): Promise<Record<string, unknown>> {
 
 let loaded: Promise<LoadedMigration> | undefined;
 
-/** `kysely/migration` on 0.29 and later, the package root before that. */
-function migrationModule(): Promise<LoadedMigration> {
+/** `kysely/migration` on 0.29 and later, the package root before that. Exported for tests. */
+export function migrationModule(): Promise<LoadedMigration> {
   loaded ??= (async () => {
     for (const specifier of ['kysely/migration', 'kysely']) {
       let module: Record<string, unknown>;
