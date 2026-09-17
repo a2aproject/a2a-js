@@ -1,15 +1,11 @@
 import type { Kysely } from 'kysely';
-// Types only, so nothing here resolves at runtime. Kysely 0.28 has no such subpath,
-// but these never reach an emitted declaration, because nothing public re-exports
-// this module. Exporting one would break consumers on 0.28. The class itself is a
-// value, so it is still loaded at runtime from whichever path kysely has.
-import type {
-  Migration,
-  MigrationResultSet,
-  Migrator,
-  MigratorProps,
-  NoMigrations,
-} from 'kysely/migration';
+// Types only, so nothing here resolves at runtime; the classes themselves are loaded
+// below from whichever path the installed kysely has. Kysely 0.28 exposes no
+// `kysely/migration` subpath, which is safe here because `exports` carries no `./cli`
+// entry: nothing in this directory can reach a consumer's declarations.
+import type { MigrationResultSet, Migrator, MigratorProps, NoMigrations } from 'kysely/migration';
+
+import type { StoreMigrations } from '../server/database/store_migrations.js';
 
 /**
  * Shared by every store.
@@ -23,19 +19,6 @@ interface LoadedMigration {
   readonly Migrator: MigratorConstructor;
   /** Kysely's own sentinel for "revert everything". */
   readonly NO_MIGRATIONS: NoMigrations;
-}
-
-/**
- * One store's migrations, and the ledger recording which have run.
- * Each store needs its own ledger.
- */
-export interface StoreMigrations {
-  /** Selects the store on the command line, and names it in output. */
-  readonly id: string;
-  /** Deliberately not Kysely's default `kysely_migration`. */
-  readonly ledgerTable: string;
-  /** Applied in name order, which is why the `0001_` prefix fixes the sequence. */
-  readonly migrations: Readonly<Record<string, Migration>>;
 }
 
 /**

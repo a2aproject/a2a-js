@@ -1,5 +1,7 @@
 import { parseArgs } from 'node:util';
 
+import { ALL_STORE_MIGRATIONS, type StoreMigrations } from '../server/database/store_migrations.js';
+import { connect } from './connect.js';
 import {
   BASE,
   migrateStore,
@@ -7,10 +9,7 @@ import {
   migrationNames,
   rollbackStore,
   storeState,
-} from '../server/database/migrator.js';
-import type { StoreMigrations } from '../server/database/migrator.js';
-import { ALL_STORE_MIGRATIONS } from '../server/database/store_migrations.js';
-import { connect } from './connect.js';
+} from './migrator.js';
 
 const STORE_IDS = ALL_STORE_MIGRATIONS.map((store) => store.id);
 
