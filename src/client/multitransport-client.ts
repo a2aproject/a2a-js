@@ -89,17 +89,21 @@ export class Client {
     options?: RequestOptions,
     verifySignature?: AgentCardSignatureVerifier
   ): Promise<AgentCard> {
-    if (this.agentCard.capabilities?.extendedAgentCard) {
-      this.agentCard = await this.executeWithInterceptors(
+    let agentCard = this.agentCard;
+    if (agentCard.capabilities?.extendedAgentCard) {
+      agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
         (_, options) => this.transport.getExtendedAgentCard({ tenant: '' }, options)
       );
     }
     if (verifySignature) {
-      await verifySignature(this.agentCard);
+      await verifySignature(agentCard);
     }
-    return this.agentCard;
+    // Only replace the cached card once the caller's verifier has accepted it, so a
+    // rejected card cannot drive later capability decisions.
+    this.agentCard = agentCard;
+    return agentCard;
   }
 
   /** Sends a message to an agent. Uses blocking mode by default. */
@@ -331,7 +335,7 @@ export class Client {
   }): SendMessageRequest {
     const result = {
       ...params,
-      configuration: params.configuration ?? ({} as SendMessageConfiguration),
+      configuration: { ...params.configuration } as SendMessageConfiguration,
     };
 
     result.configuration.acceptedOutputModes =

@@ -20,7 +20,7 @@ import {
   TaskState,
   ListTaskPushNotificationConfigsResponse,
 } from '../../../index.js';
-import { taskStateFromJSON } from '../../../types/pb/a2a.js';
+import { taskStateFromJSON } from '../../../types/index.js';
 import {
   HTTP_STATUS,
   PushNotificationNotSupportedError,
