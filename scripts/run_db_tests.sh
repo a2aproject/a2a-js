@@ -36,9 +36,9 @@ PG_PORT="${PG_PORT:-55432}"
 MY_PORT="${MY_PORT:-33306}"
 
 SPECS=(
-  test/server/database_push_notification_migrations.spec.ts
+  test/cli/database_push_notification_migrations.spec.ts
+  test/cli/database_task_migrations.spec.ts
   test/server/database_push_notification_store.spec.ts
-  test/server/database_task_migrations.spec.ts
   test/server/database_task_store.spec.ts
 )
 

@@ -75,9 +75,9 @@ jobs:
     - name: Database suites against PostgreSQL and MySQL
       run: >-
         npx vitest run --no-file-parallelism
-        test/server/database_push_notification_migrations.spec.ts
+        test/cli/database_push_notification_migrations.spec.ts
+        test/cli/database_task_migrations.spec.ts
         test/server/database_push_notification_store.spec.ts
-        test/server/database_task_migrations.spec.ts
         test/server/database_task_store.spec.ts
       env:
         POSTGRES_TEST_DSN: postgresql://a2a:a2a_password@localhost:5432/a2a_test
