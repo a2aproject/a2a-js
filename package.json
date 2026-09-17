@@ -197,7 +197,7 @@
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.11.0",
     "express": "^4.21.2 || ^5.1.0",
-    "kysely": "^0.28.5 || ^0.29.0"
+    "kysely": "^0.28.17 || ^0.29.0"
   },
   "peerDependenciesMeta": {
     "express": {
