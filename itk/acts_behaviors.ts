@@ -384,14 +384,14 @@ async function dispatch(
     }
 
     default: {
-      const terminal: Record<string, TaskState> = {
+      const states: Record<string, TaskState> = {
         'tck-complete-task': TaskState.TASK_STATE_COMPLETED,
         'tck-task-failure': TaskState.TASK_STATE_FAILED,
         'tck-reject-task': TaskState.TASK_STATE_REJECTED,
         'tck-input-required': TaskState.TASK_STATE_INPUT_REQUIRED,
         'tck-auth-required': TaskState.TASK_STATE_AUTH_REQUIRED,
       };
-      const state = terminal[behavior];
+      const state = states[behavior];
       if (state === undefined) {
         publishStatus(
           eventBus,
