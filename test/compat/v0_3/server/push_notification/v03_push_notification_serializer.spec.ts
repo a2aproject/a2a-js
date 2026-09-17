@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { V03PushNotificationSerializer } from '../../../../../src/compat/v0_3/server/push_notification/v03_push_notification_serializer.js';
 import { LEGACY_JSON_CONTENT_TYPE } from '../../../../../src/compat/v0_3/constants.js';
-import { Role, StreamResponse, TaskState } from '../../../../../src/types/pb/a2a.js';
+import { Role, StreamResponse, Task, TaskState } from '../../../../../src/types/pb/a2a.js';
 
 describe('V03PushNotificationSerializer', () => {
   const serializer = new V03PushNotificationSerializer();
@@ -197,5 +197,118 @@ describe('V03PushNotificationSerializer', () => {
   it('throws when the StreamResponse has no payload', () => {
     const event = { payload: undefined } as unknown as StreamResponse;
     expect(() => serializer.serialize(event)).toThrow(/StreamResponse payload is undefined/);
+  });
+
+  describe('when a full Task is supplied alongside an update trigger', () => {
+    // The reverted v0.3 behavior: every status/artifact update pushes the
+    // full Task, not the bare update event. The serializer is the single
+    // place that decides this — it emits the Task whenever the sender
+    // forwards one.
+    const fullTask: Task = {
+      id: 'task-full',
+      contextId: 'ctx-full',
+      status: {
+        state: TaskState.TASK_STATE_WORKING,
+        message: undefined,
+        timestamp: '2026-04-15T14:00:00Z',
+      },
+      artifacts: [
+        {
+          artifactId: 'art-1',
+          name: 'file.txt',
+          description: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'hello' },
+              filename: 'file.txt',
+              mediaType: 'text/plain',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+        },
+      ],
+      history: [],
+      metadata: {},
+    };
+
+    it('serializes the full Task instead of the bare status-update event', () => {
+      const event: StreamResponse = {
+        payload: {
+          $case: 'statusUpdate',
+          value: {
+            taskId: 'task-full',
+            contextId: 'ctx-full',
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              message: undefined,
+              timestamp: '2026-04-15T14:00:00Z',
+            },
+            metadata: {},
+          },
+        },
+      };
+
+      const parsed = JSON.parse(serializer.serialize(event, fullTask).body);
+
+      expect(parsed.kind).toBe('task');
+      expect(parsed.id).toBe('task-full');
+      expect(parsed.status.state).toBe('working');
+      expect(parsed).not.toHaveProperty('final');
+    });
+
+    it('serializes the full Task instead of the bare artifact-update event', () => {
+      const event: StreamResponse = {
+        payload: {
+          $case: 'artifactUpdate',
+          value: {
+            taskId: 'task-full',
+            contextId: 'ctx-full',
+            artifact: {
+              artifactId: 'art-1',
+              name: 'file.txt',
+              description: '',
+              parts: [],
+              metadata: {},
+              extensions: [],
+            },
+            append: false,
+            lastChunk: true,
+            metadata: {},
+          },
+        },
+      };
+
+      const parsed = JSON.parse(serializer.serialize(event, fullTask).body);
+
+      expect(parsed.kind).toBe('task');
+      expect(parsed.id).toBe('task-full');
+      expect(parsed.artifacts).toHaveLength(1);
+      expect(parsed).not.toHaveProperty('append');
+    });
+
+    it('ignores the supplied Task for message payloads', () => {
+      const event: StreamResponse = {
+        payload: {
+          $case: 'message',
+          value: {
+            messageId: 'm-1',
+            role: Role.ROLE_AGENT,
+            parts: [],
+            contextId: 'ctx-full',
+            taskId: 'task-full',
+            extensions: [],
+            metadata: {},
+            referenceTaskIds: [],
+          },
+        },
+      };
+
+      const parsed = JSON.parse(serializer.serialize(event, fullTask).body);
+
+      expect(parsed.kind).toBe('message');
+      expect(parsed.messageId).toBe('m-1');
+    });
   });
 });

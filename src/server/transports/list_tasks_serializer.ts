@@ -3,7 +3,7 @@
  * differ from the default ProtoJSON encoding used everywhere else.
  */
 
-import { ListTasksResponse } from '../../types/pb/a2a.js';
+import { ListTasksResponse } from '../../types/index.js';
 
 /** Options controlling {@link serializeListTasksResponse}. */
 export interface SerializeListTasksResponseOptions {

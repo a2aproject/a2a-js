@@ -37,13 +37,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: 'npm'
@@ -52,7 +52,7 @@ jobs:
         run: npm ci
 
       - name: Clone a2a-itk
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: a2aproject/a2a-itk
           ref: main
@@ -71,7 +71,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=itk_service
 
       - name: Cache launcher peer-SDK checkouts + build outputs
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/a2a-itk-launcher
           key: itk-launcher-${{ runner.os }}-${{ github.sha }}

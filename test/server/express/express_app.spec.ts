@@ -129,6 +129,37 @@ describe('A2AExpressApp', () => {
     vi.restoreAllMocks();
   });
 
+  it('echoes extensions activated on a custom context for a tenant-scoped JSON-RPC request', async () => {
+    class CustomContext extends ServerCallContext {
+      readonly marker = 'custom-context';
+    }
+    const context = new CustomContext({
+      state: new Map([['trace', 'trace-a']]),
+      requestedVersion: '1.0',
+    });
+    const contextBuilder = vi.fn(() => context);
+    setupA2ARoutes(expressApp, mockRequestHandler, undefined, '', [], undefined, {
+      contextBuilder,
+    });
+    (mockRequestHandler.listTasks as Mock).mockImplementation((_params, received) => {
+      received.addActivatedExtension('ext://trace');
+      return { tasks: [] };
+    });
+
+    const response = await request(expressApp)
+      .post('/')
+      .set('A2A-Version', '1.0')
+      .send(createRpcRequest('tenant-context', 'ListTasks', { tenant: 'tenant-a' }))
+      .expect(200);
+
+    expect(response.body.result).toBeDefined();
+    expect(contextBuilder).toHaveBeenCalledTimes(1);
+    expect((mockRequestHandler.listTasks as Mock).mock.calls[0][1]).toBe(context);
+    expect(context.state.get('trace')).toBe('trace-a');
+    expect(context.tenant).toBe('tenant-a');
+    expect(response.headers[HTTP_EXTENSION_HEADER.toLowerCase()]).toBe('ext://trace');
+  });
+
   describe('agent card endpoint', () => {
     beforeEach(() => {
       setupA2ARoutes(expressApp, mockRequestHandler);

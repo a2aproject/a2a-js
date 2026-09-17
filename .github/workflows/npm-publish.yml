@@ -14,19 +14,19 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
       - run: npm ci
       - run: npm run build
 
       # Now configure with the publish service for install.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           registry-url: 'https://wombat-dressing-room.appspot.com/'
 
       - name: Publish to NPM
@@ -39,4 +39,4 @@ jobs:
             npm dist-tag add "@a2a-js/sdk@${VERSION}" next
           fi
         env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

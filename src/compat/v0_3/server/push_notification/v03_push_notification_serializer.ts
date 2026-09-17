@@ -2,7 +2,7 @@ import {
   PushNotificationSerializer,
   SerializedPushNotification,
 } from '../../../../server/push_notification/push_notification_serializer.js';
-import { StreamResponse } from '../../../../index.js';
+import { StreamResponse, Task } from '../../../../index.js';
 import { LEGACY_JSON_CONTENT_TYPE } from '../../constants.js';
 import {
   toCompatTask,
@@ -18,7 +18,7 @@ import { toCompatMessage } from '../../translate/messages.js';
  * JSON-RPC envelope.
  */
 export class V03PushNotificationSerializer implements PushNotificationSerializer {
-  serialize(streamResponse: StreamResponse): SerializedPushNotification {
+  serialize(streamResponse: StreamResponse, task?: Task): SerializedPushNotification {
     const payload = streamResponse.payload;
     if (!payload) {
       throw new Error('StreamResponse payload is undefined');
@@ -27,16 +27,24 @@ export class V03PushNotificationSerializer implements PushNotificationSerializer
     let legacyEvent: unknown;
     switch (payload.$case) {
       case 'task':
-        legacyEvent = toCompatTask(payload.value);
+        legacyEvent = toCompatTask(task || payload.value);
         break;
       case 'message':
         legacyEvent = toCompatMessage(payload.value);
         break;
       case 'statusUpdate':
-        legacyEvent = toCompatTaskStatusUpdateEvent(payload.value);
+        if (task !== undefined) {
+          legacyEvent = toCompatTask(task);
+        } else {
+          legacyEvent = toCompatTaskStatusUpdateEvent(payload.value);
+        }
         break;
       case 'artifactUpdate':
-        legacyEvent = toCompatTaskArtifactUpdateEvent(payload.value);
+        if (task !== undefined) {
+          legacyEvent = toCompatTask(task);
+        } else {
+          legacyEvent = toCompatTaskArtifactUpdateEvent(payload.value);
+        }
         break;
       default: {
         // Exhaustive check on the `StreamResponse` payload union.

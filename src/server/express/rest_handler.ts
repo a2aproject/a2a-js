@@ -41,7 +41,7 @@ import {
   StreamResponse,
   Task,
   TaskPushNotificationConfig,
-} from '../../types/pb/a2a.js';
+} from '../../types/index.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors/index.js';
 
