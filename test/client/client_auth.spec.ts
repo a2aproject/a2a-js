@@ -107,10 +107,10 @@ describe('JsonRpcTransport Authentication Tests', () => {
       expect(mockFetch.mock.calls[0][0]).to.equal('https://test-agent.example.com/api');
       expect(mockFetch.mock.calls[0][1]).to.deep.include({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+      });
+      expect(Object.fromEntries(new Headers(mockFetch.mock.calls[0][1].headers))).to.deep.equal({
+        'content-type': 'application/json',
+        accept: 'application/json',
       });
       expect(mockFetch.mock.calls[0][1].body).to.include('"method":"SendMessage"');
 
@@ -119,14 +119,10 @@ describe('JsonRpcTransport Authentication Tests', () => {
       expect(mockFetch.mock.calls[1][1]).to.deep.include({
         method: 'POST',
       });
-      expect(mockFetch.mock.calls[1][1].headers).to.have.property(
-        'Content-Type',
-        'application/json'
-      );
-      expect(mockFetch.mock.calls[1][1].headers).to.have.property('Accept', 'application/json');
-      expect(mockFetch.mock.calls[1][1].headers).to.have.property('Authorization');
-
-      expect(mockFetch.mock.calls[1][1].headers['Authorization']).to.match(/^Bearer .+$/);
+      const retryHeaders = new Headers(mockFetch.mock.calls[1][1].headers);
+      expect(retryHeaders.get('Content-Type')).to.equal('application/json');
+      expect(retryHeaders.get('Accept')).to.equal('application/json');
+      expect(retryHeaders.get('Authorization')).to.match(/^Bearer .+$/);
       expect(mockFetch.mock.calls[1][1].body).to.include('"method":"SendMessage"');
 
       expect(result).to.exist;
@@ -143,9 +139,12 @@ describe('JsonRpcTransport Authentication Tests', () => {
       await client.sendMessage(messageParams.request);
 
       const firstRequestAuthCall = mockFetch.mock.calls.find(
-        (args) => (args[0] as string).includes('/api') && args[1].headers?.['Authorization']
+        (args) =>
+          (args[0] as string).includes('/api') && new Headers(args[1].headers).has('Authorization')
       );
-      const firstRequestToken = firstRequestAuthCall?.[1]?.headers?.['Authorization'];
+      const firstRequestToken = new Headers(firstRequestAuthCall?.[1]?.headers).get(
+        'Authorization'
+      );
 
       const result2 = await client.sendMessage(messageParams.request);
 
@@ -155,8 +154,9 @@ describe('JsonRpcTransport Authentication Tests', () => {
       const secondRequestCalls = mockFetch.mock.calls.slice(2);
 
       expect(secondRequestCalls[0][0]).to.equal('https://test-agent.example.com/api');
-      expect(secondRequestCalls[0][1].headers).to.have.property('Authorization');
-      expect(secondRequestCalls[0][1].headers['Authorization']).to.equal(firstRequestToken);
+      expect(new Headers(secondRequestCalls[0][1].headers).get('Authorization')).to.equal(
+        firstRequestToken
+      );
 
       expect(result2).to.exist;
     });
@@ -354,12 +354,12 @@ describe('AuthHandlingFetch Tests', () => {
       });
 
       const fetchCallArgs = mockFetch.mock.calls[0];
-      const headers = fetchCallArgs[1]?.headers as Record<string, string>;
+      const headers = Object.fromEntries(new Headers(fetchCallArgs[1]?.headers));
 
       expect(headers).to.include({
-        'Content-Type': 'application/json',
-        'Custom-Header': 'custom-value',
-        Authorization: 'Bearer test-token-123',
+        'content-type': 'application/json',
+        'custom-header': 'custom-value',
+        authorization: 'Bearer test-token-123',
       });
 
       const storedHeaders = await authHandlerWithHeaders.headers();
