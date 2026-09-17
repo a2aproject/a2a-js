@@ -1,66 +1,96 @@
-import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  beforeEach,
+  afterEach,
+  assert,
+  expect,
+  vi,
+  type Mock,
+  type MockInstance,
+} from 'vitest';
 import express, { Express } from 'express';
 import request from 'supertest';
 
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
-import { AgentCard, Task, Message } from '../../../src/types.js';
-import { A2AError } from '../../../src/server/error.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
+import { AgentCard, Task, Message, TaskState, Role } from '../../../src/index.js';
 import {
-  ListTaskPushNotificationConfigResponse,
+  A2AError,
+  RequestMalformedError,
+  TaskNotCancelableError,
+  TaskNotFoundError,
+} from '../../../src/errors/index.js';
+import {
+  ListTaskPushNotificationConfigsResponse,
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
-} from '../../../src/types/pb/a2a_types.js';
+} from '../../../src/types/index.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
+import { LegacyRestTransportHandler } from '../../../src/compat/v0_3/server/transports/rest/rest_transport_handler.js';
+import {
+  STATE_HEADERS_KEY,
+  ServerCallContextBuilder,
+  defaultServerCallContextBuilder,
+} from '../../../src/server/context.js';
 
-/**
- * Test suite for restHandler - HTTP+JSON/REST transport implementation
- *
- * This suite tests the REST API endpoints following the A2A specification:
- * - GET /v1/card - Agent card retrieval
- * - POST /v1/message:send - Send message (non-streaming)
- * - POST /v1/message:stream - Send message with SSE streaming
- * - GET /v1/tasks/:taskId - Get task status
- * - POST /v1/tasks/:taskId:cancel - Cancel task
- * - GET/POST /v1/tasks/:taskId:subscribe - Resubscribe to task updates
- * - Push notification config CRUD operations
- */
 describe('restHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let app: Express;
 
   const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'HTTP+JSON',
     version: '1.0.0',
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    securityRequirements: [],
+    securitySchemes: {},
+    provider: { url: '', organization: '' },
+    signatures: [],
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080/v1',
+        protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
+    documentationUrl: '',
   };
 
-  // camelCase format (internal type)
   const testMessage: Message = {
     messageId: 'msg-1',
-    role: 'user' as const,
-    parts: [{ kind: 'text' as const, text: 'Hello' }],
-    kind: 'message' as const,
+    role: 'user' as any,
+    parts: [
+      {
+        content: { $case: 'text', value: 'Hello' },
+        filename: '',
+        mediaType: 'text/plain',
+        metadata: {},
+      },
+    ],
+    contextId: 'ctx-1',
+    taskId: 'task-1',
+    extensions: [],
+    metadata: {},
+    referenceTaskIds: [],
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   beforeEach(() => {
@@ -71,11 +101,12 @@ describe('restHandler', () => {
       sendMessageStream: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       resubscribe: vi.fn(),
+      listTasks: vi.fn(),
     };
 
     app = express();
@@ -91,49 +122,60 @@ describe('restHandler', () => {
     vi.restoreAllMocks();
   });
 
-  describe('GET /v1/card', () => {
+  describe('GET /extendedAgentCard', () => {
     it('should return the agent card with 200 OK', async () => {
-      const response = await request(app).get('/v1/card').expect(200);
+      const response = await request(app)
+        .get('/extendedAgentCard')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
-      // REST API returns data (format checked by handler)
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
       assert.deepEqual(response.body.name, testAgentCard.name);
     });
 
-    it('should return 500 if getAuthenticatedExtendedAgentCard fails', async () => {
+    it('should return the agent card with 200 OK when tenant is provided', async () => {
+      const response = await request(app)
+        .get('/tenant1/extendedAgentCard')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
+      assert.deepEqual(response.body.name, testAgentCard.name);
+    });
+
+    it('should return 400 if getAuthenticatedExtendedAgentCard fails', async () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
-        A2AError.internalError('Card fetch failed')
+        new RequestMalformedError('Card fetch failed')
       );
 
-      const response = await request(app).get('/v1/card').expect(500);
+      const response = await request(app)
+        .get('/extendedAgentCard')
+        .set('A2A-Version', '1.0')
+        .expect(400);
 
-      assert.property(response.body, 'code');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 400);
+      assert.equal(response.body.error.details[0].reason, 'INVALID_PARAMS');
     });
   });
 
-  describe('POST /v1/message:send', () => {
-    it('should accept camelCase message and return 201 with Task', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+  describe('POST /message:send', () => {
+    it('should accept camelCase message and return 200 with Task', async () => {
+      const message = ProtoMessage.toJSON(testMessage);
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app).post('/v1/message:send').send({ message }).expect(201);
+      const response = await request(app)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(200);
 
       expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
-        {
-          message: {
+        expect.objectContaining({
+          message: expect.objectContaining({
             messageId: 'msg-1',
-            role: 'user',
-            parts: [{ kind: 'text', text: 'Hello' }],
-            kind: 'message',
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
-          configuration: undefined,
-          metadata: undefined,
-        },
+          }),
+        }),
         expect.anything()
       );
 
@@ -141,47 +183,66 @@ describe('restHandler', () => {
         SendMessageResponse.fromJSON(response.body)
       );
       assert.deepEqual((converted_result as Task).id, testTask.id);
-      // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
+    });
+
+    it('should accept message with tenant prefix and pass tenant to handler', async () => {
+      const message = ProtoMessage.toJSON(testMessage);
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
+
+      await request(app)
+        .post('/tenant1/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(200);
+
+      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: 'tenant1',
+          message: expect.objectContaining({
+            messageId: 'msg-1',
+          }),
+        }),
+        expect.anything()
+      );
     });
 
     it('should return 400 when message is invalid', async () => {
       (mockRequestHandler.sendMessage as Mock).mockRejectedValue(
-        A2AError.invalidParams('Message is required')
+        new RequestMalformedError('Message is required')
       );
 
-      await request(app).post('/v1/message:send').send({ message: null }).expect(400);
+      await request(app)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ request: null })
+        .expect(400);
     });
   });
 
-  describe('POST /v1/message:stream', () => {
+  describe('POST /message:stream', () => {
     it('should accept camelCase message and stream via SSE', async () => {
-      const message = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const message = ProtoMessage.toJSON(testMessage);
       async function* mockStream() {
         yield testMessage;
         yield testTask;
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const response = await request(app).post('/v1/message:stream').send({ message }).expect(200);
+      const response = await request(app)
+        .post('/message:stream')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
 
       expect(mockRequestHandler.sendMessageStream).toHaveBeenCalledWith(
-        {
-          message: {
+        expect.objectContaining({
+          message: expect.objectContaining({
             messageId: 'msg-1',
-            role: 'user',
-            parts: [{ kind: 'text', text: 'Hello' }],
-            kind: 'message',
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
-          configuration: undefined,
-          metadata: undefined,
-        },
+          }),
+        }),
         expect.anything()
       );
     });
@@ -202,26 +263,31 @@ describe('restHandler', () => {
         })
       );
 
-      await request(noStreamApp)
-        .post('/v1/message:stream')
-        .send({ message: testMessage })
+      const response = await request(noStreamApp)
+        .post('/message:stream')
+        .set('A2A-Version', '1.0')
+        .send({ request: testMessage })
         .expect(400);
+
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'UNSUPPORTED_OPERATION');
     });
   });
 
-  describe('GET /v1/tasks/:taskId', () => {
+  describe('GET /tasks/:taskId', () => {
     it('should return task with 200 OK', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
-      const response = await request(app).get('/v1/tasks/task-1').expect(200);
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       assert.deepEqual(response.body.id, testTask.id);
-      // Kind is not present in Proto JSON
       assert.isUndefined(response.body.kind);
-      // Status state is enum string
       assert.deepEqual(response.body.status.state, 'TASK_STATE_COMPLETED');
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { id: 'task-1', tenant: '' },
         expect.anything()
       );
     });
@@ -229,11 +295,15 @@ describe('restHandler', () => {
     it('should support historyLength query parameter', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
-      await request(app).get('/v1/tasks/task-1?historyLength=10').expect(200);
+      await request(app)
+        .get('/tasks/task-1?historyLength=10')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         {
           id: 'task-1',
+          tenant: '',
           historyLength: 10,
         },
         expect.anything()
@@ -241,93 +311,281 @@ describe('restHandler', () => {
     });
 
     it('should return 400 if historyLength is invalid', async () => {
-      await request(app).get('/v1/tasks/task-1?historyLength=invalid').expect(400);
+      await request(app)
+        .get('/tasks/task-1?historyLength=invalid')
+        .set('A2A-Version', '1.0')
+        .expect(400);
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.getTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.getTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
-      const response = await request(app).get('/v1/tasks/task-1').expect(404);
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(404);
 
-      assert.property(response.body, 'code');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 404);
+      assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
     });
   });
 
-  describe('POST /v1/tasks/:taskId:cancel', () => {
-    it('should cancel task and return 202 Accepted', async () => {
-      const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
+  describe('POST /tasks/:taskId:cancel', () => {
+    it('should cancel task and return 200 OK', async () => {
+      // 200, not 202: a2a-go's v1.0 REST client treats any non-200 status
+      // as a hard error and discards the body, so 202 would surface as
+      // ErrServerError on a successful cancel.
+      const cancelledTask = {
+        ...testTask,
+        status: { state: TaskState.TASK_STATE_CANCELED },
+      };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
-      const response = await request(app).post('/v1/tasks/task-1:cancel').expect(202);
+      const response = await request(app)
+        .post('/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       assert.deepEqual(response.body.id, cancelledTask.id);
-      assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELLED');
-
-      expect(mockRequestHandler.cancelTask).toHaveBeenCalledWith(
-        { id: 'task-1' },
+      assert.deepEqual(response.body.status.state, 'TASK_STATE_CANCELED');
+      expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: '', metadata: {} },
         expect.anything()
       );
     });
 
     it('should return 404 if task is not found', async () => {
-      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(A2AError.taskNotFound('task-1'));
+      (mockRequestHandler.cancelTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 
-      const response = await request(app).post('/v1/tasks/task-1:cancel').expect(404);
+      const response = await request(app)
+        .post('/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .expect(404);
 
-      assert.property(response.body, 'code');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 404);
+      assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
     });
 
-    it('should return 409 if task is not cancelable', async () => {
+    it('should return 400 if task is not cancelable', async () => {
       (mockRequestHandler.cancelTask as Mock).mockRejectedValue(
-        A2AError.taskNotCancelable('task-1')
+        new TaskNotCancelableError('task-1')
       );
 
-      const response = await request(app).post('/v1/tasks/task-1:cancel').expect(409);
+      const response = await request(app)
+        .post('/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .expect(400);
 
-      assert.property(response.body, 'code');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'TASK_NOT_CANCELABLE');
     });
   });
 
-  describe('/v1/tasks/:taskId:subscribe', () => {
+  describe('GET /tasks', () => {
+    it('should list a single task', async () => {
+      const tasks = [testTask];
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks });
+
+      const response = await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
+
+      const expectedResponse = [
+        {
+          id: testTask.id,
+          contextId: testTask.contextId,
+          status: {
+            state: 'TASK_STATE_COMPLETED',
+          },
+          metadata: testTask.metadata,
+        },
+      ];
+
+      assert.deepEqual(response.body.tasks, expectedResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalled();
+    });
+
+    it('should list multiple tasks', async () => {
+      const tasks = [testTask, { ...testTask, id: 'task-2' }];
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks });
+
+      const response = await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
+
+      const expectedResponse = [
+        {
+          id: testTask.id,
+          contextId: testTask.contextId,
+          status: {
+            state: 'TASK_STATE_COMPLETED',
+          },
+          metadata: testTask.metadata,
+        },
+        {
+          id: 'task-2',
+          contextId: testTask.contextId,
+          status: {
+            state: 'TASK_STATE_COMPLETED',
+          },
+          metadata: testTask.metadata,
+        },
+      ];
+
+      assert.deepEqual(response.body.tasks, expectedResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalled();
+    });
+
+    it('should parse string enum status filter', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
+
+      await request(app)
+        .get('/tasks?status=TASK_STATE_COMPLETED')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
+      assert.equal(
+        callArgs.status,
+        TaskState.TASK_STATE_COMPLETED,
+        'TASK_STATE_COMPLETED should parse to enum value (3)'
+      );
+    });
+
+    it('should surface the request handler RequestMalformedError for an unrecognized status as 400 INVALID_ARGUMENT', async () => {
+      // Regression: an invalid status used to be silently converted to
+      // UNRECOGNIZED (-1) and applied as a filter matching nothing.
+      // Validation now lives in DefaultRequestHandler; the REST layer must
+      // map it to 400 INVALID_ARGUMENT, mirroring Python's ParseDict
+      // behavior.
+      (mockRequestHandler.listTasks as Mock).mockRejectedValue(
+        new RequestMalformedError('Invalid status filter: -1')
+      );
+
+      const response = await request(app)
+        .get('/tasks?status=INVALID_VALUE')
+        .set('A2A-Version', '1.0')
+        .expect(400);
+
+      assert.equal(response.body.error.status, 'INVALID_ARGUMENT');
+      assert.equal(response.body.error.details[0].reason, 'INVALID_PARAMS');
+    });
+
+    it('should default to TASK_STATE_UNSPECIFIED when status is not provided', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
+
+      await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
+
+      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
+      assert.equal(
+        callArgs.status,
+        TaskState.TASK_STATE_UNSPECIFIED,
+        'Should default to TASK_STATE_UNSPECIFIED (0)'
+      );
+    });
+
+    describe('response field presence (§3.1.4)', () => {
+      it('should emit the required pagination fields for an empty page', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 0,
+        });
+
+        const response = await request(app)
+          .get('/tasks?pageSize=20')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        assert.deepEqual(response.body, {
+          tasks: [],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 0,
+        });
+      });
+
+      it('should omit artifacts entirely when includeArtifacts is false', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [testTask],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 1,
+        });
+
+        const response = await request(app)
+          .get('/tasks?includeArtifacts=false')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        expect(response.body.tasks[0]).not.toHaveProperty('artifacts');
+      });
+
+      it('should omit artifacts when includeArtifacts is not supplied', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [testTask],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 1,
+        });
+
+        const response = await request(app).get('/tasks').set('A2A-Version', '1.0').expect(200);
+
+        expect(response.body.tasks[0]).not.toHaveProperty('artifacts');
+      });
+
+      it('should emit an empty artifacts array when includeArtifacts is true', async () => {
+        (mockRequestHandler.listTasks as Mock).mockResolvedValue({
+          tasks: [testTask],
+          nextPageToken: '',
+          pageSize: 20,
+          totalSize: 1,
+        });
+
+        const response = await request(app)
+          .get('/tasks?includeArtifacts=true')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        assert.deepEqual(response.body.tasks[0].artifacts, []);
+      });
+    });
+  });
+
+  describe('/tasks/:taskId:subscribe', () => {
     it('GET should resubscribe to task updates via SSE (canonical proto binding)', async () => {
-      // The v0.3 proto's `google.api.http` annotation for
-      // `SubscribeToTask` is `get: "/v1/tasks/{id=*}:subscribe"`, so
-      // GET is the canonical binding — spec-compliant peers
-      // (a2a-python, a2a-go, v1.0 a2a-js) all issue GET here.
       async function* mockStream() {
         yield testTask;
       }
 
-      (mockRequestHandler.resubscribe as Mock).mockResolvedValue(mockStream());
+      (mockRequestHandler.resubscribe as Mock).mockReturnValue(mockStream());
 
-      const response = await request(app).get('/v1/tasks/task-1:subscribe').expect(200);
+      const response = await request(app)
+        .get('/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
-
-      expect(mockRequestHandler.resubscribe).toHaveBeenCalledWith(
-        { id: 'task-1' },
+      expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: '' },
         expect.anything()
       );
     });
 
     it('POST should also resubscribe to task updates via SSE (tolerance)', async () => {
-      // POST is accepted for tolerance with clients that copy the
-      // sibling `POST /v1/tasks/{id}:cancel` binding pattern.
       async function* mockStream() {
         yield testTask;
       }
 
-      (mockRequestHandler.resubscribe as Mock).mockResolvedValue(mockStream());
+      (mockRequestHandler.resubscribe as Mock).mockReturnValue(mockStream());
 
-      const response = await request(app).post('/v1/tasks/task-1:subscribe').expect(200);
+      const response = await request(app)
+        .post('/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(200);
 
       assert.equal(response.headers['content-type'], 'text/event-stream');
-
-      expect(mockRequestHandler.resubscribe).toHaveBeenCalledWith(
-        { id: 'task-1' },
+      expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: '' },
         expect.anything()
       );
     });
@@ -349,77 +607,58 @@ describe('restHandler', () => {
         })
       );
 
-      const response = await request(noStreamApp).post('/v1/tasks/task-1:subscribe').expect(400);
+      const response = await request(noStreamApp)
+        .post('/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(400);
 
-      assert.property(response.body, 'code');
-      assert.property(response.body, 'message');
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'UNSUPPORTED_OPERATION');
     });
   });
 
   describe('Push Notification Config Endpoints', () => {
-    const mockConfig = {
+    const mockConfig: TaskPushNotificationConfig = {
+      tenant: '',
       taskId: 'task-1',
-      pushNotificationConfig: {
-        id: 'config-1',
-        url: 'https://example.com/webhook',
-      },
+      id: 'config-1',
+      url: 'https://example.com/webhook',
+      token: '',
+      authentication: undefined,
     };
 
-    describe('POST /v1/tasks/:taskId/pushNotificationConfigs', () => {
+    describe('POST /tasks/:taskId/pushNotificationConfigs', () => {
       it.each([
         {
           name: 'camelCase',
           payload: {
-            parent: 'tasks/task-1',
-            configId: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              pushNotificationConfig: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
-            },
+            id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            url: 'http://127.0.0.1:9999/webhook',
+            taskId: 'task-1',
+            tenant: '',
           },
         },
         {
           name: 'snake_case',
           payload: {
-            parent: 'tasks/task-1',
-            config_id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-            config: {
-              name: 'tasks/task-1/pushNotificationConfigs/push-954f670f-598d-49bf-9981-642d523f7746',
-              push_notification_config: {
-                id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-                url: 'http://127.0.0.1:9999/webhook',
-              },
-            },
+            id: 'push-954f670f-598d-49bf-9981-642d523f7746',
+            url: 'http://127.0.0.1:9999/webhook',
+            taskId: 'task-1',
+            tenant: '',
           },
         },
       ])('should accept $name config and return 201', async ({ payload }) => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
-          .post('/v1/tasks/task-1/pushNotificationConfigs')
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
           .send(payload)
           .expect(201);
 
-        const protoResponse = FromProto.taskPushNotificationConfig(
-          TaskPushNotificationConfig.fromJSON(response.body)
-        );
-        assert.deepEqual(protoResponse.taskId, mockConfig.taskId);
-
-        expect(mockRequestHandler.setTaskPushNotificationConfig).toHaveBeenCalledWith(
-          {
-            taskId: 'task-1',
-            pushNotificationConfig: {
-              id: 'push-954f670f-598d-49bf-9981-642d523f7746',
-              url: 'http://127.0.0.1:9999/webhook',
-              token: undefined,
-              authentication: undefined,
-            },
-          },
-          expect.anything()
-        );
+        const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.equal(protoResponse.taskId, 'task-1');
+        assert.equal(protoResponse.id, 'config-1');
       });
 
       it('should return 400 if push notifications not supported', async () => {
@@ -439,98 +678,143 @@ describe('restHandler', () => {
         );
 
         await request(noPNApp)
-          .post('/v1/tasks/task-1/pushNotificationConfigs')
-          .send({ pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' } })
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({
+            pushNotificationConfig: {
+              id: 'config-1',
+              url: 'https://example.com/webhook',
+              token: '',
+              authentication: undefined,
+            },
+          })
           .expect(400);
       });
-    });
 
-    describe('GET /v1/tasks/:taskId/pushNotificationConfigs', () => {
-      it('should list push notification configs and return 200', async () => {
-        const configs = [mockConfig];
-        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue(configs);
+      it('should accept an id-less body and return 201 with the server-assigned id', async () => {
+        // id is optional; handler generates UUID server-side.
+        const assignedConfig: TaskPushNotificationConfig = {
+          ...mockConfig,
+          id: 'server-assigned-uuid',
+        };
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(
+          assignedConfig
+        );
 
         const response = await request(app)
-          .get('/v1/tasks/task-1/pushNotificationConfigs')
-          .expect(200);
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({
+            url: 'http://127.0.0.1:9999/webhook',
+            taskId: 'task-1',
+            tenant: '',
+          })
+          .expect(201);
 
-        const convertedResult = FromProto.listTaskPushNotificationConfig(
-          ListTaskPushNotificationConfigResponse.fromJSON(response.body)
-        );
-        assert.isArray(convertedResult);
-        assert.lengthOf(convertedResult, configs.length);
+        const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.equal(protoResponse.taskId, 'task-1');
+        assert.equal(protoResponse.id, 'server-assigned-uuid');
 
-        expect(mockRequestHandler.listTaskPushNotificationConfigs).toHaveBeenCalledWith(
-          { id: 'task-1' },
-          expect.anything()
-        );
+        const passedConfig = (mockRequestHandler.createTaskPushNotificationConfig as Mock).mock
+          .calls[0][0];
+        assert.equal(passedConfig.id, '');
       });
     });
 
-    describe('GET /v1/tasks/:taskId/pushNotificationConfigs/:configId', () => {
+    describe('GET /tasks/:taskId/pushNotificationConfigs', () => {
+      it('should list push notification configs and return 200', async () => {
+        const configs = [mockConfig];
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue({
+          configs: configs,
+          nextPageToken: '',
+        });
+
+        const response = await request(app)
+          .get('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        const convertedResult = ListTaskPushNotificationConfigsResponse.fromJSON(
+          response.body
+        ).configs;
+        assert.isArray(convertedResult);
+        assert.lengthOf(convertedResult, configs.length);
+      });
+    });
+
+    describe('GET /tasks/:taskId/pushNotificationConfigs/:configId', () => {
       it('should get specific push notification config and return 200', async () => {
         (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
         const response = await request(app)
-          .get('/v1/tasks/task-1/pushNotificationConfigs/config-1')
+          .get('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
           .expect(200);
 
-        // REST API returns camelCase
-        const convertedResult = FromProto.taskPushNotificationConfig(
-          TaskPushNotificationConfig.fromJSON(response.body)
-        );
-        assert.deepEqual(convertedResult.taskId, mockConfig.taskId);
-
-        expect(mockRequestHandler.getTaskPushNotificationConfig).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+        const convertedResult = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.equal(convertedResult.taskId, 'task-1');
+        expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+          {
+            id: 'config-1',
+            taskId: 'task-1',
+            tenant: '',
+          },
           expect.anything()
         );
       });
 
       it('should return 404 if config not found', async () => {
         (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockRejectedValue(
-          A2AError.taskNotFound('task-1')
+          new TaskNotFoundError('task-1')
         );
 
         const response = await request(app)
-          .get('/v1/tasks/task-1/pushNotificationConfigs/config-1')
+          .get('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
           .expect(404);
 
-        assert.property(response.body, 'code');
-        assert.property(response.body, 'message');
+        assert.property(response.body, 'error');
+        assert.equal(response.body.error.code, 404);
+        assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
       });
     });
 
-    describe('DELETE /v1/tasks/:taskId/pushNotificationConfigs/:configId', () => {
+    describe('DELETE /tasks/:taskId/pushNotificationConfigs/:configId', () => {
       it('should delete push notification config and return 204', async () => {
         (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockResolvedValue(undefined);
 
-        await request(app).delete('/v1/tasks/task-1/pushNotificationConfigs/config-1').expect(204);
+        await request(app)
+          .delete('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
+          .expect(204);
 
-        expect(mockRequestHandler.deleteTaskPushNotificationConfig).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+        expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+          {
+            id: 'config-1',
+            taskId: 'task-1',
+            tenant: '',
+          },
           expect.anything()
         );
       });
 
       it('should return 404 if config not found', async () => {
         (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockRejectedValue(
-          A2AError.taskNotFound('task-1')
+          new TaskNotFoundError('task-1')
         );
 
         const response = await request(app)
-          .delete('/v1/tasks/task-1/pushNotificationConfigs/config-1')
+          .delete('/tasks/task-1/pushNotificationConfigs/config-1')
+          .set('A2A-Version', '1.0')
           .expect(404);
 
-        assert.property(response.body, 'code');
-        assert.property(response.body, 'message');
+        assert.property(response.body, 'error');
+        assert.equal(response.body.error.code, 404);
+        assert.equal(response.body.error.details[0].reason, 'TASK_NOT_FOUND');
       });
     });
   });
 
-  /**
-   * File Parts Format Tests
-   */
   describe('File parts format acceptance', () => {
     it.each([
       {
@@ -587,100 +871,61 @@ describe('restHandler', () => {
       },
     ])('should accept $name message parts', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/v1/message:send').send(payload).expect(201);
-
-      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
-        {
-          message: {
-            kind: 'message',
-            messageId: 'msg-parts',
-            role: 'user', // ROLE_USER is converted to 'user'
-            parts: [
-              {
-                kind: 'file',
-                file: {
-                  uri: 'https://example.com/file.pdf',
-                  mimeType: 'application/pdf',
-                },
-              },
-              {
-                kind: 'text',
-                text: 'Hello world',
-              },
-              {
-                kind: 'data',
-                data: { foo: 'bar' },
-              },
-            ],
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
-          configuration: undefined,
-          metadata: undefined,
-        },
-        expect.anything()
-      );
+      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(200);
     });
   });
 
-  /**
-   * Configuration Format Tests
-   */
   describe('Configuration format acceptance', () => {
     it.each([
       {
         name: 'camelCase',
         payload: {
-          message: { messageId: 'msg-1', role: 'ROLE_USER', kind: 'message' },
+          message: testMessage,
           configuration: { acceptedOutputModes: ['text/plain'], historyLength: 5 },
         },
       },
       {
         name: 'snake_case',
         payload: {
-          message: { message_id: 'msg-1', role: 'ROLE_USER', kind: 'message' },
+          message: {
+            message_id: 'msg-1',
+            role: 'ROLE_USER',
+            parts: [
+              {
+                content: { $case: 'text', value: 'Hello' },
+                filename: '',
+                media_type: 'text/plain',
+                metadata: {},
+              },
+            ],
+          },
           configuration: { accepted_output_modes: ['text/plain'], history_length: 5 },
         },
       },
     ])('should accept $name configuration fields', async ({ payload }) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
-      await request(app).post('/v1/message:send').send(payload).expect(201);
+      await request(app).post('/message:send').set('A2A-Version', '1.0').send(payload).expect(200);
 
-      expect(mockRequestHandler.sendMessage).toHaveBeenCalledWith(
-        {
-          message: {
-            kind: 'message',
-            messageId: 'msg-1',
-            role: 'user', // ROLE_USER is converted to 'user'
-            parts: [], // empty content converts to empty parts
-            contextId: undefined,
-            extensions: [],
-            metadata: undefined,
-            taskId: undefined,
-          },
-          configuration: {
-            acceptedOutputModes: ['text/plain'],
-            blocking: false,
-            pushNotificationConfig: undefined,
-          },
-          metadata: undefined,
-        },
-        expect.anything()
-      );
+      const protoMessage = ProtoMessage.toJSON(testMessage);
+      await request(app)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message: protoMessage, configuration: payload.configuration })
+        .expect(200);
     });
   });
 
   describe('Error Handling', () => {
     it('should return 404 for unknown message action (route not matched)', async () => {
-      // Unknown actions don't match the route pattern, so Express returns default 404
-      await request(app).post('/v1/message:unknown').send({ message: testMessage }).expect(404);
+      await request(app)
+        .post('/message:unknown')
+        .set('A2A-Version', '1.0')
+        .send({ request: testMessage })
+        .expect(404);
     });
 
     it('should return 404 for unknown task action (route not matched)', async () => {
-      // Unknown actions don't match the route pattern, so Express returns default 404
-      await request(app).post('/v1/tasks/task-1:unknown').expect(404);
+      await request(app).post('/tasks/task-1:unknown').set('A2A-Version', '1.0').expect(404);
     });
 
     it('should handle internal server errors gracefully', async () => {
@@ -688,15 +933,653 @@ describe('restHandler', () => {
         new Error('Unexpected internal error')
       );
 
-      const messageProto = ProtoMessage.toJSON(ToProto.message(testMessage));
+      const messageProto = ProtoMessage.toJSON(testMessage);
       const response = await request(app)
-        .post('/v1/message:send')
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
         .send({ message: messageProto })
         .expect(500);
 
-      assert.property(response.body, 'code');
+      assert.property(response.body, 'error');
+      assert.property(response.body.error, 'message');
+      assert.equal(response.body.error.code, 500);
+    });
+  });
+
+  describe('A2A-Version header validation', () => {
+    it('should reject header-less requests against a v1.0-only card when legacyCompat is omitted', async () => {
+      // Strict mode: v1.0-only card rejects the default-to-'0.3' fallback.
+      const response = await request(app).get('/tasks/task-1').expect(400);
+
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
+    });
+
+    it('should accept requests with a supported A2A-Version header', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app).get('/tasks/task-1').set('A2A-Version', '1.0').expect(200);
+    });
+
+    it('should reject requests with an unsupported A2A-Version header', async () => {
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '9.9')
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
+      assert.include(response.body.error.message, '9.9');
+    });
+
+    it('should reject header-less requests against a v1.0-only card even when legacyCompat is enabled (strict)', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+      const compatApp = express();
+      compatApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
+        })
+      );
+
+      await request(compatApp).get('/tasks/task-1').expect(400);
+    });
+
+    it('should reject explicit A2A-Version: 0.3 against a v1.0-only card even when legacyCompat is enabled (strict)', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+      const compatApp = express();
+      compatApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
+        })
+      );
+
+      // The v1.0 validator no longer adds '0.3' implicitly; the card
+      // must declare an HTTP+JSON interface at protocolVersion '0.3'.
+      await request(compatApp).get('/tasks/task-1').set('A2A-Version', '0.3').expect(400);
+    });
+
+    it('should still reject unsupported versions (e.g. 9.9) when legacyCompat is enabled', async () => {
+      const compatApp = express();
+      compatApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
+        })
+      );
+
+      const response = await request(compatApp)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '9.9')
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
+    });
+  });
+
+  describe('Content-Type: application/a2a+json (§11.1)', () => {
+    it('should return application/a2a+json for successful JSON responses', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should return application/a2a+json for error responses', async () => {
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '9.9')
+        .expect(400);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should accept requests with Content-Type application/a2a+json', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue(testTask);
+
+      const response = await request(app)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .set('Content-Type', 'application/a2a+json')
+        .send(JSON.stringify({ message: testMessage }))
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should accept requests with Content-Type application/json', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      const response = await request(app)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .set('Content-Type', 'application/json')
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('should return text/event-stream for SSE responses, not application/a2a+json', async () => {
+      const streamResponse = (async function* () {
+        yield { payload: { $case: 'task' as const, value: testTask } };
+      })();
+
+      (mockRequestHandler.sendMessageStream as Mock).mockReturnValue(streamResponse);
+
+      const response = await request(app)
+        .post('/message:stream')
+        .set('A2A-Version', '1.0')
+        .set('Accept', 'text/event-stream')
+        .send({ message: testMessage })
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'text/event-stream');
+    });
+  });
+
+  describe('legacy v0.3 REST dispatch', () => {
+    const dualVersionAgentCard: AgentCard = {
+      ...testAgentCard,
+      supportedInterfaces: [
+        {
+          url: 'http://localhost:8080/v1',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+        {
+          url: 'http://localhost:8080/v1',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    };
+
+    // Proto-JSON SendMessageRequest body (the v0.3 REST wire shape,
+    // not the v0.3 JSON-RPC shape with `kind` discriminators).
+    const legacyMessageBody = {
+      message: {
+        messageId: 'msg-legacy-1',
+        role: 'ROLE_USER',
+        content: [{ text: 'hello' }],
+      },
+    };
+
+    let legacySendMessageStub: MockInstance;
+    let v1SendMessageStub: MockInstance;
+    let dualApp: Express;
+
+    beforeEach(() => {
+      legacySendMessageStub = vi.spyOn(LegacyRestTransportHandler.prototype, 'sendMessage');
+      v1SendMessageStub = mockRequestHandler.sendMessage as Mock as MockInstance;
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(dualVersionAgentCard);
+
+      dualApp = express();
+      dualApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: true },
+        })
+      );
+    });
+
+    it('routes POST /v1/message:send to the legacy handler', async () => {
+      legacySendMessageStub.mockResolvedValue({
+        kind: 'task',
+        id: 'legacy-task-1',
+        contextId: 'ctx',
+        status: { state: 'working' },
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '0.3')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
+      expect(v1SendMessageStub).not.toHaveBeenCalled();
+      // Proto-JSON: oneof `payload` flattens to top-level `task` field.
+      assert.equal(response.body.task.id, 'legacy-task-1');
+    });
+
+    it('routes POST /message:send to the v1.0 handler', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue({
+        ...testTask,
+        id: 'v1-task-1',
+      });
+
+      const message = ProtoMessage.toJSON({
+        ...testMessage,
+        messageId: 'msg-v1-1',
+        role: Role.ROLE_USER,
+      });
+
+      await request(dualApp)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message })
+        .expect(200);
+
+      expect(v1SendMessageStub).toHaveBeenCalledTimes(1);
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('accepts header-less requests on the legacy path (defaults to 0.3)', async () => {
+      legacySendMessageStub.mockResolvedValue({
+        kind: 'task',
+        id: 'legacy-task-2',
+        contextId: 'ctx',
+        status: { state: 'working' },
+      });
+
+      // Missing header defaults to '0.3' (A2A_LEGACY_PROTOCOL_VERSION).
+      await request(dualApp).post('/v1/message:send').send(legacyMessageBody).expect(201);
+
+      expect(legacySendMessageStub).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects legacy requests against a v1.0-only card (strict)', async () => {
+      // Strict mode: legacyCompat no longer adds '0.3' implicitly — the
+      // card must declare an HTTP+JSON interface at protocolVersion '0.3'.
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+
+      await request(dualApp).post('/v1/message:send').send(legacyMessageBody).expect(400);
+
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('streams SSE responses on the legacy path', async () => {
+      const legacyStream = (async function* () {
+        yield {
+          kind: 'task',
+          id: 'legacy-stream-task',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      })();
+      vi.spyOn(LegacyRestTransportHandler.prototype, 'sendMessageStream').mockResolvedValue(
+        legacyStream as any
+      );
+
+      const response = await request(dualApp)
+        .post('/v1/message:stream')
+        .send(legacyMessageBody)
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'text/event-stream');
+      // SSE body is proto-JSON StreamResponse — no `kind` discriminator on Task.
+      assert.include(response.text, '"task":{');
+      assert.include(response.text, '"id":"legacy-stream-task"');
+    });
+
+    it('uses the legacy error mapper (bare body, no details[]) on legacy-path errors', async () => {
+      legacySendMessageStub.mockRejectedValue(new A2AError('legacy boom'));
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(500);
+
+      assert.equal(response.body.code, -32603); // INTERNAL_ERROR
+      assert.equal(response.body.message, 'legacy boom');
+      // v0.3 body is bare {code, message, data?}.
+      assert.notProperty(response.body, 'error');
+      assert.notProperty(response.body, 'details');
+      assert.notProperty(response.body, 'status');
+    });
+
+    it('does not invoke the legacy handler for GET /v1/tasks with A2A-Version: 1.0', async () => {
+      // `/v1/tasks` doesn't match the legacy router; with v1.0 the
+      // request falls through to the v1.0 router and matches
+      // `/:tenant/tasks` with tenant='v1'.
+      const legacyListSpy = vi.spyOn(LegacyRestTransportHandler.prototype, 'getTask');
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [], nextPageToken: '' });
+
+      await request(dualApp).get('/v1/tasks').set('A2A-Version', '1.0');
+
+      expect(legacyListSpy).not.toHaveBeenCalled();
+      expect(mockRequestHandler.listTasks).toHaveBeenCalled();
+    });
+
+    it('sets Content-Type application/json on legacy responses', async () => {
+      legacySendMessageStub.mockResolvedValue({
+        kind: 'task',
+        id: 'legacy-task-ct',
+        contextId: 'ctx',
+        status: { state: 'working' },
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      assert.include(response.headers['content-type'], 'application/json');
+      assert.notInclude(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('keeps Content-Type application/a2a+json on v1.0 responses', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      const response = await request(dualApp)
+        .get('/tasks/task-1')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      assert.include(response.headers['content-type'], 'application/a2a+json');
+    });
+
+    it('reads and writes back the legacy X-A2A-Extensions header', async () => {
+      legacySendMessageStub.mockImplementation(async (_params, context) => {
+        context.addActivatedExtension('ext-1');
+        return {
+          kind: 'task',
+          id: 'legacy-task-ext',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('X-A2A-Extensions', 'ext-1')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      assert.equal(response.headers['x-a2a-extensions'], 'ext-1');
+    });
+
+    it('returns v1.0-shaped error for malformed JSON on v1.0 paths', async () => {
+      // Version dispatch short-circuits v1.0 before the legacy body parser runs,
+      // so the response uses the v1.0 envelope, not the v0.3 bare body.
+      const response = await request(dualApp)
+        .post('/message:send')
+        .set('A2A-Version', '1.0')
+        .set('Content-Type', 'application/json')
+        .send('{not valid json')
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      assert.equal(response.body.error.code, 400);
+      assert.property(response.body.error, 'details');
+      assert.notProperty(response.body, 'code');
+      assert.notProperty(response.body, 'message');
+    });
+
+    it('returns v0.3-shaped error for malformed JSON on /v1/... paths', async () => {
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('Content-Type', 'application/json')
+        .send('{not valid json')
+        .expect(400);
+
+      assert.equal(response.body.code, -32700); // PARSE_ERROR
       assert.property(response.body, 'message');
-      assert.deepEqual(response.body.code, -32603); // Internal error code
+      assert.notProperty(response.body, 'error');
+      assert.notProperty(response.body, 'details');
+    });
+
+    it('rejects /v1/message:send when legacyCompat is omitted (flag default)', async () => {
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+      const optOutApp = express();
+      optOutApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          // legacyCompat omitted => disabled
+        })
+      );
+
+      const response = await request(optOutApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('rejects /v1/message:send when legacyCompat.enabled is false', async () => {
+      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
+      const optOutApp = express();
+      optOutApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          legacyCompat: { enabled: false },
+        })
+      );
+
+      const response = await request(optOutApp)
+        .post('/v1/message:send')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it("POST /v1/message:send with A2A-Version: 1.0 routes to v1.0 with tenant='v1'", async () => {
+      // `/v1/...` is no longer reserved; v1.0 matches /:tenant/message:send with tenant='v1'.
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue({
+        ...testTask,
+        id: 'v1-task-with-tenant',
+      });
+
+      const message = ProtoMessage.toJSON({
+        ...testMessage,
+        messageId: 'msg-tenant',
+        role: Role.ROLE_USER,
+      });
+
+      await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '1.0')
+        .send({ message, tenant: 'v1' })
+        .expect(200);
+
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+      expect(mockRequestHandler.sendMessage).toHaveBeenCalledTimes(1);
+      const call = (mockRequestHandler.sendMessage as Mock).mock.calls[0][0];
+      assert.equal(call.tenant, 'v1');
+    });
+
+    it('routes A2A-Version: 0.5 (in legacy range) to the legacy handler', async () => {
+      // Card has v0.3 but not v0.5; legacy router accepts then validator rejects.
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '0.5')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.equal(response.body.code, -32009); // VERSION_NOT_SUPPORTED
+      assert.notProperty(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('routes A2A-Version: 2.0 (outside legacy range) to the v1.0 handler', async () => {
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', '2.0')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('routes A2A-Version: foo (unparseable) to the v1.0 handler', async () => {
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Version', 'foo')
+        .send(legacyMessageBody)
+        .expect(400);
+
+      assert.property(response.body, 'error');
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('accepts the v1.0 A2A-Extensions header on the legacy path', async () => {
+      legacySendMessageStub.mockImplementation(async (_params, context) => {
+        context.addActivatedExtension('ext-modern');
+        return {
+          kind: 'task',
+          id: 'legacy-task-modern-hdr',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('A2A-Extensions', 'ext-modern')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      // Response always uses the v0.3 spelling on the legacy path.
+      assert.equal(response.headers['x-a2a-extensions'], 'ext-modern');
+    });
+
+    it('prefers X-A2A-Extensions when both spellings are present', async () => {
+      legacySendMessageStub.mockImplementation(async (_params, context) => {
+        for (const ext of context.requestedExtensions ?? []) {
+          context.addActivatedExtension(ext);
+        }
+        return {
+          kind: 'task',
+          id: 'legacy-task-both',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        };
+      });
+
+      const response = await request(dualApp)
+        .post('/v1/message:send')
+        .set('X-A2A-Extensions', 'legacy-ext')
+        .set('A2A-Extensions', 'modern-ext')
+        .send(legacyMessageBody)
+        .expect(201);
+
+      assert.equal(response.headers['x-a2a-extensions'], 'legacy-ext');
+    });
+
+    describe('context builder', () => {
+      it('invokes the operator-supplied contextBuilder on the legacy path', async () => {
+        // Regression test: a custom `contextBuilder` set on the
+        // v1.0 `restHandler` used to be silently dropped by the compat
+        // router, which hard-coded `new ServerCallContext(...)`.
+        const contextBuilder = vi.fn(defaultServerCallContextBuilder);
+        const app = express();
+        app.use(
+          restHandler({
+            requestHandler: mockRequestHandler,
+            userBuilder: UserBuilder.noAuthentication,
+            legacyCompat: { enabled: true },
+            contextBuilder,
+          })
+        );
+        legacySendMessageStub.mockResolvedValue({
+          kind: 'task',
+          id: 'legacy-task-cb',
+          contextId: 'ctx',
+          status: { state: 'working' },
+        });
+
+        await request(app)
+          .post('/v1/message:send')
+          .set('A2A-Version', '0.3')
+          .send(legacyMessageBody)
+          .expect(201);
+
+        expect(contextBuilder).toHaveBeenCalledTimes(1);
+        const opts = contextBuilder.mock.calls[0]![0];
+        expect(opts.requestedVersion).to.equal('0.3');
+        // The custom builder must receive the raw headers — not just so
+        // the operator can key off them, but so the default builder's
+        // header-stashing behavior isn't silently regressed.
+        assert.isDefined(opts.headers);
+        assert.equal(opts.headers['a2a-version'], '0.3');
+      });
+
+      it('lets a custom contextBuilder inject tenant into context.state', async () => {
+        // Mirrors the reporter's use case: pull a tenant identifier off
+        // an auth header and stash it in `state` so the TaskStore /
+        // PushNotificationStore downstream can read it.
+        const tenantBuilder: ServerCallContextBuilder = (opts) => {
+          const ctx = defaultServerCallContextBuilder(opts);
+          const tenantHeader = opts.headers['x-tenant-id'];
+          ctx.state.set('tenantId', typeof tenantHeader === 'string' ? tenantHeader : undefined);
+          return ctx;
+        };
+        const app = express();
+        app.use(
+          restHandler({
+            requestHandler: mockRequestHandler,
+            userBuilder: UserBuilder.noAuthentication,
+            legacyCompat: { enabled: true },
+            contextBuilder: tenantBuilder,
+          })
+        );
+        let observedTenant: unknown;
+        legacySendMessageStub.mockImplementation(async (_params, context) => {
+          observedTenant = context.state.get('tenantId');
+          return {
+            kind: 'task',
+            id: 'legacy-task-tenant',
+            contextId: 'ctx',
+            status: { state: 'working' },
+          };
+        });
+
+        await request(app)
+          .post('/v1/message:send')
+          .set('A2A-Version', '0.3')
+          .set('X-Tenant-Id', 'acme')
+          .send(legacyMessageBody)
+          .expect(201);
+
+        expect(observedTenant).to.equal('acme');
+      });
+
+      it('falls back to the default builder when contextBuilder is omitted', async () => {
+        // Without a custom builder, `defaultServerCallContextBuilder`
+        // must still run — this pre-populates `context.state[STATE_HEADERS_KEY]`
+        // with the raw headers, mirroring the v1.0 REST path exactly.
+        let observedHeaders: unknown;
+        legacySendMessageStub.mockImplementation(async (_params, context) => {
+          observedHeaders = context.state.get(STATE_HEADERS_KEY);
+          return {
+            kind: 'task',
+            id: 'legacy-task-default',
+            contextId: 'ctx',
+            status: { state: 'working' },
+          };
+        });
+
+        await request(dualApp)
+          .post('/v1/message:send')
+          .set('A2A-Version', '0.3')
+          .set('X-Custom', 'v')
+          .send(legacyMessageBody)
+          .expect(201);
+
+        assert.isDefined(observedHeaders);
+        const headers = observedHeaders as Record<string, string>;
+        expect(headers['a2a-version']).to.equal('0.3');
+        expect(headers['x-custom']).to.equal('v');
+      });
     });
   });
 });

@@ -1,58 +1,143 @@
-import { PushNotificationConfig } from '../../types.js';
+import { TaskPushNotificationConfig } from '../../index.js';
+import { A2A_LEGACY_PROTOCOL_VERSION } from '../../constants.js';
+import { ServerCallContext } from '../context.js';
+import { OwnerResolver, resolveUserScope } from '../owner_resolver.js';
+import { ScopedStore } from '../utils.js';
 
-export interface PushNotificationStore {
-  save(taskId: string, pushNotificationConfig: PushNotificationConfig): Promise<void>;
-  load(taskId: string): Promise<PushNotificationConfig[]>;
-  delete(taskId: string, configId?: string): Promise<void>;
+/**
+ * A push-notification config bundled with the A2A wire version it was
+ * originally registered over, returned by the optional
+ * {@link PushNotificationStore.loadWithMetadata}. The
+ * {@link DefaultPushNotificationSender} uses this to route to the
+ * correct serializer per dispatch.
+ */
+export interface StoredPushNotificationConfig {
+  /** The push-notification config as supplied by the client. */
+  config: TaskPushNotificationConfig;
+  /** The A2A wire version the config was registered over. */
+  wireVersion: string;
 }
 
+/**
+ * Interface for push notification configuration storage. Implementations
+ * SHOULD use `context.tenant` (when present) and the authenticated
+ * caller's identity to scope data access.
+ */
+export interface PushNotificationStore {
+  /**
+   * Implementations MUST assign a non-empty
+   * `pushNotificationConfig.id` in place when the caller passes an empty
+   * one (id is the *result* of Create, observed via the same reference
+   * the caller passed in).
+   */
+  save(
+    taskId: string,
+    context: ServerCallContext,
+    pushNotificationConfig: TaskPushNotificationConfig
+  ): Promise<void>;
+
+  /** Loads all stored push notification configs for the given task. */
+  load(taskId: string, context: ServerCallContext): Promise<TaskPushNotificationConfig[]>;
+
+  /**
+   * Optional: loads stored configs alongside the wire version each was
+   * registered over. Implementations that don't capture this can omit
+   * the method; the sender falls back to {@link load} and treats every
+   * entry as the wire version of the *triggering* request (defaulting to
+   * `'0.3'` when absent). Custom stores in v1.0 deployments with v0.3
+   * compat enabled SHOULD implement this so each webhook keeps receiving
+   * the body shape that matches its registration.
+   */
+  loadWithMetadata?(
+    taskId: string,
+    context: ServerCallContext
+  ): Promise<StoredPushNotificationConfig[]>;
+
+  delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void>;
+}
+
+/**
+ * In-memory push notification config store backed by a triple-nested Map
+ * (tenant -> owner -> taskId -> configs[]). Each entry persists the wire
+ * version it was registered over so the sender can serialize back to the
+ * same wire format via {@link loadWithMetadata}.
+ */
 export class InMemoryPushNotificationStore implements PushNotificationStore {
-  private store: Map<string, PushNotificationConfig[]> = new Map();
+  private readonly _scopedStore: ScopedStore<StoredPushNotificationConfig[]>;
 
-  async save(taskId: string, pushNotificationConfig: PushNotificationConfig): Promise<void> {
-    const configs = this.store.get(taskId) || [];
+  constructor(ownerResolver: OwnerResolver = resolveUserScope) {
+    this._scopedStore = new ScopedStore<StoredPushNotificationConfig[]>(ownerResolver);
+  }
 
-    // Set ID if it's not already set
+  async save(
+    taskId: string,
+    context: ServerCallContext,
+    pushNotificationConfig: TaskPushNotificationConfig
+  ): Promise<void> {
+    const bucket = this._scopedStore.getOrCreateBucket(context);
+    const entries = bucket.get(taskId) || [];
+
+    // id is the *result* of Create, not an input requirement — id-less
+    // Creates must produce distinct records, not silently upsert.
     if (!pushNotificationConfig.id) {
-      pushNotificationConfig.id = taskId;
+      pushNotificationConfig.id = crypto.randomUUID();
     }
 
-    // Remove existing config with the same ID if it exists
-    const existingIndex = configs.findIndex((config) => config.id === pushNotificationConfig.id);
+    // Fallback is defensive — ServerCallContext.requestedVersion always
+    // populates a value when constructed via the normal transport path.
+    const wireVersion = context.requestedVersion || A2A_LEGACY_PROTOCOL_VERSION;
+
+    const existingIndex = entries.findIndex(
+      (entry) => entry.config.id === pushNotificationConfig.id
+    );
     if (existingIndex !== -1) {
-      configs.splice(existingIndex, 1);
+      entries.splice(existingIndex, 1);
     }
 
-    // Add the new/updated config
-    configs.push(pushNotificationConfig);
-    this.store.set(taskId, configs);
+    // Store a deep copy so caller-side mutation can't drift our state.
+    // The in-place id write above is kept so callers still observe a
+    // generated UUID on the object they passed.
+    entries.push({ config: structuredClone(pushNotificationConfig), wireVersion });
+    bucket.set(taskId, entries);
   }
 
-  async load(taskId: string): Promise<PushNotificationConfig[]> {
-    const configs = this.store.get(taskId);
-    return configs || [];
+  async load(taskId: string, context: ServerCallContext): Promise<TaskPushNotificationConfig[]> {
+    const entries = this._scopedStore.getBucket(context)?.get(taskId);
+    // Deep-clone so caller-side mutation can't reach into the store.
+    return entries ? entries.map((e) => structuredClone(e.config)) : [];
   }
 
-  async delete(taskId: string, configId?: string): Promise<void> {
-    // If no configId is provided, use taskId as the configId (backward compatibility)
+  async loadWithMetadata(
+    taskId: string,
+    context: ServerCallContext
+  ): Promise<StoredPushNotificationConfig[]> {
+    const entries = this._scopedStore.getBucket(context)?.get(taskId);
+    return entries ? entries.map((e) => structuredClone(e)) : [];
+  }
+
+  async delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void> {
+    // Backward-compat: treat missing configId as the taskId.
     if (configId === undefined) {
       configId = taskId;
     }
 
-    const configs = this.store.get(taskId);
-    if (!configs) {
+    const bucket = this._scopedStore.getBucket(context);
+    if (!bucket) {
       return;
     }
 
-    const configIndex = configs.findIndex((config) => config.id === configId);
-    if (configIndex !== -1) {
-      configs.splice(configIndex, 1);
+    const entries = bucket.get(taskId);
+    if (!entries) {
+      return;
     }
 
-    if (configs.length === 0) {
-      this.store.delete(taskId);
-    } else {
-      this.store.set(taskId, configs);
+    const entryIndex = entries.findIndex((entry) => entry.config.id === configId);
+    if (entryIndex !== -1) {
+      entries.splice(entryIndex, 1);
+    }
+
+    if (entries.length === 0) {
+      bucket.delete(taskId);
     }
   }
 }

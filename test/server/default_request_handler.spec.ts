@@ -2,11 +2,19 @@ import { describe, it, beforeEach, afterEach, assert, expect, vi, type Mock } fr
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import {
+  TaskNotFoundError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+  RequestMalformedError,
+  TaskNotCancelableError,
+  ExtendedAgentCardNotConfiguredError,
+  ExtensionSupportRequiredError,
+} from '../../src/errors/index.js';
+import {
   TaskStore,
   InMemoryTaskStore,
   DefaultRequestHandler,
   ExecutionEventQueue,
-  A2AError,
   InMemoryPushNotificationStore,
   RequestContext,
   ExecutionEventBus,
@@ -16,23 +24,26 @@ import {
 } from '../../src/server/index.js';
 import {
   AgentCard,
-  Artifact,
-  DeleteTaskPushNotificationConfigParams,
-  GetTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  Message,
-  MessageSendParams,
-  PushNotificationConfig,
   Task,
-  TaskPushNotificationConfig,
   TaskState,
+  GetTaskPushNotificationConfigRequest,
+  ListTaskPushNotificationConfigsRequest,
+  SendMessageRequest,
+  Role,
   TaskStatusUpdateEvent,
-  TextPart,
-} from '../../src/index.js';
+  DeleteTaskPushNotificationConfigRequest,
+  TaskPushNotificationConfig,
+  Message,
+  Artifact,
+  SendMessageConfiguration,
+  ListTasksRequest,
+  StreamResponse,
+} from '../../src/types/index.js';
 import {
   DefaultExecutionEventBusManager,
   ExecutionEventBusManager,
 } from '../../src/server/events/execution_event_bus_manager.js';
+import { AgentEvent } from '../../src/server/events/execution_event_bus.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import {
   MockAgentExecutor,
@@ -43,6 +54,8 @@ import {
 import { MockPushNotificationSender } from './mocks/push_notification_sender.mock.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { MockTaskStore } from './mocks/task_store.mock.js';
+import { TERMINAL_STATE_LIST } from '../../src/server/utils.js';
+import { A2A_PROTOCOL_VERSION } from '../../src/constants.js';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
   let handler: A2ARequestHandler;
@@ -53,14 +66,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   const testAgentCard: AgentCard = {
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
     version: '1.0.0',
-    protocolVersion: '0.3.0',
+    provider: undefined,
+    documentationUrl: '',
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080/a2a/v1',
+        protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
     capabilities: {
-      extensions: [{ uri: 'requested-extension-uri' }],
+      extensions: [
+        {
+          uri: 'requested-extension-uri',
+          description: 'description',
+          required: false,
+          params: {},
+        },
+      ],
       streaming: true,
       pushNotifications: true,
     },
+    securitySchemes: {},
+    securityRequirements: [],
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [
@@ -69,32 +99,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         name: 'Test Skill',
         description: 'A skill for testing',
         tags: ['test'],
+        examples: [],
+        inputModes: ['text/plain'],
+        outputModes: ['text/plain'],
+        securityRequirements: [],
       },
     ],
+    signatures: [],
   };
 
   const serverCallContext = new ServerCallContext();
 
-  // Before each test, reset the components to a clean state
   beforeEach(() => {
-    // Wrap in-memory store into a store which ensures we pass server call context.
-    // The parameter is optional to avoid breaking changes, however it should be passed.
-    const inMemoryStore = new InMemoryTaskStore();
-    mockTaskStore = {
-      save: async (task: Task, ctx?: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
-        return inMemoryStore.save(task);
-      },
-      load: async (id: string, ctx?: ServerCallContext) => {
-        if (!ctx) {
-          throw new Error('Missing server call context');
-        }
-        return inMemoryStore.load(id);
-      },
-    };
-    // Default mock for most tests
+    mockTaskStore = new InMemoryTaskStore();
     mockAgentExecutor = new MockAgentExecutor();
     executionEventBusManager = new DefaultExecutionEventBusManager();
     handler = new DefaultRequestHandler(
@@ -105,46 +122,102 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
   });
 
-  // After each test, restore any mocks
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
-  // Helper function to create a basic user message
   const createTestMessage = (id: string, text: string): Message => ({
     messageId: id,
-    role: 'user',
-    parts: [{ kind: 'text', text }],
-    kind: 'message',
+    role: Role.ROLE_USER,
+    parts: [
+      {
+        content: { $case: 'text', value: text },
+        mediaType: 'text/plain',
+        filename: '',
+        metadata: undefined,
+      },
+    ],
+    taskId: '',
+    contextId: '',
+    extensions: [],
+    metadata: {},
+    referenceTaskIds: [],
+  });
+
+  const createTestTask = (id: string, history: Message[] = []): Task => ({
+    id,
+    contextId: `ctx-${id}`,
+    status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    artifacts: [],
+    metadata: {},
+    history,
   });
 
   it('sendMessage: should return a simple message response', async () => {
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: createTestMessage('msg-1', 'Hello'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
     };
 
     const agentResponse: Message = {
       messageId: 'agent-msg-1',
-      role: 'agent',
-      parts: [{ kind: 'text', text: 'Hi there!' }],
-      kind: 'message',
+      role: Role.ROLE_AGENT,
+      parts: [
+        {
+          content: { $case: 'text', value: 'Hi there!' },
+          mediaType: 'text/plain',
+          filename: '',
+          metadata: undefined,
+        },
+      ],
+      taskId: 'task-msg-1',
+      contextId: '',
+      extensions: [],
+      metadata: {},
+      referenceTaskIds: [],
     };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish(agentResponse);
+      // Publish task creation event so ResultManager creates the task
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      const responseWithTaskId = { ...agentResponse, taskId: ctx.taskId };
+      bus.publish(AgentEvent.message(responseWithTaskId));
       bus.finished();
     });
 
-    const result = await handler.sendMessage(params, serverCallContext);
+    const result = (await handler.sendMessage(params, serverCallContext)) as Message;
 
-    assert.deepEqual(result, agentResponse, "The result should be the agent's message");
+    // Not comparing the taskId as it is assigned by the handler
+    assert.deepEqual(result, { ...agentResponse, taskId: result.taskId });
     expect((mockAgentExecutor as MockAgentExecutor).execute).toHaveBeenCalledTimes(1);
   });
 
   it('sendMessage: (blocking) should return a task in a completed state with an artifact', async () => {
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: createTestMessage('msg-2', 'Do a task'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: false,
+      },
+      metadata: {},
     };
 
     const taskId = 'task-123';
@@ -153,53 +226,87 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       artifactId: 'artifact-1',
       name: 'Test Document',
       description: 'A test artifact.',
-      parts: [{ kind: 'text', text: 'This is the content of the artifact.' }],
+      parts: [
+        {
+          content: { $case: 'text', value: 'This is the content of the artifact.' },
+          mediaType: 'text/plain',
+          filename: '',
+          metadata: undefined,
+        },
+      ],
+      metadata: {},
+      extensions: [],
     };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'working' },
-        final: false,
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'artifact-update',
-        artifact: testArtifact,
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: {
-          state: 'completed',
-          message: {
-            role: 'agent',
-            parts: [{ kind: 'text', text: 'Done!' }],
-            messageId: 'agent-msg-2',
-            kind: 'message',
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
           },
-        },
-        final: true,
-      });
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: testArtifact,
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: {
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Done!' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              messageId: 'agent-msg-2',
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
     const result = await handler.sendMessage(params, serverCallContext);
     const taskResult = result as Task;
 
-    assert.equal(taskResult.kind, 'task');
     assert.equal(taskResult.id, taskId);
-    assert.equal(taskResult.status.state, 'completed');
+    assert.equal(taskResult.status.state, TaskState.TASK_STATE_COMPLETED);
     assert.isDefined(taskResult.artifacts, 'Task result should have artifacts');
     assert.isArray(taskResult.artifacts);
     assert.lengthOf(taskResult.artifacts!, 1);
@@ -211,16 +318,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     (mockAgentExecutor as MockAgentExecutor).execute.mockRejectedValue(new Error(errorMessage));
 
     // Test blocking case
-    const blockingParams: MessageSendParams = {
+    const blockingParams: SendMessageRequest = {
       message: createTestMessage('msg-fail-block', 'Test failure blocking'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: false,
+      },
+      metadata: {},
     };
 
     const blockingResult = await handler.sendMessage(blockingParams, serverCallContext);
     const blockingTask = blockingResult as Task;
-    assert.equal(blockingTask.kind, 'task', 'Result should be a task');
-    assert.equal(blockingTask.status.state, 'failed', 'Task status should be failed');
+
+    assert.equal(
+      blockingTask.status.state,
+      TaskState.TASK_STATE_FAILED,
+      'Task status should be failed'
+    );
     assert.include(
-      (blockingTask.status.message?.parts[0] as any).text,
+      (blockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -230,9 +348,15 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     vi.useFakeTimers();
     const saveSpy = vi.spyOn(mockTaskStore, 'save');
 
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: createTestMessage('msg-nonblock', 'Do a long task'),
-      configuration: { blocking: false, acceptedOutputModes: [] },
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
+      metadata: {},
     };
 
     const taskId = 'task-nonblock-123';
@@ -240,23 +364,36 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // First event is the task creation, which should be returned immediately
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Simulate work before publishing more events
       await vi.advanceTimersByTimeAsync(500);
 
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'completed' },
-        final: true,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -265,17 +402,17 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     // Assert that we got the initial task object back right away
     const taskResult = immediateResult as Task;
-    assert.equal(taskResult.kind, 'task');
+
     assert.equal(taskResult.id, taskId);
     assert.equal(
       taskResult.status.state,
-      'submitted',
-      "Should return immediately with 'submitted' state"
+      TaskState.TASK_STATE_SUBMITTED,
+      'Should return immediately with TaskState.TASK_STATE_SUBMITTED state'
     );
 
     // The background processing should not have completed yet
     expect(saveSpy).toHaveBeenCalledTimes(1);
-    assert.equal(saveSpy.mock.calls[0][0].status.state, 'submitted');
+    assert.equal(saveSpy.mock.calls[0][0].status.state, TaskState.TASK_STATE_SUBMITTED);
 
     // Allow the background processing to complete
     await vi.runAllTimersAsync();
@@ -285,11 +422,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isDefined(finalTask);
     assert.equal(
       finalTask!.status.state,
-      'completed',
-      "Task should be 'completed' in the store after background processing"
+      TaskState.TASK_STATE_COMPLETED,
+      'Task should be TaskState.TASK_STATE_COMPLETED in the store after background processing'
     );
     expect(saveSpy).toHaveBeenCalledTimes(2);
-    assert.equal(saveSpy.mock.calls[1][0].status.state, 'completed');
+    assert.equal(saveSpy.mock.calls[1][0].status.state, TaskState.TASK_STATE_COMPLETED);
   });
 
   it('sendMessage: (non-blocking) should handle failure in event loop after successfull task event', async () => {
@@ -303,48 +440,74 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       executionEventBusManager
     );
 
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: createTestMessage('msg-nonblock', 'Do a long task'),
+      tenant: '',
       configuration: {
-        blocking: false,
         acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
       },
+      metadata: {},
     };
 
     const taskId = 'task-nonblock-123';
     const contextId = 'ctx-nonblock-abc';
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // First event is the task creation, which should be returned immediately
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Simulate work before publishing more events
       await vi.advanceTimersByTimeAsync(500);
 
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'completed' },
-        final: true,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
     let finalTaskSaved: Task | undefined;
     const errorMessage = 'Error thrown on saving completed task notification';
+    const taskByState = new Map<TaskState, Task>();
     (mockTaskStore as MockTaskStore).save.mockImplementation(async (task) => {
-      if (task.status.state == 'completed') {
+      if (task.status.state == TaskState.TASK_STATE_COMPLETED) {
         throw new Error(errorMessage);
       }
 
-      if (task.status.state == 'failed') {
+      if (task.status.state == TaskState.TASK_STATE_FAILED) {
         finalTaskSaved = task;
       }
+      taskByState.set(task.status.state, task);
+    });
+    (mockTaskStore as MockTaskStore).load.mockImplementation(async (id) => {
+      // Match InMemoryTaskStore semantics: load returns deep copies so
+      // the ResultManager's in-place edits cannot leak into storage.
+      for (const t of [...taskByState.values()].reverse()) {
+        if (t.id === id) return structuredClone(t);
+      }
+      return undefined;
     });
 
     // This call should return as soon as the first 'task' event is published
@@ -352,23 +515,23 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     // Assert that we got the initial task object back right away
     const taskResult = immediateResult as Task;
-    assert.equal(taskResult.kind, 'task');
+
     assert.equal(taskResult.id, taskId);
     assert.equal(
       taskResult.status.state,
-      'submitted',
-      "Should return immediately with 'submitted' state"
+      TaskState.TASK_STATE_SUBMITTED,
+      'Should return immediately with TaskState.TASK_STATE_SUBMITTED state'
     );
 
     // Allow the background processing to complete
     await vi.runAllTimersAsync();
 
-    assert.equal(finalTaskSaved!.status.state, 'failed');
+    assert.equal(finalTaskSaved!.status.state, TaskState.TASK_STATE_FAILED);
     assert.equal(finalTaskSaved!.id, taskId);
     assert.equal(finalTaskSaved!.contextId, contextId);
-    assert.equal(finalTaskSaved!.status.message!.role, 'agent');
+    assert.equal(finalTaskSaved!.status.message!.role, Role.ROLE_AGENT);
     assert.equal(
-      (finalTaskSaved!.status.message!.parts[0] as TextPart).text,
+      (finalTaskSaved!.status.message!.parts[0].content as { $case: 'text'; value: string }).value,
       `Event processing loop failed: ${errorMessage}`
     );
   });
@@ -378,17 +541,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     (mockAgentExecutor as MockAgentExecutor).execute.mockRejectedValue(new Error(errorMessage));
 
     // Test non-blocking case
-    const nonBlockingParams: MessageSendParams = {
+    const nonBlockingParams: SendMessageRequest = {
       message: createTestMessage('msg-fail-nonblock', 'Test failure non-blocking'),
-      configuration: { blocking: false, acceptedOutputModes: [] },
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
+      metadata: {},
     };
 
     const nonBlockingResult = await handler.sendMessage(nonBlockingParams, serverCallContext);
     const nonBlockingTask = nonBlockingResult as Task;
-    assert.equal(nonBlockingTask.kind, 'task', 'Result should be a task');
-    assert.equal(nonBlockingTask.status.state, 'failed', 'Task status should be failed');
+
+    assert.equal(
+      nonBlockingTask.status.state,
+      TaskState.TASK_STATE_FAILED,
+      'Task status should be failed'
+    );
     assert.include(
-      (nonBlockingTask.status.message?.parts[0] as any).text,
+      (nonBlockingTask.status.message?.parts[0].content as { $case: 'text'; value: string }).value,
       errorMessage,
       'Error message should be in the status'
     );
@@ -400,8 +573,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // First message
     const firstMessage = createTestMessage('msg-1', 'Message 1');
     firstMessage.contextId = contextId;
-    const firstParams: MessageSendParams = {
+    const firstParams: SendMessageRequest = {
       message: firstMessage,
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
     };
 
     let taskId: string;
@@ -410,49 +586,66 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskId = ctx.taskId;
 
       // Publish task creation
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Publish working status
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'working' },
-        final: false,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       // Mark as input-required with agent response message
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: {
-          state: 'input-required',
-          message: {
-            messageId: 'agent-msg-1',
-            role: 'agent',
-            parts: [{ kind: 'text', text: 'Response to message 1' }],
-            kind: 'message',
-            taskId,
-            contextId,
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-1',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 1' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
           },
-        },
-        final: true,
-      });
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
     const firstResult = await handler.sendMessage(firstParams, serverCallContext);
     const firstTask = firstResult as Task;
-
-    // Check the first result is a task with `input-required` status
-    assert.equal(firstTask.kind, 'task');
-    assert.equal(firstTask.status.state, 'input-required');
+    assert.equal(firstTask.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
 
     // Check the history
     assert.isDefined(firstTask.history, 'First task should have history');
@@ -477,73 +670,101 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     secondMessage.contextId = contextId;
     secondMessage.taskId = firstTask.id;
 
-    const secondParams: MessageSendParams = {
+    const secondParams: SendMessageRequest = {
       message: secondMessage,
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
     };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // Publish a status update with working state
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'working' },
-        final: false,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       // Publish a status update with working state and message
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: {
-          state: 'working',
-          message: {
-            messageId: 'agent-msg-2',
-            role: 'agent',
-            parts: [{ kind: 'text', text: 'Response to message 2' }],
-            kind: 'message',
-            taskId,
-            contextId,
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-2',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 2' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
           },
-        },
-        final: false,
-      });
+          metadata: {},
+        })
+      );
 
       // Publish an artifact update
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'artifact-update',
-        artifact: {
-          artifactId: 'artifact-1',
-          name: 'Test Document',
-          description: 'A test artifact.',
-          parts: [{ kind: 'text', text: 'This is the content of the artifact.' }],
-        },
-      });
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: {
+            artifactId: 'artifact-1',
+            name: 'Test Document',
+            description: 'A test artifact.',
+            parts: [
+              {
+                content: { $case: 'text', value: 'This is the content of the artifact.' },
+                mediaType: 'text/plain',
+                filename: '',
+                metadata: undefined,
+              },
+            ],
+            metadata: {},
+            extensions: [],
+          },
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      );
 
       // Mark as completed
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: {
-          state: 'completed',
-        },
-        final: true,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: undefined,
+          },
+          metadata: {},
+        })
+      );
 
       bus.finished();
     });
 
     const secondResult = await handler.sendMessage(secondParams, serverCallContext);
     const secondTask = secondResult as Task;
-
-    // Check the second result is a task with `completed` status
-    assert.equal(secondTask.kind, 'task');
     assert.equal(secondTask.id, taskId, 'Should be the same task');
-    assert.equal(secondTask.status.state, 'completed');
+    assert.equal(secondTask.status.state, TaskState.TASK_STATE_COMPLETED);
 
     // Check the history
     assert.isDefined(secondTask.history, 'Second task should have history');
@@ -557,25 +778,37 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((secondTask.history![0].parts[0] as any).text, 'Message 1');
+    assert.equal(
+      (secondTask.history![0].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 1'
+    );
     assert.equal(
       secondTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((secondTask.history![1].parts[0] as any).text, 'Response to message 1');
+    assert.equal(
+      (secondTask.history![1].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 1'
+    );
     assert.equal(
       secondTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((secondTask.history![2].parts[0] as any).text, 'Message 2');
+    assert.equal(
+      (secondTask.history![2].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 2'
+    );
     assert.equal(
       secondTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((secondTask.history![3].parts[0] as any).text, 'Response to message 2');
+    assert.equal(
+      (secondTask.history![3].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 2'
+    );
     assert.equal(secondTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(
       secondTask.artifacts![0].name,
@@ -588,7 +821,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (secondTask.artifacts![0].parts[0] as any).text,
+      (secondTask.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
@@ -601,8 +834,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // First message
     const firstMessage = createTestMessage('msg-1', 'Message 1');
     firstMessage.contextId = contextId;
-    const firstParams: MessageSendParams = {
+    const firstParams: SendMessageRequest = {
       message: firstMessage,
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
     };
 
     let taskId: string;
@@ -611,40 +847,60 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskId = ctx.taskId;
 
       // Publish task creation
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
 
       // Publish working status
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'working' },
-        final: false,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       // Mark as input-required with agent response message
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: {
-          state: 'input-required',
-          message: {
-            messageId: 'agent-msg-1',
-            role: 'agent',
-            parts: [{ kind: 'text', text: 'Response to message 1' }],
-            kind: 'message',
-            taskId,
-            contextId,
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-1',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 1' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
           },
-        },
-        final: true,
-      });
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -652,8 +908,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const firstTask = firstResult as Task;
 
     // Check the first result is a task with `input-required` status
-    assert.equal(firstTask.kind, 'task');
-    assert.equal(firstTask.status.state, 'input-required');
+    assert.equal(firstTask.status.state, TaskState.TASK_STATE_INPUT_REQUIRED);
 
     // Check the history
     assert.isDefined(firstTask.history, 'First task should have history');
@@ -678,65 +933,99 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     secondMessage.contextId = contextId;
     secondMessage.taskId = firstTask.id;
 
-    const secondParams: MessageSendParams = {
+    const secondParams: SendMessageRequest = {
       message: secondMessage,
-      configuration: { blocking: false },
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
+      metadata: {},
     };
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
       // Publish a status update with working state
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'working' },
-        final: false,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
 
       await vi.advanceTimersByTimeAsync(10);
 
       // Publish a status update with working state and message
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: {
-          state: 'working',
-          message: {
-            messageId: 'agent-msg-2',
-            role: 'agent',
-            parts: [{ kind: 'text', text: 'Response to message 2' }],
-            kind: 'message',
-            taskId,
-            contextId,
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            timestamp: undefined,
+            message: {
+              messageId: 'agent-msg-2',
+              role: Role.ROLE_AGENT,
+              parts: [
+                {
+                  content: { $case: 'text', value: 'Response to message 2' },
+                  mediaType: 'text/plain',
+                  filename: '',
+                  metadata: undefined,
+                },
+              ],
+              taskId,
+              contextId,
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
           },
-        },
-        final: false,
-      });
+          metadata: {},
+        })
+      );
 
       // Publish an artifact update
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'artifact-update',
-        artifact: {
-          artifactId: 'artifact-1',
-          name: 'Test Document',
-          description: 'A test artifact.',
-          parts: [{ kind: 'text', text: 'This is the content of the artifact.' }],
-        },
-      });
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: {
+            artifactId: 'artifact-1',
+            name: 'Test Document',
+            description: 'A test artifact.',
+            parts: [
+              {
+                content: { $case: 'text', value: 'This is the content of the artifact.' },
+                mediaType: 'text/plain',
+                filename: '',
+                metadata: undefined,
+              },
+            ],
+            metadata: {},
+            extensions: [],
+          },
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      );
 
       // Mark as completed
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: {
-          state: 'completed',
-        },
-        final: true,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            timestamp: undefined,
+            message: undefined,
+          },
+          metadata: {},
+        })
+      );
 
       bus.finished();
     });
@@ -745,16 +1034,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     // Check the second result is a task with `completed` status
     const secondTask = secondResult as Task;
-    assert.equal(secondTask.kind, 'task');
+
     assert.equal(secondTask.id, taskId, 'Should be the same task');
-    assert.equal(secondTask.status.state, 'working'); // It will receive the Task in the status of the first published event
+    assert.equal(secondTask.status.state, TaskState.TASK_STATE_WORKING); // It will receive the Task in the status of the first published event
 
     await vi.runAllTimersAsync(); // give time to the second task to publish all the updates
 
     const finalTask = await mockTaskStore.load(taskId, serverCallContext);
 
     // Check the history
-    assert.equal(finalTask.status.state, 'completed');
+    assert.equal(finalTask.status.state, TaskState.TASK_STATE_COMPLETED);
     assert.isDefined(finalTask.history, 'Second task should have history');
     assert.lengthOf(
       finalTask.history!,
@@ -766,25 +1055,37 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'msg-1',
       'First message should be first user message'
     );
-    assert.equal((finalTask.history![0].parts[0] as any).text, 'Message 1');
+    assert.equal(
+      (finalTask.history![0].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 1'
+    );
     assert.equal(
       finalTask.history![1].messageId,
       'agent-msg-1',
       'Second message should be first agent message'
     );
-    assert.equal((finalTask.history![1].parts[0] as any).text, 'Response to message 1');
+    assert.equal(
+      (finalTask.history![1].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 1'
+    );
     assert.equal(
       finalTask.history![2].messageId,
       'msg-2',
       'Third message should be second user message'
     );
-    assert.equal((finalTask.history![2].parts[0] as any).text, 'Message 2');
+    assert.equal(
+      (finalTask.history![2].parts[0].content as { $case: 'text'; value: string }).value,
+      'Message 2'
+    );
     assert.equal(
       finalTask.history![3].messageId,
       'agent-msg-2',
       'Fourth message should be second agent message'
     );
-    assert.equal((finalTask.history![3].parts[0] as any).text, 'Response to message 2');
+    assert.equal(
+      (finalTask.history![3].parts[0].content as { $case: 'text'; value: string }).value,
+      'Response to message 2'
+    );
     assert.equal(finalTask.artifacts![0].artifactId, 'artifact-1', 'Artifact should be the same');
     assert.equal(finalTask.artifacts![0].name, 'Test Document', 'Artifact name should be the same');
     assert.equal(
@@ -793,80 +1094,105 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'Artifact description should be the same'
     );
     assert.equal(
-      (finalTask.artifacts![0].parts[0] as any).text,
+      (finalTask.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value,
       'This is the content of the artifact.',
       'Artifact content should be the same'
     );
   });
 
   it('sendMessageStream: should stream submitted, working, and completed events', async () => {
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: createTestMessage('msg-3', 'Stream a task'),
-    };
+    } as SendMessageRequest;
     const taskId = 'task-stream-1';
     const contextId = 'ctx-stream-1';
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       await new Promise((res) => setTimeout(res, 10));
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'working' },
-        final: false,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
       await new Promise((res) => setTimeout(res, 10));
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'completed' },
-        final: true,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as Task).status.state, 'submitted');
-    assert.equal((events[1] as TaskStatusUpdateEvent).status.state, 'working');
-    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, 'completed');
-    assert.isTrue((events[2] as TaskStatusUpdateEvent).final);
+    assert.equal(
+      (events[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (events[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (events[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
   });
 
   it('sendMessage: should reject if task is in a terminal state', async () => {
     const taskId = 'task-terminal-1';
-    const terminalStates: TaskState[] = ['completed', 'failed', 'canceled', 'rejected'];
 
-    for (const state of terminalStates) {
+    for (const state of TERMINAL_STATE_LIST) {
       const fakeTask: Task = {
         id: taskId,
         contextId: 'ctx-terminal',
-        status: { state: state as TaskState },
-        kind: 'task',
+        status: { state: state as TaskState, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       await mockTaskStore.save(fakeTask, serverCallContext);
 
-      const params: MessageSendParams = {
+      const params: SendMessageRequest = {
         message: { ...createTestMessage('msg-1', 'test'), taskId: taskId },
-      };
+      } as SendMessageRequest;
 
       try {
         await handler.sendMessage(params, serverCallContext);
         assert.fail(`Should have thrown for state: ${state}`);
       } catch (error: any) {
-        expect(error.code).to.equal(-32600); // Invalid Request
+        expect(error).to.be.instanceOf(UnsupportedOperationError);
         expect(error.message).to.contain(
           `Task ${taskId} is in a terminal state (${state}) and cannot be modified.`
         );
@@ -879,14 +1205,16 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const fakeTask: Task = {
       id: taskId,
       contextId: 'ctx-terminal-stream',
-      status: { state: 'completed' },
-      kind: 'task',
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history: [],
     };
     await mockTaskStore.save(fakeTask, serverCallContext);
 
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: { ...createTestMessage('msg-1', 'test'), taskId: taskId },
-    };
+    } as SendMessageRequest;
 
     const generator = handler.sendMessageStream(params, serverCallContext);
 
@@ -894,55 +1222,69 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       await generator.next();
       assert.fail('sendMessageStream should have thrown an error');
     } catch (error: any) {
-      expect(error.code).to.equal(-32600);
-      expect(error.message).to.contain(
-        `Task ${taskId} is in a terminal state (completed) and cannot be modified.`
-      );
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect(error.message).toContain(`Task ${taskId} is in a terminal state`);
     }
   });
 
   it('sendMessageStream: should stop at input-required state', async () => {
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: createTestMessage('msg-4', 'I need input'),
-    };
+    } as SendMessageRequest;
     const taskId = 'task-input';
     const contextId = 'ctx-input';
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'input-required' },
-        final: true,
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     assert.lengthOf(events, 2);
-    const lastEvent = events[1] as TaskStatusUpdateEvent;
-    assert.equal(lastEvent.status.state, 'input-required');
-    assert.isTrue(lastEvent.final);
+    const lastEvent = events[1];
+    assert.equal(
+      (lastEvent.payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_INPUT_REQUIRED
+    );
   });
 
   it('resubscribe: should allow multiple clients to receive events for the same task', async () => {
     const saveSpy = vi.spyOn(mockTaskStore, 'save');
     vi.useFakeTimers();
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: createTestMessage('msg-5', 'Long running task'),
-    };
+    } as SendMessageRequest;
 
     let taskId;
     let contextId;
@@ -951,27 +1293,41 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       taskId = ctx.taskId;
       contextId = ctx.contextId;
 
-      bus.publish({
-        id: taskId,
-        contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'working' },
-        final: false,
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
       await vi.advanceTimersByTimeAsync(100);
-      bus.publish({
-        taskId,
-        contextId,
-        kind: 'status-update',
-        status: { state: 'completed' },
-        final: true,
-      });
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
       bus.finished();
     });
 
@@ -979,19 +1335,29 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const stream1_iterator = stream1_generator[Symbol.asyncIterator]();
 
     const firstEventResult = await stream1_iterator.next();
-    const firstEvent = firstEventResult.value as Task;
-    assert.equal(firstEvent.id, taskId, 'Should get task event first');
+    assert.isFalse(firstEventResult.done, 'Generator should not be done yet');
+    const firstEvent = firstEventResult.value as StreamResponse;
+    assert.equal(
+      (firstEvent.payload as { $case: 'task'; value: Task }).value.id,
+      taskId,
+      'Should get task event first'
+    );
 
     const secondEventResult = await stream1_iterator.next();
-    const secondEvent = secondEventResult.value as TaskStatusUpdateEvent;
-    assert.equal(secondEvent.taskId, taskId, 'Should get the task status update event second');
+    assert.isFalse(secondEventResult.done, 'Generator should not be done yet');
+    const secondEvent = secondEventResult.value as StreamResponse;
+    assert.equal(
+      (secondEvent.payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.taskId,
+      taskId,
+      'Should get the task status update event second'
+    );
 
-    const stream2_generator = handler.resubscribe({ id: taskId }, serverCallContext);
+    const stream2_generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
-    const results1: any[] = [firstEvent, secondEvent];
-    const results2: any[] = [];
+    const results1: StreamResponse[] = [firstEvent, secondEvent];
+    const results2: StreamResponse[] = [];
 
-    const collect = async (iterator: AsyncGenerator<any>, results: any[]) => {
+    const collect = async (iterator: AsyncGenerator<StreamResponse>, results: StreamResponse[]) => {
       for await (const res of iterator) {
         results.push(res);
       }
@@ -1003,150 +1369,1193 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await vi.runAllTimersAsync();
     await Promise.all([p1, p2]);
 
-    assert.equal((results1[0] as TaskStatusUpdateEvent).status.state, 'submitted');
-    assert.equal((results1[1] as TaskStatusUpdateEvent).status.state, 'working');
-    assert.equal((results1[2] as TaskStatusUpdateEvent).status.state, 'completed');
+    assert.equal(
+      (results1[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (results1[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (results1[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     // First event of resubscribe is always a task.
-    assert.equal((results2[0] as Task).status.state, 'working');
-    assert.equal((results2[1] as TaskStatusUpdateEvent).status.state, 'completed');
+    assert.equal(
+      (results2[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (results2[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
     expect(saveSpy).toHaveBeenCalledTimes(3);
     const lastSaveCall = saveSpy.mock.calls[saveSpy.mock.calls.length - 1][0];
     assert.equal(lastSaveCall.id, taskId);
-    assert.equal(lastSaveCall.status.state, 'completed');
+    assert.equal(lastSaveCall.status.state, TaskState.TASK_STATE_COMPLETED);
   });
 
-  it('getTask: should return an existing task from the store', async () => {
+  it('resubscribe: should throw UnsupportedOperationError for terminal-state tasks', async () => {
+    const taskId = 'task-terminal-resub';
+
+    for (const state of TERMINAL_STATE_LIST) {
+      const fakeTask: Task = {
+        id: taskId,
+        contextId: 'ctx-terminal-resub',
+        status: { state: state as TaskState, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(fakeTask, serverCallContext);
+
+      const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
+      try {
+        await generator.next();
+        assert.fail(`Should have thrown for terminal state: ${state}`);
+      } catch (error: unknown) {
+        expect(error).to.be.instanceOf(UnsupportedOperationError);
+        expect((error as Error).message).to.contain(`Task ${taskId} is in a terminal state`);
+      }
+    }
+  });
+
+  it('resubscribe: should throw TaskNotFoundError for non-existent task', async () => {
+    const generator = handler.resubscribe(
+      { id: 'non-existent-task', tenant: '' },
+      serverCallContext
+    );
+    try {
+      await generator.next();
+      assert.fail('Should have thrown TaskNotFoundError');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(TaskNotFoundError);
+    }
+  });
+
+  it('resubscribe: should yield Task as the first event with current state', async () => {
+    const taskId = 'task-resub-first-event';
     const fakeTask: Task = {
-      id: 'task-exist',
-      contextId: 'ctx-exist',
-      status: { state: 'working' },
-      kind: 'task',
+      id: taskId,
+      contextId: 'ctx-resub-first',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
       history: [],
+      metadata: {},
     };
     await mockTaskStore.save(fakeTask, serverCallContext);
 
-    const result = await handler.getTask({ id: 'task-exist' }, serverCallContext);
+    // Create an active event bus
+    const bus = executionEventBusManager.createOrGetByTaskId(taskId, serverCallContext);
+
+    const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
+
+    // Advance once to yield the task and create the event queue
+    const firstResult = await generator.next();
+    assert.isFalse(firstResult.done);
+
+    // Now finish the bus to unblock the stream
+    bus.finished();
+
+    const results: StreamResponse[] = [firstResult.value];
+    for await (const event of generator) {
+      results.push(event);
+    }
+
+    assert.lengthOf(results, 1, 'Should yield exactly one event (the initial task snapshot)');
+    assert.equal(results[0].payload?.$case, 'task');
+    assert.deepEqual((results[0].payload as { $case: 'task'; value: Task }).value, fakeTask);
+  });
+
+  it('resubscribe: should yield the Task snapshot and close when no active event bus exists', async () => {
+    const taskId = 'task-resub-no-bus';
+    const fakeTask: Task = {
+      id: taskId,
+      contextId: 'ctx-resub-no-bus',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
+    const results: StreamResponse[] = [];
+    for await (const event of generator) {
+      results.push(event);
+    }
+
+    assert.lengthOf(results, 1, 'Should yield exactly one event (the Task snapshot)');
+    assert.equal(results[0].payload?.$case, 'task');
+    assert.deepEqual((results[0].payload as { $case: 'task'; value: Task }).value, fakeTask);
+  });
+
+  it('sendMessageStream: should close stream after a single message (§3.1.2 message-only pattern)', async () => {
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-1', 'message-only test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'msg-response',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'response' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      // Publish a second event — the stream should already be closed.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: 'some-task',
+          contextId: 'some-ctx',
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    const generator = handler.sendMessageStream(params, serverCallContext);
+    for await (const event of generator) {
+      events.push(event);
+    }
+
+    // The stream MUST contain exactly one Message and then close.
+    assert.lengthOf(events, 1, 'Message-only stream should contain exactly one event');
+    assert.equal(events[0].payload?.$case, 'message');
+
+    // Verify the stream is closed — calling next() should return done: true.
+    const afterClose = await generator.next();
+    assert.isTrue(afterClose.done, 'Stream should be closed after message-only response');
+  });
+
+  it('sendMessageStream: handler invokes sender for stand-alone messages without error', async () => {
+    // The handler ALWAYS invokes the sender (all four payload variants
+    // are valid). For stand-alone messages (no taskId), the sender's own
+    // _getTaskId-empty guard short-circuits dispatch silently — no
+    // webhook call, no error log.
+    const pushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const handlerWithPush = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      pushNotificationStore,
+      mockPushNotificationSender
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-no-push', 'message-only push-skip test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'msg-response-no-push',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'response' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    const generator = handlerWithPush.sendMessageStream(params, serverCallContext);
+    for await (const event of generator) {
+      events.push(event);
+    }
+
+    // Stream produced the message as expected.
+    assert.lengthOf(events, 1);
+    assert.equal(events[0].payload?.$case, 'message');
+
+    // The handler hands the event to the sender (mock resolves to undefined
+    // without hitting the real send path).
+    expect(mockPushNotificationSender.send).toHaveBeenCalled();
+
+    // No `Failed to send push notification` error should have been logged.
+    const offendingCalls = errorSpy.mock.calls.filter((args) =>
+      String(args[0]).includes('Failed to send push notification')
+    );
+    expect(offendingCalls).toHaveLength(0);
+  });
+
+  it('sendMessageStream: should throw when statusUpdate arrives before task', async () => {
+    const taskId = 'task-order-1';
+    const contextId = 'ctx-order-1';
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-2', 'task-lifecycle test'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      // Agent incorrectly publishes a statusUpdate before a task event.
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const generator = handler.sendMessageStream(params, serverCallContext);
+    try {
+      for await (const _event of generator) {
+        void _event;
+        assert.fail('Should have thrown before yielding any events');
+      }
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.include('statusUpdate');
+    }
+  });
+
+  it('sendMessageStream: should throw when message arrives in task-lifecycle stream', async () => {
+    const taskId = 'task-order-2';
+    const contextId = 'ctx-order-2';
+    const params: SendMessageRequest = {
+      message: createTestMessage('msg-order-3', 'message in task stream'),
+    } as SendMessageRequest;
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      // Agent publishes task first (valid).
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+
+      // Then incorrectly publishes a message mid-stream.
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'bad-msg',
+          role: Role.ROLE_AGENT,
+          contextId: '',
+          taskId: '',
+          parts: [
+            {
+              content: { $case: 'text', value: 'should not be allowed' },
+              mediaType: 'text/plain',
+              filename: '',
+              metadata: {},
+            },
+          ],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      bus.finished();
+    });
+
+    const events: StreamResponse[] = [];
+    try {
+      for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+        events.push(event);
+      }
+      assert.fail('Should have thrown UnsupportedOperationError');
+    } catch (error) {
+      expect(error).to.be.instanceOf(UnsupportedOperationError);
+      expect((error as Error).message).to.include('received message in task lifecycle stream');
+    }
+
+    assert.lengthOf(events, 1, 'Task should be yielded before the error');
+    assert.equal(events[0].payload?.$case, 'task');
+  });
+
+  it('getTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('getTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '   ', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('sendMessage: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        messageId: 'msg-ws-taskid',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'hi' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: '',
+        taskId: '   ',
+        extensions: [],
+        metadata: {},
+      },
+    } as SendMessageRequest;
+    await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(
+      RequestMalformedError
+    );
+  });
+
+  it('getTask: should return an existing task from the store', async () => {
+    const fakeTask = createTestTask('task-exist');
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask(
+      { id: fakeTask.id, tenant: '', historyLength: 0 },
+      serverCallContext
+    );
     assert.deepEqual(result, fakeTask);
   });
 
-  it('set/getTaskPushNotificationConfig: should save and retrieve config', async () => {
+  it('getTask: should return all history when historyLength is undefined (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'history msg 1'),
+      createTestMessage('h2', 'history msg 2'),
+      createTestMessage('h3', 'history msg 3'),
+    ];
+    const fakeTask = createTestTask('task-history-all', history);
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask({ id: fakeTask.id, tenant: '' }, serverCallContext);
+    assert.lengthOf(result.history!, 3, 'undefined historyLength should return all history');
+  });
+
+  it('getTask: should return empty history when historyLength is 0 (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'history msg 1'),
+      createTestMessage('h2', 'history msg 2'),
+    ];
+    const fakeTask = createTestTask('task-history-zero', history);
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask(
+      { id: fakeTask.id, tenant: '', historyLength: 0 },
+      serverCallContext
+    );
+    assert.lengthOf(result.history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('getTask: should return N most recent messages when historyLength is N (§3.2.4)', async () => {
+    const history: Message[] = [
+      createTestMessage('h1', 'oldest'),
+      createTestMessage('h2', 'middle'),
+      createTestMessage('h3', 'newest'),
+    ];
+    const fakeTask = createTestTask('task-history-n', history);
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const result = await handler.getTask(
+      { id: fakeTask.id, tenant: '', historyLength: 2 },
+      serverCallContext
+    );
+    assert.lengthOf(result.history!, 2, 'historyLength=2 should return 2 messages');
+    assert.equal(result.history![0].messageId, 'h2', 'should return most recent messages');
+    assert.equal(result.history![1].messageId, 'h3', 'should return most recent messages');
+  });
+
+  it('sendMessage: should apply historyLength=0 to omit history from task result (§3.2.4)', async () => {
+    const contextId = 'ctx-send-hist-0';
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-hist-0', 'test'),
+      configuration: { historyLength: 0, acceptedOutputModes: [], returnImmediately: false },
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const result = await handler.sendMessage(params, serverCallContext);
+
+    assert.property(result, 'id', 'Should return a Task');
+    const task = result as Task;
+    assert.lengthOf(task.history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('sendMessage: should apply historyLength=1 to limit history in task result (§3.2.4)', async () => {
+    const contextId = 'ctx-send-hist-1';
+
+    // First, create a task with history by sending an initial message
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    // First message creates the task
+    const firstParams: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-first', 'first message'),
+      configuration: undefined,
+      metadata: {},
+    } as SendMessageRequest;
+    firstParams.message!.contextId = contextId;
+
+    const firstResult = await handler.sendMessage(firstParams, serverCallContext);
+    assert.property(firstResult, 'id');
+    const taskId = (firstResult as Task).id;
+
+    // Second message adds to history and completes the task
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const secondMessage = createTestMessage('msg-second', 'second message');
+    secondMessage.contextId = contextId;
+    secondMessage.taskId = taskId;
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: secondMessage,
+      configuration: { historyLength: 1, acceptedOutputModes: [], returnImmediately: false },
+      metadata: {},
+    } as SendMessageRequest;
+
+    const result = await handler.sendMessage(params, serverCallContext);
+
+    assert.property(result, 'id', 'Should return a Task');
+    const task = result as Task;
+    assert.isAtMost(task.history!.length, 1, 'historyLength=1 should return at most 1 message');
+  });
+
+  it('sendMessage: should not trim history when historyLength is undefined (§3.2.4)', async () => {
+    const contextId = 'ctx-send-hist-undef';
+
+    // Agent includes multiple messages in its task event history. The
+    // agent is responsible for determining which messages are persisted
+    // in the task history.
+    const agentHistory = [
+      createTestMessage('hist-1', 'first message'),
+      createTestMessage('hist-2', 'second message'),
+      createTestMessage('hist-3', 'third message'),
+    ];
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: agentHistory,
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-undef', 'test'),
+      configuration: undefined,
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const result = await handler.sendMessage(params, serverCallContext);
+
+    assert.property(result, 'id', 'Should return a Task');
+    const task = result as Task;
+    // With undefined historyLength, no trimming is applied — all history
+    // from the agent's task event is returned as-is (plus the user message).
+    assert.isAtLeast(
+      task.history!.length,
+      3,
+      'undefined historyLength should not trim agent-provided history'
+    );
+  });
+
+  it('sendMessageStream: should apply historyLength=0 to task payloads in stream (§3.2.4)', async () => {
+    const contextId = 'ctx-stream-hist-0';
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-stream-0', 'test'),
+      configuration: { historyLength: 0, acceptedOutputModes: [], returnImmediately: false },
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+      events.push(event);
+    }
+
+    const taskEvents = events.filter((e) => e.payload?.$case === 'task');
+    assert.isAtLeast(taskEvents.length, 1, 'Should have at least one task event');
+    for (const taskEvent of taskEvents) {
+      const task = taskEvent.payload!.value as Task;
+      assert.lengthOf(
+        task.history!,
+        0,
+        'historyLength=0 should omit history in stream task events'
+      );
+    }
+  });
+
+  it('sendMessageStream: should return all history in task payloads when historyLength is undefined (§3.2.4)', async () => {
+    const contextId = 'ctx-stream-hist-undef';
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: createTestMessage('msg-stream-all', 'test'),
+      configuration: undefined,
+      metadata: {},
+    } as SendMessageRequest;
+    params.message!.contextId = contextId;
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, serverCallContext)) {
+      events.push(event);
+    }
+
+    const taskEvents = events.filter((e) => e.payload?.$case === 'task');
+    assert.isAtLeast(taskEvents.length, 1, 'Should have at least one task event');
+    for (const taskEvent of taskEvents) {
+      const task = taskEvent.payload!.value as Task;
+      assert.lengthOf(
+        task.history!,
+        1,
+        'undefined historyLength should preserve all history in stream task events'
+      );
+    }
+  });
+
+  it('listTasks: should return tasks from the store', async () => {
+    const fakeTask1: Task = {
+      id: 'task-list-1',
+      contextId: 'ctx-list',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history: [],
+    };
+    const fakeTask2: Task = { ...fakeTask1, id: 'task-list-2' };
+
+    await mockTaskStore.save(fakeTask1, serverCallContext);
+    await mockTaskStore.save(fakeTask2, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 2);
+    // Tasks are listed in reverse order of creation
+    assert.equal(result.tasks[0].id, fakeTask2.id);
+    assert.equal(result.tasks[1].id, fakeTask1.id);
+  });
+
+  describe('listTasks: status filter', () => {
+    const listedTask: Task = {
+      id: 'task-status-filter',
+      contextId: 'ctx-status-filter',
+      status: {
+        state: TaskState.TASK_STATE_COMPLETED,
+        message: undefined,
+        timestamp: new Date().toISOString(),
+      },
+      artifacts: [],
+      metadata: {},
+      history: [],
+    };
+
+    beforeEach(async () => {
+      await mockTaskStore.save(listedTask, serverCallContext);
+    });
+
+    it('returns every task when the wire request omits status', async () => {
+      const params = ListTasksRequest.fromJSON({ pageSize: 10 });
+      assert.equal(
+        params.status,
+        TaskState.TASK_STATE_UNSPECIFIED,
+        'an omitted status must deserialize to the zero value'
+      );
+
+      const result = await handler.listTasks(params, serverCallContext);
+
+      assert.lengthOf(result.tasks, 1, 'an unfiltered list must not filter anything out');
+      assert.equal(result.tasks[0].id, listedTask.id);
+      assert.equal(result.totalSize, 1);
+    });
+
+    it('returns every task when status is explicitly TASK_STATE_UNSPECIFIED', async () => {
+      const params = ListTasksRequest.fromJSON({ pageSize: 10 });
+      params.status = TaskState.TASK_STATE_UNSPECIFIED;
+
+      const result = await handler.listTasks(params, serverCallContext);
+
+      assert.lengthOf(result.tasks, 1);
+      assert.equal(result.totalSize, 1);
+    });
+
+    it('still filters when a real status is supplied', async () => {
+      const matching = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: 'TASK_STATE_COMPLETED' }),
+        serverCallContext
+      );
+      assert.lengthOf(matching.tasks, 1);
+      assert.equal(matching.totalSize, 1);
+
+      const nonMatching = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: 'TASK_STATE_WORKING' }),
+        serverCallContext
+      );
+      assert.lengthOf(nonMatching.tasks, 0);
+      assert.equal(nonMatching.totalSize, 0);
+    });
+
+    it('rejects an unrecognized status filter with RequestMalformedError', async () => {
+      // Regression: an unknown status used to deserialize to the synthetic
+      // UNRECOGNIZED (-1) sentinel and silently match nothing. Validation
+      // lives in the request handler so every transport (JSON-RPC, REST,
+      // gRPC) rejects malformed filters identically.
+      const params = ListTasksRequest.fromJSON({ pageSize: 10, status: 'NOT_A_REAL_STATE' });
+      assert.equal(params.status, TaskState.UNRECOGNIZED);
+
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an unrecognized status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
+
+    it('rejects an out-of-range numeric status filter (gRPC-style raw decode) with RequestMalformedError', async () => {
+      const params: ListTasksRequest = {
+        tenant: '',
+        contextId: '',
+        status: 99 as TaskState,
+        pageSize: 10,
+        pageToken: '',
+        historyLength: 0,
+        statusTimestampAfter: undefined,
+        includeArtifacts: false,
+      };
+
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an out-of-range status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
+
+    it('accepts a valid numeric status filter passed through from a transport', async () => {
+      const result = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: TaskState.TASK_STATE_COMPLETED }),
+        serverCallContext
+      );
+      assert.lengthOf(result.tasks, 1);
+      assert.equal(result.totalSize, 1);
+    });
+  });
+
+  it('listTasks: should throw RequestMalformedError if pageSize is < 1', async () => {
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: '',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 0,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    try {
+      await handler.listTasks(params, serverCallContext);
+      assert.fail('Should have thrown an error for pageSize < 1');
+    } catch (error: any) {
+      expect(error).to.be.instanceOf(RequestMalformedError);
+      expect(error.message).to.contain('pageSize must be between 1 and 100');
+    }
+  });
+
+  it('listTasks: should throw RequestMalformedError if pageSize is > 100', async () => {
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: '',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 101,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    try {
+      await handler.listTasks(params, serverCallContext);
+      assert.fail('Should have thrown an error for pageSize > 100');
+    } catch (error: any) {
+      expect(error).to.be.instanceOf(RequestMalformedError);
+      expect(error.message).to.contain('pageSize must be between 1 and 100');
+    }
+  });
+
+  it('listTasks: should return empty history when historyLength is 0', async () => {
+    const history: Message[] = [
+      createTestMessage('lh1', 'message 1'),
+      createTestMessage('lh2', 'message 2'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-0',
+      contextId: 'ctx-list-hist',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 0,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(result.tasks[0].history!, 0, 'historyLength=0 should omit history');
+  });
+
+  it('listTasks: should return N most recent messages when historyLength is N', async () => {
+    const history: Message[] = [
+      createTestMessage('ln1', 'oldest'),
+      createTestMessage('ln2', 'middle'),
+      createTestMessage('ln3', 'newest'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-n',
+      contextId: 'ctx-list-hist-n',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist-n',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: 2,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(result.tasks[0].history!, 2, 'historyLength=2 should return 2 messages');
+    assert.equal(
+      result.tasks[0].history![0].messageId,
+      'ln2',
+      'should return most recent messages'
+    );
+    assert.equal(
+      result.tasks[0].history![1].messageId,
+      'ln3',
+      'should return most recent messages'
+    );
+  });
+
+  it('listTasks: should return all history when historyLength is undefined', async () => {
+    const history: Message[] = [
+      createTestMessage('lu1', 'message 1'),
+      createTestMessage('lu2', 'message 2'),
+    ];
+    const fakeTask: Task = {
+      id: 'task-list-hist-undef',
+      contextId: 'ctx-list-hist-undef',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history,
+    };
+    await mockTaskStore.save(fakeTask, serverCallContext);
+
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx-list-hist-undef',
+      status: TaskState.TASK_STATE_WORKING,
+      pageSize: 10,
+      pageToken: '',
+      historyLength: undefined,
+      statusTimestampAfter: undefined,
+      includeArtifacts: false,
+    };
+
+    const result = await handler.listTasks(params, serverCallContext);
+    assert.lengthOf(result.tasks, 1);
+    assert.lengthOf(
+      result.tasks[0].history!,
+      2,
+      'undefined historyLength should return all history'
+    );
+  });
+
+  it('create/getTaskPushNotificationConfig: should save and retrieve config', async () => {
     const taskId = 'task-push-config';
     const fakeTask: Task = {
       id: taskId,
       contextId: 'ctx-push',
-      status: { state: 'working' },
-      kind: 'task',
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history: [],
     };
     await mockTaskStore.save(fakeTask, serverCallContext);
 
-    const pushConfig: PushNotificationConfig = {
+    const pushConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'config-1',
       url: 'https://example.com/notify',
       token: 'secret-token',
+      authentication: undefined,
     };
 
-    const setParams: TaskPushNotificationConfig = {
-      taskId,
-      pushNotificationConfig: pushConfig,
+    const createParams: TaskPushNotificationConfig = {
+      tenant: '',
+      id: pushConfig.id,
+      taskId: taskId,
+      url: pushConfig.url,
+      token: pushConfig.token,
+      authentication: pushConfig.authentication,
     };
-    const setResponse = await handler.setTaskPushNotificationConfig(setParams, serverCallContext);
-    assert.deepEqual(
-      setResponse.pushNotificationConfig,
-      pushConfig,
-      'Set response should return the config'
+    const createResponse = await handler.createTaskPushNotificationConfig(
+      createParams,
+      serverCallContext
     );
+    assert.deepEqual(createResponse, createParams, 'Create response should return the config');
 
-    const getParams: GetTaskPushNotificationConfigParams = {
-      id: taskId,
-      pushNotificationConfigId: 'config-1',
+    const getParams: GetTaskPushNotificationConfigRequest = {
+      tenant: '',
+      taskId: taskId,
+      id: 'config-1',
     };
     const getResponse = await handler.getTaskPushNotificationConfig(getParams, serverCallContext);
-    assert.deepEqual(
-      getResponse.pushNotificationConfig,
-      pushConfig,
-      'Get response should return the saved config'
-    );
+    assert.deepEqual(getResponse, createParams, 'Get response should return the saved config');
   });
 
-  it('set/getTaskPushNotificationConfig: should save and retrieve config by task ID for backward compatibility', async () => {
+  it('create/getTaskPushNotificationConfig: should save and retrieve config by task ID for backward compatibility', async () => {
     const taskId = 'task-push-compat';
     await mockTaskStore.save(
       {
         id: taskId,
         contextId: 'ctx-compat',
-        status: { state: 'working' },
-        kind: 'task',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
 
     // Config ID defaults to task ID
-    const pushConfig: PushNotificationConfig = {
+    const pushConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       url: 'https://example.com/notify-compat',
+      id: taskId,
+      token: 'compat-token',
+      authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: pushConfig,
+        tenant: '',
+        id: pushConfig.id || taskId, // if id is missing or equals taskId in test
+        taskId: taskId,
+        url: pushConfig.url,
+        token: pushConfig.token,
+        authentication: pushConfig.authentication,
       },
       serverCallContext
     );
 
     const getResponse = await handler.getTaskPushNotificationConfig(
       {
+        tenant: '',
+        taskId: taskId,
         id: taskId,
       },
       serverCallContext
     );
-    expect(getResponse.pushNotificationConfig.id).to.equal(taskId);
-    expect(getResponse.pushNotificationConfig.url).to.equal(pushConfig.url);
+    expect(getResponse.id).to.equal(taskId);
+    expect(getResponse.url).to.equal(pushConfig.url);
   });
 
-  it('setTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when no configs exist', async () => {
+    const taskId = 'task-no-config';
+    await mockTaskStore.save(
+      {
+        id: taskId,
+        contextId: 'ctx-no-config',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
+      },
+      serverCallContext
+    );
+
+    await expect(
+      handler.getTaskPushNotificationConfig(
+        { tenant: '', taskId, id: 'missing' },
+        serverCallContext
+      )
+    ).rejects.toThrow(TaskNotFoundError);
+  });
+
+  it('getTaskPushNotificationConfig: should return TaskNotFoundError (404/-32001) when the config id is unknown', async () => {
+    const taskId = 'task-unknown-config-id';
+    await mockTaskStore.save(
+      {
+        id: taskId,
+        contextId: 'ctx-unknown-config-id',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
+      },
+      serverCallContext
+    );
+    await handler.createTaskPushNotificationConfig(
+      {
+        tenant: '',
+        taskId,
+        id: 'config-known',
+        url: 'https://example.com/notify',
+        token: '',
+        authentication: undefined,
+      },
+      serverCallContext
+    );
+
+    await expect(
+      handler.getTaskPushNotificationConfig(
+        { tenant: '', taskId, id: 'config-unknown' },
+        serverCallContext
+      )
+    ).rejects.toThrow(TaskNotFoundError);
+  });
+
+  it('createTaskPushNotificationConfig: should overwrite an existing config with the same ID', async () => {
     const taskId = 'task-overwrite';
     await mockTaskStore.save(
       {
         id: taskId,
         contextId: 'ctx-overwrite',
-        status: { state: 'working' },
-        kind: 'task',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
-    const initialConfig: PushNotificationConfig = {
+    const initialConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'config-same',
       url: 'https://initial.url',
+      token: 'token-same',
+      authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: initialConfig,
+        tenant: '',
+        taskId: taskId,
+        id: initialConfig.id,
+        url: initialConfig.url,
+        token: initialConfig.token,
+        authentication: initialConfig.authentication,
       },
       serverCallContext
     );
 
-    const newConfig: PushNotificationConfig = {
+    const newConfig: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'config-same',
       url: 'https://new.url',
+      token: 'token-new',
+      authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: newConfig,
+        tenant: '',
+        taskId: taskId,
+        id: newConfig.id,
+        url: newConfig.url,
+        token: newConfig.token,
+        authentication: newConfig.authentication,
       },
       serverCallContext
     );
 
-    const configs = await handler.listTaskPushNotificationConfigs(
+    const result = await handler.listTaskPushNotificationConfigs(
       {
-        id: taskId,
+        tenant: '',
+        taskId: taskId,
+        pageSize: 0,
+        pageToken: '',
       },
       serverCallContext
     );
-    expect(configs).to.have.lengthOf(1);
-    expect(configs[0].pushNotificationConfig.url).to.equal('https://new.url');
+    expect(result.configs).to.have.lengthOf(1);
+    expect(result.configs[0].url).to.equal('https://new.url');
+    expect(result.nextPageToken).to.equal('');
   });
 
   it('listTaskPushNotificationConfigs: should return all configs for a task', async () => {
@@ -1155,48 +2564,78 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-list',
-        status: { state: 'working' },
-        kind: 'task',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
-    const config1: PushNotificationConfig = {
+    const config1: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg1',
       url: 'https://url1.com',
+      token: 'token-1',
+      authentication: undefined,
     };
-    const config2: PushNotificationConfig = {
+    const config2: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg2',
       url: 'https://url2.com',
+      token: 'token-2',
+      authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: config1,
+        tenant: '',
+        taskId: taskId,
+        id: config1.id,
+        url: config1.url,
+        token: config1.token,
+        authentication: config1.authentication,
       },
       serverCallContext
     );
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: config2,
+        tenant: '',
+        taskId: taskId,
+        id: config2.id,
+        url: config2.url,
+        token: config2.token,
+        authentication: config2.authentication,
       },
       serverCallContext
     );
 
-    const listParams: ListTaskPushNotificationConfigParams = { id: taskId };
-    const listResponse = await handler.listTaskPushNotificationConfigs(
-      listParams,
-      serverCallContext
-    );
+    const listParams: ListTaskPushNotificationConfigsRequest = {
+      tenant: '',
+      taskId: taskId,
+      pageSize: 0,
+      pageToken: '',
+    };
+    const listResponse = (
+      await handler.listTaskPushNotificationConfigs(listParams, serverCallContext)
+    ).configs;
 
     expect(listResponse).to.be.an('array').with.lengthOf(2);
     assert.deepInclude(listResponse, {
-      taskId,
-      pushNotificationConfig: config1,
+      tenant: '',
+      taskId: taskId,
+      id: config1.id,
+      url: config1.url,
+      token: config1.token,
+      authentication: config1.authentication,
     });
     assert.deepInclude(listResponse, {
-      taskId,
-      pushNotificationConfig: config2,
+      tenant: '',
+      taskId: taskId,
+      id: config2.id,
+      url: config2.url,
+      token: config2.token,
+      authentication: config2.authentication,
     });
   });
 
@@ -1206,48 +2645,72 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-delete',
-        status: { state: 'working' },
-        kind: 'task',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
-    const config1: PushNotificationConfig = {
+    const config1: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-del-1',
       url: 'https://url1.com',
+      token: 'token-1',
+      authentication: undefined,
     };
-    const config2: PushNotificationConfig = {
+    const config2: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-del-2',
       url: 'https://url2.com',
+      token: 'token-2',
+      authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: config1,
+        tenant: '',
+        id: config1.id,
+        taskId: taskId,
+        url: config1.url,
+        token: config1.token,
+        authentication: config1.authentication,
       },
       serverCallContext
     );
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: config2,
+        tenant: '',
+        id: config2.id,
+        taskId: taskId,
+        url: config2.url,
+        token: config2.token,
+        authentication: config2.authentication,
       },
       serverCallContext
     );
 
-    const deleteParams: DeleteTaskPushNotificationConfigParams = {
-      id: taskId,
-      pushNotificationConfigId: 'cfg-del-1',
+    const deleteParams: DeleteTaskPushNotificationConfigRequest = {
+      id: 'cfg-del-1',
+      taskId: taskId,
+      tenant: '',
     };
     await handler.deleteTaskPushNotificationConfig(deleteParams, serverCallContext);
 
-    const remainingConfigs = await handler.listTaskPushNotificationConfigs(
-      {
-        id: taskId,
-      },
-      serverCallContext
-    );
+    const remainingConfigs = (
+      await handler.listTaskPushNotificationConfigs(
+        {
+          taskId: taskId,
+          tenant: '',
+          pageSize: 0,
+          pageToken: '',
+        },
+        serverCallContext
+      )
+    ).configs;
     expect(remainingConfigs).to.have.lengthOf(1);
-    expect(remainingConfigs[0].pushNotificationConfig.id).to.equal('cfg-del-2');
+    expect(remainingConfigs[0].id).to.equal('cfg-del-2');
   });
 
   it('deleteTaskPushNotificationConfig: should remove the whole entry if last config is deleted', async () => {
@@ -1256,41 +2719,56 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-delete-last',
-        status: { state: 'working' },
-        kind: 'task',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
-    const config: PushNotificationConfig = {
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-last',
       url: 'https://last.com',
+      token: 'token-last',
+      authentication: undefined,
     };
-    await handler.setTaskPushNotificationConfig(
+    await handler.createTaskPushNotificationConfig(
       {
-        taskId,
-        pushNotificationConfig: config,
+        tenant: '',
+        id: config.id,
+        taskId: taskId,
+        url: config.url,
+        token: config.token,
+        authentication: config.authentication,
       },
       serverCallContext
     );
 
     await handler.deleteTaskPushNotificationConfig(
       {
-        id: taskId,
-        pushNotificationConfigId: 'cfg-last',
+        id: 'cfg-last',
+        taskId: taskId,
+        tenant: '',
       },
       serverCallContext
     );
 
-    const configs = await handler.listTaskPushNotificationConfigs(
+    const result = await handler.listTaskPushNotificationConfigs(
       {
-        id: taskId,
+        taskId: taskId,
+        tenant: '',
+        pageSize: 0,
+        pageToken: '',
       },
       serverCallContext
     );
-    expect(configs).to.be.an('array').with.lengthOf(0);
+    expect(result.configs).to.be.an('array').with.lengthOf(0);
+    expect(result.nextPageToken).to.equal('');
   });
 
-  it('should send push notification when task update is received', async () => {
+  it('forwards the current full Task to the sender alongside every update event', async () => {
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -1302,19 +2780,26 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockPushNotificationStore,
       mockPushNotificationSender
     );
-    const pushNotificationConfig: PushNotificationConfig = {
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       url: 'https://push-1.com',
+      id: 'push-1',
+      token: 'token-1',
+      authentication: undefined,
     };
     const contextId = 'ctx-push-1';
 
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
       message: {
         ...createTestMessage('msg-push-1', 'Work on task with push notification'),
         contextId: contextId,
       },
       configuration: {
-        pushNotificationConfig: pushNotificationConfig,
-      },
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
     };
 
     let taskId: string;
@@ -1328,45 +2813,42 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const expectedTask: Task = {
       id: taskId,
       contextId,
-      status: { state: 'completed' },
-      kind: 'task',
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
       history: [params.message as Message],
     };
 
-    // Verify push notifications were sent with complete task objects
+    // The handler forwards the current full Task as the third argument on
+    // every dispatch; the serializer decides the wire shape from it.
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
       3
     );
 
-    // Verify first call (submitted state)
     const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][0] as Task;
-    const expectedFirstTask: Task = {
+      .calls[0][2] as Task;
+    assert.deepEqual(firstCallTask, {
       ...expectedTask,
-      status: { state: 'submitted' },
-    };
-    assert.deepEqual(firstCallTask, expectedFirstTask);
+      status: {
+        state: TaskState.TASK_STATE_SUBMITTED,
+        message: undefined,
+        timestamp: undefined,
+      },
+    });
 
-    // // Verify second call (working state)
     const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][0] as Task;
-    const expectedSecondTask: Task = {
+      .calls[1][2] as Task;
+    assert.deepEqual(secondCallTask, {
       ...expectedTask,
-      status: { state: 'working' },
-    };
-    assert.deepEqual(secondCallTask, expectedSecondTask);
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    });
 
-    // // Verify third call (completed state)
     const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][0] as Task;
-    const expectedThirdTask: Task = {
-      ...expectedTask,
-      status: { state: 'completed' },
-    };
-    assert.deepEqual(thirdCallTask, expectedThirdTask);
+      .calls[2][2] as Task;
+    assert.deepEqual(thirdCallTask, expectedTask);
   });
 
-  it('sendMessageStream: should send push notification when task update is received', async () => {
+  it('sendMessageStream: yields raw events to the client and forwards the current full Task to the sender', async () => {
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
 
@@ -1378,20 +2860,27 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       mockPushNotificationStore,
       mockPushNotificationSender
     );
-    const pushNotificationConfig: PushNotificationConfig = {
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       url: 'https://push-stream-1.com',
+      id: 'push-stream-1',
+      token: 'token-stream-1',
+      authentication: undefined,
     };
 
     const contextId = 'ctx-push-stream-1';
 
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
       message: {
         ...createTestMessage('msg-push-stream-1', 'Work on task with push notification via stream'),
         contextId: contextId,
       },
       configuration: {
-        pushNotificationConfig: pushNotificationConfig,
-      },
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
     };
 
     let taskId: string;
@@ -1401,19 +2890,30 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     });
 
     const eventGenerator = handler.sendMessageStream(params, serverCallContext);
-    const events = [];
+    const events: StreamResponse[] = [];
     for await (const event of eventGenerator) {
       events.push(event);
     }
 
     // Verify stream events
     assert.lengthOf(events, 3, 'Stream should yield 3 events');
-    assert.equal((events[0] as Task).status.state, 'submitted');
-    assert.equal((events[1] as TaskStatusUpdateEvent).status.state, 'working');
-    assert.equal((events[2] as TaskStatusUpdateEvent).status.state, 'completed');
-    assert.isTrue((events[2] as TaskStatusUpdateEvent).final);
+    assert.equal(
+      (events[0].payload as { $case: 'task'; value: Task }).value.status?.state,
+      TaskState.TASK_STATE_SUBMITTED
+    );
+    assert.equal(
+      (events[1].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_WORKING
+    );
+    assert.equal(
+      (events[2].payload as { $case: 'statusUpdate'; value: TaskStatusUpdateEvent }).value.status
+        ?.state,
+      TaskState.TASK_STATE_COMPLETED
+    );
 
-    // Verify push notifications were sent with complete task objects
+    // The client stream yields the raw events; the sender receives the
+    // current full Task as the third argument on every dispatch.
     expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
       3
     );
@@ -1421,61 +2921,528 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const expectedTask: Task = {
       id: taskId,
       contextId,
-      status: { state: 'completed' },
-      kind: 'task',
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
       history: [params.message as Message],
     };
-    // Verify first call (submitted state)
+
     const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][0] as Task;
-    const expectedFirstTask: Task = {
+      .calls[0][2] as Task;
+    assert.deepEqual(firstCallTask, {
       ...expectedTask,
-      status: { state: 'submitted' },
-    };
-    assert.deepEqual(firstCallTask, expectedFirstTask);
+      status: {
+        state: TaskState.TASK_STATE_SUBMITTED,
+        message: undefined,
+        timestamp: undefined,
+      },
+    });
 
-    // Verify second call (working state)
     const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][0] as Task;
-    const expectedSecondTask: Task = {
+      .calls[1][2] as Task;
+    assert.deepEqual(secondCallTask, {
       ...expectedTask,
-      status: { state: 'working' },
-    };
-    assert.deepEqual(secondCallTask, expectedSecondTask);
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+    });
 
-    // Verify third call (completed state)
     const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][0] as Task;
-    const expectedThirdTask: Task = {
-      ...expectedTask,
-      status: { state: 'completed' },
+      .calls[2][2] as Task;
+    assert.deepEqual(thirdCallTask, expectedTask);
+  });
+
+  it('should send push notification when message event is received (§4.3.3)', async () => {
+    // All four StreamResponse payload variants (`task`, `message`,
+    // `statusUpdate`, `artifactUpdate`) are valid push-notification
+    // payloads. A message event bound to a task MUST reach the sender;
+    // the sender then routes to the right serializer. No `Failed to send
+    // push notification` error should be logged.
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      url: 'https://push-1.com',
+      id: 'push-1',
+      token: 'token-1',
+      authentication: undefined,
     };
-    assert.deepEqual(thirdCallTask, expectedThirdTask);
+    const contextId = 'ctx-push-message';
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-message', 'Test message push'),
+        contextId: contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
+    };
+
+    let taskId: string;
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.message({
+          messageId: 'msg-reply-1',
+          taskId: taskId,
+          contextId: contextId,
+          role: Role.ROLE_AGENT,
+          parts: [],
+          metadata: {},
+          extensions: [],
+          referenceTaskIds: [],
+        })
+      );
+      bus.finished();
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await handler.sendMessage(params, serverCallContext);
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
+    const callResponse = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[0][0] as StreamResponse;
+    expect(callResponse.payload?.$case).toBe('message');
+    expect((callResponse.payload as { value: Message }).value.messageId).toBe('msg-reply-1');
+    // No misleading error log.
+    const offendingCalls = errorSpy.mock.calls.filter((args) =>
+      String(args[0]).includes('Failed to send push notification')
+    );
+    expect(offendingCalls).toHaveLength(0);
+  });
+
+  it('forwards the current full Task alongside a raw statusUpdate trigger', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      url: 'https://push-1.com',
+      id: 'push-1',
+      token: 'token-1',
+      authentication: undefined,
+    };
+    const contextId = 'ctx-push-status';
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-status', 'Test status push'),
+        contextId: contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
+    };
+
+    let taskId: string;
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    await handler.sendMessage(params, serverCallContext);
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
+    const statusUpdateResponse = (mockPushNotificationSender as MockPushNotificationSender).send
+      .mock.calls[1][0] as StreamResponse;
+    expect(statusUpdateResponse.payload?.$case).toBe('statusUpdate');
+    const forwardedTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][2] as Task;
+    expect(forwardedTask.status?.state).toBe(TaskState.TASK_STATE_WORKING);
+  });
+
+  it('forwards the current full Task alongside a raw artifactUpdate trigger', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const pushNotification: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      url: 'https://push-1.com',
+      id: 'push-1',
+      token: 'token-1',
+      authentication: undefined,
+    };
+    const contextId = 'ctx-push-artifact';
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-artifact', 'Test artifact push'),
+        contextId: contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: { ...pushNotification, taskId: '', tenant: '' },
+      } as SendMessageConfiguration,
+    };
+
+    let taskId: string;
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      taskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.task({
+          id: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          artifact: {
+            name: 'art-1',
+            mimeType: 'text/plain',
+            content: Buffer.from('hello').toString('base64'),
+          },
+          metadata: {},
+          append: false,
+          lastChunk: true,
+        } as any)
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: taskId,
+          contextId: contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    await handler.sendMessage(params, serverCallContext);
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalled();
+    const artifactUpdateResponse = (mockPushNotificationSender as MockPushNotificationSender).send
+      .mock.calls[1][0] as StreamResponse;
+    expect(artifactUpdateResponse.payload?.$case).toBe('artifactUpdate');
+    const forwardedTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][2] as Task;
+    expect(forwardedTask.artifacts).toHaveLength(1);
+  });
+
+  it('preserves the raw statusUpdate push body when the request sets version v1.0', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const contextV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const contextId = 'ctx-push-status-v1';
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-status-v1', 'Test status push v1'),
+        contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: {
+          tenant: '',
+          taskId: '',
+          url: 'https://push-v1.com',
+          id: 'push-v1',
+          token: 'token-v1',
+          authentication: undefined,
+        },
+      } as SendMessageConfiguration,
+    };
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+    await handler.sendMessage(params, contextV1);
+
+    const secondCall = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    expect(secondCall.payload.$case).toBe('statusUpdate');
+    expect((secondCall.payload as { value: TaskStatusUpdateEvent }).value.status?.state).toBe(
+      TaskState.TASK_STATE_WORKING
+    );
+  });
+
+  it('preserves the raw artifactUpdate push body when the request sets version v1.0', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const contextV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const contextId = 'ctx-push-artifact-v1';
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-artifact-v1', 'Test artifact push v1'),
+        contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: {
+          tenant: '',
+          taskId: '',
+          url: 'https://push-v1.com',
+          id: 'push-v1',
+          token: 'token-v1',
+          authentication: undefined,
+        },
+      } as SendMessageConfiguration,
+    };
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.artifactUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          artifact: {
+            artifactId: 'art-v1',
+            name: 'file.txt',
+            description: '',
+            parts: [
+              {
+                content: { $case: 'text', value: 'hello' },
+                mediaType: 'text/plain',
+                filename: 'file.txt',
+                metadata: {},
+              },
+            ],
+            metadata: {},
+            extensions: [],
+          },
+          append: false,
+          lastChunk: true,
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+      bus.finished();
+    });
+
+    await handler.sendMessage(params, contextV1);
+
+    const secondCall = (mockPushNotificationSender as MockPushNotificationSender).send.mock
+      .calls[1][0] as StreamResponse;
+    expect(secondCall.payload.$case).toBe('artifactUpdate');
+  });
+
+  it('mirrors the historyLength-trimmed stream in the push body when the request sets version v1.0', async () => {
+    const mockPushNotificationStore = new InMemoryPushNotificationStore();
+    const mockPushNotificationSender = new MockPushNotificationSender();
+    const contextV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+
+    const handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      mockAgentExecutor,
+      executionEventBusManager,
+      mockPushNotificationStore,
+      mockPushNotificationSender
+    );
+    const contextId = 'ctx-push-stream-v1';
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        ...createTestMessage('msg-push-stream-v1', 'Stream push mirror v1'),
+        contextId,
+      },
+      configuration: {
+        taskPushNotificationConfig: {
+          tenant: '',
+          taskId: '',
+          url: 'https://push-stream-v1.com',
+          id: 'push-stream-v1',
+          token: 'token-stream-v1',
+          authentication: undefined,
+        },
+        historyLength: 0,
+        acceptedOutputModes: [],
+      } as SendMessageConfiguration,
+    };
+
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+    const events: StreamResponse[] = [];
+    for await (const event of handler.sendMessageStream(params, contextV1)) {
+      events.push(event);
+    }
+
+    expect((mockPushNotificationSender as MockPushNotificationSender).send).toHaveBeenCalledTimes(
+      3
+    );
+
+    const pushCalls = (
+      mockPushNotificationSender as MockPushNotificationSender
+    ).send.mock.calls.map((call) => call[0] as StreamResponse);
+
+    assert.equal(events[0].payload?.$case, 'task');
+    assert.lengthOf(
+      (events[0].payload as { value: Task }).value.history!,
+      0,
+      'historyLength=0 should trim the streamed task history'
+    );
+    assert.deepEqual(pushCalls[0], events[0], 'v1 push must mirror the trimmed stream task event');
+    assert.deepEqual(pushCalls[1], events[1], 'v1 push must mirror the raw statusUpdate event');
+    assert.deepEqual(pushCalls[2], events[2], 'v1 push must mirror the raw statusUpdate event');
+    assert.equal(pushCalls[1].payload?.$case, 'statusUpdate');
+    assert.equal(pushCalls[2].payload?.$case, 'statusUpdate');
   });
 
   it('Push Notification methods should throw error if task does not exist', async () => {
     const nonExistentTaskId = 'task-non-existent';
-    const config: PushNotificationConfig = {
-      id: 'cfg-x',
-      url: 'https://x.com',
-    };
 
     const methodsToTest = [
       {
-        name: 'setTaskPushNotificationConfig',
-        params: { taskId: nonExistentTaskId, pushNotificationConfig: config },
+        name: 'createTaskPushNotificationConfig',
+        params: {
+          tenant: '',
+          id: 'cfg-x',
+          taskId: nonExistentTaskId,
+          url: 'https://x.com',
+          token: 'token-x',
+          authentication: undefined,
+        } as TaskPushNotificationConfig,
       },
       {
         name: 'getTaskPushNotificationConfig',
-        params: { id: nonExistentTaskId, pushNotificationConfigId: 'cfg-x' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as GetTaskPushNotificationConfigRequest,
       },
       {
         name: 'listTaskPushNotificationConfigs',
-        params: { id: nonExistentTaskId },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          pageSize: 0,
+          pageToken: '',
+        } as ListTaskPushNotificationConfigsRequest,
       },
       {
         name: 'deleteTaskPushNotificationConfig',
-        params: { id: nonExistentTaskId, pushNotificationConfigId: 'cfg-x' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as DeleteTaskPushNotificationConfigRequest,
       },
     ];
 
@@ -1484,8 +3451,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await (handler as any)[method.name](method.params, serverCallContext);
         assert.fail(`Method ${method.name} should have thrown for non-existent task.`);
       } catch (error: any) {
-        expect(error).to.be.instanceOf(A2AError);
-        expect(error.code).to.equal(-32001); // Task Not Found
+        expect(error).to.be.instanceOf(TaskNotFoundError);
       }
     }
   });
@@ -1507,29 +3473,42 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: 'ctx-unsupported',
-        status: { state: 'working' },
-        kind: 'task',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
-    const config: PushNotificationConfig = {
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
       id: 'cfg-u',
       url: 'https://u.com',
+      token: 'token-u',
+      authentication: undefined,
     };
 
     const methodsToTest = [
       {
-        name: 'setTaskPushNotificationConfig',
-        params: { taskId, pushNotificationConfig: config },
+        name: 'createTaskPushNotificationConfig',
+        params: {
+          parent: `tasks/${taskId}`,
+          pushNotification: config,
+          pushNotificationConfigId: config.id,
+        },
       },
       {
         name: 'getTaskPushNotificationConfig',
-        params: { id: taskId, pushNotificationConfigId: 'cfg-u' },
+        params: { name: `tasks/${taskId}/pushNotificationConfigs/cfg-u` },
       },
-      { name: 'listTaskPushNotificationConfigs', params: { id: taskId } },
+      {
+        name: 'listTaskPushNotificationConfigs',
+        params: { parent: `tasks/${taskId}`, pageSize: 0, pageToken: '' },
+      },
       {
         name: 'deleteTaskPushNotificationConfig',
-        params: { id: taskId, pushNotificationConfigId: 'cfg-u' },
+        params: { name: `tasks/${taskId}/pushNotificationConfigs/cfg-u` },
       },
     ];
 
@@ -1538,9 +3517,83 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         await (handler as any)[method.name](method.params);
         assert.fail(`Method ${method.name} should have thrown for unsupported push notifications.`);
       } catch (error: any) {
-        expect(error).to.be.instanceOf(A2AError);
-        expect(error.code).to.equal(-32003); // Push Notification Not Supported
+        expect(error).to.be.instanceOf(PushNotificationNotSupportedError);
       }
+    }
+  });
+
+  it('cancelTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: '', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('cancelTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: ' \t ', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('resubscribe: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const generator = handler.resubscribe({ id: badId, tenant: '' }, serverCallContext);
+      await expect(generator.next()).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('createTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: TaskPushNotificationConfig = {
+        tenant: '',
+        id: 'config-1',
+        taskId: badId,
+        url: 'https://example.com/notify',
+        token: 'secret-token',
+        authentication: undefined,
+      };
+      await expect(
+        handler.createTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('getTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: GetTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.getTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('listTaskPushNotificationConfigs: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: ListTaskPushNotificationConfigsRequest = {
+        tenant: '',
+        taskId: badId,
+        pageSize: 10,
+        pageToken: '',
+      };
+      await expect(
+        handler.listTaskPushNotificationConfigs(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('deleteTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: DeleteTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.deleteTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
     }
   });
 
@@ -1555,9 +3608,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       executionEventBusManager
     );
 
-    const streamParams: MessageSendParams = {
+    const streamParams: SendMessageRequest = {
       message: createTestMessage('msg-9', 'Start and cancel'),
-    };
+    } as SendMessageRequest;
     const streamGenerator = handler.sendMessageStream(streamParams, serverCallContext);
 
     const streamEvents: any[] = [];
@@ -1567,28 +3620,36 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       }
     })();
 
-    // Allow the task to be created and enter the 'working' state
-    await vi.advanceTimersByTimeAsync(150);
+    // Allow the task to be created and enter the TaskState.TASK_STATE_WORKING state
+    await vi.advanceTimersByTimeAsync(25);
 
-    const createdTask = streamEvents.find((e) => e.kind === 'task') as Task;
-    assert.isDefined(createdTask, 'Task creation event should have been received');
-    const taskId = createdTask.id;
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
 
     // Now, issue the cancel request
-    const cancelResponse = await handler.cancelTask({ id: taskId }, serverCallContext);
+    const cancelPromise = handler.cancelTask(
+      { id: taskId, tenant: '', metadata: {} },
+      serverCallContext
+    );
 
     // Let the executor's loop run to completion to detect the cancellation
     await vi.runAllTimersAsync();
+
+    const cancelResponse = await cancelPromise;
 
     expect(cancellableExecutor.cancelTaskSpy).toHaveBeenCalledExactlyOnceWith(
       taskId,
       expect.anything()
     );
 
-    const finalTask = await handler.getTask({ id: taskId }, serverCallContext);
-    assert.equal(finalTask.status.state, 'canceled');
+    const finalTask = await handler.getTask(
+      { id: taskId, tenant: '', historyLength: 0 },
+      serverCallContext
+    );
+    assert.equal(finalTask.status.state, TaskState.TASK_STATE_CANCELED);
 
-    assert.equal(cancelResponse.status.state, 'canceled');
+    assert.equal(cancelResponse.status.state, TaskState.TASK_STATE_CANCELED);
   });
 
   it('cancelTask: should fail when it fails to cancel a task', async () => {
@@ -1603,9 +3664,9 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       executionEventBusManager
     );
 
-    const streamParams: MessageSendParams = {
+    const streamParams: SendMessageRequest = {
       message: createTestMessage('msg-9', 'Start and cancel'),
-    };
+    } as SendMessageRequest;
     const streamGenerator = handler.sendMessageStream(streamParams, serverCallContext);
 
     const streamEvents: any[] = [];
@@ -1615,23 +3676,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       }
     })();
 
-    // Allow the task to be created and enter the 'working' state
-    await vi.advanceTimersByTimeAsync(150);
+    // Allow the task to be created and enter the TaskState.TASK_STATE_WORKING state
+    await vi.advanceTimersByTimeAsync(25);
 
-    const createdTask = streamEvents.find((e) => e.kind === 'task') as Task;
-    assert.isDefined(createdTask, 'Task creation event should have been received');
-    const taskId = createdTask.id;
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
 
-    let cancelResponse: Task;
+    let cancelResponse: Task | undefined;
     let thrownError: any;
     try {
-      cancelResponse = await handler.cancelTask({ id: taskId }, serverCallContext);
-    } catch (error: any) {
-      thrownError = error;
+      const cancelPromise = handler.cancelTask(
+        { id: taskId, tenant: '', metadata: {} },
+        serverCallContext
+      );
+      cancelPromise.catch(() => {});
+      await vi.runAllTimersAsync();
+      try {
+        cancelResponse = await cancelPromise;
+      } catch (error: any) {
+        thrownError = error;
+      }
     } finally {
       assert.isDefined(thrownError);
       assert.isUndefined(cancelResponse);
-      assert.equal(thrownError.code, -32002);
+      assert.instanceOf(thrownError, TaskNotCancelableError);
       expect(thrownError.message).to.contain('Task not cancelable');
       expect(failingCancellableExecutor.cancelTaskSpy).toHaveBeenCalledWith(
         taskId,
@@ -1640,45 +3709,176 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
+  it('cancelTask: should surface an error thrown while draining the cancellation', async () => {
+    // Regression: `_processEvents` re-throws (via `_handleProcessingError`)
+    // on the blocking drain path used by `cancelTask`. That handler must be
+    // awaited, otherwise the throw escapes as a floating rejection, the drain
+    // resolves as if it succeeded, and `cancelTask` masks the real failure
+    // with a misleading `TaskNotCancelableError`.
+    vi.useFakeTimers();
+    const cancellableExecutor = new CancellableMockAgentExecutor();
+    handler = new DefaultRequestHandler(
+      testAgentCard,
+      mockTaskStore,
+      cancellableExecutor,
+      executionEventBusManager
+    );
+
+    const streamParams: SendMessageRequest = {
+      message: createTestMessage('msg-cancel-drain', 'Start and cancel'),
+    } as SendMessageRequest;
+    const streamGenerator = handler.sendMessageStream(streamParams, serverCallContext);
+
+    const streamEvents: any[] = [];
+    (async () => {
+      for await (const event of streamGenerator) {
+        streamEvents.push(event);
+      }
+    })().catch(() => {
+      // The injected persistence failure also surfaces on the stream; ignore.
+    });
+
+    // Allow the task to be created and reach TASK_STATE_WORKING.
+    await vi.advanceTimersByTimeAsync(25);
+
+    const createdTaskEvent = streamEvents.find((e) => e.payload?.$case === 'task');
+    assert.isDefined(createdTaskEvent, 'Task creation event should have been received');
+    const taskId = createdTaskEvent.payload.value.id;
+
+    // Inject a failure when the cancellation (CANCELED) state is persisted
+    // during the drain. Earlier SUBMITTED/WORKING saves already succeeded.
+    const drainError = new Error('drain persistence failed');
+    const realSave = mockTaskStore.save.bind(mockTaskStore);
+    vi.spyOn(mockTaskStore, 'save').mockImplementation(async (task, ctx) => {
+      if (task.status?.state === TaskState.TASK_STATE_CANCELED) {
+        throw drainError;
+      }
+      return realSave(task, ctx);
+    });
+
+    // The real drain failure must surface, not a masking TaskNotCancelableError.
+    // Build the rejection assertion before running timers so the rejection is
+    // observed as soon as it happens (no floating unhandled rejection).
+    const cancelPromise = handler.cancelTask(
+      { id: taskId, tenant: '', metadata: {} },
+      serverCallContext
+    );
+    const rejectsWithDrainError = expect(cancelPromise).rejects.toBe(drainError);
+    await vi.runAllTimersAsync();
+    await rejectsWithDrainError;
+  });
+
   it('cancelTask: should fail for tasks in a terminal state', async () => {
     const taskId = 'task-terminal';
     const fakeTask: Task = {
       id: taskId,
       contextId: 'ctx-terminal',
-      status: { state: 'completed' },
-      kind: 'task',
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      artifacts: [],
+      metadata: {},
+      history: [],
     };
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     try {
-      await handler.cancelTask({ id: taskId }, serverCallContext);
+      await handler.cancelTask({ id: taskId, tenant: '', metadata: {} }, serverCallContext);
       assert.fail('Should have thrown a TaskNotCancelableError');
     } catch (error: any) {
-      assert.equal(error.code, -32002);
+      assert.instanceOf(error, TaskNotCancelableError);
       expect(error.message).to.contain('Task not cancelable');
     }
     expect((mockAgentExecutor as MockAgentExecutor).cancelTask).not.toHaveBeenCalled();
   });
 
+  it('cancelTask: does not clobber a task a concurrent executor just completed', async () => {
+    // Regression: cancel used load→check→mutate→save with no lock, so a
+    // COMPLETED status written by a racing executor between the check and
+    // the save could be overwritten with CANCELED (or the CANCELED write
+    // lost). cancelTask now routes the no-bus path through ResultManager,
+    // whose per-task write lock and terminal-state guard make the
+    // transition atomic; if the executor already finished, the cancel
+    // fails cleanly instead of corrupting the task.
+    const taskId = 'task-cancel-race';
+    const contextId = 'ctx-cancel-race';
+    const workTask: Task = {
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    const completedTask: Task = {
+      ...structuredClone(workTask),
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+    };
+
+    const saved: Task[] = [];
+    let loadCount = 0;
+    const racingStore: TaskStore = {
+      save: async (task) => {
+        saved.push(structuredClone(task));
+      },
+      load: async () => {
+        loadCount += 1;
+        // First load (cancel's initial check) sees WORKING; the racing
+        // executor completes the task before ResultManager re-loads
+        // inside its write lock.
+        return loadCount === 1 ? structuredClone(workTask) : structuredClone(completedTask);
+      },
+      list: async () => ({ tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 }),
+    };
+    const racingHandler = new DefaultRequestHandler(
+      testAgentCard,
+      racingStore,
+      mockAgentExecutor,
+      executionEventBusManager
+    );
+
+    await expect(
+      racingHandler.cancelTask({ id: taskId, tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(TaskNotCancelableError);
+
+    // The CANCELED write must never reach the store.
+    expect(saved.some((t) => t.status?.state === TaskState.TASK_STATE_CANCELED)).toBe(false);
+  });
+
   it('should use contextId from incomingMessage if present (contextId assignment logic)', async () => {
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
       message: {
         messageId: 'msg-ctx',
-        role: 'user',
-        parts: [{ kind: 'text', text: 'Hello' }],
-        kind: 'message',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Hello' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
         contextId: 'incoming-ctx-id',
+        taskId: '',
+        extensions: [],
+        metadata: {},
       },
-    };
+    } as SendMessageRequest;
     let capturedContextId: string | undefined;
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(async (ctx, bus) => {
       capturedContextId = ctx.contextId;
-      bus.publish({
-        id: ctx.taskId,
-        contextId: ctx.contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       bus.finished();
     });
     await handler.sendMessage(params, serverCallContext);
@@ -1692,29 +3892,50 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       {
         id: taskId,
         contextId: taskContextId,
-        status: { state: 'working' },
-        kind: 'task',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+        artifacts: [],
+        history: [],
       },
       serverCallContext
     );
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
       message: {
         messageId: 'msg-ctx2',
-        role: 'user',
-        parts: [{ kind: 'text', text: 'Hi' }],
-        kind: 'message',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Hi' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
         taskId,
+        contextId: '',
+        extensions: [],
+        metadata: {},
       },
-    };
+    } as SendMessageRequest;
     let capturedContextId: string | undefined;
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(async (ctx, bus) => {
       capturedContextId = ctx.contextId;
-      bus.publish({
-        id: ctx.taskId,
-        contextId: ctx.contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       bus.finished();
     });
     await handler.sendMessage(params, serverCallContext);
@@ -1722,23 +3943,43 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
   });
 
   it('should generate a new contextId if not present in message or task (contextId assignment logic)', async () => {
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
       message: {
         messageId: 'msg-ctx3',
-        role: 'user',
-        parts: [{ kind: 'text', text: 'Hey' }],
-        kind: 'message',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Hey' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        taskId: '',
+        contextId: '',
+        extensions: [],
+        metadata: {},
       },
-    };
+    } as SendMessageRequest;
     let capturedContextId: string | undefined;
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(async (ctx, bus) => {
       capturedContextId = ctx.contextId;
-      bus.publish({
-        id: ctx.taskId,
-        contextId: ctx.contextId,
-        status: { state: 'submitted' },
-        kind: 'task',
-      });
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
       bus.finished();
     });
     await handler.sendMessage(params, serverCallContext);
@@ -1747,9 +3988,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('ExecutionEventQueue should be instantiable and return an object', () => {
     const fakeBus = {
-      on: () => {},
-      off: () => {},
-    } as any;
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      publish: vi.fn(),
+      finished: vi.fn(),
+      removeAllListeners: vi.fn(),
+    } as unknown as ExecutionEventBus;
     const queue = new ExecutionEventQueue(fakeBus);
     expect(queue).to.be.instanceOf(ExecutionEventQueue);
   });
@@ -1761,44 +4006,68 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const incomingTaskId = 'custom-task-id';
     const expectedExtension = 'requested-extension-uri';
 
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
       message: {
         messageId: messageId,
-        role: 'user',
-        parts: [{ kind: 'text', text: userMessageText }],
-        kind: 'message',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: userMessageText },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
         contextId: incomingContextId,
         taskId: incomingTaskId,
+        extensions: [],
+        metadata: {},
       },
-    };
+    } as SendMessageRequest;
 
     let capturedRequestContext: RequestContext | undefined;
     (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
       async (ctx: RequestContext, bus: ExecutionEventBus) => {
         capturedRequestContext = ctx;
-        bus.publish({
-          id: ctx.taskId,
-          contextId: ctx.contextId,
-          status: { state: 'submitted' },
-          kind: 'task',
-        });
+        bus.publish(
+          AgentEvent.task({
+            id: ctx.taskId,
+            contextId: ctx.contextId,
+            status: {
+              state: TaskState.TASK_STATE_SUBMITTED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
         bus.finished();
       }
     );
 
     const fakeTask: Task = {
-      id: params.message.taskId!,
-      contextId: params.message.contextId!,
-      status: { state: 'submitted' as TaskState },
-      kind: 'task',
+      id: params.message!.taskId!,
+      contextId: params.message!.contextId!,
+      status: {
+        state: TaskState.TASK_STATE_SUBMITTED as TaskState,
+        message: undefined,
+        timestamp: undefined,
+      },
+      artifacts: [],
+      history: [],
+      metadata: {},
     };
     await mockTaskStore.save(fakeTask, serverCallContext);
     await handler.sendMessage(
       params,
-      new ServerCallContext(
-        [expectedExtension, 'not-available-extension-by-agent-card'],
-        new UnauthenticatedUser()
-      )
+      new ServerCallContext({
+        requestedExtensions: [expectedExtension, 'not-available-extension-by-agent-card'],
+        user: new UnauthenticatedUser(),
+      })
     );
 
     expect(capturedRequestContext).to.be.instanceOf(
@@ -1816,6 +4085,130 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       'requestedExtensions should contain the expected extension'
     );
     expect(capturedRequestContext?.context?.user).to.be.an.instanceOf(UnauthenticatedUser);
+  });
+
+  it('should expose SendMessageRequest metadata to agentExecutor via RequestContext', async () => {
+    const requestMetadata = {
+      'a2a-service-parameters': { 'A2A-Extensions': 'https://example.com/extensions/sample/v1' },
+      traceId: 'trace-123',
+    };
+
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: requestMetadata,
+      configuration: undefined,
+      message: {
+        messageId: 'msg-request-metadata',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Verify request metadata.' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: 'metadata-context-id',
+        taskId: '',
+        extensions: [],
+        referenceTaskIds: [],
+        metadata: {},
+      },
+    };
+
+    let capturedRequestContext: RequestContext | undefined;
+    (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+      async (ctx: RequestContext, bus: ExecutionEventBus) => {
+        capturedRequestContext = ctx;
+        bus.publish(
+          AgentEvent.task({
+            id: ctx.taskId,
+            contextId: ctx.contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
+        bus.finished();
+      }
+    );
+
+    await handler.sendMessage(params, serverCallContext);
+    expect(capturedRequestContext?.request.metadata).to.deep.equal(
+      requestMetadata,
+      'sendMessage should thread request metadata into RequestContext'
+    );
+
+    capturedRequestContext = undefined;
+    const streamParams: SendMessageRequest = {
+      ...params,
+      message: { ...params.message!, messageId: 'msg-request-metadata-stream' },
+    };
+    for await (const event of handler.sendMessageStream(streamParams, serverCallContext)) {
+      void event; // drain the stream
+    }
+    expect(capturedRequestContext?.request.metadata).to.deep.equal(
+      requestMetadata,
+      'sendMessageStream should thread request metadata into RequestContext'
+    );
+  });
+
+  it('should leave RequestContext metadata undefined when the request carries none', async () => {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: undefined,
+      configuration: undefined,
+      message: {
+        messageId: 'msg-no-request-metadata',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'No request metadata.' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: 'no-metadata-context-id',
+        taskId: '',
+        extensions: [],
+        referenceTaskIds: [],
+        metadata: {},
+      },
+    };
+
+    let capturedRequestContext: RequestContext | undefined;
+    (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+      async (ctx: RequestContext, bus: ExecutionEventBus) => {
+        capturedRequestContext = ctx;
+        bus.publish(
+          AgentEvent.task({
+            id: ctx.taskId,
+            contextId: ctx.contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
+        bus.finished();
+      }
+    );
+
+    await handler.sendMessage(params, serverCallContext);
+    expect(capturedRequestContext?.request.metadata).to.equal(
+      undefined,
+      'RequestContext metadata should be undefined when the request has none'
+    );
   });
 
   describe('getAuthenticatedExtendedAgentCard tests', async () => {
@@ -1836,20 +4229,33 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         return extendedAgentCard;
       }
       // Remove the extensions that are not allowed for unauthenticated clients
-      extendedAgentCard.capabilities.extensions = [{ uri: 'requested-extension-uri' }];
+      extendedAgentCard.capabilities.extensions = [
+        {
+          uri: 'requested-extension-uri',
+          description: 'A requested extension',
+          required: false,
+          params: undefined,
+        },
+      ];
       return extendedAgentCard;
     };
 
     const agentCardWithExtendedSupport: AgentCard = {
       name: 'Test Agent',
       description: 'An agent for testing purposes',
-      url: 'http://localhost:8080',
       version: '1.0.0',
-      protocolVersion: '0.3.0',
       capabilities: {
-        extensions: [{ uri: 'requested-extension-uri' }],
+        extensions: [
+          {
+            uri: 'requested-extension-uri',
+            description: 'A requested extension',
+            required: false,
+            params: undefined,
+          },
+        ],
         streaming: true,
         pushNotifications: true,
+        extendedAgentCard: true,
       },
       defaultInputModes: ['text/plain'],
       defaultOutputModes: ['text/plain'],
@@ -1859,21 +4265,38 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           name: 'Test Skill',
           description: 'A skill for testing',
           tags: ['test'],
+          examples: [],
+          inputModes: ['text/plain'],
+          outputModes: ['text/plain'],
+          securityRequirements: [],
         },
       ],
-      supportsAuthenticatedExtendedCard: true,
+      supportedInterfaces: [],
+      provider: undefined,
+      documentationUrl: '',
+      securitySchemes: {},
+      securityRequirements: [],
+      signatures: [],
     };
 
     const extendedAgentCard: AgentCard = {
       name: 'Test ExtendedAgentCard Agent',
       description: 'An agent for testing the extended agent card functionality',
-      url: 'http://localhost:8080',
       version: '1.0.0',
-      protocolVersion: '0.3.0',
       capabilities: {
         extensions: [
-          { uri: 'requested-extension-uri' },
-          { uri: 'extension-uri-for-authenticated-clients' },
+          {
+            uri: 'requested-extension-uri',
+            description: 'A requested extension',
+            required: false,
+            params: undefined,
+          },
+          {
+            uri: 'extension-uri-for-authenticated-clients',
+            description: 'Extension for authenticated clients',
+            required: false,
+            params: undefined,
+          },
         ],
         streaming: true,
         pushNotifications: true,
@@ -1886,20 +4309,31 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           name: 'Test Skill',
           description: 'A skill for testing',
           tags: ['test'],
+          examples: [],
+          inputModes: ['text/plain'],
+          outputModes: ['text/plain'],
+          securityRequirements: [],
         },
       ],
+      supportedInterfaces: [],
+      provider: undefined,
+      documentationUrl: '',
+      securitySchemes: {},
+      securityRequirements: [],
+      signatures: [],
     };
 
     it('getAuthenticatedExtendedAgentCard should fail if the agent card does not support extended agent card', async () => {
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard();
+        await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {
-        expect(caughtError).to.be.instanceOf(A2AError);
-        expect(caughtError.code).to.equal(-32004);
-        expect(caughtError.message).to.contain('Unsupported operation');
+        expect(caughtError).to.be.instanceOf(UnsupportedOperationError);
+        expect(caughtError.message).to.contain(
+          'Agent does not support authenticated extended card'
+        );
       }
     });
 
@@ -1912,13 +4346,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       );
       let caughtError;
       try {
-        await handler.getAuthenticatedExtendedAgentCard();
+        await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, serverCallContext);
       } catch (error: any) {
         caughtError = error;
       } finally {
-        expect(caughtError).to.be.instanceOf(A2AError);
-        expect(caughtError.code).to.equal(-32007);
-        expect(caughtError.message).to.contain('Extended card not configured');
+        expect(caughtError).to.be.instanceOf(ExtendedAgentCardNotConfiguredError);
+        expect(caughtError.message).to.contain('Extended Agent Card not configured');
       }
     });
 
@@ -1933,8 +4366,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         extendedAgentCard
       );
 
-      const context = new ServerCallContext(undefined, new A2AUser(true));
-      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      const context = new ServerCallContext({ user: new A2AUser(true) });
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, context);
       assert.deepEqual(agentCard, extendedAgentCard);
     });
 
@@ -1949,11 +4382,498 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         extendedAgentcardProvider
       );
 
-      const context = new ServerCallContext(undefined, new A2AUser(false));
-      const agentCard = await handler.getAuthenticatedExtendedAgentCard(context);
+      const context = new ServerCallContext({ user: new A2AUser(false) });
+      const agentCard = await handler.getAuthenticatedExtendedAgentCard({ tenant: '' }, context);
       assert(agentCard.capabilities.extensions.length === 1);
-      assert.deepEqual(agentCard.capabilities.extensions[0], { uri: 'requested-extension-uri' });
+      assert.deepEqual(agentCard.capabilities.extensions[0], {
+        uri: 'requested-extension-uri',
+        description: 'A requested extension',
+        required: false,
+        params: undefined,
+      });
       assert.deepEqual(agentCard.name, extendedAgentCard.name);
+    });
+  });
+
+  describe('ExtensionSupportRequiredError (§3.3.4)', () => {
+    const requiredExtensionUri = 'urn:a2a:required-ext';
+    const optionalExtensionUri = 'urn:a2a:optional-ext';
+
+    const agentCardWithRequiredExtension: AgentCard = {
+      ...testAgentCard,
+      capabilities: {
+        ...testAgentCard.capabilities,
+        extensions: [
+          {
+            uri: requiredExtensionUri,
+            description: 'A required extension',
+            required: true,
+            params: {},
+          },
+          {
+            uri: optionalExtensionUri,
+            description: 'An optional extension',
+            required: false,
+            params: {},
+          },
+        ],
+      },
+    };
+
+    let requiredExtHandler: DefaultRequestHandler;
+
+    beforeEach(() => {
+      requiredExtHandler = new DefaultRequestHandler(
+        agentCardWithRequiredExtension,
+        mockTaskStore,
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager()
+      );
+    });
+
+    it('should reject requests that do not declare a required extension', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-required',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      // No extensions declared by client
+      const context = new ServerCallContext();
+
+      await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+    });
+
+    it('should reject when client declares only optional extensions but not required ones', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-optional-only',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      // Client declares only the optional extension, not the required one
+      const context = new ServerCallContext({
+        requestedExtensions: [optionalExtensionUri],
+      });
+
+      await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+    });
+
+    it('should include missing extension URIs in error message', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-error-msg',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      const context = new ServerCallContext();
+
+      await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+    });
+
+    it('should not persist a follow-up that is rejected for a missing required extension', async () => {
+      const existing = createTestTask('task-ext-followup');
+      const saveSpy = vi.spyOn(mockTaskStore, 'save');
+      await mockTaskStore.save(existing, new ServerCallContext());
+      saveSpy.mockClear();
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-followup',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'follow-up' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: existing.contextId,
+          taskId: existing.id,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      await expect(requiredExtHandler.sendMessage(params, new ServerCallContext())).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it('should accept requests that declare the required extension', async () => {
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-accepted',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: 'task-ext',
+              contextId: 'ctx-ext',
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      // Client declares the required extension
+      const context = new ServerCallContext({
+        requestedExtensions: [requiredExtensionUri],
+      });
+
+      // Should not throw
+      const result = await requiredExtHandler.sendMessage(params, context);
+      expect(result).toBeDefined();
+    });
+
+    it('should not reject when agent has no required extensions', async () => {
+      // Use the default handler which has only optional extensions
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-no-required',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: 'task-no-req',
+              contextId: 'ctx-no-req',
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      // No extensions declared, but agent has no required ones
+      const context = new ServerCallContext();
+
+      const result = await handler.sendMessage(params, context);
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('contextId/taskId mismatch validation (§3.4.3)', () => {
+    it('should reject when message contextId does not match existing task contextId', async () => {
+      const taskContextId = 'task-ctx-original';
+      const messageContextId = 'msg-ctx-different';
+      const taskId = 'task-ctx-mismatch';
+
+      // Create a task with a known contextId
+      const existingTask: Task = {
+        id: taskId,
+        contextId: taskContextId,
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      // Send a message referencing the task but with a different contextId
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-mismatch',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: messageContextId,
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(
+        RequestMalformedError
+      );
+    });
+
+    it('should include both contextIds in the error message', async () => {
+      const taskContextId = 'ctx-AAA';
+      const messageContextId = 'ctx-BBB';
+      const taskId = 'task-ctx-msg';
+
+      const existingTask: Task = {
+        id: taskId,
+        contextId: taskContextId,
+        status: {
+          state: TaskState.TASK_STATE_WORKING,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-err-detail',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: messageContextId,
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(/ctx-AAA/);
+      await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(/ctx-BBB/);
+    });
+
+    it('should accept when message contextId matches existing task contextId', async () => {
+      const contextId = 'ctx-matching';
+      const taskId = 'task-ctx-match';
+
+      const existingTask: Task = {
+        id: taskId,
+        contextId: contextId,
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: taskId,
+              contextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-ok',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: contextId,
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      const result = await handler.sendMessage(params, serverCallContext);
+      expect(result).toBeDefined();
+    });
+
+    it('should accept when message omits contextId for existing task', async () => {
+      const taskId = 'task-ctx-omit';
+      const taskContextId = 'ctx-from-task';
+
+      const existingTask: Task = {
+        id: taskId,
+        contextId: taskContextId,
+        status: {
+          state: TaskState.TASK_STATE_INPUT_REQUIRED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      await mockTaskStore.save(existingTask, serverCallContext);
+
+      (mockAgentExecutor.execute as unknown as Mock).mockImplementation(
+        async (_ctx: RequestContext, bus: ExecutionEventBus) => {
+          bus.publish(
+            AgentEvent.task({
+              id: taskId,
+              contextId: taskContextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            })
+          );
+          bus.finished();
+        }
+      );
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ctx-none',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: taskId,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      const result = await handler.sendMessage(params, serverCallContext);
+      expect(result).toBeDefined();
     });
   });
 });

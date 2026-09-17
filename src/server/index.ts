@@ -1,6 +1,5 @@
 /**
- * Server entry point for the A2A Server V2 library.
- * Exports the server-only codebase.
+ * Server entry point for the A2A SDK. Exports the server-only codebase.
  */
 
 export type { AgentExecutor } from './agent_execution/agent_executor.js';
@@ -8,30 +7,61 @@ export { RequestContext } from './agent_execution/request_context.js';
 
 export type {
   AgentExecutionEvent,
+  AgentExecutionEventKind,
+  EventListener,
   ExecutionEventBus,
   ExecutionEventName,
+  FinishedListener,
 } from './events/execution_event_bus.js';
-export { DefaultExecutionEventBus } from './events/execution_event_bus.js';
+export {
+  AgentEvent,
+  assertUnreachableEvent,
+  DefaultExecutionEventBus,
+} from './events/execution_event_bus.js';
 export type { ExecutionEventBusManager } from './events/execution_event_bus_manager.js';
 export { DefaultExecutionEventBusManager } from './events/execution_event_bus_manager.js';
 export { ExecutionEventQueue } from './events/execution_event_queue.js';
 
 export type { A2ARequestHandler } from './request_handler/a2a_request_handler.js';
 export { DefaultRequestHandler } from './request_handler/default_request_handler.js';
-export type { ExtendedAgentCardProvider } from './request_handler/default_request_handler.js';
+export type {
+  DefaultRequestHandlerOptions,
+  ExtendedAgentCardProvider,
+} from './request_handler/default_request_handler.js';
 export { ResultManager } from './result_manager.js';
 export type { TaskStore } from './store.js';
 export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
-export { ServerCallContext } from './context.js';
-export { A2AError } from './error.js';
+export {
+  ServerCallContext,
+  defaultServerCallContextBuilder,
+  STATE_HEADERS_KEY,
+} from './context.js';
+export type {
+  ServerCallContextOptions,
+  ServerCallContextBuilder,
+  ServerCallContextBuilderOptions,
+  RequestHeaders,
+} from './context.js';
+export { validateVersion, getSupportedVersions } from './version.js';
 
 export type { PushNotificationSender } from './push_notification/push_notification_sender.js';
 export { DefaultPushNotificationSender } from './push_notification/default_push_notification_sender.js';
 export type { DefaultPushNotificationSenderOptions } from './push_notification/default_push_notification_sender.js';
-export type { PushNotificationStore } from './push_notification/push_notification_store.js';
+export type {
+  PushNotificationStore,
+  StoredPushNotificationConfig,
+} from './push_notification/push_notification_store.js';
 export { InMemoryPushNotificationStore } from './push_notification/push_notification_store.js';
+export type {
+  PushNotificationSerializer,
+  SerializedPushNotification,
+} from './push_notification/push_notification_serializer.js';
+export { V1PushNotificationSerializer } from './push_notification/push_notification_serializer.js';
 
 export type { User } from './authentication/user.js';
 export { UnauthenticatedUser } from './authentication/user.js';
+
+export type { OwnerResolver } from './owner_resolver.js';
+export { resolveUserScope } from './owner_resolver.js';
