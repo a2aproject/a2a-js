@@ -13,51 +13,34 @@ import { run } from '../../src/cli/run.js';
 // Spelled out rather than imported from the store: a test that reads these from the code
 // it checks cannot catch a rename, and a renamed ledger makes a migrated database look
 // untouched.
-const STORE_ID = 'tasks';
-const TABLE = 'tasks';
-const LEDGER_TABLE = 'a2a_task_store_migrations';
+const STORE_ID = 'push-notification-configs';
+const TABLE = 'push_notification_configs';
+const LEDGER_TABLE = 'a2a_push_notification_store_migrations';
 const LOCK_TABLE = 'a2a_migrations_lock';
-const MIGRATION = '0001_create_tasks';
-const KEY_COLUMNS = ['tenant', 'owner', 'id'];
-const COLLATED_COLUMNS = [...KEY_COLUMNS, 'context_id', 'status_state'];
-const ALL_COLUMNS = [
-  ...KEY_COLUMNS,
-  'context_id',
-  'status_last_updated',
-  'status_state',
-  'status',
-  'artifacts',
-  'history',
-  'metadata',
-  'protocol_version',
-];
-
-/** The listing indexes, and the column order the keyset pagination depends on. */
-const INDEXES: Record<string, string[]> = {
-  tasks_scope_updated_idx: ['tenant', 'owner', 'status_last_updated', 'id'],
-  tasks_scope_context_updated_idx: ['tenant', 'owner', 'context_id', 'status_last_updated', 'id'],
-};
+const MIGRATION = '0001_create_push_notification_configs';
+/** The revision the CLI translates into Kysely's NO_MIGRATIONS. */
+const BASE = 'base';
+const KEY_COLUMNS = ['tenant', 'owner', 'task_id', 'config_id'];
+const ALL_COLUMNS = [...KEY_COLUMNS, 'config_data', 'protocol_version'];
 
 // `upgrade` with no --store migrates every registered store, so the teardown has to
-// clear the push notification store's tables too or they outlive the test on a shared server.
-const OTHER_STORE_TABLES = ['push_notification_configs', 'a2a_push_notification_store_migrations'];
+// clear the task store's tables too or they outlive the test on a shared server.
+const OTHER_STORE_TABLES = ['tasks', 'a2a_task_store_migrations'];
 
 /**
  * What differs between engines: how to reach a database, how the binary collation is
- * spelled, and how to read back the four things Kysely's portable introspector does not
- * expose — width, collation, position in the key, and the secondary indexes.
+ * spelled, and how to read back the three things Kysely's portable introspector does not
+ * expose — width, collation and position in the key.
  */
 interface Engine {
   readonly name: string;
-  /** The collation the collated columns must carry here, spelled this engine's way. */
+  /** The collation the key columns must carry here, spelled this engine's way. */
   readonly binaryCollation: string;
   /** A URL whose database holds none of this store's tables. */
   freshUrl(): string;
   widths(db: Kysely<unknown>): Promise<Record<string, number>>;
   collations(db: Kysely<unknown>): Promise<Record<string, string | null>>;
   keyOrder(db: Kysely<unknown>): Promise<string[]>;
-  /** Secondary indexes only. */
-  indexes(db: Kysely<unknown>): Promise<Record<string, string[]>>;
 }
 
 /** `information_schema` names its own columns lowercase on PostgreSQL, uppercase on MySQL. */
@@ -71,23 +54,13 @@ async function query(db: Kysely<unknown>, text: string): Promise<Record<string, 
   return lowerKeys((await sql.raw(text).execute(db)).rows);
 }
 
-/** Both servers report one row per indexed column; only the query to get them differs. */
-function groupIndexColumns(rows: Record<string, unknown>[]): Record<string, string[]> {
-  const indexes: Record<string, string[]> = {};
-  for (const row of rows) {
-    const name = String(row.index_name);
-    (indexes[name] ??= []).push(String(row.column_name));
-  }
-  return indexes;
-}
-
 const tempDirs: string[] = [];
 
 const sqliteEngine: Engine = {
   name: 'sqlite',
   binaryCollation: 'binary',
   freshUrl() {
-    const dir = mkdtempSync(join(tmpdir(), 'a2a-task-migrations-'));
+    const dir = mkdtempSync(join(tmpdir(), 'a2a-migrations-'));
     tempDirs.push(dir);
     return `sqlite:${join(dir, 'a2a.db')}`;
   },
@@ -103,19 +76,18 @@ const sqliteEngine: Engine = {
     );
   },
   async collations(db) {
-    // Read out of the stored DDL rather than the indexes: `PRAGMA index_xinfo` reports a
-    // collation only for indexed columns, and `status_state` is in no index.
-    const [table] = await query(
-      db,
-      `select sql from sqlite_master where type = 'table' and name = '${TABLE}'`
+    // The key columns are the primary key, so their collations are the ones on the index
+    // SQLite builds for it.
+    const indexes = await query(db, `PRAGMA index_list(${TABLE})`);
+    const primary = indexes.find((row) => row.origin === 'pk');
+    if (!primary) return {};
+    const columns = await query(db, `PRAGMA index_xinfo('${String(primary.name)}')`);
+    return Object.fromEntries(
+      columns
+        // The trailing rowid entry is not a key column.
+        .filter((row) => Number(row.key) === 1)
+        .map((row) => [String(row.name), String(row.coll)])
     );
-    const collations: Record<string, string> = {};
-    for (const [, column, collation] of String(table?.sql ?? '').matchAll(
-      /"(\w+)"\s+\w+(?:\(\d+\))?\s+collate\s+(\w+)/gi
-    )) {
-      collations[column] = collation;
-    }
-    return collations;
   },
   async keyOrder(db) {
     const rows = await query(db, `PRAGMA table_info(${TABLE})`);
@@ -123,18 +95,6 @@ const sqliteEngine: Engine = {
       .filter((row) => Number(row.pk) > 0)
       .sort((a, b) => Number(a.pk) - Number(b.pk))
       .map((row) => String(row.name));
-  },
-  async indexes(db) {
-    const indexes: Record<string, string[]> = {};
-    for (const index of await query(db, `PRAGMA index_list(${TABLE})`)) {
-      // The primary key gets an index of its own, which keyOrder already covers.
-      if (index.origin === 'pk') continue;
-      const columns = await query(db, `PRAGMA index_info('${String(index.name)}')`);
-      indexes[String(index.name)] = columns
-        .sort((a, b) => Number(a.seqno) - Number(b.seqno))
-        .map((column) => String(column.name));
-    }
-    return indexes;
   },
 };
 
@@ -145,31 +105,17 @@ const SERVERS = [
     variable: 'POSTGRES_TEST_DSN',
     binaryCollation: 'C',
     currentSchema: 'current_schema()',
-    indexesSql: `
-      select i.relname as index_name, a.attname as column_name
-      from pg_class t
-      join pg_index ix on ix.indrelid = t.oid
-      join pg_class i on i.oid = ix.indexrelid
-      cross join lateral unnest(ix.indkey) with ordinality as k(attnum, ord)
-      join pg_attribute a on a.attrelid = t.oid and a.attnum = k.attnum
-      where t.relname = '${TABLE}' and not ix.indisprimary
-      order by i.relname, k.ord`,
   },
   {
     name: 'mysql',
     variable: 'MYSQL_TEST_DSN',
     binaryCollation: 'utf8mb4_0900_bin',
     currentSchema: 'database()',
-    indexesSql: `
-      select index_name, column_name
-      from information_schema.statistics
-      where table_name = '${TABLE}' and table_schema = database() and index_name <> 'PRIMARY'
-      order by index_name, seq_in_index`,
   },
 ] as const;
 
 function informationSchemaEngine(server: (typeof SERVERS)[number], url: string): Engine {
-  const { name, binaryCollation, currentSchema, indexesSql } = server;
+  const { name, binaryCollation, currentSchema } = server;
   const scoped = `table_name = '${TABLE}' and table_schema = ${currentSchema}`;
   return {
     name,
@@ -216,9 +162,6 @@ function informationSchemaEngine(server: (typeof SERVERS)[number], url: string):
       );
       return rows.map((row) => String(row.column_name));
     },
-    async indexes(db) {
-      return groupIndexColumns(await query(db, indexesSql));
-    },
   };
 }
 
@@ -252,13 +195,13 @@ afterEach(() => {
 
 // Reported rather than dropped, so a run against fewer engines than intended is visible.
 for (const label of UNCONFIGURED) {
-  describe.skip(`a2a-db task migrations on ${label}`, () => {
+  describe.skip(`a2a-db push notification migrations on ${label}`, () => {
     it('has no database to run against', () => {});
   });
 }
 
 for (const engine of ENGINES) {
-  describe(`a2a-db task migrations on ${engine.name}`, () => {
+  describe(`a2a-db push notification migrations on ${engine.name}`, () => {
     let url: string;
 
     /**
@@ -329,7 +272,6 @@ for (const engine of ENGINES) {
           widths: await engine.widths(db),
           keyOrder: await engine.keyOrder(db),
           collations: await engine.collations(db),
-          indexes: await engine.indexes(db),
         };
       });
 
@@ -354,24 +296,19 @@ for (const engine of ENGINES) {
       const nullable = Object.fromEntries(
         (await columnsOf()).map((column) => [column.name, column.isNullable])
       );
-      for (const column of [...KEY_COLUMNS, 'context_id', 'status_last_updated']) {
-        expect(nullable[column]).toBe(false);
-      }
-      for (const column of ['status_state', 'status', 'artifacts', 'history', 'metadata']) {
-        expect(nullable[column]).toBe(true);
-      }
+      for (const column of KEY_COLUMNS) expect(nullable[column]).toBe(false);
+      expect(nullable.config_data).toBe(true);
       expect(nullable.protocol_version).toBe(true);
     });
 
-    it('upgrade sets the expected width on every varchar column', async () => {
+    it('upgrade sets the expected width on every key column', async () => {
       await cli('upgrade');
 
       const widths = await introspect((db) => engine.widths(db));
+      expect(widths.task_id).toBe(36);
+      expect(widths.config_id).toBe(36);
       expect(widths.tenant).toBe(255);
       expect(widths.owner).toBe(255);
-      expect(widths.id).toBe(36);
-      expect(widths.context_id).toBe(36);
-      expect(widths.status_state).toBe(255);
     });
 
     it('upgrade sets the primary key to the key columns, in order', async () => {
@@ -380,19 +317,13 @@ for (const engine of ENGINES) {
       expect(await introspect((db) => engine.keyOrder(db))).toEqual(KEY_COLUMNS);
     });
 
-    it('upgrade sets the binary collation on every collated column', async () => {
+    it('upgrade sets the binary collation on every key column', async () => {
       await cli('upgrade');
 
       const collations = await introspect((db) => engine.collations(db));
-      for (const column of COLLATED_COLUMNS) {
+      for (const column of KEY_COLUMNS) {
         expect(collations[column]?.toLowerCase()).toBe(engine.binaryCollation.toLowerCase());
       }
-    });
-
-    it('upgrade creates both listing indexes over the right columns, in order', async () => {
-      await cli('upgrade');
-
-      expect(await introspect((db) => engine.indexes(db))).toEqual(INDEXES);
     });
 
     it('upgrade twice changes nothing and leaves one ledger row', async () => {
@@ -462,6 +393,20 @@ for (const engine of ENGINES) {
 
       expect(code).toBe(0);
       expect(out).toContain('nothing to revert');
+    });
+
+    // "base" is the one target the store does not name: it becomes Kysely's own
+    // NO_MIGRATIONS sentinel, which lives behind the same runtime load as the
+    // migrator. The table going away is what proves the translation happened.
+    it('downgrade base reverts every migration and empties the ledger', async () => {
+      await cli('upgrade');
+
+      const { code, out } = await cli('downgrade', BASE);
+
+      expect(code).toBe(0);
+      expect(out).toContain(`now at ${BASE}`);
+      expect(await tableNames()).not.toContain(TABLE);
+      expect((await cli('status')).out).toContain('pending');
     });
 
     it('upgrade after downgrade recreates an identical table', async () => {

@@ -7,7 +7,7 @@ import { sql } from 'kysely';
 import type { Kysely } from 'kysely';
 
 import { connect } from '../../src/cli/connect.js';
-import { migrateStore } from '../../src/server/database/migrator.js';
+import { migrateStore } from '../../src/cli/migrator.js';
 import { TASK_STORE_MIGRATIONS } from '../../src/server/database/task/migrations.js';
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
 import type { TaskDatabase } from '../../src/server/database/task/schema.js';

@@ -7,7 +7,7 @@ import { sql } from 'kysely';
 import type { Kysely } from 'kysely';
 
 import { connect } from '../../src/cli/connect.js';
-import { migrateStore } from '../../src/server/database/migrator.js';
+import { migrateStore } from '../../src/cli/migrator.js';
 import { PUSH_NOTIFICATION_STORE_MIGRATIONS } from '../../src/server/database/push_notification/migrations.js';
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
 import type { PushNotificationDatabase } from '../../src/server/database/push_notification/schema.js';

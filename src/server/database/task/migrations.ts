@@ -1,4 +1,4 @@
-import type { StoreMigrations } from '../migrator.js';
+import type { StoreMigrations } from '../store_migrations.js';
 
 import * as createTasks from './migrations/0001_create_tasks.js';
 

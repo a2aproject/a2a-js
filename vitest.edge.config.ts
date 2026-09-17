@@ -23,14 +23,13 @@ export default defineWorkersConfig(
         // (sibling pure-unit serializer tests stay in the edge suite).
         'test/server/push_notification_sender_serializer.spec.ts',
         'test/compat/v0_3/server/push_notification/create_legacy_aware_sender.spec.ts',
-        // Migrations run against a real database: native drivers and temp files, neither
-        // of which workerd has. Migrating is an operator step, never something a Worker
-        // does, so this is permanent rather than pending.
-        'test/server/database_push_notification_migrations.spec.ts',
-        'test/server/database_task_migrations.spec.ts',
-        // The store suites drive a real database through the same native drivers.
+        // The store suites drive a real database through native drivers workerd lacks.
         'test/server/database_push_notification_store.spec.ts',
         'test/server/database_task_store.spec.ts',
+        // `a2a-db` is Node-only: native drivers and temp files, neither of which workerd
+        // has. Migrating is an operator step, never something a Worker does, so this is
+        // permanent rather than pending.
+        'test/cli/**',
         // Node modules should always be excluded
         '**/node_modules/**',
       ],

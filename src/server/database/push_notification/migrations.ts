@@ -1,4 +1,4 @@
-import type { StoreMigrations } from '../migrator.js';
+import type { StoreMigrations } from '../store_migrations.js';
 
 import * as createPushNotificationConfigs from './migrations/0001_create_push_notification_configs.js';
 

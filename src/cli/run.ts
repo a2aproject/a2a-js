@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 
-import { NO_MIGRATIONS } from 'kysely/migration';
-
+import { ALL_STORE_MIGRATIONS, type StoreMigrations } from '../server/database/store_migrations.js';
+import { connect } from './connect.js';
 import {
   BASE,
   migrateStore,
@@ -9,10 +9,7 @@ import {
   migrationNames,
   rollbackStore,
   storeState,
-} from '../server/database/migrator.js';
-import type { StoreMigrations } from '../server/database/migrator.js';
-import { ALL_STORE_MIGRATIONS } from '../server/database/store_migrations.js';
-import { connect } from './connect.js';
+} from './migrator.js';
 
 const STORE_IDS = ALL_STORE_MIGRATIONS.map((store) => store.id);
 
@@ -158,7 +155,7 @@ export async function run(
       }
     } else {
       for (const store of stores) {
-        await migrateStoreTo(db, store, target === BASE ? NO_MIGRATIONS : target);
+        await migrateStoreTo(db, store, target);
         output.log(`${store.id}: now at ${target}`);
       }
     }
