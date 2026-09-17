@@ -20,7 +20,14 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        node-version: ['20.0.0', 22, 24]
+        # 0.28 Kysely is the last line supporting Node 20, and the only one without `kysely/migration`.
+        include:
+          - node-version: 20
+            kysely: '0.28.17'
+          # No `kysely`: these take the lockfile version, leaving no second place to
+          # bump when it moves.
+          - node-version: 22
+          - node-version: 24
     # The migration suite runs against every engine it supports.
     # Both health checks go over TCP as the application user. While initialising, each
     # image runs a temporary server that answers on its socket only, so a socket probe
@@ -57,6 +64,10 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     - run: npm ci
+    # Overrides the lockfile pin and the devDependency. Skipped where the
+    # matrix names no version.
+    - if: matrix.kysely
+      run: npm install --no-save kysely@${{ matrix.kysely }}
     - run: npm test
     # Run apart, and serially: the suites drop and recreate the same tables.
     # The suites skip an engine they cannot reach. Every engine is reachable here, so a
