@@ -3,15 +3,15 @@ import {
   RestTransportFactory,
 } from '../../../src/client/transports/rest_transport.js';
 import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
-import { TaskPushNotificationConfig } from '../../../src/types.js';
 import { RequestOptions } from '../../../src/client/multitransport-client.js';
+import { LegacyRestTransport } from '../../../src/compat/v0_3/client/transports/rest_transport.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
 import {
   TaskNotFoundError,
   TaskNotCancelableError,
   PushNotificationNotSupportedError,
-} from '../../../src/errors.js';
+} from '../../../src/errors/index.js';
 import {
   createMessageParams,
   createMockAgentCard,
@@ -24,12 +24,10 @@ import {
 } from '../util.js';
 import {
   AgentCard,
-  ListTaskPushNotificationConfigResponse,
-  TaskPushNotificationConfig as TaskPushNotificationConfigProto,
+  ListTaskPushNotificationConfigsResponse,
   TaskState,
-} from '../../../src/types/pb/a2a_types.js';
-import { FromProto } from '../../../src/types/converters/from_proto.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
+  TaskPushNotificationConfig,
+} from '../../../src/types/index.js';
 
 describe('RestTransport', () => {
   let transport: RestTransport;
@@ -60,7 +58,7 @@ describe('RestTransport', () => {
       await trailingSlashTransport.sendMessage(createMessageParams());
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).to.equal('https://example.com/a2a/rest/v1/message:send');
+      expect(url).to.equal('https://example.com/a2a/rest/message:send');
     });
 
     it('should trim multiple trailing slashes from endpoint', async () => {
@@ -74,7 +72,13 @@ describe('RestTransport', () => {
       await trailingSlashTransport.sendMessage(createMessageParams());
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).to.equal('https://example.com/a2a/rest/v1/message:send');
+      expect(url).to.equal('https://example.com/a2a/rest/message:send');
+    });
+  });
+
+  describe('protocolName', () => {
+    it('should return correct protocol name', () => {
+      expect(transport.protocolName).toBe('HTTP+JSON');
     });
   });
 
@@ -91,11 +95,27 @@ describe('RestTransport', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/message:send`);
+      expect(url).to.equal(`${endpoint}/message:send`);
       expect(options?.method).to.equal('POST');
       expect((options?.headers as Record<string, string>)['Content-Type']).to.equal(
         'application/json'
       );
+      expect((options?.headers as Record<string, string>)['Accept']).to.equal(
+        'application/a2a+json, application/json'
+      );
+    });
+
+    it('should send message with tenant prefix successfully', async () => {
+      const messageParams = createMessageParams();
+      messageParams.tenant = 'tenant1';
+      const mockResponse = createMockProtoMessage();
+
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.sendMessage(messageParams);
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/message:send`);
     });
 
     it('should correctly add the extension headers', async () => {
@@ -128,14 +148,26 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.getTask({ id: taskId });
+      const result = await transport.getTask({ id: taskId, tenant: '', historyLength: 0 });
 
       expect(result).to.deep.equal(createMockTask(taskId));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}`);
+      expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=0`);
       expect(options?.method).to.equal('GET');
+    });
+
+    it('should get task with tenant prefix successfully', async () => {
+      const taskId = 'task-123';
+      const mockTask = createMockProtoTask(taskId);
+
+      mockFetch.mockResolvedValue(createRestResponse(mockTask));
+
+      await transport.getTask({ id: taskId, tenant: 'tenant1', historyLength: 0 });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/tasks/${taskId}?historyLength=0`);
     });
 
     it('should pass historyLength as query parameter', async () => {
@@ -145,46 +177,86 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.getTask({ id: taskId, historyLength });
+      const result = await transport.getTask({ id: taskId, tenant: '', historyLength });
 
       expect(result).to.deep.equal(createMockTask(taskId));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}?historyLength=${historyLength}`);
+      expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=${historyLength}`);
       expect(options?.method).to.equal('GET');
     });
 
     it('should throw TaskNotFoundError when task does not exist', async () => {
       mockFetch.mockResolvedValue(createRestErrorResponse(-32001, 'Task not found', 404));
 
-      await expect(transport.getTask({ id: 'nonexistent' })).rejects.toThrow(TaskNotFoundError);
+      await expect(
+        transport.getTask({ id: 'nonexistent', tenant: '', historyLength: 0 })
+      ).rejects.toThrow(TaskNotFoundError);
     });
   });
 
   describe('cancelTask', () => {
     it('should cancel task successfully', async () => {
       const taskId = 'task-123';
-      const mockTask = createMockProtoTask(taskId, TaskState.TASK_STATE_CANCELLED);
+      const mockTask = createMockProtoTask(taskId, TaskState.TASK_STATE_CANCELED);
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.cancelTask({ id: taskId });
+      const result = await transport.cancelTask({ id: taskId, tenant: '', metadata: {} });
 
-      expect(result).to.deep.equal(createMockTask(taskId, 'canceled'));
+      expect(result).to.deep.equal(createMockTask(taskId, TaskState.TASK_STATE_CANCELED));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}:cancel`);
+      expect(url).to.equal(`${endpoint}/tasks/${taskId}:cancel`);
       expect(options?.method).to.equal('POST');
     });
 
     it('should throw TaskNotCancelableError on -32002', async () => {
       mockFetch.mockResolvedValue(createRestErrorResponse(-32002, 'Task cannot be canceled', 409));
 
-      await expect(transport.cancelTask({ id: 'task-123' })).rejects.toThrow(
-        TaskNotCancelableError
-      );
+      await expect(
+        transport.cancelTask({ id: 'task-123', tenant: '', metadata: {} })
+      ).rejects.toThrow(TaskNotCancelableError);
+    });
+  });
+
+  describe('listTasks', () => {
+    it('should list tasks successfully', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      const result = await transport.listTasks({
+        tenant: '',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+      });
+
+      expect(result).to.deep.equal(mockResponse);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tasks`);
+      expect(options?.method).to.equal('GET');
+    });
+
+    it('should list tasks with tenant prefix successfully', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.listTasks({
+        tenant: 'tenant1',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+      });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tenant1/tasks`);
     });
   });
 
@@ -193,7 +265,6 @@ describe('RestTransport', () => {
       const mockCard: AgentCard = {
         name: 'Test Agent',
         description: 'A test agent for testing',
-        supportsAuthenticatedExtendedCard: true,
         capabilities: {
           streaming: true,
           pushNotifications: true,
@@ -202,16 +273,20 @@ describe('RestTransport', () => {
         skills: [],
         defaultInputModes: ['text'],
         defaultOutputModes: ['text'],
-        url: endpoint,
+        supportedInterfaces: [
+          {
+            url: endpoint,
+            protocolBinding: 'HTTP+JSON',
+            tenant: '',
+            protocolVersion: '1.0.0',
+          },
+        ],
         version: '1.0.0',
-        protocolVersion: '0.3.0',
-        preferredTransport: 'HTTP+JSON',
-        additionalInterfaces: [],
         provider: {
           url: '',
           organization: '',
         },
-        security: [],
+        securityRequirements: [],
         securitySchemes: {},
         documentationUrl: '',
         signatures: [],
@@ -219,14 +294,53 @@ describe('RestTransport', () => {
 
       mockFetch.mockResolvedValue(createRestResponse(AgentCard.toJSON(mockCard)));
 
-      const result = await transport.getExtendedAgentCard();
+      const result = await transport.getExtendedAgentCard({ tenant: '' });
 
-      expect(result).to.deep.equal(FromProto.agentCard(mockCard));
+      expect(result).toEqual(expect.objectContaining(mockCard));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/v1/card`);
+      expect(url).to.equal(`${endpoint}/extendedAgentCard`);
       expect(options?.method).to.equal('GET');
+    });
+
+    it('should get extended agent card with tenant prefix', async () => {
+      const mockCard: AgentCard = {
+        name: 'Test Agent',
+        description: 'A test agent for testing',
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          extensions: [],
+        },
+        skills: [],
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+        supportedInterfaces: [
+          {
+            url: endpoint,
+            protocolBinding: 'HTTP+JSON',
+            tenant: 'my-tenant',
+            protocolVersion: '1.0.0',
+          },
+        ],
+        version: '1.0.0',
+        provider: {
+          url: '',
+          organization: '',
+        },
+        securityRequirements: [],
+        securitySchemes: {},
+        documentationUrl: '',
+        signatures: [],
+      };
+
+      mockFetch.mockResolvedValue(createRestResponse(AgentCard.toJSON(mockCard)));
+
+      await transport.getExtendedAgentCard({ tenant: 'my-tenant' });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/my-tenant/extendedAgentCard`);
     });
   });
 
@@ -234,29 +348,25 @@ describe('RestTransport', () => {
     const taskId = 'task-123';
     const configId = 'config-456';
     const mockConfig: TaskPushNotificationConfig = {
-      taskId,
-      pushNotificationConfig: {
-        id: configId,
-        url: 'https://notify.example.com/webhook',
-        authentication: undefined,
-        token: 'secret-token',
-      },
+      tenant: '',
+      id: configId,
+      taskId: taskId,
+      url: 'https://notify.example.com/webhook',
+      authentication: undefined,
+      token: 'secret-token',
     };
-    const mockProtoConfig = ToProto.taskPushNotificationConfig(mockConfig);
 
-    describe('setTaskPushNotificationConfig', () => {
-      it('should set push notification config successfully', async () => {
-        mockFetch.mockResolvedValue(
-          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
-        );
+    describe('createTaskPushNotificationConfig', () => {
+      it('should create a push notification config successfully', async () => {
+        mockFetch.mockResolvedValue(createRestResponse(mockConfig));
 
-        const result = await transport.setTaskPushNotificationConfig(mockConfig);
+        const result = await transport.createTaskPushNotificationConfig(mockConfig);
 
         expect(result).to.deep.equal(mockConfig);
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('POST');
       });
 
@@ -265,7 +375,7 @@ describe('RestTransport', () => {
           createRestErrorResponse(-32003, 'Push notifications not supported', 400)
         );
 
-        await expect(transport.setTaskPushNotificationConfig(mockConfig)).rejects.toThrow(
+        await expect(transport.createTaskPushNotificationConfig(mockConfig)).rejects.toThrow(
           PushNotificationNotSupportedError
         );
       });
@@ -273,62 +383,68 @@ describe('RestTransport', () => {
 
     describe('getTaskPushNotificationConfig', () => {
       it('should get push notification config successfully', async () => {
-        mockFetch.mockResolvedValue(
-          createRestResponse(TaskPushNotificationConfigProto.toJSON(mockProtoConfig))
-        );
+        mockFetch.mockResolvedValue(createRestResponse(mockConfig));
 
         const result = await transport.getTaskPushNotificationConfig({
-          id: taskId,
-          pushNotificationConfigId: configId,
+          id: configId,
+          taskId,
+          tenant: '',
         });
 
         expect(result).to.deep.equal(mockConfig);
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs/${configId}`);
         expect(options?.method).to.equal('GET');
-      });
-
-      it('should throw error when pushNotificationConfigId is missing', async () => {
-        await expect(
-          transport.getTaskPushNotificationConfig({
-            id: taskId,
-            pushNotificationConfigId: undefined as unknown as string,
-          })
-        ).rejects.toThrow('pushNotificationConfigId is required');
       });
     });
 
     describe('listTaskPushNotificationConfig', () => {
       it('should list push notification configs successfully', async () => {
-        const mockConfigs: TaskPushNotificationConfig[] = [
+        const protoConfigs: TaskPushNotificationConfig[] = [
           mockConfig,
           {
-            ...mockConfig,
-            pushNotificationConfig: {
-              id: 'config-789',
-              url: 'https://test.com',
-              authentication: undefined,
-              token: 'secret-token',
-            },
+            tenant: '',
+            id: 'config-789',
+            taskId: taskId,
+            url: 'https://test.com',
+            authentication: undefined,
+            token: 'secret-token',
+          },
+        ];
+        const expectedConfigs: TaskPushNotificationConfig[] = [
+          mockConfig,
+          {
+            tenant: '',
+            id: 'config-789',
+            taskId: taskId,
+            url: 'https://test.com',
+            authentication: undefined,
+            token: 'secret-token',
           },
         ];
         mockFetch.mockResolvedValue(
           createRestResponse(
-            ListTaskPushNotificationConfigResponse.toJSON(
-              ToProto.listTaskPushNotificationConfig(mockConfigs)
-            )
+            ListTaskPushNotificationConfigsResponse.toJSON({
+              configs: protoConfigs,
+              nextPageToken: '',
+            })
           )
         );
 
-        const result = await transport.listTaskPushNotificationConfig({ id: taskId });
+        const result = await transport.listTaskPushNotificationConfig({
+          taskId,
+          tenant: '',
+          pageSize: 0,
+          pageToken: '',
+        });
 
-        expect(result).to.deep.equal(mockConfigs);
+        expect(result.configs).to.deep.equal(expectedConfigs);
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('GET');
       });
     });
@@ -338,14 +454,15 @@ describe('RestTransport', () => {
         mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
 
         await transport.deleteTaskPushNotificationConfig({
-          id: taskId,
-          pushNotificationConfigId: configId,
+          id: configId,
+          taskId,
+          tenant: '',
         });
 
         expect(mockFetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = mockFetch.mock.calls[0];
-        expect(url).to.equal(`${endpoint}/v1/tasks/${taskId}/pushNotificationConfigs/${configId}`);
+        expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs/${configId}`);
         expect(options?.method).to.equal('DELETE');
       });
     });
@@ -360,13 +477,17 @@ describe('RestTransport', () => {
         })
       );
 
-      await expect(transport.getTask({ id: 'task-123' })).rejects.toThrow('HTTP error');
+      await expect(
+        transport.getTask({ id: 'task-123', tenant: '', historyLength: 0 })
+      ).rejects.toThrow('HTTP error');
     });
 
     it('should handle network errors', async () => {
       mockFetch.mockRejectedValue(new Error('Network error'));
 
-      await expect(transport.getTask({ id: 'task-123' })).rejects.toThrow('Network error');
+      await expect(
+        transport.getTask({ id: 'task-123', tenant: '', historyLength: 0 })
+      ).rejects.toThrow('Network error');
     });
   });
 });
@@ -379,8 +500,148 @@ describe('RestTransportFactory', () => {
 
   it('should create transport with correct endpoint', async () => {
     const factory = new RestTransportFactory();
-    const agentCard = createMockAgentCard({ url: 'https://example.com/api' });
-    const transport = await factory.create(agentCard.url, agentCard);
+    const agentCard = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://example.com/api',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ],
+    });
+    const transport = await factory.create('https://example.com/api', agentCard);
     expect(transport).to.be.instanceOf(RestTransport);
+  });
+});
+
+describe('legacyCompat enabled', () => {
+  it('produces LegacyRestTransport when matched interface has protocolVersion 0.3', async () => {
+    const card = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://a.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    });
+    const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+    const transport = await factory.create('https://a.example/rest', card);
+    expect(transport).toBeInstanceOf(LegacyRestTransport);
+  });
+
+  it('produces RestTransport when matched interface has protocolVersion 1.0', async () => {
+    const card = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://a.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+      ],
+    });
+    const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+    const transport = await factory.create('https://a.example/rest', card);
+    expect(transport).toBeInstanceOf(RestTransport);
+    expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+  });
+
+  it('produces LegacyRestTransport when matched interface has empty protocolVersion (defaults to 0.3)', async () => {
+    const card = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://a.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '',
+        },
+      ],
+    });
+    const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+    const transport = await factory.create('https://a.example/rest', card);
+    expect(transport).toBeInstanceOf(LegacyRestTransport);
+  });
+
+  it('disambiguates by URL when multiple HTTP+JSON interfaces are present', async () => {
+    const card = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://v1.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+        {
+          url: 'https://v03.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    });
+    const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+
+    const v03 = await factory.create('https://v03.example/rest', card);
+    expect(v03).toBeInstanceOf(LegacyRestTransport);
+
+    const v1 = await factory.create('https://v1.example/rest', card);
+    expect(v1).toBeInstanceOf(RestTransport);
+    expect(v1).not.toBeInstanceOf(LegacyRestTransport);
+  });
+
+  it('falls back to v1.0 RestTransport when no HTTP+JSON interface is found', async () => {
+    const card = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://a.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    });
+    const factory = new RestTransportFactory({ legacyCompat: { enabled: true } });
+    const transport = await factory.create('https://a.example/rest', card);
+    expect(transport).toBeInstanceOf(RestTransport);
+    expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+  });
+});
+
+describe('legacyCompat disabled (default)', () => {
+  it('produces RestTransport for v0.3 interface when legacyCompat option is omitted', async () => {
+    const card = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://a.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    });
+    const factory = new RestTransportFactory();
+    const transport = await factory.create('https://a.example/rest', card);
+    expect(transport).toBeInstanceOf(RestTransport);
+    expect(transport).not.toBeInstanceOf(LegacyRestTransport);
+  });
+
+  it('produces RestTransport for v0.3 interface when legacyCompat.enabled is false', async () => {
+    const card = createMockAgentCard({
+      supportedInterfaces: [
+        {
+          url: 'https://a.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ],
+    });
+    const factory = new RestTransportFactory({ legacyCompat: { enabled: false } });
+    const transport = await factory.create('https://a.example/rest', card);
+    expect(transport).toBeInstanceOf(RestTransport);
+    expect(transport).not.toBeInstanceOf(LegacyRestTransport);
   });
 });
