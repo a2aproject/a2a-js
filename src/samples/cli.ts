@@ -2,32 +2,27 @@
 
 import readline from 'node:readline';
 import crypto from 'node:crypto';
-import { GoogleAuth } from 'google-auth-library';
+import { parseArgs } from 'node:util';
 
 import {
-  // Specific Params/Payload types used by the CLI
-  MessageSendParams, // Changed from TaskSendParams
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   Message,
   Task, // Added for direct Task events
-  // Other types needed for message/part handling
-  FilePart,
-  DataPart,
-  // Type for the agent card
   AgentCard,
   Part, // Added for explicit Part typing
   AGENT_CARD_PATH,
 } from '../index.js';
+import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/index.js';
+import { AgentExecutionEvent, AgentEvent } from '../server/index.js';
 
 import {
-  AuthenticationHandler,
   ClientFactory,
   ClientFactoryOptions,
-  createAuthenticatingFetchWithRetry,
   DefaultAgentCardResolver,
   JsonRpcTransportFactory,
   RestTransportFactory,
+  ServiceParameters,
 } from '../client/index.js';
 import { GrpcTransportFactory } from '../client/transports/grpc/grpc_transport.js';
 
@@ -55,58 +50,120 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-// Application Default Credentials required for A2A agent running on Agent Engine.
-export class ADCHandler implements AuthenticationHandler {
-  private auth = new GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-  });
+function agentCardFromTransport(url: string, transport?: string): AgentCard {
+  return {
+    name: 'External Agent',
+    description: '',
+    supportedInterfaces: [
+      {
+        url,
+        protocolBinding: transport ?? 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
+    provider: undefined,
+    version: '1.0.0',
+    capabilities: { streaming: true, extensions: [] },
+    securitySchemes: {},
+    securityRequirements: [],
+    defaultInputModes: [],
+    defaultOutputModes: [],
+    skills: [],
+    signatures: [],
+  };
+}
 
-  async headers(): Promise<Record<string, string>> {
-    const client = await this.auth.getClient();
-    const token = await client.getAccessToken();
-    if (token?.token) {
-      return { Authorization: `Bearer ${token.token}` };
+// --- CLI Arguments ---
+const USAGE = `A2A Terminal Client
+
+Usage: a2a:cli [url] [flags]
+
+  --transport <name>   Force a transport: JSONRPC, HTTP+JSON, GRPC.
+                       Default: the first match between the agent card and this client.
+  --auth <creds>       Shorthand for --svc-param "Authorization=<creds>",
+                       e.g. --auth "Bearer $(gcloud auth print-access-token)".
+  --svc-param <k=v>    Service parameter sent with every request, as an HTTP header
+                       (JSON-RPC / REST) or request metadata (gRPC). Repeatable.
+  --card-path <path>   Agent card path relative to the url. Default: ${AGENT_CARD_PATH}.
+  --no-agent-card      Skip discovery and synthesize a card from the url and --transport.
+  --help               Show this message.
+`;
+
+function exitWithUsage(message: string): never {
+  console.error(colorize('red', message));
+  console.error(USAGE);
+  process.exit(2);
+}
+
+function parseCliArgs() {
+  try {
+    return parseArgs({
+      args: process.argv.slice(2),
+      allowPositionals: true,
+      options: {
+        transport: { type: 'string' },
+        auth: { type: 'string' },
+        'svc-param': { type: 'string', multiple: true },
+        'card-path': { type: 'string' },
+        'no-agent-card': { type: 'boolean' },
+        help: { type: 'boolean' },
+      },
+    });
+  } catch (err) {
+    return exitWithUsage(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** Merges `--auth` and every `--svc-param key=value` into one parameter map. */
+function toServiceParameters(auth: string | undefined, params: string[]): ServiceParameters {
+  const serviceParameters: ServiceParameters = auth ? { Authorization: auth } : {};
+  for (const param of params) {
+    const eq = param.indexOf('='); // Split on the first `=`; values may contain more.
+    if (eq < 1) {
+      exitWithUsage(`--svc-param expects "key=value", got "${param}".`);
     }
-    throw new Error('Failed to retrieve ADC access token.');
+    serviceParameters[param.slice(0, eq)] = param.slice(eq + 1);
   }
+  return serviceParameters;
+}
 
-  async shouldRetryWithHeaders(
-    _req: RequestInit,
-    res: Response
-  ): Promise<Record<string, string> | undefined> {
-    if (res.status !== 401 && res.status !== 403) return undefined;
-    return this.headers();
-  }
+/** Agent card discovery bypasses the transports, so it needs its own headers. */
+function fetchWithHeaders(headers: ServiceParameters): typeof fetch {
+  return (input, init) => {
+    const merged = new Headers(headers);
+    new Headers(init?.headers).forEach((value, key) => merged.set(key, value));
+    return fetch(input, { ...init, headers: merged });
+  };
 }
 
 // --- State ---
 let currentTaskId: string | undefined = undefined; // Initialize as undefined
 let currentContextId: string | undefined = undefined; // Initialize as undefined
 
-const preferredTransport = process.argv
-  .find((arg) => arg.startsWith('--transport='))
-  ?.split('=')[1];
-const serverUrlArg = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
-const serverUrl = serverUrlArg || 'http://localhost:41241'; // Agent's base URL
-
-let fetchImpl: typeof fetch = fetch;
-let agentCardPath = AGENT_CARD_PATH;
-if (process.argv.includes('--agent-engine')) {
-  fetchImpl = createAuthenticatingFetchWithRetry(fetch, new ADCHandler());
-  agentCardPath = 'a2a/v1/card'; // Agent Engine doesn't use well-known public agent card endpoint.
+const { values: flags, positionals } = parseCliArgs();
+if (flags.help) {
+  console.log(USAGE);
+  process.exit(0);
 }
+
+const serverUrl = positionals[0] ?? 'http://localhost:41241'; // Agent's base URL
+const serviceParameters = toServiceParameters(flags.auth, flags['svc-param'] ?? []);
+
 const factory = new ClientFactory(
   ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
-    cardResolver: new DefaultAgentCardResolver({ fetchImpl }),
+    cardResolver: new DefaultAgentCardResolver({ fetchImpl: fetchWithHeaders(serviceParameters) }),
     transports: [
-      new JsonRpcTransportFactory({ fetchImpl }),
-      new RestTransportFactory({ fetchImpl }),
+      new JsonRpcTransportFactory(),
+      new RestTransportFactory(),
       new GrpcTransportFactory(),
     ],
-    preferredTransports: preferredTransport ? [preferredTransport] : undefined,
+    preferredTransports: flags.transport ? [flags.transport] : undefined,
   })
 );
-const client = await factory.createFromUrl(serverUrl, agentCardPath);
+const client = flags['no-agent-card']
+  ? await factory.createFromAgentCard(agentCardFromTransport(serverUrl, flags.transport))
+  : await factory.createFromUrl(serverUrl, flags['card-path']);
 let agentName = 'Agent'; // Default, try to get from agent card later
 
 // --- Readline Setup ---
@@ -117,69 +174,68 @@ const rl = readline.createInterface({
 });
 
 // --- Response Handling ---
-// Function now accepts the unwrapped event payload directly
-function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent) {
+// Function accepts a discriminated AgentExecutionEvent and uses `kind` to narrow the type.
+function printAgentEvent(event: AgentExecutionEvent) {
   const timestamp = new Date().toLocaleTimeString();
   const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
-  // Check if it's a TaskStatusUpdateEvent
-  if (event.kind === 'status-update') {
-    const update = event as TaskStatusUpdateEvent; // Cast for type safety
-    const state = update.status.state;
+  if (event.kind === 'statusUpdate') {
+    const update = event.data;
+    const state = update.status?.state;
     let stateEmoji = '❓';
     let stateColor: keyof typeof colors = 'yellow';
 
     switch (state) {
-      case 'working':
+      case TaskState.TASK_STATE_WORKING:
         stateEmoji = '⏳';
         stateColor = 'blue';
         break;
-      case 'input-required':
+      case TaskState.TASK_STATE_INPUT_REQUIRED:
         stateEmoji = '🤔';
         stateColor = 'yellow';
         break;
-      case 'completed':
+      case TaskState.TASK_STATE_COMPLETED:
         stateEmoji = '✅';
         stateColor = 'green';
         break;
-      case 'canceled':
+      case TaskState.TASK_STATE_CANCELED:
         stateEmoji = '⏹️';
         stateColor = 'gray';
         break;
-      case 'failed':
+      case TaskState.TASK_STATE_FAILED:
         stateEmoji = '❌';
         stateColor = 'red';
         break;
       default:
-        stateEmoji = 'ℹ️'; // For other states like submitted, rejected etc.
+        stateEmoji = 'ℹ️';
         stateColor = 'dim';
         break;
     }
 
     console.log(
-      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, state)} (Task: ${update.taskId}, Context: ${update.contextId}) ${update.final ? colorize('bright', '[FINAL]') : ''}`
+      `${prefix} ${stateEmoji} Status: ${colorize(stateColor, taskStateToJSON(state!))} (Task: ${update.taskId}, Context: ${update.contextId})`
     );
 
-    if (update.status.message) {
+    if (update.status?.message) {
       printMessageContent(update.status.message);
     }
-  }
-  // Check if it's a TaskArtifactUpdateEvent
-  else if (event.kind === 'artifact-update') {
-    const update = event as TaskArtifactUpdateEvent; // Cast for type safety
+  } else if (event.kind === 'artifactUpdate') {
+    const update = event.data;
     console.log(
       `${prefix} 📄 Artifact Received: ${
-        update.artifact.name || '(unnamed)'
-      } (ID: ${update.artifact.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
+        update.artifact?.name || '(unnamed)'
+      } (ID: ${update.artifact?.artifactId}, Task: ${update.taskId}, Context: ${update.contextId})`
     );
     // Create a temporary message-like structure to reuse printMessageContent
     printMessageContent({
-      messageId: generateId(), // Dummy messageId
-      kind: 'message', // Dummy kind
-      role: 'agent', // Assuming artifact parts are from agent
-      parts: update.artifact.parts,
+      messageId: generateId(),
+      role: Role.ROLE_AGENT,
+      parts: update.artifact?.parts || [],
       taskId: update.taskId,
       contextId: update.contextId,
+      extensions: [],
+      metadata: {},
+      referenceTaskIds: [],
     });
   } else {
     // This case should ideally not be reached if called correctly
@@ -193,30 +249,39 @@ function printAgentEvent(event: TaskStatusUpdateEvent | TaskArtifactUpdateEvent)
 
 function printMessageContent(message: Message) {
   message.parts.forEach((part: Part, index: number) => {
-    // Added explicit Part type
     const partPrefix = colorize('red', `  Part ${index + 1}:`);
-    if (part.kind === 'text') {
-      // Check kind property
-      console.log(`${partPrefix} ${colorize('green', '📝 Text:')}`, part.text);
-    } else if (part.kind === 'file') {
-      // Check kind property
-      const filePart = part as FilePart;
-      console.log(
-        `${partPrefix} ${colorize('blue', '📄 File:')} Name: ${
-          filePart.file.name || 'N/A'
-        }, Type: ${filePart.file.mimeType || 'N/A'}, Source: ${
-          'bytes' in filePart.file ? 'Inline (bytes)' : filePart.file.uri
-        }`
-      );
-    } else if (part.kind === 'data') {
-      // Check kind property
-      const dataPart = part as DataPart;
-      console.log(
-        `${partPrefix} ${colorize('yellow', '📊 Data:')}`,
-        JSON.stringify(dataPart.data, null, 2)
-      );
-    } else {
-      console.log(`${partPrefix} ${colorize('yellow', 'Unsupported part kind:')}`, part);
+    const p = part.content;
+
+    if (!p) {
+      return;
+    }
+
+    switch (p.$case) {
+      case 'text':
+        console.log(`${partPrefix} ${colorize('green', '📝 Text:')}`, p.value);
+        break;
+      case 'url':
+        console.log(
+          `${partPrefix} ${colorize('blue', '📄 URL:')} ${p.value} (Type: ${part.mediaType || 'N/A'})`
+        );
+        break;
+      case 'raw':
+        console.log(
+          `${partPrefix} ${colorize('blue', '📄 Raw Bytes:')} (size: ${p.value.length}, Type: ${part.mediaType || 'N/A'})`
+        );
+        break;
+      case 'data':
+        console.log(
+          `${partPrefix} ${colorize('yellow', '📊 Data:')}`,
+          JSON.stringify(p.value, null, 2)
+        );
+        break;
+      default:
+        console.log(
+          `${partPrefix} ${colorize('yellow', 'Unsupported part case:')}`,
+          (p as any).$case
+        );
+        break;
     }
   });
 }
@@ -225,12 +290,21 @@ function printMessageContent(message: Message) {
 async function fetchAndDisplayAgentCard() {
   // Use the client's getAgentCard method.
   // The client was initialized with serverUrl, which is the agent's base URL.
-  console.log(colorize('dim', `Attempting to fetch agent card from agent at: ${serverUrl}`));
+  if (flags['no-agent-card']) {
+    console.log(colorize('dim', `Using synthesized agent card (no discovery) for: ${serverUrl}`));
+  } else {
+    console.log(colorize('dim', `Attempting to fetch agent card from agent at: ${serverUrl}`));
+  }
   try {
     // client.getAgentCard() uses the agentBaseUrl provided during client construction
-    const card: AgentCard = await client.getAgentCard();
+    const card: AgentCard = await client.getAgentCard({ serviceParameters });
     agentName = card.name || 'Agent'; // Update global agent name
-    console.log(colorize('green', `✓ Agent Card Found:`));
+    console.log(
+      colorize(
+        'green',
+        flags['no-agent-card'] ? `✓ Using Synthesized Agent Card:` : `✓ Agent Card Found:`
+      )
+    );
     console.log(`  Name:        ${colorize('bright', agentName)}`);
     if (card.description) {
       console.log(`  Description: ${card.description}`);
@@ -243,15 +317,13 @@ async function fetchAndDisplayAgentCard() {
     }
 
     const supportedTransports = new Set<string>();
-    supportedTransports.add(card.preferredTransport || 'JSONRPC');
-    if (card.additionalInterfaces) {
-      for (const iface of card.additionalInterfaces) {
-        supportedTransports.add(iface.transport);
+    if (card.supportedInterfaces) {
+      for (const iface of card.supportedInterfaces) {
+        supportedTransports.add(iface.protocolBinding);
       }
     }
     console.log(`  Supported Transports: ${Array.from(supportedTransports).join(', ')}`);
 
-    // TODO (https://github.com/a2aproject/a2a-js/issues/179): Add a way to get the protocol name from the transport.
     console.log(
       colorize(
         'green',
@@ -314,14 +386,23 @@ async function main() {
 
     const messagePayload: Message = {
       messageId: messageId,
-      kind: 'message', // Required by Message interface
-      role: 'user',
+      role: Role.ROLE_USER,
       parts: [
         {
-          kind: 'text', // Required by TextPart interface
-          text: input,
+          content: {
+            $case: 'text',
+            value: input,
+          },
+          metadata: undefined,
+          filename: '',
+          mediaType: 'text/plain',
         },
       ],
+      taskId: '',
+      contextId: '',
+      extensions: [],
+      metadata: {},
+      referenceTaskIds: [],
     };
 
     // Conditionally add taskId to the message payload
@@ -333,8 +414,11 @@ async function main() {
       messagePayload.contextId = currentContextId;
     }
 
-    const params: MessageSendParams = {
+    const params: SendMessageRequest = {
+      tenant: '',
       message: messagePayload,
+      configuration: undefined,
+      metadata: {},
       // Optional: configuration for streaming, blocking, etc.
       // configuration: {
       //   acceptedOutputModes: ['text/plain', 'application/json'], // Example
@@ -345,80 +429,103 @@ async function main() {
     try {
       console.log(colorize('red', 'Sending message...'));
       // Use sendMessageStream
-      const stream = client.sendMessageStream(params);
+      const stream = client.sendMessageStream(params, { serviceParameters });
 
       // Iterate over the events from the stream
       for await (const event of stream) {
         const timestamp = new Date().toLocaleTimeString(); // Get fresh timestamp for each event
         const prefix = colorize('magenta', `\n${agentName} [${timestamp}]:`);
 
-        if (event.kind === 'status-update' || event.kind === 'artifact-update') {
-          const typedEvent = event as TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
-          printAgentEvent(typedEvent);
+        const payload = (event as any).payload;
+        if (!payload || !payload.$case) {
+          continue;
+        }
 
-          // If the event is a TaskStatusUpdateEvent and it's final, reset currentTaskId
-          if (
-            typedEvent.kind === 'status-update' &&
-            (typedEvent as TaskStatusUpdateEvent).final &&
-            (typedEvent as TaskStatusUpdateEvent).status.state !== 'input-required'
-          ) {
+        switch (payload.$case) {
+          case 'statusUpdate': {
+            const typedEvent = payload.value as TaskStatusUpdateEvent;
+            printAgentEvent(AgentEvent.statusUpdate(typedEvent));
+
+            if (
+              typedEvent.status?.state === TaskState.TASK_STATE_COMPLETED ||
+              typedEvent.status?.state === TaskState.TASK_STATE_FAILED ||
+              typedEvent.status?.state === TaskState.TASK_STATE_CANCELED ||
+              typedEvent.status?.state === TaskState.TASK_STATE_REJECTED
+            ) {
+              console.log(
+                colorize(
+                  'yellow',
+                  `   Task ${typedEvent.taskId} is final. Clearing current task ID.`
+                )
+              );
+              currentTaskId = undefined;
+            }
+            break;
+          }
+          case 'artifactUpdate': {
+            const typedEvent = payload.value as TaskArtifactUpdateEvent;
+            printAgentEvent(AgentEvent.artifactUpdate(typedEvent));
+            break;
+          }
+          case 'message': {
+            const msg = payload.value as Message;
+            console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
+            printMessageContent(msg);
+            if (msg.taskId && msg.taskId !== currentTaskId) {
+              console.log(
+                colorize(
+                  'dim',
+                  `   Task ID context updated to ${msg.taskId} based on message event.`
+                )
+              );
+              currentTaskId = msg.taskId;
+            }
+            if (msg.contextId && msg.contextId !== currentContextId) {
+              console.log(
+                colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
+              );
+              currentContextId = msg.contextId;
+            }
+            break;
+          }
+          case 'task': {
+            const task = payload.value as Task;
             console.log(
-              colorize('yellow', `   Task ${typedEvent.taskId} is final. Clearing current task ID.`)
+              `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${taskStateToJSON(task.status!.state)}`
             );
-            currentTaskId = undefined;
-            // Optionally, you might want to clear currentContextId as well if a task ending implies context ending.
-            // currentContextId = undefined;
-            // console.log(colorize("dim", `   Context ID also cleared as task is final.`));
+            if (task.id !== currentTaskId) {
+              console.log(
+                colorize('dim', `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`)
+              );
+              currentTaskId = task.id;
+            }
+            if (task.contextId && task.contextId !== currentContextId) {
+              console.log(
+                colorize(
+                  'dim',
+                  `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`
+                )
+              );
+              currentContextId = task.contextId;
+            }
+            if (task.status?.message) {
+              console.log(colorize('gray', '   Task includes message:'));
+              printMessageContent(task.status.message);
+            }
+            if (task.artifacts && task.artifacts.length > 0) {
+              console.log(
+                colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`)
+              );
+            }
+            break;
           }
-        } else if (event.kind === 'message') {
-          const msg = event as Message;
-          console.log(`${prefix} ${colorize('green', '✉️ Message Stream Event:')}`);
-          printMessageContent(msg);
-          if (msg.taskId && msg.taskId !== currentTaskId) {
+          default:
             console.log(
-              colorize('dim', `   Task ID context updated to ${msg.taskId} based on message event.`)
+              prefix,
+              colorize('yellow', 'Received unknown event structure from stream:'),
+              event
             );
-            currentTaskId = msg.taskId;
-          }
-          if (msg.contextId && msg.contextId !== currentContextId) {
-            console.log(
-              colorize('dim', `   Context ID updated to ${msg.contextId} based on message event.`)
-            );
-            currentContextId = msg.contextId;
-          }
-        } else if (event.kind === 'task') {
-          const task = event as Task;
-          console.log(
-            `${prefix} ${colorize('blue', 'ℹ️ Task Stream Event:')} ID: ${task.id}, Context: ${task.contextId}, Status: ${task.status.state}`
-          );
-          if (task.id !== currentTaskId) {
-            console.log(
-              colorize('dim', `   Task ID updated from ${currentTaskId || 'N/A'} to ${task.id}`)
-            );
-            currentTaskId = task.id;
-          }
-          if (task.contextId && task.contextId !== currentContextId) {
-            console.log(
-              colorize(
-                'dim',
-                `   Context ID updated from ${currentContextId || 'N/A'} to ${task.contextId}`
-              )
-            );
-            currentContextId = task.contextId;
-          }
-          if (task.status.message) {
-            console.log(colorize('gray', '   Task includes message:'));
-            printMessageContent(task.status.message);
-          }
-          if (task.artifacts && task.artifacts.length > 0) {
-            console.log(colorize('gray', `   Task includes ${task.artifacts.length} artifact(s).`));
-          }
-        } else {
-          console.log(
-            prefix,
-            colorize('yellow', 'Received unknown event structure from stream:'),
-            event
-          );
+            break;
         }
       }
       console.log(colorize('dim', `--- End of response stream for this input ---`));

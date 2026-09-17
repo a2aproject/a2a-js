@@ -1,30 +1,35 @@
 import * as grpc from '@grpc/grpc-js';
 import { TransportProtocolName } from '../../../core.js';
-import { A2AServiceClient } from '../../../grpc/pb/a2a_services.js';
 import {
-  MessageSendParams,
+  A2AServiceClient,
   TaskPushNotificationConfig,
-  TaskIdParams,
-  ListTaskPushNotificationConfigParams,
-  DeleteTaskPushNotificationConfigParams,
-  TaskQueryParams,
-  Task,
-  AgentCard,
-  GetTaskPushNotificationConfigParams,
-} from '../../../types.js';
-import { A2AStreamEventData, SendMessageResult } from '../../client.js';
+  GetExtendedAgentCardRequest,
+  ListTaskPushNotificationConfigsRequest,
+  SubscribeToTaskRequest,
+} from '../../../grpc/pb/a2a.js';
+import { Task, AgentCard, ListTaskPushNotificationConfigsResponse } from '../../../types/pb/a2a.js';
+import {
+  CancelTaskRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  SendMessageRequest,
+  StreamResponse,
+  SendMessageResult,
+  ListTasksRequest,
+  ListTasksResponse,
+  A2A_PROTOCOL_VERSION,
+} from '../../../index.js';
 import { RequestOptions } from '../../multitransport-client.js';
 import { Transport, TransportFactory } from '../transport.js';
-import { ToProto } from '../../../types/converters/to_proto.js';
 import { FromProto } from '../../../types/converters/from_proto.js';
 
-import {
-  AuthenticatedExtendedCardNotConfiguredError,
-  PushNotificationNotSupportedError,
-  TaskNotFoundError,
-  TaskNotCancelableError,
-  UnsupportedOperationError,
-} from '../../../errors.js';
+import { fromGrpcError } from '../../../errors/grpc/index.js';
+import { LegacyGrpcTransport } from '../../../compat/v0_3/client/transports/grpc/index.js';
+import { isLegacyVersion } from '../../../version_utils.js';
+import { pickMatchingInterface } from '../pick_interface.js';
+
+const PROTOCOL_NAME: TransportProtocolName = 'GRPC';
 
 type GrpcUnaryCall<TReq, TRes> = (
   request: TReq,
@@ -57,155 +62,168 @@ export class GrpcTransport implements Transport {
     );
   }
 
-  async getExtendedAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    const rpcResponse = await this._sendGrpcRequest(
-      'getAgentCard',
-      undefined,
+  get protocolName(): string {
+    return PROTOCOL_NAME;
+  }
+
+  get protocolVersion(): string {
+    return A2A_PROTOCOL_VERSION;
+  }
+
+  async getExtendedAgentCard(
+    params: GetExtendedAgentCardRequest,
+    options?: RequestOptions
+  ): Promise<AgentCard> {
+    const rpcResponse = await this._sendGrpcRequest<GetExtendedAgentCardRequest, AgentCard>(
+      'getExtendedAgentCard',
+      params,
       options,
-      this.grpcClient.getAgentCard.bind(this.grpcClient),
-      ToProto.getAgentCardRequest,
-      FromProto.agentCard
+      this.grpcClient.getExtendedAgentCard.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
   async sendMessage(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     options?: RequestOptions
   ): Promise<SendMessageResult> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequestWithConverter(
       'sendMessage',
       params,
       options,
       this.grpcClient.sendMessage.bind(this.grpcClient),
-      ToProto.messageSendParams,
       FromProto.sendMessageResult
     );
     return rpcResponse;
   }
 
   async *sendMessageStream(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendGrpcStreamingRequest(
       'sendStreamingMessage',
       params,
       options,
-      this.grpcClient.sendStreamingMessage.bind(this.grpcClient),
-      ToProto.messageSendParams
+      this.grpcClient.sendStreamingMessage.bind(this.grpcClient)
     );
   }
 
-  async setTaskPushNotificationConfig(
+  async createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequest<
+      TaskPushNotificationConfig,
+      TaskPushNotificationConfig
+    >(
       'createTaskPushNotificationConfig',
       params,
       options,
-      this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient),
-      ToProto.taskPushNotificationConfigCreate,
-      FromProto.taskPushNotificationConfig
+      this.grpcClient.createTaskPushNotificationConfig.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
   async getTaskPushNotificationConfig(
-    params: GetTaskPushNotificationConfigParams,
+    params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    const rpcResponse = await this._sendGrpcRequest(
+    const rpcResponse = await this._sendGrpcRequest<
+      GetTaskPushNotificationConfigRequest,
+      TaskPushNotificationConfig
+    >(
       'getTaskPushNotificationConfig',
       params,
       options,
-      this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient),
-      ToProto.getTaskPushNotificationConfigParams,
-      FromProto.taskPushNotificationConfig
+      this.grpcClient.getTaskPushNotificationConfig.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
   async listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigParams,
+    params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
-    const rpcResponse = await this._sendGrpcRequest(
-      'listTaskPushNotificationConfig',
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
+    const rpcResponse = await this._sendGrpcRequest<
+      ListTaskPushNotificationConfigsRequest,
+      ListTaskPushNotificationConfigsResponse
+    >(
+      'listTaskPushNotificationConfigs',
       params,
       options,
-      this.grpcClient.listTaskPushNotificationConfig.bind(this.grpcClient),
-      ToProto.listTaskPushNotificationConfigParams,
-      FromProto.listTaskPushNotificationConfig
+      this.grpcClient.listTaskPushNotificationConfigs.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
   async deleteTaskPushNotificationConfig(
-    params: DeleteTaskPushNotificationConfigParams,
+    params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
-    await this._sendGrpcRequest(
+    await this._sendGrpcRequestWithConverter(
       'deleteTaskPushNotificationConfig',
       params,
       options,
       this.grpcClient.deleteTaskPushNotificationConfig.bind(this.grpcClient),
-      ToProto.deleteTaskPushNotificationConfigParams,
       () => {}
     );
   }
 
-  async getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest(
+  async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
+    const rpcResponse = await this._sendGrpcRequest<GetTaskRequest, Task>(
       'getTask',
       params,
       options,
-      this.grpcClient.getTask.bind(this.grpcClient),
-      ToProto.taskQueryParams,
-      FromProto.task
+      this.grpcClient.getTask.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
-  async cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
-    const rpcResponse = await this._sendGrpcRequest(
+  async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
+    const rpcResponse = await this._sendGrpcRequest<CancelTaskRequest, Task>(
       'cancelTask',
       params,
       options,
-      this.grpcClient.cancelTask.bind(this.grpcClient),
-      ToProto.cancelTaskRequest,
-      FromProto.task
+      this.grpcClient.cancelTask.bind(this.grpcClient)
+    );
+    return rpcResponse;
+  }
+
+  async listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    const rpcResponse = await this._sendGrpcRequest<ListTasksRequest, ListTasksResponse>(
+      'listTasks',
+      params,
+      options,
+      this.grpcClient.listTasks.bind(this.grpcClient)
     );
     return rpcResponse;
   }
 
   async *resubscribeTask(
-    params: TaskIdParams,
+    params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     yield* this._sendGrpcStreamingRequest(
-      'taskSubscription',
+      'subscribeToTask',
       params,
       options,
-      this.grpcClient.taskSubscription.bind(this.grpcClient),
-      ToProto.taskIdParams
+      this.grpcClient.subscribeToTask.bind(this.grpcClient)
     );
   }
 
-  private async _sendGrpcRequest<TReq, TRes, TParams, TResponse>(
+  private async _sendGrpcRequestWithConverter<TReq, TRes, TResponse>(
     method: keyof A2AServiceClient,
-    params: TParams,
+    params: TReq,
     options: RequestOptions | undefined,
     call: GrpcUnaryCall<TReq, TRes>,
-    parser: (req: TParams) => TReq,
     converter: (res: TRes) => TResponse
   ): Promise<TResponse> {
     return new Promise((resolve, reject) => {
       let onAbort: (() => void) | undefined;
 
       const clientCall = call(
-        parser(params),
+        params,
         this._buildMetadata(options),
         this.grpcCallOptions ?? {},
         (error, response) => {
@@ -213,7 +231,7 @@ export class GrpcTransport implements Transport {
             options.signal.removeEventListener('abort', onAbort);
           }
           if (error) {
-            return reject(GrpcTransport.mapToError(error, method));
+            return reject(fromGrpcError(error, method));
           }
           resolve(converter(response));
         }
@@ -230,18 +248,22 @@ export class GrpcTransport implements Transport {
     });
   }
 
-  private async *_sendGrpcStreamingRequest<TReq, TRes, TParams>(
-    method: 'sendStreamingMessage' | 'taskSubscription',
-    params: TParams,
+  private async _sendGrpcRequest<TReq, TRes>(
+    method: keyof A2AServiceClient,
+    params: TReq,
     options: RequestOptions | undefined,
-    call: GrpcStreamCall<TReq, TRes>,
-    parser: (req: TParams) => TReq
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
-    const streamResponse = call(
-      parser(params),
-      this._buildMetadata(options),
-      this.grpcCallOptions ?? {}
-    );
+    call: GrpcUnaryCall<TReq, TRes>
+  ): Promise<TRes> {
+    return this._sendGrpcRequestWithConverter(method, params, options, call, (res: TRes) => res);
+  }
+
+  private async *_sendGrpcStreamingRequest<TReq>(
+    method: 'sendStreamingMessage' | 'subscribeToTask',
+    params: TReq,
+    options: RequestOptions | undefined,
+    call: GrpcStreamCall<TReq, StreamResponse>
+  ): AsyncGenerator<StreamResponse, void, undefined> {
+    const streamResponse = call(params, this._buildMetadata(options), this.grpcCallOptions ?? {});
 
     let onAbort: (() => void) | undefined;
     if (options?.signal) {
@@ -255,11 +277,11 @@ export class GrpcTransport implements Transport {
 
     try {
       for await (const response of streamResponse) {
-        yield FromProto.messageStreamResult(response);
+        yield response;
       }
     } catch (error) {
       if (this.isServiceError(error)) {
-        throw GrpcTransport.mapToError(error, method);
+        throw fromGrpcError(error, method);
       } else {
         throw new Error(`GRPC error for ${String(method)}!`, {
           cause: error,
@@ -286,60 +308,45 @@ export class GrpcTransport implements Transport {
     }
     return metadata;
   }
-
-  // TODO: the logic of mapToError will be removed in v1.0.0 with the enriched error model (https://a2a-protocol.org/latest/specification/#106-error-handling)
-  private static mapToError(error: grpc.ServiceError, method: keyof A2AServiceClient): Error {
-    switch (error.code) {
-      case grpc.status.NOT_FOUND:
-        return new TaskNotFoundError(error.details);
-      case grpc.status.FAILED_PRECONDITION:
-        if (method === 'cancelTask') {
-          return new TaskNotCancelableError(error.details);
-        }
-        if (method === 'getAgentCard') {
-          return new AuthenticatedExtendedCardNotConfiguredError(error.details);
-        }
-        break;
-      case grpc.status.UNIMPLEMENTED:
-        if (
-          [
-            'getTaskPushNotificationConfig',
-            'createTaskPushNotificationConfig',
-            'deleteTaskPushNotificationConfig',
-            'listTaskPushNotificationConfig',
-          ].includes(method)
-        ) {
-          return new PushNotificationNotSupportedError(error.details);
-        }
-        if (['getAgentCard', 'taskSubscription'].includes(method)) {
-          return new UnsupportedOperationError(error.details);
-        }
-        break;
-      //TODO: add case for grpc.status.INVALID_ARGUMENT and grpc.status.INTERNAL (the respective a2a errors are not implemented yet)
-      default:
-        break;
-    }
-    return new Error(`GRPC error for ${String(method)}! ${error.code} ${error.details}`, {
-      cause: error,
-    });
-  }
 }
 
 export class GrpcTransportFactoryOptions {
   grpcChannelCredentials?: grpc.ChannelCredentials;
   grpcCallOptions?: Partial<grpc.CallOptions>;
+  /**
+   * Enables the v0.3 protocol compatibility layer. When enabled, the
+   * factory inspects the matched `AgentInterface.protocolVersion`; if
+   * it falls in `[0.3, 1.0)`, the v0.3 `LegacyGrpcTransport` is
+   * instantiated instead of v1.0.
+   *
+   * Default: omitted (disabled).
+   */
+  legacyCompat?: { enabled: boolean };
 }
 
+/**
+ * Factory producing a gRPC `Transport`. With
+ * `legacyCompat: { enabled: true }` it dispatches between the v1.0 and
+ * v0.3 transports based on `AgentInterface.protocolVersion`.
+ */
 export class GrpcTransportFactory implements TransportFactory {
-  public static readonly name: TransportProtocolName = 'GRPC';
-
   constructor(private readonly options?: GrpcTransportFactoryOptions) {}
 
   get protocolName(): string {
-    return GrpcTransportFactory.name;
+    return PROTOCOL_NAME;
   }
 
-  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
+  async create(url: string, agentCard: AgentCard): Promise<Transport> {
+    if (this.options?.legacyCompat?.enabled) {
+      const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
+      if (iface && isLegacyVersion(iface.protocolVersion)) {
+        return new LegacyGrpcTransport({
+          endpoint: url,
+          grpcChannelCredentials: this.options?.grpcChannelCredentials,
+          grpcCallOptions: this.options?.grpcCallOptions,
+        });
+      }
+    }
     return new GrpcTransport({
       endpoint: url,
       grpcChannelCredentials: this.options?.grpcChannelCredentials,

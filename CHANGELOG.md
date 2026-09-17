@@ -1,5 +1,141 @@
 # Changelog
 
+## [1.1.0](https://github.com/a2aproject/a2a-js/compare/v1.0.1...v1.1.0) (2026-08-26)
+
+
+### Features
+
+* make event bus keep-alive states configurable ([#669](https://github.com/a2aproject/a2a-js/issues/669)) ([f844dad](https://github.com/a2aproject/a2a-js/commit/f844dad4d76e0f895c2d3a1d791db81ac59880fc)), closes [#620](https://github.com/a2aproject/a2a-js/issues/620)
+
+
+### Bug Fixes
+
+* Add serialization for listTasks input/output parameters. ([#610](https://github.com/a2aproject/a2a-js/issues/610)) ([c863497](https://github.com/a2aproject/a2a-js/commit/c86349797e62c030e46ab7af4fda14a96f50cde7))
+* clone push notification configs before storing ([#662](https://github.com/a2aproject/a2a-js/issues/662)) ([4d175a0](https://github.com/a2aproject/a2a-js/commit/4d175a0ebb274e6b01a2bb1f9f13d9cc372ed1da))
+* **compat/v0_3/translate:** add null and undefined checks to array and string fields ([#618](https://github.com/a2aproject/a2a-js/issues/618)) ([108736b](https://github.com/a2aproject/a2a-js/commit/108736b9bdde5a29c620ef0e25df714aac117def))
+* **deps:** replace `uuid` package with `crypto.randomUUID()` ([#665](https://github.com/a2aproject/a2a-js/issues/665)) ([636b060](https://github.com/a2aproject/a2a-js/commit/636b06027a315171b6b400f6edc96fdc9b0aa47a))
+* Do not filter tasks in ListTasks if task state is unspecified ([#622](https://github.com/a2aproject/a2a-js/issues/622)) ([1c6eb32](https://github.com/a2aproject/a2a-js/commit/1c6eb32487aab1d56b5685a13e62ab75d153cebb))
+* **errors:** global error branding via Symbol.hasInstance to fix instanceof checks across bundle entry points ([#612](https://github.com/a2aproject/a2a-js/issues/612)) ([cc33173](https://github.com/a2aproject/a2a-js/commit/cc33173bbd2343253b8544413ff685d801621cb1))
+* **scripts:** update generate script to use buf and remove obsolete generateTypes ([#653](https://github.com/a2aproject/a2a-js/issues/653)) ([8bf3cd3](https://github.com/a2aproject/a2a-js/commit/8bf3cd3b540e35dcb36c78be5c7f23d78a96c971))
+* **server:** send full Task on every v0.3 push trigger ([#658](https://github.com/a2aproject/a2a-js/issues/658)) ([b3afbe4](https://github.com/a2aproject/a2a-js/commit/b3afbe48ff71b7b46702805d24c32949d626957b))
+
+## [1.0.1](https://github.com/a2aproject/a2a-js/compare/v1.0.0...v1.0.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **compat/v0_3:** call context builder for compatibility layer ([#604](https://github.com/a2aproject/a2a-js/issues/604)) ([771836c](https://github.com/a2aproject/a2a-js/commit/771836c3ff7122424529012252a3358d7b40d39b)), closes [#600](https://github.com/a2aproject/a2a-js/issues/600)
+* normalize legacy cards in createFromAgentCard ([#602](https://github.com/a2aproject/a2a-js/issues/602)) ([9807a66](https://github.com/a2aproject/a2a-js/commit/9807a66402444ccf27e4ce08dd96578d814119f2)), closes [#601](https://github.com/a2aproject/a2a-js/issues/601)
+* **signature:** canonicalize the same payload when signing and verifying ([#606](https://github.com/a2aproject/a2a-js/issues/606)) ([7415e0e](https://github.com/a2aproject/a2a-js/commit/7415e0e655908dbdc8229ff99205a6fe9eae8be2))
+
+## [1.0.0](https://github.com/a2aproject/a2a-js/compare/v1.0.0-beta.0...v1.0.0) (2026-07-22)
+
+`@a2a-js/sdk` is now generally available. This release promotes the v1.0 line to stable, implementing the full [A2A Protocol Specification v1.0](https://a2a-protocol.org/v1.0.0/specification/) across all three transports (JSON-RPC, HTTP+JSON/REST, gRPC), with opt-in v0.3 backward compatibility for staged migrations.
+
+Upgrading from `0.3.x`? See the [v0.3 → v1.0 migration guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0/docs/migration-guide.md).
+Interoperating with peers still on v0.3? See the [end-user v0.3 compatibility guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0/docs/compatibility-v0_3.md).
+
+Changes below cover what landed since `v1.0.0-beta.0` — for the complete v0.3 → v1.0 delta, see the [`1.0.0-beta.0`](#100-beta0-2026-07-01) and [`1.0.0-alpha.0`](#100-alpha0-2026-05-11) entries below.
+
+
+### ⚠ BREAKING CHANGES
+
+* unify A2AError hierarchy with transport specific subclasses ([#587](https://github.com/a2aproject/a2a-js/issues/587))
+* **server:** replace individual properties with SendMessageRequest in RequestContext ([#581](https://github.com/a2aproject/a2a-js/issues/581))
+
+### Features
+
+* add state bag and ServerCallContextBuilder to ServerCallContext ([#364](https://github.com/a2aproject/a2a-js/issues/364)) ([477e394](https://github.com/a2aproject/a2a-js/commit/477e394981a92a118f3a738a0401fc45193612da))
+* export SSE wire-format helpers from public entry point ([#548](https://github.com/a2aproject/a2a-js/issues/548)) ([8bc21f5](https://github.com/a2aproject/a2a-js/commit/8bc21f5697f4b3ea31a1788747db418e6619809f)), closes [#547](https://github.com/a2aproject/a2a-js/issues/547)
+* **server:** expose SendMessageRequest metadata to AgentExecutor via RequestContext ([#564](https://github.com/a2aproject/a2a-js/issues/564)) ([a92f54e](https://github.com/a2aproject/a2a-js/commit/a92f54ec6ea5aa0c3d13891fd4ad110e97b07e93))
+* **server:** replace individual properties with SendMessageRequest in RequestContext ([#581](https://github.com/a2aproject/a2a-js/issues/581)) ([7cd30de](https://github.com/a2aproject/a2a-js/commit/7cd30dea0082e2d1491f1ec4e037e06b2e408462))
+* unify A2AError hierarchy with transport specific subclasses ([#587](https://github.com/a2aproject/a2a-js/issues/587)) ([4806f8f](https://github.com/a2aproject/a2a-js/commit/4806f8f757c7b945d1d588804cbfe06fc2d30a10))
+
+
+### Bug Fixes
+
+* **client:** bound SSE event size to prevent client-side memory exhaustion ([#582](https://github.com/a2aproject/a2a-js/issues/582)) ([e6e8ce9](https://github.com/a2aproject/a2a-js/commit/e6e8ce9af036f10ca020286fe4bfa649994e7b84))
+* **client:** cancel the SSE stream on teardown to avoid leaking connections ([#580](https://github.com/a2aproject/a2a-js/issues/580)) ([83269a5](https://github.com/a2aproject/a2a-js/commit/83269a5a30f7a4860df80fe12f80d8f2d532e8cf))
+* **grpc:** preserve null values in protobuf Struct ([#578](https://github.com/a2aproject/a2a-js/issues/578)) ([f447e4e](https://github.com/a2aproject/a2a-js/commit/f447e4e72332fd9f5aa32ba3fccd1464d2de4627)), closes [#576](https://github.com/a2aproject/a2a-js/issues/576)
+* resolve sdk compatibility bugs ([#568](https://github.com/a2aproject/a2a-js/issues/568)) ([b57f026](https://github.com/a2aproject/a2a-js/commit/b57f026f82b022eee16bd09907a9ecac0162784f))
+* **server:** await _handleProcessingError so blocking drains surface errors ([#579](https://github.com/a2aproject/a2a-js/issues/579)) ([5833652](https://github.com/a2aproject/a2a-js/commit/5833652fbe4eab1a3d10437b2d6db7b0fe22233f))
+* support GET for resubscribe route ([#569](https://github.com/a2aproject/a2a-js/issues/569)) ([8dd43d1](https://github.com/a2aproject/a2a-js/commit/8dd43d1484bb7bf4dfc786eca1c4ce2d40441d73))
+
+
+## [1.0.0-beta.0](https://github.com/a2aproject/a2a-js/compare/v1.0.0-alpha.0...v1.0.0-beta.0) (2026-07-01)
+
+The v0.3 backward-compatibility layer is now complete, marking this release as the first one bringing v1.0 and v0.3 support together.
+Backward compatibility with v0.3 was implemented across all three transports (JSON-RPC, REST, gRPC), agent-card resolution, and push notifications — closing [#452](https://github.com/a2aproject/a2a-js/issues/452).
+A v1.0 server can transparently accept v0.3 clients (and a v1.0 client can talk to v0.3 servers) by opting in with `legacyCompat: { enabled: true }` on the relevant transport.
+
+See the [v0.3 → v1.0 migration guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0-beta.0/docs/migration-guide.md)
+and the [end-user v0.3 compatibility guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0-beta.0/docs/compatibility-v0_3.md).
+
+
+### Features
+
+* add compat-v1 client and server samples to demonstrate A2A v0.3 backward compatibility ([#520](https://github.com/a2aproject/a2a-js/issues/520)) ([fce0b3f](https://github.com/a2aproject/a2a-js/commit/fce0b3f8d89e80b1ad006bfb799e262e991977e9))
+* add opt-in legacy v0.3 compatibility to JSON-RPC handler and improve extension header support ([#501](https://github.com/a2aproject/a2a-js/issues/501)) ([f707350](https://github.com/a2aproject/a2a-js/commit/f70735090a6e27bbc0313c6b4d710f26a92e7b39))
+* add v0.3 compatibility layer for client and server agent-card handling ([#504](https://github.com/a2aproject/a2a-js/issues/504)) ([75685f2](https://github.com/a2aproject/a2a-js/commit/75685f2ce0a3c3ba970c000cf0935d9df3b0bbcb))
+* add v0.3 gRPC compat layer ([#505](https://github.com/a2aproject/a2a-js/issues/505)) ([314d9e3](https://github.com/a2aproject/a2a-js/commit/314d9e36946d52c3c20c8f55fac77a2a715fb4fb))
+* default to v0.3 if version not provided ([#511](https://github.com/a2aproject/a2a-js/issues/511)) ([ad7f772](https://github.com/a2aproject/a2a-js/commit/ad7f772308472c770d0ef65a23f939966741eb82))
+* defined compat-specific consts and mappings ([#478](https://github.com/a2aproject/a2a-js/issues/478)) ([db0c595](https://github.com/a2aproject/a2a-js/commit/db0c595581e833be86fe20d9e84b22ec6a5296e3))
+* implement legacy v0.3 JSON-RPC transport handler ([#493](https://github.com/a2aproject/a2a-js/issues/493)) ([d191d91](https://github.com/a2aproject/a2a-js/commit/d191d911479380a0fa0eca9ca4a2975d530143e6))
+* implement legacy v0.3 REST support with compatible transport handler and middleware routing ([#495](https://github.com/a2aproject/a2a-js/issues/495)) ([da9a968](https://github.com/a2aproject/a2a-js/commit/da9a9682a34e73578ebed75813afa2fd4e15d241))
+* implement v0.3 ITK cross-SDK validation workflows ([#513](https://github.com/a2aproject/a2a-js/issues/513)) ([c9385f3](https://github.com/a2aproject/a2a-js/commit/c9385f338863000a158ac030614e1821a3355ccb))
+* implement v0.3 JSON-RPC client transport ([#499](https://github.com/a2aproject/a2a-js/issues/499)) ([46aa5d6](https://github.com/a2aproject/a2a-js/commit/46aa5d6fe984f01c3d078342eefcd0f6af6eb9d4))
+* implement v0.3 protocol compatibility for RestTransportFactory ([#503](https://github.com/a2aproject/a2a-js/issues/503)) ([b172482](https://github.com/a2aproject/a2a-js/commit/b172482821c41ed88d85698e02b49754100170cf))
+* implement versioned push notification serializers with legacy v0.3 compatibility support ([#507](https://github.com/a2aproject/a2a-js/issues/507)) ([0261be8](https://github.com/a2aproject/a2a-js/commit/0261be8585714ba9804a6ad8cb3eb4578404c21c))
+* normalize extension headers based on negotiated protocol version ([#510](https://github.com/a2aproject/a2a-js/issues/510)) ([74a51ee](https://github.com/a2aproject/a2a-js/commit/74a51eee0b7cc0c708bbca4799a777f1d47530a9))
+* replace automatic v0.3 agent card synthesis with explicit per-interface advertisement ([#560](https://github.com/a2aproject/a2a-js/issues/560)) ([60ad3b2](https://github.com/a2aproject/a2a-js/commit/60ad3b2b6aa1cce70a372dcf5c63ac46a1059544))
+
+
+### Bug Fixes
+
+* **compat:** wrap primitive Part.data values instead of throwing ([#537](https://github.com/a2aproject/a2a-js/issues/537)) ([7647db5](https://github.com/a2aproject/a2a-js/commit/7647db51720b7f64a6df86d829627c207debaf3b))
+* **server/rest:** handle undefined historyLength to return full task history ([#527](https://github.com/a2aproject/a2a-js/issues/527)) ([fa9ebce](https://github.com/a2aproject/a2a-js/commit/fa9ebcef97ddf2bbedb4fbe42822cde8b145b66e)), closes [#535](https://github.com/a2aproject/a2a-js/issues/535)
+* **server:** handle AUTH_REQUIRED lifecycle per spec ([#523](https://github.com/a2aproject/a2a-js/issues/523)) ([68826c2](https://github.com/a2aproject/a2a-js/commit/68826c251a4bc789cbbdf2904c66eeb61cbb3715))
+* **server:** make cancelTask idempotent on the canceled state ([#545](https://github.com/a2aproject/a2a-js/issues/545)) ([1d17a78](https://github.com/a2aproject/a2a-js/commit/1d17a78d8c42b84fdf84c8e6a6a7c99b794e6b63))
+* **server:** make push notification config id optional with server-side UUID ([#543](https://github.com/a2aproject/a2a-js/issues/543)) ([83af8c3](https://github.com/a2aproject/a2a-js/commit/83af8c37eaffd6200721bc73beae85993567d41d))
+* **server:** merge Task history in ResultManager instead of overwriting ([#524](https://github.com/a2aproject/a2a-js/issues/524)) ([4e1d4f7](https://github.com/a2aproject/a2a-js/commit/4e1d4f75d0d468776a31e44b378013f098ccaf78)), closes [#532](https://github.com/a2aproject/a2a-js/issues/532)
+* **server:** preserve activated extensions in response header ([#544](https://github.com/a2aproject/a2a-js/issues/544)) ([26184b4](https://github.com/a2aproject/a2a-js/commit/26184b4aec53106a4d5c73a6ed76f1a46bf1ecba))
+* **server:** propagate return to SSE generators to prevent listener leaks ([#526](https://github.com/a2aproject/a2a-js/issues/526)) ([a690734](https://github.com/a2aproject/a2a-js/commit/a6907348c3160331e37985c181bd9fff968d10b6)), closes [#534](https://github.com/a2aproject/a2a-js/issues/534)
+* **server:** synthesize correct error Task id in blocking and streaming paths ([#525](https://github.com/a2aproject/a2a-js/issues/525)) ([a3dd703](https://github.com/a2aproject/a2a-js/commit/a3dd703ecc94c724e46e74097c2bb1bc2655bc8e)), closes [#533](https://github.com/a2aproject/a2a-js/issues/533)
+* **server:** yield Task snapshot on resubscribe when bus is inactive ([#542](https://github.com/a2aproject/a2a-js/issues/542)) ([cd8f8fc](https://github.com/a2aproject/a2a-js/commit/cd8f8fc75b9d73cbeac07969c38d2d41bf9eb881))
+
+## 1.0.0-alpha.0 (2026-05-11)
+
+See the [v0.3 -> v1.0-alpha.0 migration guide](https://github.com/a2aproject/a2a-js/blob/v1.0.0-alpha.0/docs/migration-guide.md).
+
+**Note**: Enabling backward compatibility with v0.3 is tracked in [#452](https://github.com/a2aproject/a2a-js/issues/452).
+
+
+### ⚠ BREAKING CHANGES
+
+* Drop support for node 18 ([#368](https://github.com/a2aproject/a2a-js/issues/368))
+* Make ServerCallContext parameter mandatory across all places ([#405](https://github.com/a2aproject/a2a-js/issues/405))
+* Remove JSON-RPC client ([#353](https://github.com/a2aproject/a2a-js/issues/353))
+* Remove transport-specific exports ([#404](https://github.com/a2aproject/a2a-js/issues/404))
+* Update codebase to use A2A 1.0.0 data model ([#375](https://github.com/a2aproject/a2a-js/issues/375))
+* Remove A2AExpressApp ([#363](https://github.com/a2aproject/a2a-js/issues/363))
+
+### Features
+
+* Add A2A Version Header ([#422](https://github.com/a2aproject/a2a-js/issues/422)) ([b5f3db7](https://github.com/a2aproject/a2a-js/commit/b5f3db79240d9293f632adc3c27506a1dc15ad02))
+* Add cache-headers logic to the agent card handler ([#435](https://github.com/a2aproject/a2a-js/issues/435)) ([955b52b](https://github.com/a2aproject/a2a-js/commit/955b52b77686485c6e175b6c99fbc1a42b7aa64a))
+* Add resource scoping ([#450](https://github.com/a2aproject/a2a-js/issues/450)) ([c527086](https://github.com/a2aproject/a2a-js/commit/c527086b2b734ca715bc60f85bfcc0223600939d))
+* Add support for custom authentication scheme and credentials in auth-headers ([#430](https://github.com/a2aproject/a2a-js/issues/430)) ([5a4389b](https://github.com/a2aproject/a2a-js/commit/5a4389bc117baf45665269c9efc5cad77a9146b1))
+* AgentCardSignature support ([#448](https://github.com/a2aproject/a2a-js/issues/448)) ([4a41a8c](https://github.com/a2aproject/a2a-js/commit/4a41a8c77520c3f4baa3ba45d082fd7b35910ee0))
+* Enforce events ordering ([#437](https://github.com/a2aproject/a2a-js/issues/437)) ([157cf48](https://github.com/a2aproject/a2a-js/commit/157cf48f5de41be261a8839dc44a4bbdb257182f))
+* Enriched Error Model ([#427](https://github.com/a2aproject/a2a-js/issues/427)) ([c130778](https://github.com/a2aproject/a2a-js/commit/c13077801d8d300eb4f1a81ef207c7d4f0184e11))
+* Implement listTasks method ([#383](https://github.com/a2aproject/a2a-js/issues/383)) ([7d4c472](https://github.com/a2aproject/a2a-js/commit/7d4c472b0a8aa957c8b5ebed0e3d7987df3282a9))
+* Send current task as the first event after subscribing to it ([#418](https://github.com/a2aproject/a2a-js/issues/418)) ([4bfcf5f](https://github.com/a2aproject/a2a-js/commit/4bfcf5f3ebbbe538596d9519a1e31d79cfd6fc45))
+* Support multi-tenancy ([#419](https://github.com/a2aproject/a2a-js/issues/419)) ([1877877](https://github.com/a2aproject/a2a-js/commit/18778775bb755f75d46be1039291057ece625561))
+
+### Code Refactoring
+
+* remove A2AExpressApp ([#363](https://github.com/a2aproject/a2a-js/issues/363)) ([0b84728](https://github.com/a2aproject/a2a-js/commit/0b84728e56241ae5b00ff3274fb91dda5121e037))
+
 ## [0.3.13](https://github.com/a2aproject/a2a-js/compare/v0.3.12...v0.3.13) (2026-03-16)
 
 

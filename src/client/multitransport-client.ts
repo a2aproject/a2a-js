@@ -1,16 +1,24 @@
-import { PushNotificationNotSupportedError } from '../errors.js';
+import { withA2AVersion } from './service-parameters.js';
+import { AgentCardSignatureVerifier } from '../signature.js';
+import { LEGACY_HTTP_EXTENSION_HEADER } from '../compat/v0_3/index.js';
+import { HTTP_EXTENSION_HEADER } from '../constants.js';
+import { PushNotificationNotSupportedError } from '../errors/index.js';
+import { isLegacyVersion } from '../version_utils.js';
+import { TaskPushNotificationConfig, Task, AgentCard, SendMessageResult } from '../index.js';
 import {
-  MessageSendParams,
-  TaskPushNotificationConfig,
-  DeleteTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  Task,
-  TaskIdParams,
-  TaskQueryParams,
-  PushNotificationConfig,
-  AgentCard,
-} from '../types.js';
-import { A2AStreamEventData, SendMessageResult } from './client.js';
+  CancelTaskRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  ListTaskPushNotificationConfigsRequest,
+  ListTaskPushNotificationConfigsResponse,
+  SendMessageConfiguration,
+  SendMessageRequest,
+  StreamResponse,
+  SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
+} from '../types/pb/a2a.js';
 import { ClientCallContext } from './context.js';
 import {
   CallInterceptor,
@@ -24,47 +32,48 @@ import { Transport } from './transports/transport.js';
 
 export interface ClientConfig {
   /**
-   * Whether client prefers to poll for task updates instead of blocking until a terminal state is reached.
-   * If set to true, non-streaming send message result might be a Message or a Task in any (including non-terminal) state.
-   * Callers are responsible for running the polling loop. This configuration does not apply to streaming requests.
+   * Whether to poll for task updates instead of blocking until a terminal
+   * state is reached. When `true`, a non-streaming send result may be a
+   * Message or a Task in any (including non-terminal) state, and the
+   * caller is responsible for the polling loop. Does not apply to
+   * streaming requests.
    */
   polling?: boolean;
 
-  /**
-   * Specifies the default list of accepted media types to apply for all "send message" calls.
-   */
+  /** Default list of accepted media types for `sendMessage` calls. */
   acceptedOutputModes?: string[];
 
-  /**
-   * Specifies the default push notification configuration to apply for every Task.
-   */
-  pushNotificationConfig?: PushNotificationConfig;
+  /** Default push notification configuration applied to every Task. */
+  pushNotificationConfig?: TaskPushNotificationConfig;
 
-  /**
-   * Interceptors invoked for each request.
-   */
+  /** Interceptors invoked for each request. */
   interceptors?: CallInterceptor[];
 }
 
 export interface RequestOptions {
-  /**
-   * Signal to abort request execution.
-   */
+  /** Signal to abort request execution. */
   signal?: AbortSignal;
 
   /**
-   * A key-value map for passing horizontally applicable context or parameters.
-   * All parameters are passed to the server via underlying transports (e.g. In JsonRPC via Headers).
+   * Key-value map for horizontally-applicable context. Passed to the
+   * server via the underlying transport (e.g. as HTTP headers).
    */
   serviceParameters?: ServiceParameters;
 
-  /**
-   * Arbitrary data available to interceptors and transport implementation.
-   */
+  /** Arbitrary data available to interceptors and the transport. */
   context?: ClientCallContext;
 }
 
 export class Client {
+  /**
+   * The A2A protocol version sent with every request via the
+   * `A2A-Version` header. Determined by the transport, which receives the
+   * version from the matched `AgentInterface` during factory creation.
+   */
+  public get protocolVersion(): string {
+    return this.transport.protocolVersion;
+  }
+
   constructor(
     public readonly transport: Transport,
     private agentCard: AgentCard,
@@ -72,28 +81,36 @@ export class Client {
   ) {}
 
   /**
-   * If the current agent card supports the extended feature, it will try to fetch the extended agent card from the server,
-   * Otherwise it will return the current agent card value.
+   * If the current agent card supports the extended feature, fetches the
+   * extended agent card from the server; otherwise returns the current
+   * card.
    */
-  async getAgentCard(options?: RequestOptions): Promise<AgentCard> {
-    if (this.agentCard.supportsAuthenticatedExtendedCard) {
-      this.agentCard = await this.executeWithInterceptors(
+  async getAgentCard(
+    options?: RequestOptions,
+    verifySignature?: AgentCardSignatureVerifier
+  ): Promise<AgentCard> {
+    let agentCard = this.agentCard;
+    if (agentCard.capabilities?.extendedAgentCard) {
+      agentCard = await this.executeWithInterceptors(
         { method: 'getAgentCard' },
         options,
-        (_, options) => this.transport.getExtendedAgentCard(options)
+        (_, options) => this.transport.getExtendedAgentCard({ tenant: '' }, options)
       );
     }
-    return this.agentCard;
+    if (verifySignature) {
+      await verifySignature(agentCard);
+    }
+    // Only replace the cached card once the caller's verifier has accepted it, so a
+    // rejected card cannot drive later capability decisions.
+    this.agentCard = agentCard;
+    return agentCard;
   }
 
-  /**
-   * Sends a message to an agent to initiate a new interaction or to continue an existing one.
-   * Uses blocking mode by default.
-   */
-  sendMessage(params: MessageSendParams, options?: RequestOptions): Promise<SendMessageResult> {
+  /** Sends a message to an agent. Uses blocking mode by default. */
+  sendMessage(params: SendMessageRequest, options?: RequestOptions): Promise<SendMessageResult> {
     params = this.applyClientConfig({
       params,
-      blocking: !(this.config?.polling ?? false),
+      returnImmediately: this.config?.polling ?? false,
     });
 
     return this.executeWithInterceptors(
@@ -104,20 +121,21 @@ export class Client {
   }
 
   /**
-   * Sends a message to an agent to initiate/continue a task AND subscribes the client to real-time updates for that task.
-   * Performs fallback to non-streaming if not supported by the agent.
+   * Sends a message and subscribes to real-time updates for the
+   * resulting task. Falls back to non-streaming if the agent does not
+   * support streaming.
    */
   async *sendMessageStream(
-    params: MessageSendParams,
+    params: SendMessageRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'sendMessageStream';
 
-    params = this.applyClientConfig({ params, blocking: true });
+    params = this.applyClientConfig({ params, returnImmediately: false });
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withNormalizedHeaders(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -133,10 +151,18 @@ export class Client {
       return;
     }
 
-    if (!this.agentCard.capabilities.streaming) {
+    if (!this.agentCard.capabilities?.streaming) {
       const result = await this.transport.sendMessage(beforeArgs.input.value, beforeArgs.options);
+
+      let streamValue: StreamResponse;
+      if ('messageId' in result) {
+        streamValue = { payload: { $case: 'message', value: result } };
+      } else {
+        streamValue = { payload: { $case: 'task', value: result } };
+      }
+
       const afterArgs: AfterArgs<'sendMessageStream'> = {
-        result: { method, value: result },
+        result: { method, value: streamValue },
         agentCard: this.agentCard,
         options: beforeArgs.options,
       };
@@ -161,34 +187,28 @@ export class Client {
     }
   }
 
-  /**
-   * Sets or updates the push notification configuration for a specified task.
-   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
-   */
-  setTaskPushNotificationConfig(
+  /** Creates a push notification configuration for a task. */
+  createTaskPushNotificationConfig(
     params: TaskPushNotificationConfig,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
     return this.executeWithInterceptors(
-      { method: 'setTaskPushNotificationConfig', value: params },
+      { method: 'createTaskPushNotificationConfig', value: params },
       options,
-      this.transport.setTaskPushNotificationConfig.bind(this.transport)
+      this.transport.createTaskPushNotificationConfig.bind(this.transport)
     );
   }
 
-  /**
-   * Retrieves the current push notification configuration for a specified task.
-   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
-   */
+  /** Retrieves a push notification configuration for a task. */
   getTaskPushNotificationConfig(
-    params: TaskIdParams,
+    params: GetTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<TaskPushNotificationConfig> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -199,15 +219,12 @@ export class Client {
     );
   }
 
-  /**
-   * Retrieves the associated push notification configurations for a specified task.
-   * Requires the server to have AgentCard.capabilities.pushNotifications: true.
-   */
+  /** Lists push notification configurations for a task. */
   listTaskPushNotificationConfig(
-    params: ListTaskPushNotificationConfigParams,
+    params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
-  ): Promise<TaskPushNotificationConfig[]> {
-    if (!this.agentCard.capabilities.pushNotifications) {
+  ): Promise<ListTaskPushNotificationConfigsResponse> {
+    if (!this.agentCard.capabilities?.pushNotifications) {
       throw new PushNotificationNotSupportedError();
     }
 
@@ -218,11 +235,9 @@ export class Client {
     );
   }
 
-  /**
-   * Deletes an associated push notification configuration for a task.
-   */
+  /** Deletes a push notification configuration for a task. */
   deleteTaskPushNotificationConfig(
-    params: DeleteTaskPushNotificationConfigParams,
+    params: DeleteTaskPushNotificationConfigRequest,
     options?: RequestOptions
   ): Promise<void> {
     return this.executeWithInterceptors(
@@ -233,9 +248,10 @@ export class Client {
   }
 
   /**
-   * Retrieves the current state (including status, artifacts, and optionally history) of a previously initiated task.
+   * Retrieves the current state of a previously initiated task,
+   * including status, artifacts, and optionally history.
    */
-  getTask(params: TaskQueryParams, options?: RequestOptions): Promise<Task> {
+  getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
       { method: 'getTask', value: params },
       options,
@@ -244,10 +260,10 @@ export class Client {
   }
 
   /**
-   * Requests the cancellation of an ongoing task. The server will attempt to cancel the task,
-   * but success is not guaranteed (e.g., the task might have already completed or failed, or cancellation might not be supported at its current stage).
+   * Requests cancellation of an ongoing task. Success is not guaranteed
+   * (the task may have already completed or be uncancelable).
    */
-  cancelTask(params: TaskIdParams, options?: RequestOptions): Promise<Task> {
+  cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
     return this.executeWithInterceptors(
       { method: 'cancelTask', value: params },
       options,
@@ -255,19 +271,29 @@ export class Client {
     );
   }
 
+  /** Retrieves a list of tasks with optional filtering and pagination. */
+  listTasks(params: ListTasksRequest, options?: RequestOptions): Promise<ListTasksResponse> {
+    return this.executeWithInterceptors(
+      { method: 'listTasks', value: params },
+      options,
+      this.transport.listTasks.bind(this.transport)
+    );
+  }
+
   /**
-   * Allows a client to reconnect to an updates stream for an ongoing task after a previous connection was interrupted.
+   * Reconnects to an updates stream for an ongoing task after a previous
+   * connection was interrupted.
    */
   async *resubscribeTask(
-    params: TaskIdParams,
+    params: SubscribeToTaskRequest,
     options?: RequestOptions
-  ): AsyncGenerator<A2AStreamEventData, void, undefined> {
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
-      options,
+      options: this.withNormalizedHeaders(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
@@ -302,21 +328,98 @@ export class Client {
 
   private applyClientConfig({
     params,
-    blocking,
+    returnImmediately,
   }: {
-    params: MessageSendParams;
-    blocking: boolean;
-  }): MessageSendParams {
-    const result = { ...params, configuration: params.configuration ?? {} };
+    params: SendMessageRequest;
+    returnImmediately: boolean;
+  }): SendMessageRequest {
+    const result = {
+      ...params,
+      configuration: { ...params.configuration } as SendMessageConfiguration,
+    };
 
-    if (!result.configuration.acceptedOutputModes && this.config?.acceptedOutputModes) {
-      result.configuration.acceptedOutputModes = this.config.acceptedOutputModes;
+    result.configuration.acceptedOutputModes =
+      result.configuration.acceptedOutputModes ??
+      this.config?.acceptedOutputModes ??
+      ([] as string[]);
+
+    if (!result.configuration.taskPushNotificationConfig && this.config?.pushNotificationConfig) {
+      if (params.message?.taskId !== undefined) {
+        result.configuration.taskPushNotificationConfig = this.config.pushNotificationConfig;
+      }
     }
-    if (!result.configuration.pushNotificationConfig && this.config?.pushNotificationConfig) {
-      result.configuration.pushNotificationConfig = this.config.pushNotificationConfig;
-    }
-    result.configuration.blocking ??= blocking;
+    result.configuration.returnImmediately ??= returnImmediately;
     return result;
+  }
+
+  /**
+   * Normalizes outgoing service parameters so they match the wire
+   * version negotiated by the underlying transport.
+   *
+   * 1. Injects the `A2A-Version` header from `this.protocolVersion`,
+   *    overriding any caller-supplied value.
+   * 2. Rewrites the extensions header to the spelling expected by the
+   *    negotiated wire version (v0.3 used `X-A2A-Extensions`; v1.0 uses
+   *    `A2A-Extensions`). Callers can use the {@link withA2AExtensions}
+   *    helper without knowing which transport they ended up on.
+   *
+   * Header names are matched case-insensitively. Within a logical group
+   * the exact canonical-cased key wins; otherwise the last variant seen
+   * wins. The canonical spelling beats the alias across groups. The
+   * value emitted on the wire is always under the exact canonical
+   * spelling for the negotiated wire version.
+   */
+  private withNormalizedHeaders(options: RequestOptions | undefined): RequestOptions {
+    const serviceParameters = ServiceParameters.createFrom(
+      options?.serviceParameters,
+      withA2AVersion(this.protocolVersion)
+    );
+
+    const legacy = isLegacyVersion(this.protocolVersion);
+    const canonical = legacy ? LEGACY_HTTP_EXTENSION_HEADER : HTTP_EXTENSION_HEADER;
+    const alias = legacy ? HTTP_EXTENSION_HEADER : LEGACY_HTTP_EXTENSION_HEADER;
+    const canonicalLower = canonical.toLowerCase();
+    const aliasLower = alias.toLowerCase();
+
+    // Collect values from any case variant of either header, then rebuild
+    // the entry under the exact canonical spelling. The Object.keys snapshot
+    // keeps iteration well-defined even though we delete entries inside it.
+    let canonicalValue: string | undefined;
+    let exactCanonicalSeen = false;
+    let aliasValue: string | undefined;
+    let exactAliasSeen = false;
+
+    for (const key of Object.keys(serviceParameters)) {
+      const keyLower = key.toLowerCase();
+      if (keyLower === canonicalLower) {
+        if (key === canonical) {
+          canonicalValue = serviceParameters[key];
+          exactCanonicalSeen = true;
+        } else if (!exactCanonicalSeen) {
+          canonicalValue = serviceParameters[key];
+        }
+        delete serviceParameters[key];
+      } else if (keyLower === aliasLower) {
+        if (key === alias) {
+          aliasValue = serviceParameters[key];
+          exactAliasSeen = true;
+        } else if (!exactAliasSeen) {
+          aliasValue = serviceParameters[key];
+        }
+        delete serviceParameters[key];
+      }
+    }
+
+    if (canonicalValue !== undefined) {
+      serviceParameters[canonical] = canonicalValue;
+    } else if (aliasValue !== undefined) {
+      serviceParameters[canonical] = aliasValue;
+    }
+
+    return {
+      ...options,
+      serviceParameters,
+    };
   }
 
   private async executeWithInterceptors<K extends keyof Client>(
@@ -330,7 +433,7 @@ export class Client {
     const beforeArgs: BeforeArgs<K> = {
       input: input,
       agentCard: this.agentCard,
-      options,
+      options: this.withNormalizedHeaders(options),
     };
     const beforeResult = await this.interceptBefore(beforeArgs);
 
