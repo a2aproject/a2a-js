@@ -7,9 +7,22 @@ import {
   HTTP_STATUS,
 } from '../../src/server/transports/rest/rest_transport_handler.js';
 import { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
-import { A2AError } from '../../src/server/error.js';
-import { A2A_ERROR_CODE } from '../../src/errors.js';
-import { AgentCard, Task, Message } from '../../src/types.js';
+import {
+  RequestMalformedError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  UnsupportedOperationError,
+} from '../../src/errors/index.js';
+import {
+  AgentCard,
+  Task,
+  Message,
+  Role,
+  TaskState,
+  TaskStatus,
+  ListTasksResponse,
+} from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 
 describe('RestTransportHandler', () => {
@@ -18,34 +31,61 @@ describe('RestTransportHandler', () => {
   let mockContext: ServerCallContext;
 
   const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'HTTP+JSON',
     version: '1.0.0',
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080/a2a/v1',
+        protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
     capabilities: {
       streaming: true,
       pushNotifications: true,
+      extensions: [],
     },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    provider: undefined,
+    documentationUrl: '',
+    securitySchemes: {},
+    securityRequirements: [],
+    signatures: [],
   };
 
   const testMessage: Message = {
     messageId: 'msg-1',
-    role: 'user' as const,
-    parts: [{ kind: 'text' as const, text: 'Hello' }],
-    kind: 'message' as const,
+    role: Role.ROLE_USER,
+    parts: [
+      {
+        content: { $case: 'text', value: 'Hello' },
+        mediaType: 'text/plain',
+        filename: '',
+        metadata: undefined,
+      },
+    ],
+    contextId: 'ctx-1',
+    taskId: '',
+    extensions: [],
+    metadata: {},
+    referenceTaskIds: [],
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: {
+      state: TaskState.TASK_STATE_COMPLETED,
+      message: undefined,
+      timestamp: undefined,
+    } as TaskStatus,
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   beforeEach(() => {
@@ -56,11 +96,12 @@ describe('RestTransportHandler', () => {
       sendMessageStream: vi.fn(),
       getTask: vi.fn().mockResolvedValue(testTask),
       cancelTask: vi.fn().mockResolvedValue(testTask),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       resubscribe: vi.fn(),
+      listTasks: vi.fn(),
     };
     transportHandler = new RestTransportHandler(mockRequestHandler);
     mockContext = new ServerCallContext();
@@ -72,36 +113,31 @@ describe('RestTransportHandler', () => {
 
   describe('mapErrorToStatus', () => {
     it.each([
-      [A2A_ERROR_CODE.PARSE_ERROR, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.INVALID_REQUEST, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.INVALID_PARAMS, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.METHOD_NOT_FOUND, HTTP_STATUS.NOT_FOUND],
-      [A2A_ERROR_CODE.TASK_NOT_FOUND, HTTP_STATUS.NOT_FOUND],
-      [A2A_ERROR_CODE.TASK_NOT_CANCELABLE, HTTP_STATUS.CONFLICT],
-      [A2A_ERROR_CODE.PUSH_NOTIFICATION_NOT_SUPPORTED, HTTP_STATUS.BAD_REQUEST],
-      [A2A_ERROR_CODE.UNSUPPORTED_OPERATION, HTTP_STATUS.BAD_REQUEST],
-      [-99999, HTTP_STATUS.INTERNAL_SERVER_ERROR],
-    ])('should map error code %s to HTTP status %s', (errorCode, httpStatus) => {
-      expect(mapErrorToStatus(errorCode)).to.equal(httpStatus);
+      [new RequestMalformedError(''), HTTP_STATUS.BAD_REQUEST],
+      [new TaskNotFoundError(''), HTTP_STATUS.NOT_FOUND],
+      [new TaskNotCancelableError(''), HTTP_STATUS.BAD_REQUEST],
+      [new PushNotificationNotSupportedError(''), HTTP_STATUS.BAD_REQUEST],
+      [new UnsupportedOperationError(''), HTTP_STATUS.BAD_REQUEST],
+      [new Error(''), HTTP_STATUS.INTERNAL_SERVER_ERROR],
+    ])('should map error %s to HTTP status %s', (error, httpStatus) => {
+      expect(mapErrorToStatus(error)).to.equal(httpStatus);
     });
   });
 
   describe('toHTTPError', () => {
-    it('should convert A2AError to HTTP error format', () => {
-      const error = A2AError.invalidParams('Invalid input');
-      const httpError = toHTTPError(error);
+    it('should convert A2AError to google.rpc.Status JSON format', () => {
+      const error = new RequestMalformedError('Invalid input');
+      const httpError = toHTTPError(error, 400);
 
-      expect(httpError.code).to.equal(A2A_ERROR_CODE.INVALID_PARAMS);
-      expect(httpError.message).to.equal('Invalid input');
-      expect(httpError.data).to.be.undefined;
-    });
-
-    it('should include data if present in A2AError', () => {
-      const error = A2AError.invalidParams('Invalid input');
-      error.data = { field: 'email' };
-      const httpError = toHTTPError(error);
-
-      expect(httpError.data).to.deep.equal({ field: 'email' });
+      expect(httpError.error.code).to.equal(400);
+      expect(httpError.error.status).to.equal('INVALID_ARGUMENT');
+      expect(httpError.error.message).to.equal('Invalid input');
+      expect(httpError.error.details).to.be.an('array');
+      expect(httpError.error.details[0]).to.deep.include({
+        '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+        reason: 'INVALID_PARAMS',
+        domain: 'a2a-protocol.org',
+      });
     });
   });
 
@@ -116,7 +152,10 @@ describe('RestTransportHandler', () => {
 
   describe('getAuthenticatedExtendedAgentCard', () => {
     it('should return extended agent card from request handler', async () => {
-      const card = await transportHandler.getAuthenticatedExtendedAgentCard(mockContext);
+      const card = await transportHandler.getAuthenticatedExtendedAgentCard(
+        { tenant: '' },
+        mockContext
+      );
 
       expect(card).to.deep.equal(testAgentCard);
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledTimes(1);
@@ -130,10 +169,15 @@ describe('RestTransportHandler', () => {
         input: {
           message: {
             messageId: 'msg-1',
-            role: 'user' as const,
-            parts: [{ kind: 'text' as const, text: 'Hello' }],
-            kind: 'message' as const,
+            role: Role.ROLE_USER,
+            content: [{ part: { $case: 'text', value: 'Hello' } }],
+            contextId: '',
+            taskId: '',
+            extensions: [],
+            metadata: {},
           },
+          metadata: {},
+          configuration: undefined,
         },
         expectedMessageId: 'msg-1',
       },
@@ -158,50 +202,20 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should throw InvalidParams if message.messageId is missing', async () => {
+    it('should throw InvalidParams if request.messageId is missing', async () => {
       const invalidMessage = {
         message: {
-          role: 'user' as const,
-          parts: [{ kind: 'text' as const, text: 'Hello' }],
+          role: Role.ROLE_USER as const,
+          parts: [{ part: { $case: 'text', text: 'Hello' } }],
           kind: 'message' as const,
         },
+        metadata: {},
+        configuration: undefined as any,
       };
 
       await expect(
         transportHandler.sendMessage(invalidMessage as any, mockContext)
       ).rejects.toThrow('message.messageId is required');
-    });
-
-    it('should normalize configuration with snake_case fields', async () => {
-      const inputWithConfig = {
-        message: testMessage,
-        configuration: {
-          blocking: true,
-          acceptedOutputModes: ['text/plain'],
-          historyLength: 5,
-          pushNotificationConfig: {
-            id: 'push-1',
-            url: 'https://example.com',
-          },
-        },
-      };
-
-      await transportHandler.sendMessage(inputWithConfig as any, mockContext);
-
-      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          configuration: expect.objectContaining({
-            blocking: true,
-            acceptedOutputModes: ['text/plain'],
-            historyLength: 5,
-            pushNotificationConfig: {
-              id: 'push-1',
-              url: 'https://example.com',
-            },
-          }),
-        }),
-        mockContext
-      );
     });
   });
 
@@ -213,7 +227,10 @@ describe('RestTransportHandler', () => {
       });
 
       await expect(
-        transportHandler.sendMessageStream({ message: testMessage }, mockContext)
+        transportHandler.sendMessageStream(
+          { message: testMessage, metadata: {}, configuration: undefined, tenant: '' },
+          mockContext
+        )
       ).rejects.toThrow('Agent does not support streaming');
     });
 
@@ -224,7 +241,7 @@ describe('RestTransportHandler', () => {
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
       const stream = await transportHandler.sendMessageStream(
-        { message: testMessage },
+        { message: testMessage, metadata: {}, configuration: undefined, tenant: '' },
         mockContext
       );
 
@@ -239,7 +256,7 @@ describe('RestTransportHandler', () => {
 
       expect(result).to.deep.equal(testTask);
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { id: 'task-1', tenant: '' },
         mockContext
       );
     });
@@ -248,7 +265,7 @@ describe('RestTransportHandler', () => {
       await transportHandler.getTask('task-1', mockContext, '10');
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1', historyLength: 10 },
+        { id: 'task-1', historyLength: 10, tenant: '' },
         mockContext
       );
     });
@@ -266,16 +283,96 @@ describe('RestTransportHandler', () => {
     });
   });
 
+  describe('listTasks', () => {
+    const mockListResponse: ListTasksResponse = {
+      tasks: [],
+      nextPageToken: '',
+      pageSize: 0,
+      totalSize: 0,
+    };
+
+    it('should delegate parsed query params to the request handler', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      const result = await transportHandler.listTasks(
+        {
+          pageSize: '10',
+          pageToken: 'abc',
+          historyLength: '5',
+          contextId: 'ctx-1',
+        },
+        mockContext
+      );
+
+      expect(result).toEqual(mockListResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        {
+          tenant: '',
+          contextId: 'ctx-1',
+          status: TaskState.TASK_STATE_UNSPECIFIED,
+          pageSize: 10,
+          pageToken: 'abc',
+          historyLength: 5,
+          statusTimestampAfter: undefined,
+          includeArtifacts: false,
+        },
+        mockContext
+      );
+    });
+
+    it('should forward an unrecognized status filter as UNRECOGNIZED for the request handler to reject', async () => {
+      // Parsing is the transport's job; validation lives in
+      // DefaultRequestHandler so every transport behaves identically.
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: 'bogus-status' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.UNRECOGNIZED }),
+        mockContext
+      );
+    });
+
+    it('should forward an out-of-range numeric status filter as UNRECOGNIZED for the request handler to reject', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: '99' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.UNRECOGNIZED }),
+        mockContext
+      );
+    });
+
+    it('should pass a valid status filter through to the request handler', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: 'TASK_STATE_COMPLETED' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.TASK_STATE_COMPLETED }),
+        mockContext
+      );
+    });
+  });
+
   describe('cancelTask', () => {
     it('should cancel task by ID', async () => {
-      const cancelledTask = { ...testTask, status: { state: 'canceled' as const } };
+      const cancelledTask = {
+        ...testTask,
+        status: {
+          state: TaskState.TASK_STATE_CANCELED,
+          message: undefined,
+          timestamp: undefined,
+        } as TaskStatus,
+      };
       (mockRequestHandler.cancelTask as Mock).mockResolvedValue(cancelledTask);
 
       const result = await transportHandler.cancelTask('task-1', mockContext);
 
-      expect(result.status.state).to.equal('canceled');
+      expect(result.status?.state).to.equal(TaskState.TASK_STATE_CANCELED);
       expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { id: 'task-1', tenant: '', metadata: {} },
         mockContext
       );
     });
@@ -303,7 +400,7 @@ describe('RestTransportHandler', () => {
 
       expect(stream).toBeDefined();
       expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledWith(
-        { id: 'task-1' },
+        { id: 'task-1', tenant: '' },
         mockContext
       );
     });
@@ -312,13 +409,11 @@ describe('RestTransportHandler', () => {
   describe('Push Notification Config', () => {
     const mockConfig = {
       taskId: 'task-1',
-      pushNotificationConfig: {
-        id: 'config-1',
-        url: 'https://example.com/webhook',
-      },
+      id: 'config-1',
+      url: 'https://example.com/webhook',
     };
 
-    describe('setTaskPushNotificationConfig', () => {
+    describe('createTaskPushNotificationConfig', () => {
       it('should throw PushNotificationNotSupported if not supported', async () => {
         (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
           ...testAgentCard,
@@ -326,39 +421,46 @@ describe('RestTransportHandler', () => {
         });
 
         await expect(
-          transportHandler.setTaskPushNotificationConfig(mockConfig, mockContext)
+          transportHandler.createTaskPushNotificationConfig(mockConfig as any, mockContext)
         ).rejects.toThrow('Push Notification is not supported');
       });
 
       it('should normalize and set config if supported', async () => {
-        (mockRequestHandler.setTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
 
-        const result = await transportHandler.setTaskPushNotificationConfig(
-          mockConfig,
+        const result = await transportHandler.createTaskPushNotificationConfig(
+          mockConfig as any,
           mockContext
         );
 
         expect(result).to.deep.equal(mockConfig);
       });
 
-      it('should throw InvalidParams if taskId is missing', async () => {
-        const invalidConfig = {
-          pushNotificationConfig: { id: 'config-1', url: 'https://example.com/webhook' },
-        };
-
-        await expect(
-          transportHandler.setTaskPushNotificationConfig(invalidConfig as any, mockContext)
-        ).rejects.toThrow('taskId is required');
-      });
-
-      it('should throw InvalidParams if pushNotificationConfig is missing', async () => {
-        const invalidConfig = {
+      it('should accept id-less config and delegate to the handler (handler assigns UUID)', async () => {
+        // The id is optional across all transports. The handler generates
+        // a server-side UUID when omitted, so REST must not pre-reject
+        // id-less requests (previously threw `RequestMalformedError('id is
+        // required')`, breaking parity with JSON-RPC, gRPC, and the
+        // reference a2a-python / a2a-go REST dispatchers).
+        const idLessConfig = {
           taskId: 'task-1',
+          url: 'https://example.com/webhook',
         };
+        const assignedConfig = { ...idLessConfig, id: 'server-assigned-uuid' };
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(
+          assignedConfig
+        );
 
-        await expect(
-          transportHandler.setTaskPushNotificationConfig(invalidConfig as any, mockContext)
-        ).rejects.toThrow('pushNotificationConfig is required');
+        const result = await transportHandler.createTaskPushNotificationConfig(
+          idLessConfig as any,
+          mockContext
+        );
+
+        expect(mockRequestHandler.createTaskPushNotificationConfig).toHaveBeenCalledWith(
+          idLessConfig,
+          mockContext
+        );
+        expect(result).to.deep.equal(assignedConfig);
       });
     });
 
@@ -372,9 +474,9 @@ describe('RestTransportHandler', () => {
           mockContext
         );
 
-        expect(result).to.deep.equal(configs);
+        expect(result).to.deep.equal([mockConfig]);
         expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
-          { id: 'task-1' },
+          { taskId: 'task-1', pageSize: 0, pageToken: '', tenant: '' },
           mockContext
         );
       });
@@ -392,9 +494,21 @@ describe('RestTransportHandler', () => {
 
         expect(result).to.deep.equal(mockConfig);
         expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+          { taskId: 'task-1', id: 'config-1', tenant: '' },
           mockContext
         );
+      });
+
+      it('should return config with correct name format', async () => {
+        (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        const result = await transportHandler.getTaskPushNotificationConfig(
+          'task-1',
+          'config-1',
+          mockContext
+        );
+
+        expect(result.taskId).to.equal('task-1');
       });
     });
 
@@ -405,7 +519,7 @@ describe('RestTransportHandler', () => {
         await transportHandler.deleteTaskPushNotificationConfig('task-1', 'config-1', mockContext);
 
         expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
-          { id: 'task-1', pushNotificationConfigId: 'config-1' },
+          { taskId: 'task-1', id: 'config-1', tenant: '' },
           mockContext
         );
       });
@@ -418,36 +532,50 @@ describe('RestTransportHandler', () => {
         name: 'camelCase',
         message: {
           messageId: 'msg-file',
-          role: 'user' as const,
+          role: Role.ROLE_USER,
           parts: [
             {
-              kind: 'file' as const,
-              file: {
-                uri: 'https://example.com/file.pdf',
-                mimeType: 'application/pdf',
-                name: 'document.pdf',
+              content: {
+                $case: 'url',
+                value: 'https://example.com/file.pdf',
               },
+              mediaType: 'application/pdf',
+              filename: 'file.pdf',
             },
           ],
-          kind: 'message' as const,
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
         },
+        metadata: {},
+        configuration: undefined,
       },
-    ])('should normalize $name file parts to camelCase', async ({ message }) => {
-      await transportHandler.sendMessage({ message } as any, mockContext);
+    ])(
+      'should normalize $name file parts to camelCase',
+      async ({ message, metadata, configuration }) => {
+        await transportHandler.sendMessage(
+          { message, metadata, configuration } as any,
+          mockContext
+        );
 
-      expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.objectContaining({
-            parts: [
-              expect.objectContaining({
-                kind: 'file',
-                file: expect.objectContaining({ mimeType: 'application/pdf' }),
-              }),
-            ],
+        expect(mockRequestHandler.sendMessage as Mock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: expect.objectContaining({
+              parts: [
+                expect.objectContaining({
+                  content: {
+                    $case: 'url',
+                    value: 'https://example.com/file.pdf',
+                  },
+                  mediaType: 'application/pdf',
+                }),
+              ],
+            }),
           }),
-        }),
-        mockContext
-      );
-    });
+          mockContext
+        );
+      }
+    );
   });
 });

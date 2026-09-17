@@ -162,6 +162,7 @@ yarn-error.log
 .project
 .classpath
 .c9/
+.vscode/
 *.launch
 .settings/
 *.sublime-workspace
@@ -180,3 +181,11 @@ testem.log
 .DS_Store
 Thumbs.db
 .nyc_output/
+
+# ITK protobuf instructions
+/itk/pb/*
+
+# ACTS conformance run output
+/itk/acts-report-*.json
+/itk/acts_results_*.json
+/itk/acts_js.json

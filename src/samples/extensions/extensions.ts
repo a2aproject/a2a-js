@@ -3,29 +3,29 @@ import {
   RequestContext,
   ExecutionEventBus,
   AgentExecutionEvent,
+  EventListener,
+  FinishedListener,
 } from '../../server/index.js';
-import { TaskStatusUpdateEvent } from '../../types.js';
 
-const URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1';
+export const EXTENSION_URI = 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1';
 
 class TimeStampExtension {
   activate(context: RequestContext): boolean {
     const serverContext = context.context;
-    if (serverContext?.requestedExtensions?.includes(URI)) {
-      serverContext.addActivatedExtension(URI);
+    if (serverContext?.requestedExtensions?.includes(EXTENSION_URI)) {
+      serverContext.addActivatedExtension(EXTENSION_URI);
       return true;
     }
     return false;
   }
 
   timestampEvent(event: AgentExecutionEvent): void {
-    if (event.kind === 'status-update') {
-      const statusUpdateEvent = event as TaskStatusUpdateEvent;
-      if (statusUpdateEvent.status.message) {
-        if (!statusUpdateEvent.status.message.metadata) {
-          statusUpdateEvent.status.message.metadata = {};
+    if (event.kind === 'statusUpdate') {
+      if (event.data.status?.message) {
+        if (!event.data.status.message.metadata) {
+          event.data.status.message.metadata = {};
         }
-        statusUpdateEvent.status.message.metadata['timestamp'] = new Date().toISOString();
+        event.data.status.message.metadata['timestamp'] = new Date().toISOString();
       }
     }
   }
@@ -74,18 +74,36 @@ class TimestampingEventQueue implements ExecutionEventBus {
     this._delegate.finished();
   }
 
-  on(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
-    this._delegate.on(eventName, listener);
+  on(eventName: 'event', listener: EventListener): this;
+  on(eventName: 'finished', listener: FinishedListener): this;
+  on(eventName: 'event' | 'finished', listener: EventListener | FinishedListener): this {
+    if (eventName === 'event') {
+      this._delegate.on('event', listener as EventListener);
+    } else {
+      this._delegate.on('finished', listener as FinishedListener);
+    }
     return this;
   }
 
-  off(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
-    this._delegate.off(eventName, listener);
+  off(eventName: 'event', listener: EventListener): this;
+  off(eventName: 'finished', listener: FinishedListener): this;
+  off(eventName: 'event' | 'finished', listener: EventListener | FinishedListener): this {
+    if (eventName === 'event') {
+      this._delegate.off('event', listener as EventListener);
+    } else {
+      this._delegate.off('finished', listener as FinishedListener);
+    }
     return this;
   }
 
-  once(eventName: 'event' | 'finished', listener: (event: AgentExecutionEvent) => void): this {
-    this._delegate.once(eventName, listener);
+  once(eventName: 'event', listener: EventListener): this;
+  once(eventName: 'finished', listener: FinishedListener): this;
+  once(eventName: 'event' | 'finished', listener: EventListener | FinishedListener): this {
+    if (eventName === 'event') {
+      this._delegate.once('event', listener as EventListener);
+    } else {
+      this._delegate.once('finished', listener as FinishedListener);
+    }
     return this;
   }
 

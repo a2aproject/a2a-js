@@ -2,23 +2,45 @@ import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { Client, ClientConfig, RequestOptions } from '../../src/client/multitransport-client.js';
 import { Transport } from '../../src/client/transports/transport.js';
 import {
-  MessageSendParams,
   TaskPushNotificationConfig,
-  DeleteTaskPushNotificationConfigParams,
-  ListTaskPushNotificationConfigParams,
-  TaskIdParams,
-  TaskQueryParams,
   Task,
   Message,
-  TaskStatusUpdateEvent,
   AgentCard,
-  GetTaskPushNotificationConfigParams,
-} from '../../src/types.js';
-import { A2AStreamEventData } from '../../src/client/client.js';
+  Role,
+  TaskState,
+  StreamResponse,
+  A2A_VERSION_HEADER,
+  A2A_PROTOCOL_VERSION,
+  HTTP_EXTENSION_HEADER,
+} from '../../src/index.js';
+import {
+  A2A_LEGACY_PROTOCOL_VERSION,
+  LEGACY_HTTP_EXTENSION_HEADER,
+} from '../../src/compat/v0_3/constants.js';
+
+// The default RequestOptions the Client injects when the caller passes none;
+// contains the auto-injected A2A-Version header.
+const defaultVersionOptions: RequestOptions = {
+  serviceParameters: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION },
+};
+import {
+  CancelTaskRequest,
+  DeleteTaskPushNotificationConfigRequest,
+  GetTaskPushNotificationConfigRequest,
+  GetTaskRequest,
+  ListTaskPushNotificationConfigsRequest,
+  SendMessageRequest,
+  SubscribeToTaskRequest,
+  ListTasksRequest,
+  ListTasksResponse,
+} from '../../src/types/pb/a2a.js';
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {
-  let transport: Record<keyof Transport, Mock>;
+  let transport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
+    protocolName: string;
+    protocolVersion: string;
+  };
   let client: Client;
   let agentCard: AgentCard;
 
@@ -27,41 +49,139 @@ describe('Client', () => {
       getExtendedAgentCard: vi.fn(),
       sendMessage: vi.fn(),
       sendMessageStream: vi.fn(),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfig: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
+      listTasks: vi.fn(),
       resubscribeTask: vi.fn(),
+      protocolName: 'MockTransport',
+      protocolVersion: '1.0',
     };
     agentCard = {
-      protocolVersion: '0.3.0',
       name: 'Test Agent',
       description: 'Test Description',
-      url: 'http://test-agent.com',
       version: '1.0.0',
       capabilities: {
+        extensions: [],
         streaming: true,
         pushNotifications: true,
+        extendedAgentCard: false,
       },
       defaultInputModes: [],
       defaultOutputModes: [],
       skills: [],
+      documentationUrl: 'http://test-agent.com/docs',
+      securityRequirements: [],
+      signatures: [],
+      provider: { url: '', organization: '' },
+      supportedInterfaces: [],
+      securitySchemes: {},
     };
     client = new Client(transport, agentCard);
   });
 
+  describe.each(['sendMessage', 'sendMessageStream'] as const)(
+    '%s configuration ownership',
+    (method) => {
+      let params: SendMessageRequest;
+
+      beforeEach(() => {
+        params = {
+          tenant: '',
+          message: {
+            messageId: '1',
+            role: Role.ROLE_USER,
+            parts: [],
+            contextId: '',
+            taskId: '',
+            extensions: [],
+            metadata: {},
+            referenceTaskIds: [],
+          },
+          configuration: {
+            acceptedOutputModes: ['text/plain'],
+            returnImmediately: false,
+            historyLength: 0,
+            taskPushNotificationConfig: undefined,
+          },
+          metadata: {},
+        };
+        transport.sendMessage.mockResolvedValue(params.message);
+        transport.sendMessageStream.mockImplementation(async function* () {
+          yield { payload: { $case: 'message', value: params.message } };
+        });
+      });
+
+      async function send(target: Client) {
+        if (method === 'sendMessage') {
+          await target.sendMessage(params);
+        } else {
+          for await (const event of target.sendMessageStream(params)) {
+            expect(event.payload?.value).toEqual(params.message);
+          }
+        }
+      }
+
+      it('accepts frozen caller configuration without changing explicit values', async () => {
+        Object.freeze(params.configuration);
+        const original = structuredClone(params);
+        client = new Client(transport, agentCard, {
+          polling: true,
+          acceptedOutputModes: ['application/json'],
+        });
+
+        await send(client);
+
+        expect(params).toEqual(original);
+        expect(transport[method]).toHaveBeenCalledExactlyOnceWith(original, defaultVersionOptions);
+        expect(transport[method].mock.calls[0][0].configuration).not.toBe(params.configuration);
+      });
+
+      it('does not leak default push configuration when a request is reused across clients', async () => {
+        const firstPush: TaskPushNotificationConfig = {
+          tenant: '',
+          taskId: '',
+          id: 'first',
+          url: 'https://first.example/callback',
+          token: '',
+          authentication: undefined,
+        };
+        const secondPush = { ...firstPush, id: 'second', url: 'https://second.example/callback' };
+        const original = structuredClone(params);
+
+        await send(new Client(transport, agentCard, { pushNotificationConfig: firstPush }));
+        await send(new Client(transport, agentCard, { pushNotificationConfig: secondPush }));
+
+        expect(params).toEqual(original);
+        expect(transport[method]).toHaveBeenCalledTimes(2);
+        expect(transport[method].mock.calls[0][0].configuration.taskPushNotificationConfig).toEqual(
+          firstPush
+        );
+        expect(transport[method].mock.calls[1][0].configuration.taskPushNotificationConfig).toEqual(
+          secondPush
+        );
+      });
+    }
+  );
+
   it('should call transport.getAuthenticatedExtendedAgentCard', async () => {
-    const agentCardWithExtendedSupport = { ...agentCard, supportsAuthenticatedExtendedCard: true };
+    const agentCardWithExtendedSupport = {
+      ...agentCard,
+      capabilities: { ...agentCard.capabilities, extendedAgentCard: true },
+    };
     const extendedAgentCard: AgentCard = {
       ...agentCard,
-      capabilities: { ...agentCard.capabilities, stateTransitionHistory: true },
+      capabilities: { ...agentCard.capabilities, extensions: [] },
     };
     client = new Client(transport, agentCardWithExtendedSupport);
 
-    let caughtOptions;
-    transport.getExtendedAgentCard.mockImplementation(async (options) => {
+    let caughtParams: unknown;
+    let caughtOptions: unknown;
+    transport.getExtendedAgentCard.mockImplementation(async (params, options) => {
+      caughtParams = params;
       caughtOptions = options;
       return extendedAgentCard;
     });
@@ -73,7 +193,44 @@ describe('Client', () => {
 
     expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(1);
     expect(result).to.equal(extendedAgentCard);
-    expect(caughtOptions).to.equal(expectedOptions);
+    expect(caughtParams).to.deep.equal({ tenant: '' });
+    expect(caughtOptions).toEqual({
+      serviceParameters: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION, key: 'value' },
+    });
+  });
+
+  it('should keep the current agent card when signature verification of the extended card fails', async () => {
+    const publicAgentCard: AgentCard = {
+      ...agentCard,
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: true,
+        pushNotifications: false,
+      },
+    };
+    const unverifiedAgentCard: AgentCard = {
+      ...agentCard,
+      name: 'UNVERIFIED',
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: false,
+        pushNotifications: true,
+      },
+    };
+    client = new Client(transport, publicAgentCard);
+    transport.getExtendedAgentCard.mockResolvedValue(unverifiedAgentCard);
+    const verifySignature = vi.fn().mockRejectedValue(new Error('invalid signature'));
+
+    await expect(client.getAgentCard(undefined, verifySignature)).rejects.toThrow(
+      'invalid signature'
+    );
+    expect(verifySignature).toHaveBeenCalledWith(unverifiedAgentCard);
+
+    // The rejected card must not have replaced the public one: the next call still
+    // sees `extendedAgentCard: true` and fetches again instead of serving it.
+    const result = await client.getAgentCard();
+    expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(2);
+    expect(result).to.equal(unverifiedAgentCard);
   });
 
   it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
@@ -83,21 +240,45 @@ describe('Client', () => {
     expect(result).to.equal(agentCard);
   });
 
-  it('should call transport.sendMessage with default blocking=true', async () => {
-    const params: MessageSendParams = {
+  it('should call transport.sendMessage with default returnImmediately=false', async () => {
+    const params: SendMessageRequest = {
       message: {
         contextId: '123',
-        kind: 'message',
         messageId: 'msg1',
-        role: 'user',
-        parts: [{ kind: 'text', text: 'hello' }],
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'hello' },
+            mediaType: 'text/plain',
+            filename: '',
+            metadata: {},
+          },
+        ],
+        taskId: '',
+        extensions: [],
+        metadata: {},
+        referenceTaskIds: [],
       },
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
     };
     const response: Message = {
-      kind: 'message',
       messageId: 'abc',
-      role: 'agent',
-      parts: [{ kind: 'text', text: 'response' }],
+      role: Role.ROLE_AGENT,
+      parts: [
+        {
+          content: { $case: 'text', value: 'response' },
+          mediaType: 'text/plain',
+          filename: '',
+          metadata: {},
+        },
+      ],
+      taskId: '',
+      contextId: '123',
+      extensions: [],
+      metadata: {},
+      referenceTaskIds: [],
     };
     transport.sendMessage.mockResolvedValue(response);
 
@@ -105,31 +286,70 @@ describe('Client', () => {
 
     const expectedParams = {
       ...params,
-      configuration: { ...params.configuration, blocking: true },
+      configuration: {
+        ...params.configuration,
+        returnImmediately: false,
+        acceptedOutputModes: [] as string[],
+      },
     };
     expect(transport.sendMessage.mock.contexts[0]).toBe(transport);
-    expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+    expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+      expectedParams,
+      defaultVersionOptions
+    );
     expect(result).to.deep.equal(response);
   });
 
-  it('should call transport.sendMessageStream with blocking=true', async () => {
-    const params: MessageSendParams = {
-      message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+  it('should call transport.sendMessageStream with returnImmediately=false', async () => {
+    const params: SendMessageRequest = {
+      tenant: '',
+      message: {
+        messageId: '1',
+        role: Role.ROLE_USER,
+        parts: [],
+        contextId: '',
+        taskId: '',
+        extensions: [],
+        metadata: {},
+        referenceTaskIds: [],
+      },
+      configuration: undefined,
+      metadata: {},
     };
-    const events: A2AStreamEventData[] = [
+    const events: StreamResponse[] = [
       {
-        kind: 'status-update',
-        taskId: '123',
-        contextId: 'ctx1',
-        final: false,
-        status: { state: 'working' },
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
       {
-        kind: 'status-update',
-        taskId: '123',
-        contextId: 'ctx1',
-        final: false,
-        status: { state: 'completed' },
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
     ];
     async function* stream() {
@@ -145,38 +365,51 @@ describe('Client', () => {
     }
     const expectedParams = {
       ...params,
-      configuration: { ...params.configuration, blocking: true },
+      configuration: {
+        ...params.configuration,
+        returnImmediately: false,
+        acceptedOutputModes: [] as string[],
+      },
     };
     expect(transport.sendMessageStream).toHaveBeenCalledTimes(1);
-    expect(transport.sendMessageStream).toHaveBeenCalledWith(expectedParams, undefined);
+    expect(transport.sendMessageStream).toHaveBeenCalledWith(expectedParams, defaultVersionOptions);
     expect(got).to.deep.equal(events);
   });
 
-  it('should call transport.setTaskPushNotificationConfig', async () => {
-    const params: TaskPushNotificationConfig = {
-      taskId: '123',
-      pushNotificationConfig: { url: 'http://example.com' },
+  it('should call transport.createTaskPushNotificationConfig', async () => {
+    const config: TaskPushNotificationConfig = {
+      tenant: '',
+      taskId: '',
+      id: 'abc',
+      url: 'http://example.com',
+      token: 'tok',
+      authentication: undefined,
     };
-    transport.setTaskPushNotificationConfig.mockResolvedValue(params);
+    transport.createTaskPushNotificationConfig.mockResolvedValue(config);
 
-    const result = await client.setTaskPushNotificationConfig(params);
+    const result = await client.createTaskPushNotificationConfig(config);
 
-    expect(transport.setTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
-    expect(transport.setTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
-      params,
-      undefined
+    expect(transport.createTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
+    expect(transport.createTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
+      config,
+      defaultVersionOptions
     );
-    expect(result).to.equal(params);
+    expect(result).to.equal(config);
   });
 
   it('should call transport.getTaskPushNotificationConfig', async () => {
-    const params: GetTaskPushNotificationConfigParams = {
-      id: '123',
-      pushNotificationConfigId: 'abc',
+    const params: GetTaskPushNotificationConfigRequest = {
+      tenant: '',
+      taskId: '123',
+      id: 'abc',
     };
     const config: TaskPushNotificationConfig = {
+      tenant: '',
       taskId: '123',
-      pushNotificationConfig: { url: 'http://example.com' },
+      id: 'abc',
+      url: 'http://example.com',
+      token: 'tok',
+      authentication: undefined,
     };
     transport.getTaskPushNotificationConfig.mockResolvedValue(config);
 
@@ -185,15 +418,27 @@ describe('Client', () => {
     expect(transport.getTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
     expect(transport.getTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
       params,
-      undefined
+      defaultVersionOptions
     );
     expect(result).to.equal(config);
   });
 
   it('should call transport.listTaskPushNotificationConfig', async () => {
-    const params: ListTaskPushNotificationConfigParams = { id: '123' };
+    const params: ListTaskPushNotificationConfigsRequest = {
+      tenant: '',
+      taskId: '123',
+      pageSize: 0,
+      pageToken: '',
+    };
     const configs: TaskPushNotificationConfig[] = [
-      { taskId: '123', pushNotificationConfig: { url: 'http://example.com' } },
+      {
+        tenant: '',
+        taskId: '123',
+        id: 'abc',
+        url: 'http://example.com',
+        token: 'tok',
+        authentication: undefined,
+      },
     ];
     transport.listTaskPushNotificationConfig.mockResolvedValue(configs);
 
@@ -201,15 +446,16 @@ describe('Client', () => {
 
     expect(transport.listTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
       params,
-      undefined
+      defaultVersionOptions
     );
     expect(result).to.equal(configs);
   });
 
   it('should call transport.deleteTaskPushNotificationConfig', async () => {
-    const params: DeleteTaskPushNotificationConfigParams = {
-      id: '123',
-      pushNotificationConfigId: 'abc',
+    const params: DeleteTaskPushNotificationConfigRequest = {
+      tenant: '',
+      taskId: '123',
+      id: 'abc',
     };
     transport.deleteTaskPushNotificationConfig.mockResolvedValue(undefined);
 
@@ -218,54 +464,114 @@ describe('Client', () => {
     expect(transport.deleteTaskPushNotificationConfig.mock.contexts[0]).toBe(transport);
     expect(transport.deleteTaskPushNotificationConfig).toHaveBeenCalledExactlyOnceWith(
       params,
-      undefined
+      defaultVersionOptions
     );
   });
 
   it('should call transport.getTask', async () => {
-    const params: TaskQueryParams = { id: '123' };
-    const task: Task = { id: '123', kind: 'task', contextId: 'ctx1', status: { state: 'working' } };
+    const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
+    const task: Task = {
+      id: '123',
+      contextId: 'ctx1',
+      status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
     transport.getTask.mockResolvedValue(task);
 
     const result = await client.getTask(params);
 
-    expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     expect(result).to.equal(task);
   });
 
   it('should call transport.cancelTask', async () => {
-    const params: TaskIdParams = { id: '123' };
+    const params: CancelTaskRequest = { tenant: '', id: '123', metadata: {} };
     const task: Task = {
       id: '123',
-      kind: 'task',
       contextId: 'ctx1',
-      status: { state: 'canceled' },
+      status: { state: TaskState.TASK_STATE_CANCELED, timestamp: undefined, message: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
     };
     transport.cancelTask.mockResolvedValue(task);
 
     const result = await client.cancelTask(params);
 
     expect(transport.cancelTask.mock.contexts[0]).toBe(transport);
-    expect(transport.cancelTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(transport.cancelTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
     expect(result).to.equal(task);
   });
 
+  it('should call transport.listTasks', async () => {
+    const params: ListTasksRequest = {
+      tenant: '',
+      contextId: 'ctx1',
+      status: TaskState.TASK_STATE_WORKING,
+      pageToken: '',
+      statusTimestampAfter: undefined,
+    };
+    const response: ListTasksResponse = {
+      tasks: [
+        {
+          id: '123',
+          contextId: 'ctx1',
+          status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        },
+      ],
+      nextPageToken: '',
+      pageSize: 1,
+      totalSize: 1,
+    };
+    transport.listTasks.mockResolvedValue(response);
+
+    const result = await client.listTasks(params);
+
+    expect(transport.listTasks).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
+    expect(result).to.equal(response);
+  });
+
   it('should call transport.resubscribeTask', async () => {
-    const params: TaskIdParams = { id: '123' };
-    const events: TaskStatusUpdateEvent[] = [
+    const params: SubscribeToTaskRequest = { tenant: '', id: '123' };
+    const events: StreamResponse[] = [
       {
-        kind: 'status-update',
-        taskId: '123',
-        contextId: 'ctx1',
-        final: false,
-        status: { state: 'working' },
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_WORKING,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
       {
-        kind: 'status-update',
-        taskId: '123',
-        contextId: 'ctx1',
-        final: true,
-        status: { state: 'completed' },
+        payload: {
+          $case: 'task',
+          value: {
+            id: '123',
+            contextId: 'ctx1',
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              timestamp: undefined,
+              message: undefined,
+            },
+            metadata: {},
+            artifacts: [],
+            history: [],
+          },
+        },
       },
     ];
     async function* stream() {
@@ -280,7 +586,10 @@ describe('Client', () => {
       got.push(event);
     }
     expect(transport.resubscribeTask.mock.contexts[0]).toBe(transport);
-    expect(transport.resubscribeTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+    expect(transport.resubscribeTask).toHaveBeenCalledExactlyOnceWith(
+      params,
+      defaultVersionOptions
+    );
     expect(got).to.deep.equal(events);
   });
 
@@ -288,104 +597,249 @@ describe('Client', () => {
     it('should set blocking=false when polling is enabled', async () => {
       const config: ClientConfig = { polling: true };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: false },
+        configuration: {
+          returnImmediately: true,
+          acceptedOutputModes: [] as string[],
+        },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should set blocking=false when explicitly provided in request', async () => {
       client = new Client(transport, agentCard);
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
-        configuration: { blocking: false },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: {
+          returnImmediately: true,
+          acceptedOutputModes: [] as string[],
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
+        },
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: false },
+        configuration: {
+          returnImmediately: true,
+          acceptedOutputModes: [] as string[],
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
+        },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should apply acceptedOutputModes', async () => {
       const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, acceptedOutputModes: ['application/json'] },
+        configuration: {
+          returnImmediately: false,
+          acceptedOutputModes: ['application/json'],
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
+        },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should use acceptedOutputModes from request when provided', async () => {
       const config: ClientConfig = { polling: false, acceptedOutputModes: ['application/json'] };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
-        configuration: { acceptedOutputModes: ['text/plain'] },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: {
+          acceptedOutputModes: ['text/plain'],
+          returnImmediately: true,
+          historyLength: 0,
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
+        },
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, acceptedOutputModes: ['text/plain'] },
+        configuration: {
+          acceptedOutputModes: ['text/plain'],
+          returnImmediately: true,
+          historyLength: 0,
+          taskPushNotificationConfig: undefined as TaskPushNotificationConfig,
+        },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should apply pushNotificationConfig', async () => {
-      const pushConfig = { url: 'http://test.com' };
-      const config: ClientConfig = { polling: false, pushNotificationConfig: pushConfig };
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId: '',
+        id: '1',
+        url: 'http://test.com',
+        token: 't',
+        authentication: undefined as any,
+      };
+      const config: ClientConfig = { polling: false, pushNotificationConfig: pushConfig as any };
       client = new Client(transport, agentCard, config);
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, pushNotificationConfig: pushConfig },
+        configuration: {
+          returnImmediately: false,
+          acceptedOutputModes: [] as string[],
+          taskPushNotificationConfig: pushConfig,
+        },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
 
     it('should use pushNotificationConfig from request when provided', async () => {
       const config: ClientConfig = {
         polling: false,
-        pushNotificationConfig: { url: 'http://test.com' },
+        pushNotificationConfig: {
+          tenant: '',
+          taskId: '',
+          id: '1',
+          url: 'http://test.com',
+          token: 't',
+          authentication: undefined,
+        },
       };
       client = new Client(transport, agentCard, config);
-      const pushConfig = { url: 'http://test2.com' };
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
-        configuration: { pushNotificationConfig: pushConfig },
+      const pushConfig: TaskPushNotificationConfig = {
+        tenant: '',
+        taskId: '',
+        id: '2',
+        url: 'http://test2.com',
+        token: 't',
+        authentication: undefined,
+      };
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: {
+          taskPushNotificationConfig: pushConfig,
+          returnImmediately: true,
+          acceptedOutputModes: [] as string[],
+        },
+        metadata: {},
       };
 
       await client.sendMessage(params);
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true, pushNotificationConfig: pushConfig },
+        configuration: {
+          taskPushNotificationConfig: pushConfig,
+          returnImmediately: true,
+          acceptedOutputModes: [] as string[],
+        },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
     });
   });
 
@@ -393,14 +847,30 @@ describe('Client', () => {
     it('should fallback to sendMessage if streaming is not supported', async () => {
       agentCard.capabilities.streaming = false;
       client = new Client(transport, agentCard);
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
       };
       const response: Message = {
-        kind: 'message',
         messageId: '2',
-        role: 'agent',
+        role: Role.ROLE_AGENT,
         parts: [],
+        contextId: '',
+        taskId: '',
+        extensions: [],
+        metadata: {},
+        referenceTaskIds: [],
       };
       transport.sendMessage.mockResolvedValue(response);
 
@@ -409,10 +879,22 @@ describe('Client', () => {
 
       const expectedParams = {
         ...params,
-        configuration: { blocking: true },
+        configuration: {
+          returnImmediately: false,
+          acceptedOutputModes: [] as string[],
+          taskPushNotificationConfig: undefined as any,
+        },
       };
-      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(expectedParams, undefined);
-      expect(yielded.value).to.deep.equal(response);
+      expect(transport.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expectedParams,
+        defaultVersionOptions
+      );
+      expect(yielded.value).to.deep.equal({
+        payload: {
+          $case: 'message',
+          value: response,
+        },
+      });
     });
   });
 
@@ -423,7 +905,7 @@ describe('Client', () => {
           {
             before: async (args) => {
               if (args.input.method === 'getTask') {
-                args.input.value = { ...args.input.value, metadata: { foo: 'bar' } };
+                args.input.value = { ...args.input.value, historyLength: 99 };
               }
             },
             after: async () => {},
@@ -431,20 +913,22 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
       const task: Task = {
         id: '123',
-        kind: 'task',
         contextId: 'ctx1',
-        status: { state: 'working' },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
       expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(
-        { id: '123', metadata: { foo: 'bar' } },
-        undefined
+        { tenant: '', id: '123', historyLength: 99 },
+        defaultVersionOptions
       );
       expect(result).to.equal(task);
     });
@@ -463,18 +947,20 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
       const task: Task = {
         id: '123',
-        kind: 'task',
         contextId: 'ctx1',
-        status: { state: 'working' },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
       expect(result).to.deep.equal({ ...task, metadata: { foo: 'bar' } });
     });
 
@@ -490,12 +976,14 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
       const task: Task = {
         id: '123',
-        kind: 'task',
         contextId: 'ctx1',
-        status: { state: 'working' },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       transport.getTask.mockResolvedValue(task);
 
@@ -520,12 +1008,14 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
       const task: Task = {
         id: '123',
-        kind: 'task',
         contextId: 'ctx1',
-        status: { state: 'working' },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       transport.getTask.mockResolvedValue(task);
 
@@ -536,9 +1026,11 @@ describe('Client', () => {
     it('should return early from before', async () => {
       const task: Task = {
         id: '123',
-        kind: 'task',
         contextId: 'ctx1',
-        status: { state: 'working' },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       const config: ClientConfig = {
         interceptors: [
@@ -554,7 +1046,7 @@ describe('Client', () => {
           {
             before: async (args) => {
               if (args.input.method === 'getTask') {
-                args.input.value = { ...args.input.value, metadata: { foo: 'bar' } };
+                args.input.value = { ...args.input.value };
               }
             },
             after: async () => {},
@@ -562,7 +1054,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
@@ -574,9 +1066,11 @@ describe('Client', () => {
     it('should return early from after', async () => {
       const task: Task = {
         id: '123',
-        kind: 'task',
         contextId: 'ctx1',
-        status: { state: 'working' },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       const config: ClientConfig = {
         interceptors: [
@@ -597,21 +1091,23 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
 
-      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, undefined);
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
       expect(result).to.equal(task);
     });
 
     it('should run after for interceptors executed in before for early return', async () => {
       const task: Task = {
         id: '123',
-        kind: 'task',
         contextId: 'ctx1',
-        status: { state: 'working' },
+        status: { state: TaskState.TASK_STATE_WORKING, timestamp: undefined, message: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
       };
       let firstAfterCalled = false;
       let secondAfterCalled = false;
@@ -646,7 +1142,7 @@ describe('Client', () => {
         ],
       };
       client = new Client(transport, agentCard, config);
-      const params: TaskQueryParams = { id: '123' };
+      const params: GetTaskRequest = { tenant: '', id: '123', historyLength: 0 };
       transport.getTask.mockResolvedValue(task);
 
       const result = await client.getTask(params);
@@ -659,23 +1155,51 @@ describe('Client', () => {
     });
 
     it('should intercept each iterator item', async () => {
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
       };
-      const events: A2AStreamEventData[] = [
+      const events: StreamResponse[] = [
         {
-          kind: 'status-update',
-          taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: { state: 'working' },
+          payload: {
+            $case: 'statusUpdate',
+            value: {
+              taskId: '123',
+              contextId: 'ctx1',
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                timestamp: undefined,
+                message: undefined,
+              },
+              metadata: {},
+            },
+          },
         },
         {
-          kind: 'status-update',
-          taskId: '123',
-          contextId: 'ctx1',
-          final: false,
-          status: { state: 'completed' },
+          payload: {
+            $case: 'statusUpdate',
+            value: {
+              taskId: '123',
+              contextId: 'ctx1',
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                timestamp: undefined,
+                message: undefined,
+              },
+              metadata: {},
+            },
+          },
         },
       ];
       async function* stream() {
@@ -688,10 +1212,13 @@ describe('Client', () => {
             before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
-                args.result.value = {
-                  ...args.result.value,
-                  metadata: { foo: 'bar' },
-                };
+                const val = args.result.value;
+                if (val.payload?.$case === 'statusUpdate') {
+                  val.payload.value.metadata = {
+                    ...val.payload.value.metadata,
+                    foo: 'bar',
+                  };
+                }
               }
             },
           },
@@ -707,39 +1234,85 @@ describe('Client', () => {
       }
       const expectedParams = {
         ...params,
-        configuration: { ...params.configuration, blocking: true },
+        configuration: {
+          ...params.configuration,
+          returnImmediately: false,
+          acceptedOutputModes: [] as string[],
+        },
       };
       expect(transport.sendMessageStream).toHaveBeenCalledExactlyOnceWith(
         expectedParams,
-        undefined
+        defaultVersionOptions
       );
-      expect(got).to.deep.equal(events.map((event) => ({ ...event, metadata: { foo: 'bar' } })));
+      expect(got).to.deep.equal(
+        events.map((event) => {
+          if (event.payload?.$case === 'statusUpdate') {
+            return {
+              ...event,
+              payload: {
+                ...event.payload,
+                value: {
+                  ...event.payload.value,
+                  metadata: { foo: 'bar' },
+                },
+              },
+            };
+          }
+          return event;
+        })
+      );
     });
 
     it('should intercept after non-streaming sendMessage for sendMessageStream', async () => {
-      const params: MessageSendParams = {
-        message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+      const params: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: '1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
       };
-      const message: Message = {
-        kind: 'message',
+      const responseMock: Message = {
         messageId: '2',
-        role: 'agent',
+        role: Role.ROLE_AGENT,
         parts: [],
+        contextId: '',
+        taskId: '',
+        extensions: [],
+        metadata: {},
+        referenceTaskIds: [],
       };
-      transport.sendMessage.mockResolvedValue(message);
+      transport.sendMessage.mockResolvedValue(responseMock);
       const config: ClientConfig = {
         interceptors: [
           {
             before: async () => {},
             after: async (args) => {
               if (args.result.method === 'sendMessageStream') {
-                args.result.value = { ...args.result.value, metadata: { foo: 'bar' } };
+                const val = args.result.value;
+                if (val.payload?.$case === 'message') {
+                  val.payload.value.metadata = {
+                    ...val.payload.value.metadata,
+                    foo: 'bar',
+                  };
+                }
               }
             },
           },
         ],
       };
-      client = new Client(transport, { ...agentCard, capabilities: { streaming: false } }, config);
+      client = new Client(
+        transport,
+        { ...agentCard, capabilities: { ...agentCard.capabilities, streaming: false } },
+        config
+      );
 
       const result = client.sendMessageStream(params);
 
@@ -747,42 +1320,81 @@ describe('Client', () => {
       for await (const event of result) {
         got.push(event);
       }
-      expect(got).to.deep.equal([{ ...message, metadata: { foo: 'bar' } }]);
+      expect(got).to.deep.equal([
+        {
+          payload: {
+            $case: 'message',
+            value: {
+              ...responseMock,
+              metadata: { foo: 'bar' },
+            },
+          },
+        },
+      ]);
     });
 
     const iteratorsTests = [
       {
         name: 'sendMessageStream',
-        transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.sendMessageStream,
-        caller: (c: Client): AsyncGenerator<A2AStreamEventData> =>
+        transportStubGetter: (t: typeof transport): Mock => t.sendMessageStream,
+        caller: (c: Client): AsyncGenerator<StreamResponse> =>
           c.sendMessageStream({
-            message: { kind: 'message', messageId: '1', role: 'user', parts: [] },
+            tenant: '',
+            message: {
+              messageId: '1',
+              role: Role.ROLE_USER,
+              parts: [],
+              contextId: '',
+              taskId: '',
+              extensions: [],
+              metadata: {},
+              referenceTaskIds: [],
+            },
+            configuration: undefined,
+            metadata: {},
           }),
       },
       {
         name: 'resubscribeTask',
-        transportStubGetter: (t: Record<keyof Transport, Mock>): Mock => t.resubscribeTask,
-        caller: (c: Client): AsyncGenerator<A2AStreamEventData> => c.resubscribeTask({ id: '123' }),
+        transportStubGetter: (t: typeof transport): Mock => t.resubscribeTask,
+        caller: (c: Client): AsyncGenerator<StreamResponse> =>
+          c.resubscribeTask({ tenant: '', id: '123' }),
       },
     ];
 
     iteratorsTests.forEach((test) => {
       describe(test.name, () => {
         it('should return early from iterator (before)', async () => {
-          const events: A2AStreamEventData[] = [
+          const events: StreamResponse[] = [
             {
-              kind: 'status-update',
-              taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: { state: 'working' },
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_WORKING,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
+              },
             },
             {
-              kind: 'status-update',
-              taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: { state: 'completed' },
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_COMPLETED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
+              },
             },
           ];
           async function* stream() {
@@ -838,20 +1450,36 @@ describe('Client', () => {
         });
 
         it('should return early from iterator (after)', async () => {
-          const events: A2AStreamEventData[] = [
+          const events: StreamResponse[] = [
             {
-              kind: 'status-update',
-              taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: { state: 'working' },
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_WORKING,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
+              },
             },
             {
-              kind: 'status-update',
-              taskId: '123',
-              contextId: 'ctx1',
-              final: false,
-              status: { state: 'completed' },
+              payload: {
+                $case: 'statusUpdate',
+                value: {
+                  taskId: '123',
+                  contextId: 'ctx1',
+                  status: {
+                    state: TaskState.TASK_STATE_COMPLETED,
+                    timestamp: undefined,
+                    message: undefined,
+                  },
+                  metadata: {},
+                },
+              },
             },
           ];
           async function* stream() {
@@ -865,8 +1493,11 @@ describe('Client', () => {
                 before: async () => {},
                 after: async (args) => {
                   if (args.result.method === test.name) {
-                    const event = args.result.value as A2AStreamEventData;
-                    if (event.kind === 'status-update' && event.status.state === 'working') {
+                    const event = args.result.value as StreamResponse;
+                    if (
+                      event.payload?.$case === 'statusUpdate' &&
+                      event.payload.value.status?.state === TaskState.TASK_STATE_WORKING
+                    ) {
                       args.earlyReturn = true;
                     }
                   }
@@ -884,6 +1515,292 @@ describe('Client', () => {
           }
           expect(transportStub).toHaveBeenCalledTimes(1);
           expect(got).to.deep.equal([events[0]]);
+        });
+      });
+    });
+  });
+
+  describe('A2A-Version header', () => {
+    it('should resolve protocolVersion from transport', () => {
+      const client = new Client(transport, agentCard);
+      expect(client.protocolVersion).toBe(transport.protocolVersion);
+    });
+
+    it('should inject A2A-Version into service parameters', async () => {
+      const task: Task = {
+        id: '123',
+        contextId: 'ctx1',
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          timestamp: undefined,
+          message: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      transport.getTask.mockResolvedValue(task);
+
+      const params = { tenant: '', id: '123', historyLength: 0 };
+      await client.getTask(params);
+
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
+    });
+
+    it('should use transport version even when user provides A2A-Version', async () => {
+      const task: Task = {
+        id: '123',
+        contextId: 'ctx1',
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          timestamp: undefined,
+          message: undefined,
+        },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      };
+      transport.getTask.mockResolvedValue(task);
+
+      const params = { tenant: '', id: '123', historyLength: 0 };
+      const options: RequestOptions = {
+        serviceParameters: { [A2A_VERSION_HEADER]: '0.3' },
+      };
+      await client.getTask(params, options);
+
+      // Transport's protocolVersion always takes precedence.
+      expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
+    });
+  });
+
+  describe('Extension header normalization', () => {
+    const makeTask = (): Task => ({
+      id: '123',
+      contextId: 'ctx1',
+      status: {
+        state: TaskState.TASK_STATE_COMPLETED,
+        timestamp: undefined,
+        message: undefined,
+      },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    });
+
+    const params = { tenant: '', id: '123', historyLength: 0 };
+
+    describe('on a v1.0 transport', () => {
+      beforeEach(() => {
+        transport.protocolVersion = A2A_PROTOCOL_VERSION;
+        client = new Client(transport, agentCard);
+        transport.getTask.mockResolvedValue(makeTask());
+      });
+
+      it('passes A2A-Extensions through unchanged', async () => {
+        await client.getTask(params, {
+          serviceParameters: { [HTTP_EXTENSION_HEADER]: 'ext1' },
+        });
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+          serviceParameters: {
+            [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+            [HTTP_EXTENSION_HEADER]: 'ext1',
+          },
+        });
+      });
+
+      it('rewrites X-A2A-Extensions to the v1.0 spelling', async () => {
+        await client.getTask(params, {
+          serviceParameters: { [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1' },
+        });
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+          serviceParameters: {
+            [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+            [HTTP_EXTENSION_HEADER]: 'ext1',
+          },
+        });
+      });
+
+      it('prefers the v1.0 spelling when both are present', async () => {
+        await client.getTask(params, {
+          serviceParameters: {
+            [HTTP_EXTENSION_HEADER]: 'canonical',
+            [LEGACY_HTTP_EXTENSION_HEADER]: 'legacy',
+          },
+        });
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+          serviceParameters: {
+            [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+            [HTTP_EXTENSION_HEADER]: 'canonical',
+          },
+        });
+      });
+
+      it('does not synthesize an extension header when none was provided', async () => {
+        await client.getTask(params);
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, defaultVersionOptions);
+      });
+    });
+
+    describe('on a legacy v0.3 transport', () => {
+      beforeEach(() => {
+        transport.protocolVersion = A2A_LEGACY_PROTOCOL_VERSION;
+        client = new Client(transport, agentCard);
+        transport.getTask.mockResolvedValue(makeTask());
+      });
+
+      it('rewrites A2A-Extensions to the legacy X-A2A-Extensions spelling', async () => {
+        await client.getTask(params, {
+          serviceParameters: { [HTTP_EXTENSION_HEADER]: 'ext1' },
+        });
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+          serviceParameters: {
+            [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION,
+            [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1',
+          },
+        });
+      });
+
+      it('passes X-A2A-Extensions through unchanged', async () => {
+        await client.getTask(params, {
+          serviceParameters: { [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1' },
+        });
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+          serviceParameters: {
+            [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION,
+            [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1',
+          },
+        });
+      });
+
+      it('prefers the legacy spelling when both are present', async () => {
+        await client.getTask(params, {
+          serviceParameters: {
+            [HTTP_EXTENSION_HEADER]: 'canonical',
+            [LEGACY_HTTP_EXTENSION_HEADER]: 'legacy',
+          },
+        });
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+          serviceParameters: {
+            [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION,
+            [LEGACY_HTTP_EXTENSION_HEADER]: 'legacy',
+          },
+        });
+      });
+
+      it('does not synthesize an extension header when none was provided', async () => {
+        await client.getTask(params);
+
+        expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+          serviceParameters: { [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION },
+        });
+      });
+    });
+
+    describe('with case variants', () => {
+      describe('on a v1.0 transport', () => {
+        beforeEach(() => {
+          transport.protocolVersion = A2A_PROTOCOL_VERSION;
+          client = new Client(transport, agentCard);
+          transport.getTask.mockResolvedValue(makeTask());
+        });
+
+        it('matches a lowercase canonical key case-insensitively', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
+        });
+
+        it('matches a lowercase legacy alias case-insensitively', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'x-a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
+        });
+
+        it('prefers the exact canonical spelling when a lowercase variant is also present', async () => {
+          await client.getTask(params, {
+            serviceParameters: {
+              [HTTP_EXTENSION_HEADER]: 'exact',
+              'a2a-extensions': 'variant',
+            },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'exact',
+            },
+          });
+        });
+
+        it('prefers the exact alias spelling when only alias variants are present', async () => {
+          await client.getTask(params, {
+            serviceParameters: {
+              [LEGACY_HTTP_EXTENSION_HEADER]: 'exact',
+              'x-a2a-extensions': 'variant',
+            },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION,
+              [HTTP_EXTENSION_HEADER]: 'exact',
+            },
+          });
+        });
+      });
+
+      describe('on a legacy v0.3 transport', () => {
+        beforeEach(() => {
+          transport.protocolVersion = A2A_LEGACY_PROTOCOL_VERSION;
+          client = new Client(transport, agentCard);
+          transport.getTask.mockResolvedValue(makeTask());
+        });
+
+        it('matches a lowercase v1.0 key and rewrites to the legacy spelling', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION,
+              [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
+        });
+
+        it('matches a lowercase legacy key case-insensitively', async () => {
+          await client.getTask(params, {
+            serviceParameters: { 'x-a2a-extensions': 'ext1' },
+          });
+
+          expect(transport.getTask).toHaveBeenCalledExactlyOnceWith(params, {
+            serviceParameters: {
+              [A2A_VERSION_HEADER]: A2A_LEGACY_PROTOCOL_VERSION,
+              [LEGACY_HTTP_EXTENSION_HEADER]: 'ext1',
+            },
+          });
         });
       });
     });

@@ -1,11 +1,35 @@
 /**
  * Exports the common types.
  *
- * Use the client/index.ts file to import the client-only codebase.
- * Use the server/index.ts file to import the server-only codebase.
+ * Use `./client` for the client-only codebase and `./server` for the
+ * server-only codebase.
  */
 
-export * from './types.js';
-export type { A2AResponse } from './a2a_response.js';
-export { AGENT_CARD_PATH, HTTP_EXTENSION_HEADER } from './constants.js';
+import { Message, Task } from './types/index.js';
+
+export * from './types/index.js';
+export {
+  AGENT_CARD_PATH,
+  HTTP_EXTENSION_HEADER,
+  A2A_VERSION_HEADER,
+  A2A_PROTOCOL_VERSION,
+  A2A_CONTENT_TYPE,
+} from './constants.js';
 export { Extensions, type ExtensionURI } from './extensions.js';
+export {
+  generateAgentCardSignature,
+  verifyAgentCardSignature,
+  canonicalizeAgentCard,
+  type AgentCardSignatureGenerator,
+  type AgentCardSignatureVerifier,
+} from './signature.js';
+
+export type SendMessageResult = Message | Task;
+
+export {
+  SSE_HEADERS,
+  formatSSEEvent,
+  formatSSEErrorEvent,
+  parseSseStream,
+  type SseEvent,
+} from './sse_utils.js';

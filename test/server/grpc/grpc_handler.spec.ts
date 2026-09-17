@@ -1,37 +1,57 @@
 import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import * as grpc from '@grpc/grpc-js';
-import * as proto from '../../../src/grpc/pb/a2a_services.js';
-import { A2AError, A2ARequestHandler } from '../../../src/server/index.js';
+import * as proto from '../../../src/grpc/pb/a2a.js';
+import { A2ARequestHandler } from '../../../src/server/index.js';
+import { TaskNotFoundError } from '../../../src/errors/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
-import { AgentCard, HTTP_EXTENSION_HEADER, MessageSendParams, Task } from '../../../src/index.js';
-import { ToProto } from '../../../src/types/converters/to_proto.js';
-import { FromProto } from '../../../src/types/converters/from_proto.js';
+import {
+  AgentCard,
+  HTTP_EXTENSION_HEADER,
+  Task,
+  Role,
+  TaskState,
+  TaskStatus,
+  ListTasksResponse,
+} from '../../../src/index.js';
 
-vi.mock('../../../src/types/converters/from_proto.js');
-vi.mock('../../../src/types/converters/to_proto.js');
 describe('grpcHandler', () => {
   let mockRequestHandler: A2ARequestHandler;
   let handler: ReturnType<typeof grpcService>;
 
   const testAgentCard: AgentCard = {
-    protocolVersion: '0.3.0',
     name: 'Test Agent',
     description: 'An agent for testing purposes',
-    url: 'http://localhost:8080',
-    preferredTransport: 'gRPC',
     version: '1.0.0',
-    capabilities: { streaming: true, pushNotifications: true },
+    supportedInterfaces: [
+      {
+        url: 'http://localhost:8080',
+        protocolBinding: 'GRPC',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
+    capabilities: { streaming: true, pushNotifications: true, extensions: [] },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     skills: [],
+    provider: undefined,
+    documentationUrl: 'http://test-agent.com/docs',
+    securitySchemes: {},
+    securityRequirements: [],
+    signatures: [],
   };
 
   const testTask: Task = {
     id: 'task-1',
-    kind: 'task' as const,
-    status: { state: 'completed' as const },
+    status: {
+      state: TaskState.TASK_STATE_COMPLETED,
+      timestamp: undefined,
+      message: undefined,
+    } as TaskStatus,
     contextId: 'ctx-1',
     history: [],
+    artifacts: [],
+    metadata: {},
   };
 
   // Helper to create a mock gRPC Unary Call
@@ -40,6 +60,9 @@ describe('grpcHandler', () => {
     metadataValues: Record<string, string> = {}
   ): grpc.ServerUnaryCall<any, any> => {
     const metadata = new grpc.Metadata();
+    if (!('a2a-version' in metadataValues)) {
+      metadata.set('a2a-version', '1.0');
+    }
     Object.entries(metadataValues).forEach(([k, v]) => metadata.set(k, v));
     return {
       request,
@@ -50,9 +73,11 @@ describe('grpcHandler', () => {
 
   // Helper to create a mock gRPC Writable Stream
   const createMockWritableStream = (request: any) => {
+    const metadata = new grpc.Metadata();
+    metadata.set('a2a-version', '1.0');
     return {
       request,
-      metadata: new grpc.Metadata(),
+      metadata,
       sendMetadata: vi.fn(),
       write: vi.fn(),
       end: vi.fn(),
@@ -67,8 +92,9 @@ describe('grpcHandler', () => {
       sendMessage: vi.fn().mockResolvedValue(testTask),
       sendMessageStream: vi.fn(),
       getTask: vi.fn(),
+      listTasks: vi.fn(),
       cancelTask: vi.fn(),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfigs: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
@@ -85,50 +111,50 @@ describe('grpcHandler', () => {
     vi.restoreAllMocks();
   });
 
-  describe('getAgentCard', () => {
+  describe('getExtendedAgentCard', () => {
     it('should return agent card via gRPC callback', async () => {
-      const call = createMockUnaryCall({});
+      const call = createMockUnaryCall({ tenant: '' });
       const callback = vi.fn();
-      const mockProtoAgentCard = { name: 'Proto Test Agent' } as proto.AgentCard;
-
-      (ToProto.agentCard as Mock).mockReturnValue(mockProtoAgentCard);
-
-      await handler.getAgentCard(call, callback);
+      await handler.getExtendedAgentCard(call, callback);
 
       expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalled();
-      expect(ToProto.agentCard).toHaveBeenCalledWith(testAgentCard);
       const [err, response] = callback.mock.calls[0];
       assert.isNull(err);
-      assert.deepEqual(response, mockProtoAgentCard);
+      assert.deepEqual(response, testAgentCard as unknown as proto.AgentCard);
       expect(call.sendMetadata).toHaveBeenCalled();
     });
 
     it('should return gRPC error code on failure', async () => {
       (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mockRejectedValue(
-        new A2AError(-32001, 'Not Found')
+        new TaskNotFoundError('Not Found')
       );
-      const call = createMockUnaryCall({});
+      const call = createMockUnaryCall({ tenant: '' });
       const callback = vi.fn();
 
-      await handler.getAgentCard(call, callback);
+      await handler.getExtendedAgentCard(call, callback);
 
       const [err] = callback.mock.calls[0];
       assert.equal(err.code, grpc.status.NOT_FOUND);
       assert.equal(err.details, 'Not Found');
     });
+
+    it('should pass tenant from request to request handler', async () => {
+      const call = createMockUnaryCall({ tenant: 'test-tenant' });
+      const callback = vi.fn();
+      await handler.getExtendedAgentCard(call, callback);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'test-tenant' }),
+        expect.anything()
+      );
+    });
   });
 
   describe('sendMessage', () => {
     it('should successfully send a message and return a task', async () => {
-      const call = createMockUnaryCall({ message: { role: 'user', parts: [] } });
+      const call = createMockUnaryCall({ message: { role: Role.ROLE_USER, parts: [] as any } });
       const callback = vi.fn();
 
-      const messageSendParams = { message: { role: 'user' } } as MessageSendParams;
-      (FromProto.messageSendParams as Mock).mockReturnValue(messageSendParams);
-      const sendMessageResponse = {
-        payload: { $case: 'task', value: { id: 'task-1' } } as proto.SendMessageResponse,
-      };
-      (ToProto.messageSendResult as Mock).mockReturnValue(sendMessageResponse);
       await handler.sendMessage(call, callback);
 
       const [err, response] = callback.mock.calls[0];
@@ -141,12 +167,17 @@ describe('grpcHandler', () => {
   describe('sendStreamingMessage', () => {
     it('should stream multiple parts and end correctly', async () => {
       async function* mockStream() {
-        yield { kind: 'message', messageId: 'm1' };
-        yield { kind: 'task', id: 't1' };
+        yield { messageId: 'm1', role: Role.ROLE_AGENT, parts: [] as any };
+        yield {
+          id: 't1',
+          status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined as any },
+        };
       }
       (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
 
-      const call = createMockWritableStream({ message: { role: 'user', parts: [] } });
+      const call = createMockWritableStream({
+        message: { role: Role.ROLE_USER, content: [] as any },
+      });
 
       await handler.sendStreamingMessage(call);
 
@@ -164,10 +195,32 @@ describe('grpcHandler', () => {
       expect(call.emit).toHaveBeenCalledWith(
         'error',
         expect.objectContaining({
-          code: grpc.status.INTERNAL,
+          code: grpc.status.UNKNOWN,
         })
       );
       expect(call.end).toHaveBeenCalled();
+    });
+  });
+
+  describe('listTasks', () => {
+    it('should successfully list tasks', async () => {
+      const mockResponse: ListTasksResponse = {
+        tasks: [testTask],
+        nextPageToken: '',
+        pageSize: 1,
+        totalSize: 1,
+      };
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockResponse);
+
+      const call = createMockUnaryCall({ tenant: '', contextId: '' });
+      const callback = vi.fn();
+
+      await handler.listTasks(call, callback);
+
+      const [err, response] = callback.mock.calls[0];
+      assert.isNull(err);
+      assert.equal(response.tasks.length, 1);
+      assert.equal(response.tasks[0].id, testTask.id);
     });
   });
 
@@ -182,8 +235,6 @@ describe('grpcHandler', () => {
       );
       const callback = vi.fn();
 
-      (FromProto.taskQueryParams as Mock).mockReturnValue({ id: 'task-1' });
-      (ToProto.task as Mock).mockReturnValue({ id: 'task-1', contextId: 'ctx-1' });
       await handler.getTask(call, callback);
 
       const contextArg = (mockRequestHandler.getTask as Mock).mock.calls[0][1];
@@ -206,8 +257,6 @@ describe('grpcHandler', () => {
         return testTask;
       });
 
-      (FromProto.taskQueryParams as Mock).mockReturnValue({ id: 'task-1' });
-      (ToProto.task as Mock).mockReturnValue({ id: 'task-1', contextId: 'ctx-1' });
       await handler.getTask(call, callback);
 
       const [metadata] = (call.sendMetadata as Mock).mock.calls[0];

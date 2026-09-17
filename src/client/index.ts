@@ -1,9 +1,5 @@
-/**
- * Client entry point for the A2A Server V2 library.
- */
+/** Client entry point for the A2A SDK. */
 
-export { A2AClient } from './client.js';
-export type { A2AClientOptions } from './client.js';
 export * from './auth-handler.js';
 export {
   AgentCardResolver,
@@ -12,17 +8,10 @@ export {
 } from './card-resolver.js';
 export { Client, type ClientConfig, type RequestOptions } from './multitransport-client.js';
 export type { Transport, TransportFactory } from './transports/transport.js';
+export { TenantTransportDecorator } from './transports/tenant_transport_decorator.js';
 export { ClientFactory, ClientFactoryOptions } from './factory.js';
-export {
-  JsonRpcTransport,
-  JsonRpcTransportFactory,
-  type JsonRpcTransportOptions,
-} from './transports/json_rpc_transport.js';
-export {
-  RestTransport,
-  RestTransportFactory,
-  type RestTransportOptions,
-} from './transports/rest_transport.js';
+export { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
+export { RestTransportFactory } from './transports/rest_transport.js';
 export type {
   CallInterceptor,
   BeforeArgs,
@@ -34,14 +23,6 @@ export {
   ServiceParameters,
   type ServiceParametersUpdate,
   withA2AExtensions,
+  withA2AVersion,
 } from './service-parameters.js';
 export { ClientCallContext, type ContextUpdate, ClientCallContextKey } from './context.js';
-export {
-  AuthenticatedExtendedCardNotConfiguredError,
-  ContentTypeNotSupportedError,
-  InvalidAgentResponseError,
-  PushNotificationNotSupportedError,
-  TaskNotCancelableError,
-  TaskNotFoundError,
-  UnsupportedOperationError,
-} from '../errors.js';
