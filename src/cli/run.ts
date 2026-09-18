@@ -1,6 +1,11 @@
 import { parseArgs } from 'node:util';
 
-import { ALL_STORE_MIGRATIONS, type StoreMigrations } from '../server/database/store_migrations.js';
+import {
+  PUSH_NOTIFICATION_STORE_ID,
+  pushNotificationStoreMigrations,
+} from '../server/database/push_notification/migrations.js';
+import type { StoreMigrations } from '../server/database/store_migrations.js';
+import { TASK_STORE_ID, taskStoreMigrations } from '../server/database/task/migrations.js';
 import { connect } from './connect.js';
 import {
   BASE,
@@ -11,14 +16,34 @@ import {
   storeState,
 } from './migrator.js';
 
-const STORE_IDS = ALL_STORE_MIGRATIONS.map((store) => store.id);
+/**
+ * Every store this CLI manages, against the table names it is given. Those are keyed by
+ * {@link StoreMigrations.id} so a caller names the store it is renaming rather than
+ * counting positions; an id with no entry keeps its default table.
+ */
+function allStoreMigrations(
+  tableNames: Readonly<Record<string, string>> = {}
+): readonly StoreMigrations[] {
+  return [
+    pushNotificationStoreMigrations(tableNames[PUSH_NOTIFICATION_STORE_ID]),
+    taskStoreMigrations(tableNames[TASK_STORE_ID]),
+  ];
+}
+
+/** Every id {@link allStoreMigrations} accepts, in the order it returns them. */
+const STORE_IDS: readonly string[] = allStoreMigrations().map((store) => store.id);
+
+/** The flag naming one store's table. Builds {@link OPTIONS} as well as reading it. */
+function tableNameFlag(storeId: string): string {
+  return `${storeId}-table-name`;
+}
 
 const USAGE = `a2a-db — schema management for @a2a-js/sdk database stores
 
 Usage:
-  a2a-db status    [--url <database-url>] [--store <id>]...
-  a2a-db upgrade   [--url <database-url>] [--store <id>]...
-  a2a-db downgrade [--url <database-url>] [--store <id>]... [<to>]
+  a2a-db status    [<options>]
+  a2a-db upgrade   [<options>]
+  a2a-db downgrade [<options>] [<to>]
   a2a-db --help
 
   status     Lists each migration and whether the ledger has recorded it. Changes
@@ -30,10 +55,22 @@ Usage:
              migration name reverts down to it, leaving that one applied.
              Whatever the reverted migrations created is dropped with it.
 
-Each store keeps its own ledger, so they upgrade and revert independently.
-Repeat --store to select several; omit it to cover every store:
+Options:
+  --url <database-url>    Defaults to DATABASE_URL.
+  --store <id>            Repeatable. Omit to cover every store.
+  --<store-id>-table-name <name>
+                          Renames one store's table:
+${STORE_IDS.map((id) => `                            --${tableNameFlag(id)}`).join('\n')}
 
-  ${STORE_IDS.join(', ')}
+Each store keeps its own ledger, so they upgrade and revert independently:
+${STORE_IDS.join(', ')}.
+
+A store renamed here must be given the same name in the code that reads it, as
+the "tableName" option of DatabaseTaskStore or DatabasePushNotificationStore.
+Its ledger follows the table, as a2a_<name>_migrations, so two deployments can
+share one database without reading each other's migrations as their own:
+
+  a2a-db upgrade --${tableNameFlag(TASK_STORE_ID)} agent_tasks
 
 The database URL comes from --url, or from DATABASE_URL. Its scheme selects the
 driver, which you install yourself:
@@ -47,15 +84,41 @@ const OPTIONS = {
   url: { type: 'string' },
   store: { type: 'string', multiple: true },
   help: { type: 'boolean', short: 'h' },
+  // One per store, from the same source the reader below uses, so a new store gets its
+  // flag and the two cannot name it differently.
+  ...Object.fromEntries(STORE_IDS.map((id) => [tableNameFlag(id), { type: 'string' as const }])),
 } as const;
+
+/**
+ * The table each `--<store-id>-table-name` names, keyed by store id. A store whose flag
+ * is absent keeps its default table.
+ */
+function tableNames(values: Readonly<Record<string, unknown>>): Readonly<Record<string, string>> {
+  const named: Record<string, string> = {};
+
+  for (const id of STORE_IDS) {
+    const flag = tableNameFlag(id);
+    const tableName = values[flag];
+    if (typeof tableName !== 'string') continue;
+    if (tableName === '') {
+      throw new Error(`Empty table name in --${flag}.`);
+    }
+    named[id] = tableName;
+  }
+
+  return named;
+}
 
 /**
  * The stores `--store` names, or every store when it names none.
  */
-function selectStores(ids: readonly string[] | undefined): readonly StoreMigrations[] {
-  if (ids === undefined || ids.length === 0) return ALL_STORE_MIGRATIONS;
+function selectStores(
+  all: readonly StoreMigrations[],
+  ids: readonly string[] | undefined
+): readonly StoreMigrations[] {
+  if (ids === undefined || ids.length === 0) return all;
   const wanted = new Set(ids);
-  return ALL_STORE_MIGRATIONS.filter((store) => wanted.has(store.id));
+  return all.filter((store) => wanted.has(store.id));
 }
 
 /**
@@ -96,7 +159,14 @@ export async function run(
       return 1;
     }
   }
-  const stores = selectStores(parsed.values.store);
+
+  let stores;
+  try {
+    stores = selectStores(allStoreMigrations(tableNames(parsed.values)), parsed.values.store);
+  } catch (error) {
+    output.error((error as Error).message);
+    return 1;
+  }
 
   if (command === 'downgrade' && target !== undefined && target !== BASE) {
     // "base" suits any store; a migration name belongs to one store's history.

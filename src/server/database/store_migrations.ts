@@ -1,13 +1,10 @@
 import type { Kysely } from 'kysely';
 
-import { PUSH_NOTIFICATION_STORE_MIGRATIONS } from './push_notification/migrations.js';
-import { TASK_STORE_MIGRATIONS } from './task/migrations.js';
-
 /**
  * Structurally Kysely's own `Migration`. Declared here so nothing under `src/server`
  * imports `kysely/migration`.
  */
-interface MigrationModule {
+export interface MigrationModule {
   up(db: Kysely<unknown>): Promise<void>;
   down?(db: Kysely<unknown>): Promise<void>;
 }
@@ -26,9 +23,23 @@ export interface StoreMigrations {
 }
 
 /**
- * Every store `a2a-db` manages.
+ * PostgreSQL has the tightest identifier limit of the three engines, 63 characters, and
+ * the longest thing a migration adds to the table name is the 26 of
+ * `_scope_context_updated_idx`. That leaves 37.
  */
-export const ALL_STORE_MIGRATIONS: readonly StoreMigrations[] = [
-  PUSH_NOTIFICATION_STORE_MIGRATIONS,
-  TASK_STORE_MIGRATIONS,
-];
+const MAX_TABLE_NAME_LENGTH = 37;
+
+/**
+ * Where Kysely records which of a store's migrations have run, derived from the table
+ * they build.
+ */
+export function ledgerTableFor(tableName: string): string {
+  if (tableName.length > MAX_TABLE_NAME_LENGTH) {
+    throw new Error(
+      `Table name "${tableName}" is too long: ${tableName.length} characters, against the ` +
+        `${MAX_TABLE_NAME_LENGTH} that leave room for the names a migration derives from it.`
+    );
+  }
+
+  return `a2a_${tableName}_migrations`;
+}

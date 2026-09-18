@@ -1,5 +1,5 @@
 /**
- * Name of the task table. For now, fixed, not configurable.
+ * Name of the task table, unless the store's `tableName` option names another.
  */
 export const TASK_TABLE = 'tasks';
 
@@ -25,7 +25,7 @@ export interface TaskRow {
  * The schema this store owns.
  * Kysely resolves column names against this at compile time.
  */
-export type TaskDatabase = Record<typeof TASK_TABLE, TaskRow>;
+export type TaskDatabase = Record<string, TaskRow>;
 
 /**
  * The primary key: the caller's scope plus the task's own identity.

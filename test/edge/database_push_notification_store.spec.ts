@@ -8,7 +8,7 @@ import { D1Dialect } from 'kysely-d1';
 
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
 import type { PushNotificationDatabase } from '../../src/server/database/push_notification/schema.js';
-import { PUSH_NOTIFICATION_STORE_MIGRATIONS } from '../../src/server/database/push_notification/migrations.js';
+import { pushNotificationStoreMigrations } from '../../src/server/database/push_notification/migrations.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';
@@ -78,8 +78,9 @@ describe('DatabasePushNotificationStore on D1', () => {
    * with SQLITE_AUTH.
    */
   async function migrate(connection: Kysely<unknown>): Promise<void> {
-    for (const name of Object.keys(PUSH_NOTIFICATION_STORE_MIGRATIONS.migrations).sort()) {
-      await PUSH_NOTIFICATION_STORE_MIGRATIONS.migrations[name].up(connection);
+    const { migrations } = pushNotificationStoreMigrations();
+    for (const name of Object.keys(migrations).sort()) {
+      await migrations[name].up(connection);
     }
   }
 
@@ -475,7 +476,9 @@ describe('DatabasePushNotificationStore on D1', () => {
     });
 
     it('honours a custom OwnerResolver', async () => {
-      const byTenant = new DatabasePushNotificationStore(db, (context) => context.tenant ?? 'none');
+      const byTenant = new DatabasePushNotificationStore(db, {
+        ownerResolver: (context) => context.tenant ?? 'none',
+      });
       const acme = makeContext({ tenant: 'acme', user: 'alice' });
       const acmeOther = makeContext({ tenant: 'acme', user: 'bob' });
 

@@ -42,6 +42,16 @@ function cursorTimestamp(statusLastUpdated: number): string {
   return statusLastUpdated === 0 ? '' : new Date(statusLastUpdated).toISOString();
 }
 
+export interface DatabaseTaskStoreOptions {
+  /** Defaults to {@link resolveUserScope}. */
+  readonly ownerResolver?: OwnerResolver;
+  /**
+   * Table to read and write. Defaults to {@link TASK_TABLE}, and must be the table
+   * `taskStoreMigrations` created.
+   */
+  readonly tableName?: string;
+}
+
 /**
  * {@link TaskStore} backed by a database.
  *
@@ -53,10 +63,12 @@ export class DatabaseTaskStore implements TaskStore {
   private readonly db: Kysely<TaskDatabase>;
   private readonly ownerResolver: OwnerResolver;
   private readonly dialect: DialectName;
+  private readonly tableName: string;
 
-  constructor(db: Kysely<TaskDatabase>, ownerResolver: OwnerResolver = resolveUserScope) {
+  constructor(db: Kysely<TaskDatabase>, options: DatabaseTaskStoreOptions = {}) {
     this.db = db;
-    this.ownerResolver = ownerResolver;
+    this.ownerResolver = options.ownerResolver ?? resolveUserScope;
+    this.tableName = options.tableName ?? TASK_TABLE;
     // Fixed for the connection's lifetime, and rejects an engine we cannot
     // write to here rather than on the first save.
     this.dialect = dialectOf(db);
@@ -82,7 +94,7 @@ export class DatabaseTaskStore implements TaskStore {
       protocol_version: row.protocol_version,
     };
 
-    const insert = this.db.insertInto(TASK_TABLE).values(row);
+    const insert = this.db.insertInto(this.tableName).values(row);
     await (
       this.dialect === 'mysql'
         ? insert.onDuplicateKeyUpdate(replaceable)
@@ -96,7 +108,7 @@ export class DatabaseTaskStore implements TaskStore {
     const scope = this.scopeOf(context);
 
     const row = await this.db
-      .selectFrom(TASK_TABLE)
+      .selectFrom(this.tableName)
       .select([...TASK_TABLE_COLUMNS])
       .where('tenant', '=', scope.tenant)
       .where('owner', '=', scope.owner)
@@ -111,7 +123,7 @@ export class DatabaseTaskStore implements TaskStore {
    * the count and the page so the two cannot drift.
    */
   private listFilter(scope: TaskScope, params: ListTasksRequest) {
-    return (eb: ExpressionBuilder<TaskDatabase, typeof TASK_TABLE>) => {
+    return (eb: ExpressionBuilder<TaskDatabase, string>) => {
       const conditions = [eb('tenant', '=', scope.tenant), eb('owner', '=', scope.owner)];
 
       if (params.contextId) {
@@ -136,7 +148,7 @@ export class DatabaseTaskStore implements TaskStore {
 
     // Counted before paginating, so it reports the whole match, not the page.
     const counted = await this.db
-      .selectFrom(TASK_TABLE)
+      .selectFrom(this.tableName)
       .select((eb) => eb.fn.countAll().as('total'))
       .where(filter)
       .executeTakeFirstOrThrow();
@@ -144,7 +156,7 @@ export class DatabaseTaskStore implements TaskStore {
     const totalSize = Number(counted.total);
 
     let query = this.db
-      .selectFrom(TASK_TABLE)
+      .selectFrom(this.tableName)
       .select([...listColumns(params)])
       .where(filter)
       .orderBy('status_last_updated', 'desc')

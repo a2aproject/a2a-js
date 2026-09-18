@@ -8,7 +8,7 @@ import type { Kysely } from 'kysely';
 
 import { connect } from '../../src/cli/connect.js';
 import { migrateStore } from '../../src/cli/migrator.js';
-import { PUSH_NOTIFICATION_STORE_MIGRATIONS } from '../../src/server/database/push_notification/migrations.js';
+import { pushNotificationStoreMigrations } from '../../src/server/database/push_notification/migrations.js';
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
 import type { PushNotificationDatabase } from '../../src/server/database/push_notification/schema.js';
 import { ServerCallContext } from '../../src/server/context.js';
@@ -18,7 +18,7 @@ import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/con
 
 // Spelled out rather than imported from the store
 const TABLE = 'push_notification_configs';
-const LEDGER_TABLE = 'a2a_push_notification_store_migrations';
+const LEDGER_TABLE = 'a2a_push_notification_configs_migrations';
 const LOCK_TABLE = 'a2a_migrations_lock';
 const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -126,7 +126,7 @@ for (const engine of ENGINES) {
 
     async function migrate(): Promise<void> {
       await withConnection((connection) =>
-        migrateStore(connection, PUSH_NOTIFICATION_STORE_MIGRATIONS)
+        migrateStore(connection, pushNotificationStoreMigrations())
       );
     }
 
@@ -543,10 +543,9 @@ for (const engine of ENGINES) {
       });
 
       it('honours a custom OwnerResolver', async () => {
-        const byTenant = new DatabasePushNotificationStore(
-          db,
-          (context) => context.tenant ?? 'none'
-        );
+        const byTenant = new DatabasePushNotificationStore(db, {
+          ownerResolver: (context) => context.tenant ?? 'none',
+        });
         const acme = makeContext({ tenant: 'acme', user: 'alice' });
         const acmeOther = makeContext({ tenant: 'acme', user: 'bob' });
 

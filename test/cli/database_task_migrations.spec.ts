@@ -15,7 +15,7 @@ import { run } from '../../src/cli/run.js';
 // untouched.
 const STORE_ID = 'tasks';
 const TABLE = 'tasks';
-const LEDGER_TABLE = 'a2a_task_store_migrations';
+const LEDGER_TABLE = 'a2a_tasks_migrations';
 const LOCK_TABLE = 'a2a_migrations_lock';
 const MIGRATION = '0001_create_tasks';
 /** The revision the CLI translates into Kysely's NO_MIGRATIONS. */
@@ -42,7 +42,10 @@ const INDEXES: Record<string, string[]> = {
 
 // `upgrade` with no --store migrates every registered store, so the teardown has to
 // clear the push notification store's tables too or they outlive the test on a shared server.
-const OTHER_STORE_TABLES = ['push_notification_configs', 'a2a_push_notification_store_migrations'];
+const OTHER_STORE_TABLES = [
+  'push_notification_configs',
+  'a2a_push_notification_configs_migrations',
+];
 
 /**
  * What differs between engines: how to reach a database, how the binary collation is

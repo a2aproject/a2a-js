@@ -3,6 +3,7 @@
  */
 
 export { DatabasePushNotificationStore } from './push_notification/store.js';
+export type { DatabasePushNotificationStoreOptions } from './push_notification/store.js';
 export { PUSH_NOTIFICATION_TABLE } from './push_notification/schema.js';
 export type {
   PushNotificationConfigRow,
@@ -10,5 +11,6 @@ export type {
 } from './push_notification/schema.js';
 
 export { DatabaseTaskStore } from './task/store.js';
+export type { DatabaseTaskStoreOptions } from './task/store.js';
 export { TASK_TABLE } from './task/schema.js';
 export type { TaskDatabase, TaskRow } from './task/schema.js';

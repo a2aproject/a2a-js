@@ -8,7 +8,7 @@ import { D1Dialect } from 'kysely-d1';
 
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
 import type { TaskDatabase } from '../../src/server/database/task/schema.js';
-import { TASK_STORE_MIGRATIONS } from '../../src/server/database/task/migrations.js';
+import { taskStoreMigrations } from '../../src/server/database/task/migrations.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import {
@@ -122,8 +122,9 @@ describe('DatabaseTaskStore on D1', () => {
    * with SQLITE_AUTH.
    */
   async function migrate(connection: Kysely<unknown>): Promise<void> {
-    for (const name of Object.keys(TASK_STORE_MIGRATIONS.migrations).sort()) {
-      await TASK_STORE_MIGRATIONS.migrations[name].up(connection);
+    const { migrations } = taskStoreMigrations();
+    for (const name of Object.keys(migrations).sort()) {
+      await migrations[name].up(connection);
     }
   }
 
@@ -569,7 +570,9 @@ describe('DatabaseTaskStore on D1', () => {
     });
 
     it('honours a custom OwnerResolver', async () => {
-      const byTenant = new DatabaseTaskStore(db, (context) => context.tenant ?? 'none');
+      const byTenant = new DatabaseTaskStore(db, {
+        ownerResolver: (context) => context.tenant ?? 'none',
+      });
       const acme = makeContext({ tenant: 'acme', user: 'alice' });
       const acmeOther = makeContext({ tenant: 'acme', user: 'bob' });
 

@@ -1,5 +1,6 @@
 /**
- * Name of the push notification table. For now, fixed, not configurable.
+ * Name of the push notification table, unless the store's `tableName` option names
+ * another.
  */
 export const PUSH_NOTIFICATION_TABLE = 'push_notification_configs';
 
@@ -19,10 +20,7 @@ export interface PushNotificationConfigRow {
  * The schema this store owns.
  * Kysely resolves column names against this at compile time.
  */
-export type PushNotificationDatabase = Record<
-  typeof PUSH_NOTIFICATION_TABLE,
-  PushNotificationConfigRow
->;
+export type PushNotificationDatabase = Record<string, PushNotificationConfigRow>;
 
 /**
  * The primary key: the caller's scope plus the config's own identity.

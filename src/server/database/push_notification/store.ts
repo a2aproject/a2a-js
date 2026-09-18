@@ -21,6 +21,16 @@ import {
   type PushNotificationConfigScope,
 } from './serialization.js';
 
+export interface DatabasePushNotificationStoreOptions {
+  /** Defaults to {@link resolveUserScope}. */
+  readonly ownerResolver?: OwnerResolver;
+  /**
+   * Table to read and write. Defaults to {@link PUSH_NOTIFICATION_TABLE}, and must be
+   * the table `pushNotificationStoreMigrations` created.
+   */
+  readonly tableName?: string;
+}
+
 /**
  * {@link PushNotificationStore} backed by a database.
  *
@@ -32,13 +42,15 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
   private readonly db: Kysely<PushNotificationDatabase>;
   private readonly ownerResolver: OwnerResolver;
   private readonly dialect: DialectName;
+  private readonly tableName: string;
 
   constructor(
     db: Kysely<PushNotificationDatabase>,
-    ownerResolver: OwnerResolver = resolveUserScope
+    options: DatabasePushNotificationStoreOptions = {}
   ) {
     this.db = db;
-    this.ownerResolver = ownerResolver;
+    this.ownerResolver = options.ownerResolver ?? resolveUserScope;
+    this.tableName = options.tableName ?? PUSH_NOTIFICATION_TABLE;
     // Fixed for the connection's lifetime, and rejects an engine we cannot
     // write to here rather than on the first save.
     this.dialect = dialectOf(db);
@@ -70,7 +82,7 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
       config_data: row.config_data,
       protocol_version: row.protocol_version,
     };
-    const insert = this.db.insertInto(PUSH_NOTIFICATION_TABLE).values(row);
+    const insert = this.db.insertInto(this.tableName).values(row);
     await (
       this.dialect === 'mysql'
         ? insert.onDuplicateKeyUpdate(replaceable)
@@ -93,7 +105,7 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
     const scope = this.scopeOf(taskId, context);
 
     const rows = await this.db
-      .selectFrom(PUSH_NOTIFICATION_TABLE)
+      .selectFrom(this.tableName)
       .select([...PUSH_NOTIFICATION_TABLE_COLUMNS])
       .where('tenant', '=', scope.tenant)
       .where('owner', '=', scope.owner)
@@ -125,7 +137,7 @@ export class DatabasePushNotificationStore implements PushNotificationStore {
     const scope = this.scopeOf(taskId, context);
 
     await this.db
-      .deleteFrom(PUSH_NOTIFICATION_TABLE)
+      .deleteFrom(this.tableName)
       .where('tenant', '=', scope.tenant)
       .where('owner', '=', scope.owner)
       .where('task_id', '=', scope.taskId)

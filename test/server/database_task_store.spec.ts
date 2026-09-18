@@ -8,7 +8,7 @@ import type { Kysely } from 'kysely';
 
 import { connect } from '../../src/cli/connect.js';
 import { migrateStore } from '../../src/cli/migrator.js';
-import { TASK_STORE_MIGRATIONS } from '../../src/server/database/task/migrations.js';
+import { taskStoreMigrations } from '../../src/server/database/task/migrations.js';
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
 import type { TaskDatabase } from '../../src/server/database/task/schema.js';
 import { ServerCallContext } from '../../src/server/context.js';
@@ -25,7 +25,7 @@ import { DEFAULT_PAGE_SIZE } from '../../src/constants.js';
 
 // Spelled out rather than imported from the store
 const TABLE = 'tasks';
-const LEDGER_TABLE = 'a2a_task_store_migrations';
+const LEDGER_TABLE = 'a2a_tasks_migrations';
 const LOCK_TABLE = 'a2a_migrations_lock';
 
 class TestUser implements User {
@@ -169,7 +169,7 @@ for (const engine of ENGINES) {
     }
 
     async function migrate(): Promise<void> {
-      await withConnection((connection) => migrateStore(connection, TASK_STORE_MIGRATIONS));
+      await withConnection((connection) => migrateStore(connection, taskStoreMigrations()));
     }
 
     /** The ledger goes too, or a re-migration finds 0001 applied and builds nothing. */
@@ -635,7 +635,9 @@ for (const engine of ENGINES) {
       });
 
       it('honours a custom OwnerResolver', async () => {
-        const byTenant = new DatabaseTaskStore(db, (context) => context.tenant ?? 'none');
+        const byTenant = new DatabaseTaskStore(db, {
+          ownerResolver: (context) => context.tenant ?? 'none',
+        });
         const acme = makeContext({ tenant: 'acme', user: 'alice' });
         const acmeOther = makeContext({ tenant: 'acme', user: 'bob' });
 
