@@ -1,11 +1,10 @@
 # Changelog
 
-## [1.2.0](https://github.com/a2aproject/a2a-js/compare/v1.1.0...v1.2.0) (2026-09-17)
+## [1.2.0](https://github.com/a2aproject/a2a-js/compare/v1.1.0...v1.2.0) (2026-09-18)
 
 
 ### Features
 
-* **itk:** use shared scenarios ([#672](https://github.com/a2aproject/a2a-js/issues/672)) ([07a7db4](https://github.com/a2aproject/a2a-js/commit/07a7db401e58db09b3c83119a84bdf1847f24aa6))
 * **server:** Introduce SettleByTaskId method ([#692](https://github.com/a2aproject/a2a-js/issues/692)) ([e856bda](https://github.com/a2aproject/a2a-js/commit/e856bdab9b868adc9d951bb96dabe104cf27c451))
 
 
