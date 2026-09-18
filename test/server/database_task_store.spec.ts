@@ -28,6 +28,10 @@ const TABLE = 'tasks';
 const LEDGER_TABLE = 'a2a_tasks_migrations';
 const LOCK_TABLE = 'a2a_migrations_lock';
 
+/** What a deployment that renamed the table would have instead, ledger included. */
+const RENAMED_TABLE = 'agent_tasks';
+const RENAMED_LEDGER_TABLE = 'a2a_agent_tasks_migrations';
+
 class TestUser implements User {
   constructor(private readonly _userName: string) {}
   get isAuthenticated(): boolean {
@@ -175,7 +179,13 @@ for (const engine of ENGINES) {
     /** The ledger goes too, or a re-migration finds 0001 applied and builds nothing. */
     async function dropEverything(): Promise<void> {
       await withConnection(async (connection) => {
-        for (const table of [TABLE, LEDGER_TABLE, LOCK_TABLE]) {
+        for (const table of [
+          TABLE,
+          LEDGER_TABLE,
+          LOCK_TABLE,
+          RENAMED_TABLE,
+          RENAMED_LEDGER_TABLE,
+        ]) {
           await sql.raw(`drop table if exists ${table}`).execute(connection);
         }
       });
@@ -657,6 +667,50 @@ for (const engine of ENGINES) {
         expect(await rowsInTable()).toHaveLength(2);
         expect((await store.load('task-1', lower))?.contextId).toBe('ctx-lower');
         expect((await store.load('task-1', upper))?.contextId).toBe('ctx-upper');
+      });
+    });
+
+    describe('tableName', () => {
+      const context = () => makeContext({ tenant: 'acme', user: 'alice' });
+
+      /**
+       * The outer setup migrated the default table, so a test that needs the renamed one
+       * has to swap it. Tests that want the default simply do not call this.
+       */
+      async function migrateRenamedOnly(): Promise<void> {
+        await withConnection(async (connection) => {
+          for (const table of [TABLE, LEDGER_TABLE]) {
+            await sql.raw(`drop table if exists ${table}`).execute(connection);
+          }
+          await migrateStore(connection, taskStoreMigrations(RENAMED_TABLE));
+        });
+      }
+
+      it('reads and writes the table it was given', async () => {
+        await migrateRenamedOnly();
+        const renamed = new DatabaseTaskStore(db, { tableName: RENAMED_TABLE });
+        const task = makeTask();
+
+        await renamed.save(task, context());
+
+        expect(await renamed.load('task-1', context())).toEqual(task);
+        const rows = await withConnection(
+          async (connection) =>
+            (await sql.raw(`select * from ${RENAMED_TABLE}`).execute(connection)).rows
+        );
+        expect(rows).toHaveLength(1);
+      });
+
+      it('a store left on the default name cannot read a renamed table', async () => {
+        await migrateRenamedOnly();
+
+        await expect(store.load('task-1', context())).rejects.toThrow();
+      });
+
+      it('a store given a name cannot read the default table', async () => {
+        const renamed = new DatabaseTaskStore(db, { tableName: RENAMED_TABLE });
+
+        await expect(renamed.load('task-1', context())).rejects.toThrow();
       });
     });
   });

@@ -27,6 +27,14 @@ const ALL_COLUMNS = [...KEY_COLUMNS, 'config_data', 'protocol_version'];
 // clear the task store's tables too or they outlive the test on a shared server.
 const OTHER_STORE_TABLES = ['tasks', 'a2a_tasks_migrations'];
 
+// Two names a deployment might pick instead of the default, and the ledger each one
+// derives. Spelled out for the same reason as the defaults above.
+const RENAMED_TABLE = 'agent_push_configs';
+const RENAMED_LEDGER_TABLE = 'a2a_agent_push_configs_migrations';
+const SECOND_TABLE = 'other_push_configs';
+const SECOND_LEDGER_TABLE = 'a2a_other_push_configs_migrations';
+const RENAMED_TABLES = [RENAMED_TABLE, RENAMED_LEDGER_TABLE, SECOND_TABLE, SECOND_LEDGER_TABLE];
+
 /**
  * What differs between engines: how to reach a database, how the binary collation is
  * spelled, and how to read back the three things Kysely's portable introspector does not
@@ -222,7 +230,13 @@ for (const engine of ENGINES) {
       url = engine.freshUrl();
       // SQLite gets a new file each time; the shared servers need the last run cleared.
       await introspect(async (db) => {
-        for (const table of [TABLE, LEDGER_TABLE, LOCK_TABLE, ...OTHER_STORE_TABLES]) {
+        for (const table of [
+          TABLE,
+          LEDGER_TABLE,
+          LOCK_TABLE,
+          ...OTHER_STORE_TABLES,
+          ...RENAMED_TABLES,
+        ]) {
           await sql.raw(`drop table if exists ${table}`).execute(db);
         }
       });
@@ -252,10 +266,10 @@ for (const engine of ENGINES) {
     const tableNames = () =>
       introspect(async (db) => (await db.introspection.getTables()).map((table) => table.name));
 
-    const columnsOf = () =>
+    const columnsOf = (table: string = TABLE) =>
       introspect(
         async (db) =>
-          (await db.introspection.getTables()).find((table) => table.name === TABLE)?.columns ?? []
+          (await db.introspection.getTables()).find((t) => t.name === table)?.columns ?? []
       );
 
     /**
@@ -324,6 +338,43 @@ for (const engine of ENGINES) {
       for (const column of KEY_COLUMNS) {
         expect(collations[column]?.toLowerCase()).toBe(engine.binaryCollation.toLowerCase());
       }
+    });
+
+    it('upgrade builds the table --push-notification-configs-table-name asks for, and its own ledger', async () => {
+      const { code } = await cli(
+        'upgrade',
+        '--store',
+        STORE_ID,
+        '--push-notification-configs-table-name',
+        RENAMED_TABLE
+      );
+
+      expect(code).toBe(0);
+      const names = await tableNames();
+      expect(names).toEqual(expect.arrayContaining([RENAMED_TABLE, RENAMED_LEDGER_TABLE]));
+      expect(names).not.toContain(TABLE);
+      expect(names).not.toContain(LEDGER_TABLE);
+      expect((await columnsOf(RENAMED_TABLE)).map((column) => column.name).sort()).toEqual(
+        [...ALL_COLUMNS].sort()
+      );
+    });
+
+    it('upgrade admits a second, differently named deployment to the same database', async () => {
+      const flag = '--push-notification-configs-table-name';
+      const first = await cli('upgrade', '--store', STORE_ID, flag, RENAMED_TABLE);
+      const second = await cli('upgrade', '--store', STORE_ID, flag, SECOND_TABLE);
+
+      expect(first.code).toBe(0);
+      expect(second.code).toBe(0);
+      expect(second.err).toBe('');
+      expect(await tableNames()).toEqual(
+        expect.arrayContaining([
+          RENAMED_TABLE,
+          RENAMED_LEDGER_TABLE,
+          SECOND_TABLE,
+          SECOND_LEDGER_TABLE,
+        ])
+      );
     });
 
     it('upgrade twice changes nothing and leaves one ledger row', async () => {
