@@ -84,9 +84,9 @@ jobs:
         MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test
         A2A_TEST_REQUIRE_ALL_ENGINES: '1'
 
-  # Edge runtime tests use @edge-runtime/vm to emulate Cloudflare Workers,
-  # Vercel Edge Functions, and similar environments. This ensures the SDK
-  # works correctly in non-Node.js server environments.
+  # Edge runtime tests run in workerd, via @cloudflare/vitest-pool-workers. This
+  # ensures the SDK works in non-Node.js server environments, including the database
+  # stores, which `test/edge/` drives against a miniflare-provided D1 binding.
   test-edge:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -7,7 +7,8 @@ export default defineConfig({
     include: ['test/**/*.spec.ts'],
     // Integration tests spawn sample subprocesses and need the src/samples
     // workspace installed; they run via their own config (`npm run test:integration`).
-    exclude: [...configDefaults.exclude, 'test/integration/**'],
+    // `test/edge/` needs a workerd binding, so it runs only under vitest.edge.config.
+    exclude: [...configDefaults.exclude, 'test/integration/**', 'test/edge/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'json-summary'],
