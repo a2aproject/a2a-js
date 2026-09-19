@@ -12,7 +12,12 @@ import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport
 import { ServerCallContextBuilder, defaultServerCallContextBuilder } from '../context.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '../../constants.js';
 import { UserBuilder, delegateAsyncIterator } from './common.js';
-import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
+import {
+  SSE_HEADERS,
+  formatSSEEvent,
+  formatSSEErrorEvent,
+  writeSseStream,
+} from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
 import { A2A_ERROR_CODE, ContentTypeNotSupportedError } from '../../errors/index.js';
 import { validateVersion } from '../version.js';
@@ -39,6 +44,13 @@ export interface JsonRpcHandlerOptions {
    */
   legacyCompat?: { enabled: boolean };
   contextBuilder?: ServerCallContextBuilder;
+  /**
+   * Optional inactivity timeout (ms) for SSE streams. When no event has
+   * been written within this window, the stream is closed, bounding how
+   * long a half-dead client can hold server resources.
+   * `0` (default) disables the timeout.
+   */
+  sseIdleTimeoutMs?: number;
 }
 
 /**
@@ -84,7 +96,9 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   // would silently ignore the body and the dispatcher would surface a
   // misleading InvalidParamsError (-32602).
   router.use(contentTypeGuard);
-  router.use(express.json(), jsonErrorHandler);
+  // Explicit body-size cap (CWE-400): Express has no default
+  // limit; 10 MB is generous for A2A JSON-RPC payloads.
+  router.use(express.json({ limit: '10mb' }), jsonErrorHandler);
 
   router.post('/', async (req: Request, res: Response) => {
     const useLegacy =
@@ -134,9 +148,16 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           });
           res.flushHeaders();
           try {
-            for await (const event of stream) {
-              res.write(formatSSEEvent(event));
-            }
+            // Keep-alive + monotonic `id:` fields via writeSseStream.
+            await writeSseStream(
+              res,
+              (async function* sseFrames(): AsyncGenerator<string, void, undefined> {
+                for await (const event of stream) {
+                  yield formatSSEEvent(event);
+                }
+              })(),
+              { idleTimeoutMs: options.sseIdleTimeoutMs ?? 0 }
+            );
           } catch (streamError) {
             console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
             const errorResponse: JSONRPCErrorResponse = {
@@ -183,12 +204,16 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         res.flushHeaders();
 
         try {
-          if (!firstResult.done) {
-            res.write(formatSSEEvent(firstResult.value));
-          }
-          for await (const event of delegateAsyncIterator(iterator)) {
-            res.write(formatSSEEvent(event));
-          }
+          // Keep-alive + monotonic `id:` fields via writeSseStream.
+          const frames = (async function* sseFrames(): AsyncGenerator<string, void, undefined> {
+            if (!firstResult.done) {
+              yield formatSSEEvent(firstResult.value);
+            }
+            for await (const event of delegateAsyncIterator(iterator)) {
+              yield formatSSEEvent(event);
+            }
+          })();
+          await writeSseStream(res, frames, { idleTimeoutMs: options.sseIdleTimeoutMs ?? 0 });
         } catch (streamError) {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
           const errorResponse: JSONRPCErrorResponse = {
