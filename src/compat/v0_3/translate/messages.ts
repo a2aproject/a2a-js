@@ -34,8 +34,8 @@ export function toCoreMessage(compatMsg: legacy.Message): V1Message {
   }
   return {
     messageId: compatMsg.messageId,
-    contextId: compatMsg.contextId ?? '',
-    taskId: compatMsg.taskId ?? '',
+    contextId: compatMsg.contextId as string,
+    taskId: compatMsg.taskId as string,
     role: toCoreRole(compatMsg.role),
     parts: compatMsg.parts.map(toCorePart),
     metadata: deepCloneMetadata(compatMsg.metadata),

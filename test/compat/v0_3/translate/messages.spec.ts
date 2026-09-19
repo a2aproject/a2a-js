@@ -18,8 +18,8 @@ describe('messages', () => {
       const core = toCoreMessage(compat);
       expect(core).toEqual({
         messageId: 'msg-1',
-        contextId: '',
-        taskId: '',
+        contextId: undefined,
+        taskId: undefined,
         role: Role.ROLE_USER,
         parts: [
           {
@@ -35,7 +35,7 @@ describe('messages', () => {
       });
     });
 
-    it('coerces missing IDs to empty strings (proto3 default)', () => {
+    it('leaves missing optional IDs as undefined', () => {
       const compat: legacy.Message = {
         kind: 'message',
         messageId: 'msg-1',
@@ -43,8 +43,8 @@ describe('messages', () => {
         parts: [],
       };
       const core = toCoreMessage(compat);
-      expect(core.contextId).toBe('');
-      expect(core.taskId).toBe('');
+      expect(core.contextId).toBeUndefined();
+      expect(core.taskId).toBeUndefined();
     });
 
     it('preserves contextId, taskId, metadata, extensions, referenceTaskIds', () => {
