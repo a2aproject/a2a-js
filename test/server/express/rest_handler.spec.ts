@@ -740,6 +740,23 @@ describe('restHandler', () => {
         assert.isArray(convertedResult);
         assert.lengthOf(convertedResult, configs.length);
       });
+
+      it('should forward pageSize and pageToken query params to the request handler', async () => {
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue({
+          configs: [],
+          nextPageToken: '',
+        });
+
+        await request(app)
+          .get('/tasks/task-1/pushNotificationConfigs?pageSize=7&pageToken=cursor-abc')
+          .set('A2A-Version', '1.0')
+          .expect(200);
+
+        expect(mockRequestHandler.listTaskPushNotificationConfigs).toHaveBeenCalledWith(
+          expect.objectContaining({ taskId: 'task-1', pageSize: 7, pageToken: 'cursor-abc' }),
+          expect.anything()
+        );
+      });
     });
 
     describe('GET /tasks/:taskId/pushNotificationConfigs/:configId', () => {
