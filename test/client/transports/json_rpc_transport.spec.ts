@@ -96,29 +96,36 @@ describe('JsonRpcTransport', () => {
 
   describe('JSON-RPC response validation', () => {
     it.each([
-      ['missing', undefined],
-      ['invalid', '1.0'],
-    ])('rejects unary responses with a %s jsonrpc version', async (_description, jsonrpc) => {
-      mockFetch.mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            ...(jsonrpc === undefined ? {} : { jsonrpc }),
-            result: { ok: true },
-            id: 1,
-          }),
-          { status: 200 }
-        )
-      );
+      ['missing', undefined, 'undefined'],
+      ['invalid', '1.0', '"1.0"'],
+      ['numeric', 2.0, '2'],
+      ['null', null, 'null'],
+    ])(
+      'rejects unary responses with a %s jsonrpc version',
+      async (_description, jsonrpc, received) => {
+        mockFetch.mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              ...(jsonrpc === undefined ? {} : { jsonrpc }),
+              result: { ok: true },
+              id: 1,
+            }),
+            { status: 200 }
+          )
+        );
 
-      await expect(transport.callExtensionMethod('test/method', {})).rejects.toThrow(
-        "expected 'jsonrpc' to be exactly '2.0'"
-      );
-    });
+        await expect(transport.callExtensionMethod('test/method', {})).rejects.toThrow(
+          `Invalid JSON-RPC response for test/method: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
+        );
+      }
+    );
 
     it.each([
-      ['missing', undefined],
-      ['invalid', '1.0'],
-    ])('rejects SSE events with a %s jsonrpc version', async (_description, jsonrpc) => {
+      ['missing', undefined, 'undefined'],
+      ['invalid', '1.0', '"1.0"'],
+      ['numeric', 2.0, '2'],
+      ['null', null, 'null'],
+    ])('rejects SSE events with a %s jsonrpc version', async (_description, jsonrpc, received) => {
       const event: Record<string, unknown> = {
         ...(jsonrpc === undefined ? {} : { jsonrpc }),
         result: {
@@ -154,7 +161,9 @@ describe('JsonRpcTransport', () => {
       };
       const stream = transport.sendMessageStream(request);
 
-      await expect(stream.next()).rejects.toThrow("expected 'jsonrpc' to be exactly '2.0'");
+      await expect(stream.next()).rejects.toThrow(
+        `Invalid JSON-RPC response for SSE event: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
+      );
     });
   });
 

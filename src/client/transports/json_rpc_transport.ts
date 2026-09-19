@@ -43,8 +43,12 @@ function assertJsonRpcResponseVersion(
     !('jsonrpc' in response) ||
     response.jsonrpc !== '2.0'
   ) {
+    const received =
+      typeof response === 'object' && response !== null && 'jsonrpc' in response
+        ? JSON.stringify(response.jsonrpc)
+        : 'undefined';
     throw new Error(
-      `Invalid JSON-RPC response for ${context}: expected 'jsonrpc' to be exactly '2.0'.`
+      `Invalid JSON-RPC response for ${context}: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
     );
   }
 }
