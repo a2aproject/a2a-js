@@ -483,5 +483,84 @@ for (const engine of ENGINES) {
       // The cause, not just the wrapper: without it the reason is lost.
       expect(err).toMatch(/exist/i);
     });
+
+    /**
+     * Renders the script and applies it.
+     */
+    async function renderAndApply(...extra: string[]) {
+      const { code, out } = await cli(
+        'upgrade',
+        '--sql',
+        '--dialect',
+        engine.name,
+        '--store',
+        STORE_ID,
+        ...extra
+      );
+      expect(code).toBe(0);
+
+      const statements = out
+        .split(';')
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+      await introspect(async (db) => {
+        for (const statement of statements) await sql.raw(statement).execute(db);
+      });
+    }
+
+    describe('upgrade --sql', () => {
+      it('renders a script that builds the table the migration describes', async () => {
+        await renderAndApply();
+
+        expect(await tableNames()).toEqual(expect.arrayContaining([TABLE, LEDGER_TABLE]));
+
+        const columns = await columnsOf();
+        expect(columns.map((column) => column.name).sort()).toEqual([...ALL_COLUMNS].sort());
+
+        const nullable = Object.fromEntries(
+          columns.map((column) => [column.name, column.isNullable])
+        );
+        for (const column of KEY_COLUMNS) expect(nullable[column]).toBe(false);
+        expect(nullable.config_data).toBe(true);
+        expect(nullable.protocol_version).toBe(true);
+
+        const widths = await introspect((db) => engine.widths(db));
+        expect(widths.tenant).toBe(255);
+        expect(widths.owner).toBe(255);
+        expect(widths.task_id).toBe(36);
+        expect(widths.config_id).toBe(36);
+
+        expect(await introspect((db) => engine.keyOrder(db))).toEqual(KEY_COLUMNS);
+
+        const collations = await introspect((db) => engine.collations(db));
+        for (const column of KEY_COLUMNS) {
+          expect(collations[column]?.toLowerCase()).toBe(engine.binaryCollation.toLowerCase());
+        }
+      });
+
+      it('renders the table --push-notification-configs-table-name asks for, and its own ledger', async () => {
+        await renderAndApply('--push-notification-configs-table-name', RENAMED_TABLE);
+
+        const names = await tableNames();
+        expect(names).toEqual(expect.arrayContaining([RENAMED_TABLE, RENAMED_LEDGER_TABLE]));
+        expect(names).not.toContain(TABLE);
+        expect(names).not.toContain(LEDGER_TABLE);
+        expect((await columnsOf(RENAMED_TABLE)).map((column) => column.name).sort()).toEqual(
+          [...ALL_COLUMNS].sort()
+        );
+      });
+
+      it('leaves the online CLI reporting the migration applied, with nothing to do', async () => {
+        await renderAndApply();
+
+        const status = await cli('status', '--store', STORE_ID);
+        expect(status.out).toMatch(/applied\s+\d{4}-\d{2}-\d{2}T/);
+        expect(status.out).not.toContain('pending');
+
+        const upgrade = await cli('upgrade', '--store', STORE_ID);
+        expect(upgrade.code).toBe(0);
+        expect(upgrade.out).toContain('up to date');
+      });
+    });
   });
 }
