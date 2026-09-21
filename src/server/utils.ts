@@ -11,6 +11,25 @@ const TERMINAL_STATE_LIST: TaskState[] = [
 export { TERMINAL_STATE_LIST };
 
 /**
+ * Every named `TaskState` value. Client-supplied state filters are
+ * validated against this list so that protobufjs' synthetic
+ * `UNRECOGNIZED` (-1) sentinel — or any raw out-of-range number decoded
+ * from gRPC/JSON-RPC — is rejected instead of silently matching nothing.
+ */
+const VALID_TASK_STATE_LIST: TaskState[] = [
+  TaskState.TASK_STATE_UNSPECIFIED,
+  TaskState.TASK_STATE_SUBMITTED,
+  TaskState.TASK_STATE_WORKING,
+  TaskState.TASK_STATE_COMPLETED,
+  TaskState.TASK_STATE_FAILED,
+  TaskState.TASK_STATE_CANCELED,
+  TaskState.TASK_STATE_INPUT_REQUIRED,
+  TaskState.TASK_STATE_REJECTED,
+  TaskState.TASK_STATE_AUTH_REQUIRED,
+];
+export { VALID_TASK_STATE_LIST };
+
+/**
  * Non-terminal state in which the executor pauses awaiting a fresh
  * follow-up message from the client. Both `execute()` and the blocking
  * consumer's drain loop stop when this state is published.

@@ -22,8 +22,8 @@ jobs:
       matrix:
         node-version: [20, 22, 24]
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
       with:
         node-version: ${{ matrix.node-version }}
         registry-url: 'https://registry.npmjs.org'
@@ -38,8 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
       with:
         node-version: 24
         registry-url: 'https://registry.npmjs.org'
@@ -52,12 +52,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Base Branch
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.base.ref || 'main' }}
         clean: true
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: 24
         cache: 'npm'
@@ -70,7 +70,7 @@ jobs:
         mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-base-summary.json
     
     - name: Upload Artifact (base)
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: github.event_name != 'pull_request'
       with:
         name: coverage-report
@@ -79,7 +79,7 @@ jobs:
 
     - name: Checkout PR Branch
       if: github.event_name == 'pull_request'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         clean: true
 
@@ -97,7 +97,7 @@ jobs:
         echo ${{ github.event.number }} > ./PR_NUMBER
     
     - name: Upload Coverage Artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: github.event_name == 'pull_request'
       with:
         name: coverage-data

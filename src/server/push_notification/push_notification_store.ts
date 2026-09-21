@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import { TaskPushNotificationConfig } from '../../index.js';
 import { A2A_LEGACY_PROTOCOL_VERSION } from '../../constants.js';
 import { ServerCallContext } from '../context.js';
@@ -81,7 +80,7 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     // id is the *result* of Create, not an input requirement — id-less
     // Creates must produce distinct records, not silently upsert.
     if (!pushNotificationConfig.id) {
-      pushNotificationConfig.id = uuidv4();
+      pushNotificationConfig.id = crypto.randomUUID();
     }
 
     // Fallback is defensive — ServerCallContext.requestedVersion always
@@ -95,7 +94,10 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
       entries.splice(existingIndex, 1);
     }
 
-    entries.push({ config: pushNotificationConfig, wireVersion });
+    // Store a deep copy so caller-side mutation can't drift our state.
+    // The in-place id write above is kept so callers still observe a
+    // generated UUID on the object they passed.
+    entries.push({ config: structuredClone(pushNotificationConfig), wireVersion });
     bucket.set(taskId, entries);
   }
 

@@ -22,7 +22,6 @@
  */
 
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { AgentCard } from '../../index.js';
 import { Role } from '../../index.js';
 import {
@@ -64,7 +63,7 @@ const tenantContextBuilder: ServerCallContextBuilder = ({
     [STATE_HEADERS_KEY, headers],
     // Extract specific headers into typed state entries
     [STATE_TENANT_ID_KEY, headers['x-tenant-id'] ?? tenant ?? 'unknown'],
-    [STATE_REQUEST_ID_KEY, headers['x-request-id'] ?? uuidv4()],
+    [STATE_REQUEST_ID_KEY, headers['x-request-id'] ?? crypto.randomUUID()],
   ]);
   return new ServerCallContext({
     requestedExtensions: extensions,
@@ -98,7 +97,7 @@ class StateHeadersAgentExecutor implements AgentExecutor {
     ];
 
     const finalMessage: Message = {
-      messageId: uuidv4(),
+      messageId: crypto.randomUUID(),
       contextId: '',
       taskId: '',
       role: Role.ROLE_AGENT,

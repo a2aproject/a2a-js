@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from 'node:child_process';
 import { once } from 'node:events';
+import http from 'node:http';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -73,6 +74,34 @@ async function waitForAgentCard(url: string, agent: ChildProcess): Promise<void>
   throw new Error(`Agent did not become ready at ${url}`);
 }
 
+/**
+ * Runs the CLI with `args`, sends one greeting once it has connected, and
+ * returns everything it printed. `done` says when the exchange is over: the
+ * CLI must not be closed mid-request or readline tears down the loop.
+ */
+async function driveCli(
+  args: string[],
+  label: string,
+  done: (output: string) => boolean
+): Promise<string> {
+  const cli = runSample(CLI_SCRIPT, args, {});
+  let output = '';
+  const collect = (chunk: Buffer): void => {
+    output += chunk.toString('utf8');
+  };
+  cli.stdout?.on('data', collect);
+  cli.stderr?.on('data', collect);
+
+  await waitFor(() => output.includes('Connected via'), `${label} to connect`, cli);
+  cli.stdin?.write('hello\n');
+  await waitFor(() => done(output), `${label} response`, cli);
+  cli.stdin?.end('/exit\n');
+
+  const [code] = (await once(cli, 'exit')) as [number | null];
+  expect(code, output).toBe(0);
+  return output;
+}
+
 describe('samples smoke: multi-transport-agent + cli', () => {
   let agent: ChildProcess | undefined;
   let baseUrl: string;
@@ -100,34 +129,59 @@ describe('samples smoke: multi-transport-agent + cli', () => {
 
   describe.each(TRANSPORTS)('transport %s', (transport) => {
     it('round-trips a greeting', async () => {
-      const output = await runCli(transport);
+      const output = await driveCli(
+        [`--transport=${transport}`, baseUrl],
+        transport,
+        (out) => out.includes(EXPECTED_REPLY) && out.includes(COMPLETED_MARKER)
+      );
       expect(output, output).toContain(EXPECTED_REPLY);
       expect(output, output).toContain(COMPLETED_MARKER);
     });
   });
+});
 
-  async function runCli(transport: string): Promise<string> {
-    const cli = runSample(CLI_SCRIPT, [`--transport=${transport}`, baseUrl], {});
-    let output = '';
-    const collect = (chunk: Buffer): void => {
-      output += chunk.toString('utf8');
-    };
-    cli.stdout?.on('data', collect);
-    cli.stderr?.on('data', collect);
+describe('samples smoke: cli service parameters', () => {
+  it('sends --auth and --svc-param on discovery and on every request', async () => {
+    // Stub agent: serves a card, records what it was called with, and fails the
+    // message request — the CLI reports the error and stays in its loop.
+    const requests: http.IncomingMessage[] = [];
+    const server = http.createServer((req, res) => {
+      requests.push(req);
+      if (req.url?.includes('agent-card')) {
+        res.setHeader('content-type', 'application/json');
+        res.end(
+          JSON.stringify({
+            name: 'Header Probe',
+            supportedInterfaces: [
+              { url: `http://${req.headers.host}`, protocolBinding: 'JSONRPC' },
+            ],
+          })
+        );
+        return;
+      }
+      res.statusCode = 500;
+      res.end('{}');
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const { port } = server.address() as net.AddressInfo;
 
-    // Send the greeting only once connected, and wait for the terminal event
-    // before `/exit`, otherwise readline closes the loop mid-request.
-    await waitFor(() => output.includes('Connected via'), `${transport} to connect`, cli);
-    cli.stdin?.write('hello\n');
-    await waitFor(
-      () => output.includes(EXPECTED_REPLY) && output.includes(COMPLETED_MARKER),
-      `${transport} greeting reply`,
-      cli
-    );
-    cli.stdin?.end('/exit\n');
+    try {
+      await driveCli(
+        ['--auth', 'Bearer test-token', '--svc-param', 'X-Demo=1', `http://127.0.0.1:${port}`],
+        'probe',
+        () => requests.some((req) => req.method === 'POST')
+      );
+    } finally {
+      server.close();
+    }
 
-    const [code] = (await once(cli, 'exit')) as [number | null];
-    expect(code, output).toBe(0);
-    return output;
-  }
+    // The card GET and the message POST take different paths through the CLI:
+    // the resolver's fetch wrapper and per-call `serviceParameters`.
+    expect(requests.map((req) => req.method)).toEqual(['GET', 'POST']);
+    for (const req of requests) {
+      expect(req.headers.authorization, req.url).toBe('Bearer test-token');
+      expect(req.headers['x-demo'], req.url).toBe('1');
+    }
+  });
 });

@@ -31,7 +31,6 @@
 
 import express from 'express';
 import { Server, ServerCredentials } from '@grpc/grpc-js';
-import { v4 as uuidv4 } from 'uuid';
 
 import {
   A2A_PROTOCOL_VERSION,
@@ -69,7 +68,7 @@ class SUTAgentExecutor implements AgentExecutor {
 
   public cancelTask = async (taskId: string, eventBus: ExecutionEventBus): Promise<void> => {
     this.runningTask.delete(taskId);
-    const contextId = this.taskContexts.get(taskId) ?? uuidv4();
+    const contextId = this.taskContexts.get(taskId) ?? crypto.randomUUID();
     this.taskContexts.delete(taskId);
     const cancelledUpdate: TaskStatusUpdateEvent = {
       taskId: taskId,
@@ -121,7 +120,7 @@ class SUTAgentExecutor implements AgentExecutor {
         state: TaskState.TASK_STATE_WORKING,
         message: {
           role: Role.ROLE_AGENT,
-          messageId: uuidv4(),
+          messageId: crypto.randomUUID(),
           parts: [
             {
               content: { $case: 'text', value: 'Processing your question' },
@@ -154,7 +153,7 @@ class SUTAgentExecutor implements AgentExecutor {
 
     const agentMessage: Message = {
       role: Role.ROLE_AGENT,
-      messageId: uuidv4(),
+      messageId: crypto.randomUUID(),
       parts: [
         {
           content: { $case: 'text', value: agentReplyText },

@@ -12,10 +12,7 @@ import {
   TaskStatusUpdateEvent,
 } from '../../../src/types/pb/a2a.js';
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
-import {
-  AgentEvent,
-  DefaultExecutionEventBus,
-} from '../../../src/server/events/execution_event_bus.js';
+import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
@@ -325,7 +322,163 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     await new Promise<void>((resolve) => setImmediate(resolve));
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeUndefined();
+    expect(eventBusManager.getByTaskId(observedRequestTaskId, serverContext)).toBeUndefined();
+  });
+
+  it('keeps the event bus alive when configured states replace the defaults', async () => {
+    let observedRequestTaskId = '';
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      observedRequestTaskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+    });
+
+    const configuredHandler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      mockExecutor,
+      eventBusManager,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { keepBusAliveStates: [TaskState.TASK_STATE_COMPLETED] }
+    );
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-stream-err-configured-override', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    for await (const _event of configuredHandler.sendMessageStream(params, serverContext)) {
+      void _event;
+    }
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(eventBusManager.getByTaskId(observedRequestTaskId, serverContext)).toBeDefined();
+  });
+
+  it('persists a late event after the executor returns in a configured non-terminal state', async () => {
+    let observedRequestTaskId = '';
+    let executorReturned = false;
+    mockExecutor.execute.mockImplementation(async (ctx, bus) => {
+      observedRequestTaskId = ctx.taskId;
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId: ctx.contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      executorReturned = true;
+    });
+
+    const configuredHandler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      mockExecutor,
+      eventBusManager,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        keepBusAliveStates: [
+          TaskState.TASK_STATE_INPUT_REQUIRED,
+          TaskState.TASK_STATE_AUTH_REQUIRED,
+          TaskState.TASK_STATE_WORKING,
+        ],
+      }
+    );
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-stream-err-configured-working', 'kick off'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    const iterator = configuredHandler
+      .sendMessageStream(params, serverContext)
+      [Symbol.asyncIterator]();
+
+    const first = await iterator.next();
+    expect(first.done).toBe(false);
+    const firstPayload = (first.value as StreamResponse).payload as {
+      $case: 'task';
+      value: Task;
+    };
+    expect(firstPayload.$case).toBe('task');
+    expect(firstPayload.value.status?.state).toBe(TaskState.TASK_STATE_WORKING);
+
+    // Let the executor's `.finally()` settle before publishing again. WORKING
+    // is configured, so the bus and the original stream consumer must remain
+    // active even though the executor has returned.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(executorReturned).toBe(true);
+    const eventBus = eventBusManager.getByTaskId(observedRequestTaskId, serverContext);
+    expect(eventBus).toBeDefined();
+
+    const lateEventPromise = iterator.next();
+    eventBus!.publish(
+      AgentEvent.statusUpdate({
+        taskId: observedRequestTaskId,
+        contextId: firstPayload.value.contextId,
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          message: undefined,
+          timestamp: undefined,
+        },
+        metadata: {},
+      })
+    );
+
+    const lateEvent = await lateEventPromise;
+    expect(lateEvent.done).toBe(false);
+    const latePayload = (lateEvent.value as StreamResponse).payload as {
+      $case: 'statusUpdate';
+      value: TaskStatusUpdateEvent;
+    };
+    expect(latePayload.$case).toBe('statusUpdate');
+    expect(latePayload.value.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+
+    const storedTask = await taskStore.load(observedRequestTaskId, serverContext);
+    expect(storedTask?.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
   });
 
   it('does not leak the published-task listener on the success path (regression: gemini-code-assist)', async () => {
@@ -366,15 +519,12 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       serverContext
     );
 
-    const bus = new DefaultExecutionEventBus();
-
-    // Install the bus into the manager BEFORE the handler is asked to
-    // create one, so `createOrGetByTaskId` returns this instance.
+    // Create the bus through the manager BEFORE the handler is asked for
+    // one, so `createOrGetByTaskId` returns this same instance. It must be
+    // created under `serverContext`, the scope the handler will look it up
+    // from — buses are partitioned by (tenant, owner, taskId).
     const localBusManager = new DefaultExecutionEventBusManager();
-    (localBusManager as unknown as { taskIdToBus: Map<string, unknown> }).taskIdToBus.set(
-      taskId,
-      bus
-    );
+    const bus = localBusManager.createOrGetByTaskId(taskId, serverContext);
 
     const localHandler = new DefaultRequestHandler(
       agentCard,
@@ -442,7 +592,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       await new Promise<void>((resolve) => setImmediate(resolve));
 
       // Bus must still be alive at INPUT_REQUIRED.
-      expect(localBusManager.getByTaskId(taskId)).toBe(bus);
+      expect(localBusManager.getByTaskId(taskId, serverContext)).toBe(bus);
       sizesAfterTurns.push(eventListenerCount());
     };
 

@@ -84,7 +84,7 @@ The legacy `tasks/resubscribe` handler always responds with `Content-Type: text/
 
 ## Push Notifications
 
-Webhooks registered over v0.3 transports must receive the v0.3-shaped HTTP body, not the v1.0 `StreamResponse` wrapper. Per the v0.3 spec example (§9.5), the body is the **bare event object** (a v0.3 JSON `Task`, `TaskStatusUpdateEvent`, or `TaskArtifactUpdateEvent` discriminated by its `kind` field) with `Content-Type: application/json` — no `StreamResponse` discriminator and no JSON-RPC envelope.
+Webhooks registered over v0.3 transports must receive the v0.3-shaped HTTP body, not the v1.0 `StreamResponse` wrapper. Per the v0.3 spec example (§9.5), a push notification **always delivers the full `Task`** on every trigger — status and artifact updates are sent as the current `Task` snapshot, not as a bare `TaskStatusUpdateEvent` / `TaskArtifactUpdateEvent`. The body is the v0.3 JSON `Task` (discriminated by its `kind` field) with `Content-Type: application/json` — no `StreamResponse` discriminator and no JSON-RPC envelope.
 
 This is implemented by two pieces working together:
 

@@ -13,7 +13,6 @@
  */
 
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
 
 import { AGENT_CARD_PATH } from '../../../index.js';
 
@@ -73,7 +72,7 @@ function buildLegacyTask(taskId: string, contextId: string, userText: string) {
     history: [
       {
         kind: 'message' as const,
-        messageId: uuidv4(),
+        messageId: crypto.randomUUID(),
         role: 'user',
         parts: [{ kind: 'text' as const, text: userText }],
         taskId,
@@ -102,7 +101,7 @@ function buildLegacyStatusUpdate(
         ? {
             message: {
               kind: 'message' as const,
-              messageId: uuidv4(),
+              messageId: crypto.randomUUID(),
               role: 'agent',
               parts: [{ kind: 'text' as const, text: agentText }],
               taskId,
@@ -121,7 +120,7 @@ function buildLegacyArtifactUpdate(taskId: string, contextId: string, agentText:
     taskId,
     contextId,
     artifact: {
-      artifactId: uuidv4(),
+      artifactId: crypto.randomUUID(),
       name: 'Result',
       parts: [{ kind: 'text' as const, text: agentText }],
     },
@@ -194,8 +193,8 @@ function* handleMessageStream(params: {
   message: { messageId: string; parts: { kind?: string; text?: string }[] };
 }): Generator<object> {
   const userText = params.message.parts.find((p) => p.kind === 'text')?.text ?? '(no text)';
-  const taskId = uuidv4();
-  const contextId = uuidv4();
+  const taskId = crypto.randomUUID();
+  const contextId = crypto.randomUUID();
   const reply = replyText(userText);
 
   yield buildLegacyTask(taskId, contextId, userText);
@@ -275,8 +274,8 @@ export async function startMockV03Server(options: MockV03ServerOptions): Promise
           };
           // We'll compute the taskId before handleMessageSend so we can
           // register the webhook against it.
-          const taskId = uuidv4();
-          const contextId = uuidv4();
+          const taskId = crypto.randomUUID();
+          const contextId = crypto.randomUUID();
           if (params.configuration?.pushNotificationConfig?.url) {
             pushConfigsByTask.set(taskId, [
               {
@@ -304,7 +303,7 @@ export async function startMockV03Server(options: MockV03ServerOptions): Promise
             status: { state: 'completed', timestamp: new Date().toISOString() },
             artifacts: [
               {
-                artifactId: uuidv4(),
+                artifactId: crypto.randomUUID(),
                 name: 'Result',
                 parts: [{ kind: 'text', text: reply }],
               },

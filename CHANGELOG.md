@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.2.0](https://github.com/a2aproject/a2a-js/compare/v1.1.0...v1.2.0) (2026-09-18)
+
+
+### Features
+
+* **server:** Introduce SettleByTaskId method ([#692](https://github.com/a2aproject/a2a-js/issues/692)) ([e856bda](https://github.com/a2aproject/a2a-js/commit/e856bdab9b868adc9d951bb96dabe104cf27c451))
+
+
+### Bug Fixes
+
+* accept GetExtendedAgentCard JSON-RPC calls with omitted params ([#687](https://github.com/a2aproject/a2a-js/issues/687)) ([047d970](https://github.com/a2aproject/a2a-js/commit/047d97033ae4b4f48bee3d1b752c717e7a476a48))
+* avoid mutating caller message configuration ([#725](https://github.com/a2aproject/a2a-js/issues/725)) ([e3a6428](https://github.com/a2aproject/a2a-js/commit/e3a6428111759e1e69e210778ece6d99d6f45d65))
+* **client:** cache the extended Agent Card only after signature verification ([#711](https://github.com/a2aproject/a2a-js/issues/711)) ([55b601c](https://github.com/a2aproject/a2a-js/commit/55b601c9e2aa0cccdfec859ec7b83b8044b8af7e))
+* guard terminal state transitions and make cancelTask atomic ([#636](https://github.com/a2aproject/a2a-js/issues/636)) ([7b87c94](https://github.com/a2aproject/a2a-js/commit/7b87c9480bfa643f9d2b2eaf06988b3d3a95de25))
+* preserve call context for JSON-RPC tenant requests ([#708](https://github.com/a2aproject/a2a-js/issues/708)) ([ae20aca](https://github.com/a2aproject/a2a-js/commit/ae20aca7d6fbc94c839a37d945ec637642289227))
+* preserve HeadersInit in authenticating fetch ([#721](https://github.com/a2aproject/a2a-js/issues/721)) ([f8c33fa](https://github.com/a2aproject/a2a-js/commit/f8c33fa7d7a0a430685e5e853f5b259f6bdef284))
+* preserve historyLength=0 and reject invalid REST listTasks pageSize ([#685](https://github.com/a2aproject/a2a-js/issues/685)) ([32c1865](https://github.com/a2aproject/a2a-js/commit/32c18653f608646af585e07aabfd98712170464d))
+* reject empty task IDs with RequestMalformedError in getTask/cancelTask ([#629](https://github.com/a2aproject/a2a-js/issues/629)) ([71aae97](https://github.com/a2aproject/a2a-js/commit/71aae970a3187d8259c1c4eb08ac235f487c6876))
+* reject invalid ListTasks status filters with RequestMalformedError ([#631](https://github.com/a2aproject/a2a-js/issues/631)) ([a881fae](https://github.com/a2aproject/a2a-js/commit/a881faea5da2cd265f9dcac02c616b97de3bbb7f))
+* reject missing required extensions before mutating task history ([#690](https://github.com/a2aproject/a2a-js/issues/690)) ([3b4ef3f](https://github.com/a2aproject/a2a-js/commit/3b4ef3fac081ccb17f2957904b8e9585fcf33d25))
+* reject whitespace-only taskId on sendMessage ([#689](https://github.com/a2aproject/a2a-js/issues/689)) ([85227a0](https://github.com/a2aproject/a2a-js/commit/85227a011e70112d8eee7053845148f21cf96bf3))
+* return 404/-32001 for missing push notification configs ([#630](https://github.com/a2aproject/a2a-js/issues/630)) ([34f06e3](https://github.com/a2aproject/a2a-js/commit/34f06e3be3905970de7db24888f2d1c305a5a86c))
+* scope ExecutionEventBusManager by tenant and owner to match TaskStore ([#707](https://github.com/a2aproject/a2a-js/issues/707)) ([69d8899](https://github.com/a2aproject/a2a-js/commit/69d88990113cf42f9ac34e3fcde0c5a3c1ceae24))
+* stamp the resolved taskId onto sendMessage push configs ([#688](https://github.com/a2aproject/a2a-js/issues/688)) ([cfb19a8](https://github.com/a2aproject/a2a-js/commit/cfb19a8ef0ffc2da3d2c14361cdb3dd82069dfc8))
+
+## [1.1.0](https://github.com/a2aproject/a2a-js/compare/v1.0.1...v1.1.0) (2026-08-26)
+
+
+### Features
+
+* make event bus keep-alive states configurable ([#669](https://github.com/a2aproject/a2a-js/issues/669)) ([f844dad](https://github.com/a2aproject/a2a-js/commit/f844dad4d76e0f895c2d3a1d791db81ac59880fc)), closes [#620](https://github.com/a2aproject/a2a-js/issues/620)
+
+
+### Bug Fixes
+
+* Add serialization for listTasks input/output parameters. ([#610](https://github.com/a2aproject/a2a-js/issues/610)) ([c863497](https://github.com/a2aproject/a2a-js/commit/c86349797e62c030e46ab7af4fda14a96f50cde7))
+* clone push notification configs before storing ([#662](https://github.com/a2aproject/a2a-js/issues/662)) ([4d175a0](https://github.com/a2aproject/a2a-js/commit/4d175a0ebb274e6b01a2bb1f9f13d9cc372ed1da))
+* **compat/v0_3/translate:** add null and undefined checks to array and string fields ([#618](https://github.com/a2aproject/a2a-js/issues/618)) ([108736b](https://github.com/a2aproject/a2a-js/commit/108736b9bdde5a29c620ef0e25df714aac117def))
+* **deps:** replace `uuid` package with `crypto.randomUUID()` ([#665](https://github.com/a2aproject/a2a-js/issues/665)) ([636b060](https://github.com/a2aproject/a2a-js/commit/636b06027a315171b6b400f6edc96fdc9b0aa47a))
+* Do not filter tasks in ListTasks if task state is unspecified ([#622](https://github.com/a2aproject/a2a-js/issues/622)) ([1c6eb32](https://github.com/a2aproject/a2a-js/commit/1c6eb32487aab1d56b5685a13e62ab75d153cebb))
+* **errors:** global error branding via Symbol.hasInstance to fix instanceof checks across bundle entry points ([#612](https://github.com/a2aproject/a2a-js/issues/612)) ([cc33173](https://github.com/a2aproject/a2a-js/commit/cc33173bbd2343253b8544413ff685d801621cb1))
+* **scripts:** update generate script to use buf and remove obsolete generateTypes ([#653](https://github.com/a2aproject/a2a-js/issues/653)) ([8bf3cd3](https://github.com/a2aproject/a2a-js/commit/8bf3cd3b540e35dcb36c78be5c7f23d78a96c971))
+* **server:** send full Task on every v0.3 push trigger ([#658](https://github.com/a2aproject/a2a-js/issues/658)) ([b3afbe4](https://github.com/a2aproject/a2a-js/commit/b3afbe48ff71b7b46702805d24c32949d626957b))
+
 ## [1.0.1](https://github.com/a2aproject/a2a-js/compare/v1.0.0...v1.0.1) (2026-07-28)
 
 

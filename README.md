@@ -9,7 +9,7 @@
    <h2 align="center">
    <img src="https://raw.githubusercontent.com/a2aproject/A2A/refs/heads/main/docs/assets/a2a_logo/color/SVG/a2a_color.svg" width="800" alt="Agent2Agent Protocol Logo"/>
    </h2>
-   <h3 align="center">A JavaScript library that helps run agentic applications as A2AServers following the <a href="https://google-a2a.github.io/A2A">Agent2Agent (A2A) Protocol</a>.</h3>
+   <h3 align="center">A JavaScript library that helps run agentic applications as A2AServers following the <a href="https://a2a-protocol.org/">Agent2Agent (A2A) Protocol</a>.</h3>
 </html>
 
 <!-- markdownlint-enable no-inline-html -->
@@ -96,7 +96,7 @@ Each sample directory has its own `README.md` with run instructions.
 | [`authentication`](src/samples/authentication/)                                 | Server-side Bearer/JWT authentication using Passport, including a `UserBuilder` that propagates the authenticated user into the agent context. |
 | [`extensions`](src/samples/extensions/)                                         | A2A protocol extension implemented as an `AgentExecutor` decorator that adds metadata to outgoing events.                                      |
 | [`client/interceptors`](src/samples/client/interceptors/)                       | Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.                                   |
-| [`cli.ts`](src/samples/cli.ts)                                                  | Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with optional Google ADC authentication.                                       |
+| [`cli.ts`](src/samples/cli.ts)                                                  | Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with `--auth` / `--svc-param` header injection.                                |
 | [`agents/compat-v1-server`](src/samples/agents/compat-v1-server/)               | v1.0-native server with `legacyCompat: { enabled: true }` on every transport — JSON-RPC, REST, gRPC, agent card, and push notifications.       |
 | [`agents/compat-v1-client`](src/samples/agents/compat-v1-client/)               | v1.0-native client driving both the compat-aware server above and a hand-rolled mock v0.3 server in-process; pairs with `compat-v1-server`.    |
 
@@ -198,6 +198,26 @@ See the spec section
 and the [`push-notification-agent`](src/samples/agents/push-notification-agent/)
 sample (which includes a runnable webhook receiver).
 
+### Custom event bus and task store
+
+`TaskStore`, `ExecutionEventBus` and `ExecutionEventBusManager` are all
+constructor-injected into `DefaultRequestHandler`, so you can back them with a
+database, a cache, or a message broker instead of the in-process defaults.
+
+One caveat applies to a bus that does not deliver events synchronously. When the
+agent executor returns, the handler decides whether to tear that task's bus down
+from the last state it saw delivered, so a bus that batches or persists events
+before handing them to subscribers has shown the handler nothing by that point
+and its bus is released too early. Such a bus should implement the optional
+`settleByTaskId` on its manager, which is offered that decision first: return
+`true` to take ownership of the bus and settle it from your own drain, or
+`false` to let the handler apply its usual policy for that call.
+
+See the doc comments on
+[`ExecutionEventBusManager`](src/server/events/execution_event_bus_manager.ts)
+for the full contract, and `test/integration/delayed_event_bus.spec.ts` for a
+worked example against a bus that withholds every batch.
+
 ### Client customization
 
 `@a2a-js/sdk/client` exposes a transport-agnostic `CallInterceptor` interface
@@ -214,8 +234,8 @@ headers and retry on 401/403 responses.
 
 See the [`client/interceptors`](src/samples/client/interceptors/) sample for
 header injection + per-call `AbortSignal.timeout(...)`, and the
-[`cli.ts`](src/samples/cli.ts) sample for an `AuthenticationHandler` based on
-Google Application Default Credentials.
+[`cli.ts`](src/samples/cli.ts) sample for passing `--auth "Bearer $TOKEN"` as
+per-call `serviceParameters`.
 
 ### Authentication (server side)
 
@@ -271,8 +291,8 @@ end-to-end demonstration across every transport.
 
 ## License
 
-This project is licensed under the terms of the [Apache 2.0 License](https://raw.githubusercontent.com/google-a2a/a2a-python/refs/heads/main/LICENSE).
+This project is licensed under the terms of the [Apache 2.0 License](LICENSE).
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/google-a2a/a2a-js/blob/main/CONTRIBUTING.md) for contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.

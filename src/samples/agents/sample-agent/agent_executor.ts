@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
-
 import {
   Task,
   TaskState,
@@ -74,7 +72,7 @@ export class SampleAgentExecutor implements AgentExecutor {
           state: TaskState.TASK_STATE_WORKING,
           message: {
             role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
+            messageId: crypto.randomUUID(),
             parts: [
               {
                 content: { $case: 'text', value: 'Processing your question' },
@@ -119,7 +117,7 @@ export class SampleAgentExecutor implements AgentExecutor {
       }
 
       // 4. Publish artifact with the result
-      const artifactId = uuidv4();
+      const artifactId = crypto.randomUUID();
       const resultArtifact: Artifact = {
         artifactId: artifactId,
         name: 'Result',
