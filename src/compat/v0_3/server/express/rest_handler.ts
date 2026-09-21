@@ -377,6 +377,11 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
     asyncHandler(async (req, res) => {
       const context = await buildContext(req);
       const params = decodeTaskPushNotificationConfig(req.body);
+      const pathTaskId = req.params.taskId ?? '';
+      if (params.taskId && params.taskId !== pathTaskId) {
+        throw LegacyA2AError.invalidParams('taskId in the body must match the path');
+      }
+      params.taskId = pathTaskId;
       const result = await transportHandler.setTaskPushNotificationConfig(params, context);
       sendResponse(res, HTTP_STATUS.CREATED, context, encodeTaskPushNotificationConfig(result));
     })
