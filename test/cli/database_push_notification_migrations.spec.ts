@@ -226,10 +226,9 @@ for (const engine of ENGINES) {
       }
     }
 
-    beforeEach(async () => {
-      url = engine.freshUrl();
-      // SQLite gets a new file each time; the shared servers need the last run cleared.
-      await introspect(async (db) => {
+    /** Everything a test here can create, so the next one starts from nothing. */
+    const dropTables = () =>
+      introspect(async (db) => {
         for (const table of [
           TABLE,
           LEDGER_TABLE,
@@ -240,6 +239,11 @@ for (const engine of ENGINES) {
           await sql.raw(`drop table if exists ${table}`).execute(db);
         }
       });
+
+    beforeEach(async () => {
+      url = engine.freshUrl();
+      // SQLite gets a new file each time; the shared servers need the last run cleared.
+      await dropTables();
     });
 
     /**
@@ -509,33 +513,15 @@ for (const engine of ENGINES) {
     }
 
     describe('upgrade --sql', () => {
-      it('renders a script that builds the table the migration describes', async () => {
+      it('builds the table a real upgrade builds', async () => {
         await renderAndApply();
+        expect(await tableNames()).not.toContain(LOCK_TABLE);
+        const scripted = await structure();
 
-        expect(await tableNames()).toEqual(expect.arrayContaining([TABLE, LEDGER_TABLE]));
+        await dropTables();
+        await cli('upgrade', '--store', STORE_ID);
 
-        const columns = await columnsOf();
-        expect(columns.map((column) => column.name).sort()).toEqual([...ALL_COLUMNS].sort());
-
-        const nullable = Object.fromEntries(
-          columns.map((column) => [column.name, column.isNullable])
-        );
-        for (const column of KEY_COLUMNS) expect(nullable[column]).toBe(false);
-        expect(nullable.config_data).toBe(true);
-        expect(nullable.protocol_version).toBe(true);
-
-        const widths = await introspect((db) => engine.widths(db));
-        expect(widths.tenant).toBe(255);
-        expect(widths.owner).toBe(255);
-        expect(widths.task_id).toBe(36);
-        expect(widths.config_id).toBe(36);
-
-        expect(await introspect((db) => engine.keyOrder(db))).toEqual(KEY_COLUMNS);
-
-        const collations = await introspect((db) => engine.collations(db));
-        for (const column of KEY_COLUMNS) {
-          expect(collations[column]?.toLowerCase()).toBe(engine.binaryCollation.toLowerCase());
-        }
+        expect(scripted).toEqual(await structure());
       });
 
       it('renders the table --push-notification-configs-table-name asks for, and its own ledger', async () => {
