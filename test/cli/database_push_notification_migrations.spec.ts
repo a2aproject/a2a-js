@@ -20,6 +20,8 @@ const LOCK_TABLE = 'a2a_migrations_lock';
 const MIGRATION = '0001_create_push_notification_configs';
 /** The revision the CLI translates into Kysely's NO_MIGRATIONS. */
 const BASE = 'base';
+/** The other end of a history, which a revert starts at rather than stops at. */
+const LATEST = 'latest';
 const KEY_COLUMNS = ['tenant', 'owner', 'task_id', 'config_id'];
 const ALL_COLUMNS = [...KEY_COLUMNS, 'config_data', 'protocol_version'];
 
@@ -491,15 +493,14 @@ for (const engine of ENGINES) {
     /**
      * Renders the script and applies it.
      */
-    async function renderAndApply(...extra: string[]) {
+    async function renderAndApply(...args: string[]) {
       const { code, out } = await cli(
-        'upgrade',
+        ...args,
         '--sql',
         '--dialect',
         engine.name,
         '--store',
-        STORE_ID,
-        ...extra
+        STORE_ID
       );
       expect(code).toBe(0);
 
@@ -512,9 +513,9 @@ for (const engine of ENGINES) {
       });
     }
 
-    describe('upgrade --sql', () => {
+    describe('--sql', () => {
       it('builds the table a real upgrade builds', async () => {
-        await renderAndApply();
+        await renderAndApply('upgrade');
         expect(await tableNames()).not.toContain(LOCK_TABLE);
         const scripted = await structure();
 
@@ -525,7 +526,7 @@ for (const engine of ENGINES) {
       });
 
       it('renders the table --push-notification-configs-table-name asks for, and its own ledger', async () => {
-        await renderAndApply('--push-notification-configs-table-name', RENAMED_TABLE);
+        await renderAndApply('upgrade', '--push-notification-configs-table-name', RENAMED_TABLE);
 
         const names = await tableNames();
         expect(names).toEqual(expect.arrayContaining([RENAMED_TABLE, RENAMED_LEDGER_TABLE]));
@@ -537,7 +538,7 @@ for (const engine of ENGINES) {
       });
 
       it('leaves the online CLI reporting the migration applied, with nothing to do', async () => {
-        await renderAndApply();
+        await renderAndApply('upgrade');
 
         const status = await cli('status', '--store', STORE_ID);
         expect(status.out).toMatch(/applied\s+\d{4}-\d{2}-\d{2}T/);
@@ -546,6 +547,50 @@ for (const engine of ENGINES) {
         const upgrade = await cli('upgrade', '--store', STORE_ID);
         expect(upgrade.code).toBe(0);
         expect(upgrade.out).toContain('up to date');
+      });
+
+      /** The reverse of the test above: what a rendered revert leaves behind. */
+      it('renders a revert that drops the table and empties the ledger', async () => {
+        await cli('upgrade', '--store', STORE_ID);
+        expect(await tableNames()).toContain(TABLE);
+
+        await renderAndApply('downgrade', BASE);
+
+        expect(await tableNames()).not.toContain(TABLE);
+        const { out } = await cli('status', '--store', STORE_ID);
+        expect(out).toContain('pending');
+      });
+
+      it('refuses "base" as where a revert starts', async () => {
+        const { code, err } = await cli(
+          'downgrade',
+          BASE,
+          '--sql',
+          '--dialect',
+          engine.name,
+          '--store',
+          STORE_ID,
+          '--from',
+          BASE
+        );
+
+        expect(code).toBe(1);
+        expect(err).toContain('is where a downgrade ends, not where it starts');
+      });
+
+      it('refuses "latest" as where a revert stops', async () => {
+        const { code, err } = await cli(
+          'downgrade',
+          LATEST,
+          '--sql',
+          '--dialect',
+          engine.name,
+          '--store',
+          STORE_ID
+        );
+
+        expect(code).toBe(1);
+        expect(err).toContain('is where a downgrade starts, not where it stops');
       });
     });
   });
