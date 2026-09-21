@@ -694,6 +694,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: SendMessageRequest,
     context: ServerCallContext
   ): AsyncGenerator<StreamResponse, void, undefined> {
+    if (!this.agentCard.capabilities?.streaming) {
+      throw new UnsupportedOperationError('Streaming is not supported.');
+    }
+
     const incomingMessage = params.message;
     if (!incomingMessage?.messageId) {
       throw new RequestMalformedError('message.messageId is required for streaming.');
