@@ -226,10 +226,9 @@ for (const engine of ENGINES) {
       }
     }
 
-    beforeEach(async () => {
-      url = engine.freshUrl();
-      // SQLite gets a new file each time; the shared servers need the last run cleared.
-      await introspect(async (db) => {
+    /** Everything a test here can create, so the next one starts from nothing. */
+    const dropTables = () =>
+      introspect(async (db) => {
         for (const table of [
           TABLE,
           LEDGER_TABLE,
@@ -240,6 +239,11 @@ for (const engine of ENGINES) {
           await sql.raw(`drop table if exists ${table}`).execute(db);
         }
       });
+
+    beforeEach(async () => {
+      url = engine.freshUrl();
+      // SQLite gets a new file each time; the shared servers need the last run cleared.
+      await dropTables();
     });
 
     /**
@@ -482,6 +486,67 @@ for (const engine of ENGINES) {
       expect(err).toContain(MIGRATION);
       // The cause, not just the wrapper: without it the reason is lost.
       expect(err).toMatch(/exist/i);
+    });
+
+    /**
+     * Renders the script and applies it.
+     */
+    async function renderAndApply(...extra: string[]) {
+      const { code, out } = await cli(
+        'upgrade',
+        '--sql',
+        '--dialect',
+        engine.name,
+        '--store',
+        STORE_ID,
+        ...extra
+      );
+      expect(code).toBe(0);
+
+      const statements = out
+        .split(';')
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+      await introspect(async (db) => {
+        for (const statement of statements) await sql.raw(statement).execute(db);
+      });
+    }
+
+    describe('upgrade --sql', () => {
+      it('builds the table a real upgrade builds', async () => {
+        await renderAndApply();
+        expect(await tableNames()).not.toContain(LOCK_TABLE);
+        const scripted = await structure();
+
+        await dropTables();
+        await cli('upgrade', '--store', STORE_ID);
+
+        expect(scripted).toEqual(await structure());
+      });
+
+      it('renders the table --push-notification-configs-table-name asks for, and its own ledger', async () => {
+        await renderAndApply('--push-notification-configs-table-name', RENAMED_TABLE);
+
+        const names = await tableNames();
+        expect(names).toEqual(expect.arrayContaining([RENAMED_TABLE, RENAMED_LEDGER_TABLE]));
+        expect(names).not.toContain(TABLE);
+        expect(names).not.toContain(LEDGER_TABLE);
+        expect((await columnsOf(RENAMED_TABLE)).map((column) => column.name).sort()).toEqual(
+          [...ALL_COLUMNS].sort()
+        );
+      });
+
+      it('leaves the online CLI reporting the migration applied, with nothing to do', async () => {
+        await renderAndApply();
+
+        const status = await cli('status', '--store', STORE_ID);
+        expect(status.out).toMatch(/applied\s+\d{4}-\d{2}-\d{2}T/);
+        expect(status.out).not.toContain('pending');
+
+        const upgrade = await cli('upgrade', '--store', STORE_ID);
+        expect(upgrade.code).toBe(0);
+        expect(upgrade.out).toContain('up to date');
+      });
     });
   });
 }

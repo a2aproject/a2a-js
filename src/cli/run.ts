@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 
+import type { DialectName } from '../server/database/dialect.js';
 import {
   PUSH_NOTIFICATION_STORE_ID,
   pushNotificationStoreMigrations,
@@ -15,6 +16,8 @@ import {
   rollbackStore,
   storeState,
 } from './migrator.js';
+import { DIALECT_NAMES } from './offline.js';
+import { LATEST, renderMigrationScript } from './sql_script.js';
 
 /**
  * Every store this CLI manages, against the table names it is given. Those are keyed by
@@ -42,7 +45,7 @@ const USAGE = `a2a-db — schema management for @a2a-js/sdk database stores
 
 Usage:
   a2a-db status    [<options>]
-  a2a-db upgrade   [<options>]
+  a2a-db upgrade   [<options>] [--sql --dialect <name> [--from <revision>]]
   a2a-db downgrade [<options>] [<to>]
   a2a-db --help
 
@@ -55,22 +58,32 @@ Usage:
              migration name reverts down to it, leaving that one applied.
              Whatever the reverted migrations created is dropped with it.
 
-Options:
+Options, for every command:
   --url <database-url>    Defaults to DATABASE_URL.
   --store <id>            Repeatable. Omit to cover every store.
   --<store-id>-table-name <name>
                           Renames one store's table:
 ${STORE_IDS.map((id) => `                            --${tableNameFlag(id)}`).join('\n')}
 
+Options, for upgrade --sql only:
+  --sql                   Print the statements instead of running them. Connects
+                          to nothing, so --url goes unread.
+  --dialect <name>        Required. Which SQL to write: ${DIALECT_NAMES.join(', ')}.
+  --from <revision>       The migration already applied. Defaults to "${BASE}", an
+                          empty database.
+
 Each store keeps its own ledger, so they upgrade and revert independently:
 ${STORE_IDS.join(', ')}.
 
 A store renamed here must be given the same name in the code that reads it, as
 the "tableName" option of DatabaseTaskStore or DatabasePushNotificationStore.
-Its ledger follows the table, as a2a_<name>_migrations, so two deployments can
-share one database without reading each other's migrations as their own:
+Its ledger follows the table, as a2a_<name>_migrations:
 
   a2a-db upgrade --${tableNameFlag(TASK_STORE_ID)} agent_tasks
+
+The rendered script follows the rename too, table and derived ledger alike:
+
+  a2a-db upgrade --${tableNameFlag(TASK_STORE_ID)} agent_tasks --sql --dialect sqlite
 
 The database URL comes from --url, or from DATABASE_URL. Its scheme selects the
 driver, which you install yourself:
@@ -78,11 +91,26 @@ driver, which you install yourself:
   postgresql://…   needs pg              (or postgres://)
   mysql://…        needs mysql2
   sqlite:./a2a.db  needs better-sqlite3
+
+--sql prints the statements upgrade would run instead of running them: for
+review, or for a database this CLI cannot reach. Nothing is connected to and no
+driver is loaded, which is why --dialect has to name the engine and --url goes
+unread. Cloudflare D1 speaks sqlite.
+
+Rendering always ends at the latest migration. It cannot discover where the
+database already starts, having read nothing, so --from names the migration
+applied there; omit it for an empty database:
+
+  a2a-db upgrade --sql --dialect sqlite
+  a2a-db upgrade --sql --dialect postgres --from 0001_create_tasks
 `;
 
 const OPTIONS = {
   url: { type: 'string' },
   store: { type: 'string', multiple: true },
+  sql: { type: 'boolean' },
+  dialect: { type: 'string' },
+  from: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
   // One per store, from the same source the reader below uses, so a new store gets its
   // flag and the two cannot name it differently.
@@ -107,6 +135,37 @@ function tableNames(values: Readonly<Record<string, unknown>>): Readonly<Record<
   }
 
   return named;
+}
+
+/**
+ * Which SQL to write. Named outright rather than read off a URL, since rendering never
+ * connects and the URL of a database it is not talking to says nothing binding.
+ */
+function resolveDialect(requested: string | undefined): DialectName {
+  if (requested === undefined) {
+    throw new Error(`--sql needs --dialect, one of: ${DIALECT_NAMES.join(', ')}.`);
+  }
+  if ((DIALECT_NAMES as readonly string[]).includes(requested)) return requested as DialectName;
+  throw new Error(`Unknown dialect "${requested}". Expected one of: ${DIALECT_NAMES.join(', ')}.`);
+}
+
+/**
+ * `base` fits any store, but a migration name belongs to one store's history, so naming
+ * one has to say which store it means.
+ */
+function checkRevision(revision: string, stores: readonly StoreMigrations[]): void {
+  if (revision === BASE) return;
+  if (revision === LATEST) {
+    throw new Error(
+      `"${LATEST}" is where rendering ends, not where it starts. --from names the ` +
+        `migration already applied, or "${BASE}" for an empty database.`
+    );
+  }
+  if (stores.length === 1) return;
+  throw new Error(
+    `"${revision}" is a migration name, which belongs to a single store's history, so it ` +
+      `needs exactly one --store. Available: ${STORE_IDS.join(', ')}.`
+  );
 }
 
 /**
@@ -165,6 +224,51 @@ export async function run(
     stores = selectStores(allStoreMigrations(tableNames(parsed.values)), parsed.values.store);
   } catch (error) {
     output.error((error as Error).message);
+    return 1;
+  }
+
+  if (command === 'upgrade' && target !== undefined) {
+    // Ahead of --sql, so rendering refuses a revision too rather than quietly starting
+    // from base. Silently ignoring it would read as having honoured it.
+    output.error(
+      `upgrade takes no positional argument ("${target}"). --sql renders from a ` +
+        `revision with --from.`
+    );
+    return 1;
+  }
+
+  if (parsed.values.sql) {
+    if (command !== 'upgrade') {
+      // Both of the others answer from what the ledger already holds, which is the one
+      // thing rendering never reads.
+      output.error(`--sql renders an upgrade; "${command}" works from the ledger.`);
+      return 1;
+    }
+    try {
+      const from = parsed.values.from ?? BASE;
+      checkRevision(from, stores);
+      output.log(
+        await renderMigrationScript({
+          dialect: resolveDialect(parsed.values.dialect),
+          stores,
+          from,
+        })
+      );
+    } catch (error) {
+      output.error((error as Error).message);
+      return 1;
+    }
+    return 0;
+  }
+  if (parsed.values.dialect !== undefined) {
+    // Connecting settles the engine, so accepting --dialect would invite it to disagree.
+    output.error('--dialect only applies with --sql; a connected database names its own.');
+    return 1;
+  }
+  if (parsed.values.from !== undefined) {
+    // The ledger records where a reachable database got to, so asserting it would only
+    // let the two disagree.
+    output.error('--from only applies with --sql; a connected database has a ledger.');
     return 1;
   }
 
