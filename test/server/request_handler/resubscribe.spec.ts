@@ -95,7 +95,7 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
     await taskStore.save(persisted, serverContext);
 
     // Sanity: no bus is registered for this task before resubscribe.
-    expect(eventBusManager.getByTaskId(taskId)).toBeUndefined();
+    expect(eventBusManager.getByTaskId(taskId, serverContext)).toBeUndefined();
 
     const events: StreamResponse[] = [];
     for await (const event of handler.resubscribe({ id: taskId, tenant: '' }, serverContext)) {
@@ -181,7 +181,7 @@ describe('DefaultRequestHandler.resubscribe (§3.1.6)', () => {
     const persisted = makeTask(taskId, TaskState.TASK_STATE_WORKING, contextId);
     await taskStore.save(persisted, serverContext);
 
-    const bus: ExecutionEventBus = eventBusManager.createOrGetByTaskId(taskId);
+    const bus: ExecutionEventBus = eventBusManager.createOrGetByTaskId(taskId, serverContext);
 
     const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverContext);
     const iterator = generator[Symbol.asyncIterator]();

@@ -26,7 +26,7 @@ import {
   StreamResponse,
   ListTasksRequest,
   ListTasksResponse,
-} from '../../types/pb/a2a.js';
+} from '../../types/index.js';
 import { JSON_CONTENT_TYPE } from '../../constants.js';
 import { LegacyJsonRpcTransport } from '../../compat/v0_3/client/index.js';
 import { pickMatchingInterface } from './pick_interface.js';

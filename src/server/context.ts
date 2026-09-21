@@ -90,7 +90,7 @@ export class ServerCallContext {
   private _requestedExtensions?: Extensions;
   private readonly _user?: User;
   private readonly _requestedVersion: string;
-  private readonly _tenant?: string;
+  private _tenant?: string;
   private _activatedExtensions?: Extensions;
   private readonly _state: Map<string, unknown>;
 
@@ -104,6 +104,20 @@ export class ServerCallContext {
 
   get tenant(): string | undefined {
     return this._tenant;
+  }
+
+  /**
+   * Sets the tenant resolved by a transport without replacing this context.
+   * Keeping the instance preserves custom state, subclasses, and extension
+   * activations observed by the response layer.
+   *
+   * @throws {Error} If a tenant has already been set, including by the constructor.
+   */
+  public setTenant(tenant: string) {
+    if (this._tenant !== undefined) {
+      throw new Error('Tenant is already set.');
+    }
+    this._tenant = tenant;
   }
 
   get user(): User | undefined {
