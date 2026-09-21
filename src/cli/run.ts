@@ -17,6 +17,7 @@ import {
   storeState,
 } from './migrator.js';
 import { DIALECT_NAMES } from './offline.js';
+import type { MigrationDirection } from './sql_script.js';
 import { LATEST, renderMigrationScript } from './sql_script.js';
 
 /**
@@ -46,7 +47,7 @@ const USAGE = `a2a-db — schema management for @a2a-js/sdk database stores
 Usage:
   a2a-db status    [<options>]
   a2a-db upgrade   [<options>] [--sql --dialect <name> [--from <revision>]]
-  a2a-db downgrade [<options>] [<to>]
+  a2a-db downgrade [<options>] [<to>] [--sql --dialect <name> [--from <revision>]]
   a2a-db --help
 
   status     Lists each migration and whether the ledger has recorded it. Changes
@@ -65,12 +66,14 @@ Options, for every command:
                           Renames one store's table:
 ${STORE_IDS.map((id) => `                            --${tableNameFlag(id)}`).join('\n')}
 
-Options, for upgrade --sql only:
+Options, for --sql only:
   --sql                   Print the statements instead of running them. Connects
-                          to nothing, so --url goes unread.
+                          to nothing, so --url goes unread. upgrade and downgrade
+                          only; status has nothing to render.
   --dialect <name>        Required. Which SQL to write: ${DIALECT_NAMES.join(', ')}.
-  --from <revision>       The migration already applied. Defaults to "${BASE}", an
-                          empty database.
+  --from <revision>       Where the database already is. Defaults to "${BASE}" for
+                          upgrade and "${LATEST}" for downgrade. The one thing the
+                          online command reads from the ledger instead.
 
 Each store keeps its own ledger, so they upgrade and revert independently:
 ${STORE_IDS.join(', ')}.
@@ -92,17 +95,22 @@ driver, which you install yourself:
   mysql://…        needs mysql2
   sqlite:./a2a.db  needs better-sqlite3
 
---sql prints the statements upgrade would run instead of running them: for
+--sql prints the statements a command would run instead of running them: for
 review, or for a database this CLI cannot reach. Nothing is connected to and no
 driver is loaded, which is why --dialect has to name the engine and --url goes
 unread. Cloudflare D1 speaks sqlite.
 
-Rendering always ends at the latest migration. It cannot discover where the
-database already starts, having read nothing, so --from names the migration
-applied there; omit it for an empty database:
+Having read nothing, it cannot discover where the database already is, so --from
+names the migration applied there; it defaults to "${BASE}" for upgrade and
+"${LATEST}" for downgrade. Both ends otherwise default to what the online command
+does: an upgrade ends at the latest migration, and a revert stops where <to>
+says, or one migration back when it says nothing. Naming a migration picks
+one store's history, so it needs one --store.
 
   a2a-db upgrade --sql --dialect sqlite
-  a2a-db upgrade --sql --dialect postgres --from 0001_create_tasks
+  a2a-db upgrade --sql --dialect postgres --store ${TASK_STORE_ID} --from <revision>
+  a2a-db downgrade --sql --dialect sqlite
+  a2a-db downgrade <revision> --sql --dialect mysql --store ${TASK_STORE_ID}
 `;
 
 const OPTIONS = {
@@ -150,15 +158,26 @@ function resolveDialect(requested: string | undefined): DialectName {
 }
 
 /**
- * `base` fits any store, but a migration name belongs to one store's history, so naming
- * one has to say which store it means.
+ * `base` and `latest` apply across every store, but a migration name belongs to a
+ * single store's history and requires `--store`. Which values are accepted depends on
+ * the command: an upgrade starts at `base`, while a revert starts at `latest` and stops
+ * at `base`.
  */
-function checkRevision(revision: string, stores: readonly StoreMigrations[]): void {
-  if (revision === BASE) return;
-  if (revision === LATEST) {
+function checkRevision(
+  revision: string,
+  stores: readonly StoreMigrations[],
+  accepted: readonly string[]
+): void {
+  if (accepted.includes(revision)) return;
+  // Ahead of the --store check, so a name no store has is reported as unknown rather than
+  // as ambiguous, which would advise a --store that cannot help.
+  if (!stores.some((store) => migrationNames(store).includes(revision))) {
+    const histories = stores
+      .map((store) => `${store.id} (${migrationNames(store).join(', ')})`)
+      .join(', ');
     throw new Error(
-      `"${LATEST}" is where rendering ends, not where it starts. --from names the ` +
-        `migration already applied, or "${BASE}" for an empty database.`
+      `"${revision}" is not a migration. Expected ` +
+        `${accepted.map((name) => `"${name}"`).join(', ')} or one of: ${histories}.`
     );
   }
   if (stores.length === 1) return;
@@ -166,6 +185,42 @@ function checkRevision(revision: string, stores: readonly StoreMigrations[]): vo
     `"${revision}" is a migration name, which belongs to a single store's history, so it ` +
       `needs exactly one --store. Available: ${STORE_IDS.join(', ')}.`
   );
+}
+
+/**
+ * Where a range starts. `base` and `latest` name the ends of a history, and neither run
+ * can start where it would stop: an upgrade runs toward `latest`, a revert away from it.
+ * A migration name carries no such direction, so it fits either end.
+ */
+function checkStart(direction: MigrationDirection, from: string): void {
+  if (direction === 'up') {
+    if (from !== LATEST) return;
+    throw new Error(
+      `"${LATEST}" is where an upgrade ends, not where it starts. --from names the ` +
+        `migration already applied, or "${BASE}" for an empty database.`
+    );
+  }
+  if (from === BASE) {
+    throw new Error(
+      `"${BASE}" is where a downgrade ends, not where it starts. --from names the ` +
+        `migration already applied, or "${LATEST}" for a fully migrated database.`
+    );
+  }
+}
+
+/**
+ * Where a revert stops: `base` or a migration name, never `latest`, which is where one
+ * starts. Online and rendered both come through here, so a bad destination is answered
+ * the same way either way.
+ */
+function checkDestination(target: string, stores: readonly StoreMigrations[]): void {
+  if (target === LATEST) {
+    throw new Error(
+      `"${LATEST}" is where a downgrade starts, not where it stops. Pass "${BASE}" or a ` +
+        `migration name.`
+    );
+  }
+  checkRevision(target, stores, [BASE]);
 }
 
 /**
@@ -238,20 +293,29 @@ export async function run(
   }
 
   if (parsed.values.sql) {
-    if (command !== 'upgrade') {
-      // Both of the others answer from what the ledger already holds, which is the one
-      // thing rendering never reads.
-      output.error(`--sql renders an upgrade; "${command}" works from the ledger.`);
+    if (command === 'status') {
+      // status answers from what the ledger already holds, which is the one thing
+      // rendering never reads.
+      output.error('--sql renders a migration; status only reports what the ledger holds.');
       return 1;
     }
+    // Both ends default to what the online command does: an upgrade runs from wherever
+    // the database is to the latest migration, and a bare downgrade reverts one.
+    const upgrading = command === 'upgrade';
+    const direction: MigrationDirection = upgrading ? 'up' : 'down';
+    const from = parsed.values.from ?? (upgrading ? BASE : LATEST);
+    const to = upgrading ? LATEST : target;
     try {
-      const from = parsed.values.from ?? BASE;
-      checkRevision(from, stores);
+      checkStart(direction, from);
+      checkRevision(from, stores, [direction === 'up' ? BASE : LATEST]);
+      if (target !== undefined) checkDestination(target, stores);
       output.log(
         await renderMigrationScript({
           dialect: resolveDialect(parsed.values.dialect),
           stores,
           from,
+          to,
+          direction,
         })
       );
     } catch (error) {
@@ -272,20 +336,11 @@ export async function run(
     return 1;
   }
 
-  if (command === 'downgrade' && target !== undefined && target !== BASE) {
-    // "base" suits any store; a migration name belongs to one store's history.
-    if (stores.length !== 1) {
-      output.error(
-        `Reverting to "${target}" needs exactly one --store, since a migration name ` +
-          `belongs to a single store's history. Available: ${STORE_IDS.join(', ')}.`
-      );
-      return 1;
-    }
-    if (!migrationNames(stores[0]).includes(target)) {
-      output.error(
-        `"${target}" is not a migration of the ${stores[0].id} store. ` +
-          `Expected "${BASE}" or one of: ${migrationNames(stores[0]).join(', ')}.`
-      );
+  if (command === 'downgrade' && target !== undefined) {
+    try {
+      checkDestination(target, stores);
+    } catch (error) {
+      output.error((error as Error).message);
       return 1;
     }
   }
