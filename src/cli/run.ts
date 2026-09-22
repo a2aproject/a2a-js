@@ -50,67 +50,71 @@ Usage:
   a2a-db downgrade [<options>] [<to>] [--sql --dialect <name> [--from <revision>]]
   a2a-db --help
 
-  status     Lists each migration and whether the ledger has recorded it. Changes
-             nothing.
-  upgrade    Applies any migrations the database has not yet run. Safe to re-run:
-             migrations already recorded in the ledger are skipped.
-  downgrade  Reverts the most recent migration of each selected store. <to> says
-             where to stop instead: "base" reverts every migration, and a
-             migration name reverts down to it, leaving that one applied.
-             Whatever the reverted migrations created is dropped with it.
+Commands:
+  status     Show migration status for each store.
+  upgrade    Apply pending migrations. Safe to re-run.
+  downgrade  Revert migrations. Reverts the latest migration by default.
+             Pass <to> as a migration name to stop at (leaving it applied),
+             or "${BASE}" to revert all.
 
-Options, for every command:
-  --url <database-url>    Defaults to DATABASE_URL.
-  --store <id>            Repeatable. Omit to cover every store.
+Options:
+  --url <url>             Database URL (postgresql://, postgres://, mysql://, sqlite:).
+                          Defaults to the DATABASE_URL environment variable.
+  --store <id>            Target a specific store (repeatable). Default: all stores.
+                          Required when naming a migration.
+                          Available: ${STORE_IDS.join(', ')}.
   --<store-id>-table-name <name>
-                          Renames one store's table:
+                          Override a store's table name:
 ${STORE_IDS.map((id) => `                            --${tableNameFlag(id)}`).join('\n')}
 
-Options, for --sql only:
-  --sql                   Print the statements instead of running them. Connects
-                          to nothing, so --url goes unread. upgrade and downgrade
-                          only; status has nothing to render.
-  --dialect <name>        Required. Which SQL to write: ${DIALECT_NAMES.join(', ')}.
-  --from <revision>       Where the database already is. Defaults to "${BASE}" for
-                          upgrade and "${LATEST}" for downgrade. The one thing the
-                          online command reads from the ledger instead.
+Options (--sql only):
+  --sql                   Print SQL statements instead of connecting to a database.
+  --dialect <name>        Target SQL dialect: ${DIALECT_NAMES.join(', ')}.
+                          Required with --sql.
+  --from <revision>       Starting point ("${BASE}", "${LATEST}", or a migration name).
+                          Defaults to "${BASE}" for upgrade, "${LATEST}" for downgrade.
 
-Each store keeps its own ledger, so they upgrade and revert independently:
-${STORE_IDS.join(', ')}.
+Drivers:
+  Driver packages must be installed separately:
+    postgresql://…  -> npm install pg
+    mysql://…       -> npm install mysql2
+    sqlite:…        -> npm install better-sqlite3
 
-A store renamed here must be given the same name in the code that reads it, as
-the "tableName" option of DatabaseTaskStore or DatabasePushNotificationStore.
-Its ledger follows the table, as a2a_<name>_migrations:
+Offline (--sql):
+  Generates raw SQL for review or environments where the CLI cannot connect
+  directly (such as Cloudflare D1, which uses the sqlite dialect).
+  Does not connect to a database; ignores --url.
 
-  a2a-db upgrade --${tableNameFlag(TASK_STORE_ID)} agent_tasks
+  The rendered SQL updates the migration ledger alongside the tables. Once
+  applied, online commands see the database as if the migration ran online.
 
-The rendered script follows the rename too, table and derived ledger alike:
+Table Renaming:
+  When using custom table names, pass the name configured in your store.
+  The migration ledger table is renamed automatically to match.
 
-  a2a-db upgrade --${tableNameFlag(TASK_STORE_ID)} agent_tasks --sql --dialect sqlite
+Examples:
+  # Online migrations:
+  a2a-db upgrade
+  a2a-db downgrade
+  a2a-db downgrade base
 
-The database URL comes from --url, or from DATABASE_URL. Its scheme selects the
-driver, which you install yourself:
-
-  postgresql://…   needs pg              (or postgres://)
-  mysql://…        needs mysql2
-  sqlite:./a2a.db  needs better-sqlite3
-
---sql prints the statements a command would run instead of running them: for
-review, or for a database this CLI cannot reach. Nothing is connected to and no
-driver is loaded, which is why --dialect has to name the engine and --url goes
-unread. Cloudflare D1 speaks sqlite.
-
-Having read nothing, it cannot discover where the database already is, so --from
-names the migration applied there; it defaults to "${BASE}" for upgrade and
-"${LATEST}" for downgrade. Both ends otherwise default to what the online command
-does: an upgrade ends at the latest migration, and a revert stops where <to>
-says, or one migration back when it says nothing. Naming a migration picks
-one store's history, so it needs one --store.
-
+  # Generate SQL for an empty database (defaults to --from base):
   a2a-db upgrade --sql --dialect sqlite
+
+  # Generate SQL from a specific migration forward:
   a2a-db upgrade --sql --dialect postgres --store ${TASK_STORE_ID} --from <revision>
+
+  # Generate SQL to revert the last migration:
   a2a-db downgrade --sql --dialect sqlite
-  a2a-db downgrade <revision> --sql --dialect mysql --store ${TASK_STORE_ID}
+
+  # Generate SQL to revert all migrations down to base:
+  a2a-db downgrade base --sql --dialect sqlite
+
+  # Generate SQL to revert to base from a specific migration:
+  a2a-db downgrade base --sql --dialect mysql --store ${TASK_STORE_ID} --from <revision>
+
+  # Custom table name:
+  a2a-db upgrade --${tableNameFlag(TASK_STORE_ID)} agent_tasks
 `;
 
 const OPTIONS = {
