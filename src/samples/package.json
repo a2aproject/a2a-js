@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "a2a:cli": "tsx cli.ts",
+    "a2a-db": "tsx ../cli/a2a_db.ts",
     "agents:movie-agent": "tsx agents/movie-agent/index.ts",
     "agents:sample-agent": "tsx agents/sample-agent/index.ts",
     "agents:extension-agent": "tsx extensions/index.ts",
@@ -16,6 +17,9 @@
     "agents:cancellable-client": "tsx agents/cancellable-agent/client.ts",
     "agents:compat-v1-server": "tsx agents/compat-v1-server/index.ts",
     "agents:compat-v1-client": "tsx agents/compat-v1-client/index.ts",
+    "agents:database-agent": "tsx agents/database-agent/index.ts",
+    "agents:database-webhook": "tsx agents/database-agent/webhook.ts",
+    "agents:database-client": "tsx agents/database-agent/client.ts",
     "client:interceptors": "tsx client/interceptors/index.ts"
   },
   "devDependencies": {
@@ -23,8 +27,10 @@
     "@types/express": "^5.0.5",
     "@types/passport": "^1.0.17",
     "@types/passport-jwt": "^4.0.1",
+    "better-sqlite3": "^13.0.3",
     "express": "^5.1.0",
     "genkit": "^1.8.0",
+    "kysely": "^0.29.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "tsx": "^4.22.4"
