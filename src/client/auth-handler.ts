@@ -49,22 +49,31 @@ export function createAuthenticatingFetchWithRetry(
       headers: mergeHeaders(authHeaders, init?.headers),
     };
 
-    let response = await fetchImpl(url, mergedInit);
+    // Fetch consumes Request bodies, so reserve the retry copy before sending.
+    const retryInput = url instanceof Request ? url.clone() : url;
+    try {
+      let response = await fetchImpl(url, mergedInit);
 
-    const updatedHeaders = await authHandler.shouldRetryWithHeaders(mergedInit, response);
-    if (updatedHeaders) {
-      const retryInit: RequestInit = {
-        ...(init || {}),
-        headers: mergeHeaders(updatedHeaders, init?.headers),
-      };
-      response = await fetchImpl(url, retryInit);
+      const updatedHeaders = await authHandler.shouldRetryWithHeaders(mergedInit, response);
+      if (updatedHeaders) {
+        const retryInit: RequestInit = {
+          ...(init || {}),
+          headers: mergeHeaders(updatedHeaders, init?.headers),
+        };
+        response = await fetchImpl(retryInput, retryInit);
 
-      if (response.ok && authHandler.onSuccessfulRetry) {
-        await authHandler.onSuccessfulRetry(updatedHeaders);
+        if (response.ok && authHandler.onSuccessfulRetry) {
+          await authHandler.onSuccessfulRetry(updatedHeaders);
+        }
+      }
+
+      return response;
+    } finally {
+      if (retryInput instanceof Request && !retryInput.bodyUsed) {
+        // Do not await cancellation: a tee branch can wait for the other reader.
+        void retryInput.body?.cancel().catch(() => {});
       }
     }
-
-    return response;
   }
 
   // Preserve fetch's own properties so the wrapped function is a drop-in.
