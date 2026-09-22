@@ -140,6 +140,21 @@ describe('authenticating fetch Request body retries', () => {
     ]);
   });
 
+  it('allows a consumed Request when RequestInit supplies a fresh body', async () => {
+    const request = new Request(url, { method: 'POST', body: 'original' });
+    await request.text();
+    const authenticatedFetch = createAuthenticatingFetchWithRetry(fetch, {
+      headers: async () => ({ Authorization: 'Bearer initial' }),
+      shouldRetryWithHeaders: async () => ({ Authorization: 'Bearer refreshed' }),
+    });
+
+    const response = await authenticatedFetch(request, { body: 'replacement' });
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(received.map(({ body }) => body)).toEqual(['replacement', 'replacement']);
+  });
+
   it('returns a failed retry without a third attempt or a success notification', async () => {
     responseStatuses = [401, 401];
     const onSuccessfulRetry = vi.fn(async () => {});

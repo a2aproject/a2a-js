@@ -49,8 +49,8 @@ export function createAuthenticatingFetchWithRetry(
       headers: mergeHeaders(authHeaders, init?.headers),
     };
 
-    // Fetch consumes Request bodies, so reserve the retry copy before sending.
-    const retryInput = url instanceof Request ? url.clone() : url;
+    // Reserve a copy before Fetch consumes the Request body, unless init replaces it.
+    const retryInput = url instanceof Request && init?.body == null ? url.clone() : url;
     try {
       let response = await fetchImpl(url, mergedInit);
 
@@ -69,7 +69,7 @@ export function createAuthenticatingFetchWithRetry(
 
       return response;
     } finally {
-      if (retryInput instanceof Request && !retryInput.bodyUsed) {
+      if (retryInput !== url && retryInput instanceof Request && !retryInput.bodyUsed) {
         // Do not await cancellation: a tee branch can wait for the other reader.
         void retryInput.body?.cancel().catch(() => {});
       }
