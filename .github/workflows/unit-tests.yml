@@ -20,12 +20,12 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        # 0.28 Kysely is the last line supporting Node 20, and the only one without `kysely/migration`.
+        # 0.28 Kysely and better-sqlite3 12 are the last lines supporting Node 20.
         include:
           - node-version: 20
             kysely: '0.28.17'
-          # No `kysely`: these take the lockfile version, leaving no second place to
-          # bump when it moves.
+            better-sqlite3: '12'
+          # No overrides: these take the lockfile versions (Kysely 0.29, SQLite 13).
           - node-version: 22
           - node-version: 24
     # The migration suite runs against every engine it supports.
@@ -68,6 +68,8 @@ jobs:
     # matrix names no version.
     - if: matrix.kysely
       run: npm install --no-save kysely@${{ matrix.kysely }}
+    - if: matrix['better-sqlite3']
+      run: npm install --no-save better-sqlite3@${{ matrix['better-sqlite3'] }}
     - run: npm test
     # Run apart, and serially: the suites drop and recreate the same tables.
     # The suites skip an engine they cannot reach. Every engine is reachable here, so a
