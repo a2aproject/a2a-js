@@ -36,11 +36,7 @@ import { AddressInfo } from 'net';
 import { UserBuilder } from '../src/server/express/common.js';
 import { A2AService, grpcService } from '../src/server/grpc/index.js';
 import { GrpcTransportFactory } from '../src/client/transports/grpc/grpc_transport.js';
-import { JsonRpcTransportFactory } from '../src/client/transports/json_rpc_transport.js';
-import { RestTransportFactory } from '../src/client/transports/rest_transport.js';
-import type { TransportFactory } from '../src/client/transports/transport.js';
 import { ServiceParameters, withA2AVersion } from '../src/client/service-parameters.js';
-import { A2A_PROTOCOL_VERSION } from '../src/constants.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -58,14 +54,6 @@ interface TransportConfig {
   name: string;
   preferredTransport: string;
   serverPath?: string;
-  /**
-   * The transport behind the `Client` for this binding. A few behaviours are
-   * invisible from the `Client`, which implements fallbacks of its own —
-   * `sendMessageStream` degrades to `sendMessage` against an agent that does
-   * not advertise streaming, so the server's refusal never surfaces. Driving
-   * the transport directly is what shows the error reaching the wire.
-   */
-  transportFactory: () => TransportFactory;
 }
 
 const transportConfigs: TransportConfig[] = [
@@ -73,18 +61,15 @@ const transportConfigs: TransportConfig[] = [
     name: 'JSON-RPC',
     preferredTransport: 'JSONRPC',
     serverPath: '/a2a/rpc',
-    transportFactory: () => new JsonRpcTransportFactory(),
   },
   {
     name: 'REST',
     preferredTransport: 'HTTP+JSON',
     serverPath: '/a2a/rest',
-    transportFactory: () => new RestTransportFactory(),
   },
   {
     name: 'GRPC',
     preferredTransport: 'GRPC',
-    transportFactory: () => new GrpcTransportFactory(),
   },
 ];
 
@@ -568,12 +553,9 @@ describe('Client E2E tests', () => {
         it('should return UnsupportedOperationError from sendMessageStream when streaming is disabled', async () => {
           agentCard.capabilities!.streaming = false;
 
-          const transport = await transportConfig
-            .transportFactory()
-            .create(agentCard.supportedInterfaces![0].url, agentCard);
-
+          const client = await clientFactory.createFromAgentCard(agentCard);
           await expect(
-            transport
+            client.transport
               .sendMessageStream(
                 {
                   tenant: '',
@@ -582,7 +564,9 @@ describe('Client E2E tests', () => {
                   metadata: {},
                 },
                 {
-                  serviceParameters: ServiceParameters.create(withA2AVersion(A2A_PROTOCOL_VERSION)),
+                  serviceParameters: ServiceParameters.create(
+                    withA2AVersion(client.protocolVersion)
+                  ),
                 }
               )
               .next()
