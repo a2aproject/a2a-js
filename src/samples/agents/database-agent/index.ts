@@ -87,10 +87,16 @@ async function main() {
     );
   }
 
-  // 3. Create persistent stores backed by the database
-  const taskStore = new DatabaseTaskStore(db as unknown as Kysely<TaskDatabase>);
+  // 3. Create persistent stores backed by the database.
+  // Cast via ConstructorParameters is needed here because this sample is in an isolated
+  // sub-workspace with its own node_modules. TypeScript sees two different Kysely class
+  // declarations (root vs. samples) and rejects mixing them due to Kysely's private (#private)
+  // members. In a standalone project with a single node_modules, pass `db` directly without casts.
+  const taskStore = new DatabaseTaskStore(
+    db as unknown as ConstructorParameters<typeof DatabaseTaskStore>[0]
+  );
   const pushNotificationStore = new DatabasePushNotificationStore(
-    db as unknown as Kysely<PushNotificationDatabase>
+    db as unknown as ConstructorParameters<typeof DatabasePushNotificationStore>[0]
   );
   const pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
 
