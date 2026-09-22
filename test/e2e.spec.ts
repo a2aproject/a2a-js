@@ -43,7 +43,7 @@ import { ServiceParameters, withA2AVersion } from '../src/client/service-paramet
 import { A2A_PROTOCOL_VERSION } from '../src/constants.js';
 
 class TestAgentExecutor implements AgentExecutor {
-  constructor(public events: AgentExecutionEvent[] = []) { }
+  constructor(public events: AgentExecutionEvent[] = []) {}
 
   async execute(_requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     for (const message of this.events) {

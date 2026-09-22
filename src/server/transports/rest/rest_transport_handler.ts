@@ -110,8 +110,8 @@ export class RestTransportHandler {
       contextId: (queryParams.contextId as string) || '',
       status: queryParams.status
         ? taskStateFromJSON(
-          isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
-        )
+            isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
+          )
         : TaskState.TASK_STATE_UNSPECIFIED,
       pageSize:
         queryParams.pageSize !== undefined && queryParams.pageSize !== ''
