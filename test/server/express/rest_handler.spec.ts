@@ -661,6 +661,37 @@ describe('restHandler', () => {
         assert.equal(protoResponse.id, 'config-1');
       });
 
+      it('should take taskId from the path when the body omits it', async () => {
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        const response = await request(app)
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({ url: 'http://127.0.0.1:9999/webhook' })
+          .expect(201);
+
+        const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.equal(protoResponse.taskId, 'task-1');
+
+        const passedConfig = (mockRequestHandler.createTaskPushNotificationConfig as Mock).mock
+          .calls[0][0];
+        assert.equal(passedConfig.taskId, 'task-1');
+      });
+
+      it('should prefer the path taskId over one repeated in the body', async () => {
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        await request(app)
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({ url: 'http://127.0.0.1:9999/webhook', taskId: 'some-other-task' })
+          .expect(201);
+
+        const passedConfig = (mockRequestHandler.createTaskPushNotificationConfig as Mock).mock
+          .calls[0][0];
+        assert.equal(passedConfig.taskId, 'task-1');
+      });
+
       it('should return 400 if push notifications not supported', async () => {
         const noPNRequestHandler = {
           ...mockRequestHandler,
