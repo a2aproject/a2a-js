@@ -20,6 +20,7 @@ import {
   RequestMalformedError,
   TaskNotCancelableError,
   TaskNotFoundError,
+  UnsupportedOperationError,
 } from '../../../src/errors/index.js';
 import {
   ListTaskPushNotificationConfigsResponse,
@@ -247,26 +248,19 @@ describe('restHandler', () => {
       );
     });
 
-    it('should return 400 if streaming is not supported', async () => {
-      const noStreamRequestHandler = {
-        ...mockRequestHandler,
-        getAgentCard: vi.fn().mockResolvedValue({
-          ...testAgentCard,
-          capabilities: { streaming: false, pushNotifications: false },
-        }),
-      };
-      const noStreamApp = express();
-      noStreamApp.use(
-        restHandler({
-          requestHandler: noStreamRequestHandler as any,
-          userBuilder: UserBuilder.noAuthentication,
-        })
+    it('should return 400 when the request handler refuses to stream', async () => {
+      // Whether the agent streams is decided by the request handler, not by
+      // this layer, so the handler is made to refuse rather than the card made
+      // to withhold. What is under test here is the mapping of that refusal
+      // onto an HTTP status and a `google.rpc.Status` reason.
+      (mockRequestHandler.sendMessageStream as Mock).mockRejectedValue(
+        new UnsupportedOperationError('Streaming is not supported.')
       );
 
-      const response = await request(noStreamApp)
+      const response = await request(app)
         .post('/message:stream')
         .set('A2A-Version', '1.0')
-        .send({ request: testMessage })
+        .send({ message: ProtoMessage.toJSON(testMessage) })
         .expect(400);
 
       assert.property(response.body, 'error');
@@ -590,24 +584,12 @@ describe('restHandler', () => {
       );
     });
 
-    it('should return 400 if streaming is not supported', async () => {
-      // Create new app with handler that has capabilities without streaming
-      const noStreamRequestHandler = {
-        ...mockRequestHandler,
-        getAgentCard: vi.fn().mockResolvedValue({
-          ...testAgentCard,
-          capabilities: { streaming: false, pushNotifications: false },
-        }),
-      };
-      const noStreamApp = express();
-      noStreamApp.use(
-        restHandler({
-          requestHandler: noStreamRequestHandler as any,
-          userBuilder: UserBuilder.noAuthentication,
-        })
+    it('should return 400 when the request handler refuses to resubscribe', async () => {
+      (mockRequestHandler.resubscribe as Mock).mockRejectedValue(
+        new UnsupportedOperationError('Streaming (and thus resubscription) is not supported.')
       );
 
-      const response = await request(noStreamApp)
+      const response = await request(app)
         .post('/tasks/task-1:subscribe')
         .set('A2A-Version', '1.0')
         .expect(400);

@@ -220,20 +220,6 @@ describe('RestTransportHandler', () => {
   });
 
   describe('sendMessageStream', () => {
-    it('should throw UnsupportedOperation if streaming not supported', async () => {
-      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
-        ...testAgentCard,
-        capabilities: { streaming: false },
-      });
-
-      await expect(
-        transportHandler.sendMessageStream(
-          { message: testMessage, metadata: {}, configuration: undefined, tenant: '' },
-          mockContext
-        )
-      ).rejects.toThrow('Agent does not support streaming');
-    });
-
     it('should call request handler sendMessageStream if streaming supported', async () => {
       async function* mockStream() {
         yield testMessage;
@@ -402,17 +388,6 @@ describe('RestTransportHandler', () => {
   });
 
   describe('resubscribe', () => {
-    it('should throw UnsupportedOperation if streaming not supported', async () => {
-      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
-        ...testAgentCard,
-        capabilities: { streaming: false },
-      });
-
-      await expect(transportHandler.resubscribe('task-1', mockContext)).rejects.toThrow(
-        'Agent does not support streaming'
-      );
-    });
-
     it('should call request handler resubscribe if streaming supported', async () => {
       async function* mockStream() {
         yield testTask;

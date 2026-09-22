@@ -27,7 +27,6 @@ import {
   RequestMalformedError,
   restStatusFor as mapErrorToStatus,
   toRestErrorBody as toHTTPError,
-  UnsupportedOperationError,
 } from '../../../errors/index.js';
 
 export { HTTP_STATUS, mapErrorToStatus, toHTTPError };
@@ -80,7 +79,6 @@ export class RestTransportHandler {
     params: SendMessageRequest,
     context: ServerCallContext
   ): Promise<AsyncGenerator<StreamResponse, void, undefined>> {
-    await this.requireCapability('streaming');
     this.validateSendMessageRequest(params);
     return this.requestHandler.sendMessageStream(params, context);
   }
@@ -112,8 +110,8 @@ export class RestTransportHandler {
       contextId: (queryParams.contextId as string) || '',
       status: queryParams.status
         ? taskStateFromJSON(
-            isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
-          )
+          isNaN(Number(queryParams.status)) ? queryParams.status : Number(queryParams.status)
+        )
         : TaskState.TASK_STATE_UNSPECIFIED,
       pageSize:
         queryParams.pageSize !== undefined && queryParams.pageSize !== ''
@@ -136,7 +134,6 @@ export class RestTransportHandler {
     context: ServerCallContext,
     tenant?: string
   ): Promise<AsyncGenerator<StreamResponse, void, undefined>> {
-    await this.requireCapability('streaming');
     return this.requestHandler.resubscribe({ id: taskId, tenant: tenant || '' }, context);
   }
 
@@ -185,15 +182,11 @@ export class RestTransportHandler {
     );
   }
 
-  private static readonly CAPABILITY_ERRORS: Record<
-    'streaming' | 'pushNotifications',
-    () => Error
-  > = {
-    streaming: () => new UnsupportedOperationError('Agent does not support streaming'),
+  private static readonly CAPABILITY_ERRORS: Record<'pushNotifications', () => Error> = {
     pushNotifications: () => new PushNotificationNotSupportedError(),
   };
 
-  private async requireCapability(capability: 'streaming' | 'pushNotifications'): Promise<void> {
+  private async requireCapability(capability: 'pushNotifications'): Promise<void> {
     const agentCard = await this.getAgentCard();
     if (!agentCard.capabilities?.[capability]) {
       throw RestTransportHandler.CAPABILITY_ERRORS[capability]();
