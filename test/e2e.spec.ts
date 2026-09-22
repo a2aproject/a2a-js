@@ -36,6 +36,7 @@ import { AddressInfo } from 'net';
 import { UserBuilder } from '../src/server/express/common.js';
 import { A2AService, grpcService } from '../src/server/grpc/index.js';
 import { GrpcTransportFactory } from '../src/client/transports/grpc/grpc_transport.js';
+import { ServiceParameters, withA2AVersion } from '../src/client/service-parameters.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -546,6 +547,29 @@ describe('Client E2E tests', () => {
           // resubscribeTask triggers the streaming-specific error path.
           await expect(
             client.resubscribeTask({ id: 'non-existent', tenant: '' }).next()
+          ).rejects.toThrow(UnsupportedOperationError);
+        });
+
+        it('should return UnsupportedOperationError from sendMessageStream when streaming is disabled', async () => {
+          agentCard.capabilities!.streaming = false;
+
+          const client = await clientFactory.createFromAgentCard(agentCard);
+          await expect(
+            client.transport
+              .sendMessageStream(
+                {
+                  tenant: '',
+                  message: createTestMessage('msg-no-streaming', 'test'),
+                  configuration: undefined,
+                  metadata: {},
+                },
+                {
+                  serviceParameters: ServiceParameters.create(
+                    withA2AVersion(client.protocolVersion)
+                  ),
+                }
+              )
+              .next()
           ).rejects.toThrow(UnsupportedOperationError);
         });
 
