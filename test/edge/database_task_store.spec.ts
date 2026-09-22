@@ -7,7 +7,6 @@ import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
 
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
-import type { TaskDatabase } from '../../src/server/database/task/schema.js';
 import { taskStoreMigrations } from '../../src/server/database/task/migrations.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
@@ -108,7 +107,7 @@ function open(): Kysely<unknown> {
 }
 
 describe('DatabaseTaskStore on D1', () => {
-  let db: Kysely<TaskDatabase>;
+  let db: Kysely<unknown>;
   let store: DatabaseTaskStore;
 
   /** No ledger and no lock table here: nothing on edge runs the `Migrator`. */
@@ -157,7 +156,7 @@ describe('DatabaseTaskStore on D1', () => {
     await migrate(connection);
     await connection.destroy();
 
-    db = open() as Kysely<TaskDatabase>;
+    db = open();
     store = new DatabaseTaskStore(db);
   });
 
@@ -184,7 +183,7 @@ describe('DatabaseTaskStore on D1', () => {
       await db.destroy();
 
       // A whole new connection and store, as a fresh isolate would have.
-      db = open() as Kysely<TaskDatabase>;
+      db = open();
       const restarted = new DatabaseTaskStore(db);
 
       expect(await restarted.load('task-1', makeContext())).toEqual(makeTask());

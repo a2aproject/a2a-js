@@ -10,7 +10,6 @@ import { connect } from '../../src/cli/connect.js';
 import { migrateStore } from '../../src/cli/migrator.js';
 import { taskStoreMigrations } from '../../src/server/database/task/migrations.js';
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
-import type { TaskDatabase } from '../../src/server/database/task/schema.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import {
@@ -159,7 +158,7 @@ for (const label of UNCONFIGURED) {
 for (const engine of ENGINES) {
   describe(`DatabaseTaskStore on ${engine.name}`, () => {
     let url: string;
-    let db: Kysely<TaskDatabase>;
+    let db: Kysely<unknown>;
     let store: DatabaseTaskStore;
 
     /** A connection of its own, as an operator's migration step would have. */
@@ -226,7 +225,7 @@ for (const engine of ENGINES) {
       // SQLite gets a new file each time; the shared servers need the last run cleared.
       await dropEverything();
       await migrate();
-      db = (await connect(url)) as Kysely<TaskDatabase>;
+      db = await connect(url);
       store = new DatabaseTaskStore(db);
     });
 
@@ -257,7 +256,7 @@ for (const engine of ENGINES) {
         await db.destroy();
 
         // A whole new connection and store, as a restarted process would have.
-        db = (await connect(url)) as Kysely<TaskDatabase>;
+        db = await connect(url);
         const restarted = new DatabaseTaskStore(db);
 
         expect(await restarted.load('task-1', makeContext())).toEqual(makeTask());

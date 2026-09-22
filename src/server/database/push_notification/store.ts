@@ -34,21 +34,22 @@ export interface DatabasePushNotificationStoreOptions {
 /**
  * {@link PushNotificationStore} backed by a database.
  *
- * The caller builds the {@link Kysely} instance.
+ * The caller builds the {@link Kysely} instance and can type it with any schema: the
+ * store names its table at runtime, so one connection can serve other stores and the
+ * application's own tables too.
  * The table must already exist, migrating is an operator step, not something
  * the store does on first use.
  */
-export class DatabasePushNotificationStore implements PushNotificationStore {
+export class DatabasePushNotificationStore<DB = unknown> implements PushNotificationStore {
   private readonly db: Kysely<PushNotificationDatabase>;
   private readonly ownerResolver: OwnerResolver;
   private readonly dialect: DialectName;
   private readonly tableName: string;
 
-  constructor(
-    db: Kysely<PushNotificationDatabase>,
-    options: DatabasePushNotificationStoreOptions = {}
-  ) {
-    this.db = db;
+  constructor(db: Kysely<DB>, options: DatabasePushNotificationStoreOptions = {}) {
+    // Safe: the table is named at runtime, so the caller's schema type is never used.
+    // Kysely only accepts an exact schema type, so the conversion goes through unknown.
+    this.db = db as unknown as Kysely<PushNotificationDatabase>;
     this.ownerResolver = options.ownerResolver ?? resolveUserScope;
     this.tableName = options.tableName ?? PUSH_NOTIFICATION_TABLE;
     // Fixed for the connection's lifetime, and rejects an engine we cannot

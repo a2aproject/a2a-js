@@ -10,7 +10,6 @@ import { connect } from '../../src/cli/connect.js';
 import { migrateStore } from '../../src/cli/migrator.js';
 import { pushNotificationStoreMigrations } from '../../src/server/database/push_notification/migrations.js';
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
-import type { PushNotificationDatabase } from '../../src/server/database/push_notification/schema.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';
@@ -115,7 +114,7 @@ for (const label of UNCONFIGURED) {
 for (const engine of ENGINES) {
   describe(`DatabasePushNotificationStore on ${engine.name}`, () => {
     let url: string;
-    let db: Kysely<PushNotificationDatabase>;
+    let db: Kysely<unknown>;
     let store: DatabasePushNotificationStore;
 
     /** A connection of its own, as an operator's migration step would have. */
@@ -170,7 +169,7 @@ for (const engine of ENGINES) {
       // SQLite gets a new file each time; the shared servers need the last run cleared.
       await dropEverything();
       await migrate();
-      db = (await connect(url)) as Kysely<PushNotificationDatabase>;
+      db = await connect(url);
       store = new DatabasePushNotificationStore(db);
     });
 
@@ -200,7 +199,7 @@ for (const engine of ENGINES) {
         await db.destroy();
 
         // A whole new connection and store, as a restarted process would have.
-        db = (await connect(url)) as Kysely<PushNotificationDatabase>;
+        db = await connect(url);
         const restarted = new DatabasePushNotificationStore(db);
 
         expect(await restarted.load('task-1', makeContext())).toEqual([makeConfig()]);

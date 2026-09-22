@@ -7,8 +7,6 @@ import { agentCardHandler, jsonRpcHandler, UserBuilder } from '../../../server/e
 import {
   DatabaseTaskStore,
   DatabasePushNotificationStore,
-  type TaskDatabase,
-  type PushNotificationDatabase,
 } from '../../../server/database/index.js';
 import { DefaultPushNotificationSender, DefaultRequestHandler } from '../../../server/index.js';
 import { DatabaseAgentExecutor } from './agent_executor.js';
@@ -70,8 +68,7 @@ async function main() {
   const Database = driver.default as new (path: string) => SqliteDatabase;
   const sqlite = new Database(DATABASE_FILE);
   const dialect = new SqliteDialect({ database: sqlite });
-  type AppDatabase = TaskDatabase & PushNotificationDatabase;
-  const db = new Kysely<AppDatabase>({ dialect });
+  const db = new Kysely({ dialect });
 
   // 2. Validate tables exist, with guidance if migrations were not run
   const tables = sqlite
