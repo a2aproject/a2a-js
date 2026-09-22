@@ -951,7 +951,9 @@ async function main() {
     undefined,
     undefined,
     undefined,
-    agentCard
+    agentCard,
+    undefined,
+    { validateInputModes: true }
   );
 
   const app = express();
