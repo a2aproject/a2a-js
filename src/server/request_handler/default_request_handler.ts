@@ -1,5 +1,6 @@
 import {
   A2AError,
+  ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
   PushNotificationNotSupportedError,
@@ -81,6 +82,15 @@ export interface DefaultRequestHandlerOptions {
    * declines.
    */
   keepBusAliveStates?: TaskState[];
+
+  /**
+   * Reject an incoming message part whose declared media type is not among
+   * the card's `defaultInputModes`, per §3.1.1. Defaults to `false`, since
+   * a card may advertise informal modes (`text`) while clients send real
+   * media types (`text/plain`), and enforcing that mismatch would refuse
+   * traffic an existing agent accepts today.
+   */
+  validateInputModes?: boolean;
 }
 
 /**
@@ -102,6 +112,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
   private readonly keepBusAliveStates: Set<TaskState>;
+  private readonly validateInputModes: boolean;
 
   constructor(
     agentCard: AgentCard,
@@ -121,6 +132,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
     this.keepBusAliveStates = new Set(options.keepBusAliveStates ?? INTERRUPTED_STATE_LIST);
+    this.validateInputModes = options.validateInputModes ?? false;
 
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
@@ -161,6 +173,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return agentCard;
   }
 
+  private _validateInputModes(message: Message, agentCard: AgentCard): void {
+    const supportedModes = agentCard.defaultInputModes ?? [];
+    if (!this.validateInputModes || supportedModes.length === 0) {
+      return;
+    }
+    for (const part of message.parts ?? []) {
+      if (part.mediaType && !supportedModes.includes(part.mediaType)) {
+        throw new ContentTypeNotSupportedError(
+          `Media type '${part.mediaType}' is not supported. ` +
+            `Supported media types: ${supportedModes.join(', ')}.`
+        );
+      }
+    }
+  }
+
   private async _createRequestContext(
     request: SendMessageRequest,
     context: ServerCallContext
@@ -173,6 +200,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     let referenceTasks: Task[] | undefined;
 
     const agentCard = await this.getAgentCard();
+    this._validateInputModes(incomingMessage, agentCard);
     const agentExtensions = agentCard.capabilities?.extensions ?? [];
 
     // The client MUST declare support for every required extension.
@@ -694,6 +722,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: SendMessageRequest,
     context: ServerCallContext
   ): AsyncGenerator<StreamResponse, void, undefined> {
+    if (!this.agentCard.capabilities?.streaming) {
+      throw new UnsupportedOperationError('Streaming is not supported.');
+    }
+
     const incomingMessage = params.message;
     if (!incomingMessage?.messageId) {
       throw new RequestMalformedError('message.messageId is required for streaming.');

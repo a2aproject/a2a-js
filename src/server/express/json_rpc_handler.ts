@@ -10,7 +10,12 @@ import { JSONRPCResponse } from '../transports/jsonrpc/jsonrpc_transport_handler
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContextBuilder, defaultServerCallContextBuilder } from '../context.js';
-import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '../../constants.js';
+import {
+  A2A_LEGACY_PROTOCOL_VERSION,
+  A2A_VERSION_HEADER,
+  HTTP_EXTENSION_HEADER,
+  JSON_CONTENT_TYPE,
+} from '../../constants.js';
 import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
@@ -20,45 +25,22 @@ import { LegacyJsonRpcTransportHandler } from '../../compat/v0_3/server/index.js
 import {
   LEGACY_HTTP_EXTENSION_HEADER,
   LEGACY_METHOD_TASKS_RESUBSCRIBE,
-  isLegacyJsonRpcMethod,
-  isV1JsonRpcMethod,
 } from '../../compat/v0_3/index.js';
 
 export interface JsonRpcHandlerOptions {
   requestHandler: A2ARequestHandler;
   userBuilder: UserBuilder;
   /**
-   * Enables the v0.3 protocol compatibility layer. When enabled, the
-   * handler inspects each request body's `method` field and routes
-   * v0.3 method names (`message/send`, `tasks/get`, …) through the
-   * v0.3 compat module. The agent card MUST also declare a v0.3
-   * `JSONRPC` interface in `supportedInterfaces`.
+   * Enables the v0.3 protocol compatibility layer. When enabled, a request
+   * whose `A2A-Version` is 0.3 — explicitly, or by omitting the header — is
+   * routed through the v0.3 compat module. The agent card MUST also declare
+   * a v0.3 `JSONRPC` interface in `supportedInterfaces`.
    *
    * Default: omitted (disabled). Disabled v0.3-shaped requests surface
    * as JSON-RPC `method not found` (-32601).
    */
   legacyCompat?: { enabled: boolean };
   contextBuilder?: ServerCallContextBuilder;
-}
-
-/**
- * Returns `true` if the body looks like a v0.3 JSON-RPC request. v1.0
- * method names are PascalCase (`SendMessage`); v0.3 use `namespace/verb`
- * (`message/send`), so the two grammars are disjoint.
- */
-function isLegacyRequest(body: unknown): boolean {
-  if (typeof body !== 'object' || body === null) return false;
-  return isLegacyJsonRpcMethod((body as { method?: unknown }).method);
-}
-
-/**
- * Returns `true` for bodies that should fall through to the v0.3
- * dispatcher when `legacyCompat` is enabled: missing or unknown
- * `method`.
- */
-function shouldUseLegacyFallback(body: unknown): boolean {
-  if (typeof body !== 'object' || body === null) return false;
-  return !isV1JsonRpcMethod((body as { method?: unknown }).method);
 }
 
 /**
@@ -89,7 +71,8 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   router.post('/', async (req: Request, res: Response) => {
     const useLegacy =
       legacyJsonRpcTransportHandler !== undefined &&
-      (isLegacyRequest(req.body) || shouldUseLegacyFallback(req.body));
+      (req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION) ===
+        A2A_LEGACY_PROTOCOL_VERSION;
     const mapToError = useLegacy
       ? LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError
       : JsonRpcTransportHandler.mapToJSONRPCError;
@@ -213,15 +196,18 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         res.status(200).json(rpcResponse);
       }
     } catch (error) {
-      // Catches errors from `handle` itself (e.g. initial parse error).
+      // Catches what runs outside `handle`: the user builder, card lookup and
+      // version validation. `handle` maps its own failures and returns 200.
       console.error('Unhandled error in JSON-RPC POST handler:', error);
+      const mappedError = mapToError(error);
       const errorResponse: JSONRPCErrorResponse = {
         jsonrpc: '2.0',
         id: req.body?.id || null,
-        error: mapToError(error),
+        error: mappedError,
       };
       if (!res.headersSent) {
-        res.status(500).json(errorResponse);
+        const isServerFault = mappedError.code === A2A_ERROR_CODE.INTERNAL_ERROR;
+        res.status(isServerFault ? 500 : 200).json(errorResponse);
       } else if (!res.writableEnded) {
         // Likely a stream attempt that failed early.
         res.end();
@@ -236,6 +222,10 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
  * Express middleware rejecting requests whose Content-Type is not
  * `application/json` with `ContentTypeNotSupportedError`. Bodyless
  * requests and requests without a Content-Type header pass through.
+ *
+ * Answers 200 and lets the JSON-RPC envelope carry the refusal, as every
+ * other error on this binding does. The REST guard returns 400 for the same
+ * condition; the bindings differ here on purpose.
  */
 const contentTypeGuard: RequestHandler = (req, res, next) => {
   const rawContentType = req.header('content-type');
@@ -258,7 +248,7 @@ const contentTypeGuard: RequestHandler = (req, res, next) => {
       )
     ),
   };
-  res.status(400).json(errorResponse);
+  res.status(200).json(errorResponse);
 };
 
 export const jsonErrorHandler: ErrorRequestHandler = (
@@ -277,7 +267,7 @@ export const jsonErrorHandler: ErrorRequestHandler = (
         message: 'Invalid JSON payload.',
       },
     };
-    return res.status(400).json(errorResponse);
+    return res.status(200).json(errorResponse);
   }
   next(err);
 };
