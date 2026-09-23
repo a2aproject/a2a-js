@@ -34,6 +34,14 @@ export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
 export {
+  WebSocketTransportHandler,
+  adaptWebSocketConnection,
+  type WebSocketConnection,
+  type WebSocketHandshakeContext,
+  type WebSocketServerOptions,
+  type WebSocketSocketLike,
+} from './transports/websocket/websocket_transport_handler.js';
+export {
   ServerCallContext,
   defaultServerCallContextBuilder,
   STATE_HEADERS_KEY,
