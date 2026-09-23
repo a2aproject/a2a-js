@@ -102,6 +102,16 @@ export async function migrateStore<DB>(db: Kysely<DB>, store: StoreMigrations): 
   throwOnFailure(store, await (await migratorFor(db, store)).migrateToLatest());
 }
 
+/**
+ * Drops the table Kysely's migrator keeps for its lock. The migrator recreates it at the
+ * start of every run, and on the engines this CLI connects to it locks without it, so
+ * nothing needs the table between runs. Only safe while one migration runs at a time:
+ * a concurrent run that has created the table but not yet written its row would fail.
+ */
+export async function dropMigrationLockTable<DB>(db: Kysely<DB>): Promise<void> {
+  await db.schema.dropTable(MIGRATION_LOCK_TABLE).ifExists().execute();
+}
+
 /** The revision name meaning "before any migration ran". */
 export const BASE = 'base';
 

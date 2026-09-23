@@ -295,11 +295,13 @@ for (const engine of ENGINES) {
         };
       });
 
-    it('upgrade creates the table, the ledger and the lock', async () => {
+    it('upgrade creates the table and the ledger, and drops the lock table after', async () => {
       const { code } = await cli('upgrade');
 
       expect(code).toBe(0);
-      expect(await tableNames()).toEqual(expect.arrayContaining([TABLE, LEDGER_TABLE, LOCK_TABLE]));
+      const names = await tableNames();
+      expect(names).toEqual(expect.arrayContaining([TABLE, LEDGER_TABLE]));
+      expect(names).not.toContain(LOCK_TABLE);
     });
 
     it('upgrade creates exactly the expected columns', async () => {
@@ -442,6 +444,14 @@ for (const engine of ENGINES) {
       expect(await tableNames()).not.toContain(TABLE);
     });
 
+    it('downgrade drops the lock table after', async () => {
+      await cli('upgrade');
+
+      await cli('downgrade');
+
+      expect(await tableNames()).not.toContain(LOCK_TABLE);
+    });
+
     it('downgrade reports nothing to revert when the ledger is empty', async () => {
       await cli('upgrade');
       await cli('downgrade');
@@ -516,13 +526,20 @@ for (const engine of ENGINES) {
     describe('--sql', () => {
       it('builds the table a real upgrade builds', async () => {
         await renderAndApply('upgrade');
-        expect(await tableNames()).not.toContain(LOCK_TABLE);
         const scripted = await structure();
 
         await dropTables();
         await cli('upgrade', '--store', STORE_ID);
 
         expect(scripted).toEqual(await structure());
+      });
+
+      it('renders an upgrade that creates the table and the ledger, but no lock table', async () => {
+        await renderAndApply('upgrade');
+
+        const names = await tableNames();
+        expect(names).toEqual(expect.arrayContaining([TABLE, LEDGER_TABLE]));
+        expect(names).not.toContain(LOCK_TABLE);
       });
 
       it('renders the table --push-notification-configs-table-name asks for, and its own ledger', async () => {
@@ -559,6 +576,14 @@ for (const engine of ENGINES) {
         expect(await tableNames()).not.toContain(TABLE);
         const { out } = await cli('status', '--store', STORE_ID);
         expect(out).toContain('pending');
+      });
+
+      it('renders a revert that leaves no lock table', async () => {
+        await renderAndApply('upgrade');
+
+        await renderAndApply('downgrade', BASE);
+
+        expect(await tableNames()).not.toContain(LOCK_TABLE);
       });
 
       it('refuses "base" as where a revert starts', async () => {

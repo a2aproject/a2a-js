@@ -65,9 +65,6 @@ function span(
 
 /**
  * Kysely's ledger table, which `Migrator` creates for itself and a script has to carry.
- *
- * The lock table is left out: it serialises concurrent migrators, which a script applied
- * once by hand is not, and a later online run creates it anyway.
  */
 function createLedger(db: Kysely<LedgerDatabase>, store: StoreMigrations) {
   return db.schema

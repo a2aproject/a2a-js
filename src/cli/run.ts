@@ -10,6 +10,7 @@ import { TASK_STORE_ID, taskStoreMigrations } from '../server/database/task/migr
 import { connect } from './connect.js';
 import {
   BASE,
+  dropMigrationLockTable,
   migrateStore,
   migrateStoreTo,
   migrationNames,
@@ -391,6 +392,14 @@ export async function run(
         await migrateStoreTo(db, store, target);
         output.log(`${store.id}: now at ${target}`);
       }
+    }
+    if (command !== 'status') {
+      // `status` only reads. A failed drop should not fail migrations that succeeded.
+      await dropMigrationLockTable(db).catch((error: unknown) =>
+        output.error(
+          `Migrations applied, but the migration lock table could not be dropped: ${String(error)}`
+        )
+      );
     }
     return 0;
   } catch (error) {
