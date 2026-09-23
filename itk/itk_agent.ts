@@ -972,10 +972,8 @@ async function main() {
   //    compat for some transports). v1.0 SDKs that send
   //    `A2A-Version: 1.0` short-circuit through the legacy router and
   //    get the unmodified v1.0 card.
-  //  - JSON-RPC: dispatched per-request by body `method` shape
-  //    (`message/send` for v0.3 vs `SendMessage` for v1.0).
-  //  - REST: dispatched per-request by the `A2A-Version` header (default
-  //    '0.3' if absent).
+  //  - JSON-RPC and REST: dispatched per-request by the `A2A-Version`
+  //    header (default '0.3' if absent).
   //  - gRPC: both `A2AService` (v1.0) and `LegacyA2AService` (v0.3) are
   //    bound to the same port; clients select by service descriptor.
   const legacyCompat = { enabled: true };
