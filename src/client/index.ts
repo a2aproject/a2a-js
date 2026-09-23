@@ -12,6 +12,29 @@ export { TenantTransportDecorator } from './transports/tenant_transport_decorato
 export { ClientFactory, ClientFactoryOptions } from './factory.js';
 export { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
 export { RestTransportFactory } from './transports/rest_transport.js';
+export {
+  WebSocketTransport,
+  WebSocketTransportFactory,
+  type A2AWebSocket,
+  type WebSocketCredential,
+  type WebSocketFactory,
+  type WebSocketFactoryOptions,
+  type WebSocketReauthenticationRequired,
+  type WebSocketTransportOptions,
+} from './transports/websocket.js';
+export {
+  DEFAULT_WEBSOCKET_MAX_MESSAGE_BYTES,
+  REAUTHENTICATION_REQUIRED_CONTROL,
+  WEBSOCKET_CLOSE_CODE,
+  WEBSOCKET_JSONRPC_VERSION,
+  WEBSOCKET_METHOD,
+  WEBSOCKET_PROTOCOL_NAME,
+  WEBSOCKET_SUBPROTOCOL,
+  type WebSocketRequestEnvelope,
+  type WebSocketRequestId,
+  type WebSocketResponseEnvelope,
+  type WebSocketServiceParameters,
+} from '../transports/websocket/protocol.js';
 export type {
   CallInterceptor,
   BeforeArgs,
