@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach, assert, expect, vi, type Mock } fr
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import {
+  ContentTypeNotSupportedError,
   TaskNotFoundError,
   PushNotificationNotSupportedError,
   UnsupportedOperationError,
@@ -4873,6 +4874,124 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } as SendMessageRequest;
 
       const result = await handler.sendMessage(params, serverCallContext);
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('defaultInputModes validation (§3.1.1)', () => {
+    const unsupportedMediaType = 'application/x-unsupported-type-12345';
+
+    /** A one-part message; `mediaType: ''` is a part that declares none. */
+    const messageWithMediaType = (mediaType: string): SendMessageRequest =>
+      ({
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: `msg-input-mode-${mediaType || 'none'}`,
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType,
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      }) as SendMessageRequest;
+
+    beforeEach(() => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+        bus.publish(
+          AgentEvent.message({
+            messageId: 'msg-input-mode-reply',
+            role: Role.ROLE_AGENT,
+            parts: [],
+            contextId: ctx.contextId,
+            taskId: ctx.taskId,
+            extensions: [],
+            metadata: {},
+            referenceTaskIds: [],
+          })
+        );
+        bus.finished();
+      });
+    });
+
+    const handlerWithValidation = (): DefaultRequestHandler =>
+      new DefaultRequestHandler(
+        testAgentCard,
+        mockTaskStore,
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { validateInputModes: true }
+      );
+
+    it('rejects a media type the card does not advertise', async () => {
+      await expect(
+        handlerWithValidation().sendMessage(messageWithMediaType(unsupportedMediaType), {
+          ...serverCallContext,
+        } as ServerCallContext)
+      ).rejects.toThrow(ContentTypeNotSupportedError);
+    });
+
+    it('accepts a media type the card advertises', async () => {
+      const result = await handlerWithValidation().sendMessage(
+        messageWithMediaType('text/plain'),
+        serverCallContext
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('accepts a part that declares no media type', async () => {
+      const result = await handlerWithValidation().sendMessage(
+        messageWithMediaType(''),
+        serverCallContext
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('rejects on the streaming path as well', async () => {
+      const generator = handlerWithValidation().sendMessageStream(
+        messageWithMediaType(unsupportedMediaType),
+        { ...serverCallContext } as ServerCallContext
+      );
+      await expect(generator.next()).rejects.toThrow(ContentTypeNotSupportedError);
+    });
+
+    it('accepts any media type when the card declares no input modes', async () => {
+      const handlerWithoutModes = new DefaultRequestHandler(
+        { ...testAgentCard, defaultInputModes: [] },
+        mockTaskStore,
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { validateInputModes: true }
+      );
+
+      const result = await handlerWithoutModes.sendMessage(
+        messageWithMediaType(unsupportedMediaType),
+        serverCallContext
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('accepts an unadvertised media type when validation is not enabled', async () => {
+      const result = await handler.sendMessage(
+        messageWithMediaType(unsupportedMediaType),
+        serverCallContext
+      );
       expect(result).toBeDefined();
     });
   });
