@@ -222,6 +222,10 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
  * Express middleware rejecting requests whose Content-Type is not
  * `application/json` with `ContentTypeNotSupportedError`. Bodyless
  * requests and requests without a Content-Type header pass through.
+ *
+ * Answers 200 and lets the JSON-RPC envelope carry the refusal, as every
+ * other error on this binding does. The REST guard returns 400 for the same
+ * condition; the bindings differ here on purpose.
  */
 const contentTypeGuard: RequestHandler = (req, res, next) => {
   const rawContentType = req.header('content-type');
@@ -244,7 +248,7 @@ const contentTypeGuard: RequestHandler = (req, res, next) => {
       )
     ),
   };
-  res.status(400).json(errorResponse);
+  res.status(200).json(errorResponse);
 };
 
 export const jsonErrorHandler: ErrorRequestHandler = (
