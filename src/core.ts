@@ -1,4 +1,4 @@
-export type TransportProtocolName = 'JSONRPC' | 'HTTP+JSON' | 'GRPC' | (string & {});
+export type TransportProtocolName = 'JSONRPC' | 'HTTP+JSON' | 'GRPC' | 'WEBSOCKET' | (string & {});
 
 export interface JSONRPCError {
   code: number;
