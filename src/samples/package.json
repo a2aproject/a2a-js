@@ -30,7 +30,6 @@
     "better-sqlite3": "^13.0.3",
     "express": "^5.1.0",
     "genkit": "^1.8.0",
-    "kysely": "^0.29.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "tsx": "^4.22.4"
