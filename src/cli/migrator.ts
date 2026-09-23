@@ -10,7 +10,7 @@ import type { StoreMigrations } from '../server/database/store_migrations.js';
 /**
  * Shared by every store.
  */
-const MIGRATION_LOCK_TABLE = 'a2a_migrations_lock';
+export const MIGRATION_LOCK_TABLE = 'a2a_migrations_lock';
 
 type MigratorConstructor = new (props: MigratorProps) => Migrator;
 
