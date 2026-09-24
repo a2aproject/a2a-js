@@ -539,6 +539,25 @@ for (const engine of ENGINES) {
       expect((await cli('status')).out).toContain('pending');
     });
 
+    it('downgrade refuses a migration that is not applied, instead of applying it', async () => {
+      const { code, err } = await cli('downgrade', MIGRATION, '--store', STORE_ID);
+
+      expect(code).toBe(1);
+      expect(err).toContain(`"${MIGRATION}" is not applied to the ${STORE_ID} store`);
+      expect(await tableNames()).not.toContain(TABLE);
+      expect((await cli('status', '--store', STORE_ID)).out).toContain('pending');
+    });
+
+    it('downgrade to an applied migration leaves it applied', async () => {
+      await cli('upgrade');
+
+      const { code, out } = await cli('downgrade', MIGRATION, '--store', STORE_ID);
+
+      expect(code).toBe(0);
+      expect(out).toContain(`now at ${MIGRATION}`);
+      expect(await tableNames()).toContain(TABLE);
+    });
+
     it('upgrade after downgrade recreates an identical table', async () => {
       await cli('upgrade');
       const before = await structure();

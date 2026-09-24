@@ -12,8 +12,8 @@ import {
   BASE,
   MIGRATION_LOCK_TABLE,
   migrateStore,
-  migrateStoreTo,
   migrationNames,
+  revertStoreTo,
   rollbackStore,
   storeState,
 } from './migrator.js';
@@ -399,7 +399,7 @@ export async function run(
       }
     } else {
       for (const store of stores) {
-        await migrateStoreTo(db, store, target);
+        await revertStoreTo(db, store, target);
         output.log(`${store.id}: now at ${target}`);
       }
     }
