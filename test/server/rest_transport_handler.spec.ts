@@ -220,20 +220,6 @@ describe('RestTransportHandler', () => {
   });
 
   describe('sendMessageStream', () => {
-    it('should throw UnsupportedOperation if streaming not supported', async () => {
-      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
-        ...testAgentCard,
-        capabilities: { streaming: false },
-      });
-
-      await expect(
-        transportHandler.sendMessageStream(
-          { message: testMessage, metadata: {}, configuration: undefined, tenant: '' },
-          mockContext
-        )
-      ).rejects.toThrow('Agent does not support streaming');
-    });
-
     it('should call request handler sendMessageStream if streaming supported', async () => {
       async function* mockStream() {
         yield testMessage;
@@ -344,6 +330,29 @@ describe('RestTransportHandler', () => {
       );
     });
 
+    it('should forward historyLength=0 instead of dropping it', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ historyLength: '0' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ historyLength: 0 }),
+        mockContext
+      );
+    });
+
+    it('should reject a non-numeric pageSize', async () => {
+      await expect(transportHandler.listTasks({ pageSize: 'abc' }, mockContext)).rejects.toThrow(
+        /pageSize must be a valid integer/
+      );
+    });
+
+    it('should reject pageSize=0', async () => {
+      await expect(transportHandler.listTasks({ pageSize: '0' }, mockContext)).rejects.toThrow(
+        /pageSize must be between 1 and 100/
+      );
+    });
+
     it('should pass a valid status filter through to the request handler', async () => {
       (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
 
@@ -379,17 +388,6 @@ describe('RestTransportHandler', () => {
   });
 
   describe('resubscribe', () => {
-    it('should throw UnsupportedOperation if streaming not supported', async () => {
-      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
-        ...testAgentCard,
-        capabilities: { streaming: false },
-      });
-
-      await expect(transportHandler.resubscribe('task-1', mockContext)).rejects.toThrow(
-        'Agent does not support streaming'
-      );
-    });
-
     it('should call request handler resubscribe if streaming supported', async () => {
       async function* mockStream() {
         yield testTask;

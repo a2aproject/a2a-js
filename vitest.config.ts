@@ -5,10 +5,13 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['test/**/*.spec.ts'],
-    // Integration tests spawn sample subprocesses and need the src/samples
-    // workspace installed; they run via their own config (`npm run test:integration`).
+    // Only the samples smoke test is held back: it spawns the sample agent and
+    // CLI as subprocesses and needs the src/samples workspace installed, so it
+    // runs via its own config (`npm run test:integration`). The rest of
+    // test/integration is in-process and runs here too, which keeps it in the
+    // node version matrix and in the coverage report.
     // `test/edge/` needs a workerd binding, so it runs only under vitest.edge.config.
-    exclude: [...configDefaults.exclude, 'test/integration/**', 'test/edge/**'],
+    exclude: [...configDefaults.exclude, 'test/integration/samples_smoke.spec.ts', 'test/edge/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'json-summary'],

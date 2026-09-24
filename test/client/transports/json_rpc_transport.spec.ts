@@ -94,6 +94,79 @@ describe('JsonRpcTransport', () => {
     });
   });
 
+  describe('JSON-RPC response validation', () => {
+    it.each([
+      ['missing', undefined, 'undefined'],
+      ['invalid', '1.0', '"1.0"'],
+      ['numeric', 2.0, '2'],
+      ['null', null, 'null'],
+    ])(
+      'rejects unary responses with a %s jsonrpc version',
+      async (_description, jsonrpc, received) => {
+        mockFetch.mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              ...(jsonrpc === undefined ? {} : { jsonrpc }),
+              result: { ok: true },
+              id: 1,
+            }),
+            { status: 200 }
+          )
+        );
+
+        await expect(transport.callExtensionMethod('test/method', {})).rejects.toThrow(
+          `Invalid JSON-RPC response for test/method: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
+        );
+      }
+    );
+
+    it.each([
+      ['missing', undefined, 'undefined'],
+      ['invalid', '1.0', '"1.0"'],
+      ['numeric', 2.0, '2'],
+      ['null', null, 'null'],
+    ])('rejects SSE events with a %s jsonrpc version', async (_description, jsonrpc, received) => {
+      const event: Record<string, unknown> = {
+        ...(jsonrpc === undefined ? {} : { jsonrpc }),
+        result: {
+          message: {
+            messageId: 'response-msg-1',
+            role: 'ROLE_AGENT',
+            parts: [],
+          },
+        },
+        id: 1,
+      };
+      mockFetch.mockResolvedValue(
+        new Response(`data: ${JSON.stringify(event)}\n\n`, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      );
+
+      const request: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: 'test-msg-1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: undefined,
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
+      };
+      const stream = transport.sendMessageStream(request);
+
+      await expect(stream.next()).rejects.toThrow(
+        `Invalid JSON-RPC response for SSE event: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
+      );
+    });
+  });
+
   describe('TaskPushNotificationConfig', () => {
     it('createTaskPushNotificationConfig should send correct params and return config', async () => {
       const config: TaskPushNotificationConfig = {

@@ -1,5 +1,6 @@
 import {
   A2AError,
+  ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
   PushNotificationNotSupportedError,
@@ -72,8 +73,24 @@ export interface DefaultRequestHandlerOptions {
    * To add another keep-alive state while preserving those defaults, include
    * both default states and the additional state. Any custom value overrides
    * the default list.
+   *
+   * This option decides the fate of the bus from the last state observed on
+   * it, which only works for a bus that delivers its events before the
+   * executor returns. A bus that defers delivery should instead implement
+   * {@link ExecutionEventBusManager.settleByTaskId} and take ownership of the
+   * bus from there; this option then applies only to the calls that manager
+   * declines.
    */
   keepBusAliveStates?: TaskState[];
+
+  /**
+   * Reject an incoming message part whose declared media type is not among
+   * the card's `defaultInputModes`, per §3.1.1. Defaults to `false`, since
+   * a card may advertise informal modes (`text`) while clients send real
+   * media types (`text/plain`), and enforcing that mismatch would refuse
+   * traffic an existing agent accepts today.
+   */
+  validateInputModes?: boolean;
 }
 
 /**
@@ -82,8 +99,8 @@ export interface DefaultRequestHandlerOptions {
  * Multi-tenant deployments: the transport layer extracts the tenant from
  * its protocol-specific source (REST path prefix, JSON-RPC `params.tenant`,
  * gRPC `tenant` field) and propagates it via `ServerCallContext.tenant`.
- * The built-in `InMemoryTaskStore` and `InMemoryPushNotificationStore`
- * scope data by `tenant` to provide isolation.
+ * The built-in `InMemoryTaskStore`, `InMemoryPushNotificationStore` and
+ * `DefaultExecutionEventBusManager` scope data by `tenant` to provide isolation.
  */
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
@@ -95,6 +112,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
   private readonly keepBusAliveStates: Set<TaskState>;
+  private readonly validateInputModes: boolean;
 
   constructor(
     agentCard: AgentCard,
@@ -114,6 +132,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
     this.keepBusAliveStates = new Set(options.keepBusAliveStates ?? INTERRUPTED_STATE_LIST);
+    this.validateInputModes = options.validateInputModes ?? false;
 
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
@@ -154,6 +173,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return agentCard;
   }
 
+  private _validateInputModes(message: Message, agentCard: AgentCard): void {
+    const supportedModes = agentCard.defaultInputModes ?? [];
+    if (!this.validateInputModes || supportedModes.length === 0) {
+      return;
+    }
+    for (const part of message.parts ?? []) {
+      if (part.mediaType && !supportedModes.includes(part.mediaType)) {
+        throw new ContentTypeNotSupportedError(
+          `Media type '${part.mediaType}' is not supported. ` +
+            `Supported media types: ${supportedModes.join(', ')}.`
+        );
+      }
+    }
+  }
+
   private async _createRequestContext(
     request: SendMessageRequest,
     context: ServerCallContext
@@ -164,6 +198,22 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
+
+    const agentCard = await this.getAgentCard();
+    this._validateInputModes(incomingMessage, agentCard);
+    const agentExtensions = agentCard.capabilities?.extensions ?? [];
+
+    // The client MUST declare support for every required extension.
+    const requestedSet = new Set(context.requestedExtensions ?? []);
+    const missingRequired = agentExtensions
+      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
+      .map((ext) => ext.uri);
+
+    if (missingRequired.length > 0) {
+      throw new ExtensionSupportRequiredError(
+        `Client must declare support for required extensions: ${missingRequired.join(', ')}`
+      );
+    }
 
     if (incomingMessage.taskId) {
       this._requireValidTaskId(incomingMessage.taskId);
@@ -206,21 +256,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
     }
     const contextId = incomingMessage.contextId || task?.contextId || crypto.randomUUID();
-
-    const agentCard = await this.getAgentCard();
-    const agentExtensions = agentCard.capabilities?.extensions ?? [];
-
-    // The client MUST declare support for every required extension.
-    const requestedSet = new Set(context.requestedExtensions ?? []);
-    const missingRequired = agentExtensions
-      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
-      .map((ext) => ext.uri);
-
-    if (missingRequired.length > 0) {
-      throw new ExtensionSupportRequiredError(
-        `Client must declare support for required extensions: ${missingRequired.join(', ')}`
-      );
-    }
 
     // Narrow the client-requested set to extensions the agent actually
     // exposes. Mutate in place — the transport layer holds a reference
@@ -450,7 +485,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // Close the bus for terminal tasks; keep it alive for
         // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
         // resubscribers can still attach.
-        this._settleBus(taskId, eventBus, stateTracker());
+        this._settleBus(taskId, eventBus, stateTracker(), requestContext.context);
       });
   }
 
@@ -459,17 +494,30 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * (and the bare-Message stream pattern) close the bus immediately;
    * states configured in `keepBusAliveStates` keep it alive so follow-up
    * sends and resubscribers can still attach.
+   *
+   * A bus manager implementing
+   * {@link ExecutionEventBusManager.settleByTaskId} is offered the decision
+   * first and takes ownership of the bus by returning `true`, in which case we
+   * do nothing further. That seam exists for buses whose delivery is deferred,
+   * where `lastState` is still `undefined` when the executor returns and no
+   * state-based policy can work. A manager that declines — or has no opinion
+   * on this particular task — returns `false`, and the policy below applies as
+   * usual.
    */
   private _settleBus(
     taskId: string,
     eventBus: ExecutionEventBus,
-    lastState: TaskState | undefined
+    lastState: TaskState | undefined,
+    context: ServerCallContext
   ): void {
+    if (this.eventBusManager.settleByTaskId?.(taskId, eventBus, lastState, context)) {
+      return;
+    }
     if (lastState !== undefined && this.keepBusAliveStates.has(lastState)) {
       return;
     }
     eventBus.finished();
-    this.eventBusManager.cleanupByTaskId(taskId);
+    this.eventBusManager.cleanupByTaskId(taskId, context);
   }
 
   /**
@@ -572,7 +620,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        this._settleBus(taskId, eventBus, snapshotTracker().state);
+        this._settleBus(taskId, eventBus, snapshotTracker().state, requestContext.context);
       });
   }
 
@@ -603,7 +651,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     // Attach the queue before kicking off the executor so no events are missed.
     const eventQueue = new ExecutionEventQueue(eventBus);
 
@@ -674,6 +722,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: SendMessageRequest,
     context: ServerCallContext
   ): AsyncGenerator<StreamResponse, void, undefined> {
+    if (!this.agentCard.capabilities?.streaming) {
+      throw new UnsupportedOperationError('Streaming is not supported.');
+    }
+
     const incomingMessage = params.message;
     if (!incomingMessage?.messageId) {
       throw new RequestMalformedError('message.messageId is required for streaming.');
@@ -685,7 +737,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const requestContext = await this._createRequestContext(params, context);
     const taskId = requestContext.taskId;
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     const eventQueue = new ExecutionEventQueue(eventBus);
 
     if (
@@ -749,7 +801,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   ): Promise<ListTasksResponse> {
     const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
 
-    if (pageSize < 1 || pageSize > 100) {
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
     }
 
@@ -790,7 +842,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
     }
 
-    const eventBus = this.eventBusManager.getByTaskId(taskId);
+    const eventBus = this.eventBusManager.getByTaskId(taskId, context);
 
     if (eventBus) {
       const eventQueue = new ExecutionEventQueue(eventBus);
@@ -950,7 +1002,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Attach to the event bus BEFORE loading the task from the store so
     // we don't miss events published between the load and subscription.
-    const eventBus = this.eventBusManager.getByTaskId(taskId);
+    const eventBus = this.eventBusManager.getByTaskId(taskId, context);
     const eventQueue = eventBus ? new ExecutionEventQueue(eventBus) : undefined;
 
     try {

@@ -1,5 +1,5 @@
 import { A2A_LEGACY_PROTOCOL_VERSION } from '../../../constants.js';
-import { TaskPushNotificationConfig } from '../../../types/pb/a2a.js';
+import { TaskPushNotificationConfig } from '../../../types/index.js';
 import type { StoredPushNotificationConfig } from '../../push_notification/push_notification_store.js';
 import { requireKey } from '../../utils.js';
 import type { PushNotificationConfigRow } from './schema.js';

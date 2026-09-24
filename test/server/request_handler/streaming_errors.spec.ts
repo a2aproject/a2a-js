@@ -12,11 +12,9 @@ import {
   TaskStatusUpdateEvent,
 } from '../../../src/types/pb/a2a.js';
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
-import {
-  AgentEvent,
-  DefaultExecutionEventBus,
-} from '../../../src/server/events/execution_event_bus.js';
+import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
+import { UnsupportedOperationError } from '../../../src/errors/index.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
 // Streaming error synthesis: if the executor throws before a Task
@@ -85,6 +83,25 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     metadata: {},
     referenceTaskIds: [],
     ...overrides,
+  });
+
+  it('throws UnsupportedOperationError if the agent does not advertise streaming', async () => {
+    const nonStreamingHandler = new DefaultRequestHandler(
+      { ...agentCard, capabilities: { ...agentCard.capabilities!, streaming: false } },
+      taskStore,
+      mockExecutor,
+      eventBusManager
+    );
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-no-streaming', 'hello'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    const stream = nonStreamingHandler.sendMessageStream(params, serverContext);
+    await expect(stream.next()).rejects.toThrow(UnsupportedOperationError);
   });
 
   it('executor throws before any Task event: stream yields synthetic Task + statusUpdate(FAILED), not empty', async () => {
@@ -325,7 +342,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     await new Promise<void>((resolve) => setImmediate(resolve));
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeUndefined();
+    expect(eventBusManager.getByTaskId(observedRequestTaskId, serverContext)).toBeUndefined();
   });
 
   it('keeps the event bus alive when configured states replace the defaults', async () => {
@@ -385,7 +402,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
 
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    expect(eventBusManager.getByTaskId(observedRequestTaskId)).toBeDefined();
+    expect(eventBusManager.getByTaskId(observedRequestTaskId, serverContext)).toBeDefined();
   });
 
   it('persists a late event after the executor returns in a configured non-terminal state', async () => {
@@ -453,7 +470,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     // active even though the executor has returned.
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(executorReturned).toBe(true);
-    const eventBus = eventBusManager.getByTaskId(observedRequestTaskId);
+    const eventBus = eventBusManager.getByTaskId(observedRequestTaskId, serverContext);
     expect(eventBus).toBeDefined();
 
     const lateEventPromise = iterator.next();
@@ -522,15 +539,12 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       serverContext
     );
 
-    const bus = new DefaultExecutionEventBus();
-
-    // Install the bus into the manager BEFORE the handler is asked to
-    // create one, so `createOrGetByTaskId` returns this instance.
+    // Create the bus through the manager BEFORE the handler is asked for
+    // one, so `createOrGetByTaskId` returns this same instance. It must be
+    // created under `serverContext`, the scope the handler will look it up
+    // from — buses are partitioned by (tenant, owner, taskId).
     const localBusManager = new DefaultExecutionEventBusManager();
-    (localBusManager as unknown as { taskIdToBus: Map<string, unknown> }).taskIdToBus.set(
-      taskId,
-      bus
-    );
+    const bus = localBusManager.createOrGetByTaskId(taskId, serverContext);
 
     const localHandler = new DefaultRequestHandler(
       agentCard,
@@ -598,7 +612,7 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       await new Promise<void>((resolve) => setImmediate(resolve));
 
       // Bus must still be alive at INPUT_REQUIRED.
-      expect(localBusManager.getByTaskId(taskId)).toBe(bus);
+      expect(localBusManager.getByTaskId(taskId, serverContext)).toBe(bus);
       sizesAfterTurns.push(eventListenerCount());
     };
 

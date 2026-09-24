@@ -13,7 +13,7 @@ import {
   Part, // Added for explicit Part typing
   AGENT_CARD_PATH,
 } from '../index.js';
-import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/pb/a2a.js';
+import { TaskState, Role, taskStateToJSON, SendMessageRequest } from '../types/index.js';
 import { AgentExecutionEvent, AgentEvent } from '../server/index.js';
 
 import {

@@ -41,7 +41,7 @@ import {
   StreamResponse,
   Task,
   TaskPushNotificationConfig,
-} from '../../types/pb/a2a.js';
+} from '../../types/index.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors/index.js';
 
@@ -470,7 +470,10 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
-    const params = TaskPushNotificationConfig.fromJSON(req.body ?? {});
+    const params = TaskPushNotificationConfig.fromJSON({
+      ...(req.body ?? {}),
+      taskId: req.params.taskId,
+    });
     const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
     sendResponse<TaskPushNotificationConfig>(
       res,
