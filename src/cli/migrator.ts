@@ -113,17 +113,31 @@ export function migrationNames(store: StoreMigrations): string[] {
 }
 
 /**
- * Migrates up or down until the ledger reads `target`, which is a migration name or
- * {@link BASE}. Kysely spells "revert everything" as its own sentinel.
+ * Reverts migrations until the ledger reads `target`, which is a migration name that stays
+ * applied or {@link BASE}. Kysely's `migrateTo` would apply migrations to reach a target that
+ * is still pending, so only an applied target is accepted: a downgrade must never upgrade.
+ * Kysely spells "revert everything" as its own sentinel.
  */
-export async function migrateStoreTo<DB>(
+export async function revertStoreTo<DB>(
   db: Kysely<DB>,
   store: StoreMigrations,
   target: string
 ): Promise<void> {
+  const migrator = await migratorFor(db, store);
+  if (target !== BASE) {
+    const applied = (await migrator.getMigrations()).some(
+      (migration) => migration.name === target && migration.executedAt !== undefined
+    );
+    if (!applied) {
+      throw new Error(
+        `"${target}" is not applied to the ${store.id} store, so reaching it would move ` +
+          `the store up, but this is a downgrade. Use upgrade to apply it.`
+      );
+    }
+  }
   const { NO_MIGRATIONS } = await migrationModule();
   const resolved = target === BASE ? NO_MIGRATIONS : target;
-  throwOnFailure(store, await (await migratorFor(db, store)).migrateTo(resolved));
+  throwOnFailure(store, await migrator.migrateTo(resolved));
 }
 
 /**
