@@ -12,6 +12,8 @@
     "agents:push-notification-webhook": "tsx agents/push-notification-agent/webhook.ts",
     "agents:push-notification-client": "tsx agents/push-notification-agent/client.ts",
     "agents:multi-transport-agent": "tsx agents/multi-transport-agent/index.ts",
+    "agents:websocket-agent": "tsx agents/websocket-agent/index.ts",
+    "agents:websocket-client": "tsx agents/websocket-agent/client.ts",
     "agents:cancellable-agent": "tsx agents/cancellable-agent/index.ts",
     "agents:cancellable-client": "tsx agents/cancellable-agent/client.ts",
     "agents:compat-v1-server": "tsx agents/compat-v1-server/index.ts",
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@genkit-ai/google-genai": "^1.38.0",
     "@types/express": "^5.0.5",
+    "@types/ws": "^8.18.1",
     "@types/passport": "^1.0.17",
     "@types/passport-jwt": "^4.0.1",
     "express": "^5.1.0",
@@ -31,6 +34,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.10.2",
-    "@grpc/grpc-js": "^1.14.4"
+    "@grpc/grpc-js": "^1.14.4",
+    "ws": "^8.18.0"
   }
 }
