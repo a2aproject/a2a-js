@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.1](https://github.com/a2aproject/a2a-js/compare/v1.2.0...v1.2.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* issue that status or artifact events do not propagate the metatadata to the task ([#748](https://github.com/a2aproject/a2a-js/issues/748)) ([72588af](https://github.com/a2aproject/a2a-js/commit/72588af83e38d22d2c642f11e0787b423dcdd539))
+* **jsonrpc:** return JSON-RPC errors as HTTP 200 and dispatch on A2A-Version ([#747](https://github.com/a2aproject/a2a-js/issues/747)) ([733259d](https://github.com/a2aproject/a2a-js/commit/733259d9139362d8f92d71f8599a9d86b686bcb5))
+* **rest:** ensure taskId is correctly set from path parameters when creating push notification configs ([#740](https://github.com/a2aproject/a2a-js/issues/740)) ([4a42ec1](https://github.com/a2aproject/a2a-js/commit/4a42ec12255656e119f6125dd40fc226c6807ac6))
+* **server:** add optional media type validation against agent defaultInputModes ([#745](https://github.com/a2aproject/a2a-js/issues/745)) ([27659a2](https://github.com/a2aproject/a2a-js/commit/27659a2f5f762ab04a18919ebff0b01f8ba6e52c))
+* validate JSON-RPC response version ([#698](https://github.com/a2aproject/a2a-js/issues/698)) ([e0cdc91](https://github.com/a2aproject/a2a-js/commit/e0cdc9141ded14d3e787c400a7729b2c2360d3d3))
+
 ## [1.2.0](https://github.com/a2aproject/a2a-js/compare/v1.1.0...v1.2.0) (2026-09-18)
 
 
