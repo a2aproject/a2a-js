@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { requireArray, requireObject } from '../../../../src/compat/v0_3/translate/_validate.js';
+import {
+  requireArray,
+  requireObject,
+  requireString,
+} from '../../../../src/compat/v0_3/translate/_validate.js';
 import { A2AError } from '../../../../src/compat/v0_3/server/error.js';
 import { JSON_RPC_ERROR_CODE } from '../../../../src/errors/json_rpc.js';
 
@@ -55,6 +59,32 @@ describe('_validate', () => {
       try {
         requireObject(undefined, 'x');
         expect.fail('requireObject should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(A2AError);
+        expect(JSON_RPC_ERROR_CODE[(err as Error).name]).toBe(-32602);
+      }
+    });
+  });
+
+  describe('requireString', () => {
+    it('returns the value when it is a non-empty string', () => {
+      expect(requireString('abc', 'foo')).toBe('abc');
+    });
+
+    it.each([undefined, null, '', 42, {}, ['a']])(
+      'throws A2AError.invalidParams for a missing or non-string value (%p)',
+      (value) => {
+        expect(() => requireString(value as unknown as string, 'foo.bar')).toThrowError(A2AError);
+        expect(() => requireString(value as unknown as string, 'foo.bar')).toThrow(
+          /foo\.bar is required and must be a non-empty string/
+        );
+      }
+    );
+
+    it('carries the JSON-RPC invalid-params code', () => {
+      try {
+        requireString(undefined, 'x');
+        expect.fail('requireString should have thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(A2AError);
         expect(JSON_RPC_ERROR_CODE[(err as Error).name]).toBe(-32602);
