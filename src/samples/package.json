@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@genkit-ai/google-genai": "^1.38.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.5",
     "@types/passport": "^1.0.17",
     "@types/passport-jwt": "^4.0.1",
