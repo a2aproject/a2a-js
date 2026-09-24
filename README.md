@@ -99,6 +99,7 @@ Each sample directory has its own `README.md` with run instructions.
 | [`cli.ts`](src/samples/cli.ts)                                                  | Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with `--auth` / `--svc-param` header injection.                                |
 | [`agents/compat-v1-server`](src/samples/agents/compat-v1-server/)               | v1.0-native server with `legacyCompat: { enabled: true }` on every transport — JSON-RPC, REST, gRPC, agent card, and push notifications.       |
 | [`agents/compat-v1-client`](src/samples/agents/compat-v1-client/)               | v1.0-native client driving both the compat-aware server above and a hand-rolled mock v0.3 server in-process; pairs with `compat-v1-server`.    |
+| [`agents/database-agent`](src/samples/agents/database-agent/)                   | Persistent agent backed by SQLite + Kysely (`DatabaseTaskStore` and `DatabasePushNotificationStore`).                                          |
 
 To run a sample, install dependencies inside `src/samples` and use the
 provided npm scripts:
@@ -131,6 +132,7 @@ The server side is built around three pieces:
 
 Reference samples:
 [`sample-agent`](src/samples/agents/sample-agent/),
+[`database-agent`](src/samples/agents/database-agent/),
 [`multi-transport-agent`](src/samples/agents/multi-transport-agent/),
 [`cancellable-agent`](src/samples/agents/cancellable-agent/),
 [`push-notification-agent`](src/samples/agents/push-notification-agent/).

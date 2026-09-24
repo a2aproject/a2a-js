@@ -90,6 +90,7 @@ The `src/samples` directory contains practical examples. Each subdirectory has i
     *   `verify-signing/`: Client-side verification of signed agent cards (JWS + JWKS).
     *   `compat-v1-server/`: v1.0-native server with `legacyCompat: { enabled: true }` on every transport.
     *   `compat-v1-client/`: v1.0-native client driving both the compat-aware server above and an in-process mock v0.3 server.
+    *   `database-agent/`: Persistent agent backed by SQLite + Kysely (`DatabaseTaskStore` and `DatabasePushNotificationStore`).
 *   **`authentication/`**: Bearer/JWT authentication with Passport, including a `UserBuilder` that propagates the authenticated user into the agent context.
 *   **`extensions/`**: Protocol extension implemented as an `AgentExecutor` decorator that stamps metadata onto outgoing events.
 *   **`client/interceptors/`**: Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.
