@@ -7,7 +7,7 @@ import {
   type ListTasksRequest,
   type ListTasksResponse,
   type Task,
-} from '../../../types/pb/a2a.js';
+} from '../../../types/index.js';
 import type { ServerCallContext } from '../../context.js';
 import { type OwnerResolver, resolveUserScope } from '../../owner_resolver.js';
 import type { TaskStore } from '../../store.js';

@@ -1,4 +1,4 @@
-import { Task, taskStateToJSON } from '../../../types/pb/a2a.js';
+import { Task, taskStateToJSON } from '../../../types/index.js';
 import { requireKey } from '../../utils.js';
 import type { TaskRow } from './schema.js';
 
