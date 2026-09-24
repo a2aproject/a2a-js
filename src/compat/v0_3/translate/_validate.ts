@@ -13,3 +13,10 @@ export function requireObject<T>(value: T | undefined | null, path: string): T {
   }
   return value;
 }
+
+export function requireString(value: string | undefined | null, path: string): string {
+  if (typeof value !== 'string' || value === '') {
+    throw A2AError.invalidParams(`${path} is required and must be a non-empty string`);
+  }
+  return value;
+}

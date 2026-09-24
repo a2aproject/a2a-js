@@ -16,24 +16,13 @@
 import type { StreamResponse } from '../../types/pb/a2a.js';
 import type * as legacy from './types/types.js';
 import { A2AError } from './server/error.js';
+import { requireObject, requireString } from './translate/_validate.js';
 import { toCoreMessage } from './translate/messages.js';
 import {
   toCoreTask,
   toCoreTaskArtifactUpdateEvent,
   toCoreTaskStatusUpdateEvent,
 } from './translate/tasks.js';
-
-function requireString(value: unknown, path: string): void {
-  if (typeof value !== 'string' || value === '') {
-    throw A2AError.invalidParams(`${path} is required and must be a non-empty string`);
-  }
-}
-
-function requireObject(value: unknown, path: string): void {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw A2AError.invalidParams(`${path} is required and must be an object`);
-  }
-}
 
 /**
  * Converts a raw v0.3 push-notification body into a v1.0
