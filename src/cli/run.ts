@@ -10,6 +10,7 @@ import { TASK_STORE_ID, taskStoreMigrations } from '../server/database/task/migr
 import { connect } from './connect.js';
 import {
   BASE,
+  MIGRATION_LOCK_TABLE,
   migrateStore,
   migrateStoreTo,
   migrationNames,
@@ -52,7 +53,8 @@ Usage:
 
 Commands:
   status     Show migration status for each store.
-  upgrade    Apply pending migrations. Safe to re-run.
+  upgrade    Apply pending migrations, always up to the latest migration.
+             Safe to re-run.
   downgrade  Revert migrations. Reverts the latest migration by default.
              Pass <to> as a migration name to stop at (leaving it applied),
              or "${BASE}" to revert all.
@@ -91,6 +93,15 @@ Offline (--sql):
 Table Renaming:
   When using custom table names, pass the name configured in your store.
   The migration ledger table is renamed automatically to match.
+
+Lock Table:
+  Online upgrade and downgrade also create ${MIGRATION_LOCK_TABLE} for Kysely's
+  migration lock; every store shares it. Scripts rendered with --sql don't
+  create it.
+
+Cleaning Up:
+  downgrade never drops the lock table. It doesn't drop the ledger tables
+  either; it only deletes their rows. Drop them manually to remove everything.
 
 Examples:
   # Online migrations:
