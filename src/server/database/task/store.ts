@@ -55,18 +55,22 @@ export interface DatabaseTaskStoreOptions {
 /**
  * {@link TaskStore} backed by a database.
  *
- * The caller builds the {@link Kysely} instance.
+ * The caller builds the {@link Kysely} instance and can type it with any schema: the
+ * store names its table at runtime, so one connection can serve other stores and the
+ * application's own tables too.
  * The table must already exist, migrating is an operator step, not something
  * the store does on first use.
  */
-export class DatabaseTaskStore implements TaskStore {
+export class DatabaseTaskStore<DB = unknown> implements TaskStore {
   private readonly db: Kysely<TaskDatabase>;
   private readonly ownerResolver: OwnerResolver;
   private readonly dialect: DialectName;
   private readonly tableName: string;
 
-  constructor(db: Kysely<TaskDatabase>, options: DatabaseTaskStoreOptions = {}) {
-    this.db = db;
+  constructor(db: Kysely<DB>, options: DatabaseTaskStoreOptions = {}) {
+    // Safe: the table is named at runtime, so the caller's schema type is never used.
+    // Kysely only accepts an exact schema type, so the conversion goes through unknown.
+    this.db = db as unknown as Kysely<TaskDatabase>;
     this.ownerResolver = options.ownerResolver ?? resolveUserScope;
     this.tableName = options.tableName ?? TASK_TABLE;
     // Fixed for the connection's lifetime, and rejects an engine we cannot

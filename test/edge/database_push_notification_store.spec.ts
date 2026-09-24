@@ -7,7 +7,6 @@ import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
 
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
-import type { PushNotificationDatabase } from '../../src/server/database/push_notification/schema.js';
 import { pushNotificationStoreMigrations } from '../../src/server/database/push_notification/migrations.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
@@ -64,7 +63,7 @@ function open(): Kysely<unknown> {
 }
 
 describe('DatabasePushNotificationStore on D1', () => {
-  let db: Kysely<PushNotificationDatabase>;
+  let db: Kysely<unknown>;
   let store: DatabasePushNotificationStore;
 
   /** No ledger and no lock table here: nothing on edge runs the `Migrator`. */
@@ -99,7 +98,7 @@ describe('DatabasePushNotificationStore on D1', () => {
     await migrate(connection);
     await connection.destroy();
 
-    db = open() as Kysely<PushNotificationDatabase>;
+    db = open();
     store = new DatabasePushNotificationStore(db);
   });
 
@@ -125,7 +124,7 @@ describe('DatabasePushNotificationStore on D1', () => {
       await db.destroy();
 
       // A whole new connection and store, as a fresh isolate would have.
-      db = open() as Kysely<PushNotificationDatabase>;
+      db = open();
       const restarted = new DatabasePushNotificationStore(db);
 
       expect(await restarted.load('task-1', makeContext())).toEqual([makeConfig()]);

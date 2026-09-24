@@ -1,5 +1,6 @@
+import Database from 'better-sqlite3';
 import express from 'express';
-import { Kysely, SqliteDialect, type SqliteDatabase } from 'kysely';
+import { Kysely, SqliteDialect } from 'kysely';
 import path from 'node:path';
 
 import { A2A_PROTOCOL_VERSION, AgentCard, AGENT_CARD_PATH } from '../../../index.js';
@@ -7,8 +8,6 @@ import { agentCardHandler, jsonRpcHandler, UserBuilder } from '../../../server/e
 import {
   DatabaseTaskStore,
   DatabasePushNotificationStore,
-  type TaskDatabase,
-  type PushNotificationDatabase,
 } from '../../../server/database/index.js';
 import { DefaultPushNotificationSender, DefaultRequestHandler } from '../../../server/index.js';
 import { DatabaseAgentExecutor } from './agent_executor.js';
@@ -60,18 +59,11 @@ export const databaseAgentCard: AgentCard = {
   signatures: [],
 };
 
-async function loadDriver(name: string): Promise<Record<string, unknown>> {
-  return (await import(name)) as Record<string, unknown>;
-}
-
 async function main() {
   // 1. Initialize SQLite database & Kysely
-  const driver = await loadDriver('better-sqlite3');
-  const Database = driver.default as new (path: string) => SqliteDatabase;
   const sqlite = new Database(DATABASE_FILE);
   const dialect = new SqliteDialect({ database: sqlite });
-  type AppDatabase = TaskDatabase & PushNotificationDatabase;
-  const db = new Kysely<AppDatabase>({ dialect });
+  const db = new Kysely({ dialect });
 
   // 2. Validate tables exist, with guidance if migrations were not run
   const tables = sqlite
@@ -88,16 +80,8 @@ async function main() {
   }
 
   // 3. Create persistent stores backed by the database.
-  // Cast via ConstructorParameters is needed here because this sample is in an isolated
-  // sub-workspace with its own node_modules. TypeScript sees two different Kysely class
-  // declarations (root vs. samples) and rejects mixing them due to Kysely's private (#private)
-  // members. In a standalone project with a single node_modules, pass `db` directly without casts.
-  const taskStore = new DatabaseTaskStore(
-    db as unknown as ConstructorParameters<typeof DatabaseTaskStore>[0]
-  );
-  const pushNotificationStore = new DatabasePushNotificationStore(
-    db as unknown as ConstructorParameters<typeof DatabasePushNotificationStore>[0]
-  );
+  const taskStore = new DatabaseTaskStore(db);
+  const pushNotificationStore = new DatabasePushNotificationStore(db);
   const pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
 
   // 4. Create AgentExecutor
