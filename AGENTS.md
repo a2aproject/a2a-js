@@ -16,7 +16,7 @@ compatibility layer for v0.3 peers (see section 5 below).
 *   **Build System**: `tsup` (Outputs ESM and CJS)
 *   **Testing Framework**: `vitest`
 *   **Linting/Formatting**: `eslint`, `prettier`
-*   **Peer Dependencies**: `express` (for server-side Express integration)
+*   **Peer Dependencies** (all optional): `express` (Express integration), `@grpc/grpc-js` + `@bufbuild/protobuf` (gRPC), `kysely` + `pg` / `mysql2` / `better-sqlite3` (database stores and the `a2a-db` CLI)
 
 ## Architecture & Key Components
 
@@ -54,6 +54,13 @@ The project is structured into modular entry points to allow tree-shaking and se
 ### 4b. Server gRPC Integration (`src/server/grpc/index.ts`)
 *   **`grpcService`** + **`A2AService`** descriptor for `grpc.Server.addService(...)`.
 
+### 4c. Server Database Stores (`src/server/database/index.ts`)
+*   **`DatabaseTaskStore`** / **`DatabasePushNotificationStore`**: Kysely-backed stores for PostgreSQL, MySQL, SQLite and Cloudflare D1 (via `kysely-d1`). They accept a Kysely connection of any schema type and take a `tableName` option. Workers-safe (D1 suites in `test/edge/`).
+*   **Migrations**: in `src/server/database/{task,push_notification}/migrations/`. The stores never create tables themselves.
+*   **`a2a-db` CLI** (`src/cli/`, the package's `bin`): `status`, `upgrade`, `downgrade`, and `--sql` to render the migrations as SQL offline (the only way to provision D1).
+
+See `docs/persistent-stores.md` for the user guide.
+
 ### 5. v0.3 Backward Compatibility (`src/compat/v0_3/`)
 The compat layer is shipped as six subpath exports off `@a2a-js/sdk`, mirroring the v1.0 layout (`server` is framework-agnostic; `server/express` and `server/grpc` carry the runtime-specific bits):
 
@@ -73,6 +80,8 @@ The bidirectional v0.3 ↔ v1.0 translators in `./translate/` are intentionally 
 | :--- | :--- |
 | `npm run build` | Builds the SDK using `tsup` into `dist/`. |
 | `npm test` | Runs unit tests using `vitest`. |
+| `npm run test:edge` | Runs the Workers-compatible suites, including the D1 store tests, in Miniflare. |
+| `npm run test:db` | Runs the database suites against PostgreSQL and MySQL in containers (docker or podman); `npm test` covers SQLite only. |
 | `npm run lint`    | Runs all linting checks and applies automatic fixes (`tsc --noEmit` + ESLint + Prettier). |
 | `npm run lint:ci` | Runs all linting checks without applying fixes. Fails if any issues are found.      |
 | `npm run format:readme` | Formats the README file. |
@@ -90,6 +99,7 @@ The `src/samples` directory contains practical examples. Each subdirectory has i
     *   `verify-signing/`: Client-side verification of signed agent cards (JWS + JWKS).
     *   `compat-v1-server/`: v1.0-native server with `legacyCompat: { enabled: true }` on every transport.
     *   `compat-v1-client/`: v1.0-native client driving both the compat-aware server above and an in-process mock v0.3 server.
+    *   `database-agent/`: Agent with a server that uses persistent stores, so tasks and push notification configs survive restarts.
 *   **`authentication/`**: Bearer/JWT authentication with Passport, including a `UserBuilder` that propagates the authenticated user into the agent context.
 *   **`extensions/`**: Protocol extension implemented as an `AgentExecutor` decorator that stamps metadata onto outgoing events.
 *   **`client/interceptors/`**: Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.
@@ -98,4 +108,4 @@ The `src/samples` directory contains practical examples. Each subdirectory has i
 ## Development Conventions
 
 *   **Testing**: All new features should have accompanying unit tests in `test/` or alongside source files.
-*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./client/grpc`, `./server`, `./server/express`, `./server/grpc`, `./compat/v0_3`, `./compat/v0_3/server`, `./compat/v0_3/server/express`, `./compat/v0_3/server/grpc`, `./compat/v0_3/client`, `./compat/v0_3/client/grpc`). Ensure new components are exported from the correct entry point.
+*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./client/grpc`, `./server`, `./server/express`, `./server/grpc`, `./server/database`, `./compat/v0_3`, `./compat/v0_3/server`, `./compat/v0_3/server/express`, `./compat/v0_3/server/grpc`, `./compat/v0_3/client`, `./compat/v0_3/client/grpc`). Ensure new components are exported from the correct entry point.

@@ -25,6 +25,7 @@ HTTP+JSON/REST, gRPC), and an opt-in compatibility layer for v0.3 peers.
   all backed by a single `DefaultRequestHandler`.
 - 🔄 **v0.3 backward compatibility** as an opt-in layer so v1.0 deployments
   can interoperate with peers still on v0.3 during a staged migration.
+- 💾 **Persistent stores** — tasks and push notification configs in PostgreSQL, MySQL, SQLite, or Cloudflare D1, with the `a2a-db` CLI for migrations.
 
 ## Installation
 
@@ -48,6 +49,14 @@ If you plan to use the GRPC transport (imports from `@a2a-js/sdk/server/grpc`, `
 
 ```bash
 npm install @grpc/grpc-js @bufbuild/protobuf
+```
+
+### For Persistent Stores
+
+If you plan to use persistent stores (`@a2a-js/sdk/server/database`), install Kysely and the driver for your database:
+
+```bash
+npm install kysely <driver>  # pg / mysql2 / better-sqlite3 / kysely-d1 (Cloudflare D1)
 ```
 
 ---
@@ -78,6 +87,7 @@ SDK-specific guides live under [`docs/`](docs/):
 
 - [Migration guide (`v0.3` → `v1.0`)](docs/migration-guide.md)
 - [v0.3 compatibility guide](docs/compatibility-v0_3.md)
+- [Persistent stores guide](docs/persistent-stores.md)
 
 ## Samples
 
@@ -99,6 +109,7 @@ Each sample directory has its own `README.md` with run instructions.
 | [`cli.ts`](src/samples/cli.ts)                                                  | Multi-transport interactive CLI client (JSON-RPC / REST / gRPC) with `--auth` / `--svc-param` header injection.                                |
 | [`agents/compat-v1-server`](src/samples/agents/compat-v1-server/)               | v1.0-native server with `legacyCompat: { enabled: true }` on every transport — JSON-RPC, REST, gRPC, agent card, and push notifications.       |
 | [`agents/compat-v1-client`](src/samples/agents/compat-v1-client/)               | v1.0-native client driving both the compat-aware server above and a hand-rolled mock v0.3 server in-process; pairs with `compat-v1-server`.    |
+| [`agents/database-agent`](src/samples/agents/database-agent/)                   | Agent with a server that uses persistent stores, so tasks and push notification configs survive restarts.                                      |
 
 To run a sample, install dependencies inside `src/samples` and use the
 provided npm scripts:
@@ -131,6 +142,7 @@ The server side is built around three pieces:
 
 Reference samples:
 [`sample-agent`](src/samples/agents/sample-agent/),
+[`database-agent`](src/samples/agents/database-agent/),
 [`multi-transport-agent`](src/samples/agents/multi-transport-agent/),
 [`cancellable-agent`](src/samples/agents/cancellable-agent/),
 [`push-notification-agent`](src/samples/agents/push-notification-agent/).
@@ -217,6 +229,17 @@ See the doc comments on
 [`ExecutionEventBusManager`](src/server/events/execution_event_bus_manager.ts)
 for the full contract, and `test/integration/delayed_event_bus.spec.ts` for a
 worked example against a bus that withholds every batch.
+
+### Persistent stores
+
+The in-memory stores (`InMemoryTaskStore` and `InMemoryPushNotificationStore`) lose all state when the server restarts.
+
+For persistent production storage, `@a2a-js/sdk/server/database` provides `DatabaseTaskStore` and `DatabasePushNotificationStore` backed by Kysely:
+
+- Supported engines: PostgreSQL, MySQL, SQLite, and Cloudflare D1.
+- Schema management: Ships with the `a2a-db` CLI tool, which can also render SQL offline.
+
+See the [Persistent stores guide](docs/persistent-stores.md) and the [`database-agent`](src/samples/agents/database-agent/) sample.
 
 ### Client customization
 

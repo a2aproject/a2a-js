@@ -17,10 +17,45 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       matrix:
-        node-version: [20, 22, 24]
+        # 0.28 Kysely and better-sqlite3 12 are the last lines supporting Node 20.
+        include:
+          - node-version: 20
+            kysely: '0.28.17'
+            better-sqlite3: '12'
+          # No overrides: these take the lockfile versions (Kysely 0.29, SQLite 13).
+          - node-version: 22
+          - node-version: 24
+    # The migration suite runs against every engine it supports.
+    # Both health checks go over TCP as the application user. While initialising, each
+    # image runs a temporary server that answers on its socket only, so a socket probe
+    # reports healthy seconds before the real server accepts a connection.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: a2a
+          POSTGRES_PASSWORD: a2a_password
+          POSTGRES_DB: a2a_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -h 127.0.0.1 -U a2a -d a2a_test" --health-interval 10s --health-timeout 5s --health-retries 5
+      mysql:
+        # 8.0 or newer: utf8mb4_0900_bin, the collation the key columns depend on, does
+        # not exist before it.
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: a2a_test
+          MYSQL_USER: a2a
+          MYSQL_PASSWORD: a2a_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --protocol=TCP -h 127.0.0.1 -u a2a -pa2a_password" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-node@v7
@@ -29,11 +64,31 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     - run: npm ci
+    # Overrides the lockfile pin and the devDependency. Skipped where the
+    # matrix names no version.
+    - if: matrix.kysely
+      run: npm install --no-save kysely@${{ matrix.kysely }}
+    - if: matrix['better-sqlite3']
+      run: npm install --no-save better-sqlite3@${{ matrix['better-sqlite3'] }}
     - run: npm test
+    # Run apart, and serially: the suites drop and recreate the same tables.
+    # The suites skip an engine they cannot reach. Every engine is reachable here, so a
+    # skip would mean this job is misconfigured; the flag turns that into a failure.
+    - name: Database suites against PostgreSQL and MySQL
+      run: >-
+        npx vitest run --no-file-parallelism
+        test/cli/database_push_notification_migrations.spec.ts
+        test/cli/database_task_migrations.spec.ts
+        test/server/database_push_notification_store.spec.ts
+        test/server/database_task_store.spec.ts
+      env:
+        POSTGRES_TEST_DSN: postgresql://a2a:a2a_password@localhost:5432/a2a_test
+        MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test
+        A2A_TEST_REQUIRE_ALL_ENGINES: '1'
 
-  # Edge runtime tests use @edge-runtime/vm to emulate Cloudflare Workers,
-  # Vercel Edge Functions, and similar environments. This ensures the SDK
-  # works correctly in non-Node.js server environments.
+  # Edge runtime tests run in workerd, via @cloudflare/vitest-pool-workers. This
+  # ensures the SDK works in non-Node.js server environments, including the database
+  # stores, which `test/edge/` drives against a miniflare-provided D1 binding.
   test-edge:
     runs-on: ubuntu-latest
     timeout-minutes: 10
