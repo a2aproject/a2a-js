@@ -200,12 +200,12 @@ export class RestTransport implements Transport {
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
     const path = this._buildPath(`/tasks/${encodeURIComponent(params.id)}:cancel`, params.tenant);
-    const response = await this._sendRequest<void, Task>(
+    const response = await this._sendRequest<CancelTaskRequest, Task>(
       'POST',
       path,
-      undefined,
+      params,
       options,
-      undefined,
+      CancelTaskRequest,
       Task
     );
     return response;
