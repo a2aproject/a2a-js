@@ -449,7 +449,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               contextId: finalMessageForAgent.contextId!,
               parts: [
                 {
-                  content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
+                  // Sanitize (CWE-209): the raw error (stack trace, file
+                  // path) is logged above but must not reach the wire;
+                  // semantic A2AError messages are kept.
+                  content: {
+                    $case: 'text',
+                    value:
+                      err instanceof A2AError
+                        ? `Agent execution error: ${errorMessage}`
+                        : 'Agent execution failed.',
+                  },
                   mediaType: 'text/plain',
                   filename: '',
                   metadata: {},
@@ -566,7 +575,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
                 contextId: finalMessageForAgent.contextId!,
                 parts: [
                   {
-                    content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
+                    // Sanitize (CWE-209): raw error is logged above.
+                    content: {
+                      $case: 'text',
+                      value:
+                        err instanceof A2AError
+                          ? `Agent execution error: ${errorMessage}`
+                          : 'Agent execution failed.',
+                    },
                     mediaType: 'text/plain',
                     filename: '',
                     metadata: {},
@@ -603,7 +619,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               contextId: errorContextId,
               parts: [
                 {
-                  content: { $case: 'text', value: `Agent execution error: ${errorMessage}` },
+                  // Sanitize (CWE-209): raw error is logged above.
+                  content: {
+                    $case: 'text',
+                    value:
+                      err instanceof A2AError
+                        ? `Agent execution error: ${errorMessage}`
+                        : 'Agent execution failed.',
+                  },
                   mediaType: 'text/plain',
                   filename: '',
                   metadata: {},
@@ -1142,7 +1165,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             contextId: currentTask.contextId,
             parts: [
               {
-                content: { $case: 'text', value: `Event processing loop failed: ${errorMessage}` },
+                // Sanitize (CWE-209): the raw drain error (stack trace,
+                // file path) must not reach the wire; it is logged in the
+                // catch below.
+                content: {
+                  $case: 'text',
+                  value:
+                    error instanceof A2AError
+                      ? `Event processing loop failed: ${errorMessage}`
+                      : 'Event processing loop failed.',
+                },
                 mediaType: 'text/plain',
                 filename: '',
                 metadata: {},
