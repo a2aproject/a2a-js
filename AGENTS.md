@@ -56,7 +56,7 @@ The project is structured into modular entry points to allow tree-shaking and se
 
 ### 4c. Server Database Stores (`src/server/database/index.ts`)
 *   **`DatabaseTaskStore`** / **`DatabasePushNotificationStore`**: Kysely-backed stores for PostgreSQL, MySQL, SQLite and Cloudflare D1 (via `kysely-d1`). They accept a Kysely connection of any schema type and take a `tableName` option. Workers-safe (D1 suites in `test/edge/`).
-*   **Migrations**: in `src/server/database/{task,push_notification}/migrations/`. The stores never create tables themselves.
+*   **Migrations**: in `src/cli/{task,push_notification}/migrations/`. The stores never create tables themselves.
 *   **`a2a-db` CLI** (`src/cli/`, the package's `bin`): `status`, `upgrade`, `downgrade`, and `--sql` to render the migrations as SQL offline (the only way to provision D1).
 
 See `docs/persistent-stores.md` for the user guide.
