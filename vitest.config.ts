@@ -10,7 +10,8 @@ export default defineConfig({
     // runs via its own config (`npm run test:integration`). The rest of
     // test/integration is in-process and runs here too, which keeps it in the
     // node version matrix and in the coverage report.
-    exclude: [...configDefaults.exclude, 'test/integration/samples_smoke.spec.ts'],
+    // `test/edge/` needs a workerd binding, so it runs only under vitest.edge.config.
+    exclude: [...configDefaults.exclude, 'test/integration/samples_smoke.spec.ts', 'test/edge/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'json-summary'],
