@@ -8,7 +8,7 @@ import type { Kysely } from 'kysely';
 
 import { connect } from '../../src/cli/connect.js';
 import { migrateStore } from '../../src/cli/migrator.js';
-import { taskStoreMigrations } from '../../src/server/database/task/migrations.js';
+import { taskStoreMigrations } from '../../src/cli/task/migrations.js';
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';

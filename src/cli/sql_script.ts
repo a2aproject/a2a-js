@@ -2,9 +2,9 @@ import { sql } from 'kysely';
 import type { Kysely } from 'kysely';
 
 import type { DialectName } from '../server/database/dialect.js';
-import type { StoreMigrations } from '../server/database/store_migrations.js';
 import { BASE, migrationNames } from './migrator.js';
 import { recordingKysely } from './offline.js';
+import type { StoreMigrations } from './store_migrations.js';
 
 /** The end of a store's history, as {@link BASE} is the start. */
 export const LATEST = 'latest';

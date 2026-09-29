@@ -8,7 +8,7 @@ import type { Kysely } from 'kysely';
 
 import { connect } from '../../src/cli/connect.js';
 import { migrateStore } from '../../src/cli/migrator.js';
-import { pushNotificationStoreMigrations } from '../../src/server/database/push_notification/migrations.js';
+import { pushNotificationStoreMigrations } from '../../src/cli/push_notification/migrations.js';
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';

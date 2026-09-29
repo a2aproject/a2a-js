@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/a2aproject/a2a-js/compare/v1.2.1...v1.3.0) (2026-09-29)
+
+
+### Features
+
+* **server/database:** add database-backed task and push notification stores ([#756](https://github.com/a2aproject/a2a-js/issues/756)) ([0f2e563](https://github.com/a2aproject/a2a-js/commit/0f2e563fb134dd9cb59c3b3b978a7f02e7760d16)), closes [#114](https://github.com/a2aproject/a2a-js/issues/114)
+
 ## [1.2.1](https://github.com/a2aproject/a2a-js/compare/v1.2.0...v1.2.1) (2026-09-24)
 
 
