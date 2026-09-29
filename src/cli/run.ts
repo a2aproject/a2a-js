@@ -1,12 +1,6 @@
 import { parseArgs } from 'node:util';
 
 import type { DialectName } from '../server/database/dialect.js';
-import {
-  PUSH_NOTIFICATION_STORE_ID,
-  pushNotificationStoreMigrations,
-} from '../server/database/push_notification/migrations.js';
-import type { StoreMigrations } from '../server/database/store_migrations.js';
-import { TASK_STORE_ID, taskStoreMigrations } from '../server/database/task/migrations.js';
 import { connect } from './connect.js';
 import {
   BASE,
@@ -18,8 +12,14 @@ import {
   storeState,
 } from './migrator.js';
 import { DIALECT_NAMES } from './offline.js';
+import {
+  PUSH_NOTIFICATION_STORE_ID,
+  pushNotificationStoreMigrations,
+} from './push_notification/migrations.js';
 import type { MigrationDirection } from './sql_script.js';
 import { LATEST, renderMigrationScript } from './sql_script.js';
+import type { StoreMigrations } from './store_migrations.js';
+import { TASK_STORE_ID, taskStoreMigrations } from './task/migrations.js';
 
 /**
  * Every store this CLI manages, against the table names it is given. Those are keyed by

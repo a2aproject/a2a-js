@@ -7,7 +7,7 @@ import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
 
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
-import { pushNotificationStoreMigrations } from '../../src/server/database/push_notification/migrations.js';
+import { pushNotificationStoreMigrations } from '../../src/cli/push_notification/migrations.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';

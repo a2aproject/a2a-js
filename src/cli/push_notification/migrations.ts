@@ -1,7 +1,7 @@
+import { PUSH_NOTIFICATION_TABLE } from '../../server/database/push_notification/schema.js';
 import { ledgerTableFor, type StoreMigrations } from '../store_migrations.js';
 
 import { createPushNotificationConfigs } from './migrations/0001_create_push_notification_configs.js';
-import { PUSH_NOTIFICATION_TABLE } from './schema.js';
 
 /** Names this store on the command line. */
 export const PUSH_NOTIFICATION_STORE_ID = 'push-notification-configs';

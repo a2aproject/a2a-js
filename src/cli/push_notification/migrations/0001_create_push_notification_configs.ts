@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import type { Kysely } from 'kysely';
 
-import { dialectOf, type DialectName } from '../../dialect.js';
+import { dialectOf, type DialectName } from '../../../server/database/dialect.js';
 import type { MigrationModule } from '../../store_migrations.js';
 
 /**
