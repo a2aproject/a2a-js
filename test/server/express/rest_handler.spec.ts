@@ -11,6 +11,10 @@ import {
 } from 'vitest';
 import express, { Express } from 'express';
 import request from 'supertest';
+import { once } from 'node:events';
+import type { AddressInfo } from 'node:net';
+import { RestTransport } from '../../../src/client/transports/rest_transport.js';
+import { ServiceParameters, withA2AVersion } from '../../../src/client/service-parameters.js';
 
 import { restHandler, UserBuilder } from '../../../src/server/express/index.js';
 import { A2ARequestHandler } from '../../../src/server/request_handler/a2a_request_handler.js';
@@ -326,6 +330,66 @@ describe('restHandler', () => {
   });
 
   describe('POST /tasks/:taskId:cancel', () => {
+    it.each([{}, { reason: 'user_requested', details: [false, 0, null, { id: 'audit-1' }] }])(
+      'should round-trip cancellation metadata through the REST client and server: %j',
+      async (metadata) => {
+        (mockRequestHandler.cancelTask as Mock).mockResolvedValue(testTask);
+        const server = app.listen(0, '127.0.0.1');
+        await once(server, 'listening');
+        try {
+          const endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+          const transport = new RestTransport({ endpoint });
+          const result = await transport.cancelTask(
+            { id: 'task-1', tenant: '', metadata },
+            { serviceParameters: ServiceParameters.create(withA2AVersion('1.0')) }
+          );
+
+          expect(result.id).toBe('task-1');
+          expect(mockRequestHandler.cancelTask).toHaveBeenCalledWith(
+            { id: 'task-1', tenant: '', metadata },
+            expect.anything()
+          );
+        } finally {
+          server.closeAllConnections();
+          await new Promise<void>((resolve, reject) => {
+            server.close((error) => (error ? reject(error) : resolve()));
+          });
+        }
+      }
+    );
+
+    it('should default missing body metadata to an empty object', async () => {
+      (mockRequestHandler.cancelTask as Mock).mockResolvedValue(testTask);
+      await request(app)
+        .post('/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .send({})
+        .expect(200);
+      expect(mockRequestHandler.cancelTask).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: '', metadata: {} },
+        expect.anything()
+      );
+    });
+
+    it.each(['', '/tenant1'])(
+      'should preserve cancellation metadata for prefix "%s"',
+      async (prefix) => {
+        const metadata = { reason: 'user_requested', audit: { id: 'cancel-001' } };
+        (mockRequestHandler.cancelTask as Mock).mockResolvedValue(testTask);
+
+        await request(app)
+          .post(`${prefix}/tasks/task-1:cancel`)
+          .set('A2A-Version', '1.0')
+          .send({ id: 'body-id-must-not-override-path', metadata })
+          .expect(200);
+
+        expect(mockRequestHandler.cancelTask).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'task-1', metadata }),
+          expect.anything()
+        );
+      }
+    );
+
     it('should cancel task and return 200 OK', async () => {
       // 200, not 202: a2a-go's v1.0 REST client treats any non-200 status
       // as a hard error and discards the body, so 202 would surface as
