@@ -20,6 +20,8 @@ const merged = mergeConfig(defaultConfig, {
       // Spawns the sample agent and CLI as child processes over real sockets.
       'test/integration/samples_smoke.spec.ts',
       'test/server/push_notification_integration.spec.ts',
+      // Native-fetch replay tests start a Node.js HTTP server; Web API tests stay in edge.
+      'test/client/auth_handler_request.spec.ts',
       // Push-notification senders are exercised against a real Express webhook
       // (sibling pure-unit serializer tests stay in the edge suite).
       'test/server/push_notification_sender_serializer.spec.ts',
