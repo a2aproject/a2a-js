@@ -26,6 +26,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
       - run: npm ci
+      # The lockfile's Kysely 0.29 and better-sqlite3 13 need Node 22. 0.28 and 12 are
+      # the last lines supporting Node 20, as in the unit tests' Node 20 job.
+      - run: npm install --no-save kysely@0.28.17 better-sqlite3@12
       # The samples are a separate workspace the integration suite spawns.
       - name: Install sample workspace dependencies
         run: npm ci
