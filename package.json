@@ -178,6 +178,7 @@
     "test:edge": "vitest run --config vitest.edge.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:db": "./scripts/run_db_tests.sh",
+    "test:package": "./scripts/package_smoke_test.sh",
     "install:samples": "npm --prefix src/samples install",
     "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint . --fix",
     "lint:ci": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint .",
