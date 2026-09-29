@@ -82,6 +82,7 @@ The bidirectional v0.3 ↔ v1.0 translators in `./translate/` are intentionally 
 | `npm test` | Runs unit tests using `vitest`. |
 | `npm run test:edge` | Runs the Workers-compatible suites, including the D1 store tests, in Miniflare. |
 | `npm run test:db` | Runs the database suites against PostgreSQL and MySQL in containers (docker or podman); `npm test` covers SQLite only. |
+| `npm run test:package` | Packs the SDK, installs the tarball into a temp project and runs `a2a-db --help`, as a user would. Needs network access. |
 | `npm run lint`    | Runs all linting checks and applies automatic fixes (`tsc --noEmit` + ESLint + Prettier). |
 | `npm run lint:ci` | Runs all linting checks without applying fixes. Fails if any issues are found.      |
 | `npm run format:readme` | Formats the README file. |
