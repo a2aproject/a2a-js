@@ -14,6 +14,10 @@ import type { StoreHarness } from './store_harness.js';
 // Spelled out rather than imported from the store
 const TABLE = 'tasks';
 
+/** What a deployment that renamed the table would have instead, ledger included. */
+export const RENAMED_TABLE = 'agent_tasks';
+export const RENAMED_LEDGER_TABLE = 'a2a_agent_tasks_migrations';
+
 /**
  * Declares the tests in the caller's describe. The caller's beforeEach runs first, since it
  * was declared first, and leaves the database this one builds the store on.
@@ -469,6 +473,33 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
       expect(await rowsInTable()).toHaveLength(2);
       expect((await store.load('task-1', lower))?.contextId).toBe('ctx-lower');
       expect((await store.load('task-1', upper))?.contextId).toBe('ctx-upper');
+    });
+  });
+
+  describe('tableName', () => {
+    const context = () => makeContext({ tenant: 'acme', user: 'alice' });
+
+    it('reads and writes the table it was given', async () => {
+      await harness.migrateRenamed();
+      const renamed = new DatabaseTaskStore(harness.db(), { tableName: RENAMED_TABLE });
+      const task = makeTask();
+
+      await renamed.save(task, context());
+
+      expect(await renamed.load('task-1', context())).toEqual(task);
+      expect(await rowsInTable(RENAMED_TABLE)).toHaveLength(1);
+    });
+
+    it('a store left on the default name cannot read a renamed table', async () => {
+      await harness.migrateRenamed();
+
+      await expect(store.load('task-1', context())).rejects.toThrow();
+    });
+
+    it('a store given a name cannot read the default table', async () => {
+      const renamed = new DatabaseTaskStore(harness.db(), { tableName: RENAMED_TABLE });
+
+      await expect(renamed.load('task-1', context())).rejects.toThrow();
     });
   });
 }

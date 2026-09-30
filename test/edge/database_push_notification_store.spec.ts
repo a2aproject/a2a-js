@@ -7,7 +7,10 @@ import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
 
 import { pushNotificationStoreMigrations } from '../../src/cli/push_notification/migrations.js';
-import { describeDatabasePushNotificationStoreBehavior } from '../support/database/database_push_notification_store_behavior.js';
+import {
+  RENAMED_TABLE,
+  describeDatabasePushNotificationStoreBehavior,
+} from '../support/database/database_push_notification_store_behavior.js';
 
 declare module 'cloudflare:test' {
   interface ProvidedEnv {
@@ -28,7 +31,9 @@ describe('DatabasePushNotificationStore on D1', () => {
 
   /** No ledger and no lock table here: nothing on edge runs the `Migrator`. */
   async function dropEverything(connection: Kysely<unknown>): Promise<void> {
-    await sql.raw(`drop table if exists ${TABLE}`).execute(connection);
+    for (const table of [TABLE, RENAMED_TABLE]) {
+      await sql.raw(`drop table if exists ${table}`).execute(connection);
+    }
   }
 
   /**
@@ -36,8 +41,8 @@ describe('DatabasePushNotificationStore on D1', () => {
    * The `Migrator` cannot: it introspects with `pragma_table_info`, which D1 answers
    * with SQLITE_AUTH.
    */
-  async function migrate(connection: Kysely<unknown>): Promise<void> {
-    const { migrations } = pushNotificationStoreMigrations();
+  async function migrate(connection: Kysely<unknown>, tableName?: string): Promise<void> {
+    const { migrations } = pushNotificationStoreMigrations(tableName);
     for (const name of Object.keys(migrations).sort()) {
       await migrations[name].up(connection);
     }
@@ -62,11 +67,15 @@ describe('DatabasePushNotificationStore on D1', () => {
     async execute(text) {
       await sql.raw(text).execute(db);
     },
-    async rowsInTable() {
-      return (await sql.raw(`select * from ${TABLE}`).execute(db)).rows as Record<
+    async rowsInTable(table = TABLE) {
+      return (await sql.raw(`select * from ${table}`).execute(db)).rows as Record<
         string,
         unknown
       >[];
+    },
+    async migrateRenamed() {
+      await sql.raw(`drop table if exists ${TABLE}`).execute(db);
+      await migrate(db, RENAMED_TABLE);
     },
   });
 });

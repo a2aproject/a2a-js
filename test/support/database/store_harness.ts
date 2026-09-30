@@ -10,6 +10,11 @@ export interface StoreHarness {
   /** Closes that connection and opens another to the same database, as a restart would. */
   reconnect(): Promise<Kysely<unknown>>;
   execute(text: string): Promise<void>;
-  /** Every row of the store's table. */
-  rowsInTable(): Promise<Record<string, unknown>[]>;
+  /** Every row of the store's table, or of `table`. */
+  rowsInTable(table?: string): Promise<Record<string, unknown>[]>;
+  /**
+   * Drops the default table and migrates the store's RENAMED_TABLE in its place. Fixed
+   * rather than a parameter, so the cleanup always knows which renamed table to drop.
+   */
+  migrateRenamed(): Promise<void>;
 }

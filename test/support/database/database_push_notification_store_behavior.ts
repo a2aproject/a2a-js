@@ -13,6 +13,10 @@ import type { StoreHarness } from './store_harness.js';
 const TABLE = 'push_notification_configs';
 const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** What a deployment that renamed the table would have instead, ledger included. */
+export const RENAMED_TABLE = 'agent_push_configs';
+export const RENAMED_LEDGER_TABLE = 'a2a_agent_push_configs_migrations';
+
 /**
  * Declares the tests in the caller's describe. The caller's beforeEach runs first, since it
  * was declared first, and leaves the database this one builds the store on.
@@ -418,6 +422,32 @@ export function describeDatabasePushNotificationStoreBehavior(harness: StoreHarn
       expect(await rowsInTable()).toHaveLength(2);
       expect((await store.load('task-1', lower))[0].url).toBe('https://lower.test/');
       expect((await store.load('task-1', upper))[0].url).toBe('https://upper.test/');
+    });
+  });
+
+  describe('tableName', () => {
+    const context = () => makeContext({ tenant: 'acme', user: 'alice' });
+
+    it('reads and writes the table it was given', async () => {
+      await harness.migrateRenamed();
+      const renamed = new DatabasePushNotificationStore(harness.db(), { tableName: RENAMED_TABLE });
+
+      await renamed.save('task-1', context(), makeConfig({ url: 'https://renamed.test/' }));
+
+      expect((await renamed.load('task-1', context()))[0].url).toBe('https://renamed.test/');
+      expect(await rowsInTable(RENAMED_TABLE)).toHaveLength(1);
+    });
+
+    it('a store left on the default name cannot read a renamed table', async () => {
+      await harness.migrateRenamed();
+
+      await expect(store.load('task-1', context())).rejects.toThrow();
+    });
+
+    it('a store given a name cannot read the default table', async () => {
+      const renamed = new DatabasePushNotificationStore(harness.db(), { tableName: RENAMED_TABLE });
+
+      await expect(renamed.load('task-1', context())).rejects.toThrow();
     });
   });
 }
