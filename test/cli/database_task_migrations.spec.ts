@@ -1,14 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { inspect } from 'node:util';
 
 import { sql } from 'kysely';
 import type { Kysely } from 'kysely';
 
-import { connect } from '../../src/cli/connect.js';
 import { run } from '../../src/cli/run.js';
+import {
+  describeOnEachEngine,
+  freshSqliteUrl,
+  withConnection,
+  type Server,
+} from '../support/database/node_engines.js';
 
 // Spelled out rather than imported from the store: a test that reads these from the code
 // it checks cannot catch a rename, and a renamed ledger makes a migrated database look
@@ -96,16 +98,10 @@ function groupIndexColumns(rows: Record<string, unknown>[]): Record<string, stri
   return indexes;
 }
 
-const tempDirs: string[] = [];
-
 const sqliteEngine: Engine = {
   name: 'sqlite',
   binaryCollation: 'binary',
-  freshUrl() {
-    const dir = mkdtempSync(join(tmpdir(), 'a2a-task-migrations-'));
-    tempDirs.push(dir);
-    return `sqlite:${join(dir, 'a2a.db')}`;
-  },
+  freshUrl: freshSqliteUrl('a2a-task-migrations-'),
   async widths(db) {
     // SQLite stores the declared type verbatim and never enforces it, so the width is
     // read back out of that string rather than from a limit the engine applies.
@@ -154,10 +150,8 @@ const sqliteEngine: Engine = {
 };
 
 /** PostgreSQL and MySQL are read the same way, differing only in these. */
-const SERVERS = [
-  {
-    name: 'postgres',
-    variable: 'POSTGRES_TEST_DSN',
+const DIALECTS = {
+  postgres: {
     binaryCollation: 'C',
     currentSchema: 'current_schema()',
     indexesSql: `
@@ -170,9 +164,7 @@ const SERVERS = [
       where t.relname = '${TABLE}' and not ix.indisprimary
       order by i.relname, k.ord`,
   },
-  {
-    name: 'mysql',
-    variable: 'MYSQL_TEST_DSN',
+  mysql: {
     binaryCollation: 'utf8mb4_0900_bin',
     currentSchema: 'database()',
     indexesSql: `
@@ -181,10 +173,11 @@ const SERVERS = [
       where table_name = '${TABLE}' and table_schema = database() and index_name <> 'PRIMARY'
       order by index_name, seq_in_index`,
   },
-] as const;
+} as const;
 
-function informationSchemaEngine(server: (typeof SERVERS)[number], url: string): Engine {
-  const { name, binaryCollation, currentSchema, indexesSql } = server;
+function informationSchemaEngine(server: Server, url: string): Engine {
+  const { name } = server;
+  const { binaryCollation, currentSchema, indexesSql } = DIALECTS[name];
   const scoped = `table_name = '${TABLE}' and table_schema = ${currentSchema}`;
   return {
     name,
@@ -237,43 +230,11 @@ function informationSchemaEngine(server: (typeof SERVERS)[number], url: string):
   };
 }
 
-/**
- * Set where every engine is meant to be reachable, so a misconfigured job fails instead
- * of quietly proving only that SQLite works. The variable names live here rather than in
- * the workflow, so renaming one cannot leave CI passing against fewer engines.
- */
-const REQUIRE_EVERY_ENGINE = process.env.A2A_TEST_REQUIRE_ALL_ENGINES === '1';
-
-/** SQLite needs nothing; a server engine joins in only once pointed at a database. */
-const ENGINES: Engine[] = [sqliteEngine];
-const UNCONFIGURED: string[] = [];
-
-for (const server of SERVERS) {
-  const url = process.env[server.variable];
-  if (url !== undefined) {
-    ENGINES.push(informationSchemaEngine(server, url));
-  } else if (REQUIRE_EVERY_ENGINE) {
-    throw new Error(
-      `${server.variable} is not set, but A2A_TEST_REQUIRE_ALL_ENGINES demands every engine.`
-    );
-  } else {
-    UNCONFIGURED.push(`${server.name} (${server.variable} not set)`);
-  }
-}
-
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
-
-// Reported rather than dropped, so a run against fewer engines than intended is visible.
-for (const label of UNCONFIGURED) {
-  describe.skip(`a2a-db task migrations on ${label}`, () => {
-    it('has no database to run against', () => {});
-  });
-}
-
-for (const engine of ENGINES) {
-  describe(`a2a-db task migrations on ${engine.name}`, () => {
+describeOnEachEngine(
+  'a2a-db task migrations',
+  sqliteEngine,
+  informationSchemaEngine,
+  (engine: Engine) => {
     let url: string;
 
     /**
@@ -281,13 +242,8 @@ for (const engine of ENGINES) {
      * one. SQLite answers `PRAGMA index_list` out of a schema cached when the connection
      * opened, so a connection older than the migration reports no indexes at all.
      */
-    async function introspect<T>(read: (db: Kysely<unknown>) => Promise<T>): Promise<T> {
-      const db = await connect(url);
-      try {
-        return await read(db);
-      } finally {
-        await db.destroy();
-      }
+    function introspect<T>(read: (db: Kysely<unknown>) => Promise<T>): Promise<T> {
+      return withConnection(url, read);
     }
 
     /** Everything a test here can create, so the next one starts from nothing. */
@@ -685,5 +641,5 @@ for (const engine of ENGINES) {
         expect(err).toContain('is where a downgrade starts, not where it stops');
       });
     });
-  });
-}
+  }
+);

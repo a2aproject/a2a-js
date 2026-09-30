@@ -1,7 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 import { sql } from 'kysely';
 import type { Kysely } from 'kysely';
@@ -14,6 +11,12 @@ import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';
 import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/constants.js';
+import {
+  describeOnEachEngine,
+  freshSqliteUrl,
+  urlOnly,
+  withConnection,
+} from '../support/database/node_engines.js';
 
 // Spelled out rather than imported from the store
 const TABLE = 'push_notification_configs';
@@ -59,83 +62,24 @@ function makeConfig(
   };
 }
 
-/** What differs between engines is only how to reach a database. */
-interface Engine {
-  readonly name: string;
-  freshUrl(): string;
-}
-
-const tempDirs: string[] = [];
-
-const ENGINES: Engine[] = [
-  {
-    name: 'sqlite',
-    freshUrl() {
-      const dir = mkdtempSync(join(tmpdir(), 'a2a-push-store-'));
-      tempDirs.push(dir);
-      return `sqlite:${join(dir, 'a2a.db')}`;
-    },
-  },
-];
-
-const SERVERS = [
-  { name: 'postgres', variable: 'POSTGRES_TEST_DSN' },
-  { name: 'mysql', variable: 'MYSQL_TEST_DSN' },
-] as const;
-
-/** Set where every engine is meant to be reachable, so a misconfigured job fails. */
-const REQUIRE_EVERY_ENGINE = process.env.A2A_TEST_REQUIRE_ALL_ENGINES === '1';
-const UNCONFIGURED: string[] = [];
-
-for (const server of SERVERS) {
-  const url = process.env[server.variable];
-  if (url !== undefined) {
-    ENGINES.push({ name: server.name, freshUrl: () => url });
-  } else if (REQUIRE_EVERY_ENGINE) {
-    throw new Error(
-      `${server.variable} is not set, but A2A_TEST_REQUIRE_ALL_ENGINES demands every engine.`
-    );
-  } else {
-    UNCONFIGURED.push(`${server.name} (${server.variable} not set)`);
-  }
-}
-
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
-
-// Reported rather than dropped, so a run against fewer engines than intended is visible.
-for (const label of UNCONFIGURED) {
-  describe.skip(`DatabasePushNotificationStore on ${label}`, () => {
-    it('has no database to run against', () => {});
-  });
-}
-
-for (const engine of ENGINES) {
-  describe(`DatabasePushNotificationStore on ${engine.name}`, () => {
+describeOnEachEngine(
+  'DatabasePushNotificationStore',
+  { name: 'sqlite', freshUrl: freshSqliteUrl('a2a-push-store-') },
+  urlOnly,
+  (engine) => {
     let url: string;
     let db: Kysely<unknown>;
     let store: DatabasePushNotificationStore;
 
-    /** A connection of its own, as an operator's migration step would have. */
-    async function withConnection<T>(use: (db: Kysely<unknown>) => Promise<T>): Promise<T> {
-      const connection = await connect(url);
-      try {
-        return await use(connection);
-      } finally {
-        await connection.destroy();
-      }
-    }
-
     async function migrate(): Promise<void> {
-      await withConnection((connection) =>
+      await withConnection(url, (connection) =>
         migrateStore(connection, pushNotificationStoreMigrations())
       );
     }
 
     /** The ledger goes too, or a re-migration finds 0001 applied and builds nothing. */
     async function dropEverything(): Promise<void> {
-      await withConnection(async (connection) => {
+      await withConnection(url, async (connection) => {
         for (const table of [
           TABLE,
           LEDGER_TABLE,
@@ -149,13 +93,14 @@ for (const engine of ENGINES) {
     }
 
     async function execute(text: string): Promise<void> {
-      await withConnection(async (connection) => {
+      await withConnection(url, async (connection) => {
         await sql.raw(text).execute(connection);
       });
     }
 
     async function rowsInTable(): Promise<Record<string, unknown>[]> {
       return withConnection(
+        url,
         async (connection) =>
           (await sql.raw(`select * from ${TABLE}`).execute(connection)).rows as Record<
             string,
@@ -585,7 +530,7 @@ for (const engine of ENGINES) {
        * has to swap it. Tests that want the default simply do not call this.
        */
       async function migrateRenamedOnly(): Promise<void> {
-        await withConnection(async (connection) => {
+        await withConnection(url, async (connection) => {
           for (const table of [TABLE, LEDGER_TABLE]) {
             await sql.raw(`drop table if exists ${table}`).execute(connection);
           }
@@ -601,6 +546,7 @@ for (const engine of ENGINES) {
 
         expect((await renamed.load('task-1', context()))[0].url).toBe('https://renamed.test/');
         const rows = await withConnection(
+          url,
           async (connection) =>
             (await sql.raw(`select * from ${RENAMED_TABLE}`).execute(connection)).rows
         );
@@ -619,5 +565,5 @@ for (const engine of ENGINES) {
         await expect(renamed.load('task-1', context())).rejects.toThrow();
       });
     });
-  });
-}
+  }
+);
