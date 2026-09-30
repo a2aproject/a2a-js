@@ -8,10 +8,8 @@ import { D1Dialect } from 'kysely-d1';
 
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
 import { pushNotificationStoreMigrations } from '../../src/cli/push_notification/migrations.js';
-import { ServerCallContext } from '../../src/server/context.js';
-import type { User } from '../../src/server/authentication/user.js';
-import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';
 import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/constants.js';
+import { makeConfig, makeContext } from '../support/database/builders.js';
 
 declare module 'cloudflare:test' {
   interface ProvidedEnv {
@@ -22,40 +20,6 @@ declare module 'cloudflare:test' {
 // Spelled out rather than imported from the store
 const TABLE = 'push_notification_configs';
 const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-class TestUser implements User {
-  constructor(private readonly _userName: string) {}
-  get isAuthenticated(): boolean {
-    return true;
-  }
-  get userName(): string {
-    return this._userName;
-  }
-}
-
-function makeContext(
-  options: { tenant?: string; user?: string; version?: string } = {}
-): ServerCallContext {
-  return new ServerCallContext({
-    tenant: options.tenant,
-    user: options.user === undefined ? undefined : new TestUser(options.user),
-    requestedVersion: options.version,
-  });
-}
-
-function makeConfig(
-  overrides: Partial<TaskPushNotificationConfig> = {}
-): TaskPushNotificationConfig {
-  return {
-    tenant: '',
-    taskId: 'task-1',
-    id: 'cfg-1',
-    url: 'http://example.test/webhook',
-    token: 'token',
-    authentication: undefined,
-    ...overrides,
-  };
-}
 
 /** There is no URL to connect to: the binding *is* the database. */
 function open(): Kysely<unknown> {

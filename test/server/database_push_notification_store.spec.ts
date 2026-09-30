@@ -7,9 +7,6 @@ import { connect } from '../../src/cli/connect.js';
 import { migrateStore } from '../../src/cli/migrator.js';
 import { pushNotificationStoreMigrations } from '../../src/cli/push_notification/migrations.js';
 import { DatabasePushNotificationStore } from '../../src/server/database/push_notification/store.js';
-import { ServerCallContext } from '../../src/server/context.js';
-import type { User } from '../../src/server/authentication/user.js';
-import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';
 import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/constants.js';
 import {
   describeOnEachEngine,
@@ -17,6 +14,7 @@ import {
   urlOnly,
   withConnection,
 } from '../support/database/node_engines.js';
+import { makeConfig, makeContext } from '../support/database/builders.js';
 
 // Spelled out rather than imported from the store
 const TABLE = 'push_notification_configs';
@@ -27,40 +25,6 @@ const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 /** What a deployment that renamed the table would have instead, ledger included. */
 const RENAMED_TABLE = 'agent_push_configs';
 const RENAMED_LEDGER_TABLE = 'a2a_agent_push_configs_migrations';
-
-class TestUser implements User {
-  constructor(private readonly _userName: string) {}
-  get isAuthenticated(): boolean {
-    return true;
-  }
-  get userName(): string {
-    return this._userName;
-  }
-}
-
-function makeContext(
-  options: { tenant?: string; user?: string; version?: string } = {}
-): ServerCallContext {
-  return new ServerCallContext({
-    tenant: options.tenant,
-    user: options.user === undefined ? undefined : new TestUser(options.user),
-    requestedVersion: options.version,
-  });
-}
-
-function makeConfig(
-  overrides: Partial<TaskPushNotificationConfig> = {}
-): TaskPushNotificationConfig {
-  return {
-    tenant: '',
-    taskId: 'task-1',
-    id: 'cfg-1',
-    url: 'http://example.test/webhook',
-    token: 'token',
-    authentication: undefined,
-    ...overrides,
-  };
-}
 
 describeOnEachEngine(
   'DatabasePushNotificationStore',

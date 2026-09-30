@@ -8,17 +8,16 @@ import { D1Dialect } from 'kysely-d1';
 
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
 import { taskStoreMigrations } from '../../src/cli/task/migrations.js';
-import { ServerCallContext } from '../../src/server/context.js';
-import type { User } from '../../src/server/authentication/user.js';
-import {
-  Role,
-  TaskState,
-  type Artifact,
-  type ListTasksRequest,
-  type Message,
-  type Task,
-} from '../../src/types/pb/a2a.js';
+import type { ServerCallContext } from '../../src/server/context.js';
+import { TaskState, type Task } from '../../src/types/pb/a2a.js';
 import { DEFAULT_PAGE_SIZE } from '../../src/constants.js';
+import {
+  makeArtifact,
+  makeContext,
+  makeListRequest,
+  makeMessage,
+  makeTask,
+} from '../support/database/builders.js';
 
 declare module 'cloudflare:test' {
   interface ProvidedEnv {
@@ -28,78 +27,6 @@ declare module 'cloudflare:test' {
 
 // Spelled out rather than imported from the store
 const TABLE = 'tasks';
-
-class TestUser implements User {
-  constructor(private readonly _userName: string) {}
-  get isAuthenticated(): boolean {
-    return true;
-  }
-  get userName(): string {
-    return this._userName;
-  }
-}
-
-function makeContext(options: { tenant?: string; user?: string } = {}): ServerCallContext {
-  return new ServerCallContext({
-    tenant: options.tenant,
-    user: options.user === undefined ? undefined : new TestUser(options.user),
-  });
-}
-
-function makeMessage(overrides: Partial<Message> = {}): Message {
-  return {
-    messageId: 'msg-1',
-    contextId: 'ctx-1',
-    taskId: 'task-1',
-    role: Role.ROLE_USER,
-    parts: [{ content: { $case: 'text', value: 'hello' }, mediaType: 'text/plain', filename: '' }],
-    metadata: undefined,
-    extensions: [],
-    referenceTaskIds: [],
-    ...overrides,
-  } as Message;
-}
-
-function makeArtifact(overrides: Partial<Artifact> = {}): Artifact {
-  return {
-    artifactId: 'artifact-1',
-    name: 'report',
-    description: 'the output',
-    parts: [{ content: { $case: 'text', value: 'result' }, mediaType: 'text/plain', filename: '' }],
-    metadata: undefined,
-    extensions: [],
-    ...overrides,
-  } as Artifact;
-}
-
-/** Already in the shape `Task.fromJSON` produces, so a round trip compares equal. */
-function makeTask(overrides: Partial<Task> = {}): Task {
-  return {
-    id: 'task-1',
-    contextId: 'ctx-1',
-    status: {
-      state: TaskState.TASK_STATE_WORKING,
-      message: undefined,
-      timestamp: '2026-01-02T03:04:05.678Z',
-    },
-    artifacts: [],
-    history: [],
-    metadata: undefined,
-    ...overrides,
-  };
-}
-
-/** Every field the interface demands, so a test states only what it varies. */
-function makeListRequest(overrides: Partial<ListTasksRequest> = {}): ListTasksRequest {
-  return {
-    tenant: '',
-    contextId: '',
-    status: TaskState.TASK_STATE_UNSPECIFIED,
-    pageToken: '',
-    statusTimestampAfter: undefined,
-    ...overrides,
-  };
-}
 
 /** There is no URL to connect to: the binding *is* the database. */
 function open(): Kysely<unknown> {
