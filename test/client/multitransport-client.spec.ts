@@ -898,6 +898,54 @@ describe('Client', () => {
     });
   });
 
+  describe('unknown stream payload kinds', () => {
+    const task: Task = {
+      id: 'task-1',
+      contextId: 'ctx-1',
+      status: undefined,
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    // What the transports produce for a payload kind this SDK does not know.
+    const unknown = StreamResponse.fromJSON({ futureUpdate: { taskId: 'task-1' } });
+
+    it('decodes an unknown kind to an event with no payload', () => {
+      expect(unknown.payload).toBeUndefined();
+    });
+
+    it('sendMessageStream should skip it and keep reading', async () => {
+      transport.sendMessageStream.mockImplementation(async function* () {
+        yield { payload: { $case: 'task', value: task } };
+        yield unknown;
+        yield { payload: { $case: 'task', value: task } };
+      });
+
+      const events: StreamResponse[] = [];
+      for await (const event of client.sendMessageStream({} as SendMessageRequest)) {
+        events.push(event);
+      }
+
+      expect(events.map((e) => e.payload?.$case)).to.deep.equal(['task', 'task']);
+    });
+
+    it('resubscribeTask should skip it and keep reading', async () => {
+      transport.resubscribeTask.mockImplementation(async function* () {
+        yield unknown;
+        yield { payload: { $case: 'task', value: task } };
+      });
+
+      const events: StreamResponse[] = [];
+      for await (const event of client.resubscribeTask({
+        id: 'task-1',
+      } as SubscribeToTaskRequest)) {
+        events.push(event);
+      }
+
+      expect(events.map((e) => e.payload?.$case)).to.deep.equal(['task']);
+    });
+  });
+
   describe('Interceptors', () => {
     it('should modify request', async () => {
       const config: ClientConfig = {

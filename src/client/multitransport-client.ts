@@ -174,6 +174,10 @@ export class Client {
       beforeArgs.input.value,
       beforeArgs.options
     )) {
+      if (!event.payload) {
+        // A payload kind this SDK does not know yet. Skip it and keep reading.
+        continue;
+      }
       const afterArgs: AfterArgs<'sendMessageStream'> = {
         result: { method, value: event },
         agentCard: this.agentCard,
@@ -313,6 +317,10 @@ export class Client {
       beforeArgs.input.value,
       beforeArgs.options
     )) {
+      if (!event.payload) {
+        // A payload kind this SDK does not know yet. Skip it and keep reading.
+        continue;
+      }
       const afterArgs: AfterArgs<'resubscribeTask'> = {
         result: { method, value: event },
         agentCard: this.agentCard,
