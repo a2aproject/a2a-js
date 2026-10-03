@@ -53,7 +53,7 @@ export interface PushNotificationStore {
     context: ServerCallContext
   ): Promise<StoredPushNotificationConfig[]>;
 
-  delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void>;
+  delete(taskId: string, context: ServerCallContext, configId: string): Promise<void>;
 }
 
 /**
@@ -115,10 +115,9 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
     return entries ? entries.map((e) => structuredClone(e)) : [];
   }
 
-  async delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void> {
-    // Backward-compat: treat missing configId as the taskId.
-    if (configId === undefined) {
-      configId = taskId;
+  async delete(taskId: string, context: ServerCallContext, configId: string): Promise<void> {
+    if (!configId || configId.trim() === '') {
+      throw new Error('Deleting a push notification config needs its configId.');
     }
 
     const bucket = this._scopedStore.getBucket(context);

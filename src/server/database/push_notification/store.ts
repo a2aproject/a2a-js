@@ -134,9 +134,8 @@ export class DatabasePushNotificationStore<DB = unknown> implements PushNotifica
     return stored;
   }
 
-  async delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void> {
-    // Optional on the interface. Ambiguous when absent, so reject rather than guess.
-    if (configId === undefined) {
+  async delete(taskId: string, context: ServerCallContext, configId: string): Promise<void> {
+    if (!configId || configId.trim() === '') {
       throw new Error('Deleting a push notification config needs its configId.');
     }
 
