@@ -33,6 +33,24 @@ npm install kysely mysql2
 npm install kysely better-sqlite3
 ```
 
+### Upgrading task timestamp precision
+
+Run `a2a-db upgrade --store tasks` before using the updated `DatabaseTaskStore`.
+Migration `0002_timestamp_precision` adds and backfills nanoseconds below a
+millisecond from each stored status timestamp, and rebuilds the listing indexes.
+The existing payloads and millisecond metadata are preserved. Use the same
+`--tasks-table-name` option for a custom table.
+
+For D1, render `a2a-db upgrade --sql --dialect sqlite --store tasks --from
+0001_create_tasks` and apply the resulting script. PostgreSQL scripts must run on
+one connection because the backfill uses a temporary, session-local function.
+
+Restart pagination after upgrading. Tokens issued by older SDKs discarded
+submillisecond precision and cannot recover the corrected position. The token
+format is unchanged; new tokens preserve the full sort key. Downgrading removes
+only the derived precision column and restores the old indexes; upgrading again
+recovers the precision from the unchanged payloads.
+
 ### Node.js Compatibility
 
 On Node.js 20, install `kysely@^0.28.17` and `better-sqlite3@^12.0.0` for SQLite. The latest versions of both require Node.js 22 or later.
@@ -164,7 +182,7 @@ npx a2a-db downgrade --url postgresql://user:pass@localhost:5432/my_db
 npx a2a-db downgrade base --url postgresql://user:pass@localhost:5432/my_db
 
 # Revert the task store down to a named migration, which stays applied. A migration name
-# belongs to one store, so name it; with one migration per store, this changes nothing yet.
+# belongs to one store, so name it; this leaves the original task schema applied.
 npx a2a-db downgrade 0001_create_tasks --store tasks --url postgresql://user:pass@localhost:5432/my_db
 
 # Migrate only the task store, taking the URL from the environment
@@ -186,7 +204,7 @@ npx a2a-db downgrade --sql --dialect mysql > rollback.sql
 npx a2a-db downgrade base --sql --dialect sqlite > rollback.sql
 
 # SQL from a known migration forward. A migration name belongs to one store, so name the
-# store too; each store has a single migration today, so this renders nothing yet.
+# store too; this renders the task timestamp precision migration.
 npx a2a-db upgrade --sql --dialect sqlite --store tasks --from 0001_create_tasks
 
 # Cloudflare D1: render the schema, then apply it with Wrangler
