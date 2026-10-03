@@ -150,10 +150,8 @@ export async function* parseSseStream(
     }
   }
 
-  // Yield any pending event at stream end.
-  if (eventData) {
-    yield { type: eventType, data: eventData };
-  }
+  // EOF does not dispatch an event: only a blank line completes its frame.
+  // Discard pending data from an incomplete event.
 }
 
 function sseSizeError(what: string, maxEventSizeBytes: number): Error {
