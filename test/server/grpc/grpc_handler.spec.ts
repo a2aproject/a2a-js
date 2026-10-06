@@ -75,6 +75,7 @@ describe('grpcHandler', () => {
   const createMockWritableStream = (request: any) => {
     const metadata = new grpc.Metadata();
     metadata.set('a2a-version', '1.0');
+    const listeners: Record<string, () => void> = {};
     return {
       request,
       metadata,
@@ -82,6 +83,16 @@ describe('grpcHandler', () => {
       write: vi.fn(),
       end: vi.fn(),
       emit: vi.fn(),
+      on: vi.fn((event: string, listener: () => void) => {
+        listeners[event] = listener;
+      }),
+      off: vi.fn((event: string) => {
+        delete listeners[event];
+      }),
+      // Test helper: fire the 'cancelled' listener as gRPC would.
+      fireCancelled: () => {
+        listeners['cancelled']?.();
+      },
     } as unknown as grpc.ServerWritableStream<any, any>;
   };
 
@@ -199,6 +210,51 @@ describe('grpcHandler', () => {
         })
       );
       expect(call.end).toHaveBeenCalled();
+    });
+
+    it('stops the generator when the client cancels mid-stream', async () => {
+      let generatorClosed = false;
+      let releaseGate: (() => void) | undefined;
+      // The generator blocks on this gate until the test releases it —
+      // simulating an event-queue await that settles after cancellation.
+      const gate = new Promise<void>((resolve) => {
+        releaseGate = resolve;
+      });
+      async function* mockStream() {
+        try {
+          yield { messageId: 'm1', role: Role.ROLE_AGENT, parts: [] as any };
+          await gate;
+          yield { messageId: 'm2', role: Role.ROLE_AGENT, parts: [] as any };
+        } finally {
+          generatorClosed = true;
+        }
+      }
+      (mockRequestHandler.sendMessageStream as Mock).mockResolvedValue(mockStream());
+
+      const call = createMockWritableStream({
+        message: { role: Role.ROLE_USER, content: [] as any },
+      });
+
+      const done = handler.sendStreamingMessage(call);
+      await vi.waitFor(() => {
+        expect(call.write).toHaveBeenCalledTimes(1);
+      });
+
+      // Simulate the client disconnecting: gRPC emits 'cancelled' and
+      // the server must release the generator's resources instead of
+      // draining it to completion.
+      (call as unknown as { fireCancelled: () => void }).fireCancelled();
+      releaseGate!();
+
+      await done;
+
+      await vi.waitFor(() => {
+        expect(generatorClosed).toBe(true);
+      });
+      // No writes after cancellation are attempted (m2 is discarded).
+      expect(call.write).toHaveBeenCalledTimes(1);
+      expect(call.end).toHaveBeenCalled();
+      expect(call.emit).not.toHaveBeenCalled();
     });
   });
 
