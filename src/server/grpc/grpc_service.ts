@@ -29,7 +29,7 @@ import {
 import { Extensions } from '../../extensions.js';
 import { UserBuilder } from './common.js';
 import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../constants.js';
-import { A2AError } from '../../errors/index.js';
+import { A2AError, clientSafeErrorMessage } from '../../errors/index.js';
 import {
   buildGrpcErrorMetadata,
   GRPC_STATUS_CODE,
@@ -223,7 +223,10 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
  */
 const mapToError = (error: unknown): Partial<grpc.ServiceError> => {
   const code = error instanceof A2AError ? grpcStatusFor(error) : GRPC_STATUS_CODE.UNKNOWN;
-  const message = error instanceof Error ? error.message : 'Internal server error';
+  // Sanitize internal exception messages (CWE-209): semantic A2AError
+  // messages are deliberate; raw Error messages (stack traces, paths) are
+  // replaced with a generic string and logged by `clientSafeErrorMessage`.
+  const message = error instanceof A2AError ? error.message : clientSafeErrorMessage(error);
   const result: Partial<grpc.ServiceError> = { code, details: message };
   const md = buildGrpcErrorMetadata(grpc.Metadata, error);
   if (md) result.metadata = md;
