@@ -39,6 +39,11 @@ export interface DatabasePushNotificationStoreOptions {
  * application's own tables too.
  * The table must already exist, migrating is an operator step, not something
  * the store does on first use.
+ *
+ * Each config's webhook URL, token and authentication credentials are stored as
+ * plain text in the `config_data` column. See "Security and Data Retention" in
+ * docs/persistent-stores.md for how to protect them and remove them once their task
+ * has finished.
  */
 export class DatabasePushNotificationStore<DB = unknown> implements PushNotificationStore {
   private readonly db: Kysely<PushNotificationDatabase>;
