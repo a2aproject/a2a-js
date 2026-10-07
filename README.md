@@ -238,6 +238,7 @@ For persistent production storage, `@a2a-js/sdk/server/database` provides `Datab
 
 - Supported engines: PostgreSQL, MySQL, SQLite, and Cloudflare D1.
 - Schema management: Ships with the `a2a-db` CLI tool, which can also render SQL offline.
+- Security: push notification credentials are stored in plain text. See [Security and Data Retention](docs/persistent-stores.md#security-and-data-retention) for how to protect them and remove them once their task has finished.
 
 See the [Persistent stores guide](docs/persistent-stores.md) and the [`database-agent`](src/samples/agents/database-agent/) sample.
 

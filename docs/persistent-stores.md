@@ -5,7 +5,7 @@ The in-memory stores, `InMemoryTaskStore` (which you pass to `DefaultRequestHand
 For persistent production deployments, `@a2a-js/sdk/server/database` provides database-backed implementations powered by [Kysely](https://kysely.dev/):
 
 - **`DatabaseTaskStore`** — stores task snapshots, status updates, message histories, and artifacts.
-- **`DatabasePushNotificationStore`** — stores client-registered webhook URLs and notification tokens.
+- **`DatabasePushNotificationStore`** — stores client-registered webhook URLs, notification tokens, and webhook authentication credentials. See [Security and Data Retention](#security-and-data-retention).
 
 Both stores work with:
 
@@ -94,6 +94,25 @@ export default {
   },
 };
 ```
+
+### Store Options
+
+Both store constructors take an optional second argument:
+
+- `tableName`: the table to read and write. Defaults to `tasks` and `push_notification_configs`. See [Table Renaming](#table-renaming).
+- `ownerResolver`: maps each call to the owner its rows are scoped to. Defaults to `resolveUserScope` from `@a2a-js/sdk/server`, which uses the authenticated user's name.
+
+Pass the same `ownerResolver` to both stores, so a caller's tasks and push notification configs are stored under the same owner. The [retention sweep](#removing-configs-of-finished-tasks) relies on this.
+
+```typescript
+import { resolveUserScope } from '@a2a-js/sdk/server';
+
+const ownerResolver = resolveUserScope; // or your own (context) => string
+const taskStore = new DatabaseTaskStore(db, { ownerResolver });
+const pushNotificationStore = new DatabasePushNotificationStore(db, { ownerResolver });
+```
+
+Choose the resolver before you store data. Changing it later changes the owner computed for existing callers, and the rows they stored become unreachable.
 
 ---
 
@@ -193,6 +212,42 @@ npx a2a-db upgrade --sql --dialect sqlite --store tasks --from 0001_create_tasks
 npx a2a-db upgrade --sql --dialect sqlite > schema.sql
 wrangler d1 execute <database-name> --remote --file schema.sql
 ```
+
+---
+
+## Security and Data Retention
+
+### What the Push Notification Table Stores
+
+`DatabasePushNotificationStore` keeps one row per push notification config:
+
+| Column                                    | Contents                                                                                                                                                                                |
+| :---------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenant`, `owner`, `task_id`, `config_id` | Identifiers that scope and key the row.                                                                                                                                                 |
+| `config_data`                             | The rest of the config as JSON: the webhook `url`, the notification `token`, `authentication.scheme`, `authentication.credentials`, and the A2A version the config was registered over. |
+| `protocol_version`                        | The format version of `config_data`.                                                                                                                                                    |
+
+The SDK writes `config_data` as plain text on every supported engine. It does not encrypt or hash it, because the push notification sender needs the original values to call the webhook. Anyone who can read the table, a backup of it, or a replica can read the webhook credentials.
+
+The task table carries the same exposure for different data: its `history` and `artifacts` columns hold message content, which may include user data.
+
+The A2A specification asks agents to protect this data: agents "SHOULD securely store push notification configurations and credentials" ([§13.2](https://a2a-protocol.org/v1.0.0/specification/#132-push-notification-security)).
+
+### Protecting Stored Credentials
+
+- **Encrypt at rest.** Use the storage encryption your database or platform provides. For SQLite, keep the database file on an encrypted volume, readable only by the server's user.
+- **Grant the server only what it uses.** At runtime, the stores need `SELECT`, `INSERT` and `UPDATE` on the task table, and `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the push notification table. `UPDATE` is needed because saves are upserts. Run `a2a-db` under a separate role that holds the schema privileges, and give the [retention sweep](#removing-configs-of-finished-tasks) only `SELECT` on the task table and `SELECT` and `DELETE` on the push notification table.
+- **Treat backups, replicas and exports like the live table.** They contain the same credentials.
+- **Keep `config_data` out of logs and analytics exports.**
+- **Encrypting individual fields.** The SDK has no built-in hook for it. If you need it, implement `PushNotificationStore` as a wrapper around `DatabasePushNotificationStore` that encrypts `token` and `authentication.credentials` before delegating `save`, and decrypts them in `load` and `loadWithMetadata`. The wrapper's `save` must still write the generated `id` back onto the object it was given, because the request handler returns that object to the client. Storing and rotating the encryption key is up to you.
+
+### Removing Configs of Finished Tasks
+
+The store removes a config only when a client calls `DeleteTaskPushNotificationConfig` for it. Nothing removes configs when their task finishes, so the webhook credentials of a completed task stay in the table until a client deletes them. Once a task reaches a terminal state, the server accepts no further messages for it and sends no further notifications, so its configs are no longer used.
+
+The specification allows removing them at that point: a config "MUST persist until task completion or explicit deletion" ([§3.1.7](https://a2a-protocol.org/v1.0.0/specification/#317-create-push-notification-config)). To do so, schedule a sweep that deletes the configs of tasks that finished more than a grace period ago. The grace period lets the final notification go out, and lets clients still read a config shortly after its task completes.
+
+The terminal states are `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED`, `TASK_STATE_CANCELED` and `TASK_STATE_REJECTED`. Leave `TASK_STATE_INPUT_REQUIRED` and `TASK_STATE_AUTH_REQUIRED` alone: those tasks are waiting for the client and can resume.
 
 ---
 
