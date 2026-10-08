@@ -116,9 +116,9 @@ export class InMemoryPushNotificationStore implements PushNotificationStore {
   }
 
   async delete(taskId: string, context: ServerCallContext, configId?: string): Promise<void> {
-    // Backward-compat: treat missing configId as the taskId.
+    // Optional on the interface. Ambiguous when absent, so reject rather than guess.
     if (configId === undefined) {
-      configId = taskId;
+      throw new Error('Deleting a push notification config needs its configId.');
     }
 
     const bucket = this._scopedStore.getBucket(context);
