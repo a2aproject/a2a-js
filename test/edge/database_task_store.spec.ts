@@ -7,7 +7,7 @@ import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
 
 import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
-import { taskStoreMigrations } from '../../src/server/database/task/migrations.js';
+import { taskStoreMigrations } from '../../src/cli/task/migrations.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import {

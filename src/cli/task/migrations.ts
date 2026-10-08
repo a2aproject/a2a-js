@@ -1,7 +1,7 @@
+import { TASK_TABLE } from '../../server/database/task/schema.js';
 import { ledgerTableFor, type StoreMigrations } from '../store_migrations.js';
 
 import { createTasks } from './migrations/0001_create_tasks.js';
-import { TASK_TABLE } from './schema.js';
 
 /** Names this store on the command line. */
 export const TASK_STORE_ID = 'tasks';

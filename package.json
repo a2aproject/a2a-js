@@ -1,6 +1,6 @@
 {
   "name": "@a2a-js/sdk",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Server & Client SDK for Agent2Agent protocol",
   "license": "Apache-2.0",
   "repository": {
@@ -148,7 +148,7 @@
     "@cloudflare/vitest-pool-workers": "^0.12.5",
     "@cloudflare/workers-types": "^4.20260702.1",
     "@eslint/js": "^9.39.1",
-    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/grpc-js": "^1.14.5",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.14",
     "@types/supertest": "^6.0.3",
@@ -178,6 +178,7 @@
     "test:edge": "vitest run --config vitest.edge.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:db": "./scripts/run_db_tests.sh",
+    "test:package": "./scripts/package_smoke_test.sh",
     "install:samples": "npm --prefix src/samples install",
     "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint . --fix",
     "lint:ci": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint .",

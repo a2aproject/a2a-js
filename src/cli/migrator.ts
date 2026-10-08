@@ -5,7 +5,7 @@ import type { Kysely } from 'kysely';
 // entry: nothing in this directory can reach a consumer's declarations.
 import type { MigrationResultSet, Migrator, MigratorProps, NoMigrations } from 'kysely/migration';
 
-import type { StoreMigrations } from '../server/database/store_migrations.js';
+import type { StoreMigrations } from './store_migrations.js';
 
 /**
  * Shared by every store.
