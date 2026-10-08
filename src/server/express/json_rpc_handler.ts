@@ -97,14 +97,16 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       const transportHandler = useLegacy ? legacyJsonRpcTransportHandler : jsonRpcTransportHandler;
       const rpcResponseOrStream = await transportHandler.handle(req.body, context);
 
-      if (context.activatedExtensions) {
-        // Legacy path responds with the v0.3 `X-A2A-Extensions`
-        // spelling; v1.0 path responds with `A2A-Extensions`.
-        res.setHeader(
-          useLegacy ? LEGACY_HTTP_EXTENSION_HEADER : HTTP_EXTENSION_HEADER,
-          Array.from(context.activatedExtensions)
-        );
-      }
+      // Legacy path responds with the v0.3 `X-A2A-Extensions` spelling;
+      // v1.0 path responds with `A2A-Extensions`.
+      const setExtensionsHeader = (): void => {
+        if (context.activatedExtensions) {
+          res.setHeader(
+            useLegacy ? LEGACY_HTTP_EXTENSION_HEADER : HTTP_EXTENSION_HEADER,
+            Array.from(context.activatedExtensions)
+          );
+        }
+      };
       if (typeof (rpcResponseOrStream as AsyncGenerator)?.[Symbol.asyncIterator] === 'function') {
         const stream = rpcResponseOrStream as AsyncGenerator<JSONRPCResponse, void, undefined>;
 
@@ -115,6 +117,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           Object.entries(SSE_HEADERS).forEach(([key, value]) => {
             res.setHeader(key, value);
           });
+          setExtensionsHeader();
           res.flushHeaders();
           try {
             for await (const event of stream) {
@@ -143,13 +146,18 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         // UnsupportedOperationError) surfaces as a proper JSON-RPC
         // error with the right HTTP status, rather than a 200 SSE
         // stream carrying a single error event that looks like a
-        // successful subscription to most clients.
+        // successful subscription to most clients. This also lets
+        // extensions the executor activates while producing that first
+        // event reach the header below: `handle()` only returns a lazy
+        // generator, so none of the executor's code has run yet at this
+        // point.
         const iterator = stream[Symbol.asyncIterator]();
         let firstResult: IteratorResult<JSONRPCResponse>;
         try {
           firstResult = await iterator.next();
         } catch (streamError) {
           console.error(`Pre-stream error for request ${req.body?.id}:`, streamError);
+          setExtensionsHeader();
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
             id: req.body?.id || null,
@@ -163,6 +171,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         Object.entries(SSE_HEADERS).forEach(([key, value]) => {
           res.setHeader(key, value);
         });
+        setExtensionsHeader();
         res.flushHeaders();
 
         try {
@@ -193,6 +202,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         }
       } else {
         const rpcResponse = rpcResponseOrStream as JSONRPCResponse;
+        setExtensionsHeader();
         res.status(200).json(rpcResponse);
       }
     } catch (error) {
