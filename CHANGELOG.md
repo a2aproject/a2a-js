@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.1](https://github.com/a2aproject/a2a-js/compare/v1.3.0...v1.3.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **client:** preserve first matching client interface ([#764](https://github.com/a2aproject/a2a-js/issues/764)) ([ca14b82](https://github.com/a2aproject/a2a-js/commit/ca14b824bc072533ff9b8720fb6b830041e9f4d9))
+* **rest:** forward pageSize and pageToken for push-notification config listing ([#701](https://github.com/a2aproject/a2a-js/issues/701)) ([8a4e696](https://github.com/a2aproject/a2a-js/commit/8a4e696e0f073882cc6736ff6b05b028324a9855)), closes [#700](https://github.com/a2aproject/a2a-js/issues/700)
+* support CR-delimited SSE lines ([#718](https://github.com/a2aproject/a2a-js/issues/718)) ([2c81b86](https://github.com/a2aproject/a2a-js/commit/2c81b861614905b55b7e0d465d596ef69d85d721))
+
 ## [1.3.0](https://github.com/a2aproject/a2a-js/compare/v1.2.1...v1.3.0) (2026-09-29)
 
 
