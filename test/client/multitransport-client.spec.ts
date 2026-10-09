@@ -83,6 +83,90 @@ describe('Client', () => {
     client = new Client(transport, agentCard);
   });
 
+  describe.each(['sendMessage', 'sendMessageStream'] as const)(
+    '%s configuration ownership',
+    (method) => {
+      let params: SendMessageRequest;
+
+      beforeEach(() => {
+        params = {
+          tenant: '',
+          message: {
+            messageId: '1',
+            role: Role.ROLE_USER,
+            parts: [],
+            contextId: '',
+            taskId: '',
+            extensions: [],
+            metadata: {},
+            referenceTaskIds: [],
+          },
+          configuration: {
+            acceptedOutputModes: ['text/plain'],
+            returnImmediately: false,
+            historyLength: 0,
+            taskPushNotificationConfig: undefined,
+          },
+          metadata: {},
+        };
+        transport.sendMessage.mockResolvedValue(params.message);
+        transport.sendMessageStream.mockImplementation(async function* () {
+          yield { payload: { $case: 'message', value: params.message } };
+        });
+      });
+
+      async function send(target: Client) {
+        if (method === 'sendMessage') {
+          await target.sendMessage(params);
+        } else {
+          for await (const event of target.sendMessageStream(params)) {
+            expect(event.payload?.value).toEqual(params.message);
+          }
+        }
+      }
+
+      it('accepts frozen caller configuration without changing explicit values', async () => {
+        Object.freeze(params.configuration);
+        const original = structuredClone(params);
+        client = new Client(transport, agentCard, {
+          polling: true,
+          acceptedOutputModes: ['application/json'],
+        });
+
+        await send(client);
+
+        expect(params).toEqual(original);
+        expect(transport[method]).toHaveBeenCalledExactlyOnceWith(original, defaultVersionOptions);
+        expect(transport[method].mock.calls[0][0].configuration).not.toBe(params.configuration);
+      });
+
+      it('does not leak default push configuration when a request is reused across clients', async () => {
+        const firstPush: TaskPushNotificationConfig = {
+          tenant: '',
+          taskId: '',
+          id: 'first',
+          url: 'https://first.example/callback',
+          token: '',
+          authentication: undefined,
+        };
+        const secondPush = { ...firstPush, id: 'second', url: 'https://second.example/callback' };
+        const original = structuredClone(params);
+
+        await send(new Client(transport, agentCard, { pushNotificationConfig: firstPush }));
+        await send(new Client(transport, agentCard, { pushNotificationConfig: secondPush }));
+
+        expect(params).toEqual(original);
+        expect(transport[method]).toHaveBeenCalledTimes(2);
+        expect(transport[method].mock.calls[0][0].configuration.taskPushNotificationConfig).toEqual(
+          firstPush
+        );
+        expect(transport[method].mock.calls[1][0].configuration.taskPushNotificationConfig).toEqual(
+          secondPush
+        );
+      });
+    }
+  );
+
   it('should call transport.getAuthenticatedExtendedAgentCard', async () => {
     const agentCardWithExtendedSupport = {
       ...agentCard,
@@ -113,6 +197,40 @@ describe('Client', () => {
     expect(caughtOptions).toEqual({
       serviceParameters: { [A2A_VERSION_HEADER]: A2A_PROTOCOL_VERSION, key: 'value' },
     });
+  });
+
+  it('should keep the current agent card when signature verification of the extended card fails', async () => {
+    const publicAgentCard: AgentCard = {
+      ...agentCard,
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: true,
+        pushNotifications: false,
+      },
+    };
+    const unverifiedAgentCard: AgentCard = {
+      ...agentCard,
+      name: 'UNVERIFIED',
+      capabilities: {
+        ...agentCard.capabilities,
+        extendedAgentCard: false,
+        pushNotifications: true,
+      },
+    };
+    client = new Client(transport, publicAgentCard);
+    transport.getExtendedAgentCard.mockResolvedValue(unverifiedAgentCard);
+    const verifySignature = vi.fn().mockRejectedValue(new Error('invalid signature'));
+
+    await expect(client.getAgentCard(undefined, verifySignature)).rejects.toThrow(
+      'invalid signature'
+    );
+    expect(verifySignature).toHaveBeenCalledWith(unverifiedAgentCard);
+
+    // The rejected card must not have replaced the public one: the next call still
+    // sees `extendedAgentCard: true` and fetches again instead of serving it.
+    const result = await client.getAgentCard();
+    expect(transport.getExtendedAgentCard).toHaveBeenCalledTimes(2);
+    expect(result).to.equal(unverifiedAgentCard);
   });
 
   it('should not call transport.getAuthenticatedExtendedAgentCard if not supported', async () => {
