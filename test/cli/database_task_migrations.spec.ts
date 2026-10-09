@@ -9,6 +9,11 @@ import type { Kysely } from 'kysely';
 
 import { connect } from '../../src/cli/connect.js';
 import { run } from '../../src/cli/run.js';
+import { migrateStore } from '../../src/cli/migrator.js';
+import { taskStoreMigrations } from '../../src/cli/task/migrations.js';
+import { DatabaseTaskStore } from '../../src/server/database/task/store.js';
+import { ServerCallContext } from '../../src/server/context.js';
+import { ListTasksRequest } from '../../src/types/index.js';
 
 // Spelled out rather than imported from the store: a test that reads these from the code
 // it checks cannot catch a rename, and a renamed ledger makes a migrated database look
@@ -18,6 +23,7 @@ const TABLE = 'tasks';
 const LEDGER_TABLE = 'a2a_tasks_migrations';
 const LOCK_TABLE = 'a2a_migrations_lock';
 const MIGRATION = '0001_create_tasks';
+const PRECISION_MIGRATION = '0002_timestamp_precision';
 /** The revision the CLI translates into Kysely's NO_MIGRATIONS. */
 const BASE = 'base';
 /** The other end of a history, which a revert starts at rather than stops at. */
@@ -28,6 +34,7 @@ const ALL_COLUMNS = [
   ...KEY_COLUMNS,
   'context_id',
   'status_last_updated',
+  'status_last_updated_nanos',
   'status_state',
   'status',
   'artifacts',
@@ -38,8 +45,21 @@ const ALL_COLUMNS = [
 
 /** The listing indexes, and the column order the keyset pagination depends on. */
 const INDEXES: Record<string, string[]> = {
-  tasks_scope_updated_idx: ['tenant', 'owner', 'status_last_updated', 'id'],
-  tasks_scope_context_updated_idx: ['tenant', 'owner', 'context_id', 'status_last_updated', 'id'],
+  tasks_scope_updated_idx: [
+    'tenant',
+    'owner',
+    'status_last_updated',
+    'status_last_updated_nanos',
+    'id',
+  ],
+  tasks_scope_context_updated_idx: [
+    'tenant',
+    'owner',
+    'context_id',
+    'status_last_updated',
+    'status_last_updated_nanos',
+    'id',
+  ],
 };
 
 // `upgrade` with no --store migrates every registered store, so the teardown has to
@@ -379,7 +399,12 @@ for (const engine of ENGINES) {
       const nullable = Object.fromEntries(
         (await columnsOf()).map((column) => [column.name, column.isNullable])
       );
-      for (const column of [...KEY_COLUMNS, 'context_id', 'status_last_updated']) {
+      for (const column of [
+        ...KEY_COLUMNS,
+        'context_id',
+        'status_last_updated',
+        'status_last_updated_nanos',
+      ]) {
         expect(nullable[column]).toBe(false);
       }
       for (const column of ['status_state', 'status', 'artifacts', 'history', 'metadata']) {
@@ -456,7 +481,7 @@ for (const engine of ENGINES) {
       );
     });
 
-    it('upgrade twice changes nothing and leaves one ledger row', async () => {
+    it('upgrade twice changes nothing and leaves two ledger rows', async () => {
       await cli('upgrade');
       const before = await structure();
 
@@ -468,7 +493,7 @@ for (const engine of ENGINES) {
       const ledger = await introspect((db) =>
         sql.raw(`select name from ${LEDGER_TABLE}`).execute(db)
       );
-      expect(ledger.rows).toHaveLength(1);
+      expect(ledger.rows).toHaveLength(2);
     });
 
     it('status reports the migration as pending before upgrade', async () => {
@@ -505,19 +530,22 @@ for (const engine of ENGINES) {
       expect((await cli('status')).out).toContain('pending');
     });
 
-    it('downgrade drops the table and names the reverted migration', async () => {
+    it('downgrade removes precision metadata and names the reverted migration', async () => {
       await cli('upgrade');
 
       const { code, out } = await cli('downgrade');
 
       expect(code).toBe(0);
-      expect(out).toContain(`reverted ${MIGRATION}`);
-      expect(await tableNames()).not.toContain(TABLE);
+      expect(out).toContain(`reverted ${PRECISION_MIGRATION}`);
+      expect(await tableNames()).toContain(TABLE);
+      expect((await columnsOf()).map((column) => column.name)).not.toContain(
+        'status_last_updated_nanos'
+      );
     });
 
     it('downgrade reports nothing to revert when the ledger is empty', async () => {
       await cli('upgrade');
-      await cli('downgrade');
+      await cli('downgrade', BASE);
 
       const { code, out } = await cli('downgrade');
 
@@ -596,14 +624,123 @@ for (const engine of ENGINES) {
       );
       expect(code).toBe(0);
 
-      const statements = out
-        .split(';')
+      const statements = (out.match(/(?:\$\$[\s\S]*?\$\$|[^;])+/g) ?? [])
         .map((statement) => statement.trim())
         .filter(Boolean);
       await introspect(async (db) => {
         for (const statement of statements) await sql.raw(statement).execute(db);
       });
     }
+
+    it.each([
+      { table: TABLE, source: 'online' },
+      { table: RENAMED_TABLE, source: 'online' },
+      { table: TABLE, source: 'script' },
+      { table: RENAMED_TABLE, source: 'script' },
+    ])(
+      'backfills existing $table rows using $source SQL without changing payloads',
+      async ({ table, source }) => {
+        const oldStore = taskStoreMigrations(table);
+        await introspect((db) =>
+          migrateStore(db, {
+            ...oldStore,
+            migrations: { [MIGRATION]: oldStore.migrations[MIGRATION] },
+          })
+        );
+        const entries: readonly (readonly [string, string | undefined, number])[] = [
+          ['a-newer', '2026-10-02T00:00:00.000900001Z', 900001],
+          ['z-older', '2026-10-02T00:00:00.0001Z', 100000],
+          ['tie-z', '2026-10-02T01:00:00.000900001+01:00', 900001],
+          ['tie-y', '2026-10-01T19:00:00.000900001-05:00', 900001],
+          ['pre-epoch', '1969-12-31T23:59:59.999900001Z', 900001],
+          ['epoch', '1970-01-01T00:00:00.000000001Z', 1],
+          ['epoch-offset', '1969-12-31T19:00:00.000000009-05:00', 9],
+          ['invalid', 'xxxx-xx-xxTxx:xx:xx.000900001Z', 0],
+          ['invalid-month', '2026-99-02T00:00:00.000900001Z', 0],
+          ['whole-second', '2026-10-01T00:00:00Z', 0],
+          ['no-timestamp', undefined, 0],
+        ] as const;
+        await introspect(async (db) => {
+          for (const [id, timestamp] of entries) {
+            const status = JSON.stringify({ state: 'TASK_STATE_WORKING', timestamp });
+            const parsed = timestamp ? Date.parse(timestamp) : 0;
+            const updated = Number.isNaN(parsed) ? 0 : parsed;
+            for (const tenant of ['acme', 'other']) {
+              await sql`insert into ${sql.table(table)}
+              (tenant, owner, id, context_id, status_last_updated, status, metadata)
+              values (${tenant}, 'unknown', ${id}, 'ctx', ${updated}, ${status}, '{"note":"keep"}')`.execute(
+                db
+              );
+            }
+          }
+          await sql`insert into ${sql.table(table)}
+          (tenant, owner, id, context_id, status_last_updated, status)
+          values ('acme', 'unknown', 'unreadable', 'ctx', 0, 'not json'),
+                 ('acme', 'unknown', 'null-status', 'ctx', 0, null)`.execute(db);
+        });
+        const rows = () =>
+          introspect(
+            async (db) =>
+              (await sql`select * from ${sql.table(table)} order by tenant, owner, id`.execute(db))
+                .rows as Record<string, unknown>[]
+          );
+        const before = await rows();
+        if (source === 'online') {
+          expect(
+            (await cli('upgrade', '--store', STORE_ID, '--tasks-table-name', table)).code
+          ).toBe(0);
+        } else {
+          await renderAndApply('upgrade', '--from', MIGRATION, '--tasks-table-name', table);
+        }
+        const after = await rows();
+        expect(after.map(({ status_last_updated_nanos: _nanos, ...row }) => row)).toEqual(before);
+        for (const [id, , nanos] of entries) {
+          expect(
+            after.filter((row) => row.id === id).map((row) => Number(row.status_last_updated_nanos))
+          ).toEqual([nanos, nanos]);
+        }
+        expect(after.find((row) => row.id === 'unreadable')?.status_last_updated_nanos).toBe(0);
+        expect(after.find((row) => row.id === 'null-status')?.status_last_updated_nanos).toBe(0);
+        const seen: string[] = [];
+        await introspect(async (db) => {
+          const store = new DatabaseTaskStore(db, { tableName: table });
+          const context = new ServerCallContext({ tenant: 'other' });
+          let pageToken = '';
+          for (let page = 0; page < entries.length + 1; page++) {
+            const response = await store.list(
+              ListTasksRequest.fromJSON({ pageSize: 1, pageToken }),
+              context
+            );
+            seen.push(...response.tasks.map((task) => task.id));
+            pageToken = response.nextPageToken;
+            if (!pageToken) break;
+          }
+          expect(pageToken).toBe('');
+        });
+        expect(seen).toEqual([
+          'tie-z',
+          'tie-y',
+          'a-newer',
+          'z-older',
+          'whole-second',
+          'epoch-offset',
+          'epoch',
+          'no-timestamp',
+          'invalid-month',
+          'invalid',
+          'pre-epoch',
+        ]);
+        // Downgrade only drops the derived column; upgrading recovers the same precision.
+        expect(
+          (await cli('downgrade', MIGRATION, '--store', STORE_ID, '--tasks-table-name', table)).code
+        ).toBe(0);
+        expect(await rows()).toEqual(before);
+        expect((await cli('upgrade', '--store', STORE_ID, '--tasks-table-name', table)).code).toBe(
+          0
+        );
+        expect(await rows()).toEqual(after);
+      }
+    );
 
     describe('--sql', () => {
       it('builds the table a real upgrade builds', async () => {

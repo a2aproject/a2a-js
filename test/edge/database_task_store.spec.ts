@@ -142,7 +142,7 @@ describe('DatabaseTaskStore on D1', () => {
     }
   }
 
-  function taskAt(timestamp: string, overrides: Partial<Task> = {}): Partial<Task> {
+  function taskAt(timestamp: string | undefined, overrides: Partial<Task> = {}): Partial<Task> {
     return {
       status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp },
       ...overrides,
@@ -248,6 +248,60 @@ describe('DatabaseTaskStore on D1', () => {
     });
   });
 
+  it('backfills existing D1 rows while preserving payloads and scope', async () => {
+    await dropEverything(db);
+    const { migrations } = taskStoreMigrations();
+    await migrations['0001_create_tasks'].up(db);
+    for (const [id, timestamp] of [
+      ['a-newer', '2026-10-02T01:00:00.000900001+01:00'],
+      ['z-older', '2026-10-02T00:00:00.000100Z'],
+    ]) {
+      const status = JSON.stringify({ state: 'TASK_STATE_WORKING', timestamp });
+      for (const tenant of ['acme', 'other']) {
+        await sql`insert into tasks (tenant, owner, id, context_id, status_last_updated, status)
+          values (${tenant}, 'alice', ${id}, 'ctx', ${Date.parse(timestamp)}, ${status})`.execute(
+          db
+        );
+      }
+    }
+    await sql`insert into tasks (tenant, owner, id, context_id, status_last_updated, status)
+      values ('other', 'alice', 'unreadable', 'ctx', 0, 'not json'),
+             ('other', 'alice', 'null-status', 'ctx', 0, null)`.execute(db);
+    for (const [id, timestamp] of [
+      ['invalid', 'xxxx-xx-xxTxx:xx:xx.000900001Z'],
+      ['invalid-month', '2026-99-02T00:00:00.000900001Z'],
+      ['epoch-offset', '1969-12-31T19:00:00.000000009-05:00'],
+    ]) {
+      const status = JSON.stringify({ state: 'TASK_STATE_WORKING', timestamp });
+      await sql`insert into tasks (tenant, owner, id, context_id, status_last_updated, status)
+        values ('other', 'alice', ${id}, 'ctx', 0, ${status})`.execute(db);
+    }
+    const before = await rowsInTable();
+    await migrations['0002_timestamp_precision'].up(db);
+    const after = await rowsInTable();
+    expect(after.map(({ status_last_updated_nanos: _nanos, ...row }) => row)).toEqual(before);
+    expect(
+      after.filter((row) => row.id === 'a-newer').map((row) => row.status_last_updated_nanos)
+    ).toEqual([900001, 900001]);
+    expect(
+      after.filter((row) => row.id === 'z-older').map((row) => row.status_last_updated_nanos)
+    ).toEqual([100000, 100000]);
+    expect(after.find((row) => row.id === 'unreadable')?.status_last_updated_nanos).toBe(0);
+    expect(after.find((row) => row.id === 'null-status')?.status_last_updated_nanos).toBe(0);
+    expect(after.find((row) => row.id === 'invalid')?.status_last_updated_nanos).toBe(0);
+    expect(after.find((row) => row.id === 'invalid-month')?.status_last_updated_nanos).toBe(0);
+    expect(after.find((row) => row.id === 'epoch-offset')?.status_last_updated_nanos).toBe(9);
+    const context = makeContext({ tenant: 'acme', user: 'alice' });
+    const first = await store.list(makeListRequest({ pageSize: 1 }), context);
+    expect(first.tasks.map((task) => task.id)).toEqual(['a-newer']);
+    const second = await store.list(
+      makeListRequest({ pageSize: 1, pageToken: first.nextPageToken }),
+      context
+    );
+    expect(second.tasks.map((task) => task.id)).toEqual(['z-older']);
+    expect(second.nextPageToken).toBe('');
+  });
+
   describe('stored row shape', () => {
     it('writes status_state and protocol_version', async () => {
       await store.save(makeTask(), makeContext());
@@ -293,6 +347,85 @@ describe('DatabaseTaskStore on D1', () => {
 
       const response = await store.list(makeListRequest(), context);
       expect(response.tasks.map((task) => task.id)).toEqual(['new', 'tie-b', 'tie-a', 'old']);
+    });
+
+    it.each([undefined, 1])(
+      'orders submillisecond timestamps with page size %s',
+      async (pageSize) => {
+        const newer = '2026-10-02T00:00:00.000900Z';
+        const older = '2026-10-02T00:00:00.000100Z';
+        await saveAll(context, [
+          { id: 'a-newer', ...taskAt(newer) },
+          { id: 'z-older', ...taskAt(older) },
+        ]);
+        expect((await store.load('a-newer', context))?.status?.timestamp).toBe(newer);
+        expect((await store.load('z-older', context))?.status?.timestamp).toBe(older);
+
+        const seen: string[] = [];
+        let pageToken = '';
+        for (let page = 0; page < 3; page++) {
+          const response = await store.list(makeListRequest({ pageSize, pageToken }), context);
+          seen.push(...response.tasks.map((task) => task.id));
+          pageToken = response.nextPageToken;
+          if (!pageToken) break;
+        }
+        expect(pageToken).toBe('');
+        expect(seen).toEqual(['a-newer', 'z-older']);
+      }
+    );
+
+    it.each([
+      {
+        name: 'nanosecond precision',
+        timestamps: ['2026-10-02T00:00:00.000000009Z', '2026-10-02T00:00:00.000000001Z'],
+        expected: ['a-first', 'z-second'],
+      },
+      {
+        name: 'equivalent fractional widths',
+        timestamps: ['2026-10-02T00:00:00.0009Z', '2026-10-02T00:00:00.000900000Z'],
+        expected: ['z-second', 'a-first'],
+      },
+      {
+        name: 'equivalent timezone offsets',
+        timestamps: ['2026-10-02T01:00:00.000900001+01:00', '2026-10-01T19:00:00.000900001-05:00'],
+        expected: ['z-second', 'a-first'],
+      },
+      {
+        name: 'pre-epoch nanoseconds',
+        timestamps: ['1969-12-31T23:59:59.999900001Z', '1969-12-31T23:59:59.9999Z'],
+        expected: ['a-first', 'z-second'],
+      },
+      {
+        name: 'epoch nanoseconds and an absent timestamp',
+        timestamps: ['1970-01-01T00:00:00.000000001Z', undefined],
+        expected: ['a-first', 'z-second'],
+      },
+    ])('pages through $name without repeats or gaps', async ({ timestamps, expected }) => {
+      await saveAll(context, [
+        { id: 'a-first', ...taskAt(timestamps[0]) },
+        { id: 'z-second', ...taskAt(timestamps[1]) },
+      ]);
+      const seen: string[] = [];
+      let pageToken = '';
+      for (let page = 0; page < 3; page++) {
+        const response = await store.list(makeListRequest({ pageSize: 1, pageToken }), context);
+        seen.push(...response.tasks.map((task) => task.id));
+        pageToken = response.nextPageToken;
+        if (!pageToken) break;
+      }
+      expect(pageToken).toBe('');
+      expect(seen).toEqual(expected);
+    });
+
+    it('accepts an existing millisecond cursor as an exact millisecond boundary', async () => {
+      await saveAll(context, [
+        { id: 'tie-z', ...taskAt('2026-10-02T00:00:00.001Z') },
+        { id: 'tie-a', ...taskAt('2026-10-02T00:00:00.001Z') },
+        { id: 'older', ...taskAt('2026-10-02T00:00:00.000900001Z') },
+      ]);
+      const pageToken = Buffer.from('2026-10-02T00:00:00.001Z|tie-z').toString('base64');
+      const response = await store.list(makeListRequest({ pageToken }), context);
+      expect(response.tasks.map((task) => task.id)).toEqual(['tie-a', 'older']);
     });
 
     // Four matching tasks over two full pages, with a tie split across the boundary so
