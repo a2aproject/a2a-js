@@ -15,6 +15,12 @@ import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
 import { LegacyJsonRpcTransport } from '../../../src/compat/v0_3/client/transports/json_rpc_transport.js';
+import {
+  A2A_ERROR_CODE,
+  JsonRpcTaskNotFoundError,
+  JsonRpcTransportError,
+  TaskNotFoundError,
+} from '../../../src/errors/index.js';
 
 describe('JsonRpcTransport', () => {
   let transport: JsonRpcTransport;
@@ -164,6 +170,75 @@ describe('JsonRpcTransport', () => {
       await expect(stream.next()).rejects.toThrow(
         `Invalid JSON-RPC response for SSE event: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
       );
+    });
+  });
+
+  describe('SSE error events', () => {
+    const request: SendMessageRequest = {
+      tenant: '',
+      message: {
+        messageId: 'test-msg-1',
+        role: Role.ROLE_USER,
+        parts: [],
+        contextId: '',
+        taskId: '',
+        extensions: [],
+        metadata: undefined,
+        referenceTaskIds: [],
+      },
+      configuration: undefined,
+      metadata: {},
+    };
+
+    const mockErrorResponse = (
+      error: { code: number; message: string; data?: unknown },
+      stream: boolean
+    ) => {
+      mockFetch.mockImplementation(async (_url, init) => {
+        const { id } = JSON.parse(init!.body as string);
+        const envelope = JSON.stringify({ jsonrpc: '2.0', id, error });
+        return stream
+          ? new Response(`data: ${envelope}\n\n`, {
+              status: 200,
+              headers: { 'Content-Type': 'text/event-stream' },
+            })
+          : new Response(envelope, { status: 200 });
+      });
+    };
+
+    it('throws the same typed error as a unary response', async () => {
+      const error = { code: A2A_ERROR_CODE.TASK_NOT_FOUND, message: 'Task not found' };
+
+      mockErrorResponse(error, false);
+      const unaryError = await transport.sendMessage(request).catch((e: unknown) => e);
+      expect(unaryError).toBeInstanceOf(JsonRpcTaskNotFoundError);
+
+      mockErrorResponse(error, true);
+      const streamError = await transport
+        .sendMessageStream(request)
+        .next()
+        .catch((e: unknown) => e);
+      expect(streamError).toBeInstanceOf(JsonRpcTaskNotFoundError);
+      expect(streamError).toBeInstanceOf(TaskNotFoundError);
+      expect((streamError as JsonRpcTaskNotFoundError).envelopeCode).toBe(
+        A2A_ERROR_CODE.TASK_NOT_FOUND
+      );
+      expect((streamError as Error).message).toBe((unaryError as Error).message);
+    });
+
+    it('throws JsonRpcTransportError for unknown error codes', async () => {
+      mockErrorResponse({ code: -42000, message: 'mystery', data: { detail: 'x' } }, true);
+
+      const streamError = await transport
+        .sendMessageStream(request)
+        .next()
+        .catch((e: unknown) => e);
+      expect(streamError).toBeInstanceOf(JsonRpcTransportError);
+      expect((streamError as JsonRpcTransportError).errorResponse.error).toEqual({
+        code: -42000,
+        message: 'mystery',
+        data: { detail: 'x' },
+      });
     });
   });
 

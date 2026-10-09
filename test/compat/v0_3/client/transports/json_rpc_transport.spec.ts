@@ -471,6 +471,21 @@ describe('LegacyJsonRpcTransport', () => {
       expect(body.method).toBe('message/stream');
     });
 
+    it('throws the typed error for a v0.3 SSE error event', async () => {
+      mockFetch.mockResolvedValue(
+        makeSseResponse([
+          {
+            jsonrpc: '2.0',
+            id: 1,
+            error: { code: A2A_ERROR_CODE.TASK_NOT_FOUND, message: 'no such task' },
+          },
+        ])
+      );
+
+      const stream = transport.sendMessageStream(sendMessageRequest());
+      await expect(stream.next()).rejects.toBeInstanceOf(TaskNotFoundError);
+    });
+
     it('uses tasks/resubscribe for resubscribeTask', async () => {
       mockFetch.mockResolvedValue(makeSseResponse([]));
 

@@ -385,11 +385,7 @@ export class JsonRpcTransport implements Transport {
     }
 
     if ('error' in a2aStreamResponse) {
-      const err = a2aStreamResponse.error;
-      throw new Error(
-        `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
-        { cause: mapJsonRpcErrorToSdkError(a2aStreamResponse) }
-      );
+      throw mapJsonRpcErrorToSdkError(a2aStreamResponse);
     }
 
     if (!('result' in a2aStreamResponse) || typeof a2aStreamResponse.result === 'undefined') {
