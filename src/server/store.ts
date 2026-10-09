@@ -2,6 +2,7 @@ import { Task, ListTasksRequest, ListTasksResponse, TaskState } from '../index.j
 import { ServerCallContext } from './context.js';
 import { DEFAULT_PAGE_SIZE } from '../constants.js';
 import { OwnerResolver, resolveUserScope } from './owner_resolver.js';
+import { isTimestampStrictlyAfter } from './timestamp.js';
 import { decodePageToken, encodePageToken, ScopedStore } from './utils.js';
 
 /**
@@ -85,9 +86,10 @@ export class InMemoryTaskStore implements TaskStore {
     }
 
     if (statusTimestampAfter) {
-      const filterTime = new Date(statusTimestampAfter).getTime();
       tasks = tasks.filter(
-        (task) => task.status?.timestamp && new Date(task.status.timestamp).getTime() > filterTime
+        (task) =>
+          !!task.status?.timestamp &&
+          isTimestampStrictlyAfter(task.status.timestamp, statusTimestampAfter)
       );
     }
 

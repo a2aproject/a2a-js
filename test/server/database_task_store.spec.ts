@@ -422,6 +422,26 @@ for (const engine of ENGINES) {
         expect(response.tasks.map((task) => task.id)).toEqual(['match']);
       });
 
+      it('keeps a later fraction in the same millisecond as the boundary', async () => {
+        const completed = (timestamp: string): Partial<Task> => ({
+          status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp },
+        });
+        await saveAll(context, [
+          { id: 'a-newer', ...completed('2026-10-02T00:00:00.000900Z') },
+          { id: 'z-older', ...completed('2026-10-02T00:00:00.000100Z') },
+        ]);
+
+        const response = await store.list(
+          makeListRequest({
+            statusTimestampAfter: '2026-10-02T00:00:00.000500Z',
+            pageSize: 1,
+          }),
+          context
+        );
+        expect(response.tasks.map((task) => task.id)).toEqual(['a-newer']);
+        expect(response.totalSize).toBe(1);
+      });
+
       it('treats an unspecified status as no filter rather than a state to match', async () => {
         await saveAll(context, [{ id: 'task-1' }, { id: 'task-2' }]);
 
