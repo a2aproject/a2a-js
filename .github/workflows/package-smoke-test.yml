@@ -21,10 +21,11 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        # Kysely 0.28 is the last line supporting Node 20.
+        # Kysely 0.28 and better-sqlite3 12 are the last lines supporting Node 20.
         include:
           - node-version: 20
             kysely: '0.28.17'
+            better-sqlite3: '12'
           # No version: the script uses the Kysely in package-lock.json.
           - node-version: 22
           - node-version: 24
@@ -39,3 +40,7 @@ jobs:
       - run: npm run test:package
         env:
           KYSELY_VERSION: ${{ matrix.kysely }}
+      - run: npm run test:package-imports
+        env:
+          KYSELY_VERSION: ${{ matrix.kysely }}
+          BETTER_SQLITE3_VERSION: ${{ matrix['better-sqlite3'] }}
