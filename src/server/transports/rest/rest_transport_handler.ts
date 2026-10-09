@@ -147,11 +147,19 @@ export class RestTransportHandler {
 
   async listTaskPushNotificationConfigs(
     taskId: string,
-    context: ServerCallContext,
-    tenant?: string
+    queryParams: Record<string, unknown>,
+    context: ServerCallContext
   ): Promise<ListTaskPushNotificationConfigsResponse> {
     const result = await this.requestHandler.listTaskPushNotificationConfigs(
-      { taskId, pageSize: 0, pageToken: '', tenant: tenant || '' },
+      {
+        taskId,
+        pageSize:
+          queryParams.pageSize !== undefined && queryParams.pageSize !== ''
+            ? this.parseNonNegativeInt(queryParams.pageSize, 'pageSize')
+            : 0,
+        pageToken: (queryParams.pageToken as string) || '',
+        tenant: (queryParams.tenant as string) || '',
+      },
       context
     );
     return result;
@@ -203,6 +211,14 @@ export class RestTransportHandler {
     }
     if (parsed < 0) {
       throw new RequestMalformedError('historyLength must be non-negative');
+    }
+    return parsed;
+  }
+
+  private parseNonNegativeInt(value: unknown, name: string): number {
+    const parsed = parseInt(String(value), 10);
+    if (isNaN(parsed) || String(parsed) !== String(value).trim() || parsed < 0) {
+      throw new RequestMalformedError(`${name} must be a non-negative integer`);
     }
     return parsed;
   }
