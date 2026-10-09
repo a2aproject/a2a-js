@@ -21,7 +21,6 @@ import {
   type ErrorDetail,
   RequestMalformedError,
   toJsonRpcError,
-  UnsupportedOperationError,
 } from '../../../errors/index.js';
 import { JSONRPCErrorResponse } from '../../../core.js';
 
@@ -95,21 +94,12 @@ export class JsonRpcTransportHandler {
       const paramsTenant = (rpcRequest.params as Record<string, unknown> | undefined)?.tenant as
         | string
         | undefined;
-      if (paramsTenant && !context.tenant) {
-        context = new ServerCallContext({
-          requestedExtensions: context.requestedExtensions,
-          user: context.user,
-          requestedVersion: context.requestedVersion,
-          tenant: paramsTenant,
-        });
+      if (paramsTenant) {
+        context.setTenant(paramsTenant);
       }
 
       if (method === 'SendStreamingMessage' || method === 'SubscribeToTask') {
         const params = rpcRequest.params;
-        const agentCard = await this.requestHandler.getAgentCard();
-        if (!agentCard.capabilities?.streaming) {
-          throw new UnsupportedOperationError(`Method ${method} requires streaming capability.`);
-        }
         const agentEventStream =
           method === 'SendStreamingMessage'
             ? this.requestHandler.sendMessageStream(SendMessageRequest.fromJSON(params), context)
