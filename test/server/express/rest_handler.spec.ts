@@ -20,13 +20,14 @@ import {
   RequestMalformedError,
   TaskNotCancelableError,
   TaskNotFoundError,
+  UnsupportedOperationError,
 } from '../../../src/errors/index.js';
 import {
   ListTaskPushNotificationConfigsResponse,
   Message as ProtoMessage,
   SendMessageResponse,
   TaskPushNotificationConfig,
-} from '../../../src/types/pb/a2a.js';
+} from '../../../src/types/index.js';
 import { FromProto } from '../../../src/types/converters/from_proto.js';
 import { LegacyRestTransportHandler } from '../../../src/compat/v0_3/server/transports/rest/rest_transport_handler.js';
 import {
@@ -247,26 +248,19 @@ describe('restHandler', () => {
       );
     });
 
-    it('should return 400 if streaming is not supported', async () => {
-      const noStreamRequestHandler = {
-        ...mockRequestHandler,
-        getAgentCard: vi.fn().mockResolvedValue({
-          ...testAgentCard,
-          capabilities: { streaming: false, pushNotifications: false },
-        }),
-      };
-      const noStreamApp = express();
-      noStreamApp.use(
-        restHandler({
-          requestHandler: noStreamRequestHandler as any,
-          userBuilder: UserBuilder.noAuthentication,
-        })
+    it('should return 400 when the request handler refuses to stream', async () => {
+      // Whether the agent streams is decided by the request handler, not by
+      // this layer, so the handler is made to refuse rather than the card made
+      // to withhold. What is under test here is the mapping of that refusal
+      // onto an HTTP status and a `google.rpc.Status` reason.
+      (mockRequestHandler.sendMessageStream as Mock).mockRejectedValue(
+        new UnsupportedOperationError('Streaming is not supported.')
       );
 
-      const response = await request(noStreamApp)
+      const response = await request(app)
         .post('/message:stream')
         .set('A2A-Version', '1.0')
-        .send({ request: testMessage })
+        .send({ message: ProtoMessage.toJSON(testMessage) })
         .expect(400);
 
       assert.property(response.body, 'error');
@@ -450,17 +444,23 @@ describe('restHandler', () => {
       );
     });
 
-    it('should treat unrecognized status values as UNRECOGNIZED (-1)', async () => {
-      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [testTask] });
-
-      await request(app).get('/tasks?status=INVALID_VALUE').set('A2A-Version', '1.0').expect(200);
-
-      const callArgs = (mockRequestHandler.listTasks as Mock).mock.calls[0][0];
-      assert.equal(
-        callArgs.status,
-        TaskState.UNRECOGNIZED,
-        'Unrecognized status should return UNRECOGNIZED (-1)'
+    it('should surface the request handler RequestMalformedError for an unrecognized status as 400 INVALID_ARGUMENT', async () => {
+      // Regression: an invalid status used to be silently converted to
+      // UNRECOGNIZED (-1) and applied as a filter matching nothing.
+      // Validation now lives in DefaultRequestHandler; the REST layer must
+      // map it to 400 INVALID_ARGUMENT, mirroring Python's ParseDict
+      // behavior.
+      (mockRequestHandler.listTasks as Mock).mockRejectedValue(
+        new RequestMalformedError('Invalid status filter: -1')
       );
+
+      const response = await request(app)
+        .get('/tasks?status=INVALID_VALUE')
+        .set('A2A-Version', '1.0')
+        .expect(400);
+
+      assert.equal(response.body.error.status, 'INVALID_ARGUMENT');
+      assert.equal(response.body.error.details[0].reason, 'INVALID_PARAMS');
     });
 
     it('should default to TASK_STATE_UNSPECIFIED when status is not provided', async () => {
@@ -584,24 +584,12 @@ describe('restHandler', () => {
       );
     });
 
-    it('should return 400 if streaming is not supported', async () => {
-      // Create new app with handler that has capabilities without streaming
-      const noStreamRequestHandler = {
-        ...mockRequestHandler,
-        getAgentCard: vi.fn().mockResolvedValue({
-          ...testAgentCard,
-          capabilities: { streaming: false, pushNotifications: false },
-        }),
-      };
-      const noStreamApp = express();
-      noStreamApp.use(
-        restHandler({
-          requestHandler: noStreamRequestHandler as any,
-          userBuilder: UserBuilder.noAuthentication,
-        })
+    it('should return 400 when the request handler refuses to resubscribe', async () => {
+      (mockRequestHandler.resubscribe as Mock).mockRejectedValue(
+        new UnsupportedOperationError('Streaming (and thus resubscription) is not supported.')
       );
 
-      const response = await request(noStreamApp)
+      const response = await request(app)
         .post('/tasks/task-1:subscribe')
         .set('A2A-Version', '1.0')
         .expect(400);
@@ -653,6 +641,37 @@ describe('restHandler', () => {
         const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
         assert.equal(protoResponse.taskId, 'task-1');
         assert.equal(protoResponse.id, 'config-1');
+      });
+
+      it('should take taskId from the path when the body omits it', async () => {
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        const response = await request(app)
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({ url: 'http://127.0.0.1:9999/webhook' })
+          .expect(201);
+
+        const protoResponse = TaskPushNotificationConfig.fromJSON(response.body);
+        assert.equal(protoResponse.taskId, 'task-1');
+
+        const passedConfig = (mockRequestHandler.createTaskPushNotificationConfig as Mock).mock
+          .calls[0][0];
+        assert.equal(passedConfig.taskId, 'task-1');
+      });
+
+      it('should prefer the path taskId over one repeated in the body', async () => {
+        (mockRequestHandler.createTaskPushNotificationConfig as Mock).mockResolvedValue(mockConfig);
+
+        await request(app)
+          .post('/tasks/task-1/pushNotificationConfigs')
+          .set('A2A-Version', '1.0')
+          .send({ url: 'http://127.0.0.1:9999/webhook', taskId: 'some-other-task' })
+          .expect(201);
+
+        const passedConfig = (mockRequestHandler.createTaskPushNotificationConfig as Mock).mock
+          .calls[0][0];
+        assert.equal(passedConfig.taskId, 'task-1');
       });
 
       it('should return 400 if push notifications not supported', async () => {

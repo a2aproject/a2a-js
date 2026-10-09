@@ -14,7 +14,15 @@ import {
   PushNotificationNotSupportedError,
   UnsupportedOperationError,
 } from '../../src/errors/index.js';
-import { AgentCard, Task, Message, Role, TaskState, TaskStatus } from '../../src/index.js';
+import {
+  AgentCard,
+  Task,
+  Message,
+  Role,
+  TaskState,
+  TaskStatus,
+  ListTasksResponse,
+} from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 
 describe('RestTransportHandler', () => {
@@ -212,20 +220,6 @@ describe('RestTransportHandler', () => {
   });
 
   describe('sendMessageStream', () => {
-    it('should throw UnsupportedOperation if streaming not supported', async () => {
-      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
-        ...testAgentCard,
-        capabilities: { streaming: false },
-      });
-
-      await expect(
-        transportHandler.sendMessageStream(
-          { message: testMessage, metadata: {}, configuration: undefined, tenant: '' },
-          mockContext
-        )
-      ).rejects.toThrow('Agent does not support streaming');
-    });
-
     it('should call request handler sendMessageStream if streaming supported', async () => {
       async function* mockStream() {
         yield testMessage;
@@ -275,6 +269,102 @@ describe('RestTransportHandler', () => {
     });
   });
 
+  describe('listTasks', () => {
+    const mockListResponse: ListTasksResponse = {
+      tasks: [],
+      nextPageToken: '',
+      pageSize: 0,
+      totalSize: 0,
+    };
+
+    it('should delegate parsed query params to the request handler', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      const result = await transportHandler.listTasks(
+        {
+          pageSize: '10',
+          pageToken: 'abc',
+          historyLength: '5',
+          contextId: 'ctx-1',
+        },
+        mockContext
+      );
+
+      expect(result).toEqual(mockListResponse);
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        {
+          tenant: '',
+          contextId: 'ctx-1',
+          status: TaskState.TASK_STATE_UNSPECIFIED,
+          pageSize: 10,
+          pageToken: 'abc',
+          historyLength: 5,
+          statusTimestampAfter: undefined,
+          includeArtifacts: false,
+        },
+        mockContext
+      );
+    });
+
+    it('should forward an unrecognized status filter as UNRECOGNIZED for the request handler to reject', async () => {
+      // Parsing is the transport's job; validation lives in
+      // DefaultRequestHandler so every transport behaves identically.
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: 'bogus-status' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.UNRECOGNIZED }),
+        mockContext
+      );
+    });
+
+    it('should forward an out-of-range numeric status filter as UNRECOGNIZED for the request handler to reject', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: '99' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.UNRECOGNIZED }),
+        mockContext
+      );
+    });
+
+    it('should forward historyLength=0 instead of dropping it', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ historyLength: '0' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ historyLength: 0 }),
+        mockContext
+      );
+    });
+
+    it('should reject a non-numeric pageSize', async () => {
+      await expect(transportHandler.listTasks({ pageSize: 'abc' }, mockContext)).rejects.toThrow(
+        /pageSize must be a valid integer/
+      );
+    });
+
+    it('should reject pageSize=0', async () => {
+      await expect(transportHandler.listTasks({ pageSize: '0' }, mockContext)).rejects.toThrow(
+        /pageSize must be between 1 and 100/
+      );
+    });
+
+    it('should pass a valid status filter through to the request handler', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue(mockListResponse);
+
+      await transportHandler.listTasks({ status: 'TASK_STATE_COMPLETED' }, mockContext);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TaskState.TASK_STATE_COMPLETED }),
+        mockContext
+      );
+    });
+  });
+
   describe('cancelTask', () => {
     it('should cancel task by ID', async () => {
       const cancelledTask = {
@@ -298,17 +388,6 @@ describe('RestTransportHandler', () => {
   });
 
   describe('resubscribe', () => {
-    it('should throw UnsupportedOperation if streaming not supported', async () => {
-      (mockRequestHandler.getAgentCard as Mock).mockResolvedValue({
-        ...testAgentCard,
-        capabilities: { streaming: false },
-      });
-
-      await expect(transportHandler.resubscribe('task-1', mockContext)).rejects.toThrow(
-        'Agent does not support streaming'
-      );
-    });
-
     it('should call request handler resubscribe if streaming supported', async () => {
       async function* mockStream() {
         yield testTask;

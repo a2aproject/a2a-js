@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach, assert, expect, vi, type Mock } fr
 
 import { AgentExecutor } from '../../src/server/agent_execution/agent_executor.js';
 import {
+  ContentTypeNotSupportedError,
   TaskNotFoundError,
   PushNotificationNotSupportedError,
   UnsupportedOperationError,
@@ -38,7 +39,7 @@ import {
   SendMessageConfiguration,
   ListTasksRequest,
   StreamResponse,
-} from '../../src/types/pb/a2a.js';
+} from '../../src/types/index.js';
 import {
   DefaultExecutionEventBusManager,
   ExecutionEventBusManager,
@@ -1452,7 +1453,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     await mockTaskStore.save(fakeTask, serverCallContext);
 
     // Create an active event bus
-    const bus = executionEventBusManager.createOrGetByTaskId(taskId);
+    const bus = executionEventBusManager.createOrGetByTaskId(taskId, serverCallContext);
 
     const generator = handler.resubscribe({ id: taskId, tenant: '' }, serverCallContext);
 
@@ -1710,6 +1711,44 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     assert.lengthOf(events, 1, 'Task should be yielded before the error');
     assert.equal(events[0].payload?.$case, 'task');
+  });
+
+  it('getTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('getTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.getTask({ id: '   ', tenant: '', historyLength: 0 }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('sendMessage: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    const params: SendMessageRequest = {
+      tenant: '',
+      metadata: {},
+      message: {
+        messageId: 'msg-ws-taskid',
+        role: Role.ROLE_USER,
+        parts: [
+          {
+            content: { $case: 'text', value: 'hi' },
+            filename: '',
+            mediaType: 'text/plain',
+            metadata: undefined,
+          },
+        ],
+        contextId: '',
+        taskId: '   ',
+        extensions: [],
+        metadata: {},
+      },
+    } as SendMessageRequest;
+    await expect(handler.sendMessage(params, serverCallContext)).rejects.toThrow(
+      RequestMalformedError
+    );
   });
 
   it('getTask: should return an existing task from the store', async () => {
@@ -2111,14 +2150,49 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       assert.equal(nonMatching.totalSize, 0);
     });
 
-    it('matches nothing for an unrecognized status rather than listing everything', async () => {
+    it('rejects an unrecognized status filter with RequestMalformedError', async () => {
+      // Regression: an unknown status used to deserialize to the synthetic
+      // UNRECOGNIZED (-1) sentinel and silently match nothing. Validation
+      // lives in the request handler so every transport (JSON-RPC, REST,
+      // gRPC) rejects malformed filters identically.
       const params = ListTasksRequest.fromJSON({ pageSize: 10, status: 'NOT_A_REAL_STATE' });
       assert.equal(params.status, TaskState.UNRECOGNIZED);
 
-      const result = await handler.listTasks(params, serverCallContext);
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an unrecognized status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
 
-      assert.lengthOf(result.tasks, 0);
-      assert.equal(result.totalSize, 0);
+    it('rejects an out-of-range numeric status filter (gRPC-style raw decode) with RequestMalformedError', async () => {
+      const params: ListTasksRequest = {
+        tenant: '',
+        contextId: '',
+        status: 99 as TaskState,
+        pageSize: 10,
+        pageToken: '',
+        historyLength: 0,
+        statusTimestampAfter: undefined,
+        includeArtifacts: false,
+      };
+
+      try {
+        await handler.listTasks(params, serverCallContext);
+        assert.fail('Should have thrown RequestMalformedError for an out-of-range status');
+      } catch (error: any) {
+        expect(error).to.be.instanceOf(RequestMalformedError);
+      }
+    });
+
+    it('accepts a valid numeric status filter passed through from a transport', async () => {
+      const result = await handler.listTasks(
+        ListTasksRequest.fromJSON({ pageSize: 10, status: TaskState.TASK_STATE_COMPLETED }),
+        serverCallContext
+      );
+      assert.lengthOf(result.tasks, 1);
+      assert.equal(result.totalSize, 1);
     });
   });
 
@@ -3333,34 +3407,43 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
   it('Push Notification methods should throw error if task does not exist', async () => {
     const nonExistentTaskId = 'task-non-existent';
-    const config: TaskPushNotificationConfig = {
-      tenant: '',
-      taskId: '',
-      id: 'cfg-x',
-      url: 'https://x.com',
-      token: 'token-x',
-      authentication: undefined,
-    };
 
     const methodsToTest = [
       {
         name: 'createTaskPushNotificationConfig',
         params: {
-          name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/${config.id}`,
-          pushNotificationConfig: config,
-        },
+          tenant: '',
+          id: 'cfg-x',
+          taskId: nonExistentTaskId,
+          url: 'https://x.com',
+          token: 'token-x',
+          authentication: undefined,
+        } as TaskPushNotificationConfig,
       },
       {
         name: 'getTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as GetTaskPushNotificationConfigRequest,
       },
       {
         name: 'listTaskPushNotificationConfigs',
-        params: { parent: `tasks/${nonExistentTaskId}`, pageSize: 0, pageToken: '' },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          pageSize: 0,
+          pageToken: '',
+        } as ListTaskPushNotificationConfigsRequest,
       },
       {
         name: 'deleteTaskPushNotificationConfig',
-        params: { name: `tasks/${nonExistentTaskId}/pushNotificationConfigs/cfg-x` },
+        params: {
+          tenant: '',
+          taskId: nonExistentTaskId,
+          id: 'cfg-x',
+        } as DeleteTaskPushNotificationConfigRequest,
       },
     ];
 
@@ -3437,6 +3520,81 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } catch (error: any) {
         expect(error).to.be.instanceOf(PushNotificationNotSupportedError);
       }
+    }
+  });
+
+  it('cancelTask: should reject an empty taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: '', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('cancelTask: should reject a whitespace-only taskId with RequestMalformedError', async () => {
+    await expect(
+      handler.cancelTask({ id: ' \t ', tenant: '', metadata: {} }, serverCallContext)
+    ).rejects.toThrow(RequestMalformedError);
+  });
+
+  it('resubscribe: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const generator = handler.resubscribe({ id: badId, tenant: '' }, serverCallContext);
+      await expect(generator.next()).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('createTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: TaskPushNotificationConfig = {
+        tenant: '',
+        id: 'config-1',
+        taskId: badId,
+        url: 'https://example.com/notify',
+        token: 'secret-token',
+        authentication: undefined,
+      };
+      await expect(
+        handler.createTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('getTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: GetTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.getTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('listTaskPushNotificationConfigs: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: ListTaskPushNotificationConfigsRequest = {
+        tenant: '',
+        taskId: badId,
+        pageSize: 10,
+        pageToken: '',
+      };
+      await expect(
+        handler.listTaskPushNotificationConfigs(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
+  it('deleteTaskPushNotificationConfig: should reject an empty or whitespace-only taskId with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: DeleteTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: badId,
+        id: 'config-1',
+      };
+      await expect(
+        handler.deleteTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
     }
   });
 
@@ -4361,8 +4519,41 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       const context = new ServerCallContext();
 
       await expect(requiredExtHandler.sendMessage(params, context)).rejects.toThrow(
-        requiredExtensionUri
+        ExtensionSupportRequiredError
       );
+    });
+
+    it('should not persist a follow-up that is rejected for a missing required extension', async () => {
+      const existing = createTestTask('task-ext-followup');
+      const saveSpy = vi.spyOn(mockTaskStore, 'save');
+      await mockTaskStore.save(existing, new ServerCallContext());
+      saveSpy.mockClear();
+
+      const params: SendMessageRequest = {
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: 'msg-ext-followup',
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'follow-up' },
+              filename: '',
+              mediaType: 'text/plain',
+              metadata: undefined,
+            },
+          ],
+          contextId: existing.contextId,
+          taskId: existing.id,
+          extensions: [],
+          metadata: {},
+        },
+      } as SendMessageRequest;
+
+      await expect(requiredExtHandler.sendMessage(params, new ServerCallContext())).rejects.toThrow(
+        ExtensionSupportRequiredError
+      );
+      expect(saveSpy).not.toHaveBeenCalled();
     });
 
     it('should accept requests that declare the required extension', async () => {
@@ -4683,6 +4874,124 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       } as SendMessageRequest;
 
       const result = await handler.sendMessage(params, serverCallContext);
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('defaultInputModes validation (§3.1.1)', () => {
+    const unsupportedMediaType = 'application/x-unsupported-type-12345';
+
+    /** A one-part message; `mediaType: ''` is a part that declares none. */
+    const messageWithMediaType = (mediaType: string): SendMessageRequest =>
+      ({
+        tenant: '',
+        metadata: {},
+        message: {
+          messageId: `msg-input-mode-${mediaType || 'none'}`,
+          role: Role.ROLE_USER,
+          parts: [
+            {
+              content: { $case: 'text', value: 'test' },
+              filename: '',
+              mediaType,
+              metadata: undefined,
+            },
+          ],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: {},
+        },
+      }) as SendMessageRequest;
+
+    beforeEach(() => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+        bus.publish(
+          AgentEvent.message({
+            messageId: 'msg-input-mode-reply',
+            role: Role.ROLE_AGENT,
+            parts: [],
+            contextId: ctx.contextId,
+            taskId: ctx.taskId,
+            extensions: [],
+            metadata: {},
+            referenceTaskIds: [],
+          })
+        );
+        bus.finished();
+      });
+    });
+
+    const handlerWithValidation = (): DefaultRequestHandler =>
+      new DefaultRequestHandler(
+        testAgentCard,
+        mockTaskStore,
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { validateInputModes: true }
+      );
+
+    it('rejects a media type the card does not advertise', async () => {
+      await expect(
+        handlerWithValidation().sendMessage(messageWithMediaType(unsupportedMediaType), {
+          ...serverCallContext,
+        } as ServerCallContext)
+      ).rejects.toThrow(ContentTypeNotSupportedError);
+    });
+
+    it('accepts a media type the card advertises', async () => {
+      const result = await handlerWithValidation().sendMessage(
+        messageWithMediaType('text/plain'),
+        serverCallContext
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('accepts a part that declares no media type', async () => {
+      const result = await handlerWithValidation().sendMessage(
+        messageWithMediaType(''),
+        serverCallContext
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('rejects on the streaming path as well', async () => {
+      const generator = handlerWithValidation().sendMessageStream(
+        messageWithMediaType(unsupportedMediaType),
+        { ...serverCallContext } as ServerCallContext
+      );
+      await expect(generator.next()).rejects.toThrow(ContentTypeNotSupportedError);
+    });
+
+    it('accepts any media type when the card declares no input modes', async () => {
+      const handlerWithoutModes = new DefaultRequestHandler(
+        { ...testAgentCard, defaultInputModes: [] },
+        mockTaskStore,
+        mockAgentExecutor,
+        new DefaultExecutionEventBusManager(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { validateInputModes: true }
+      );
+
+      const result = await handlerWithoutModes.sendMessage(
+        messageWithMediaType(unsupportedMediaType),
+        serverCallContext
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('accepts an unadvertised media type when validation is not enabled', async () => {
+      const result = await handler.sendMessage(
+        messageWithMediaType(unsupportedMediaType),
+        serverCallContext
+      );
       expect(result).toBeDefined();
     });
   });

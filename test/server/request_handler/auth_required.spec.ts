@@ -175,7 +175,7 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
     expect(snapshot.id).toBe(ids.taskId);
     expect(snapshot.status.state).toBe(TaskState.TASK_STATE_AUTH_REQUIRED);
 
-    expect(eventBusManager.getByTaskId(ids.taskId)).toBeDefined();
+    expect(eventBusManager.getByTaskId(ids.taskId, serverContext)).toBeDefined();
   });
 
   it('background consumer persists post-AUTH_REQUIRED events into the task store', async () => {
@@ -369,14 +369,14 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
     };
     const snapshot = (await handler.sendMessage(params, serverContext)) as Task;
     expect(snapshot.status.state).toBe(TaskState.TASK_STATE_AUTH_REQUIRED);
-    expect(eventBusManager.getByTaskId(ids.taskId)).toBeDefined();
+    expect(eventBusManager.getByTaskId(ids.taskId, serverContext)).toBeDefined();
 
     release();
     await executed;
     await new Promise<void>((resolve) => setImmediate(resolve));
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    expect(eventBusManager.getByTaskId(ids.taskId)).toBeUndefined();
+    expect(eventBusManager.getByTaskId(ids.taskId, serverContext)).toBeUndefined();
   });
 
   it('AUTH_REQUIRED followed by INPUT_REQUIRED in the same execution: snapshot returned at AUTH_REQUIRED, drain stops at INPUT_REQUIRED (bus stays alive)', async () => {
@@ -412,7 +412,7 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
     const persisted = await taskStore.load(ids.taskId, serverContext);
     expect(persisted!.status.state).toBe(TaskState.TASK_STATE_INPUT_REQUIRED);
     // INPUT_REQUIRED is interrupted — bus stays alive.
-    expect(eventBusManager.getByTaskId(ids.taskId)).toBeDefined();
+    expect(eventBusManager.getByTaskId(ids.taskId, serverContext)).toBeDefined();
   });
 
   it('non-blocking sendMessage is unaffected by AUTH_REQUIRED — returns the initial Task event immediately as before', async () => {
@@ -525,7 +525,7 @@ describe('DefaultRequestHandler AUTH_REQUIRED lifecycle (§7.6.1)', () => {
     const result = (await handler.sendMessage(params, serverContext)) as Task;
     expect(result.status.state).toBe(TaskState.TASK_STATE_INPUT_REQUIRED);
 
-    expect(eventBusManager.getByTaskId(observedTaskId)).toBeDefined();
+    expect(eventBusManager.getByTaskId(observedTaskId, serverContext)).toBeDefined();
   });
 
   it('post-AUTH_REQUIRED drain error persists a FAILED status update instead of throwing into the background', async () => {

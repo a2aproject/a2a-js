@@ -40,3 +40,36 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  notify-failure:
+    if: failure()
+    runs-on: ubuntu-latest
+    needs:
+      - publish-npm
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open and pin an issue for the failed publish
+        env:
+          ASSIGNEES: "bartek-gralewicz,ishymko,JakubWorek"
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          printf '%s\n\n%s\n' \
+            "$TAG is not on NPM. The publish workflow failed." \
+            "Failed run: $RUN_URL" > body.md
+
+          url="$(gh issue create --repo "$REPO" \
+            --title "Publish failed for $TAG" \
+            --label 'component: tooling' \
+            --body-file body.md)"
+          echo "Opened $url"
+
+          # Assigning and pinning must never discard the alert itself.
+          gh issue edit "$url" --add-assignee "$ASSIGNEES" \
+            || echo "::warning::Could not assign $url"
+          gh issue pin "$url" \
+            || echo "::warning::Could not pin $url. A repository allows at most 3 pinned issues."

@@ -29,7 +29,7 @@ import {
   ListTasksResponse,
   TaskState,
   taskStateToJSON,
-} from '../../types/pb/a2a.js';
+} from '../../types/index.js';
 import { LegacyRestTransport } from '../../compat/v0_3/client/index.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';

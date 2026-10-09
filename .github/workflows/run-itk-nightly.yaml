@@ -86,8 +86,9 @@ jobs:
         working-directory: itk
         env:
           A2A_ITK_REVISION: ${{ env.A2A_ITK_REVISION }}
-          # `ITK_NIGHTLY_RUN=True` selects `scenarios_full.json` (PR set
-          # + tri/quad-SDK star topologies) and routes results through
+          # `ITK_NIGHTLY_RUN=True` selects the shared nightly set
+          # (`a2a-itk/scenarios/traversal/nightly.yaml` — this SDK against
+          # every peer in matrix.yaml) and routes results through
           # `a2a-itk/scripts/process_results.py` to produce the rolling
           # `itk_js.json` history file consumed by the release asset.
           ITK_NIGHTLY_RUN: "True"
