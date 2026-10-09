@@ -447,6 +447,26 @@ describe('RestTransport', () => {
         expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('GET');
       });
+
+      it('sends pageSize and pageToken as query parameters when specified', async () => {
+        mockFetch.mockResolvedValue(
+          createRestResponse(
+            ListTaskPushNotificationConfigsResponse.toJSON({ configs: [], nextPageToken: '' })
+          )
+        );
+
+        await transport.listTaskPushNotificationConfig({
+          taskId,
+          tenant: '',
+          pageSize: 7,
+          pageToken: 'cursor-abc',
+        });
+
+        const [url] = mockFetch.mock.calls[0];
+        expect(url).to.equal(
+          `${endpoint}/tasks/${taskId}/pushNotificationConfigs?pageSize=7&pageToken=cursor-abc`
+        );
+      });
     });
 
     describe('deleteTaskPushNotificationConfig', () => {
