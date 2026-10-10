@@ -4,6 +4,8 @@ import {
   generateAgentCardSignature,
   verifyAgentCardSignature,
   canonicalizeAgentCard,
+  CanonicalizationError,
+  MAX_DEPTH,
 } from '../src/signature.js';
 import { AgentCard } from '../src/index.js';
 
@@ -132,6 +134,62 @@ describe('Agent Card Signature', () => {
 
       expect(canonicalizeAgentCard(cardWithExtraFields)).toBe(canonicalizeAgentCard(mockAgentCard));
     });
+
+    // cleanEmpty starts at the card. params is the fifth container: the card,
+    // capabilities, the extensions array, the extension object, then params.
+    // nest(n) adds n wrappers around a leaf object, so the leaf sits at depth
+    // 5 + n. Depth 128 is still accepted. Depth 129 is the first rejection.
+    const containersBeforeParamsLeaf = 5;
+
+    function nest(wrappers: number): { [key: string]: any } {
+      let value: { [key: string]: any } = { x: 1 };
+      for (let i = 0; i < wrappers; i++) {
+        value = { a: value };
+      }
+      return value;
+    }
+
+    function cardWithParams(params: { [key: string]: any }): AgentCard {
+      return {
+        ...mockAgentCard,
+        capabilities: {
+          ...mockAgentCard.capabilities!,
+          extensions: [
+            {
+              uri: 'urn:example:extension',
+              description: 'Example',
+              required: false,
+              params,
+            },
+          ],
+        },
+      };
+    }
+
+    it('should accept extension params at the nesting limit', () => {
+      const card = cardWithParams(nest(MAX_DEPTH - containersBeforeParamsLeaf));
+      const parsed = JSON.parse(canonicalizeAgentCard(card));
+      expect(parsed.capabilities.extensions[0].params).toBeDefined();
+    });
+
+    it('should reject extension params one level past the nesting limit', () => {
+      const card = cardWithParams(nest(MAX_DEPTH - containersBeforeParamsLeaf + 1));
+      expect(() => canonicalizeAgentCard(card)).toThrow(CanonicalizationError);
+    });
+
+    it('should reject a very deep params object instead of walking it', () => {
+      const card = cardWithParams(nest(5000));
+      expect(() => canonicalizeAgentCard(card)).toThrow(CanonicalizationError);
+    });
+
+    it('should reject a very deep array inside extension params', () => {
+      let value: unknown = [1];
+      for (let i = 0; i < 5000; i++) {
+        value = [value];
+      }
+      const card = cardWithParams({ items: value });
+      expect(() => canonicalizeAgentCard(card)).toThrow(CanonicalizationError);
+    });
   });
 
   describe('generateAgentCardSignature', () => {
@@ -176,6 +234,34 @@ describe('Agent Card Signature', () => {
     beforeEach(() => {
       mockRetrieveKey.mockReset();
       mockRetrieveKey.mockImplementation(async () => publicKey);
+    });
+
+    it('should reject a card whose extension params nest past the limit', async () => {
+      let params: { [key: string]: any } = { x: 1 };
+      for (let i = 0; i < 5000; i++) {
+        params = { a: params };
+      }
+      const card: AgentCard = {
+        ...mockAgentCard,
+        capabilities: {
+          ...mockAgentCard.capabilities!,
+          extensions: [
+            {
+              uri: 'urn:example:extension',
+              description: 'Example',
+              required: false,
+              params,
+            },
+          ],
+        },
+        signatures: [{ protected: 'e30', signature: 'aa', header: undefined }],
+      };
+
+      const verifier = verifyAgentCardSignature(mockRetrieveKey);
+      await expect(verifier(card)).rejects.toThrow(
+        'Agent card cannot be canonicalized for verification'
+      );
+      expect(mockRetrieveKey).not.toHaveBeenCalled();
     });
 
     it('should successfully verify a valid signature', async () => {

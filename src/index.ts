@@ -20,6 +20,7 @@ export {
   generateAgentCardSignature,
   verifyAgentCardSignature,
   canonicalizeAgentCard,
+  CanonicalizationError,
   type AgentCardSignatureGenerator,
   type AgentCardSignatureVerifier,
 } from './signature.js';
