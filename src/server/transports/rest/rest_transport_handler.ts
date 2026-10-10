@@ -96,8 +96,13 @@ export class RestTransportHandler {
     return this.requestHandler.getTask(params, context);
   }
 
-  async cancelTask(taskId: string, context: ServerCallContext, tenant?: string): Promise<Task> {
-    const params: CancelTaskRequest = { id: taskId, tenant: tenant || '', metadata: {} };
+  async cancelTask(
+    taskId: string,
+    context: ServerCallContext,
+    tenant?: string,
+    metadata: CancelTaskRequest['metadata'] = {}
+  ): Promise<Task> {
+    const params: CancelTaskRequest = { id: taskId, tenant: tenant || '', metadata };
     return this.requestHandler.cancelTask(params, context);
   }
 
