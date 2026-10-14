@@ -33,6 +33,7 @@ import { legacyRestRouter } from '../../compat/v0_3/server/express/index.js';
 
 import {
   AgentCard,
+  CancelTaskRequest,
   ListTaskPushNotificationConfigsResponse,
   ListTasksResponse,
   MessageFns,
@@ -411,7 +412,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const result = await restTransportHandler.cancelTask(
       req.params.taskId,
       context,
-      (req.query.tenant as string) || ''
+      (req.query.tenant as string) || '',
+      CancelTaskRequest.fromJSON(req.body ?? {}).metadata
     );
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
