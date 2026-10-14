@@ -2,13 +2,16 @@
 # entrypoints, and that transport-scoped entrypoints resolve only their
 # declared peers. Each `test-build:*` step runs in a DIFFERENT environment:
 #   1. workers-safe: NO optional peer deps installed (no @grpc/grpc-js,
-#      @bufbuild/protobuf, or express). esbuild fails natively if any
-#      Workers-safe entry pulls them in. Mirrors what a real Workers /
+#      @bufbuild/protobuf, express, or kysely). esbuild fails natively if
+#      any Workers-safe entry pulls them in. Mirrors what a real Workers /
 #      REST-only consumer gets.
 #   2. grpc: @grpc/grpc-js + @bufbuild/protobuf reinstalled (still no
 #      express); every gRPC entry must resolve.
 #   3. express: express reinstalled on top; every express entry must
 #      resolve.
+#   4. database: kysely reinstalled on top. Runs at --platform=neutral, not
+#      node: the entry carries no Node dependency of its own, only the
+#      driver the caller supplies does.
 
 name: Run Build Tests
 
@@ -37,10 +40,10 @@ jobs:
         cache: 'npm'
     - run: npm ci
     - run: npm run build
-    # Strip ALL three optional peer deps so esbuild sees the same
-    # module graph a non-gRPC, non-Express consumer would. Any
+    # Strip ALL the optional peer deps so esbuild sees the same module
+    # graph a non-gRPC, non-Express, non-database consumer would. Any
     # Workers-safe entrypoint that leaks one of them fails to resolve.
-    - run: npm uninstall --no-save @grpc/grpc-js @bufbuild/protobuf express
+    - run: npm uninstall --no-save @grpc/grpc-js @bufbuild/protobuf express kysely
     - run: npm run test-build:workers-safe
     # Reinstall only the gRPC peers; verify every gRPC entry resolves
     # (and would fail here if any of them silently required express).
@@ -49,3 +52,7 @@ jobs:
     # Reinstall express; verify every express entry resolves.
     - run: npm install --no-save express
     - run: npm run test-build:express
+    # Reinstall kysely; the database entry must resolve against it and stay
+    # clear of Node built-ins.
+    - run: npm install --no-save kysely
+    - run: npm run test-build:database
