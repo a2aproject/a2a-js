@@ -366,6 +366,15 @@ describe('RestTransportHandler', () => {
   });
 
   describe('cancelTask', () => {
+    it('should forward supplied cancellation metadata without changing the tenant', async () => {
+      const metadata = { reason: 'user_requested' };
+      await transportHandler.cancelTask('task-1', mockContext, 'tenant1', metadata);
+      expect(mockRequestHandler.cancelTask).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: 'tenant1', metadata },
+        mockContext
+      );
+    });
+
     it('should cancel task by ID', async () => {
       const cancelledTask = {
         ...testTask,
