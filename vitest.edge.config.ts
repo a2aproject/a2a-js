@@ -28,6 +28,7 @@ const merged = mergeConfig(defaultConfig, {
       // themselves are runtime-agnostic, which `test/edge/` proves against D1.
       'test/server/database_push_notification_store.spec.ts',
       'test/server/database_task_store.spec.ts',
+      'test/integration/database_delayed_task_store.spec.ts',
       // `a2a-db` is Node-only: native drivers and temp files, neither of which workerd
       // has. Migrating is an operator step, never something a Worker does, so this is
       // permanent rather than pending.
