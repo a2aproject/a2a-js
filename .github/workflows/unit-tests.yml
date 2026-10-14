@@ -64,12 +64,10 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     - run: npm ci
-    # Overrides the lockfile pin and the devDependency. Skipped where the
-    # matrix names no version.
+    # Overrides the lockfile pins and the devDependencies. Skipped where the matrix
+    # names no versions.
     - if: matrix.kysely
-      run: npm install --no-save kysely@${{ matrix.kysely }}
-    - if: matrix['better-sqlite3']
-      run: npm install --no-save better-sqlite3@${{ matrix['better-sqlite3'] }}
+      run: npm install --no-save kysely@${{ matrix.kysely }} better-sqlite3@${{ matrix['better-sqlite3'] }}
     - run: npm test
     # Run apart, and serially: the suites drop and recreate the same tables.
     # The suites skip an engine they cannot reach. Every engine is reachable here, so a
