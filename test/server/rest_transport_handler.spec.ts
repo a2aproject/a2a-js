@@ -366,6 +366,15 @@ describe('RestTransportHandler', () => {
   });
 
   describe('cancelTask', () => {
+    it('should forward supplied cancellation metadata without changing the tenant', async () => {
+      const metadata = { reason: 'user_requested' };
+      await transportHandler.cancelTask('task-1', mockContext, 'tenant1', metadata);
+      expect(mockRequestHandler.cancelTask).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: 'tenant1', metadata },
+        mockContext
+      );
+    });
+
     it('should cancel task by ID', async () => {
       const cancelledTask = {
         ...testTask,
@@ -469,12 +478,68 @@ describe('RestTransportHandler', () => {
 
         const result = await transportHandler.listTaskPushNotificationConfigs(
           'task-1',
+          {},
           mockContext
         );
 
         expect(result).to.deep.equal([mockConfig]);
         expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
           { taskId: 'task-1', pageSize: 0, pageToken: '', tenant: '' },
+          mockContext
+        );
+      });
+
+      it('should forward pageSize and pageToken from the query params', async () => {
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue([]);
+
+        await transportHandler.listTaskPushNotificationConfigs(
+          'task-1',
+          { pageSize: '7', pageToken: 'cursor-abc' },
+          mockContext
+        );
+
+        expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
+          { taskId: 'task-1', pageSize: 7, pageToken: 'cursor-abc', tenant: '' },
+          mockContext
+        );
+      });
+
+      it.each(['abc', '-5', '1.5', '7x'])(
+        'should reject a pageSize of %s that is not a non-negative integer',
+        async (pageSize) => {
+          await expect(
+            transportHandler.listTaskPushNotificationConfigs('task-1', { pageSize }, mockContext)
+          ).rejects.toThrow(/pageSize must be a non-negative integer/);
+          expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).not.toHaveBeenCalled();
+        }
+      );
+
+      it('should treat an empty pageSize as unset', async () => {
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue([]);
+
+        await transportHandler.listTaskPushNotificationConfigs(
+          'task-1',
+          { pageSize: '' },
+          mockContext
+        );
+
+        expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
+          { taskId: 'task-1', pageSize: 0, pageToken: '', tenant: '' },
+          mockContext
+        );
+      });
+
+      it('should forward tenant from the query params', async () => {
+        (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue([]);
+
+        await transportHandler.listTaskPushNotificationConfigs(
+          'task-1',
+          { tenant: 'tenant-a' },
+          mockContext
+        );
+
+        expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
+          { taskId: 'task-1', pageSize: 0, pageToken: '', tenant: 'tenant-a' },
           mockContext
         );
       });
