@@ -377,11 +377,7 @@ export class LegacyJsonRpcTransport implements Transport {
     }
 
     if ('error' in legacyStreamResponse) {
-      const err = legacyStreamResponse.error;
-      throw new Error(
-        `SSE event contained an error: ${err.message} (Code: ${err.code}) Data: ${JSON.stringify(err.data || {})}`,
-        { cause: mapJsonRpcErrorToSdkError(legacyStreamResponse) }
-      );
+      throw mapJsonRpcErrorToSdkError(legacyStreamResponse);
     }
 
     if (!('result' in legacyStreamResponse) || legacyStreamResponse.result === null) {
