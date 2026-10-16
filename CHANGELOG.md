@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.1](https://github.com/a2aproject/a2a-js/compare/v1.3.0...v1.3.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **client:** preserve first matching client interface ([#764](https://github.com/a2aproject/a2a-js/issues/764)) ([ca14b82](https://github.com/a2aproject/a2a-js/commit/ca14b824bc072533ff9b8720fb6b830041e9f4d9))
+* **client:** skip stream events whose payload kind is not recognised ([#770](https://github.com/a2aproject/a2a-js/issues/770)) ([cf8ccff](https://github.com/a2aproject/a2a-js/commit/cf8ccffe4ad7b6e5af2a0d3d92103cb3ad56691d))
+* **client:** throw typed A2A errors from JSON-RPC SSE error events ([#788](https://github.com/a2aproject/a2a-js/issues/788)) ([10f8937](https://github.com/a2aproject/a2a-js/commit/10f89379274bf72575a9ab83c1aaa52e5378e9c6))
+* **jsonrpc:** include extensions activated during SendStreamingMessage's first event ([#762](https://github.com/a2aproject/a2a-js/issues/762)) ([fc7a664](https://github.com/a2aproject/a2a-js/commit/fc7a6649cebd5d6af40854a44635762b161f3938)), closes [#710](https://github.com/a2aproject/a2a-js/issues/710)
+* preserve REST cancellation metadata ([#758](https://github.com/a2aproject/a2a-js/issues/758)) ([1468f5f](https://github.com/a2aproject/a2a-js/commit/1468f5fa7751af2eec66912cd0afd901b2395f47))
+* **rest:** forward pageSize and pageToken for push-notification config listing ([#701](https://github.com/a2aproject/a2a-js/issues/701)) ([8a4e696](https://github.com/a2aproject/a2a-js/commit/8a4e696e0f073882cc6736ff6b05b028324a9855)), closes [#700](https://github.com/a2aproject/a2a-js/issues/700)
+* support CR-delimited SSE lines ([#718](https://github.com/a2aproject/a2a-js/issues/718)) ([2c81b86](https://github.com/a2aproject/a2a-js/commit/2c81b861614905b55b7e0d465d596ef69d85d721))
+
 ## [1.3.0](https://github.com/a2aproject/a2a-js/compare/v1.2.1...v1.3.0) (2026-09-29)
 
 
