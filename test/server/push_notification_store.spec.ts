@@ -74,6 +74,34 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     expect(remaining[0].id).toBe('keep');
   });
 
+  it.each([false, true])(
+    'rejects a missing config ID without deleting stored configs (populated=%s)',
+    async (populated) => {
+      const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+      if (populated) {
+        await store.save('task-1', context, makeConfig({ id: 'task-1' }));
+        await store.save('task-1', context, makeConfig({ id: 'other' }));
+      }
+      const before = await store.load('task-1', context);
+
+      await expect(store.delete('task-1', context)).rejects.toThrow(
+        'Deleting a push notification config needs its configId.'
+      );
+
+      expect(await store.load('task-1', context)).toEqual(before);
+    }
+  );
+
+  it('deletes a config whose explicit ID equals the task ID', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save('task-1', context, makeConfig({ id: 'task-1' }));
+    await store.save('task-1', context, makeConfig({ id: 'other' }));
+
+    await store.delete('task-1', context, 'task-1');
+
+    expect((await store.load('task-1', context)).map((config) => config.id)).toEqual(['other']);
+  });
+
   it('stores a deep clone so mutating the input after save cannot rewrite stored webhooks', async () => {
     // Mirrors InMemoryTaskStore.save: the caller's object must not remain
     // the store's internal row. Reproduction: save, mutate url/token, load.
