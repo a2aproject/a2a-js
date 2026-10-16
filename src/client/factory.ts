@@ -98,7 +98,7 @@ export class ClientFactory {
    */
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const normalizedAgentCard = this.agentCardResolver.normalizeAgentCard?.(agentCard) ?? agentCard;
-    return this.createFromNormalizedAgentCard(normalizedAgentCard);
+    return await this.createFromNormalizedAgentCard(normalizedAgentCard);
   }
 
   private async createFromNormalizedAgentCard(agentCard: AgentCard): Promise<Client> {

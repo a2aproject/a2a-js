@@ -84,7 +84,7 @@ jobs:
         MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test
         A2A_TEST_REQUIRE_ALL_ENGINES: '1'
 
-  # Edge runtime tests run in workerd, via @cloudflare/vitest-pool-workers. This
+  # Edge runtime tests run in workerd, via @cloudflare/vitest-plugin. This
   # ensures the SDK works in non-Node.js server environments, including the database
   # stores, which `test/edge/` drives against a miniflare-provided D1 binding.
   test-edge:
