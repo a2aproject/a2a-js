@@ -1,7 +1,5 @@
-/// <reference types="@cloudflare/vitest-plugin/types" />
 import { beforeEach, describe, expect, it } from 'vitest';
-import { env } from 'cloudflare:test';
-import type { D1Database } from '@cloudflare/workers-types';
+import { env } from 'cloudflare:workers';
 
 import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
@@ -19,16 +17,6 @@ import {
   type Task,
 } from '../../src/types/pb/a2a.js';
 import { DEFAULT_PAGE_SIZE } from '../../src/constants.js';
-
-// `env` from `cloudflare:test` is typed as `Cloudflare.Env`, which only a namespace can extend.
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Cloudflare {
-    interface Env {
-      TASKS_DB: D1Database;
-    }
-  }
-}
 
 // Spelled out rather than imported from the store
 const TABLE = 'tasks';
