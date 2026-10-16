@@ -1,8 +1,17 @@
 import { mergeConfig } from 'vitest/config';
-import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
+import { cloudflareTest } from '@cloudflare/vitest-plugin';
 import defaultConfig from './vitest.config';
 
 const merged = mergeConfig(defaultConfig, {
+  plugins: [
+    cloudflareTest({
+      miniflare: {
+        compatibilityDate: '2024-04-01',
+        // `test/edge/` has no URL to connect to, so its database arrives as `env.TASKS_DB`.
+        d1Databases: { TASKS_DB: 'a2a-edge-tests' },
+      },
+    }),
+  ],
   test: {
     exclude: [
       // Express tests require Node.js-specific APIs (http, Express framework)
@@ -35,15 +44,6 @@ const merged = mergeConfig(defaultConfig, {
       // Node modules should always be excluded
       '**/node_modules/**',
     ],
-    poolOptions: {
-      workers: {
-        miniflare: {
-          compatibilityDate: '2024-04-01',
-          // `test/edge/` has no URL to connect to, so its database arrives as `env.TASKS_DB`.
-          d1Databases: { TASKS_DB: 'a2a-edge-tests' },
-        },
-      },
-    },
   },
 });
 
@@ -53,4 +53,4 @@ merged.test.exclude = (merged.test.exclude as string[]).filter(
   (pattern) => pattern !== 'test/edge/**'
 );
 
-export default defineWorkersConfig(merged);
+export default merged;

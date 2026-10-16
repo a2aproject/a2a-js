@@ -1,7 +1,5 @@
-/// <reference types="@cloudflare/vitest-pool-workers" />
 import { beforeEach, describe, expect, it } from 'vitest';
-import { env } from 'cloudflare:test';
-import type { D1Database } from '@cloudflare/workers-types';
+import { env } from 'cloudflare:workers';
 
 import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
@@ -12,12 +10,6 @@ import { ServerCallContext } from '../../src/server/context.js';
 import type { User } from '../../src/server/authentication/user.js';
 import { TaskPushNotificationConfig } from '../../src/types/pb/a2a.js';
 import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from '../../src/constants.js';
-
-declare module 'cloudflare:test' {
-  interface ProvidedEnv {
-    TASKS_DB: D1Database;
-  }
-}
 
 // Spelled out rather than imported from the store
 const TABLE = 'push_notification_configs';
