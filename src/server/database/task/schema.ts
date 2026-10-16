@@ -13,6 +13,8 @@ export interface TaskRow {
   context_id: string;
   /** `bigint`, which PostgreSQL's driver reads back as a string. */
   status_last_updated: number | string;
+  /** Nanoseconds within status_last_updated, in the range 0–999999. */
+  status_last_updated_nanos: number;
   status_state: string | null;
   status: string | null;
   artifacts: string | null;
@@ -40,6 +42,7 @@ export const TASK_TABLE_COLUMNS = [
   ...TASK_TABLE_KEY_COLUMNS,
   'context_id',
   'status_last_updated',
+  'status_last_updated_nanos',
   'status_state',
   'status',
   'artifacts',

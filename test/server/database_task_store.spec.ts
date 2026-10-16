@@ -213,7 +213,7 @@ for (const engine of ENGINES) {
       }
     }
 
-    function taskAt(timestamp: string, overrides: Partial<Task> = {}): Partial<Task> {
+    function taskAt(timestamp: string | undefined, overrides: Partial<Task> = {}): Partial<Task> {
       return {
         status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp },
         ...overrides,
@@ -366,6 +366,88 @@ for (const engine of ENGINES) {
 
         const response = await store.list(makeListRequest(), context);
         expect(response.tasks.map((task) => task.id)).toEqual(['new', 'tie-b', 'tie-a', 'old']);
+      });
+
+      it.each([undefined, 1])(
+        'orders submillisecond timestamps with page size %s',
+        async (pageSize) => {
+          const newer = '2026-10-02T00:00:00.000900Z';
+          const older = '2026-10-02T00:00:00.000100Z';
+          await saveAll(context, [
+            { id: 'a-newer', ...taskAt(newer) },
+            { id: 'z-older', ...taskAt(older) },
+          ]);
+          expect((await store.load('a-newer', context))?.status?.timestamp).toBe(newer);
+          expect((await store.load('z-older', context))?.status?.timestamp).toBe(older);
+
+          const seen: string[] = [];
+          let pageToken = '';
+          for (let page = 0; page < 3; page++) {
+            const response = await store.list(makeListRequest({ pageSize, pageToken }), context);
+            seen.push(...response.tasks.map((task) => task.id));
+            pageToken = response.nextPageToken;
+            if (!pageToken) break;
+          }
+          expect(pageToken).toBe('');
+          expect(seen).toEqual(['a-newer', 'z-older']);
+        }
+      );
+
+      it.each([
+        {
+          name: 'nanosecond precision',
+          timestamps: ['2026-10-02T00:00:00.000000009Z', '2026-10-02T00:00:00.000000001Z'],
+          expected: ['a-first', 'z-second'],
+        },
+        {
+          name: 'equivalent fractional widths',
+          timestamps: ['2026-10-02T00:00:00.0009Z', '2026-10-02T00:00:00.000900000Z'],
+          expected: ['z-second', 'a-first'],
+        },
+        {
+          name: 'equivalent timezone offsets',
+          timestamps: [
+            '2026-10-02T01:00:00.000900001+01:00',
+            '2026-10-01T19:00:00.000900001-05:00',
+          ],
+          expected: ['z-second', 'a-first'],
+        },
+        {
+          name: 'pre-epoch nanoseconds',
+          timestamps: ['1969-12-31T23:59:59.999900001Z', '1969-12-31T23:59:59.9999Z'],
+          expected: ['a-first', 'z-second'],
+        },
+        {
+          name: 'epoch nanoseconds and an absent timestamp',
+          timestamps: ['1970-01-01T00:00:00.000000001Z', undefined],
+          expected: ['a-first', 'z-second'],
+        },
+      ])('pages through $name without repeats or gaps', async ({ timestamps, expected }) => {
+        await saveAll(context, [
+          { id: 'a-first', ...taskAt(timestamps[0]) },
+          { id: 'z-second', ...taskAt(timestamps[1]) },
+        ]);
+        const seen: string[] = [];
+        let pageToken = '';
+        for (let page = 0; page < 3; page++) {
+          const response = await store.list(makeListRequest({ pageSize: 1, pageToken }), context);
+          seen.push(...response.tasks.map((task) => task.id));
+          pageToken = response.nextPageToken;
+          if (!pageToken) break;
+        }
+        expect(pageToken).toBe('');
+        expect(seen).toEqual(expected);
+      });
+
+      it('accepts an existing millisecond cursor as an exact millisecond boundary', async () => {
+        await saveAll(context, [
+          { id: 'tie-z', ...taskAt('2026-10-02T00:00:00.001Z') },
+          { id: 'tie-a', ...taskAt('2026-10-02T00:00:00.001Z') },
+          { id: 'older', ...taskAt('2026-10-02T00:00:00.000900001Z') },
+        ]);
+        const pageToken = Buffer.from('2026-10-02T00:00:00.001Z|tie-z').toString('base64');
+        const response = await store.list(makeListRequest({ pageToken }), context);
+        expect(response.tasks.map((task) => task.id)).toEqual(['tie-a', 'older']);
       });
 
       // Four matching tasks over two full pages, with a tie split across the boundary so
