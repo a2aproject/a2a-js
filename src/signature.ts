@@ -6,6 +6,34 @@
 import * as jose from 'jose';
 import { AgentCard, AgentCardSignature } from './index.js';
 
+/**
+ * Maximum object or array nesting accepted while canonicalizing a card.
+ *
+ * Deep enough that a real Agent Card does not reach it, shallow enough that
+ * the walk cannot exhaust the stack. `AgentExtension.params` is an arbitrary
+ * struct, so a card from the network can nest without a schema limit. This
+ * matches the Python SDK.
+ */
+export const MAX_DEPTH = 128;
+
+/** Raised when a card has no canonical form, including when it nests too deep. */
+export class CanonicalizationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CanonicalizationError';
+  }
+}
+
+function isContainer(value: unknown): boolean {
+  return value !== null && typeof value === 'object';
+}
+
+function assertNestingDepth(value: unknown, depth: number): void {
+  if (isContainer(value) && depth > MAX_DEPTH) {
+    throw new CanonicalizationError(`nesting exceeds the maximum depth of ${MAX_DEPTH}`);
+  }
+}
+
 /** Signs an agent card and returns the card with signatures attached. */
 export type AgentCardSignatureGenerator = (agentCard: AgentCard) => Promise<AgentCard>;
 
@@ -88,7 +116,15 @@ export function verifyAgentCardSignature(
       throw new Error('No signatures found on agent card to verify.');
     }
 
-    const canonicalPayload = canonicalizeAgentCard(agentCard);
+    let canonicalPayload: string;
+    try {
+      canonicalPayload = canonicalizeAgentCard(agentCard);
+    } catch (error) {
+      if (error instanceof CanonicalizationError) {
+        throw new Error('Agent card cannot be canonicalized for verification');
+      }
+      throw error;
+    }
     const payloadBytes = new TextEncoder().encode(canonicalPayload);
     const encodedPayload = jose.base64url.encode(payloadBytes);
 
@@ -122,13 +158,15 @@ export function verifyAgentCardSignature(
  * Recursively strips empty values (empty strings, null, undefined, empty
  * arrays, empty objects) from `d` in preparation for JCS canonicalization.
  */
-function cleanEmpty(d: unknown): unknown {
+function cleanEmpty(d: unknown, depth = 1): unknown {
+  assertNestingDepth(d, depth);
+
   if (d === '' || d === null || d === undefined) {
     return null;
   }
 
   if (Array.isArray(d)) {
-    const cleanedList = d.map((v) => cleanEmpty(v)).filter((v) => v !== null);
+    const cleanedList = d.map((v) => cleanEmpty(v, depth + 1)).filter((v) => v !== null);
     return cleanedList.length > 0 ? cleanedList : null;
   }
 
@@ -136,7 +174,7 @@ function cleanEmpty(d: unknown): unknown {
     if (d instanceof Date) return d.toISOString();
     const cleanedDict: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(d as Record<string, unknown>)) {
-      const cleanedValue = cleanEmpty(v);
+      const cleanedValue = cleanEmpty(v, depth + 1);
       if (cleanedValue !== null) {
         cleanedDict[key] = cleanedValue;
       }
@@ -151,18 +189,20 @@ function cleanEmpty(d: unknown): unknown {
  * JCS canonicalization (RFC 8785): sorts object keys recursively and
  * serializes to a deterministic JSON string.
  */
-function jcsStringify(value: unknown): string {
+function jcsStringify(value: unknown, depth = 1): string {
+  assertNestingDepth(value, depth);
+
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value);
   }
 
   if (Array.isArray(value)) {
-    return '[' + value.map((item) => jcsStringify(item)).join(',') + ']';
+    return '[' + value.map((item) => jcsStringify(item, depth + 1)).join(',') + ']';
   }
 
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
-  const parts = keys.map((key) => `${JSON.stringify(key)}:${jcsStringify(record[key])}`);
+  const parts = keys.map((key) => `${JSON.stringify(key)}:${jcsStringify(record[key], depth + 1)}`);
 
   return '{' + parts.join(',') + '}';
 }
