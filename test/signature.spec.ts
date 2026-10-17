@@ -5,7 +5,7 @@ import {
   verifyAgentCardSignature,
   canonicalizeAgentCard,
   CanonicalizationError,
-  MAX_DEPTH,
+  MAX_CANONICALIZATION_DEPTH,
 } from '../src/signature.js';
 import { AgentCard } from '../src/index.js';
 
@@ -167,13 +167,13 @@ describe('Agent Card Signature', () => {
     }
 
     it('should accept extension params at the nesting limit', () => {
-      const card = cardWithParams(nest(MAX_DEPTH - containersBeforeParamsLeaf));
+      const card = cardWithParams(nest(MAX_CANONICALIZATION_DEPTH - containersBeforeParamsLeaf));
       const parsed = JSON.parse(canonicalizeAgentCard(card));
       expect(parsed.capabilities.extensions[0].params).toBeDefined();
     });
 
     it('should reject extension params one level past the nesting limit', () => {
-      const card = cardWithParams(nest(MAX_DEPTH - containersBeforeParamsLeaf + 1));
+      const card = cardWithParams(nest(MAX_CANONICALIZATION_DEPTH - containersBeforeParamsLeaf + 1));
       expect(() => canonicalizeAgentCard(card)).toThrow(CanonicalizationError);
     });
 

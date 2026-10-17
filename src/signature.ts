@@ -14,7 +14,7 @@ import { AgentCard, AgentCardSignature } from './index.js';
  * struct, so a card from the network can nest without a schema limit. This
  * matches the Python SDK.
  */
-export const MAX_DEPTH = 128;
+export const MAX_CANONICALIZATION_DEPTH = 128;
 
 /** Raised when a card has no canonical form, including when it nests too deep. */
 export class CanonicalizationError extends Error {
@@ -29,8 +29,10 @@ function isContainer(value: unknown): boolean {
 }
 
 function assertNestingDepth(value: unknown, depth: number): void {
-  if (isContainer(value) && depth > MAX_DEPTH) {
-    throw new CanonicalizationError(`nesting exceeds the maximum depth of ${MAX_DEPTH}`);
+  if (isContainer(value) && depth > MAX_CANONICALIZATION_DEPTH) {
+    throw new CanonicalizationError(
+      `nesting exceeds the maximum depth of ${MAX_CANONICALIZATION_DEPTH}`
+    );
   }
 }
 
@@ -121,7 +123,7 @@ export function verifyAgentCardSignature(
       canonicalPayload = canonicalizeAgentCard(agentCard);
     } catch (error) {
       if (error instanceof CanonicalizationError) {
-        throw new Error('Agent card cannot be canonicalized for verification');
+        throw new Error('Agent card cannot be canonicalized for verification', { cause: error });
       }
       throw error;
     }
