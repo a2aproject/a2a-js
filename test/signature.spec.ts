@@ -173,7 +173,9 @@ describe('Agent Card Signature', () => {
     });
 
     it('should reject extension params one level past the nesting limit', () => {
-      const card = cardWithParams(nest(MAX_CANONICALIZATION_DEPTH - containersBeforeParamsLeaf + 1));
+      const card = cardWithParams(
+        nest(MAX_CANONICALIZATION_DEPTH - containersBeforeParamsLeaf + 1)
+      );
       expect(() => canonicalizeAgentCard(card)).toThrow(CanonicalizationError);
     });
 
