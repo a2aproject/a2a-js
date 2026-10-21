@@ -65,7 +65,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: 'tck/a2a-tck/pyproject.toml'
+          # The TCK only declares requires-python >=3.8.1, so the file resolves
+          # to the newest release. On 3.15 its cachebox dependency has no wheel
+          # and the source build fails (PyO3 supports up to 3.14).
+          python-version: '3.14'
       - name: Install uv and Python dependencies
         run: |
           pip install uv
