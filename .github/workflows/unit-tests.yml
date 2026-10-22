@@ -64,12 +64,10 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     - run: npm ci
-    # Overrides the lockfile pin and the devDependency. Skipped where the
-    # matrix names no version.
+    # Overrides the lockfile pins and the devDependencies. Skipped where the matrix
+    # names no versions.
     - if: matrix.kysely
-      run: npm install --no-save kysely@${{ matrix.kysely }}
-    - if: matrix['better-sqlite3']
-      run: npm install --no-save better-sqlite3@${{ matrix['better-sqlite3'] }}
+      run: npm install --no-save kysely@${{ matrix.kysely }} better-sqlite3@${{ matrix['better-sqlite3'] }}
     - run: npm test
     # Run apart, and serially: the suites drop and recreate the same tables.
     # The suites skip an engine they cannot reach. Every engine is reachable here, so a
@@ -86,7 +84,7 @@ jobs:
         MYSQL_TEST_DSN: mysql://a2a:a2a_password@localhost:3306/a2a_test
         A2A_TEST_REQUIRE_ALL_ENGINES: '1'
 
-  # Edge runtime tests run in workerd, via @cloudflare/vitest-pool-workers. This
+  # Edge runtime tests run in workerd, via @cloudflare/vitest-plugin. This
   # ensures the SDK works in non-Node.js server environments, including the database
   # stores, which `test/edge/` drives against a miniflare-provided D1 binding.
   test-edge:

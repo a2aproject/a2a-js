@@ -1,7 +1,5 @@
-/// <reference types="@cloudflare/vitest-pool-workers" />
 import { beforeEach, describe } from 'vitest';
-import { env } from 'cloudflare:test';
-import type { D1Database } from '@cloudflare/workers-types';
+import { env } from 'cloudflare:workers';
 
 import { Kysely, sql } from 'kysely';
 import { D1Dialect } from 'kysely-d1';
@@ -11,12 +9,6 @@ import {
   RENAMED_TABLE,
   describeDatabaseTaskStoreBehavior,
 } from '../support/database/database_task_store_behavior.js';
-
-declare module 'cloudflare:test' {
-  interface ProvidedEnv {
-    TASKS_DB: D1Database;
-  }
-}
 
 // Spelled out rather than imported from the store
 const TABLE = 'tasks';
