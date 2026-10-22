@@ -239,6 +239,70 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].headers['content-type']).toBe(A2A_CONTENT_TYPE);
   });
 
+  it('rejects a scheme with empty credentials instead of silently dropping the Authorization header', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sender = new DefaultPushNotificationSender(store, {});
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save(
+      'task-auth-empty',
+      ctxV1,
+      makeConfig(`${baseUrl}/notify`, {
+        authentication: { scheme: 'Bearer', credentials: '' },
+      })
+    );
+
+    await sender.send(makeStatusUpdate('task-auth-empty'), ctxV1);
+
+    expect(received).toHaveLength(0);
+    const [, emptyCredError] = errorSpy.mock.calls[0];
+    expect((emptyCredError as Error).message).toContain(
+      "scheme 'Bearer' requires non-empty credentials"
+    );
+  });
+
+  it('rejects a scheme with blank credentials', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sender = new DefaultPushNotificationSender(store, {});
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save(
+      'task-auth-blank',
+      ctxV1,
+      makeConfig(`${baseUrl}/notify`, {
+        authentication: { scheme: 'Bearer', credentials: '   ' },
+      })
+    );
+
+    await sender.send(makeStatusUpdate('task-auth-blank'), ctxV1);
+
+    expect(received).toHaveLength(0);
+    const [, blankCredError] = errorSpy.mock.calls[0];
+    expect((blankCredError as Error).message).toContain(
+      "scheme 'Bearer' requires non-empty credentials"
+    );
+  });
+
+  it('rejects credentials containing CR/LF to prevent header injection', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sender = new DefaultPushNotificationSender(store, {});
+    const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    await store.save(
+      'task-auth-crlf',
+      ctxV1,
+      makeConfig(`${baseUrl}/notify`, {
+        authentication: {
+          scheme: 'Bearer',
+          credentials: 'token\r\nX-Injected: 1',
+        },
+      })
+    );
+
+    await sender.send(makeStatusUpdate('task-auth-crlf'), ctxV1);
+
+    expect(received).toHaveLength(0);
+    const [, crlfError] = errorSpy.mock.calls[0];
+    expect((crlfError as Error).message).toContain('must not contain CR/LF characters');
+  });
+
   it('delivers message payloads with task association per §4.3.3', async () => {
     // Push notifications accept all four StreamResponse payload
     // variants. The built-in v1.0 serializer encodes the message as part
