@@ -4,6 +4,12 @@ import { DEFAULT_PAGE_SIZE } from '../constants.js';
 import { OwnerResolver, resolveUserScope } from './owner_resolver.js';
 import { decodePageToken, encodePageToken, ScopedStore } from './utils.js';
 
+/** Optional hints for read-only task loads. Stores may ignore them. */
+export interface TaskStoreLoadOptions {
+  /** Maximum history needed by the caller; zero means history is not needed. */
+  historyLength?: number;
+}
+
 /**
  * Interface for task storage providers. Implementations SHOULD use
  * `context.tenant` (when present) and the authenticated caller's identity
@@ -28,8 +34,14 @@ export interface TaskStore {
    * @param taskId The ID of the task to load.
    * @param context The context of the current call. Use `context.tenant`
    *   for tenant-scoped lookups and `context.user` for owner scoping.
+   * @param options Optional read hints. Callers must still trim returned history.
+   *   Omit these for read-modify-save operations to preserve the full task.
    */
-  load(taskId: string, context: ServerCallContext): Promise<Task | undefined>;
+  load(
+    taskId: string,
+    context: ServerCallContext,
+    options?: TaskStoreLoadOptions
+  ): Promise<Task | undefined>;
 
   /**
    * Lists tasks visible to the authenticated caller, with filtering and pagination.

@@ -787,7 +787,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
     this._requireValidTaskId(taskId);
-    const task = await this.taskStore.load(taskId, context);
+    const task = await this.taskStore.load(taskId, context, {
+      historyLength: params.historyLength,
+    });
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
     }
