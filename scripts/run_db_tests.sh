@@ -40,6 +40,7 @@ SPECS=(
   test/cli/database_task_migrations.spec.ts
   test/server/database_push_notification_store.spec.ts
   test/server/database_task_store.spec.ts
+  test/integration/database_delayed_task_store.spec.ts
 )
 
 debug=false
