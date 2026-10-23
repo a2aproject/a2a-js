@@ -149,8 +149,18 @@ export class RestTransport implements Transport {
     params: ListTaskPushNotificationConfigsRequest,
     options?: RequestOptions
   ): Promise<ListTaskPushNotificationConfigsResponse> {
+    const queryParams = new URLSearchParams();
+    // Unlike ListTasksRequest.pageSize (proto3 `optional`, so `undefined` means
+    // "unspecified"), this field has no `optional` modifier and is always a
+    // concrete number, so 0 — its proto3 zero value — is the "unspecified" case.
+    if (params.pageSize > 0) queryParams.set('pageSize', String(params.pageSize));
+    if (params.pageToken) queryParams.set('pageToken', params.pageToken);
+    const queryString = queryParams.toString();
+
     const path = this._buildPath(
-      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs`,
+      `/tasks/${encodeURIComponent(params.taskId)}/pushNotificationConfigs${
+        queryString ? `?${queryString}` : ''
+      }`,
       params.tenant
     );
     const response = await this._sendRequest<void, ListTaskPushNotificationConfigsResponse>(
@@ -200,12 +210,12 @@ export class RestTransport implements Transport {
 
   async cancelTask(params: CancelTaskRequest, options?: RequestOptions): Promise<Task> {
     const path = this._buildPath(`/tasks/${encodeURIComponent(params.id)}:cancel`, params.tenant);
-    const response = await this._sendRequest<void, Task>(
+    const response = await this._sendRequest<CancelTaskRequest, Task>(
       'POST',
       path,
-      undefined,
+      params,
       options,
-      undefined,
+      CancelTaskRequest,
       Task
     );
     return response;
