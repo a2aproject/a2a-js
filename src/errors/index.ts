@@ -21,6 +21,7 @@ export {
   type ErrorDetail,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
+  clientSafeErrorMessage,
   extractErrorMessage,
   InvalidAgentResponseError,
   PushNotificationNotSupportedError,
