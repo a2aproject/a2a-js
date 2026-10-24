@@ -8,6 +8,7 @@ import {
 import { ServerCallContext } from './context.js';
 import { AgentExecutionEvent, assertUnreachableEvent } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
+import { TERMINAL_STATE_LIST } from './utils.js';
 
 /**
  * Per-(tenant, owner, taskId) write serializer shared across every
@@ -241,8 +242,36 @@ export class ResultManager {
       return;
     }
 
+    // Terminal tasks are immutable: a late status update must
+    // not roll a COMPLETED/FAILED/CANCELED/REJECTED task back into a
+    // non-terminal state (or a different terminal state). Same-state
+    // terminal updates (e.g. a final COMPLETED message arriving after the
+    // COMPLETED status) are still applied.
+    const persistedState = task.status?.state;
+    if (
+      persistedState !== undefined &&
+      TERMINAL_STATE_LIST.includes(persistedState) &&
+      updateEvent.status?.state !== persistedState
+    ) {
+      console.warn(
+        `ResultManager: ignoring status update ${updateEvent.status?.state} for terminal ` +
+          `task ${task.id} (${persistedState})`
+      );
+      this.currentTask = task;
+      return;
+    }
+
     // Clone the incoming status so caller-side mutation can't drift state.
     task.status = structuredClone(updateEvent.status);
+
+    // Merge event-level metadata into the task; incoming wins for collisions.
+    if (updateEvent.metadata) {
+      task.metadata = {
+        ...task.metadata,
+        ...structuredClone(updateEvent.metadata),
+      };
+    }
+
     const update = updateEvent.status?.message;
     if (update) {
       if (!task.history?.find((msg) => msg.messageId === update.messageId)) {
@@ -293,6 +322,15 @@ export class ResultManager {
     } else {
       task.artifacts.push(structuredClone(artifact));
     }
+
+    // Merge event-level metadata into the task; incoming wins for collisions.
+    if (artifactEvent.metadata) {
+      task.metadata = {
+        ...task.metadata,
+        ...structuredClone(artifactEvent.metadata),
+      };
+    }
+
     this.currentTask = task;
     await this.saveCurrentTask();
   }

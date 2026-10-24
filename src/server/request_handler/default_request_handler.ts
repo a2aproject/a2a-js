@@ -1,7 +1,6 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import {
   A2AError,
+  ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
   PushNotificationNotSupportedError,
@@ -61,11 +60,45 @@ import {
   AUTH_REQUIRED_STATE_LIST,
   INTERRUPTED_STATE_LIST,
   TERMINAL_STATE_LIST,
+  VALID_TASK_STATE_LIST,
   isTask,
   StreamPattern,
 } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors/index.js';
+
+export interface DefaultRequestHandlerOptions {
+  /**
+   * Task states that keep the execution event bus alive after the agent
+   * executor returns. Defaults to INPUT_REQUIRED and AUTH_REQUIRED.
+   * To add another keep-alive state while preserving those defaults, include
+   * both default states and the additional state. Any custom value overrides
+   * the default list.
+   *
+   * This option decides the fate of the bus from the last state observed on
+   * it, which only works for a bus that delivers its events before the
+   * executor returns. A bus that defers delivery should instead implement
+   * {@link ExecutionEventBusManager.settleByTaskId} and take ownership of the
+   * bus from there; this option then applies only to the calls that manager
+   * declines.
+   */
+  keepBusAliveStates?: TaskState[];
+
+  /**
+   * Reject an incoming message part whose declared media type is not among
+   * the card's `defaultInputModes`, per §3.1.1. Defaults to `false`, since
+   * a card may advertise informal modes (`text`) while clients send real
+   * media types (`text/plain`), and enforcing that mismatch would refuse
+   * traffic an existing agent accepts today.
+   */
+  validateInputModes?: boolean;
+
+  /**
+   * Allow push webhook URLs that resolve to private or loopback addresses.
+   * Defaults to false. A trusted internal webhook can set this.
+   */
+  allowPrivatePushUrls?: boolean;
+}
 
 /**
  * Default implementation of the A2A request handler.
@@ -73,8 +106,8 @@ import { extractErrorMessage } from '../../errors/index.js';
  * Multi-tenant deployments: the transport layer extracts the tenant from
  * its protocol-specific source (REST path prefix, JSON-RPC `params.tenant`,
  * gRPC `tenant` field) and propagates it via `ServerCallContext.tenant`.
- * The built-in `InMemoryTaskStore` and `InMemoryPushNotificationStore`
- * scope data by `tenant` to provide isolation.
+ * The built-in `InMemoryTaskStore`, `InMemoryPushNotificationStore` and
+ * `DefaultExecutionEventBusManager` scope data by `tenant` to provide isolation.
  */
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
@@ -86,6 +119,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider;
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
   private readonly allowPrivatePushUrls: boolean;
+  private readonly keepBusAliveStates: Set<TaskState>;
+  private readonly validateInputModes: boolean;
 
   constructor(
     agentCard: AgentCard,
@@ -96,7 +131,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     pushNotificationSender?: PushNotificationSender,
     extendedAgentCardProvider?: AgentCard | ExtendedAgentCardProvider,
     agentCardSignatureGenerator?: AgentCardSignatureGenerator,
-    allowPrivatePushUrls: boolean = false
+    options: DefaultRequestHandlerOptions = {}
   ) {
     this.agentCard = agentCard;
     this.taskStore = taskStore;
@@ -104,7 +139,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     this.eventBusManager = eventBusManager;
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
-    this.allowPrivatePushUrls = allowPrivatePushUrls;
+    this.allowPrivatePushUrls = options.allowPrivatePushUrls ?? false;
+    this.keepBusAliveStates = new Set(options.keepBusAliveStates ?? INTERRUPTED_STATE_LIST);
+    this.validateInputModes = options.validateInputModes ?? false;
 
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
@@ -120,17 +157,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * Reject client-supplied push webhook URLs that are not safe to POST to.
    * Skipped when {@link allowPrivatePushUrls} is true (trusted internal webhooks).
    */
-  private async _assertPushConfigUrlAllowed(
-    config: TaskPushNotificationConfig
-  ): Promise<void> {
+  private async _assertPushConfigUrlAllowed(config: TaskPushNotificationConfig): Promise<void> {
     if (this.allowPrivatePushUrls) {
       return;
     }
     const validationError = await pushUrlValidationError(config.url);
     if (validationError) {
-      throw new RequestMalformedError(
-        `invalid push config endpoint URL: ${validationError}`
-      );
+      throw new RequestMalformedError(`invalid push config endpoint URL: ${validationError}`);
     }
   }
 
@@ -166,6 +199,21 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return agentCard;
   }
 
+  private _validateInputModes(message: Message, agentCard: AgentCard): void {
+    const supportedModes = agentCard.defaultInputModes ?? [];
+    if (!this.validateInputModes || supportedModes.length === 0) {
+      return;
+    }
+    for (const part of message.parts ?? []) {
+      if (part.mediaType && !supportedModes.includes(part.mediaType)) {
+        throw new ContentTypeNotSupportedError(
+          `Media type '${part.mediaType}' is not supported. ` +
+            `Supported media types: ${supportedModes.join(', ')}.`
+        );
+      }
+    }
+  }
+
   private async _createRequestContext(
     request: SendMessageRequest,
     context: ServerCallContext
@@ -177,7 +225,24 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
 
+    const agentCard = await this.getAgentCard();
+    this._validateInputModes(incomingMessage, agentCard);
+    const agentExtensions = agentCard.capabilities?.extensions ?? [];
+
+    // The client MUST declare support for every required extension.
+    const requestedSet = new Set(context.requestedExtensions ?? []);
+    const missingRequired = agentExtensions
+      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
+      .map((ext) => ext.uri);
+
+    if (missingRequired.length > 0) {
+      throw new ExtensionSupportRequiredError(
+        `Client must declare support for required extensions: ${missingRequired.join(', ')}`
+      );
+    }
+
     if (incomingMessage.taskId) {
+      this._requireValidTaskId(incomingMessage.taskId);
       task = await this.taskStore.load(incomingMessage.taskId, context);
       if (!task) {
         throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
@@ -201,7 +266,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       task.history = [...(task.history || []), incomingMessage];
       await this.taskStore.save(task, context);
     }
-    const taskId = incomingMessage.taskId || uuidv4();
+    const taskId = incomingMessage.taskId || crypto.randomUUID();
     const referenceTaskIds =
       (incomingMessage as Message & { referenceTaskIds?: string[] }).referenceTaskIds || [];
 
@@ -216,22 +281,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
       }
     }
-    const contextId = incomingMessage.contextId || task?.contextId || uuidv4();
-
-    const agentCard = await this.getAgentCard();
-    const agentExtensions = agentCard.capabilities?.extensions ?? [];
-
-    // The client MUST declare support for every required extension.
-    const requestedSet = new Set(context.requestedExtensions ?? []);
-    const missingRequired = agentExtensions
-      .filter((ext) => ext.required && !requestedSet.has(ext.uri))
-      .map((ext) => ext.uri);
-
-    if (missingRequired.length > 0) {
-      throw new ExtensionSupportRequiredError(
-        `Client must declare support for required extensions: ${missingRequired.join(', ')}`
-      );
-    }
+    const contextId = incomingMessage.contextId || task?.contextId || crypto.randomUUID();
 
     // Narrow the client-requested set to extensions the agent actually
     // exposes. Mutate in place — the transport layer holds a reference
@@ -284,8 +334,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         await resultManager.processEvent(event);
 
         try {
-          const streamResponse = await this._mapEventToStreamResponse(event, context);
-          await this._sendPushNotificationIfNeeded(context, streamResponse);
+          const streamResponse = this._mapEventToStreamResponse(event, resultManager);
+          await this._sendPushNotificationIfNeeded(
+            context,
+            streamResponse,
+            structuredClone(resultManager.getCurrentTask())
+          );
         } catch (error) {
           console.error(`Error sending push notification: ${error}`);
         }
@@ -416,7 +470,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             state: TaskState.TASK_STATE_FAILED,
             message: {
               role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
+              messageId: crypto.randomUUID(),
               taskId: requestContext.taskId,
               contextId: finalMessageForAgent.contextId!,
               parts: [
@@ -457,26 +511,39 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         // Close the bus for terminal tasks; keep it alive for
         // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
         // resubscribers can still attach.
-        this._settleBus(taskId, eventBus, stateTracker());
+        this._settleBus(taskId, eventBus, stateTracker(), requestContext.context);
       });
   }
 
   /**
    * Settles the event bus once the executor returns. Terminal states
    * (and the bare-Message stream pattern) close the bus immediately;
-   * interrupted states (INPUT_REQUIRED, AUTH_REQUIRED) keep it alive
-   * so follow-up sends and resubscribers can still attach.
+   * states configured in `keepBusAliveStates` keep it alive so follow-up
+   * sends and resubscribers can still attach.
+   *
+   * A bus manager implementing
+   * {@link ExecutionEventBusManager.settleByTaskId} is offered the decision
+   * first and takes ownership of the bus by returning `true`, in which case we
+   * do nothing further. That seam exists for buses whose delivery is deferred,
+   * where `lastState` is still `undefined` when the executor returns and no
+   * state-based policy can work. A manager that declines — or has no opinion
+   * on this particular task — returns `false`, and the policy below applies as
+   * usual.
    */
   private _settleBus(
     taskId: string,
     eventBus: ExecutionEventBus,
-    lastState: TaskState | undefined
+    lastState: TaskState | undefined,
+    context: ServerCallContext
   ): void {
-    if (lastState !== undefined && INTERRUPTED_STATE_LIST.includes(lastState)) {
+    if (this.eventBusManager.settleByTaskId?.(taskId, eventBus, lastState, context)) {
+      return;
+    }
+    if (lastState !== undefined && this.keepBusAliveStates.has(lastState)) {
       return;
     }
     eventBus.finished();
-    this.eventBusManager.cleanupByTaskId(taskId);
+    this.eventBusManager.cleanupByTaskId(taskId, context);
   }
 
   /**
@@ -520,7 +587,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               state: TaskState.TASK_STATE_FAILED,
               message: {
                 role: Role.ROLE_AGENT,
-                messageId: uuidv4(),
+                messageId: crypto.randomUUID(),
                 taskId: requestContext.taskId,
                 contextId: finalMessageForAgent.contextId!,
                 parts: [
@@ -557,7 +624,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             state: TaskState.TASK_STATE_FAILED,
             message: {
               role: Role.ROLE_AGENT,
-              messageId: uuidv4(),
+              messageId: crypto.randomUUID(),
               taskId: errorTaskId,
               contextId: errorContextId,
               parts: [
@@ -579,7 +646,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        this._settleBus(taskId, eventBus, snapshotTracker().state);
+        this._settleBus(taskId, eventBus, snapshotTracker().state, requestContext.context);
       });
   }
 
@@ -605,15 +672,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
-      await this._assertPushConfigUrlAllowed(params.configuration.taskPushNotificationConfig);
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        params.configuration.taskPushNotificationConfig
-      );
+      const pushConfig = structuredClone(params.configuration.taskPushNotificationConfig);
+      pushConfig.taskId = taskId;
+      await this._assertPushConfigUrlAllowed(pushConfig);
+      await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     // Attach the queue before kicking off the executor so no events are missed.
     const eventQueue = new ExecutionEventQueue(eventBus);
 
@@ -684,6 +749,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     params: SendMessageRequest,
     context: ServerCallContext
   ): AsyncGenerator<StreamResponse, void, undefined> {
+    if (!this.agentCard.capabilities?.streaming) {
+      throw new UnsupportedOperationError('Streaming is not supported.');
+    }
+
     const incomingMessage = params.message;
     if (!incomingMessage?.messageId) {
       throw new RequestMalformedError('message.messageId is required for streaming.');
@@ -695,19 +764,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const requestContext = await this._createRequestContext(params, context);
     const taskId = requestContext.taskId;
 
-    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId);
+    const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     const eventQueue = new ExecutionEventQueue(eventBus);
 
     if (
       params.configuration?.taskPushNotificationConfig &&
       this.agentCard.capabilities?.pushNotifications
     ) {
-      await this._assertPushConfigUrlAllowed(params.configuration.taskPushNotificationConfig);
-      await this.pushNotificationStore?.save(
-        taskId,
-        context,
-        params.configuration.taskPushNotificationConfig
-      );
+      const pushConfig = structuredClone(params.configuration.taskPushNotificationConfig);
+      pushConfig.taskId = taskId;
+      await this._assertPushConfigUrlAllowed(pushConfig);
+      await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
     // Run the executor in the background. Bus cleanup is tied to the
@@ -723,14 +790,19 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
         await resultManager.processEvent(event);
 
-        const streamResponse = await this._mapEventToStreamResponse(event, context);
+        const streamResponse = this._mapEventToStreamResponse(event, resultManager);
         if (streamResponse.payload?.$case === 'task') {
           this._applyHistoryLengthSemantics(
             streamResponse.payload.value,
             params.configuration ?? {}
           );
         }
-        await this._sendPushNotificationIfNeeded(context, streamResponse);
+
+        await this._sendPushNotificationIfNeeded(
+          context,
+          streamResponse,
+          resultManager.getCurrentTask()
+        );
         yield streamResponse;
       }
     } finally {
@@ -742,6 +814,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -756,8 +829,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   ): Promise<ListTasksResponse> {
     const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
 
-    if (pageSize < 1 || pageSize > 100) {
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw new RequestMalformedError('pageSize must be between 1 and 100');
+    }
+
+    // Validate the state filter against the real enum so an unrecognized
+    // value — protobufjs' UNRECOGNIZED (-1) sentinel from JSON-RPC/REST
+    // parsing, or a raw out-of-range number from gRPC decoding — surfaces
+    // as RequestMalformedError instead of silently matching nothing.
+    if (params.status !== undefined && !VALID_TASK_STATE_LIST.includes(params.status)) {
+      throw new RequestMalformedError(`Invalid status filter: ${String(params.status)}`);
     }
 
     if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
@@ -773,6 +854,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
   async cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -788,7 +870,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
     }
 
-    const eventBus = this.eventBusManager.getByTaskId(taskId);
+    const eventBus = this.eventBusManager.getByTaskId(taskId, context);
 
     if (eventBus) {
       const eventQueue = new ExecutionEventQueue(eventBus);
@@ -802,33 +884,41 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       );
     } else {
       // Mark the task as cancelled directly. We do not wait for the
-      // executor to actually cancel processing.
-      task.status = {
-        state: TaskState.TASK_STATE_CANCELED,
-        message: {
-          role: Role.ROLE_AGENT,
-          messageId: uuidv4(),
+      // executor to actually cancel processing. Routing through the
+      // ResultManager — instead of mutating `task` and saving directly —
+      // applies the per-(tenant, owner, taskId) write lock and the
+      // terminal-state guard, so a concurrent status update (e.g.
+      // COMPLETED published by a racing executor) cannot be clobbered by
+      // the CANCELED write or vice versa.
+      const cancelMessage: Message = {
+        role: Role.ROLE_AGENT,
+        messageId: crypto.randomUUID(),
+        taskId: task.id,
+        contextId: task.contextId,
+        parts: [
+          {
+            content: { $case: 'text', value: 'Task cancellation requested by user.' },
+            mediaType: 'text/plain',
+            filename: '',
+            metadata: {},
+          },
+        ],
+        metadata: {},
+        extensions: [],
+        referenceTaskIds: [],
+      };
+      await new ResultManager(this.taskStore, context).processEvent(
+        AgentEvent.statusUpdate({
           taskId: task.id,
           contextId: task.contextId,
-          parts: [
-            {
-              content: { $case: 'text', value: 'Task cancellation requested by user.' },
-              mediaType: 'text/plain',
-              filename: '',
-              metadata: {},
-            },
-          ],
+          status: {
+            state: TaskState.TASK_STATE_CANCELED,
+            message: cancelMessage,
+            timestamp: new Date().toISOString(),
+          },
           metadata: {},
-          extensions: [],
-          referenceTaskIds: [],
-        },
-        timestamp: new Date().toISOString(),
-      };
-      if (task.status?.message) {
-        task.history = [...(task.history || []), task.status.message];
-      }
-
-      await this.taskStore.save(task, context);
+        })
+      );
     }
 
     const latestTask = await this.taskStore.load(taskId, context);
@@ -849,6 +939,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -867,6 +958,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -874,13 +966,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const configs = (await this.pushNotificationStore?.load(taskId, context)) || [];
     if (configs.length === 0) {
-      throw new A2AError(`Push notification config not found for task ${taskId}.`);
+      // Semantic TaskNotFoundError (rather than a bare A2AError) so REST
+      // maps this to 404 and JSON-RPC to -32001, matching Python's
+      // behavior. A bare A2AError previously surfaced as 500 / -32603.
+      throw new TaskNotFoundError(`Push notification config not found for task ${taskId}.`);
     }
 
     const config = configs.find((c) => c.id === params.id);
 
     if (!config) {
-      throw new A2AError(
+      throw new TaskNotFoundError(
         `Push notification config with id '${params.id}' not found for task ${taskId}.`
       );
     }
@@ -895,6 +990,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -914,6 +1010,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new PushNotificationNotSupportedError();
     }
     const taskId = params.taskId;
+    this._requireValidTaskId(taskId);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -930,10 +1027,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const taskId = params.id;
+    this._requireValidTaskId(taskId);
 
     // Attach to the event bus BEFORE loading the task from the store so
     // we don't miss events published between the load and subscription.
-    const eventBus = this.eventBusManager.getByTaskId(taskId);
+    const eventBus = this.eventBusManager.getByTaskId(taskId, context);
     const eventQueue = eventBus ? new ExecutionEventQueue(eventBus) : undefined;
 
     try {
@@ -996,18 +1094,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * events the full task is loaded from the store to include accumulated
    * history and artifacts.
    */
-  private async _mapEventToStreamResponse(
+  private _mapEventToStreamResponse(
     event: AgentExecutionEvent,
-    context: ServerCallContext
-  ): Promise<StreamResponse> {
+    resultManager: ResultManager
+  ): StreamResponse {
     switch (event.kind) {
       case 'task': {
-        const taskId = event.data.id;
-        const fullTask = await this.taskStore.load(taskId, context).catch((error): Task | null => {
-          console.warn('Failed to load full task from store, falling back to event data:', error);
-          return null;
-        });
-        return { payload: { $case: 'task', value: fullTask || event.data } };
+        const fullTask = resultManager.getCurrentTask();
+        return {
+          payload: { $case: 'task', value: fullTask ? structuredClone(fullTask) : event.data },
+        };
       }
       case 'message':
         return { payload: { $case: 'message', value: event.data } };
@@ -1028,10 +1124,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    */
   private async _sendPushNotificationIfNeeded(
     context: ServerCallContext,
-    streamResponse: StreamResponse
+    streamResponse: StreamResponse,
+    task?: Task
   ): Promise<void> {
     if (this.agentCard.capabilities?.pushNotifications && this.pushNotificationSender) {
-      this.pushNotificationSender.send(streamResponse, context).catch((error) => {
+      this.pushNotificationSender.send(streamResponse, context, task).catch((error) => {
         console.error(`Failed to send push notification:`, error);
       });
     }
@@ -1067,7 +1164,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           state: TaskState.TASK_STATE_FAILED,
           message: {
             role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
+            messageId: crypto.randomUUID(),
             taskId: currentTask.id,
             contextId: currentTask.contextId,
             parts: [
@@ -1125,6 +1222,17 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             `Stream ordering violation: received ${event.kind} in task lifecycle stream.`
           );
         return currentPattern;
+    }
+  }
+
+  /**
+   * A missing or whitespace-only task ID is malformed input: reject it
+   * with `RequestMalformedError` (-32602 / HTTP 400) instead of letting
+   * the task store surface `TaskNotFoundError` (-32001 / HTTP 404).
+   */
+  private _requireValidTaskId(taskId: string | undefined): void {
+    if (!taskId || taskId.trim() === '') {
+      throw new RequestMalformedError('Task ID is required');
     }
   }
 

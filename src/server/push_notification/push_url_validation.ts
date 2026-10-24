@@ -92,8 +92,8 @@ function ipv4MappedFromV6(ip: string): string | undefined {
 function expandIpv6(ip: string): number[] {
   // Minimal expander for prefix checks only.
   const sides = ip.split('::');
-  let head = sides[0] ? sides[0].split(':') : [];
-  let tail = sides.length > 1 && sides[1] ? sides[1].split(':') : [];
+  const head = sides[0] ? sides[0].split(':') : [];
+  const tail = sides.length > 1 && sides[1] ? sides[1].split(':') : [];
   if (sides.length > 2) {
     throw new Error('invalid ipv6');
   }

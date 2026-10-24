@@ -103,7 +103,9 @@ describe('DefaultPushNotificationSender SSRF guard', () => {
   });
 
   it('revert-test: allowPrivatePushUrls true would call fetch for loopback', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }));
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('ok', { status: 200 }));
     const store = new InMemoryPushNotificationStore();
     const sender = new DefaultPushNotificationSender(store, { allowPrivatePushUrls: true });
     const ctx = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
@@ -149,7 +151,12 @@ describe('create-time push URL validation', () => {
     provider: undefined,
     documentationUrl: '',
     supportedInterfaces: [
-      { url: 'http://localhost/a2a', protocolBinding: 'HTTP+JSON', tenant: '', protocolVersion: '1.0' },
+      {
+        url: 'http://localhost/a2a',
+        protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
     ],
     capabilities: { extensions: [], streaming: true, pushNotifications: true },
     securitySchemes: {},

@@ -15,6 +15,12 @@ import { RequestOptions } from '../../../src/client/multitransport-client.js';
 import { HTTP_EXTENSION_HEADER } from '../../../src/constants.js';
 import { ServiceParameters, withA2AExtensions } from '../../../src/client/service-parameters.js';
 import { LegacyJsonRpcTransport } from '../../../src/compat/v0_3/client/transports/json_rpc_transport.js';
+import {
+  A2A_ERROR_CODE,
+  JsonRpcTaskNotFoundError,
+  JsonRpcTransportError,
+  TaskNotFoundError,
+} from '../../../src/errors/index.js';
 
 describe('JsonRpcTransport', () => {
   let transport: JsonRpcTransport;
@@ -91,6 +97,148 @@ describe('JsonRpcTransport', () => {
       const fetchArgs = mockFetch.mock.calls[0][1];
       const headers = fetchArgs.headers;
       expect((headers as any)[HTTP_EXTENSION_HEADER]).to.deep.equal(expectedExtensions);
+    });
+  });
+
+  describe('JSON-RPC response validation', () => {
+    it.each([
+      ['missing', undefined, 'undefined'],
+      ['invalid', '1.0', '"1.0"'],
+      ['numeric', 2.0, '2'],
+      ['null', null, 'null'],
+    ])(
+      'rejects unary responses with a %s jsonrpc version',
+      async (_description, jsonrpc, received) => {
+        mockFetch.mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              ...(jsonrpc === undefined ? {} : { jsonrpc }),
+              result: { ok: true },
+              id: 1,
+            }),
+            { status: 200 }
+          )
+        );
+
+        await expect(transport.callExtensionMethod('test/method', {})).rejects.toThrow(
+          `Invalid JSON-RPC response for test/method: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
+        );
+      }
+    );
+
+    it.each([
+      ['missing', undefined, 'undefined'],
+      ['invalid', '1.0', '"1.0"'],
+      ['numeric', 2.0, '2'],
+      ['null', null, 'null'],
+    ])('rejects SSE events with a %s jsonrpc version', async (_description, jsonrpc, received) => {
+      const event: Record<string, unknown> = {
+        ...(jsonrpc === undefined ? {} : { jsonrpc }),
+        result: {
+          message: {
+            messageId: 'response-msg-1',
+            role: 'ROLE_AGENT',
+            parts: [],
+          },
+        },
+        id: 1,
+      };
+      mockFetch.mockResolvedValue(
+        new Response(`data: ${JSON.stringify(event)}\n\n`, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      );
+
+      const request: SendMessageRequest = {
+        tenant: '',
+        message: {
+          messageId: 'test-msg-1',
+          role: Role.ROLE_USER,
+          parts: [],
+          contextId: '',
+          taskId: '',
+          extensions: [],
+          metadata: undefined,
+          referenceTaskIds: [],
+        },
+        configuration: undefined,
+        metadata: {},
+      };
+      const stream = transport.sendMessageStream(request);
+
+      await expect(stream.next()).rejects.toThrow(
+        `Invalid JSON-RPC response for SSE event: expected 'jsonrpc' to be exactly '2.0', got ${received}.`
+      );
+    });
+  });
+
+  describe('SSE error events', () => {
+    const request: SendMessageRequest = {
+      tenant: '',
+      message: {
+        messageId: 'test-msg-1',
+        role: Role.ROLE_USER,
+        parts: [],
+        contextId: '',
+        taskId: '',
+        extensions: [],
+        metadata: undefined,
+        referenceTaskIds: [],
+      },
+      configuration: undefined,
+      metadata: {},
+    };
+
+    const mockErrorResponse = (
+      error: { code: number; message: string; data?: unknown },
+      stream: boolean
+    ) => {
+      mockFetch.mockImplementation(async (_url, init) => {
+        const { id } = JSON.parse(init!.body as string);
+        const envelope = JSON.stringify({ jsonrpc: '2.0', id, error });
+        return stream
+          ? new Response(`data: ${envelope}\n\n`, {
+              status: 200,
+              headers: { 'Content-Type': 'text/event-stream' },
+            })
+          : new Response(envelope, { status: 200 });
+      });
+    };
+
+    it('throws the same typed error as a unary response', async () => {
+      const error = { code: A2A_ERROR_CODE.TASK_NOT_FOUND, message: 'Task not found' };
+
+      mockErrorResponse(error, false);
+      const unaryError = await transport.sendMessage(request).catch((e: unknown) => e);
+      expect(unaryError).toBeInstanceOf(JsonRpcTaskNotFoundError);
+
+      mockErrorResponse(error, true);
+      const streamError = await transport
+        .sendMessageStream(request)
+        .next()
+        .catch((e: unknown) => e);
+      expect(streamError).toBeInstanceOf(JsonRpcTaskNotFoundError);
+      expect(streamError).toBeInstanceOf(TaskNotFoundError);
+      expect((streamError as JsonRpcTaskNotFoundError).envelopeCode).toBe(
+        A2A_ERROR_CODE.TASK_NOT_FOUND
+      );
+      expect((streamError as Error).message).toBe((unaryError as Error).message);
+    });
+
+    it('throws JsonRpcTransportError for unknown error codes', async () => {
+      mockErrorResponse({ code: -42000, message: 'mystery', data: { detail: 'x' } }, true);
+
+      const streamError = await transport
+        .sendMessageStream(request)
+        .next()
+        .catch((e: unknown) => e);
+      expect(streamError).toBeInstanceOf(JsonRpcTransportError);
+      expect((streamError as JsonRpcTransportError).errorResponse.error).toEqual({
+        code: -42000,
+        message: 'mystery',
+        data: { detail: 'x' },
+      });
     });
   });
 

@@ -54,6 +54,31 @@ describe('ServerCallContext', () => {
     });
   });
 
+  describe('setTenant', () => {
+    it('sets a tenant when none was provided', () => {
+      const ctx = new ServerCallContext();
+
+      ctx.setTenant('acme');
+
+      expect(ctx.tenant).toBe('acme');
+    });
+
+    it.each(['acme', 'other'])('rejects setting %s over a constructor tenant', (tenant) => {
+      const ctx = new ServerCallContext({ tenant: 'acme' });
+
+      expect(() => ctx.setTenant(tenant)).toThrow('Tenant is already set.');
+      expect(ctx.tenant).toBe('acme');
+    });
+
+    it('rejects a second assignment through the setter', () => {
+      const ctx = new ServerCallContext();
+      ctx.setTenant('acme');
+
+      expect(() => ctx.setTenant('other')).toThrow('Tenant is already set.');
+      expect(ctx.tenant).toBe('acme');
+    });
+  });
+
   describe('addActivatedExtension', () => {
     it('adds a single extension', () => {
       const ctx = new ServerCallContext();

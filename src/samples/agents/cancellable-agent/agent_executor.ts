@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import { Task, TaskState, TaskStatusUpdateEvent, Role } from '../../../index.js';
 import {
   AgentExecutor,
@@ -92,7 +90,7 @@ export class CancellableAgentExecutor implements AgentExecutor {
               timestamp: new Date().toISOString(),
               message: {
                 role: Role.ROLE_AGENT,
-                messageId: uuidv4(),
+                messageId: crypto.randomUUID(),
                 parts: [
                   {
                     content: {

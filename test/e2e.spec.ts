@@ -16,6 +16,7 @@ import {
   Message,
   Role,
   Task,
+  TaskPushNotificationConfig,
   TaskState,
   StreamResponse,
 } from '../src/index.js';
@@ -29,11 +30,13 @@ import { agentCardHandler } from '../src/server/express/agent_card_handler.js';
 import { jsonRpcHandler } from '../src/server/express/json_rpc_handler.js';
 import { restHandler } from '../src/server/express/rest_handler.js';
 import { ClientFactory, ClientFactoryOptions } from '../src/client/factory.js';
+import type { Client } from '../src/client/multitransport-client.js';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
 import { UserBuilder } from '../src/server/express/common.js';
 import { A2AService, grpcService } from '../src/server/grpc/index.js';
 import { GrpcTransportFactory } from '../src/client/transports/grpc/grpc_transport.js';
+import { ServiceParameters, withA2AVersion } from '../src/client/service-parameters.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -366,6 +369,122 @@ describe('Client E2E tests', () => {
         });
       });
 
+      describe('push notification config', () => {
+        const taskId = 'push-task';
+        let client: Client;
+
+        const config = (
+          id: string,
+          url = 'http://localhost:1/webhook'
+        ): TaskPushNotificationConfig => ({
+          tenant: '',
+          id,
+          taskId,
+          url,
+          token: 'push-token',
+          authentication: undefined,
+        });
+
+        const listConfigs = () =>
+          client.listTaskPushNotificationConfig({
+            tenant: '',
+            taskId,
+            pageSize: 10,
+            pageToken: '',
+          });
+
+        beforeEach(async () => {
+          // A config is addressed by the task it belongs to, so the task has to
+          // exist before any of this means anything.
+          agentExecutor.events = [
+            AgentEvent.task({
+              id: taskId,
+              contextId: 'ctx-push',
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              artifacts: [],
+              history: [],
+              metadata: {},
+            }),
+          ];
+          client = await clientFactory.createFromAgentCard(agentCard);
+          await client.sendMessage({
+            tenant: '',
+            message: createTestMessage('msg-push', 'test'),
+            configuration: {
+              returnImmediately: true,
+              acceptedOutputModes: [],
+              taskPushNotificationConfig: undefined,
+            },
+            metadata: {},
+          });
+        });
+
+        it('should create a config against the task named in the request', async () => {
+          // Round-trip coverage across all three bindings, not a regression
+          // guard for the path-vs-body `taskId` bug: this client sends `taskId`
+          // in the path *and* the body, which is why a2a-js could always talk
+          // to itself while a conformant caller got 400. That one is pinned in
+          // rest_handler.spec.ts, at the layer where a request can be written
+          // without the body field.
+          const created = await client.createTaskPushNotificationConfig(config('cfg-1'));
+
+          expect(created.taskId).to.equal(taskId);
+          expect(created.url).to.equal('http://localhost:1/webhook');
+        });
+
+        it('should get a config by id', async () => {
+          const created = await client.createTaskPushNotificationConfig(config('cfg-1'));
+
+          const fetched = await client.getTaskPushNotificationConfig({
+            tenant: '',
+            taskId,
+            id: created.id,
+          });
+
+          expect(fetched.id).to.equal(created.id);
+          expect(fetched.taskId).to.equal(taskId);
+          expect(fetched.url).to.equal('http://localhost:1/webhook');
+        });
+
+        it('should list the configs registered for the task', async () => {
+          await client.createTaskPushNotificationConfig(config('cfg-a'));
+          await client.createTaskPushNotificationConfig(
+            config('cfg-b', 'http://localhost:2/webhook')
+          );
+
+          const listed = await listConfigs();
+
+          expect(listed.configs.map((c) => c.taskId)).to.deep.equal([taskId, taskId]);
+          expect(listed.configs.map((c) => c.url)).to.have.members([
+            'http://localhost:1/webhook',
+            'http://localhost:2/webhook',
+          ]);
+        });
+
+        it('should delete a config', async () => {
+          const created = await client.createTaskPushNotificationConfig(config('cfg-1'));
+
+          await client.deleteTaskPushNotificationConfig({ tenant: '', taskId, id: created.id });
+
+          expect((await listConfigs()).configs).to.be.empty;
+        });
+
+        it('should delete only the config named', async () => {
+          const doomed = await client.createTaskPushNotificationConfig(config('cfg-a'));
+          const survivor = await client.createTaskPushNotificationConfig(
+            config('cfg-b', 'http://localhost:2/webhook')
+          );
+
+          await client.deleteTaskPushNotificationConfig({ tenant: '', taskId, id: doomed.id });
+
+          expect((await listConfigs()).configs.map((c) => c.id)).to.deep.equal([survivor.id]);
+        });
+      });
+
       describe('error round-trip', () => {
         it('should return TaskNotFoundError for non-existent task', async () => {
           const client = await clientFactory.createFromAgentCard(agentCard);
@@ -428,6 +547,29 @@ describe('Client E2E tests', () => {
           // resubscribeTask triggers the streaming-specific error path.
           await expect(
             client.resubscribeTask({ id: 'non-existent', tenant: '' }).next()
+          ).rejects.toThrow(UnsupportedOperationError);
+        });
+
+        it('should return UnsupportedOperationError from sendMessageStream when streaming is disabled', async () => {
+          agentCard.capabilities!.streaming = false;
+
+          const client = await clientFactory.createFromAgentCard(agentCard);
+          await expect(
+            client.transport
+              .sendMessageStream(
+                {
+                  tenant: '',
+                  message: createTestMessage('msg-no-streaming', 'test'),
+                  configuration: undefined,
+                  metadata: {},
+                },
+                {
+                  serviceParameters: ServiceParameters.create(
+                    withA2AVersion(client.protocolVersion)
+                  ),
+                }
+              )
+              .next()
           ).rejects.toThrow(UnsupportedOperationError);
         });
 

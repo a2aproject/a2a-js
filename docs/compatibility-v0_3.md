@@ -309,10 +309,17 @@ A v1.0-only deployment delivers every push as a `StreamResponse` envelope
 with `Content-Type: application/a2a+json`. With the compat layer enabled, the
 sender (`createLegacyAwarePushNotificationSender`) routes per webhook:
 
-| Wire version the webhook was registered under   | Body shape                                                                                                                   | Content-Type           |
-| :---------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- | :--------------------- |
-| `1.0`                                           | `StreamResponse` envelope                                                                                                    | `application/a2a+json` |
-| `0.3` (or absent `A2A-Version` at registration) | The bare event object (v0.3 `Task`, `TaskStatusUpdateEvent`, or `TaskArtifactUpdateEvent` discriminated by its `kind` field) | `application/json`     |
+| Wire version the webhook was registered under   | Body shape                                                                                                                                                  | Content-Type           |
+| :---------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------- |
+| `1.0`                                           | `StreamResponse` envelope                                                                                                                                   | `application/a2a+json` |
+| `0.3` (or absent `A2A-Version` at registration) | The full v0.3 `Task` snapshot on every task, status and artifact trigger, or a bare v0.3 `Message` for a message trigger, discriminated by its `kind` field | `application/json`     |
+
+Status and artifact triggers are **consolidated into the current `Task`
+snapshot** rather than delivered as bare `TaskStatusUpdateEvent` /
+`TaskArtifactUpdateEvent` bodies, which is what the v0.3 spec example (§9.5)
+shows and what `v0.3.14` emitted. A v0.3 receiver written against a `v0.3.14`
+server therefore keeps working unchanged. See `src/compat/v0_3/README.md` for
+the rationale.
 
 Routing is anchored on the `requestedVersion` recorded **when the webhook was
 registered** (captured by `InMemoryPushNotificationStore` on `save()` and

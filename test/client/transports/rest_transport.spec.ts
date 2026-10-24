@@ -27,7 +27,7 @@ import {
   ListTaskPushNotificationConfigsResponse,
   TaskState,
   TaskPushNotificationConfig,
-} from '../../../src/types/pb/a2a.js';
+} from '../../../src/types/index.js';
 
 describe('RestTransport', () => {
   let transport: RestTransport;
@@ -197,6 +197,17 @@ describe('RestTransport', () => {
   });
 
   describe('cancelTask', () => {
+    it('should preserve cancellation metadata in the request body', async () => {
+      const metadata = { reason: 'user_requested', audit: { id: 'cancel-001' } };
+      mockFetch.mockResolvedValue(createRestResponse(createMockProtoTask('task-1')));
+
+      await transport.cancelTask({ id: 'task-1', tenant: 'tenant1', metadata });
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe(`${endpoint}/tenant1/tasks/task-1:cancel`);
+      expect(JSON.parse(options?.body as string).metadata).toEqual(metadata);
+    });
+
     it('should cancel task successfully', async () => {
       const taskId = 'task-123';
       const mockTask = createMockProtoTask(taskId, TaskState.TASK_STATE_CANCELED);
@@ -446,6 +457,26 @@ describe('RestTransport', () => {
         const [url, options] = mockFetch.mock.calls[0];
         expect(url).to.equal(`${endpoint}/tasks/${taskId}/pushNotificationConfigs`);
         expect(options?.method).to.equal('GET');
+      });
+
+      it('sends pageSize and pageToken as query parameters when specified', async () => {
+        mockFetch.mockResolvedValue(
+          createRestResponse(
+            ListTaskPushNotificationConfigsResponse.toJSON({ configs: [], nextPageToken: '' })
+          )
+        );
+
+        await transport.listTaskPushNotificationConfig({
+          taskId,
+          tenant: '',
+          pageSize: 7,
+          pageToken: 'cursor-abc',
+        });
+
+        const [url] = mockFetch.mock.calls[0];
+        expect(url).to.equal(
+          `${endpoint}/tasks/${taskId}/pushNotificationConfigs?pageSize=7&pageToken=cursor-abc`
+        );
       });
     });
 

@@ -74,6 +74,42 @@ describe('InMemoryPushNotificationStore.load() (canonical, version-agnostic read
     expect(remaining[0].id).toBe('keep');
   });
 
+  it('stores a deep clone so mutating the input after save cannot rewrite stored webhooks', async () => {
+    // Mirrors InMemoryTaskStore.save: the caller's object must not remain
+    // the store's internal row. Reproduction: save, mutate url/token, load.
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const config = makeConfig({
+      id: 'c1',
+      url: 'https://example.test/hook',
+      token: 'tok',
+    });
+
+    await store.save('task-save-iso', context, config);
+    config.url = 'https://attacker.test/';
+    config.token = 'stolen';
+
+    const loaded = await store.load('task-save-iso', context);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].id).toBe('c1');
+    expect(loaded[0].url).toBe('https://example.test/hook');
+    expect(loaded[0].token).toBe('tok');
+  });
+
+  it('still writes a generated id onto the caller object when id is empty', async () => {
+    const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+    const config = makeConfig({ id: '' });
+
+    await store.save('task-id-inplace', context, config);
+
+    const UUIDV4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(config.id).toMatch(UUIDV4_RE);
+
+    config.url = 'https://attacker.test/';
+    const loaded = await store.load('task-id-inplace', context);
+    expect(loaded[0].id).toBe(config.id);
+    expect(loaded[0].url).toBe('http://example.test/webhook');
+  });
+
   it('returns deep-cloned configs so caller mutations cannot reach internal state', async () => {
     const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-iso', context, makeConfig({ id: 'cfg-iso', url: 'http://orig/' }));

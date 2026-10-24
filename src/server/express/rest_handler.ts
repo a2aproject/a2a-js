@@ -33,6 +33,7 @@ import { legacyRestRouter } from '../../compat/v0_3/server/express/index.js';
 
 import {
   AgentCard,
+  CancelTaskRequest,
   ListTaskPushNotificationConfigsResponse,
   ListTasksResponse,
   MessageFns,
@@ -41,7 +42,7 @@ import {
   StreamResponse,
   Task,
   TaskPushNotificationConfig,
-} from '../../types/pb/a2a.js';
+} from '../../types/index.js';
 import { ToProto } from '../../types/converters/to_proto.js';
 import { ContentTypeNotSupportedError, RequestMalformedError } from '../../errors/index.js';
 
@@ -411,7 +412,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const result = await restTransportHandler.cancelTask(
       req.params.taskId,
       context,
-      (req.query.tenant as string) || ''
+      (req.query.tenant as string) || '',
+      CancelTaskRequest.fromJSON(req.body ?? {}).metadata
     );
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
@@ -470,7 +472,10 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('post', '/tasks/:taskId/pushNotificationConfigs', async (req, res) => {
     const context = await buildContext(req);
-    const params = TaskPushNotificationConfig.fromJSON(req.body ?? {});
+    const params = TaskPushNotificationConfig.fromJSON({
+      ...(req.body ?? {}),
+      taskId: req.params.taskId,
+    });
     const result = await restTransportHandler.createTaskPushNotificationConfig(params, context);
     sendResponse<TaskPushNotificationConfig>(
       res,
@@ -494,8 +499,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTaskPushNotificationConfigs(
       req.params.taskId as string,
-      context,
-      (req.query.tenant as string) || ''
+      req.query,
+      context
     );
     sendResponse<ListTaskPushNotificationConfigsResponse>(
       res,

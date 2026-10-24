@@ -1,4 +1,4 @@
-import { TaskPushNotificationConfig, StreamResponse } from '../../index.js';
+import { TaskPushNotificationConfig, StreamResponse, Task } from '../../index.js';
 import {
   A2A_LEGACY_PROTOCOL_VERSION,
   A2A_PROTOCOL_VERSION,
@@ -51,9 +51,7 @@ export interface DefaultPushNotificationSenderOptions {
 export class DefaultPushNotificationSender implements PushNotificationSender {
   private readonly pushNotificationStore: PushNotificationStore;
   private notificationChain: Map<string, Promise<unknown>>;
-  private readonly options: Required<
-    Omit<DefaultPushNotificationSenderOptions, 'serializers'>
-  >;
+  private readonly options: Required<Omit<DefaultPushNotificationSenderOptions, 'serializers'>>;
   private readonly serializers: Map<string, PushNotificationSerializer>;
   private readonly fallbackSerializer: PushNotificationSerializer;
   // Avoid log spam when many notifications target the same unknown version.
@@ -90,7 +88,11 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     this.fallbackSerializer = this.serializers.get(ProtocolVersion.V1_0) ?? builtinV1;
   }
 
-  async send(streamResponse: StreamResponse, context: ServerCallContext): Promise<void> {
+  async send(
+    streamResponse: StreamResponse,
+    context: ServerCallContext,
+    task?: Task
+  ): Promise<void> {
     const taskId = this._getTaskId(streamResponse);
     // Stand-alone messages with no task association can't have a
     // registered push config — skip the store round-trip.
@@ -112,7 +114,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       .then(async () => {
         const dispatches = storedConfigs.map(async (storedConfig) => {
           try {
-            await this._dispatchNotification(streamResponse, storedConfig, taskId);
+            await this._dispatchNotification(streamResponse, storedConfig, taskId, task);
           } catch (error) {
             console.error(
               `Error sending push notification for task_id=${taskId} to URL: ${storedConfig.config.url}. Error:`,
@@ -220,7 +222,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   private async _dispatchNotification(
     streamResponse: StreamResponse,
     storedConfig: StoredPushNotificationConfig,
-    taskId: string
+    taskId: string,
+    task?: Task
   ): Promise<void> {
     const { config: pushConfig, wireVersion } = storedConfig;
     const url = pushConfig.url;
@@ -228,9 +231,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
     if (!this.options.allowPrivatePushUrls) {
       const validationError = await pushUrlValidationError(url);
       if (validationError) {
-        console.warn(
-          `Push-notification URL for task_id=${taskId} rejected: ${validationError}`
-        );
+        console.warn(`Push-notification URL for task_id=${taskId} rejected: ${validationError}`);
         return;
       }
     }
@@ -240,7 +241,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
 
     try {
       const serializer = this._resolveSerializer(wireVersion);
-      const { body, contentType } = serializer.serialize(streamResponse);
+      const { body, contentType } = serializer.serialize(streamResponse, task);
 
       // Do not follow redirects: validation covers the initial URL only.
       const response = await fetch(url, {

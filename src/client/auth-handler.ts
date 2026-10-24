@@ -36,6 +36,7 @@ export interface AuthenticationHandler {
  * injects headers from `authHandler.headers()`, retries when
  * `authHandler.shouldRetryWithHeaders` returns new headers, and notifies
  * via `onSuccessfulRetry` when the retry succeeds.
+ * Caller-provided headers take precedence on both requests, regardless of casing.
  */
 export function createAuthenticatingFetchWithRetry(
   fetchImpl: typeof fetch,
@@ -45,10 +46,7 @@ export function createAuthenticatingFetchWithRetry(
     const authHeaders = (await authHandler.headers()) || {};
     const mergedInit: RequestInit = {
       ...(init || {}),
-      headers: {
-        ...authHeaders,
-        ...(init?.headers || {}),
-      },
+      headers: mergeHeaders(authHeaders, init?.headers),
     };
 
     let response = await fetchImpl(url, mergedInit);
@@ -57,10 +55,7 @@ export function createAuthenticatingFetchWithRetry(
     if (updatedHeaders) {
       const retryInit: RequestInit = {
         ...(init || {}),
-        headers: {
-          ...updatedHeaders,
-          ...(init?.headers || {}),
-        },
+        headers: mergeHeaders(updatedHeaders, init?.headers),
       };
       response = await fetchImpl(url, retryInit);
 
@@ -77,4 +72,10 @@ export function createAuthenticatingFetchWithRetry(
   Object.defineProperties(authFetch, Object.getOwnPropertyDescriptors(fetchImpl));
 
   return authFetch;
+}
+
+function mergeHeaders(authHeaders: HttpHeaders, callerHeaders?: HeadersInit): Headers {
+  const headers = new Headers(authHeaders);
+  new Headers(callerHeaders).forEach((value, name) => headers.set(name, value));
+  return headers;
 }

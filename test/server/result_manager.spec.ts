@@ -531,6 +531,74 @@ describe('ResultManager.processEvent("task")', () => {
       (snapshot!.artifacts![0].parts[0].content as { $case: 'text'; value: string }).value
     ).toBe('original');
   });
+
+  it('should merge status update metadata into the task, with incoming values winning on key collisions', async () => {
+    const taskId = 'task-status-meta';
+    const contextId = 'ctx-status-meta';
+    await store.save(
+      createTask(taskId, contextId, {
+        metadata: { keep: 'persisted', shared: 'old' },
+      }),
+      context
+    );
+
+    const rm = new ResultManager(store, context);
+    await rm.processEvent(
+      AgentEvent.statusUpdate({
+        taskId,
+        contextId,
+        status: {
+          state: TaskState.TASK_STATE_WORKING,
+          message: undefined,
+          timestamp: undefined,
+        },
+        metadata: { shared: 'new', extra: 'added' },
+      })
+    );
+
+    const saved = await store.load(taskId, context);
+    expect(saved!.metadata).toEqual({
+      keep: 'persisted',
+      shared: 'new',
+      extra: 'added',
+    });
+  });
+
+  it('should merge artifact update event metadata into the task while persisting artifact metadata as-is', async () => {
+    const taskId = 'task-artifact-meta';
+    const contextId = 'ctx-artifact-meta';
+    await store.save(
+      createTask(taskId, contextId, {
+        metadata: { keep: 'persisted', shared: 'old' },
+      }),
+      context
+    );
+
+    const artifact = createArtifact('art-meta', 'body');
+    artifact.metadata = { artifactOnly: 'value' };
+
+    const rm = new ResultManager(store, context);
+    await rm.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId,
+        contextId,
+        artifact,
+        append: false,
+        lastChunk: true,
+        metadata: { shared: 'new', extra: 'added' },
+      })
+    );
+
+    const saved = await store.load(taskId, context);
+    // Event-level metadata is merged into the task; incoming wins.
+    expect(saved!.metadata).toEqual({
+      keep: 'persisted',
+      shared: 'new',
+      extra: 'added',
+    });
+    // The artifact's own metadata is persisted 1:1, not merged into the task.
+    expect(saved!.artifacts![0].metadata).toEqual({ artifactOnly: 'value' });
+  });
 });
 
 describe('concurrent ResultManagers on the same taskId', () => {
@@ -844,5 +912,105 @@ describe('concurrent ResultManagers on the same taskId', () => {
     // and vice versa.
     expect((finalA!.history ?? []).map((m) => m.messageId)).not.toContain('B-user');
     expect((finalB!.history ?? []).map((m) => m.messageId)).not.toContain('A-user');
+  });
+
+  describe('terminal-state guard', () => {
+    it('ignores a status update that would roll a terminal task back to a non-terminal state', async () => {
+      const taskId = 'task-terminal-immutable';
+      const contextId = 'ctx-terminal-immutable';
+      await store.save(
+        createTask(taskId, contextId, {
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        }),
+        context
+      );
+
+      const rm = new ResultManager(store, context);
+      await rm.processEvent(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+
+      const stored = await store.load(taskId, context);
+      expect(stored!.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+    });
+
+    it('ignores a status update that would switch a terminal task to a different terminal state', async () => {
+      const taskId = 'task-terminal-switch';
+      const contextId = 'ctx-terminal-switch';
+      await store.save(
+        createTask(taskId, contextId, {
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        }),
+        context
+      );
+
+      const rm = new ResultManager(store, context);
+      await rm.processEvent(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_CANCELED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+
+      const stored = await store.load(taskId, context);
+      expect(stored!.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+    });
+
+    it('still applies a same-state terminal status update (e.g. the final message)', async () => {
+      const taskId = 'task-terminal-samestate';
+      const contextId = 'ctx-terminal-samestate';
+      await store.save(
+        createTask(taskId, contextId, {
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        }),
+        context
+      );
+
+      const finalMessage = createMessage('final-1', 'done', Role.ROLE_AGENT);
+      const rm = new ResultManager(store, context);
+      await rm.processEvent(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: finalMessage,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+
+      const stored = await store.load(taskId, context);
+      expect(stored!.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+      expect(stored!.history?.map((m) => m.messageId)).toContain('final-1');
+    });
   });
 });

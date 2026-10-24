@@ -1,5 +1,4 @@
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 import {
   A2A_PROTOCOL_VERSION,
@@ -85,7 +84,7 @@ class MovieAgentExecutor implements AgentExecutor {
         state: TaskState.TASK_STATE_WORKING,
         message: {
           role: Role.ROLE_AGENT,
-          messageId: uuidv4(),
+          messageId: crypto.randomUUID(),
           parts: [
             {
               content: { $case: 'text', value: 'Processing your question, hang tight!' },
@@ -138,7 +137,7 @@ class MovieAgentExecutor implements AgentExecutor {
           state: TaskState.TASK_STATE_FAILED,
           message: {
             role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
+            messageId: crypto.randomUUID(),
             parts: [
               {
                 content: { $case: 'text', value: 'No message found to process.' },
@@ -224,7 +223,7 @@ class MovieAgentExecutor implements AgentExecutor {
           mediaType: 'text/plain',
         },
       ];
-      const artifactId = uuidv4();
+      const artifactId = crypto.randomUUID();
       const resultArtifact: Artifact = {
         artifactId: artifactId,
         name: 'Result',
@@ -247,7 +246,7 @@ class MovieAgentExecutor implements AgentExecutor {
       // 6. Update local history context (internal only)
       const agentMessage: Message = {
         role: Role.ROLE_AGENT,
-        messageId: uuidv4(),
+        messageId: crypto.randomUUID(),
         parts: parts,
         taskId: taskId,
         contextId: contextId,
@@ -281,7 +280,7 @@ class MovieAgentExecutor implements AgentExecutor {
           state: TaskState.TASK_STATE_FAILED,
           message: {
             role: Role.ROLE_AGENT,
-            messageId: uuidv4(),
+            messageId: crypto.randomUUID(),
             parts: [
               {
                 content: { $case: 'text', value: `Agent error: ${error.message}` },

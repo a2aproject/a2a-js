@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import {
   AfterArgs,
   BeforeArgs,
@@ -45,7 +43,7 @@ const AGENT_URL = process.env.AGENT_URL || 'http://localhost:41241';
  */
 class RequestIdInterceptor implements CallInterceptor {
   async before(args: BeforeArgs): Promise<void> {
-    const requestId = uuidv4();
+    const requestId = crypto.randomUUID();
     args.options = {
       ...args.options,
       serviceParameters: {
@@ -137,7 +135,7 @@ function buildMessage(text: string): SendMessageRequest {
     tenant: '',
     metadata: {},
     message: {
-      messageId: uuidv4(),
+      messageId: crypto.randomUUID(),
       role: Role.ROLE_USER,
       parts: [
         {

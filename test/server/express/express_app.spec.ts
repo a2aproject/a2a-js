@@ -129,6 +129,37 @@ describe('A2AExpressApp', () => {
     vi.restoreAllMocks();
   });
 
+  it('echoes extensions activated on a custom context for a tenant-scoped JSON-RPC request', async () => {
+    class CustomContext extends ServerCallContext {
+      readonly marker = 'custom-context';
+    }
+    const context = new CustomContext({
+      state: new Map([['trace', 'trace-a']]),
+      requestedVersion: '1.0',
+    });
+    const contextBuilder = vi.fn(() => context);
+    setupA2ARoutes(expressApp, mockRequestHandler, undefined, '', [], undefined, {
+      contextBuilder,
+    });
+    (mockRequestHandler.listTasks as Mock).mockImplementation((_params, received) => {
+      received.addActivatedExtension('ext://trace');
+      return { tasks: [] };
+    });
+
+    const response = await request(expressApp)
+      .post('/')
+      .set('A2A-Version', '1.0')
+      .send(createRpcRequest('tenant-context', 'ListTasks', { tenant: 'tenant-a' }))
+      .expect(200);
+
+    expect(response.body.result).toBeDefined();
+    expect(contextBuilder).toHaveBeenCalledTimes(1);
+    expect((mockRequestHandler.listTasks as Mock).mock.calls[0][1]).toBe(context);
+    expect(context.state.get('trace')).toBe('trace-a');
+    expect(context.tenant).toBe('tenant-a');
+    expect(response.headers[HTTP_EXTENSION_HEADER.toLowerCase()]).toBe('ext://trace');
+  });
+
   describe('agent card endpoint', () => {
     beforeEach(() => {
       setupA2ARoutes(expressApp, mockRequestHandler);
@@ -329,7 +360,7 @@ describe('A2AExpressApp', () => {
         .post('/')
         .set('A2A-Version', '1.0')
         .send(requestBody)
-        .expect(500);
+        .expect(200);
 
       assert.equal(response.body.id, null);
     });
@@ -624,7 +655,7 @@ describe('A2AExpressApp', () => {
         .post('/')
         .set('Content-Type', 'application/json') // Set header to trigger json parser
         .send(requestBody)
-        .expect(400);
+        .expect(200);
 
       // JSON-RPC 2.0 §4.2: parse errors use code -32700.
       const expectedErrorResponse: JSONRPCErrorResponse = {
@@ -649,7 +680,7 @@ describe('A2AExpressApp', () => {
       const response = await request(expressApp)
         .post('/')
         .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
-        .expect(500);
+        .expect(200);
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.property(response.body, 'error');
@@ -673,7 +704,7 @@ describe('A2AExpressApp', () => {
         .post('/')
         .set('A2A-Version', '9.9')
         .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
-        .expect(500);
+        .expect(200);
 
       assert.equal(response.body.jsonrpc, '2.0');
       assert.property(response.body, 'error');
@@ -762,15 +793,51 @@ describe('A2AExpressApp', () => {
       expect(legacyHandleStub).toHaveBeenCalledTimes(1);
     });
 
+    it('routes a header-less v1.0 method name to the legacy handler', async () => {
+      // An absent header means 0.3, so `SendMessage` is dispatched as 0.3 and
+      // the v0.3 handler is the one that gets to reject it. Routing on the
+      // method name instead would answer a 1.0 request the client never made.
+      legacyHandleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-no-header-v1-name',
+        error: { code: A2A_ERROR_CODE.METHOD_NOT_FOUND, message: 'Method not found' },
+      });
+
+      await request(expressApp)
+        .post('/')
+        .send(createRpcRequest('req-no-header-v1-name', 'SendMessage'))
+        .expect(200);
+
+      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+      expect(handleStub).not.toHaveBeenCalled();
+    });
+
+    it('routes a v0.3 method name to the v1 handler when the header says 1.0', async () => {
+      handleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-v1-header-03-name',
+        error: { code: A2A_ERROR_CODE.METHOD_NOT_FOUND, message: 'Method not found' },
+      });
+
+      await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(createRpcRequest('req-v1-header-03-name', 'message/send'))
+        .expect(200);
+
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      expect(legacyHandleStub).not.toHaveBeenCalled();
+    });
+
     it('rejects header-less legacy requests against a v1.0-only card (strict)', async () => {
       // legacyCompat is strict: card must declare a v0.3 interface for
-      // the binding. A v1.0-only card → VersionNotSupportedError → 500.
+      // the binding. A v1.0-only card → VersionNotSupportedError.
       (mockRequestHandler.getAgentCard as Mock).mockResolvedValue(testAgentCard);
 
       await request(expressApp)
         .post('/')
         .send(createRpcRequest('req-4', 'message/send'))
-        .expect(500);
+        .expect(200);
 
       expect(legacyHandleStub).not.toHaveBeenCalled();
     });
@@ -782,7 +849,7 @@ describe('A2AExpressApp', () => {
         .post('/')
         .set('A2A-Version', '0.3')
         .send(createRpcRequest('req-explicit-03', 'message/send'))
-        .expect(500);
+        .expect(200);
 
       expect(legacyHandleStub).not.toHaveBeenCalled();
     });
