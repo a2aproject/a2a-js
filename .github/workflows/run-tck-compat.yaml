@@ -18,7 +18,7 @@ on:
 
 env:
   # Tag of the TCK.
-  TCK_VERSION: 0.3.0.beta5
+  TCK_VERSION: 0.3.0.beta6
   # Tells uv to not need a venv, and instead use system
   UV_SYSTEM_PYTHON: 1
   # Base URL for the SUT agent
