@@ -248,8 +248,8 @@ describe('requests', () => {
           $case: 'message',
           value: {
             messageId: 'm-1',
-            contextId: '',
-            taskId: '',
+            contextId: undefined,
+            taskId: undefined,
             role: Role.ROLE_AGENT,
             parts: [],
             metadata: undefined,
@@ -279,8 +279,8 @@ describe('requests', () => {
         $case: 'message',
         value: {
           messageId: 'm-1',
-          contextId: '',
-          taskId: '',
+          contextId: undefined,
+          taskId: undefined,
           role: Role.ROLE_AGENT,
           parts: [],
           metadata: undefined,
