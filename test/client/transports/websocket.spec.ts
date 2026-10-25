@@ -102,6 +102,10 @@ async function respond(socket: () => FakeSocket, index: number, reply: Record<st
   return frame;
 }
 
+function activeStreams(transport: WebSocketTransport): Map<string, unknown> {
+  return (transport as unknown as { streams: Map<string, unknown> }).streams;
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -277,6 +281,37 @@ describe('WebSocketTransport', () => {
     await expect(next).rejects.toMatchObject({ name: 'TaskNotFoundError' });
   });
 
+  it('releases the stream entry and abort listener when an error frame ends a stream', async () => {
+    const { transport, socket } = setup();
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+    const stream = transport.sendMessageStream(request(), { signal: controller.signal });
+    const next = stream.next();
+    await vi.waitFor(() => expect(activeStreams(transport).size).toBe(1));
+
+    await respond(socket, 0, { error: { code: -32001, message: 'Task not found' } });
+    await expect(next).rejects.toMatchObject({ name: 'TaskNotFoundError' });
+    expect(activeStreams(transport).size).toBe(0);
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+
+    controller.abort();
+    expect(socket().sent).toHaveLength(1);
+  });
+
+  it('releases the stream entry and abort listener when a stream is aborted', async () => {
+    const { transport, socket } = setup();
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+    const stream = transport.sendMessageStream(request(), { signal: controller.signal });
+    const next = stream.next();
+    await vi.waitFor(() => expect(socket().sent).toHaveLength(1));
+
+    controller.abort();
+    await expect(next).rejects.toMatchObject({ name: 'AbortError' });
+    expect(activeStreams(transport).size).toBe(0);
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
+
   it('does not send anything when an unstarted stream is closed', async () => {
     const { transport, sockets } = setup();
     const stream = transport.sendMessageStream(request());
@@ -290,19 +325,26 @@ describe('WebSocketTransport', () => {
     const stream = transport.sendMessageStream(request());
     const pending = stream.next();
     await vi.waitFor(() => expect(socket().sent).toHaveLength(1));
+    const pendingRejected = expect(pending).rejects.toThrow('consumer failed');
     await expect(stream.throw(new Error('consumer failed'))).rejects.toThrow('consumer failed');
     expect(socket().sent[1]).toMatchObject({ id: socket().sent[0].id, cancelStream: true });
-    await expect(pending).rejects.toThrow('consumer failed');
+    await pendingRejected;
+  });
+
+  it('does not connect or send for an already-aborted signal', async () => {
+    const { transport, sockets } = setup();
+    const signal = AbortSignal.abort();
+    await expect(transport.getTask({ id: 't', tenant: '' }, { signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    await expect(transport.sendMessageStream(request(), { signal }).next()).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(sockets).toHaveLength(0);
   });
 
   it('aborts unary calls and streams through AbortSignal', async () => {
     const { transport, socket } = setup();
-
-    const preAborted = AbortSignal.abort();
-    await expect(
-      transport.getTask({ id: 't', tenant: '' }, { signal: preAborted })
-    ).rejects.toThrow('aborted');
-    expect(socket().sent).toHaveLength(0);
 
     const unaryController = new AbortController();
     const unary = transport.getTask({ id: 't', tenant: '' }, { signal: unaryController.signal });
