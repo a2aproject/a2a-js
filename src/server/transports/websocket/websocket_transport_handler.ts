@@ -215,33 +215,12 @@ export class WebSocketTransportHandler {
       lastActivity: Date.now(),
       activeStreams: new Map(),
     };
-    const messageCleanup = connection.onMessage((data, isBinary) => {
-      void this.handleMessage(
-        connection,
-        state,
-        connectionParameters,
-        authenticatedParameters,
-        data,
-        isBinary
-      );
-    });
-    const closeCleanup = connection.onClose((code, reason) => {
-      state.closed = true;
-      for (const stream of state.activeStreams.values()) {
-        stream.cancelled = true;
-        void stream.iterator.return();
-      }
-      state.activeStreams.clear();
-      void code;
-      void reason;
-    });
-    const errorCleanup = connection.onError?.(() => {
-      state.closed = true;
-    });
-    const livenessCleanup = this.startLiveness(connection, state);
-
-    return () => {
-      if (state.closed) return;
+    // Kept separate from state.closed so that teardown always runs exactly once,
+    // whichever path (peer close, error, idle timeout, host cleanup) gets here first.
+    let disposed = false;
+    const dispose = () => {
+      if (disposed) return;
+      disposed = true;
       state.closed = true;
       messageCleanup();
       closeCleanup();
@@ -253,6 +232,21 @@ export class WebSocketTransportHandler {
       }
       state.activeStreams.clear();
     };
+    const messageCleanup = connection.onMessage((data, isBinary) => {
+      void this.handleMessage(
+        connection,
+        state,
+        connectionParameters,
+        authenticatedParameters,
+        data,
+        isBinary
+      );
+    });
+    const closeCleanup = connection.onClose(dispose);
+    const errorCleanup = connection.onError?.(dispose);
+    const livenessCleanup = this.startLiveness(connection, state, dispose);
+
+    return dispose;
   }
 
   private async handleMessage(
@@ -454,7 +448,8 @@ export class WebSocketTransportHandler {
 
   private startLiveness(
     connection: WebSocketConnection,
-    state: SessionState
+    state: SessionState,
+    onIdle: () => void
   ): (() => void) | undefined {
     const interval = this.options.pingIntervalMs;
     if (!interval && !this.options.idleTimeoutMs) return undefined;
@@ -466,7 +461,7 @@ export class WebSocketTransportHandler {
           Date.now() - state.lastActivity >= this.options.idleTimeoutMs
         ) {
           connection.close(WEBSOCKET_CLOSE_CODE.GOING_AWAY, 'idle timeout');
-          state.closed = true;
+          onIdle();
           return;
         }
         if (interval && connection.ping) connection.ping();
