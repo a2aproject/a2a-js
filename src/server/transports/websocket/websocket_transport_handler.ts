@@ -1,6 +1,8 @@
 import { A2A_PROTOCOL_VERSION } from '../../../constants.js';
 import type { JSONRPCError } from '../../../core.js';
 import { A2A_ERROR_CODE, toJsonRpcError } from '../../../errors/index.js';
+import { Extensions } from '../../../extensions.js';
+import { validateVersion } from '../../version.js';
 import {
   defaultServerCallContextBuilder,
   RequestHeaders,
@@ -22,6 +24,7 @@ import {
   isWebSocketRequestId,
   mergeServiceParameters,
   requestIdKey,
+  WEBSOCKET_PROTOCOL_NAME,
 } from '../../../transports/websocket/protocol.js';
 
 /** Normalized socket surface used by the framework-neutral server handler. */
@@ -184,10 +187,12 @@ interface SessionState {
  * gives every request to the normal A2A request handler.
  */
 export class WebSocketTransportHandler {
+  private readonly requestHandler: A2ARequestHandler;
   private readonly jsonRpcHandler: JsonRpcTransportHandler;
   private readonly options: WebSocketServerOptions;
 
   constructor(requestHandler: A2ARequestHandler, options: WebSocketServerOptions = {}) {
+    this.requestHandler = requestHandler;
     this.jsonRpcHandler = new JsonRpcTransportHandler(requestHandler);
     this.options = options;
   }
@@ -322,9 +327,14 @@ export class WebSocketTransportHandler {
     for (const key of Object.keys(authenticatedParameters)) {
       requestParameters[key] = connectionParameters[key];
     }
-    const context = this.createContext(requestParameters);
     let result: JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>;
     try {
+      const context = this.createContext(requestParameters);
+      validateVersion(
+        context.requestedVersion,
+        await this.requestHandler.getAgentCard(),
+        WEBSOCKET_PROTOCOL_NAME
+      );
       result = await this.jsonRpcHandler.handle(envelope as Record<string, unknown>, context);
     } catch (error) {
       this.sendError(connection, id, toJsonRpcError(error));
@@ -396,7 +406,7 @@ export class WebSocketTransportHandler {
     const headers: RequestHeaders = { ...parameters };
     const builder = this.options.contextBuilder ?? defaultServerCallContextBuilder;
     return builder({
-      extensions: undefined,
+      extensions: Extensions.parseServiceParameter(parameters['a2a-extensions']),
       user: this.options.handshake?.user,
       headers,
       requestedVersion: parameters['a2a-version'] ?? A2A_PROTOCOL_VERSION,
