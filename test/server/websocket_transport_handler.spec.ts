@@ -534,6 +534,68 @@ describe('WebSocketTransportHandler', () => {
     expect(connection.closed?.code).toBe(1001);
     cleanup();
   });
+
+  it.each([
+    ['the peer closes', (c: FakeConnection) => c.close(1000, 'bye')],
+    ['the socket errors', (c: FakeConnection) => c.emitError(new Error('reset'))],
+  ])('stops the liveness timer when %s', async (_name, end) => {
+    vi.useFakeTimers();
+    const connection = new FakeConnection();
+    connection.ping = vi.fn();
+    new WebSocketTransportHandler(handler(), { pingIntervalMs: 100 }).handleConnection(connection);
+    expect(vi.getTimerCount()).toBe(1);
+
+    end(connection);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(connection.ping).not.toHaveBeenCalled();
+  });
+
+  it('stops the liveness timer after an idle timeout', async () => {
+    vi.useFakeTimers();
+    const connection = new FakeConnection();
+    connection.ping = vi.fn();
+    // Detach the close listener so the timeout path cannot rely on the peer echoing a close.
+    connection.close = (code, reason) => {
+      connection.closed = { code, reason };
+    };
+    new WebSocketTransportHandler(handler(), {
+      pingIntervalMs: 100,
+      idleTimeoutMs: 100,
+    }).handleConnection(connection);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(connection.closed?.code).toBe(1001);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops active streams on a socket error and keeps cleanup() safe to call', async () => {
+    vi.useFakeTimers();
+    const gate = deferred();
+    let finished = false;
+    const connection = new FakeConnection();
+    const cleanup = new WebSocketTransportHandler(
+      handler({
+        sendMessageStream: vi.fn(async function* () {
+          try {
+            yield { payload: { $case: 'task', value: { id: 'task-1' } } };
+            await gate.promise;
+          } finally {
+            finished = true;
+          }
+        }) as unknown as A2ARequestHandler['sendMessageStream'],
+      }),
+      { pingIntervalMs: 100 }
+    ).handleConnection(connection);
+
+    connection.receive(streamMessage(1));
+    await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
+    connection.emitError(new Error('reset'));
+    cleanup();
+    gate.resolve();
+    await vi.waitFor(() => expect(finished).toBe(true));
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe('adaptWebSocketConnection', () => {

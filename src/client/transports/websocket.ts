@@ -345,6 +345,7 @@ export class WebSocketTransport implements Transport {
   }
 
   private async call(method: string, params: unknown, options?: RequestOptions): Promise<unknown> {
+    throwIfAborted(options?.signal);
     await this.connect();
     const id = this.allocateRequestId();
     const key = requestIdKey(id);
@@ -383,9 +384,10 @@ export class WebSocketTransport implements Transport {
     let started: Promise<void> | undefined;
     const cancel = (requestId: WebSocketRequestId) => this.sendCancel(requestId);
 
-    const start = async () => {
+    const start = (): Promise<void> => {
       if (started) return started;
       started = (async () => {
+        throwIfAborted(options?.signal);
         await this.connect();
         id = this.allocateRequestId();
         key = requestIdKey(id);
@@ -393,7 +395,7 @@ export class WebSocketTransport implements Transport {
         this.streams.set(key, pending);
         pending.abortCleanup = addAbortHandler(options?.signal, () => {
           this.sendCancel(id!);
-          pending?.queue.end(new DOMException('The operation was aborted', 'AbortError'));
+          this.endStream(key!, new DOMException('The operation was aborted', 'AbortError'));
         });
         if (!pending.queue.isEnded) {
           this.sendEnvelope({
@@ -500,16 +502,11 @@ export class WebSocketTransport implements Transport {
         this.rejectUnary(key, error);
         return;
       }
-      this.streams.get(key)?.queue.end(error);
+      this.endStream(key, error);
       return;
     }
     if (envelope.streamEnd) {
-      const stream = this.streams.get(key);
-      if (stream) {
-        stream.abortCleanup?.();
-        stream.queue.end();
-        this.streams.delete(key);
-      }
+      this.endStream(key);
       return;
     }
     if (!('result' in envelope)) return;
@@ -557,6 +554,14 @@ export class WebSocketTransport implements Transport {
 
   private allocateRequestId(): WebSocketRequestId {
     return this.nextRequestId++;
+  }
+
+  private endStream(key: string, error?: unknown): void {
+    const stream = this.streams.get(key);
+    if (!stream) return;
+    this.streams.delete(key);
+    stream.abortCleanup?.();
+    stream.queue.end(error);
   }
 
   private rejectUnary(key: string, error: unknown): void {
@@ -624,12 +629,19 @@ function defaultWebSocketFactory(
   return new constructor(endpoint, protocols);
 }
 
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DOMException('The operation was aborted', 'AbortError');
+}
+
 function addAbortHandler(
   signal: AbortSignal | undefined,
   callback: () => void
 ): (() => void) | undefined {
   if (!signal) return undefined;
-  if (signal.aborted) callback();
+  if (signal.aborted) {
+    callback();
+    return undefined;
+  }
   signal.addEventListener('abort', callback, { once: true });
   return () => signal.removeEventListener('abort', callback);
 }
