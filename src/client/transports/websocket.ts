@@ -181,13 +181,8 @@ export class WebSocketTransport implements Transport {
 
       const timer = setTimeout(() => {
         const error = new Error(`WebSocket connection timed out after ${this.connectTimeoutMs}ms`);
-        try {
-          socket.close(WEBSOCKET_CLOSE_CODE.GOING_AWAY, 'connection timeout');
-        } catch {
-          // The socket may already have closed between the timeout and close().
-        }
         settle(() => reject(error));
-        this.failConnection(error);
+        this.abortConnection(WEBSOCKET_CLOSE_CODE.GOING_AWAY, 'connection timeout', error);
       }, this.connectTimeoutMs);
     }).finally(() => {
       this.connectPromise = undefined;
@@ -459,13 +454,19 @@ export class WebSocketTransport implements Transport {
 
   private async handleMessage(data: unknown): Promise<void> {
     if (typeof data !== 'string') {
-      this.socket?.close(WEBSOCKET_CLOSE_CODE.UNSUPPORTED_DATA, 'binary frames are not supported');
-      this.failConnection(new Error('Received a binary WebSocket frame; text frames are required'));
+      this.abortConnection(
+        WEBSOCKET_CLOSE_CODE.UNSUPPORTED_DATA,
+        'binary frames are not supported',
+        new Error('Received a binary WebSocket frame; text frames are required')
+      );
       return;
     }
     if (new TextEncoder().encode(data).byteLength > this.maxMessageBytes) {
-      this.socket?.close(WEBSOCKET_CLOSE_CODE.MESSAGE_TOO_BIG, 'message too big');
-      this.failConnection(new Error('WebSocket message exceeded the configured maximum size'));
+      this.abortConnection(
+        WEBSOCKET_CLOSE_CODE.MESSAGE_TOO_BIG,
+        'message too big',
+        new Error('WebSocket message exceeded the configured maximum size')
+      );
       return;
     }
 
@@ -473,8 +474,11 @@ export class WebSocketTransport implements Transport {
     try {
       envelope = JSON.parse(data) as WebSocketResponseEnvelope;
     } catch (error) {
-      this.socket?.close(WEBSOCKET_CLOSE_CODE.PROTOCOL_ERROR, 'invalid JSON');
-      this.failConnection(new Error('Invalid JSON in WebSocket response', { cause: error }));
+      this.abortConnection(
+        WEBSOCKET_CLOSE_CODE.PROTOCOL_ERROR,
+        'invalid JSON',
+        new Error('Invalid JSON in WebSocket response', { cause: error })
+      );
       return;
     }
     if (envelope.jsonrpc !== WEBSOCKET_JSONRPC_VERSION) return;
@@ -563,8 +567,22 @@ export class WebSocketTransport implements Transport {
     pending.reject(error);
   }
 
+  /** Rejects pending calls with `error` before closing, so callers see the real cause. */
+  private abortConnection(code: number, reason: string, error: Error): void {
+    this.rejectPending(error);
+    try {
+      this.socket?.close(code, reason);
+    } catch {
+      // The socket may already be closed.
+    }
+  }
+
   private failConnection(error: Error): void {
     if (this.socket?.readyState === OPEN) return;
+    this.rejectPending(error);
+  }
+
+  private rejectPending(error: Error): void {
     for (const [key, pending] of this.unary) {
       pending.abortCleanup?.();
       pending.reject(error);
