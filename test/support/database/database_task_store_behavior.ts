@@ -4,8 +4,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DatabaseTaskStore } from '../../../src/server/database/task/store.js';
+import { DefaultRequestHandler } from '../../../src/server/request_handler/default_request_handler.js';
+import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
+import type { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
 import type { ServerCallContext } from '../../../src/server/context.js';
-import { TaskState, type Task } from '../../../src/types/pb/a2a.js';
+import { Role, TaskState, type AgentCard, type Task } from '../../../src/types/pb/a2a.js';
 import { DEFAULT_PAGE_SIZE } from '../../../src/constants.js';
 
 import { makeArtifact, makeContext, makeListRequest, makeMessage, makeTask } from './builders.js';
@@ -500,6 +503,114 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
       const renamed = new DatabaseTaskStore(harness.db(), { tableName: RENAMED_TABLE });
 
       await expect(renamed.load('task-1', context())).rejects.toThrow();
+    });
+  });
+
+  describe('with DefaultRequestHandler', () => {
+    const agentCard: AgentCard = {
+      name: 'Test Agent',
+      description: 'Test agent',
+      version: '1.0.0',
+      provider: undefined,
+      documentationUrl: '',
+      supportedInterfaces: [
+        {
+          url: 'http://localhost/a2a',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+      ],
+      capabilities: {
+        extensions: [],
+        streaming: true,
+        pushNotifications: false,
+      },
+      securitySchemes: {},
+      securityRequirements: [],
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: [],
+      signatures: [],
+    };
+
+    it('persists task events from sendMessage and reads the task back via getTask', async () => {
+      const context = makeContext({ tenant: 'acme', user: 'alice' });
+      const userMessage = makeMessage({ messageId: 'msg-user', taskId: '' });
+      const agentMessage = makeMessage({ messageId: 'msg-agent', role: Role.ROLE_AGENT });
+      const artifact = makeArtifact();
+
+      const executor: AgentExecutor = {
+        async execute(ctx, bus) {
+          const ids = { taskId: ctx.taskId, contextId: ctx.contextId };
+          bus.publish(
+            AgentEvent.task(
+              makeTask({
+                id: ctx.taskId,
+                contextId: ctx.contextId,
+                status: {
+                  state: TaskState.TASK_STATE_SUBMITTED,
+                  message: undefined,
+                  timestamp: undefined,
+                },
+              })
+            )
+          );
+          bus.publish(
+            AgentEvent.statusUpdate({
+              ...ids,
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                message: { ...agentMessage, ...ids },
+                timestamp: undefined,
+              },
+              metadata: undefined,
+            })
+          );
+          bus.publish(
+            AgentEvent.artifactUpdate({
+              ...ids,
+              artifact,
+              append: false,
+              lastChunk: true,
+              metadata: undefined,
+            })
+          );
+          bus.publish(
+            AgentEvent.statusUpdate({
+              ...ids,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              metadata: undefined,
+            })
+          );
+        },
+        async cancelTask() {},
+      };
+
+      const handler = new DefaultRequestHandler(agentCard, store, executor);
+      const result = (await handler.sendMessage(
+        {
+          tenant: 'acme',
+          message: userMessage,
+          configuration: undefined,
+          metadata: undefined,
+        },
+        context
+      )) as Task;
+
+      expect(result.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+
+      const stored = await store.load(result.id, context);
+      expect(stored?.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
+      expect(stored?.artifacts).toEqual([artifact]);
+      expect(stored?.history).toEqual([userMessage, { ...agentMessage, taskId: result.id }]);
+
+      const fetched = await handler.getTask({ id: result.id, tenant: 'acme' }, context);
+      expect(fetched).toEqual(stored);
     });
   });
 }
