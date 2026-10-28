@@ -15,6 +15,117 @@ export const SSE_HEADERS = {
   'X-Accel-Buffering': 'no', // Disable buffering in nginx
 } as const;
 
+/** Default keep-alive interval for server-side SSE streams (ms). */
+export const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
+
+/** Options for {@link writeSseStream}. */
+export interface SseStreamWriterOptions {
+  /**
+   * Keep-alive interval in ms. While no event has been written for this
+   * long, an SSE comment frame (`: keep-alive`) is emitted so proxies and
+   * load balancers do not terminate the idle connection.
+   * Defaults to {@link SSE_HEARTBEAT_INTERVAL_MS}.
+   */
+  heartbeatIntervalMs?: number;
+  /**
+   * Optional inactivity timeout in ms: if no event is written within this
+   * window, the stream is stopped (the caller ends the response). This
+   * bounds how long a half-dead client can hold server resources.
+   * `0` disables the timeout. Defaults to `0` (disabled).
+   */
+  idleTimeoutMs?: number;
+}
+
+/**
+ * Writes pre-formatted SSE frames (strings starting with `data: `) to an
+ * Express-style response, adding:
+ * - a monotonically increasing `id:` field to every data frame, so
+ *   clients can implement resumable subscriptions,
+ * - keep-alive comment frames while the stream is idle,
+ * - an optional inactivity timeout that stops the stream.
+ *
+ * The response is NOT ended by this helper — the caller owns
+ * `res.end()` (so stream errors can still be reported as SSE error
+ * frames before closing).
+ */
+export async function writeSseStream(
+  res: { write: (chunk: string) => unknown; writableEnded?: boolean },
+  frames: AsyncIterable<string>,
+  options: SseStreamWriterOptions = {}
+): Promise<void> {
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? SSE_HEARTBEAT_INTERVAL_MS;
+  const idleTimeoutMs = options.idleTimeoutMs ?? 0;
+
+  let eventId = 0;
+  let lastActivity = Date.now();
+  let stopped = false;
+
+  // Heartbeat: fires on the min(heartbeat, idle) cadence so an idle
+  // stream is detected at least as often as it would be heartbeated.
+  const heartbeatTimer = setInterval(
+    () => {
+      if (stopped || res.writableEnded) return;
+      const now = Date.now();
+      if (idleTimeoutMs > 0 && now - lastActivity >= idleTimeoutMs) {
+        // Idle too long — stop the loop; the caller ends the response.
+        stopped = true;
+        return;
+      }
+      if (now - lastActivity >= heartbeatIntervalMs) {
+        res.write(': keep-alive\n\n');
+        lastActivity = now;
+      }
+    },
+    Math.min(heartbeatIntervalMs, idleTimeoutMs > 0 ? idleTimeoutMs : heartbeatIntervalMs)
+  );
+  // Do not keep the process alive for a heartbeat alone.
+  (heartbeatTimer as unknown as { unref?: () => void }).unref?.();
+
+  try {
+    const iterator = frames[Symbol.asyncIterator]();
+    for (;;) {
+      if (stopped || res.writableEnded) break;
+
+      let idleSignal: Promise<'idle'> | undefined;
+      let idleTimer: NodeJS.Timeout | undefined;
+      if (idleTimeoutMs > 0) {
+        let resolveIdle: ((value: 'idle' | PromiseLike<'idle'>) => void) | undefined;
+        idleSignal = new Promise<'idle'>((resolve) => {
+          resolveIdle = resolve;
+        });
+        idleTimer = setTimeout(() => resolveIdle?.('idle'), idleTimeoutMs);
+      }
+
+      const nextPromise = iterator.next();
+      // If the idle timer wins the race, `nextPromise` is abandoned —
+      // attach a handled branch so a late rejection is not an unhandled
+      // rejection.
+      void nextPromise.catch(() => {});
+
+      let result: Awaited<typeof nextPromise> | 'idle';
+      if (idleSignal) {
+        result = await Promise.race([nextPromise, idleSignal.then(() => 'idle' as const)]);
+        clearTimeout(idleTimer);
+      } else {
+        result = await nextPromise;
+      }
+      if (result === 'idle') {
+        stopped = true;
+        break;
+      }
+      if (result.done) break;
+      if (stopped || res.writableEnded) break;
+
+      eventId += 1;
+      lastActivity = Date.now();
+      res.write(`id: ${eventId}\n${result.value}`);
+    }
+  } finally {
+    stopped = true;
+    clearInterval(heartbeatTimer);
+  }
+}
+
 // ============================================================================
 // SSE Event Types
 // ============================================================================
