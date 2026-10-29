@@ -1,12 +1,10 @@
 import { vi, type Mock, type MockInstance } from 'vitest';
 import { AgentExecutor } from '../../../src/server/agent_execution/agent_executor.js';
-import { RequestContext, ExecutionEventBus } from '../../../src/server/index.js';
+import { TaskState } from '../../../src/types/pb/a2a.js';
+import { RequestContext } from '../../../src/server/agent_execution/request_context.js';
+import { ExecutionEventBus, AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 
-/**
- * A mock implementation of AgentExecutor to control agent behavior during tests.
- */
 export class MockAgentExecutor implements AgentExecutor {
-  // Stubs to control and inspect calls to execute and cancelTask
   public execute: Mock<
     (requestContext: RequestContext, eventBus: ExecutionEventBus) => Promise<void>
   > = vi.fn();
@@ -14,45 +12,42 @@ export class MockAgentExecutor implements AgentExecutor {
   public cancelTask: Mock<(taskId: string, eventBus: ExecutionEventBus) => Promise<void>> = vi.fn();
 }
 
-/**
- * Fake implementation of the task execution events.
- */
 export const fakeTaskExecute = async (ctx: RequestContext, bus: ExecutionEventBus) => {
   const taskId = ctx.taskId;
   const contextId = ctx.contextId;
 
-  // Publish task creation
-  bus.publish({
-    id: taskId,
-    contextId,
-    status: { state: 'submitted' },
-    kind: 'task',
-  });
+  bus.publish(
+    AgentEvent.task({
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    })
+  );
 
-  // Publish working status
-  bus.publish({
-    taskId,
-    contextId,
-    kind: 'status-update',
-    status: { state: 'working' },
-    final: false,
-  });
+  bus.publish(
+    AgentEvent.statusUpdate({
+      taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      metadata: {},
+    })
+  );
 
-  // Publish completion
-  bus.publish({
-    taskId,
-    contextId,
-    kind: 'status-update',
-    status: { state: 'completed' },
-    final: true,
-  });
+  bus.publish(
+    AgentEvent.statusUpdate({
+      taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      metadata: {},
+    })
+  );
 
   bus.finished();
 };
 
-/**
- * A realistic mock of AgentExecutor for cancellation tests.
- */
 export class CancellableMockAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
   public cancelTaskSpy: MockInstance;
@@ -65,56 +60,62 @@ export class CancellableMockAgentExecutor implements AgentExecutor {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
 
-    eventBus.publish({
-      id: taskId,
-      contextId,
-      status: { state: 'submitted' },
-      kind: 'task',
-    });
-    eventBus.publish({
-      taskId,
-      contextId,
-      kind: 'status-update',
-      status: { state: 'working' },
-      final: false,
-    });
+    eventBus.publish(
+      AgentEvent.task({
+        id: taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      })
+    );
+    eventBus.publish(
+      AgentEvent.statusUpdate({
+        taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+      })
+    );
 
-    // Simulate a long-running process
     for (let i = 0; i < 5; i++) {
       if (this.cancelledTasks.has(taskId)) {
-        eventBus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'canceled' },
-          final: true,
-        });
+        eventBus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_CANCELED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            metadata: {},
+          })
+        );
         eventBus.finished();
         return;
       }
-      // Use fake timers to simulate work
-      await vi.advanceTimersByTimeAsync(100);
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
-    eventBus.publish({
-      taskId,
-      contextId,
-      kind: 'status-update',
-      status: { state: 'completed' },
-      final: true,
-    });
+    eventBus.publish(
+      AgentEvent.statusUpdate({
+        taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+        metadata: {},
+      })
+    );
     eventBus.finished();
   }
 
   public async cancelTask(taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
     this.cancelledTasks.add(taskId);
-    // The execute loop is responsible for publishing the final state
+    // execute() publishes the final cancellation status.
   }
 }
 
-/**
- * A realistic mock of AgentExecutor for failed cancellation tests.
- */
 export class FailingCancellableMockAgentExecutor implements AgentExecutor {
   private cancelledTasks = new Set<string>();
   public cancelTaskSpy: MockInstance;
@@ -127,48 +128,57 @@ export class FailingCancellableMockAgentExecutor implements AgentExecutor {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
 
-    eventBus.publish({
-      id: taskId,
-      contextId,
-      status: { state: 'submitted' },
-      kind: 'task',
-    });
-    eventBus.publish({
-      taskId,
-      contextId,
-      kind: 'status-update',
-      status: { state: 'working' },
-      final: false,
-    });
+    eventBus.publish(
+      AgentEvent.task({
+        id: taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_SUBMITTED, message: undefined, timestamp: undefined },
+        artifacts: [],
+        history: [],
+        metadata: {},
+      })
+    );
+    eventBus.publish(
+      AgentEvent.statusUpdate({
+        taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+        metadata: {},
+      })
+    );
 
-    // Simulate a long-running process
     for (let i = 0; i < 5; i++) {
       if (this.cancelledTasks.has(taskId)) {
-        eventBus.publish({
-          taskId,
-          contextId,
-          kind: 'status-update',
-          status: { state: 'canceled' },
-          final: true,
-        });
+        eventBus.publish(
+          AgentEvent.statusUpdate({
+            taskId,
+            contextId,
+            status: {
+              state: TaskState.TASK_STATE_CANCELED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            metadata: {},
+          })
+        );
         eventBus.finished();
         return;
       }
-      // Use fake timers to simulate work
-      await vi.advanceTimersByTimeAsync(100);
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
-    eventBus.publish({
-      taskId,
-      contextId,
-      kind: 'status-update',
-      status: { state: 'completed' },
-      final: true,
-    });
+    eventBus.publish(
+      AgentEvent.statusUpdate({
+        taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+        metadata: {},
+      })
+    );
     eventBus.finished();
   }
 
   public async cancelTask(_taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
-    // No operation: simulates the failure of task cancellation
+    // No-op: simulates a cancellation that never publishes.
   }
 }

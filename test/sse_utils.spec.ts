@@ -3,9 +3,6 @@ import { formatSSEEvent, formatSSEErrorEvent, parseSseStream, SseEvent } from '.
 
 const MOCK_CHUNK_SIZE = 2;
 
-/**
- * Creates a ReadableStream from chunks of Uint8Array data.
- */
 function createStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   let chunkIndex = 0;
   return new ReadableStream({
@@ -20,9 +17,6 @@ function createStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   });
 }
 
-/**
- * Encodes a string into chunks of Uint8Array data.
- */
 function encodeChunks(data: string): Uint8Array[] {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
@@ -32,10 +26,6 @@ function encodeChunks(data: string): Uint8Array[] {
   return chunks;
 }
 
-/**
- * Creates a mock Response object from SSE-formatted strings.
- * Used to test that the parser can understand what the formatter produces.
- */
 function createMockResponse(sseData: string): Response {
   const chunks = encodeChunks(sseData);
   return new Response(createStream(chunks), {
@@ -43,11 +33,8 @@ function createMockResponse(sseData: string): Response {
   });
 }
 
-/**
- * Creates a mock Response where the decoded stream has no native async iterator.
- * Simulates environments where ReadableStream async iteration is not supported.
- * @see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
- */
+// Simulates environments where ReadableStream async iteration is not supported.
+// See https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream#browser_compatibility
 function createMockResponseWithoutAsyncIterator(sseData: string): Response {
   const chunks = encodeChunks(sseData);
   const stream = createStream(chunks);
@@ -63,6 +50,33 @@ function createMockResponseWithoutAsyncIterator(sseData: string): Response {
     headers: { 'Content-Type': 'text/event-stream' },
   });
 }
+
+// The teardown tests observe the leak fix by watching the source stream's
+// `cancel` callback fire through `parseSseStream`'s internal
+// `pipeThrough(TextDecoderStream)`. Some runtimes (notably the Cloudflare
+// Workers test pool / workerd) do not propagate a TextDecoderStream cancel to
+// the upstream source, so that signal is unobservable there even though the
+// fix runs. Probe the capability once and gate the assertions on it — the
+// leak matters most under Node/undici, where the probe passes.
+async function cancelPropagatesThroughTextDecoder(): Promise<boolean> {
+  let cancelled = false;
+  const source = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1]));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  // Mirror parseSseStream: pipe the response body through a TextDecoderStream.
+  const body = new Response(source).body;
+  if (!body) return false;
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  await reader.read();
+  await reader.cancel().catch(() => {});
+  return cancelled;
+}
+const CANCEL_PROPAGATES = await cancelPropagatesThroughTextDecoder();
 
 describe('SSE Utils', () => {
   describe('formatSSEEvent', () => {
@@ -138,6 +152,116 @@ describe('SSE Utils', () => {
       expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
       expect(JSON.parse(events[1].data)).toEqual({ id: 2 });
     });
+
+    it('joins multiple consecutive data: lines per the SSE spec', async () => {
+      // Per the HTML SSE spec: when an event has more than one `data:`
+      // field, the user-agent concatenates them with `\n`. This is what
+      // pretty-printing JSON via sse_starlette (a2a-python) produces.
+      const sseData = 'data: {\ndata:   "id": 1\ndata: }\n\n';
+      const response = createResponse(sseData);
+
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(1);
+      expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
+    });
+
+    it('ignores SSE comment lines (lines starting with `:`)', async () => {
+      // Per SSE: lines starting with `:` are comments / heartbeats and
+      // must be ignored. Common with proxies (nginx) and Python ASGI
+      // servers (sse_starlette) emitting `: ping\n\n` to keep
+      // connections warm.
+      const sseData = ': ping\ndata: {"id":1}\n\n: another\ndata: {"id":2}\n\n';
+      const response = createResponse(sseData);
+
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(2);
+      expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
+      expect(JSON.parse(events[1].data)).toEqual({ id: 2 });
+    });
+
+    it('handles \\r\\n line endings', async () => {
+      // Per the SSE spec, lines may end with `\r\n`, `\r`, or `\n`. Our
+      // tokenizer splits on `\n` and strips an optional trailing `\r`
+      // — this exercises the `\r`-stripping branch.
+      const sseData = 'data: {"id":1}\r\n\r\n';
+      const response = createResponse(sseData);
+
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(1);
+      expect(JSON.parse(events[0].data)).toEqual({ id: 1 });
+    });
+  });
+
+  describe('parseSseStream teardown', () => {
+    it.runIf(CANCEL_PROPAGATES)(
+      'cancels the underlying stream when the consumer stops early',
+      async () => {
+        // An early break must cancel the response body, not just release the lock.
+        let sourceCancelled = false;
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            // One event, then stay open — a long-lived SSE connection.
+            controller.enqueue(new TextEncoder().encode('data: {"id":1}\n\n'));
+          },
+          cancel() {
+            sourceCancelled = true;
+          },
+        });
+        const response = new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+
+        const seen: SseEvent[] = [];
+        for await (const event of parseSseStream(response)) {
+          seen.push(event);
+          break;
+        }
+
+        expect(seen).toHaveLength(1);
+        expect(sourceCancelled).toBe(true);
+      }
+    );
+
+    it.runIf(CANCEL_PROPAGATES)(
+      'cancels the underlying stream when the consumer throws',
+      async () => {
+        let sourceCancelled = false;
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"id":1}\n\n'));
+          },
+          cancel() {
+            sourceCancelled = true;
+          },
+        });
+        const response = new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+
+        await expect(
+          (async () => {
+            for await (const event of parseSseStream(response)) {
+              expect(event.data).toBe('{"id":1}');
+              throw new Error('consumer boom');
+            }
+          })()
+        ).rejects.toThrow('consumer boom');
+
+        expect(sourceCancelled).toBe(true);
+      }
+    );
   });
 
   describe('Symmetry: parser understands formatter output', () => {
@@ -209,6 +333,57 @@ describe('SSE Utils', () => {
       expect(JSON.parse(parsedEvents[0].data)).toEqual(dataEvent);
       expect(parsedEvents[1].type).toBe('error');
       expect(JSON.parse(parsedEvents[1].data)).toEqual(errorEvent);
+    });
+  });
+
+  // A2A clients stream from remote, potentially untrusted servers. A hostile
+  // server that never terminates a line — or an event — would grow an
+  // in-memory buffer without bound (CWE-400). parseSseStream caps both.
+  describe('parseSseStream size bound (DoS guard)', () => {
+    async function drain(response: Response, maxEventSizeBytes?: number): Promise<SseEvent[]> {
+      const events: SseEvent[] = [];
+      for await (const event of parseSseStream(response, maxEventSizeBytes)) {
+        events.push(event);
+      }
+      return events;
+    }
+
+    it('throws when a single line never terminates and exceeds the limit', async () => {
+      // No newline anywhere: the residual partial line grows past the cap.
+      const response = createMockResponse('data: ' + 'A'.repeat(1000));
+
+      await expect(drain(response, 100)).rejects.toThrow(/SSE line exceeded the maximum/);
+    });
+
+    it('throws when an oversized line is terminated and arrives in one chunk', async () => {
+      // Delivered whole so the newline is present before the residual check —
+      // exercises the in-loop guard the residual check alone would miss.
+      const stream = createStream([new TextEncoder().encode(': ' + 'A'.repeat(1000) + '\n')]);
+      const response = new Response(stream, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+
+      await expect(drain(response, 100)).rejects.toThrow(/SSE line exceeded the maximum/);
+    });
+
+    it('throws when accumulated data lines exceed the limit before a blank line', async () => {
+      // Many consecutive `data:` lines with no terminating blank line: the
+      // joined event data grows past the cap.
+      let sse = '';
+      for (let i = 0; i < 200; i++) sse += `data: ${'A'.repeat(20)}\n`;
+      const response = createMockResponse(sse);
+
+      await expect(drain(response, 100)).rejects.toThrow(/SSE event data exceeded the maximum/);
+    });
+
+    it('parses a well-formed event that stays within the limit', async () => {
+      const event = { kind: 'message', text: 'hello' };
+      const response = createMockResponse(formatSSEEvent(event));
+
+      const events = await drain(response, 1024);
+
+      expect(events).toHaveLength(1);
+      expect(JSON.parse(events[0].data)).toEqual(event);
     });
   });
 });

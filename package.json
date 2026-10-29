@@ -1,6 +1,6 @@
 {
   "name": "@a2a-js/sdk",
-  "version": "0.3.13",
+  "version": "1.3.0",
   "description": "Server & Client SDK for Agent2Agent protocol",
   "license": "Apache-2.0",
   "repository": {
@@ -8,13 +8,19 @@
     "url": "git+https://github.com/a2aproject/a2a-js.git"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
   "typesVersions": {
     "*": {
+      "errors": [
+        "./dist/errors/index.d.ts"
+      ],
+      "errors/grpc": [
+        "./dist/errors/grpc/index.d.ts"
+      ],
       "server": [
         "./dist/server/index.d.ts"
       ],
@@ -24,11 +30,32 @@
       "server/grpc": [
         "./dist/server/grpc/index.d.ts"
       ],
+      "server/database": [
+        "./dist/server/database/index.d.ts"
+      ],
       "client": [
         "./dist/client/index.d.ts"
       ],
       "client/grpc": [
         "./dist/client/transports/grpc/index.d.ts"
+      ],
+      "compat/v0_3": [
+        "./dist/compat/v0_3/index.d.ts"
+      ],
+      "compat/v0_3/server": [
+        "./dist/compat/v0_3/server/index.d.ts"
+      ],
+      "compat/v0_3/server/express": [
+        "./dist/compat/v0_3/server/express/index.d.ts"
+      ],
+      "compat/v0_3/server/grpc": [
+        "./dist/compat/v0_3/server/grpc/index.d.ts"
+      ],
+      "compat/v0_3/client": [
+        "./dist/compat/v0_3/client/index.d.ts"
+      ],
+      "compat/v0_3/client/grpc": [
+        "./dist/compat/v0_3/client/transports/grpc/index.d.ts"
       ]
     }
   },
@@ -37,6 +64,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "import": "./dist/errors/index.js",
+      "require": "./dist/errors/index.cjs"
+    },
+    "./errors/grpc": {
+      "types": "./dist/errors/grpc/index.d.ts",
+      "import": "./dist/errors/grpc/index.js",
+      "require": "./dist/errors/grpc/index.cjs"
     },
     "./server": {
       "types": "./dist/server/index.d.ts",
@@ -53,6 +90,11 @@
       "import": "./dist/server/grpc/index.js",
       "require": "./dist/server/grpc/index.cjs"
     },
+    "./server/database": {
+      "types": "./dist/server/database/index.d.ts",
+      "import": "./dist/server/database/index.js",
+      "require": "./dist/server/database/index.cjs"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
@@ -62,67 +104,136 @@
       "types": "./dist/client/transports/grpc/index.d.ts",
       "import": "./dist/client/transports/grpc/index.js",
       "require": "./dist/client/transports/grpc/index.cjs"
+    },
+    "./compat/v0_3": {
+      "types": "./dist/compat/v0_3/index.d.ts",
+      "import": "./dist/compat/v0_3/index.js",
+      "require": "./dist/compat/v0_3/index.cjs"
+    },
+    "./compat/v0_3/server": {
+      "types": "./dist/compat/v0_3/server/index.d.ts",
+      "import": "./dist/compat/v0_3/server/index.js",
+      "require": "./dist/compat/v0_3/server/index.cjs"
+    },
+    "./compat/v0_3/server/express": {
+      "types": "./dist/compat/v0_3/server/express/index.d.ts",
+      "import": "./dist/compat/v0_3/server/express/index.js",
+      "require": "./dist/compat/v0_3/server/express/index.cjs"
+    },
+    "./compat/v0_3/server/grpc": {
+      "types": "./dist/compat/v0_3/server/grpc/index.d.ts",
+      "import": "./dist/compat/v0_3/server/grpc/index.js",
+      "require": "./dist/compat/v0_3/server/grpc/index.cjs"
+    },
+    "./compat/v0_3/client": {
+      "types": "./dist/compat/v0_3/client/index.d.ts",
+      "import": "./dist/compat/v0_3/client/index.js",
+      "require": "./dist/compat/v0_3/client/index.cjs"
+    },
+    "./compat/v0_3/client/grpc": {
+      "types": "./dist/compat/v0_3/client/transports/grpc/index.d.ts",
+      "import": "./dist/compat/v0_3/client/transports/grpc/index.js",
+      "require": "./dist/compat/v0_3/client/transports/grpc/index.cjs"
     }
   },
   "files": [
     "dist",
     "!dist/**/*.map",
+    "!dist/tmp-checks",
     "README.md"
   ],
   "devDependencies": {
-    "@betterer/cli": "^6.0.0-alpha.1",
-    "@betterer/typescript": "^6.0.0-alpha.1",
     "@bufbuild/buf": "^1.61.0",
     "@bufbuild/protobuf": "^2.10.2",
-    "@cloudflare/vitest-pool-workers": "^0.12.5",
+    "@cloudflare/vitest-plugin": "^1.4.2",
+    "@cloudflare/workers-types": "^5.20261015.1",
     "@eslint/js": "^9.39.1",
-    "@grpc/grpc-js": "^1.11.0",
+    "@grpc/grpc-js": "^1.14.5",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.14",
     "@types/supertest": "^6.0.3",
-    "@vitest/coverage-v8": "^3.2.4",
-    "esbuild": "^0.27.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "better-sqlite3": "^13.0.3",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "express": "^5.1.0",
     "json-schema-to-typescript": "^15.0.4",
+    "kysely": "^0.29.5",
+    "kysely-d1": "^0.4.0",
+    "mysql2": "^3.24.3",
+    "pg": "^8.23.0",
     "prettier": "^3.6.2",
     "supertest": "^7.1.4",
     "tsup": "^8.5.0",
     "tsx": "^4.19.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "test:edge": "vitest run --config vitest.edge.config.ts",
-    "lint": "tsc --noEmit && npx eslint . --fix && betterer precommit",
-    "lint:ci": "tsc --noEmit && npx eslint . && betterer ci",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:db": "./scripts/run_db_tests.sh",
+    "test:package": "./scripts/package_smoke_test.sh",
+    "install:samples": "npm --prefix src/samples install",
+    "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint . --fix",
+    "lint:ci": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint .",
     "format:readme": "prettier --write ./README.md",
     "coverage": "vitest run --coverage",
-    "generate": "curl https://raw.githubusercontent.com/google-a2a/A2A/refs/heads/main/specification/json/a2a.json > spec.json && node scripts/generateTypes.js && rm spec.json",
-    "test-build": "esbuild ./dist/client/index.js ./dist/server/index.js ./dist/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist"
+    "generate": "cd src/types && npx buf generate",
+    "generate:compat": "curl -fSL https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
+    "test-build:workers-safe": "esbuild ./dist/index.js ./dist/errors/index.js ./dist/client/index.js ./dist/server/index.js ./dist/compat/v0_3/index.js ./dist/compat/v0_3/client/index.js ./dist/compat/v0_3/server/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
+    "test-build:grpc": "esbuild ./dist/errors/grpc/index.js ./dist/server/grpc/index.js ./dist/client/transports/grpc/index.js ./dist/compat/v0_3/server/grpc/index.js ./dist/compat/v0_3/client/transports/grpc/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
+    "test-build:express": "esbuild ./dist/server/express/index.js ./dist/compat/v0_3/server/express/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
+    "test-build:database": "esbuild ./dist/server/database/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
+    "test-build": "npm run test-build:workers-safe && npm run test-build:grpc && npm run test-build:express && npm run test-build:database",
+    "itk-agent": "tsx itk/itk_agent.ts"
   },
   "dependencies": {
-    "uuid": "^11.1.0"
+    "jose": "^6.2.3"
   },
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.10.2",
     "@grpc/grpc-js": "^1.11.0",
-    "express": "^4.21.2 || ^5.1.0"
+    "better-sqlite3": "^12.0.0 || ^13.0.0",
+    "express": "^4.21.2 || ^5.1.0",
+    "kysely": "^0.28.17 || ^0.29.0",
+    "mysql2": "^3.0.0",
+    "pg": "^8.0.0"
   },
   "peerDependenciesMeta": {
-    "express": {
+    "@bufbuild/protobuf": {
       "optional": true
     },
     "@grpc/grpc-js": {
       "optional": true
     },
-    "@bufbuild/protobuf": {
+    "better-sqlite3": {
       "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "kysely": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
+  },
+  "bin": {
+    "a2a-db": "./dist/cli/a2a_db.js"
+  },
+  "overrides": {
+    "tsup": {
+      "esbuild": "$esbuild"
     }
   }
 }

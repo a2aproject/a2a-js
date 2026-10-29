@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "NodeNext",
+    "skipLibCheck": true,
+    "rootDir": ".",
+    "outDir": "build",
+    "sourceMap": true,
+    "declaration": true,
+    "esModuleInterop": true, // Often helpful with NodeNext
+    "resolveJsonModule": true, // Good practice for importing JSON if needed
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true
+  }
+}

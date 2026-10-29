@@ -1,5 +1,5 @@
-import { TaskStatusUpdateEvent } from '../../types.js';
 import { ExecutionEventBus, AgentExecutionEvent } from './execution_event_bus.js';
+import { INPUT_REQUIRED_STATE_LIST, TERMINAL_STATE_LIST } from '../utils.js';
 
 /**
  * An async queue that subscribes to an ExecutionEventBus for events
@@ -31,8 +31,13 @@ export class ExecutionEventQueue {
   };
 
   /**
-   * Provides an async generator that yields events from the event bus.
-   * Stops when a Message event is received or a TaskStatusUpdateEvent with final=true is received.
+   * Async generator yielding events from the bus. Terminates on Message,
+   * terminal Task status, or INPUT_REQUIRED. AUTH_REQUIRED is deliberately
+   * NOT in the stop set: the executor resumes publishing on the same bus
+   * after the out-of-band credential injection, so the queue must stay
+   * drainable. Blocking callers return a snapshot at AUTH_REQUIRED via a
+   * separate code path and a background consumer keeps draining until a
+   * terminal state is reached.
    */
   public async *events(): AsyncGenerator<AgentExecutionEvent, void, undefined> {
     while (!this.stopped || this.eventQueue.length > 0) {
@@ -41,7 +46,10 @@ export class ExecutionEventQueue {
         yield event;
         if (
           event.kind === 'message' ||
-          (event.kind === 'status-update' && (event as TaskStatusUpdateEvent).final)
+          (event.kind === 'statusUpdate' &&
+            event.data.status &&
+            (TERMINAL_STATE_LIST.includes(event.data.status.state) ||
+              INPUT_REQUIRED_STATE_LIST.includes(event.data.status.state)))
         ) {
           this.handleFinished();
           break;
@@ -54,9 +62,6 @@ export class ExecutionEventQueue {
     }
   }
 
-  /**
-   * Stops the event queue from processing further events.
-   */
   public stop(): void {
     this.stopped = true;
     if (this.resolvePromise) {

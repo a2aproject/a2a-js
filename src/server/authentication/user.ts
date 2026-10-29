@@ -1,21 +1,12 @@
-/**
- * Represents a user accessing A2A server.
- */
+/** A user accessing the A2A server. */
 export interface User {
-  /**
-   * Indicates whether the user is authenticated.
-   */
   get isAuthenticated(): boolean;
 
-  /**
-   * A unique name (identifier) for the user.
-   */
+  /** A unique identifier for the user. */
   get userName(): string;
 }
 
-/**
- * An implementation of {@link User} representing an unauthenticated user.
- */
+/** {@link User} representing an unauthenticated caller. */
 export class UnauthenticatedUser implements User {
   get isAuthenticated(): boolean {
     return false;

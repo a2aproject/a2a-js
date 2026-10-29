@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { AGENT_CARD_PATH, AgentCard } from '../../index.js';
+import { A2A_PROTOCOL_VERSION, AGENT_CARD_PATH, AgentCard } from '../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -8,7 +8,7 @@ import {
   DefaultRequestHandler,
 } from '../../server/index.js';
 import { jsonRpcHandler, agentCardHandler, UserBuilder } from '../../server/express/index.js';
-import { TimestampingAgentExecutor } from './extensions.js';
+import { TimestampingAgentExecutor, EXTENSION_URI } from './extensions.js';
 import { SampleAgentExecutor } from '../agents/sample-agent/agent_executor.js';
 
 // --- Server Setup ---
@@ -17,18 +17,31 @@ const extensionAgentCard: AgentCard = {
   name: 'Sample Agent with timestamp extensions',
   description:
     'A sample agent to test the stream functionality and simulate the flow of tasks statuses, with extensions integration.',
-  url: 'http://localhost:41241/',
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: A2A_PROTOCOL_VERSION,
+    },
+  ],
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples', // Added provider URL
+    url: 'https://example.com/a2a-samples',
   },
-  version: '1.0.0', // Incremented version
-  protocolVersion: '0.3.0',
+  version: '1.0.0',
   capabilities: {
-    extensions: [{ uri: 'https://github.com/a2aproject/a2a-js/src/samples/extensions/v1' }],
-    streaming: true, // The new framework supports streaming
-    pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
+    extensions: [
+      {
+        uri: EXTENSION_URI,
+        description: 'Timestamp extension',
+        required: false,
+        params: {},
+      },
+    ],
+    streaming: true,
+    pushNotifications: false,
+    extendedAgentCard: false,
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
@@ -41,9 +54,13 @@ const extensionAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
+      securityRequirements: [],
     },
   ],
-  supportsAuthenticatedExtendedCard: false,
+  documentationUrl: 'https://example.com/docs',
+  securityRequirements: [],
+  securitySchemes: {},
+  signatures: [],
 };
 
 async function main() {

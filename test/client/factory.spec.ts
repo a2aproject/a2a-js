@@ -1,28 +1,41 @@
 import { describe, it, beforeEach, expect, vi, Mock } from 'vitest';
 import { ClientFactory, ClientFactoryOptions } from '../../src/client/factory.js';
 import { Transport } from '../../src/client/transports/transport.js';
-import { JsonRpcTransportFactory } from '../../src/client/transports/json_rpc_transport.js';
-import { AgentCard } from '../../src/types.js';
+import { TenantTransportDecorator } from '../../src/client/transports/tenant_transport_decorator.js';
+import { AgentCard } from '../../src/index.js';
 import { Client } from '../../src/client/multitransport-client.js';
 import { CallInterceptor } from '../../src/client/interceptors.js';
+import {
+  JsonRpcTransport,
+  JsonRpcTransportFactory,
+} from '../../src/client/transports/json_rpc_transport.js';
+import { LegacyJsonRpcTransport } from '../../src/compat/v0_3/client/transports/json_rpc_transport.js';
+import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
+import { RestTransportFactory } from '../../src/client/transports/rest_transport.js';
 
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
   let mockTransportFactory2: { protocolName: string; create: Mock };
-  let mockTransport: Record<keyof Transport, Mock>;
+  let mockTransport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
+    protocolName: string;
+    protocolVersion: string;
+  };
 
   beforeEach(() => {
     mockTransport = {
       getExtendedAgentCard: vi.fn(),
       sendMessage: vi.fn(),
       sendMessageStream: vi.fn(),
-      setTaskPushNotificationConfig: vi.fn(),
+      createTaskPushNotificationConfig: vi.fn(),
       getTaskPushNotificationConfig: vi.fn(),
       listTaskPushNotificationConfig: vi.fn(),
       deleteTaskPushNotificationConfig: vi.fn(),
       getTask: vi.fn(),
       cancelTask: vi.fn(),
+      listTasks: vi.fn(),
       resubscribeTask: vi.fn(),
+      protocolName: 'MockTransport',
+      protocolVersion: '1.0',
     };
 
     mockTransportFactory1 = {
@@ -75,10 +88,9 @@ describe('ClientFactory', () => {
     it('should accept preferred transport with different case', () => {
       const options: ClientFactoryOptions = {
         transports: [mockTransportFactory1],
-        preferredTransports: ['transport1'], // lowercase, but Transport1 is registered
+        preferredTransports: ['transport1'],
       };
 
-      // Should not throw
       const factory = new ClientFactory(options);
 
       expect(factory.options).to.equal(options);
@@ -86,11 +98,11 @@ describe('ClientFactory', () => {
 
     it('should detect duplicate transports with different case as duplicates', () => {
       const transport1Lower = {
-        protocolName: 'transport1', // lowercase
+        protocolName: 'transport1',
         create: vi.fn(),
       };
       const options: ClientFactoryOptions = {
-        transports: [mockTransportFactory1, transport1Lower], // Transport1 and transport1
+        transports: [mockTransportFactory1, transport1Lower],
       };
 
       expect(() => new ClientFactory(options)).to.throw('Duplicate protocol name: transport1');
@@ -102,16 +114,30 @@ describe('ClientFactory', () => {
 
     beforeEach(() => {
       agentCard = {
-        protocolVersion: '0.3.0',
         name: 'Test Agent',
         description: 'Test',
-        url: 'http://transport1.com',
-        preferredTransport: 'Transport1',
         version: '1.0.0',
-        capabilities: {},
+        supportedInterfaces: [
+          {
+            url: 'http://transport1.com',
+            protocolBinding: 'Transport1',
+            tenant: '',
+            protocolVersion: '1.0.0',
+          },
+        ],
+        capabilities: {
+          extensions: [],
+          streaming: true,
+          pushNotifications: true,
+        },
         defaultInputModes: [],
         defaultOutputModes: [],
         skills: [],
+        documentationUrl: 'http://test-agent.com/docs',
+        securityRequirements: [],
+        securitySchemes: {},
+        signatures: [],
+        provider: { url: '', organization: '' },
       };
     });
 
@@ -127,8 +153,116 @@ describe('ClientFactory', () => {
       );
     });
 
+    describe.each(['JSONRPC', 'HTTP+JSON'])('%s interface preference', (protocolBinding) => {
+      it.each([
+        { versions: ['1.0', '1.0'], selectedIndex: 0 },
+        { versions: ['0.3', '1.0', '1.0'], selectedIndex: 1 },
+        { versions: ['1.0', '0.3', '1.0'], selectedIndex: 0 },
+        { versions: ['0.3', '0.3'], selectedIndex: 0 },
+      ])(
+        'selects interface $selectedIndex for versions $versions',
+        async ({ versions, selectedIndex }) => {
+          const card = AgentCard.fromJSON({
+            name: 'Interface order test',
+            version: '1.0.0',
+            supportedInterfaces: versions.map((protocolVersion, index) => ({
+              url: `https://agent.example/endpoint-${index}`,
+              protocolBinding: index === 0 ? protocolBinding : protocolBinding.toLowerCase(),
+              protocolVersion,
+            })),
+          });
+          const result = {
+            id: 'task-1',
+            contextId: 'context-1',
+            status: {
+              state:
+                protocolBinding === 'JSONRPC' && versions[selectedIndex] === '0.3'
+                  ? 'completed'
+                  : 'TASK_STATE_COMPLETED',
+            },
+          };
+          const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
+            if (protocolBinding === 'JSONRPC') {
+              const request = JSON.parse(init?.body as string);
+              return Response.json({ jsonrpc: '2.0', id: request.id, result });
+            }
+            return Response.json(result);
+          });
+          const options = { fetchImpl, legacyCompat: { enabled: true } };
+          const factory = new ClientFactory({
+            transports: [
+              protocolBinding === 'JSONRPC'
+                ? new JsonRpcTransportFactory(options)
+                : new RestTransportFactory(options),
+            ],
+          });
+
+          const client = await factory.createFromAgentCard(card);
+          const task = await client.getTask({ id: 'task-1', tenant: '' });
+
+          expect(task.id).toBe('task-1');
+          expect(client.transport.protocolVersion).toBe(versions[selectedIndex]);
+          expect(fetchImpl).toHaveBeenCalledOnce();
+          const expectedEndpoint = card.supportedInterfaces[selectedIndex].url;
+          const restPath = versions[selectedIndex] === '0.3' ? '/v1/tasks/task-1' : '/tasks/task-1';
+          expect(fetchImpl.mock.calls[0][0]).toBe(
+            protocolBinding === 'JSONRPC' ? expectedEndpoint : `${expectedEndpoint}${restPath}`
+          );
+        }
+      );
+    });
+
+    it('should preserve the first interface and tenant within the preferred transport', async () => {
+      const card = AgentCard.fromJSON({
+        name: 'Preferred transport order test',
+        version: '1.0.0',
+        supportedInterfaces: [
+          { url: 'https://agent.example/rpc', protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+          {
+            url: 'https://agent.example/rest-primary',
+            protocolBinding: 'HTTP+JSON',
+            protocolVersion: '1.0',
+            tenant: 'primary-tenant',
+          },
+          {
+            url: 'https://agent.example/rest-backup',
+            protocolBinding: 'http+json',
+            protocolVersion: '1.0',
+            tenant: 'backup-tenant',
+          },
+        ],
+      });
+      const fetchImpl = vi.fn<typeof fetch>(async () =>
+        Response.json({
+          id: 'task-1',
+          contextId: 'context-1',
+          status: { state: 'TASK_STATE_COMPLETED' },
+        })
+      );
+      const factory = new ClientFactory({
+        transports: [
+          new JsonRpcTransportFactory({ fetchImpl }),
+          new RestTransportFactory({ fetchImpl }),
+        ],
+        preferredTransports: ['http+json'],
+      });
+
+      const client = await factory.createFromAgentCard(card);
+      await client.getTask({ id: 'task-1', tenant: '' });
+
+      expect(fetchImpl).toHaveBeenCalledOnce();
+      expect(fetchImpl.mock.calls[0][0]).toBe(
+        'https://agent.example/rest-primary/primary-tenant/tasks/task-1'
+      );
+    });
+
     it('should use factory preferred transport if available', async () => {
-      agentCard.additionalInterfaces = [{ transport: 'Transport2', url: 'http://transport2.com' }];
+      agentCard.supportedInterfaces.push({
+        url: 'http://transport2.com',
+        protocolBinding: 'Transport2',
+        tenant: '',
+        protocolVersion: '1.0.0',
+      });
       const factory = new ClientFactory({
         transports: [mockTransportFactory1, mockTransportFactory2],
         preferredTransports: ['Transport2'],
@@ -141,7 +275,14 @@ describe('ClientFactory', () => {
 
     it('should throw error if no compatible transport found', async () => {
       const factory = new ClientFactory({ transports: [mockTransportFactory1] });
-      agentCard.preferredTransport = 'Transport2'; // Not supported
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport2.com',
+          protocolBinding: 'Transport2',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
 
       try {
         await factory.createFromAgentCard(agentCard);
@@ -154,25 +295,12 @@ describe('ClientFactory', () => {
     it('should fallback to default transport if preferred transport is missing but default supported', async () => {
       const factory = new ClientFactory({
         transports: [mockTransportFactory1, mockTransportFactory2],
-        preferredTransports: ['Transport2'], // Not supported
+        preferredTransports: ['Transport2'],
       });
 
       await factory.createFromAgentCard(agentCard);
 
       expect(mockTransportFactory1.create).toHaveBeenCalledTimes(1);
-    });
-
-    it('should default to JSONRPC transport if agentCard.preferredTransport is undefined', async () => {
-      agentCard.preferredTransport = undefined;
-      const jsonRpcFactory = {
-        protocolName: JsonRpcTransportFactory.name,
-        create: vi.fn().mockResolvedValue(mockTransport),
-      };
-      const factory = new ClientFactory({ transports: [jsonRpcFactory] });
-
-      await factory.createFromAgentCard(agentCard);
-
-      expect(jsonRpcFactory.create).toHaveBeenCalledTimes(1);
     });
 
     it('should pass clientConfig to the created Client', async () => {
@@ -188,8 +316,14 @@ describe('ClientFactory', () => {
     });
 
     it('should match transport with case-insensitive protocol name', async () => {
-      // Transport factory uses "Transport1" but agent card uses "transport1" (lowercase)
-      agentCard.preferredTransport = 'transport1';
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'transport1',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
       const factory = new ClientFactory({ transports: [mockTransportFactory1] });
 
       const client = await factory.createFromAgentCard(agentCard);
@@ -206,7 +340,14 @@ describe('ClientFactory', () => {
         protocolName: 'HTTP+JSON',
         create: vi.fn().mockResolvedValue(mockTransport),
       };
-      agentCard.preferredTransport = 'http+json'; // lowercase
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'http+json',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
       const factory = new ClientFactory({ transports: [httpJsonFactory] });
 
       await factory.createFromAgentCard(agentCard);
@@ -219,12 +360,34 @@ describe('ClientFactory', () => {
         protocolName: 'JSONRPC',
         create: vi.fn().mockResolvedValue(mockTransport),
       };
-      agentCard.preferredTransport = 'JsonRpc'; // mixed case
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'JsonRpc',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
       const factory = new ClientFactory({ transports: [jsonRpcFactory] });
 
       await factory.createFromAgentCard(agentCard);
 
       expect(jsonRpcFactory.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves direct-card behavior for resolvers without a card normalizer', async () => {
+      const cardResolver = {
+        resolve: vi.fn().mockResolvedValue(agentCard),
+      };
+      const factory = new ClientFactory({
+        transports: [mockTransportFactory1],
+        cardResolver,
+      });
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(mockTransportFactory1.create).toHaveBeenCalledTimes(1);
     });
 
     it('should use card resolver with default path', async () => {
@@ -260,6 +423,161 @@ describe('ClientFactory', () => {
       expect(cardResolver.resolve).toHaveBeenCalledExactlyOnceWith(
         'http://transport1.com',
         'a2a/my-agent-card.json'
+      );
+    });
+
+    it('should wrap transport with TenantTransportDecorator when interface has tenant', async () => {
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'Transport1',
+          tenant: 'my-tenant',
+          protocolVersion: '1.0.0',
+        },
+      ];
+      const factory = new ClientFactory({ transports: [mockTransportFactory1] });
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(client.transport).to.be.instanceOf(TenantTransportDecorator);
+    });
+
+    it('should NOT wrap transport with TenantTransportDecorator when interface has no tenant', async () => {
+      agentCard.supportedInterfaces = [
+        {
+          url: 'http://transport1.com',
+          protocolBinding: 'Transport1',
+          tenant: '',
+          protocolVersion: '1.0.0',
+        },
+      ];
+      const factory = new ClientFactory({ transports: [mockTransportFactory1] });
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(client.transport).not.to.be.instanceOf(TenantTransportDecorator);
+    });
+
+    it('default ClientFactory does NOT route v0.3 JSON-RPC agents through the compat transport', async () => {
+      // Default JsonRpcTransportFactory has no legacyCompat, so v0.3
+      // agents fall through to the v1.0 transport.
+      const factory = new ClientFactory();
+      agentCard.supportedInterfaces = [
+        {
+          url: 'https://v03.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ];
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(client.transport).to.be.instanceOf(JsonRpcTransport);
+      expect(client.transport).not.to.be.instanceOf(LegacyJsonRpcTransport);
+    });
+
+    it('default ClientFactory uses v1.0 JSON-RPC transport for v1.0 agents', async () => {
+      const factory = new ClientFactory();
+      agentCard.supportedInterfaces = [
+        {
+          url: 'https://v1.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+      ];
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(client.transport).to.be.instanceOf(JsonRpcTransport);
+      expect(client.transport).not.to.be.instanceOf(LegacyJsonRpcTransport);
+    });
+
+    it('ClientFactory with legacyCompat-enabled JSON-RPC factory routes v0.3 agents through LegacyJsonRpcTransport', async () => {
+      const factory = new ClientFactory(
+        ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+          transports: [new JsonRpcTransportFactory({ legacyCompat: { enabled: true } })],
+        })
+      );
+      agentCard.supportedInterfaces = [
+        {
+          url: 'https://v03.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3',
+        },
+      ];
+
+      const client = await factory.createFromAgentCard(agentCard);
+
+      expect(client).to.be.instanceOf(Client);
+      expect(client.transport).to.be.instanceOf(LegacyJsonRpcTransport);
+      expect(client.protocolVersion).to.equal('0.3');
+    });
+
+    it('normalizes a pure v0.3 card through the configured resolver', async () => {
+      const factory = new ClientFactory(
+        ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+          cardResolver: new DefaultAgentCardResolver({ legacyCompat: { enabled: true } }),
+          transports: [new JsonRpcTransportFactory({ legacyCompat: { enabled: true } })],
+        })
+      );
+      const legacyCard: Record<string, unknown> = {
+        name: 'Legacy Agent',
+        description: 'A v0.3 agent',
+        protocolVersion: '0.3.0',
+        version: '1.0.0',
+        url: 'https://v03.example/rpc',
+        skills: [],
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          stateTransitionHistory: false,
+        },
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+      };
+
+      const client = await factory.createFromAgentCard(legacyCard as unknown as AgentCard);
+
+      expect(client.transport).to.be.instanceOf(LegacyJsonRpcTransport);
+      expect(client.protocolVersion).to.equal('0.3');
+      expect((await client.getAgentCard()).supportedInterfaces).to.deep.equal([
+        {
+          url: 'https://v03.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '0.3.0',
+        },
+      ]);
+    });
+
+    it('does not normalize a pure v0.3 card when resolver compatibility is disabled', async () => {
+      const factory = new ClientFactory(
+        ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+          cardResolver: new DefaultAgentCardResolver(),
+          transports: [new JsonRpcTransportFactory({ legacyCompat: { enabled: true } })],
+        })
+      );
+      const legacyCard: Record<string, unknown> = {
+        name: 'Legacy Agent',
+        description: 'A v0.3 agent',
+        protocolVersion: '0.3.0',
+        version: '1.0.0',
+        url: 'https://v03.example/rpc',
+        skills: [],
+        capabilities: {},
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+      };
+
+      await expect(factory.createFromAgentCard(legacyCard as unknown as AgentCard)).rejects.toThrow(
+        'No compatible transport found'
       );
     });
   });

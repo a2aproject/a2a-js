@@ -1,0 +1,293 @@
+/**
+ * Security translators: `SecurityRequirement`, `SecurityScheme`,
+ * `OAuthFlows`. Notable: v1.0 wraps scope lists in `StringList`, uses
+ * `$case`-tagged scheme oneofs, and has an extra `deviceCode` OAuth
+ * flow that v0.3 can't represent (silently dropped v1.0 → v0.3).
+ */
+
+import { A2AError } from '../server/error.js';
+import type {
+  APIKeySecurityScheme as V1APIKeySecurityScheme,
+  AuthorizationCodeOAuthFlow as V1AuthorizationCodeOAuthFlow,
+  ClientCredentialsOAuthFlow as V1ClientCredentialsOAuthFlow,
+  HTTPAuthSecurityScheme as V1HTTPAuthSecurityScheme,
+  ImplicitOAuthFlow as V1ImplicitOAuthFlow,
+  MutualTlsSecurityScheme as V1MutualTlsSecurityScheme,
+  OAuth2SecurityScheme as V1OAuth2SecurityScheme,
+  OAuthFlows as V1OAuthFlows,
+  OpenIdConnectSecurityScheme as V1OpenIdConnectSecurityScheme,
+  PasswordOAuthFlow as V1PasswordOAuthFlow,
+  SecurityRequirement as V1SecurityRequirement,
+  SecurityScheme as V1SecurityScheme,
+} from '../../../types/pb/a2a.js';
+import type * as legacy from '../types/types.js';
+
+function nonEmpty(value: string | undefined): string | undefined {
+  return value !== undefined && value !== '' ? value : undefined;
+}
+
+export function toCoreSecurityRequirement(compat: {
+  [k: string]: string[];
+}): V1SecurityRequirement {
+  return {
+    schemes: Object.fromEntries(
+      Object.entries(compat).map(([scheme, scopes]) => [scheme, { list: [...scopes] }])
+    ),
+  };
+}
+
+export function toCompatSecurityRequirement(core: V1SecurityRequirement): {
+  [k: string]: string[];
+} {
+  return Object.fromEntries(
+    Object.entries(core.schemes).map(([scheme, stringList]) => [scheme, [...stringList.list]])
+  );
+}
+
+function buildV1ApiKeyScheme(scheme: legacy.APIKeySecurityScheme): V1APIKeySecurityScheme {
+  return {
+    description: scheme.description ?? '',
+    location: scheme.in,
+    name: scheme.name,
+  };
+}
+
+function buildV1HttpScheme(scheme: legacy.HTTPAuthSecurityScheme): V1HTTPAuthSecurityScheme {
+  return {
+    description: scheme.description ?? '',
+    scheme: scheme.scheme,
+    bearerFormat: scheme.bearerFormat ?? '',
+  };
+}
+
+function buildV1MtlsScheme(scheme: legacy.MutualTLSSecurityScheme): V1MutualTlsSecurityScheme {
+  return { description: scheme.description ?? '' };
+}
+
+function buildV1Oauth2Scheme(scheme: legacy.OAuth2SecurityScheme): V1OAuth2SecurityScheme {
+  return {
+    description: scheme.description ?? '',
+    flows: toCoreOAuthFlows(scheme.flows),
+    oauth2MetadataUrl: scheme.oauth2MetadataUrl ?? '',
+  };
+}
+
+function buildV1OidcScheme(
+  scheme: legacy.OpenIdConnectSecurityScheme
+): V1OpenIdConnectSecurityScheme {
+  return {
+    description: scheme.description ?? '',
+    openIdConnectUrl: scheme.openIdConnectUrl,
+  };
+}
+
+export function toCoreSecurityScheme(compat: legacy.SecurityScheme): V1SecurityScheme {
+  switch (compat.type) {
+    case 'apiKey':
+      return {
+        scheme: { $case: 'apiKeySecurityScheme', value: buildV1ApiKeyScheme(compat) },
+      };
+    case 'http':
+      return {
+        scheme: { $case: 'httpAuthSecurityScheme', value: buildV1HttpScheme(compat) },
+      };
+    case 'oauth2':
+      return {
+        scheme: { $case: 'oauth2SecurityScheme', value: buildV1Oauth2Scheme(compat) },
+      };
+    case 'openIdConnect':
+      return {
+        scheme: { $case: 'openIdConnectSecurityScheme', value: buildV1OidcScheme(compat) },
+      };
+    case 'mutualTLS':
+      return {
+        scheme: { $case: 'mtlsSecurityScheme', value: buildV1MtlsScheme(compat) },
+      };
+    default:
+      throw A2AError.invalidParams(
+        `Unsupported v0.3 security scheme type: ${String((compat as { type?: string }).type)}`
+      );
+  }
+}
+
+function buildCompatApiKey(core: V1APIKeySecurityScheme): legacy.APIKeySecurityScheme {
+  const result: legacy.APIKeySecurityScheme = {
+    type: 'apiKey',
+    name: core.name,
+    // v1.0 widens `location` to a free-form string; narrow to the v0.3
+    // union, defaulting unknown values to `'header'` (OpenAPI default).
+    in: core.location === 'cookie' || core.location === 'query' ? core.location : 'header',
+  };
+  const description = nonEmpty(core.description);
+  if (description !== undefined) result.description = description;
+  return result;
+}
+
+function buildCompatHttp(core: V1HTTPAuthSecurityScheme): legacy.HTTPAuthSecurityScheme {
+  const result: legacy.HTTPAuthSecurityScheme = { type: 'http', scheme: core.scheme };
+  const description = nonEmpty(core.description);
+  if (description !== undefined) result.description = description;
+  const bearerFormat = nonEmpty(core.bearerFormat);
+  if (bearerFormat !== undefined) result.bearerFormat = bearerFormat;
+  return result;
+}
+
+function buildCompatMtls(core: V1MutualTlsSecurityScheme): legacy.MutualTLSSecurityScheme {
+  const result: legacy.MutualTLSSecurityScheme = { type: 'mutualTLS' };
+  const description = nonEmpty(core.description);
+  if (description !== undefined) result.description = description;
+  return result;
+}
+
+function buildCompatOauth2(core: V1OAuth2SecurityScheme): legacy.OAuth2SecurityScheme {
+  if (!core.flows) {
+    throw A2AError.invalidParams('OAuth2 security scheme missing flows');
+  }
+  const result: legacy.OAuth2SecurityScheme = {
+    type: 'oauth2',
+    flows: toCompatOAuthFlows(core.flows),
+  };
+  const description = nonEmpty(core.description);
+  if (description !== undefined) result.description = description;
+  const meta = nonEmpty(core.oauth2MetadataUrl);
+  if (meta !== undefined) result.oauth2MetadataUrl = meta;
+  return result;
+}
+
+function buildCompatOidc(core: V1OpenIdConnectSecurityScheme): legacy.OpenIdConnectSecurityScheme {
+  const result: legacy.OpenIdConnectSecurityScheme = {
+    type: 'openIdConnect',
+    openIdConnectUrl: core.openIdConnectUrl,
+  };
+  const description = nonEmpty(core.description);
+  if (description !== undefined) result.description = description;
+  return result;
+}
+
+export function toCompatSecurityScheme(core: V1SecurityScheme): legacy.SecurityScheme {
+  const scheme = core.scheme;
+  if (!scheme) {
+    throw A2AError.invalidParams('Invalid v1.0 SecurityScheme: missing inner scheme');
+  }
+  switch (scheme.$case) {
+    case 'apiKeySecurityScheme':
+      return buildCompatApiKey(scheme.value);
+    case 'httpAuthSecurityScheme':
+      return buildCompatHttp(scheme.value);
+    case 'mtlsSecurityScheme':
+      return buildCompatMtls(scheme.value);
+    case 'oauth2SecurityScheme':
+      return buildCompatOauth2(scheme.value);
+    case 'openIdConnectSecurityScheme':
+      return buildCompatOidc(scheme.value);
+    default:
+      throw A2AError.invalidParams(
+        `Unsupported v1.0 SecurityScheme $case: ${(scheme as { $case?: string }).$case ?? 'unknown'}`
+      );
+  }
+}
+
+/**
+ * Picks a flow in deterministic order (authorizationCode → clientCredentials
+ * → implicit → password). Throws if no flow is present — the proto oneof
+ * has no "empty" representation.
+ */
+export function toCoreOAuthFlows(compat: legacy.OAuthFlows): V1OAuthFlows {
+  if (compat.authorizationCode) {
+    const authCode = compat.authorizationCode;
+    const value: V1AuthorizationCodeOAuthFlow = {
+      authorizationUrl: authCode.authorizationUrl,
+      tokenUrl: authCode.tokenUrl,
+      refreshUrl: authCode.refreshUrl ?? '',
+      scopes: { ...authCode.scopes },
+      pkceRequired: false,
+    };
+    return { flow: { $case: 'authorizationCode', value } };
+  }
+  if (compat.clientCredentials) {
+    const clientCreds = compat.clientCredentials;
+    const value: V1ClientCredentialsOAuthFlow = {
+      tokenUrl: clientCreds.tokenUrl,
+      refreshUrl: clientCreds.refreshUrl ?? '',
+      scopes: { ...clientCreds.scopes },
+    };
+    return { flow: { $case: 'clientCredentials', value } };
+  }
+  if (compat.implicit) {
+    const value: V1ImplicitOAuthFlow = {
+      authorizationUrl: compat.implicit.authorizationUrl,
+      refreshUrl: compat.implicit.refreshUrl ?? '',
+      scopes: { ...compat.implicit.scopes },
+    };
+    return { flow: { $case: 'implicit', value } };
+  }
+  if (compat.password) {
+    const value: V1PasswordOAuthFlow = {
+      tokenUrl: compat.password.tokenUrl,
+      refreshUrl: compat.password.refreshUrl ?? '',
+      scopes: { ...compat.password.scopes },
+    };
+    return { flow: { $case: 'password', value } };
+  }
+  throw A2AError.invalidParams('OAuthFlows must declare at least one flow');
+}
+
+/**
+ * v1.0's `deviceCode` is silently dropped (no v0.3 equivalent). When
+ * `deviceCode` is the only declared flow the result is empty; callers
+ * can guard via `Object.keys(result).length === 0`.
+ */
+export function toCompatOAuthFlows(core: V1OAuthFlows): legacy.OAuthFlows {
+  const result: legacy.OAuthFlows = {};
+  const flow = core.flow;
+  if (!flow) return result;
+
+  switch (flow.$case) {
+    case 'authorizationCode': {
+      const v = flow.value;
+      result.authorizationCode = {
+        authorizationUrl: v.authorizationUrl,
+        tokenUrl: v.tokenUrl,
+        scopes: { ...v.scopes },
+      };
+      const refresh = nonEmpty(v.refreshUrl);
+      if (refresh !== undefined) result.authorizationCode.refreshUrl = refresh;
+      break;
+    }
+    case 'clientCredentials': {
+      const v = flow.value;
+      result.clientCredentials = {
+        tokenUrl: v.tokenUrl,
+        scopes: { ...v.scopes },
+      };
+      const refresh = nonEmpty(v.refreshUrl);
+      if (refresh !== undefined) result.clientCredentials.refreshUrl = refresh;
+      break;
+    }
+    case 'implicit': {
+      const v = flow.value;
+      result.implicit = {
+        authorizationUrl: v.authorizationUrl,
+        scopes: { ...v.scopes },
+      };
+      const refresh = nonEmpty(v.refreshUrl);
+      if (refresh !== undefined) result.implicit.refreshUrl = refresh;
+      break;
+    }
+    case 'password': {
+      const v = flow.value;
+      result.password = {
+        tokenUrl: v.tokenUrl,
+        scopes: { ...v.scopes },
+      };
+      const refresh = nonEmpty(v.refreshUrl);
+      if (refresh !== undefined) result.password.refreshUrl = refresh;
+      break;
+    }
+    case 'deviceCode':
+    default:
+      // No v0.3 representation; silently dropped.
+      break;
+  }
+  return result;
+}

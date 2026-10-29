@@ -1,5 +1,5 @@
 import express from 'express';
-import { AgentCard, AGENT_CARD_PATH } from '../../../index.js';
+import { A2A_PROTOCOL_VERSION, AgentCard, AGENT_CARD_PATH } from '../../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -15,18 +15,27 @@ const sampleAgentCard: AgentCard = {
   name: 'Sample Agent',
   description:
     'A sample agent to test the stream functionality and simulate the flow of tasks statuses.',
-  url: 'http://localhost:41241/',
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: A2A_PROTOCOL_VERSION,
+    },
+  ],
   provider: {
     organization: 'A2A Samples',
-    url: 'https://example.com/a2a-samples', // Added provider URL
+    url: 'https://example.com/a2a-samples',
   },
-  version: '1.0.0', // Incremented version
-  protocolVersion: '0.3.0',
+  version: '1.0.0',
   capabilities: {
-    streaming: true, // The new framework supports streaming
-    pushNotifications: false, // Assuming not implemented for this agent yet
-    stateTransitionHistory: true, // Agent uses history
+    streaming: true,
+    pushNotifications: false,
+    extensions: [],
+    extendedAgentCard: false,
   },
+  securitySchemes: {},
+  securityRequirements: [],
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'], // task-status is a common output mode
   skills: [
@@ -38,9 +47,11 @@ const sampleAgentCard: AgentCard = {
       examples: ['hi', 'hello world', 'how are you', 'goodbye'],
       inputModes: ['text'], // Explicitly defining for skill
       outputModes: ['text', 'task-status'], // Explicitly defining for skill
+      securityRequirements: [],
     },
   ],
-  supportsAuthenticatedExtendedCard: false,
+  documentationUrl: '',
+  signatures: [],
 };
 
 async function main() {

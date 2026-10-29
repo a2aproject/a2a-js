@@ -1,5 +1,5 @@
 import express from 'express';
-import { AgentCard } from '../../index.js';
+import { A2A_PROTOCOL_VERSION, AgentCard } from '../../index.js';
 import {
   InMemoryTaskStore,
   TaskStore,
@@ -16,15 +16,24 @@ import { authenticationHandler } from './authentication_middleware.js';
 const authenticationAgentCard: AgentCard = {
   name: 'Sample Authentication Agent',
   description: 'A sample agent to test the authentication functionality',
-  url: 'http://localhost:41241/',
+  supportedInterfaces: [
+    {
+      url: 'http://localhost:41241/',
+      protocolBinding: 'JSONRPC',
+      tenant: '',
+      protocolVersion: A2A_PROTOCOL_VERSION,
+    },
+  ],
   provider: {
     organization: 'A2A Samples',
     url: 'https://example.com/a2a-samples',
   },
   version: '1.0.0',
-  protocolVersion: '0.3.0',
   capabilities: {
-    stateTransitionHistory: true, // Agent uses history
+    streaming: false,
+    pushNotifications: false,
+    extensions: [],
+    extendedAgentCard: false,
   },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text', 'task-status'],
@@ -37,11 +46,24 @@ const authenticationAgentCard: AgentCard = {
       examples: ['hello, who am i?'],
       inputModes: ['text'],
       outputModes: ['text', 'task-status'],
+      securityRequirements: [],
     },
   ],
-  supportsAuthenticatedExtendedCard: false,
-  security: [{ Bearer: [] }],
-  securitySchemes: { Bearer: { type: 'http', scheme: 'bearer' } },
+  securityRequirements: [{ schemes: { Bearer: { list: [] } } }],
+  securitySchemes: {
+    Bearer: {
+      scheme: {
+        $case: 'httpAuthSecurityScheme',
+        value: {
+          description: 'Bearer Token',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+  documentationUrl: 'https://example.com/docs',
+  signatures: [],
 };
 
 async function main() {
@@ -58,9 +80,8 @@ async function main() {
     agentExecutor
   );
 
-  // 4. Create and setup express app, with authentication middleware and user builder
+  // 4. Create and setup express app, with authentication middleware and user builder.
   const app = express();
-  app.use(express.json());
   app.use(authenticationHandler);
   app.use(
     jsonRpcHandler({
