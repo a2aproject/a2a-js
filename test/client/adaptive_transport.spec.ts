@@ -3,6 +3,7 @@ import {
   TransportStats,
   AdaptiveTransportInterceptor,
 } from '../../src/client/transports/adaptive_transport.js';
+import { BeforeArgs, AfterArgs } from '../../src/client/interceptors.js';
 
 // ---------------------------------------------------------------------------
 // TransportStats
@@ -76,6 +77,14 @@ describe('TransportStats', () => {
     expect(order[order.length - 1]).toBe('WORST');
   });
 
+  it('preferredOrder ranks untried available transports first (explore-first)', () => {
+    stats.record('JSONRPC', true, 200);
+    stats.record('GRPC', false, 100);
+
+    const order = stats.preferredOrder(['GRPC', 'JSONRPC', 'HTTP+JSON']);
+    expect(order).toEqual(['HTTP+JSON', 'JSONRPC', 'GRPC']);
+  });
+
   it('count returns number of records', () => {
     expect(stats.count('JSONRPC')).toBe(0);
     stats.record('JSONRPC', true, 50);
@@ -100,5 +109,31 @@ describe('AdaptiveTransportInterceptor', () => {
     const stats = new TransportStats();
     const interceptor = new AdaptiveTransportInterceptor(stats);
     expect(interceptor.getStats()).toBe(stats);
+  });
+
+  it('records latency once using the start time stored on options', async () => {
+    const stats = new TransportStats();
+    const interceptor = new AdaptiveTransportInterceptor(stats);
+    const agentCard = { supportedInterfaces: [{ protocolBinding: 'JSONRPC' }] };
+    const options = {};
+
+    await interceptor.before({
+      input: { method: 'sendMessage', value: {} },
+      agentCard,
+      options,
+    } as unknown as BeforeArgs);
+    expect(options).toHaveProperty('_adaptiveStartTime');
+
+    const afterArgs = {
+      result: { method: 'sendMessage', value: {} },
+      agentCard,
+      options,
+    } as unknown as AfterArgs;
+    await interceptor.after(afterArgs);
+    await interceptor.after(afterArgs);
+
+    expect(stats.count('JSONRPC')).toBe(1);
+    expect(stats.successRate('JSONRPC')).toBe(1);
+    expect(options).not.toHaveProperty('_adaptiveStartTime');
   });
 });

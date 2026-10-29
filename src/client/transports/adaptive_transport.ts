@@ -15,7 +15,7 @@
  *   clientConfig: { interceptors: [new AdaptiveTransportInterceptor(stats)] },
  * });
  * // Before each request, read preferred order:
- * const preferred = stats.preferredOrder();
+ * const preferred = stats.preferredOrder(['JSONRPC', 'HTTP+JSON', 'GRPC']);
  * ```
  *
  * @see Kholodenko, B.N. (2006) "Cell-signalling dynamics in time and space."
@@ -33,7 +33,6 @@ import { CallInterceptor, BeforeArgs, AfterArgs } from '../interceptors.js';
 interface TransportRecord {
   ok: boolean;
   latencyMs: number;
-  timestamp: number;
 }
 
 /**
@@ -68,7 +67,7 @@ export class TransportStats {
       list = [];
       this.records.set(transport, list);
     }
-    list.push({ ok, latencyMs: Math.max(0, latencyMs), timestamp: Date.now() });
+    list.push({ ok, latencyMs: Math.max(0, latencyMs) });
     if (list.length > this.windowSize) {
       list.splice(0, list.length - this.windowSize);
     }
@@ -111,10 +110,15 @@ export class TransportStats {
 
   /**
    * Returns transport names ordered by descending score.
-   * Only includes transports that have at least one recorded outcome.
+   *
+   * @param available  Transports to rank (e.g. the protocol bindings the agent
+   *   card advertises).  Untried transports score 1.0 and are ranked first
+   *   (explore-first).  When omitted, only transports with at least one
+   *   recorded outcome are ranked.
    */
-  preferredOrder(): string[] {
-    return Array.from(this.records.keys()).sort((a, b) => this.getScore(b) - this.getScore(a));
+  preferredOrder(available?: readonly string[]): string[] {
+    const names = available ? Array.from(new Set(available)) : Array.from(this.records.keys());
+    return names.sort((a, b) => this.getScore(b) - this.getScore(a));
   }
 
   /** Clear all recorded data. */
@@ -148,7 +152,6 @@ export class TransportStats {
  */
 export class AdaptiveTransportInterceptor implements CallInterceptor {
   private readonly stats: TransportStats;
-  private readonly timers = new Map<string, number>();
 
   constructor(stats: TransportStats) {
     this.stats = stats;
@@ -156,28 +159,21 @@ export class AdaptiveTransportInterceptor implements CallInterceptor {
 
   async before(args: BeforeArgs): Promise<void> {
     if (!args.input) return;
-    // Record start time keyed by a unique request identifier.
-    // We use the method name + timestamp as a simple key since
-    // interceptors are invoked synchronously per request.
-    const key = `${args.input.method}:${Date.now()}`;
-    this.timers.set(key, performance.now());
-    // Store key in options for retrieval in after()
+    // Store the start time on the per-request options for retrieval in after().
     if (!args.options) {
       args.options = {};
     }
-    (args.options as Record<string, unknown>)['_adaptiveTimerKey'] = key;
+    (args.options as Record<string, unknown>)['_adaptiveStartTime'] = performance.now();
   }
 
   async after(args: AfterArgs): Promise<void> {
     if (!args.result) return;
-    const key = (args.options as Record<string, unknown> | undefined)?.['_adaptiveTimerKey'] as
-      | string
-      | undefined;
-    if (!key) return;
-
-    const startTime = this.timers.get(key);
-    this.timers.delete(key);
+    const startTime = (args.options as Record<string, unknown> | undefined)?.[
+      '_adaptiveStartTime'
+    ] as number | undefined;
     if (startTime === undefined) return;
+    // Consume it so streaming responses (after() per event) record only once.
+    delete (args.options as Record<string, unknown>)['_adaptiveStartTime'];
 
     const latencyMs = performance.now() - startTime;
 
