@@ -29,6 +29,7 @@ import {
 import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { Extensions } from '../../extensions.js';
 import { validateVersion } from '../version.js';
+import { isObject } from '../utils.js';
 import { legacyRestRouter } from '../../compat/v0_3/server/express/index.js';
 
 import {
@@ -257,10 +258,23 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   };
 
   /**
+   * Returns the tenant for a request: the `/:tenant` path segment when the
+   * route has one, otherwise the `tenant` query parameter.
+   *
+   * Route handlers read the tenant through this helper rather than from
+   * `req.query.tenant`, because `req.query` is a getter in Express 5 that
+   * re-parses the URL on every access, so a value written to it by
+   * middleware is lost.
+   */
+  const requestTenant = (req: Request): string =>
+    (req.params.tenant as string | undefined) || (req.query.tenant as string) || '';
+
+  /**
    * Resolves tenant from the URL path parameter and normalizes it onto
-   * `req.body.tenant` and `req.query.tenant`. The path tenant is the
-   * canonical source — if the body or query also carries a tenant that
-   * differs, a warning is logged and the path tenant wins.
+   * `req.body.tenant` when the body is a JSON object. The path tenant is
+   * the canonical source — if the body or query also carries a tenant that
+   * differs, a warning is logged and the path tenant wins (see
+   * `requestTenant`).
    */
   const tenantMiddleware = (req: Request, _res: Response, next: () => void): void => {
     const pathTenant = req.params.tenant as string | undefined;
@@ -285,10 +299,9 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       );
     }
 
-    if (req.body) {
+    if (isObject(req.body)) {
       req.body.tenant = pathTenant;
     }
-    (req.query as Record<string, unknown>).tenant = pathTenant;
 
     next();
   };
@@ -317,7 +330,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   registerRoute('get', '/extendedAgentCard', async (req, res) => {
     const context = await buildContext(req);
     const result = await restTransportHandler.getAuthenticatedExtendedAgentCard(
-      { tenant: (req.query.tenant as string) || '' },
+      { tenant: requestTenant(req) },
       context
     );
     sendResponse<AgentCard>(res, HTTP_STATUS.OK, context, result, AgentCard);
@@ -389,7 +402,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const stream = await restTransportHandler.resubscribe(
       req.params.taskId,
       context,
-      (req.query.tenant as string) || ''
+      requestTenant(req)
     );
     await sendStreamResponse(res, stream, context);
   };
@@ -412,7 +425,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const result = await restTransportHandler.cancelTask(
       req.params.taskId,
       context,
-      (req.query.tenant as string) || '',
+      requestTenant(req),
       CancelTaskRequest.fromJSON(req.body ?? {}).metadata
     );
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
@@ -435,7 +448,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       req.params.taskId as string,
       context,
       req.query.historyLength,
-      (req.query.tenant as string) || ''
+      requestTenant(req)
     );
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });
@@ -450,7 +463,10 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    */
   registerRoute('get', '/tasks', async (req, res) => {
     const context = await buildContext(req);
-    const result = await restTransportHandler.listTasks(req.query, context);
+    const result = await restTransportHandler.listTasks(
+      { ...req.query, tenant: requestTenant(req) },
+      context
+    );
     const includeArtifacts = parseIncludeArtifacts(req.query.includeArtifacts);
     sendResponse<ListTasksResponse>(res, HTTP_STATUS.OK, context, result, {
       ...ListTasksResponse,
@@ -499,7 +515,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const context = await buildContext(req);
     const result = await restTransportHandler.listTaskPushNotificationConfigs(
       req.params.taskId as string,
-      req.query,
+      { ...req.query, tenant: requestTenant(req) },
       context
     );
     sendResponse<ListTaskPushNotificationConfigsResponse>(
@@ -527,7 +543,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       req.params.taskId as string,
       req.params.configId as string,
       context,
-      (req.query.tenant as string) || ''
+      requestTenant(req)
     );
     sendResponse<TaskPushNotificationConfig>(
       res,
@@ -554,7 +570,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       req.params.taskId as string,
       req.params.configId as string,
       context,
-      (req.query.tenant as string) || ''
+      requestTenant(req)
     );
     sendResponse(res, HTTP_STATUS.NO_CONTENT, context);
   });
