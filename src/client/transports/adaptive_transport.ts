@@ -181,10 +181,9 @@ export class AdaptiveTransportInterceptor implements CallInterceptor {
 
     const latencyMs = performance.now() - startTime;
 
-    // Determine transport name from agent card's supported protocols.
-    // The first matching protocol is the one being used.
-    const protocols =
-      args.agentCard?.additionalInterfaces?.map((i: { transport?: string }) => i.transport) ?? [];
+    // Determine transport name from agent card's supported interfaces.
+    // The first matching protocol binding is the one being used.
+    const protocols = args.agentCard?.supportedInterfaces?.map((i) => i.protocolBinding) ?? [];
     const transport = protocols[0] ?? 'unknown';
 
     // Determine success based on whether result contains an error-like value.
