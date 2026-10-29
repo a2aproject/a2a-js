@@ -8,7 +8,7 @@
     "url": "git+https://github.com/a2aproject/a2a-js.git"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
