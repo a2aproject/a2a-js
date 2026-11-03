@@ -50,7 +50,8 @@ export function createAuthenticatingFetchWithRetry(
     };
 
     // Reserve a copy before Fetch consumes the Request body, unless init replaces it.
-    const retryInput = url instanceof Request && init?.body == null ? url.clone() : url;
+    const retryInput =
+      url instanceof Request && init?.body == null ? (url.clone() as Request) : url;
     try {
       let response = await fetchImpl(url, mergedInit);
 
