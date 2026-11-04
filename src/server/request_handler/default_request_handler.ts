@@ -758,6 +758,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           this._processEvents(taskId, resultManager, eventQueue, context, {
             firstResultResolver: (result) => {
               if (isTask(result)) {
+                // `result` can be the Task object the executor published,
+                // which it may keep and publish again. Trim a copy.
+                result = structuredClone(result);
                 this._applyHistoryLengthSemantics(result, historyLengthConfig ?? {});
               }
               resolve(result);
