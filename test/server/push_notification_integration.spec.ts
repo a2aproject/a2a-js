@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, assert, vi, type MockInstance } from 'vitest';
 import express, { Request, Response } from 'express';
-import { Server } from 'http';
+import http, { Server } from 'http';
 import { AddressInfo } from 'net';
 
 import { DefaultRequestHandler } from '../../src/server/request_handler/default_request_handler.js';
@@ -1387,6 +1387,59 @@ describe('Push Notification Integration Tests', () => {
       assert.equal(receivedNotifications.length, 1);
       const notification = receivedNotifications[0];
       assert.deepEqual(notification.body, StreamResponse.toJSON(streamResponse));
+    });
+  });
+
+  describe('Webhook response handling', () => {
+    it('releases the connection when the webhook keeps its response body open', async () => {
+      // Sends headers and part of a body, then never ends the response.
+      let closedResponses = 0;
+      const hangingServer = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.write('partial');
+          res.on('close', () => closedResponses++);
+        });
+      });
+      await new Promise<void>((resolve) => hangingServer.listen(0, resolve));
+      const port = (hangingServer.address() as AddressInfo).port;
+
+      try {
+        const taskId = 'test-hanging-webhook';
+        await pushNotificationStore.save(taskId, defaultContext, {
+          tenant: '',
+          taskId,
+          id: 'config-hanging',
+          url: `http://localhost:${port}/notify`,
+          token: '',
+          authentication: undefined,
+        });
+        const streamResponse: StreamResponse = {
+          payload: {
+            $case: 'statusUpdate',
+            value: {
+              taskId,
+              contextId: 'ctx-hanging',
+              status: {
+                state: TaskState.TASK_STATE_WORKING,
+                message: undefined,
+                timestamp: undefined,
+              },
+              metadata: {},
+            },
+          },
+        };
+
+        for (let i = 0; i < 3; i++) {
+          await pushNotificationSender.send(streamResponse, defaultContext);
+        }
+
+        await vi.waitFor(() => assert.equal(closedResponses, 3), { timeout: 2000 });
+      } finally {
+        hangingServer.closeAllConnections();
+        hangingServer.close();
+      }
     });
   });
 });
