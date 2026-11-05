@@ -15,7 +15,7 @@ plugins:
       - outputServices=false
       - env=node
       - esModuleInterop=true
-      - outputJsonMethods=true
+      - outputJsonMethods=false
       - outputPartialMethods=false
       - outputEncodeMethods=false
       - snakeToCamel=keys

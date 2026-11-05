@@ -184,3 +184,136 @@ describe('A2A-Extensions response header (end-to-end echo)', () => {
     expect(response.get(HTTP_EXTENSION_HEADER)).toBe(`${ECHOED_EXT}, ${UNKNOWN_EXT}`);
   });
 });
+
+// Regression guard for SendStreamingMessage specifically: `handle()`
+// returns a lazy async generator, so the executor doesn't run — and
+// doesn't activate anything — until the handler pulls the first event.
+// A header check placed right after `handle()` resolves, before that
+// pull, would always see an empty activated set.
+describe('A2A-Extensions response header (SendStreamingMessage end-to-end echo)', () => {
+  let app: Express;
+  let executor: AgentExecutor;
+
+  const ECHOED_EXT = 'https://example.test/ext/echo';
+  let extensionsToActivate: string[] = [];
+
+  const agentCard: AgentCard = {
+    name: 'Extension Echo Streaming Agent',
+    description: 'Agent that exposes the echo extension over streaming.',
+    version: '1.0.0',
+    provider: undefined,
+    documentationUrl: '',
+    supportedInterfaces: [
+      {
+        url: 'http://localhost/a2a',
+        protocolBinding: 'JSONRPC',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+    ],
+    capabilities: {
+      extensions: [{ uri: ECHOED_EXT, required: false, description: '', params: {} }],
+      streaming: true,
+      pushNotifications: false,
+    },
+    securitySchemes: {},
+    securityRequirements: [],
+    defaultInputModes: ['text/plain'],
+    defaultOutputModes: ['text/plain'],
+    skills: [],
+    signatures: [],
+  };
+
+  beforeEach(() => {
+    const taskStore: TaskStore = new InMemoryTaskStore();
+
+    executor = {
+      execute: async (ctx: RequestContext, bus: ExecutionEventBus) => {
+        // Activates the extension while producing the first event, i.e.
+        // exactly the ordering the bug depends on.
+        for (const uri of extensionsToActivate) {
+          ctx.context.addActivatedExtension(uri);
+        }
+        bus.publish(
+          AgentEvent.task({
+            id: ctx.taskId,
+            contextId: ctx.contextId,
+            status: {
+              state: TaskState.TASK_STATE_COMPLETED,
+              message: undefined,
+              timestamp: undefined,
+            },
+            artifacts: [],
+            history: [],
+            metadata: {},
+          })
+        );
+        bus.finished();
+      },
+      cancelTask: async () => {},
+    };
+
+    const handler = new DefaultRequestHandler(
+      agentCard,
+      taskStore,
+      executor,
+      new DefaultExecutionEventBusManager()
+    );
+
+    app = express();
+    const router = express.Router();
+    router.use(express.json(), jsonErrorHandler);
+    router.use(
+      jsonRpcHandler({ requestHandler: handler, userBuilder: UserBuilder.noAuthentication })
+    );
+    app.use(router);
+  });
+
+  it('includes extensions activated while producing the first SSE event', async () => {
+    extensionsToActivate = [ECHOED_EXT];
+
+    const response = await request(app)
+      .post('/')
+      .set('A2A-Version', '1.0')
+      .set(HTTP_EXTENSION_HEADER, ECHOED_EXT)
+      .send({
+        jsonrpc: '2.0',
+        id: 'req-stream',
+        method: 'SendStreamingMessage',
+        params: {
+          message: {
+            messageId: 'm-stream',
+            role: Role.ROLE_USER,
+            parts: [{ text: 'hi' }],
+          },
+        },
+      })
+      .expect(200);
+
+    expect(response.get(HTTP_EXTENSION_HEADER)).toBe(ECHOED_EXT);
+  });
+
+  it('omits the response header when the executor activates nothing', async () => {
+    extensionsToActivate = [];
+
+    const response = await request(app)
+      .post('/')
+      .set('A2A-Version', '1.0')
+      .set(HTTP_EXTENSION_HEADER, ECHOED_EXT)
+      .send({
+        jsonrpc: '2.0',
+        id: 'req-stream-noop',
+        method: 'SendStreamingMessage',
+        params: {
+          message: {
+            messageId: 'm-stream-noop',
+            role: Role.ROLE_USER,
+            parts: [{ text: 'hi' }],
+          },
+        },
+      })
+      .expect(200);
+
+    expect(response.get(HTTP_EXTENSION_HEADER)).toBeUndefined();
+  });
+});

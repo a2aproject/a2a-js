@@ -19,7 +19,7 @@ import {
   StreamResponse,
   TaskPushNotificationConfig,
   TaskState,
-} from '../../src/types/pb/a2a.js';
+} from '../../src/types/index.js';
 import {
   A2A_CONTENT_TYPE,
   A2A_LEGACY_PROTOCOL_VERSION,

@@ -18,7 +18,7 @@ import {
   TaskState,
   TaskStatus,
   StreamResponse,
-} from '../../src/types/pb/a2a.js';
+} from '../../src/types/index.js';
 import { SendMessageRequest } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from './mocks/agent-executor.mock.js';

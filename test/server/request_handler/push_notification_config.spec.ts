@@ -17,6 +17,7 @@ import {
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { fakeTaskExecute, MockAgentExecutor } from '../mocks/agent-executor.mock.js';
+import { MockPushNotificationSender } from '../mocks/push_notification_sender.mock.js';
 
 // id-less Create assigns a server-side UUID. Regression guard for the
 // pre-fix `id ||= taskId` collapse that overwrote configs.
@@ -62,7 +63,8 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
       taskStore,
       new MockAgentExecutor(),
       new DefaultExecutionEventBusManager(),
-      pushNotificationStore
+      pushNotificationStore,
+      new MockPushNotificationSender()
     );
   });
 
@@ -177,7 +179,8 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
       taskStore,
       executor,
       new DefaultExecutionEventBusManager(),
-      pushNotificationStore
+      pushNotificationStore,
+      new MockPushNotificationSender()
     );
 
     const config: TaskPushNotificationConfig = {
@@ -235,7 +238,8 @@ describe('DefaultRequestHandler.createTaskPushNotificationConfig (§3.1.7, §5.1
       taskStore,
       executor,
       new DefaultExecutionEventBusManager(),
-      pushNotificationStore
+      pushNotificationStore,
+      new MockPushNotificationSender()
     );
 
     const config: TaskPushNotificationConfig = {

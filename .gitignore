@@ -176,8 +176,20 @@ yarn-error.log
 /libpeerconnection.log
 testem.log
 /typings
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # System files
 .DS_Store
 Thumbs.db
 .nyc_output/
+
+# ITK protobuf instructions
+/itk/pb/*
+
+# ACTS conformance run output
+/itk/acts-report-*.json
+/itk/acts_results_*.json
+/itk/acts_js.json

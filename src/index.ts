@@ -5,9 +5,9 @@
  * server-only codebase.
  */
 
-import { Message, Task } from './types/pb/a2a.js';
+import { Message, Task } from './types/index.js';
 
-export * from './types/pb/a2a.js';
+export * from './types/index.js';
 export {
   AGENT_CARD_PATH,
   HTTP_EXTENSION_HEADER,
@@ -20,6 +20,7 @@ export {
   generateAgentCardSignature,
   verifyAgentCardSignature,
   canonicalizeAgentCard,
+  CanonicalizationError,
   type AgentCardSignatureGenerator,
   type AgentCardSignatureVerifier,
 } from './signature.js';
