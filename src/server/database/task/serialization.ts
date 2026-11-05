@@ -22,6 +22,13 @@ export function statusLastUpdated(timestamp: string | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+/** Nanoseconds below the millisecond retained by Date.parse. */
+export function statusSubmillisecondNanos(timestamp: string | undefined): number {
+  if (!timestamp || Number.isNaN(Date.parse(timestamp))) return 0;
+  const fraction = /\.(\d{1,9})(?:Z|[+-]\d{2}:\d{2})$/i.exec(timestamp)?.[1];
+  return fraction ? Number(fraction.padEnd(9, '0').slice(3)) : 0;
+}
+
 /** proto3 JSON omits empty values, and the column holds null for those. */
 function encode(value: unknown): string | null {
   return value === undefined ? null : JSON.stringify(value);
@@ -44,6 +51,7 @@ export function toTaskRow(scope: TaskScope, task: Task): TaskRow {
     id: task.id,
     context_id: task.contextId || '',
     status_last_updated: statusLastUpdated(task.status?.timestamp),
+    status_last_updated_nanos: statusSubmillisecondNanos(task.status?.timestamp),
     status_state: task.status ? taskStateToJSON(task.status.state) : null,
     status: encode(payload.status),
     artifacts: encode(payload.artifacts),

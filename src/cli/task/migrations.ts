@@ -2,6 +2,7 @@ import { TASK_TABLE } from '../../server/database/task/schema.js';
 import { ledgerTableFor, type StoreMigrations } from '../store_migrations.js';
 
 import { createTasks } from './migrations/0001_create_tasks.js';
+import { addTimestampPrecision } from './migrations/0002_timestamp_precision.js';
 
 /** Names this store on the command line. */
 export const TASK_STORE_ID = 'tasks';
@@ -16,6 +17,7 @@ export function taskStoreMigrations(tableName: string = TASK_TABLE): StoreMigrat
     ledgerTable: ledgerTableFor(tableName),
     migrations: {
       '0001_create_tasks': createTasks(tableName),
+      '0002_timestamp_precision': addTimestampPrecision(tableName),
     },
   };
 }
