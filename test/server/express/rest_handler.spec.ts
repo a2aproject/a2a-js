@@ -909,6 +909,166 @@ describe('restHandler', () => {
     });
   });
 
+  describe('tenant path prefix', () => {
+    it('should pass the path tenant to getTask', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app).get('/tenant1/tasks/task-1').set('A2A-Version', '1.0').expect(200);
+
+      expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: 'tenant1' },
+        expect.anything()
+      );
+    });
+
+    it('should pass the path tenant to listTasks', async () => {
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [] });
+
+      await request(app).get('/tenant1/tasks').set('A2A-Version', '1.0').expect(200);
+
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'tenant1' }),
+        expect.anything()
+      );
+    });
+
+    it('should pass the path tenant to getAuthenticatedExtendedAgentCard', async () => {
+      await request(app).get('/tenant1/extendedAgentCard').set('A2A-Version', '1.0').expect(200);
+
+      expect(mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).toHaveBeenCalledWith(
+        { tenant: 'tenant1' },
+        expect.anything()
+      );
+    });
+
+    it('should pass the path tenant to resubscribe on GET and POST', async () => {
+      async function* mockStream() {
+        yield testTask;
+      }
+      (mockRequestHandler.resubscribe as Mock).mockImplementation(() => mockStream());
+
+      await request(app)
+        .get('/tenant1/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+      await request(app)
+        .post('/tenant1/tasks/task-1:subscribe')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      expect(mockRequestHandler.resubscribe as Mock).toHaveBeenCalledTimes(2);
+      for (const call of (mockRequestHandler.resubscribe as Mock).mock.calls) {
+        expect(call[0]).toEqual({ id: 'task-1', tenant: 'tenant1' });
+      }
+    });
+
+    it('should pass the path tenant to cancelTask', async () => {
+      (mockRequestHandler.cancelTask as Mock).mockResolvedValue(testTask);
+
+      await request(app)
+        .post('/tenant1/tasks/task-1:cancel')
+        .set('A2A-Version', '1.0')
+        .send({})
+        .expect(200);
+
+      expect(mockRequestHandler.cancelTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: 'tenant1', metadata: {} },
+        expect.anything()
+      );
+    });
+
+    it('should pass the path tenant to the push notification config routes', async () => {
+      (mockRequestHandler.getTaskPushNotificationConfig as Mock).mockResolvedValue({
+        tenant: 'tenant1',
+        taskId: 'task-1',
+        id: 'config-1',
+        url: 'https://example.com/webhook',
+        token: '',
+        authentication: undefined,
+      });
+      (mockRequestHandler.listTaskPushNotificationConfigs as Mock).mockResolvedValue({
+        configs: [],
+        nextPageToken: '',
+      });
+      (mockRequestHandler.deleteTaskPushNotificationConfig as Mock).mockResolvedValue(undefined);
+
+      await request(app)
+        .get('/tenant1/tasks/task-1/pushNotificationConfigs/config-1')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+      await request(app)
+        .get('/tenant1/tasks/task-1/pushNotificationConfigs')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+      await request(app)
+        .delete('/tenant1/tasks/task-1/pushNotificationConfigs/config-1')
+        .set('A2A-Version', '1.0')
+        .expect(204);
+
+      const expected = { id: 'config-1', taskId: 'task-1', tenant: 'tenant1' };
+      expect(mockRequestHandler.getTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+        expected,
+        expect.anything()
+      );
+      expect(mockRequestHandler.deleteTaskPushNotificationConfig as Mock).toHaveBeenCalledWith(
+        expected,
+        expect.anything()
+      );
+      expect(mockRequestHandler.listTaskPushNotificationConfigs as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ taskId: 'task-1', tenant: 'tenant1' }),
+        expect.anything()
+      );
+    });
+
+    it('should prefer the path tenant over a conflicting tenant query parameter', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+      (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [] });
+
+      await request(app)
+        .get('/tenant1/tasks/task-1?tenant=other')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+      await request(app).get('/tenant1/tasks?tenant=other').set('A2A-Version', '1.0').expect(200);
+
+      expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: 'tenant1' },
+        expect.anything()
+      );
+      expect(mockRequestHandler.listTasks as Mock).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'tenant1' }),
+        expect.anything()
+      );
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should still read the tenant query parameter on unprefixed routes', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app).get('/tasks/task-1?tenant=other').set('A2A-Version', '1.0').expect(200);
+
+      expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: 'other' },
+        expect.anything()
+      );
+    });
+
+    it.each(['"hello"', '42'])(
+      'should return 400, not 500, for a JSON primitive body %s on a tenant route',
+      async (body) => {
+        const response = await request(app)
+          .post('/tenant1/message:send')
+          .set('A2A-Version', '1.0')
+          .set('Content-Type', 'application/json')
+          .send(body)
+          .expect(400);
+
+        assert.equal(response.body.error.code, 400);
+        expect(mockRequestHandler.sendMessage as Mock).not.toHaveBeenCalled();
+      }
+    );
+  });
+
   describe('File parts format acceptance', () => {
     it.each([
       {
