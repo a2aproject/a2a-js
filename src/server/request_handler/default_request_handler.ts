@@ -1105,6 +1105,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
     const taskId = params.taskId;
     this._requireValidTaskId(taskId);
+    this._requireValidConfigId(params.id);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -1327,6 +1328,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private _requireValidTaskId(taskId: string | undefined): void {
     if (!taskId || taskId.trim() === '') {
       throw new RequestMalformedError('Task ID is required');
+    }
+  }
+
+  private _requireValidConfigId(configId: string | undefined): void {
+    if (!configId || configId.trim() === '') {
+      throw new RequestMalformedError('Config ID is required');
     }
   }
 

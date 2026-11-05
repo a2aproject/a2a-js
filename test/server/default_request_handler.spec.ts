@@ -3598,6 +3598,19 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
+  it('deleteTaskPushNotificationConfig: should reject an empty or whitespace-only config id with RequestMalformedError', async () => {
+    for (const badId of ['', '   ']) {
+      const params: DeleteTaskPushNotificationConfigRequest = {
+        tenant: '',
+        taskId: 'task-1',
+        id: badId,
+      };
+      await expect(
+        handler.deleteTaskPushNotificationConfig(params, serverCallContext)
+      ).rejects.toThrow(RequestMalformedError);
+    }
+  });
+
   it('cancelTask: should cancel a running task and notify listeners', async () => {
     vi.useFakeTimers();
     // Use the more advanced mock for this specific test
