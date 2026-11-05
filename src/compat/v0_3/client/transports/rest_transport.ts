@@ -1,3 +1,4 @@
+import { buildRestUrl } from '../../../../client/transports/rest_url.js';
 /**
  * v0.3 HTTP+JSON (REST) client transport. Implements the v1.0 `Transport`
  * interface but speaks the v0.3 REST wire format.
@@ -87,7 +88,7 @@ export class LegacyRestTransport implements Transport {
 
   constructor(options: LegacyRestTransportOptions) {
     // Strip trailing slashes for path consistency, matching v1.0.
-    this.endpoint = options.endpoint.replace(/\/+$/, '');
+    this.endpoint = options.endpoint;
     this.customFetchImpl = options.fetchImpl;
   }
 
@@ -294,7 +295,7 @@ export class LegacyRestTransport implements Transport {
     responseType: { fromJSON(object: unknown): TResponse } | undefined,
     options: RequestOptions | undefined
   ): Promise<TResponse> {
-    const url = `${this.endpoint}${path}`;
+    const url = buildRestUrl(this.endpoint, path);
     const requestInit: RequestInit = {
       method,
       headers: this._buildHeaders(options),
@@ -329,7 +330,7 @@ export class LegacyRestTransport implements Transport {
     body: unknown | undefined,
     options?: RequestOptions
   ): AsyncGenerator<V1StreamResponse, void, undefined> {
-    const url = `${this.endpoint}${path}`;
+    const url = buildRestUrl(this.endpoint, path);
     const requestInit: RequestInit = {
       method,
       headers: this._buildHeaders(options, 'text/event-stream'),
