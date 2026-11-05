@@ -124,7 +124,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   });
 
   it('uses the built-in v1.0 serializer for v1.0-tagged configs (regression)', async () => {
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, { allowPrivatePushUrls: true });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-v1', ctxV1, makeConfig(`${baseUrl}/notify`));
 
@@ -142,6 +142,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(store, {
+      allowPrivatePushUrls: true,
       serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
     });
     const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
@@ -161,6 +162,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(store, {
+      allowPrivatePushUrls: true,
       serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
     });
 
@@ -180,7 +182,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
 
   it('falls back to the v1.0 serializer with a one-time warning for unknown wire versions', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, { allowPrivatePushUrls: true });
     // Register two configs under an unknown wire version on the same task so
     // we can verify the warning is emitted only once per instance per
     // unknown version.
@@ -209,6 +211,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(store, {
+      allowPrivatePushUrls: true,
       serializers: { [A2A_PROTOCOL_VERSION]: customV1 },
     });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
@@ -222,7 +225,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   });
 
   it('preserves auth headers alongside serializer-supplied content type', async () => {
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, { allowPrivatePushUrls: true });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save(
       'task-auth',
@@ -243,7 +246,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     // Push notifications accept all four StreamResponse payload
     // variants. The built-in v1.0 serializer encodes the message as part
     // of the canonical StreamResponse JSON wrapper.
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, { allowPrivatePushUrls: true });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
     await store.save('task-msg', ctxV1, makeConfig(`${baseUrl}/notify`));
 
@@ -257,7 +260,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
   it('silently skips dispatch for stand-alone messages (no task association)', async () => {
     // Message-only stream pattern: no taskId means no config can ever
     // match. Sender returns silently without hitting the store.
-    const sender = new DefaultPushNotificationSender(store);
+    const sender = new DefaultPushNotificationSender(store, { allowPrivatePushUrls: true });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
 
     await sender.send(makeMessage(''), ctxV1);
@@ -281,6 +284,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(customStore, {
+      allowPrivatePushUrls: true,
       serializers: { [ProtocolVersion.V0_3]: v03Serializer },
     });
     const ctxV03 = new ServerCallContext({ requestedVersion: A2A_LEGACY_PROTOCOL_VERSION });
@@ -308,6 +312,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
       },
     };
     const sender = new DefaultPushNotificationSender(customStore, {
+      allowPrivatePushUrls: true,
       serializers: { [ProtocolVersion.V0_3]: v03Serializer },
     });
     const ctxEmpty = new ServerCallContext({ requestedVersion: '' });
@@ -333,7 +338,7 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     };
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Default sender — only the built-in V1 serializer. No compat opt-in.
-    const sender = new DefaultPushNotificationSender(customStore);
+    const sender = new DefaultPushNotificationSender(customStore, { allowPrivatePushUrls: true });
     const ctxV1 = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
 
     await sender.send(makeStatusUpdate('task-bare-v1'), ctxV1);
