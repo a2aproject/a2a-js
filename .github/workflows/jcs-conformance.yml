@@ -1,0 +1,37 @@
+# Replays the a2a-jcs-v01 corpus (the a2a-tck Agent Card canonicalization
+# vectors) against the canonicalizer that signs and verifies cards.
+
+name: JCS Conformance
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main", "epic/**" ]
+    paths:
+      - 'src/signature.ts'
+      - 'scripts/a2a-jcs-conformance.ts'
+      - '.github/workflows/jcs-conformance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  a2a-jcs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: 'npm'
+    - run: npm ci
+    # One bundle, so each of the corpus's vectors costs a node start, not a compile.
+    - run: >-
+        npx esbuild scripts/a2a-jcs-conformance.ts --bundle --platform=node
+        --format=esm --outfile=${{ runner.temp }}/a2a-jcs-conformance.mjs
+    - uses: probityai/agent-evidence-vectors@v0.31.0
+      with:
+        corpus: vectors-a2a-jcs-v01
+        verifier: node ${{ runner.temp }}/a2a-jcs-conformance.mjs
