@@ -70,7 +70,11 @@ describe('A2AExpressApp', () => {
       legacyCompat: { enabled: true },
     });
 
-  const createRpcRequest = (id: string | null, method = 'SendMessage', params: object = {}) => ({
+  const createRpcRequest = (
+    id: string | number | null,
+    method = 'SendMessage',
+    params: object = {}
+  ) => ({
     jsonrpc: '2.0',
     method,
     id,
@@ -363,6 +367,53 @@ describe('A2AExpressApp', () => {
         .expect(200);
 
       assert.equal(response.body.id, null);
+    });
+
+    it('should keep a zero request id on a pre-stream error', async () => {
+      handleStub.mockResolvedValue({
+        // eslint-disable-next-line require-yield
+        async *[Symbol.asyncIterator]() {
+          throw new RequestMalformedError('Immediate streaming error');
+        },
+      });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(createRpcRequest(0, 'SendStreamingMessage'))
+        .expect(200);
+
+      assert.strictEqual(response.body.id, 0);
+    });
+
+    it('should keep a zero request id on a mid-stream error', async () => {
+      handleStub.mockResolvedValue({
+        async *[Symbol.asyncIterator]() {
+          yield { jsonrpc: '2.0', id: 0, result: { step: 1 } };
+          throw new RequestMalformedError('Streaming error');
+        },
+      });
+
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '1.0')
+        .send(createRpcRequest(0, 'SendStreamingMessage'))
+        .expect(200);
+
+      const errorEvent = response.text.split('event: error\ndata: ')[1];
+      assert.exists(errorEvent);
+      assert.strictEqual(JSON.parse(errorEvent).id, 0);
+    });
+
+    it('should keep a zero request id on an error outside the transport handler', async () => {
+      const response = await request(expressApp)
+        .post('/')
+        .set('A2A-Version', '9.9')
+        .send(createRpcRequest(0, 'GetTask', { id: 'test-task' }))
+        .expect(200);
+
+      assert.equal(response.body.error.code, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
+      assert.strictEqual(response.body.id, 0);
     });
 
     it('should handle extensions headers in request', async () => {
