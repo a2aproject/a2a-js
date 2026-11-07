@@ -1967,6 +1967,105 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
   });
 
+  it('sendMessage: (non-blocking) historyLength should trim a copy, not the Task the executor published (§3.2.4)', async () => {
+    const contextId = 'ctx-send-hist-nonblocking';
+
+    // First turn leaves the task in INPUT_REQUIRED with one message in history.
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      bus.publish(
+        AgentEvent.task({
+          id: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_SUBMITTED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        })
+      );
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: ctx.taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_INPUT_REQUIRED,
+            message: undefined,
+            timestamp: undefined,
+          },
+          metadata: {},
+        })
+      );
+    });
+    const firstMessage = createTestMessage('msg-hist-first', 'first message');
+    firstMessage.contextId = contextId;
+    const firstResult = (await handler.sendMessage(
+      { tenant: '', message: firstMessage, configuration: undefined, metadata: {} },
+      serverCallContext
+    )) as Task;
+
+    // Second turn publishes the loaded task as is, like the samples do, and
+    // publishes it again once the client has its response.
+    let publishedTask: Task | undefined;
+    let releaseExecutor!: () => void;
+    const responded = new Promise<void>((resolve) => {
+      releaseExecutor = resolve;
+    });
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+      publishedTask = ctx.task!;
+      bus.publish(AgentEvent.task(publishedTask));
+      await responded;
+
+      publishedTask.status = {
+        state: TaskState.TASK_STATE_COMPLETED,
+        message: undefined,
+        timestamp: undefined,
+      };
+      bus.publish(AgentEvent.task(publishedTask));
+      bus.publish(
+        AgentEvent.statusUpdate({
+          taskId: publishedTask.id,
+          contextId,
+          status: publishedTask.status,
+          metadata: {},
+        })
+      );
+    });
+    const secondMessage = createTestMessage('msg-hist-second', 'second message');
+    secondMessage.contextId = contextId;
+    secondMessage.taskId = firstResult.id;
+
+    const result = (await handler.sendMessage(
+      {
+        tenant: '',
+        message: secondMessage,
+        configuration: { historyLength: 1, acceptedOutputModes: [], returnImmediately: true },
+        metadata: {},
+      } as SendMessageRequest,
+      serverCallContext
+    )) as Task;
+    assert.lengthOf(result.history!, 1, 'historyLength=1 should trim the response');
+    assert.lengthOf(
+      publishedTask!.history,
+      2,
+      "historyLength should not change the executor's own Task"
+    );
+
+    releaseExecutor();
+    await vi.waitFor(async () => {
+      const stored = await mockTaskStore.load(result.id, serverCallContext);
+      assert.equal(stored?.status?.state, TaskState.TASK_STATE_COMPLETED);
+    });
+    const stored = await mockTaskStore.load(result.id, serverCallContext);
+    assert.deepEqual(
+      stored!.history.map((m) => m.messageId),
+      ['msg-hist-first', 'msg-hist-second'],
+      'historyLength should not shorten the persisted history'
+    );
+  });
+
   it('sendMessageStream: should apply historyLength=0 to task payloads in stream (§3.2.4)', async () => {
     const contextId = 'ctx-stream-hist-0';
 
