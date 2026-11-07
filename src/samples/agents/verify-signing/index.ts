@@ -141,7 +141,11 @@ async function main() {
     console.log('  PASS: Tampered card was correctly rejected.\n');
   }
 
-  // Step 5: Use the SDK client to fetch + verify in one step
+  // Step 5: Fetch the card again through the SDK client and verify it.
+  // createFromUrl() builds the client from the public card it resolves, before
+  // any signature check. Verify that card first (as in Step 2) before relying
+  // on the endpoints it lists; the verifier passed to getAgentCard() checks the
+  // card that getAgentCard() returns.
   console.log('--- Step 5: Fetch and verify via SDK Client ---');
   const factory = new ClientFactory(
     ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
