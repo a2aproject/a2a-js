@@ -13,6 +13,8 @@ import {
   InMemoryTaskStore,
   TaskStore,
   User,
+  WEBSOCKET_PROTOCOL_NAME,
+  WEBSOCKET_SUBPROTOCOL,
   WebSocketTransportHandler,
   type WebSocketSocketLike,
 } from '../../../server/index.js';
@@ -31,7 +33,7 @@ const websocketAgentCard: AgentCard = {
   supportedInterfaces: [
     {
       url: `ws://localhost:${PORT}${WEBSOCKET_PATH}`,
-      protocolBinding: 'WEBSOCKET',
+      protocolBinding: WEBSOCKET_PROTOCOL_NAME,
       tenant: '',
       protocolVersion: A2A_PROTOCOL_VERSION,
     },
@@ -91,7 +93,7 @@ function isAuthorized(request: IncomingMessage): boolean {
 function hasSupportedProtocol(request: IncomingMessage): boolean {
   const header = request.headers['sec-websocket-protocol'];
   const protocols = Array.isArray(header) ? header : header?.split(',');
-  return protocols?.some((protocol) => protocol.trim() === 'a2a.v1') ?? false;
+  return protocols?.some((protocol) => protocol.trim() === WEBSOCKET_SUBPROTOCOL) ?? false;
 }
 
 function isAllowedOrigin(request: IncomingMessage): boolean {
@@ -149,10 +151,8 @@ async function main(): Promise<void> {
       const transportHandler = new WebSocketTransportHandler(requestHandler, {
         handshake: {
           headers: request.headers,
+          url: request.url,
           user: new AuthenticatedUser(userName),
-          serviceParameters: {
-            'a2a-version': A2A_PROTOCOL_VERSION,
-          },
         },
       });
       transportHandler.handleConnection(adaptWebSocketConnection(webSocket as WebSocketSocketLike));

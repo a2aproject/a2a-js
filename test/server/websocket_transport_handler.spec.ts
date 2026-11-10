@@ -4,7 +4,9 @@ import {
   WebSocketTransportHandler,
   adaptWebSocketConnection,
   type WebSocketConnection,
+  type WebSocketServerOptions,
 } from '../../src/server/transports/websocket/websocket_transport_handler.js';
+import { WEBSOCKET_PROTOCOL_NAME } from '../../src/transports/websocket/protocol.js';
 import type { A2ARequestHandler } from '../../src/server/request_handler/a2a_request_handler.js';
 import { DefaultRequestHandler } from '../../src/server/request_handler/default_request_handler.js';
 import { InMemoryTaskStore } from '../../src/server/store.js';
@@ -20,6 +22,7 @@ class FakeConnection implements WebSocketConnection {
   readonly sent: unknown[] = [];
   closed?: { code?: number; reason?: string };
   ping?: () => void;
+  onPong?: (listener: () => void) => () => void;
   failSend = false;
   private messageListener?: (data: unknown, isBinary?: boolean) => void;
   private closeListener?: (code?: number, reason?: string) => void;
@@ -74,9 +77,31 @@ const agentCard = {
   version: '1.0.0',
   capabilities: { streaming: true },
   supportedInterfaces: [
-    { url: 'ws://localhost/a2a/ws', protocolBinding: 'WEBSOCKET', protocolVersion: '1.0' },
+    {
+      url: 'ws://localhost/a2a/ws',
+      protocolBinding: WEBSOCKET_PROTOCOL_NAME,
+      protocolVersion: '1.0',
+    },
   ],
 } as unknown as AgentCard;
+
+/** A handler for a connection whose handshake sent `A2A-Version: 1.0`. */
+function wsHandler(
+  requestHandler: A2ARequestHandler,
+  options: WebSocketServerOptions = {}
+): WebSocketTransportHandler {
+  return new WebSocketTransportHandler(requestHandler, {
+    ...options,
+    handshake: {
+      ...options.handshake,
+      headers: { 'A2A-Version': '1.0', ...options.handshake?.headers },
+    },
+  });
+}
+
+function streamEnd(id: string | number) {
+  return { jsonrpc: '2.0', method: 'ws/StreamEnd', params: { id } };
+}
 
 function handler(overrides: Partial<A2ARequestHandler> = {}): A2ARequestHandler {
   return {
@@ -140,7 +165,7 @@ describe('WebSocketTransportHandler', () => {
   it('dispatches unary requests and carries connection/per-request service params', async () => {
     const { requestHandler, context } = capturingContext();
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(requestHandler, {
+    wsHandler(requestHandler, {
       handshake: { serviceParameters: { 'x-connection': 'yes' } },
     }).handleConnection(connection);
 
@@ -151,13 +176,51 @@ describe('WebSocketTransportHandler', () => {
       id: 'request-1',
       result: { message: { messageId: 'response-1' } },
     });
-    expect(context().state.get('headers')).toEqual({ 'x-connection': 'yes', 'x-request': 'one' });
+    expect(context().state.get('headers')).toEqual({
+      'a2a-version': '1.0',
+      'x-connection': 'yes',
+      'x-request': 'one',
+    });
+    expect(context().requestedVersion).toBe('1.0');
+  });
+
+  it('reads A2A- query parameters from the upgrade URL, with headers winning', async () => {
+    const { requestHandler, context } = capturingContext();
+    const connection = new FakeConnection();
+    new WebSocketTransportHandler(requestHandler, {
+      handshake: {
+        url: '/a2a/ws?A2A-Version=1.0&A2A-Extensions=urn:ext:query&token=secret',
+        headers: { 'A2A-Extensions': 'urn:ext:header' },
+      },
+    }).handleConnection(connection);
+
+    connection.receive(sendMessage(1));
+    await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
+    // Only A2A- query parameters become service parameters.
+    expect(context().state.get('headers')).toEqual({
+      'a2a-version': '1.0',
+      'a2a-extensions': 'urn:ext:header',
+    });
+  });
+
+  it.each([
+    ['an absent A2A-Version (0.3)', {}],
+    ['an undeclared A2A-Version', { headers: { 'A2A-Version': '9.9' } }],
+  ])('closes with 4002 for %s', async (_name, handshake) => {
+    const requestHandler = handler();
+    const connection = new FakeConnection();
+    new WebSocketTransportHandler(requestHandler, { handshake }).handleConnection(connection);
+
+    connection.receive(sendMessage(1));
+    await vi.waitFor(() => expect(connection.closed?.code).toBe(4002));
+    expect(connection.sent).toHaveLength(0);
+    expect(requestHandler.sendMessage).not.toHaveBeenCalled();
   });
 
   it('maps handshake headers to service params and drops upgrade-only headers', async () => {
     const { requestHandler, context } = capturingContext();
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(requestHandler, {
+    wsHandler(requestHandler, {
       handshake: {
         headers: {
           Host: 'agent.example',
@@ -173,6 +236,7 @@ describe('WebSocketTransportHandler', () => {
     connection.receive(sendMessage(1));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
     expect(context().state.get('headers')).toEqual({
+      'a2a-version': '1.0',
       'a2a-extensions': 'urn:ext:handshake',
       'x-multi': 'a, b',
     });
@@ -182,7 +246,7 @@ describe('WebSocketTransportHandler', () => {
   it('parses requested extensions from per-request service params', async () => {
     const { requestHandler, context } = capturingContext();
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(requestHandler).handleConnection(connection);
+    wsHandler(requestHandler).handleConnection(connection);
 
     connection.receive(
       sendMessage(1, { serviceParams: { 'a2a-extensions': 'urn:ext:a, urn:ext:b' } })
@@ -195,14 +259,31 @@ describe('WebSocketTransportHandler', () => {
     const { requestHandler, context } = capturingContext();
     const connection = new FakeConnection();
     const user = { isAuthenticated: true, userName: 'alice' };
-    new WebSocketTransportHandler(requestHandler, {
+    wsHandler(requestHandler, {
       handshake: { user, authenticatedServiceParameters: { 'X-Principal': 'alice' } },
     }).handleConnection(connection);
 
     connection.receive(sendMessage(1, { serviceParams: { 'x-principal': 'mallory' } }));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
-    expect(context().state.get('headers')).toEqual({ 'x-principal': 'alice' });
+    expect(context().state.get('headers')).toEqual({
+      'a2a-version': '1.0',
+      'x-principal': 'alice',
+    });
     expect(context().user).toBe(user);
+  });
+
+  it('rejects serviceParams keys that differ only in case', async () => {
+    const requestHandler = handler();
+    const connection = new FakeConnection();
+    wsHandler(requestHandler).handleConnection(connection);
+
+    connection.receive(sendMessage('dup', { serviceParams: { 'X-Key': 'a', 'x-key': 'b' } }));
+    await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
+    expect(connection.sent[0]).toMatchObject({
+      id: 'dup',
+      error: { code: A2A_ERROR_CODE.INVALID_REQUEST },
+    });
+    expect(requestHandler.sendMessage).not.toHaveBeenCalled();
   });
 
   it('uses a custom context builder', async () => {
@@ -215,7 +296,7 @@ describe('WebSocketTransportHandler', () => {
     );
     const { requestHandler, context } = capturingContext();
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(requestHandler, { contextBuilder }).handleConnection(connection);
+    wsHandler(requestHandler, { contextBuilder }).handleConnection(connection);
 
     connection.receive(sendMessage(1));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
@@ -223,10 +304,10 @@ describe('WebSocketTransportHandler', () => {
     expect(context().tenant).toBe('custom-tenant');
   });
 
-  it('rejects an A2A-Version the agent card does not declare for WEBSOCKET', async () => {
+  it('rejects a request that names a different A2A-Version than the connection', async () => {
     const connection = new FakeConnection();
     const requestHandler = handler();
-    new WebSocketTransportHandler(requestHandler).handleConnection(connection);
+    wsHandler(requestHandler).handleConnection(connection);
 
     connection.receive(sendMessage('old', { serviceParams: { 'A2A-Version': '0.3' } }));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
@@ -235,11 +316,12 @@ describe('WebSocketTransportHandler', () => {
       error: { code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED },
     });
     expect(requestHandler.sendMessage).not.toHaveBeenCalled();
+    expect(connection.closed).toBeUndefined();
   });
 
-  it('returns an internal error when the agent card cannot be loaded', async () => {
+  it('closes with 1011 when the agent card cannot be loaded', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(
+    wsHandler(
       handler({
         getAgentCard: async () => {
           throw new Error('card store offline');
@@ -248,16 +330,13 @@ describe('WebSocketTransportHandler', () => {
     ).handleConnection(connection);
 
     connection.receive(sendMessage(1));
-    await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
-    expect(connection.sent[0]).toMatchObject({
-      id: 1,
-      error: { code: A2A_ERROR_CODE.INTERNAL_ERROR },
-    });
+    await vi.waitFor(() => expect(connection.closed?.code).toBe(1011));
+    expect(connection.sent).toHaveLength(0);
   });
 
   it('forwards JSON-RPC errors from the dispatcher with the request id', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(handler()).handleConnection(connection);
+    wsHandler(handler()).handleConnection(connection);
 
     connection.receive({ jsonrpc: '2.0', id: 3, method: 'NoSuchMethod', params: {} });
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
@@ -269,7 +348,7 @@ describe('WebSocketTransportHandler', () => {
 
   it('answers a delete with an empty object result', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(handler()).handleConnection(connection);
+    wsHandler(handler()).handleConnection(connection);
 
     connection.receive({
       jsonrpc: '2.0',
@@ -283,31 +362,65 @@ describe('WebSocketTransportHandler', () => {
 
   it('rejects envelopes that are not JSON-RPC 2.0 requests', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(handler()).handleConnection(connection);
+    wsHandler(handler()).handleConnection(connection);
 
     connection.receive({ jsonrpc: '1.0', id: 'a', method: 'SendMessage' });
     connection.receive({ jsonrpc: '1.0', id: 1.5, method: 'SendMessage' });
     connection.receive({ jsonrpc: '2.0', id: '', method: 'SendMessage' });
     connection.receive({ jsonrpc: '2.0', id: 'b' });
-    connection.receive({ jsonrpc: '2.0', id: 'c', method: 'Authenticate', params: {} });
+    connection.receive({ jsonrpc: '2.0', id: null, method: 'SendMessage' });
+    connection.receive([1, 2]);
 
-    await vi.waitFor(() => expect(connection.sent).toHaveLength(5));
+    await vi.waitFor(() => expect(connection.sent).toHaveLength(6));
     expect(connection.sent).toEqual([
       expect.objectContaining({ id: 'a', error: expect.objectContaining({ code: -32600 }) }),
       expect.objectContaining({ id: null, error: expect.objectContaining({ code: -32600 }) }),
       expect.objectContaining({ id: null, error: expect.objectContaining({ code: -32600 }) }),
       expect.objectContaining({ id: 'b', error: expect.objectContaining({ code: -32600 }) }),
-      expect.objectContaining({
-        id: 'c',
-        error: expect.objectContaining({ code: A2A_ERROR_CODE.UNSUPPORTED_OPERATION }),
-      }),
+      expect.objectContaining({ id: null, error: expect.objectContaining({ code: -32600 }) }),
+      expect.objectContaining({ id: null, error: expect.objectContaining({ code: -32600 }) }),
     ]);
     expect(connection.closed).toBeUndefined();
   });
 
-  it('emits ordered stream results followed by streamEnd', async () => {
+  it('answers ws/ requests, including ws/Authenticate, with method not found', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(handler()).handleConnection(connection);
+    wsHandler(handler()).handleConnection(connection);
+
+    connection.receive({
+      jsonrpc: '2.0',
+      id: 'auth',
+      method: 'ws/Authenticate',
+      params: { credentials: { bearer: 'token' } },
+    });
+    connection.receive({ jsonrpc: '2.0', id: 'other', method: 'ws/Unknown' });
+    await vi.waitFor(() => expect(connection.sent).toHaveLength(2));
+    expect(connection.sent).toEqual([
+      expect.objectContaining({ id: 'auth', error: expect.objectContaining({ code: -32601 }) }),
+      expect.objectContaining({ id: 'other', error: expect.objectContaining({ code: -32601 }) }),
+    ]);
+  });
+
+  it('never answers notifications, including unknown and malformed ones', async () => {
+    const requestHandler = handler();
+    const connection = new FakeConnection();
+    wsHandler(requestHandler).handleConnection(connection);
+
+    connection.receive({ jsonrpc: '2.0', method: 'SendMessage', params: {} });
+    connection.receive({ jsonrpc: '2.0', method: 'ws/Unknown' });
+    connection.receive({ jsonrpc: '2.0', method: 'ws/CancelStream' });
+    connection.receive({ jsonrpc: '1.0', method: 'ws/CancelStream', params: { id: 1 } });
+    connection.receive({ jsonrpc: '2.0' });
+    connection.receive(sendMessage('after'));
+
+    await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
+    expect(connection.sent[0]).toMatchObject({ id: 'after' });
+    expect(requestHandler.sendMessage).toHaveBeenCalledOnce();
+  });
+
+  it('emits ordered stream results followed by ws/StreamEnd', async () => {
+    const connection = new FakeConnection();
+    wsHandler(handler()).handleConnection(connection);
     connection.receive(streamMessage(7));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(3));
     expect(connection.sent[0]).toMatchObject({ id: 7, result: { task: { id: 'task-1' } } });
@@ -315,12 +428,12 @@ describe('WebSocketTransportHandler', () => {
       id: 7,
       result: { statusUpdate: { taskId: 'task-1' } },
     });
-    expect(connection.sent[2]).toEqual({ jsonrpc: '2.0', id: 7, streamEnd: true });
+    expect(connection.sent[2]).toEqual(streamEnd(7));
   });
 
-  it('sends a stream error frame instead of streamEnd when the stream fails', async () => {
+  it('sends a stream error frame instead of ws/StreamEnd when the stream fails', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(
+    wsHandler(
       handler({
         sendMessageStream: vi.fn(async function* () {
           yield { payload: { $case: 'task', value: { id: 'task-1' } } };
@@ -332,7 +445,8 @@ describe('WebSocketTransportHandler', () => {
     connection.receive(streamMessage('s'));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(2));
     expect(connection.sent[1]).toMatchObject({ id: 's', error: { code: expect.any(Number) } });
-    expect(connection.sent[1]).not.toHaveProperty('streamEnd');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(connection.sent).toHaveLength(2);
   });
 
   it('surfaces the request handler streaming-capability check as an error frame', async () => {
@@ -342,9 +456,9 @@ describe('WebSocketTransportHandler', () => {
       cancelTask: vi.fn(async () => undefined),
     };
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(
-      new DefaultRequestHandler(card, new InMemoryTaskStore(), executor)
-    ).handleConnection(connection);
+    wsHandler(new DefaultRequestHandler(card, new InMemoryTaskStore(), executor)).handleConnection(
+      connection
+    );
 
     connection.receive(streamMessage('no-stream'));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
@@ -355,11 +469,11 @@ describe('WebSocketTransportHandler', () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
-  it('cancels one stream with cancelStream while keeping the connection open', async () => {
+  it('cancels one stream with ws/CancelStream while keeping the connection open', async () => {
     const gate = deferred();
     let finished = false;
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(
+    wsHandler(
       handler({
         sendMessageStream: vi.fn(async function* () {
           try {
@@ -375,12 +489,13 @@ describe('WebSocketTransportHandler', () => {
 
     connection.receive(streamMessage(9));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
-    connection.receive({ jsonrpc: '2.0', id: 9, cancelStream: true });
+    const cancel = { jsonrpc: '2.0', method: 'ws/CancelStream', params: { id: 9 } };
+    connection.receive(cancel);
     await vi.waitFor(() => expect(connection.sent).toHaveLength(2));
-    expect(connection.sent[1]).toEqual({ jsonrpc: '2.0', id: 9, streamEnd: true });
+    expect(connection.sent[1]).toEqual(streamEnd(9));
 
     // A second cancel for the same id is a no-op.
-    connection.receive({ jsonrpc: '2.0', id: 9, cancelStream: true });
+    connection.receive(cancel);
     gate.resolve();
     await vi.waitFor(() => expect(finished).toBe(true));
     expect(connection.sent).toHaveLength(2);
@@ -390,7 +505,7 @@ describe('WebSocketTransportHandler', () => {
   it('limits concurrent streams per connection', async () => {
     const gate = deferred();
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(
+    wsHandler(
       handler({
         sendMessageStream: vi.fn(async function* () {
           yield { payload: { $case: 'task', value: { id: 'task-1' } } };
@@ -404,18 +519,30 @@ describe('WebSocketTransportHandler', () => {
     await vi.waitFor(() => expect(connection.sent).toHaveLength(1));
     connection.receive(streamMessage(2));
     await vi.waitFor(() => expect(connection.sent).toHaveLength(2));
-    expect(connection.sent[1]).toMatchObject({ id: 2, error: { code: -32000 } });
+    expect(connection.sent[1]).toMatchObject({
+      id: 2,
+      error: {
+        code: -32000,
+        data: [
+          {
+            '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+            reason: 'WS_TOO_MANY_IN_FLIGHT',
+            domain: 'a2a-protocol.org',
+          },
+        ],
+      },
+    });
 
     gate.resolve();
     await vi.waitFor(() => expect(connection.sent).toHaveLength(3));
-    expect(connection.sent[2]).toEqual({ jsonrpc: '2.0', id: 1, streamEnd: true });
+    expect(connection.sent[2]).toEqual(streamEnd(1));
   });
 
   it('stops active streams when the peer closes the connection', async () => {
     const gate = deferred();
     let finished = false;
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(
+    wsHandler(
       handler({
         sendMessageStream: vi.fn(async function* () {
           try {
@@ -445,7 +572,7 @@ describe('WebSocketTransportHandler', () => {
     const gate = deferred();
     let finished = false;
     const connection = new FakeConnection();
-    const cleanup = new WebSocketTransportHandler(
+    const cleanup = wsHandler(
       handler({
         sendMessageStream: vi.fn(async function* () {
           try {
@@ -472,29 +599,42 @@ describe('WebSocketTransportHandler', () => {
 
   it('ignores frames after a socket error', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(handler()).handleConnection(connection);
+    wsHandler(handler()).handleConnection(connection);
     connection.emitError(new Error('reset'));
     connection.receive(sendMessage(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(connection.sent).toHaveLength(0);
   });
 
-  it('closes on malformed JSON and binary frames with the spec close codes', async () => {
-    const malformed = new FakeConnection();
-    new WebSocketTransportHandler(handler()).handleConnection(malformed);
-    malformed.receive('{not-json');
-    await vi.waitFor(() => expect(malformed.closed?.code).toBe(1002));
-    expect(malformed.sent[0]).toMatchObject({ id: null, error: { code: -32700 } });
+  it('answers malformed JSON with -32700 and keeps the connection open', async () => {
+    const connection = new FakeConnection();
+    wsHandler(handler()).handleConnection(connection);
+    connection.receive('{not-json');
+    connection.receive(sendMessage('next'));
+    await vi.waitFor(() => expect(connection.sent).toHaveLength(2));
+    expect(connection.sent[0]).toMatchObject({ id: null, error: { code: -32700 } });
+    expect(connection.sent[1]).toMatchObject({ id: 'next', result: expect.anything() });
+    expect(connection.closed).toBeUndefined();
+  });
 
+  it('closes with 4000 after repeated malformed messages', async () => {
+    const connection = new FakeConnection();
+    wsHandler(handler()).handleConnection(connection);
+    for (let i = 0; i < 10; i++) connection.receive('{not-json');
+    await vi.waitFor(() => expect(connection.closed?.code).toBe(4000));
+    expect(connection.sent).toHaveLength(10);
+  });
+
+  it('closes binary frames with 1003', async () => {
     const binary = new FakeConnection();
-    new WebSocketTransportHandler(handler()).handleConnection(binary);
+    wsHandler(handler()).handleConnection(binary);
     binary.receive(new Uint8Array([1, 2]), true);
     await vi.waitFor(() => expect(binary.closed?.code).toBe(1003));
   });
 
   it('closes with 1009 when a frame exceeds maxMessageBytes', async () => {
     const connection = new FakeConnection();
-    new WebSocketTransportHandler(handler(), { maxMessageBytes: 16 }).handleConnection(connection);
+    wsHandler(handler(), { maxMessageBytes: 16 }).handleConnection(connection);
     connection.receive(sendMessage(1));
     await vi.waitFor(() => expect(connection.closed?.code).toBe(1009));
     expect(connection.sent).toHaveLength(0);
@@ -503,7 +643,7 @@ describe('WebSocketTransportHandler', () => {
   it('closes with 1011 when a response cannot be written', async () => {
     const connection = new FakeConnection();
     connection.failSend = true;
-    new WebSocketTransportHandler(handler()).handleConnection(connection);
+    wsHandler(handler()).handleConnection(connection);
     connection.receive(sendMessage(1));
     await vi.waitFor(() => expect(connection.closed?.code).toBe(1011));
   });
@@ -512,7 +652,7 @@ describe('WebSocketTransportHandler', () => {
     vi.useFakeTimers();
     const connection = new FakeConnection();
     connection.ping = vi.fn();
-    new WebSocketTransportHandler(handler(), {
+    wsHandler(handler(), {
       pingIntervalMs: 100,
       idleTimeoutMs: 250,
     }).handleConnection(connection);
@@ -523,10 +663,42 @@ describe('WebSocketTransportHandler', () => {
     expect(connection.closed).toEqual({ code: 1001, reason: 'idle timeout' });
   });
 
+  it('pings every 30 seconds by default', async () => {
+    vi.useFakeTimers();
+    const connection = new FakeConnection();
+    connection.ping = vi.fn();
+    const cleanup = wsHandler(handler()).handleConnection(connection);
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(connection.ping).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(connection.ping).toHaveBeenCalledOnce();
+    cleanup();
+  });
+
+  it('closes with 1001 when a pong does not arrive in time', async () => {
+    vi.useFakeTimers();
+    let pong: (() => void) | undefined;
+    const connection = new FakeConnection();
+    connection.ping = vi.fn();
+    connection.onPong = (listener) => {
+      pong = listener;
+      return () => (pong = undefined);
+    };
+    wsHandler(handler(), { pingIntervalMs: 100, pongTimeoutMs: 50 }).handleConnection(connection);
+
+    await vi.advanceTimersByTimeAsync(100);
+    pong!();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(connection.closed).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(connection.closed).toEqual({ code: 1001, reason: 'pong timeout' });
+  });
+
   it('checks idleness without pings when only idleTimeoutMs is set', async () => {
     vi.useFakeTimers();
     const connection = new FakeConnection();
-    const cleanup = new WebSocketTransportHandler(handler(), {
+    const cleanup = wsHandler(handler(), {
       idleTimeoutMs: 50,
     }).handleConnection(connection);
 
@@ -542,7 +714,7 @@ describe('WebSocketTransportHandler', () => {
     vi.useFakeTimers();
     const connection = new FakeConnection();
     connection.ping = vi.fn();
-    new WebSocketTransportHandler(handler(), { pingIntervalMs: 100 }).handleConnection(connection);
+    wsHandler(handler(), { pingIntervalMs: 100 }).handleConnection(connection);
     expect(vi.getTimerCount()).toBe(1);
 
     end(connection);
@@ -559,7 +731,7 @@ describe('WebSocketTransportHandler', () => {
     connection.close = (code, reason) => {
       connection.closed = { code, reason };
     };
-    new WebSocketTransportHandler(handler(), {
+    wsHandler(handler(), {
       pingIntervalMs: 100,
       idleTimeoutMs: 100,
     }).handleConnection(connection);
@@ -574,7 +746,7 @@ describe('WebSocketTransportHandler', () => {
     const gate = deferred();
     let finished = false;
     const connection = new FakeConnection();
-    const cleanup = new WebSocketTransportHandler(
+    const cleanup = wsHandler(
       handler({
         sendMessageStream: vi.fn(async function* () {
           try {
@@ -687,6 +859,23 @@ describe('adaptWebSocketConnection', () => {
     ]);
     expect(errors).toEqual([expect.any(Error)]);
     expect(connection.ping).toBeUndefined();
+  });
+
+  it('closes Node ws-style sockets with 1007 on invalid UTF-8 text', () => {
+    const emitter = new EventEmitter();
+    const socket = Object.assign(emitter, { readyState: 1, send: vi.fn(), close: vi.fn() });
+    const connection = adaptWebSocketConnection(socket as never);
+    const messages: unknown[] = [];
+    connection.onMessage((data) => messages.push(data));
+    let pongs = 0;
+    connection.onPong!(() => pongs++);
+
+    emitter.emit('message', Buffer.from([0xff, 0xfe]), false);
+    emitter.emit('pong');
+
+    expect(messages).toHaveLength(0);
+    expect(socket.close).toHaveBeenCalledWith(1007, 'invalid UTF-8');
+    expect(pongs).toBe(1);
   });
 
   it('rejects objects without an event API', () => {

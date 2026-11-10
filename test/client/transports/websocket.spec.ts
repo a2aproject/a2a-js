@@ -5,7 +5,13 @@ import {
   type A2AWebSocket,
   type WebSocketTransportOptions,
 } from '../../../src/client/transports/websocket.js';
+import {
+  WEBSOCKET_PROTOCOL_NAME,
+  webSocketBindingErrorReason,
+} from '../../../src/transports/websocket/protocol.js';
 import { Role, type SendMessageRequest } from '../../../src/types/pb/a2a.js';
+
+const WEBSOCKET_URI = 'https://a2a-protocol.org/bindings/experimental-websocket/v1';
 
 class FakeSocket implements A2AWebSocket {
   readyState = 0;
@@ -135,11 +141,12 @@ describe('WebSocketTransport', () => {
 
     await expect(first).resolves.toMatchObject({ messageId: 'response-1' });
     await expect(second).resolves.toMatchObject({ messageId: 'response-2' });
-    expect(transport.protocolName).toBe('WEBSOCKET');
+    expect(transport.protocolName).toBe(WEBSOCKET_URI);
+    expect(WEBSOCKET_PROTOCOL_NAME).toBe(WEBSOCKET_URI);
     expect(transport.protocolVersion).toBe('1.0');
   });
 
-  it('passes handshake headers to the socket factory', async () => {
+  it('passes handshake headers, including A2A-Version, to the socket factory', async () => {
     const factory = vi.fn(() => new FakeSocket());
     const transport = new WebSocketTransport({
       endpoint: 'ws://agent.example/a2a/ws',
@@ -150,7 +157,33 @@ describe('WebSocketTransport', () => {
     await transport.connect();
     expect(factory).toHaveBeenCalledOnce();
     expect(factory).toHaveBeenCalledWith('ws://agent.example/a2a/ws', ['a2a.v1'], {
-      headers: { authorization: 'Bearer test' },
+      headers: { authorization: 'Bearer test', 'A2A-Version': '1.0' },
+    });
+  });
+
+  it('uses protocolVersion, but lets an A2A-Version header take precedence', async () => {
+    const factory = vi.fn(() => new FakeSocket());
+    const fromOption = new WebSocketTransport({
+      endpoint: 'ws://agent.example/a2a/ws',
+      protocolVersion: '1.1',
+      webSocketFactory: factory,
+    });
+    await fromOption.connect();
+    expect(fromOption.protocolVersion).toBe('1.1');
+    expect(factory).toHaveBeenLastCalledWith(expect.any(String), ['a2a.v1'], {
+      headers: { 'A2A-Version': '1.1' },
+    });
+
+    const fromHeader = new WebSocketTransport({
+      endpoint: 'ws://agent.example/a2a/ws',
+      protocolVersion: '1.1',
+      headers: { 'a2a-version': '1.2' },
+      webSocketFactory: factory,
+    });
+    await fromHeader.connect();
+    expect(fromHeader.protocolVersion).toBe('1.2');
+    expect(factory).toHaveBeenLastCalledWith(expect.any(String), ['a2a.v1'], {
+      headers: { 'a2a-version': '1.2' },
     });
   });
 
@@ -237,7 +270,7 @@ describe('WebSocketTransport', () => {
     await expect(pending).rejects.toThrow('missing payload');
   });
 
-  it('yields streaming result frames until streamEnd and cancels on iterator cleanup', async () => {
+  it('yields streaming results until ws/StreamEnd and sends ws/CancelStream on cleanup', async () => {
     const { transport, socket } = setup();
 
     const stream = transport.sendMessageStream(request());
@@ -252,14 +285,18 @@ describe('WebSocketTransport', () => {
     });
     expect((await first).value).toMatchObject({ payload: { $case: 'task' } });
     expect((await stream.next()).value).toMatchObject({ payload: { $case: 'statusUpdate' } });
-    socket().receive({ jsonrpc: '2.0', id, streamEnd: true });
+    socket().receive({ jsonrpc: '2.0', method: 'ws/StreamEnd', params: { id } });
     await expect(stream.next()).resolves.toMatchObject({ done: true });
 
     const cancelled = transport.sendMessageStream(request());
     const pending = cancelled.next();
     await vi.waitFor(() => expect(socket().sent).toHaveLength(2));
     await cancelled.return(undefined);
-    expect(socket().sent[2]).toMatchObject({ jsonrpc: '2.0', cancelStream: true });
+    expect(socket().sent[2]).toEqual({
+      jsonrpc: '2.0',
+      method: 'ws/CancelStream',
+      params: { id: socket().sent[1].id },
+    });
     await pending;
   });
 
@@ -327,7 +364,11 @@ describe('WebSocketTransport', () => {
     await vi.waitFor(() => expect(socket().sent).toHaveLength(1));
     const pendingRejected = expect(pending).rejects.toThrow('consumer failed');
     await expect(stream.throw(new Error('consumer failed'))).rejects.toThrow('consumer failed');
-    expect(socket().sent[1]).toMatchObject({ id: socket().sent[0].id, cancelStream: true });
+    expect(socket().sent[1]).toMatchObject({
+      method: 'ws/CancelStream',
+      params: { id: socket().sent[0].id },
+    });
+    expect(socket().sent[1]).not.toHaveProperty('id');
     await pendingRejected;
   });
 
@@ -360,7 +401,10 @@ describe('WebSocketTransport', () => {
     await vi.waitFor(() => expect(socket().sent).toHaveLength(2));
     streamController.abort();
     await expect(next).rejects.toMatchObject({ name: 'AbortError' });
-    expect(socket().sent[2]).toMatchObject({ id: socket().sent[1].id, cancelStream: true });
+    expect(socket().sent[2]).toMatchObject({
+      method: 'ws/CancelStream',
+      params: { id: socket().sent[1].id },
+    });
   });
 
   it('maps JSON-RPC errors and sends per-request service parameters', async () => {
@@ -398,7 +442,10 @@ describe('WebSocketTransport', () => {
     socket().receive({ jsonrpc: '1.0', id, result: { id: 'wrong-version' } });
     socket().receive({ jsonrpc: '2.0', result: { id: 'no-id' } });
     socket().receive({ jsonrpc: '2.0', id: 999, result: { id: 'unknown' } });
-    socket().receive({ jsonrpc: '2.0', id: 999, streamEnd: true });
+    socket().receive({ jsonrpc: '2.0', method: 'ws/StreamEnd', params: { id: 999 } });
+    socket().receive({ jsonrpc: '2.0', method: 'ws/StreamEnd' });
+    socket().receive({ jsonrpc: '2.0', method: 'ws/Unknown', params: { id } });
+    socket().receive({ jsonrpc: '2.0', method: 'ws/ReauthenticationRequired', params: {} });
     socket().receive({ jsonrpc: '2.0', id: 999, error: { code: -32603, message: 'x' } });
     socket().receive({ jsonrpc: '2.0', id });
     socket().receive({ jsonrpc: '2.0', id, result: { id: 't' } });
@@ -424,38 +471,71 @@ describe('WebSocketTransport', () => {
     expect(socket().closeCalls[0][0]).toBe(code);
   });
 
-  it('runs the re-authentication hook and refreshes credentials in band', async () => {
+  it('runs the re-authentication hook and refreshes credentials with ws/Authenticate', async () => {
     const onReauthenticationRequired = vi.fn();
-    const credentialProvider = vi.fn(async () => ({ scheme: 'Bearer', credentials: 'fresh' }));
+    const credentialProvider = vi.fn(async () => ({ bearer: 'fresh' }));
     const { socket, transport } = setup({ onReauthenticationRequired, credentialProvider });
     await transport.connect();
 
     socket().receive({
       jsonrpc: '2.0',
-      control: 'ReauthenticationRequired',
-      reason: 'token expiring',
-      retryAfterMs: 500,
+      method: 'ws/ReauthenticationRequired',
+      params: { expiresAt: '2026-11-10T10:00:00Z' },
     });
     const frame = await respond(socket, 0, { result: {} });
     expect(onReauthenticationRequired).toHaveBeenCalledWith({
-      reason: 'token expiring',
-      retryAfterMs: 500,
+      expiresAt: '2026-11-10T10:00:00Z',
     });
     expect(frame).toMatchObject({
-      method: 'Authenticate',
-      params: { scheme: 'Bearer', credentials: 'fresh' },
+      method: 'ws/Authenticate',
+      params: { credentials: { bearer: 'fresh' } },
     });
+    expect(frame.id).toBeDefined();
 
-    // A rejected refresh is swallowed; the server closes with 4001 instead.
-    socket().receive({ jsonrpc: '2.0', control: 'ReauthenticationRequired' });
-    await respond(socket, 1, { error: { code: -32004, message: 'not supported' } });
+    // A rejected refresh is swallowed; the server closes with 4001 at expiresAt.
+    socket().receive({
+      jsonrpc: '2.0',
+      method: 'ws/ReauthenticationRequired',
+      params: { expiresAt: '2026-11-10T11:00:00Z' },
+    });
+    await respond(socket, 1, { error: { code: -32601, message: 'Method not found' } });
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onReauthenticationRequired).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns expiresAt from ws/Authenticate and exposes binding error reasons', async () => {
+    const { socket, transport } = setup();
+
+    const ok = transport.authenticate({ bearer: 'new' });
+    await respond(socket, 0, { result: { expiresAt: '2026-11-10T12:00:00Z' } });
+    await expect(ok).resolves.toEqual({ expiresAt: '2026-11-10T12:00:00Z' });
+
+    const denied = transport.authenticate({ bearer: 'other-user' });
+    await respond(socket, 1, {
+      error: {
+        code: -32000,
+        message: 'principal changed',
+        data: [
+          {
+            '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+            reason: 'WS_PERMISSION_DENIED',
+            domain: 'a2a-protocol.org',
+          },
+        ],
+      },
+    });
+    const error = await denied.catch((e: unknown) => e);
+    expect(webSocketBindingErrorReason(error)).toBe('WS_PERMISSION_DENIED');
   });
 
   it('describes close codes in connection errors', async () => {
     const cases: Array<[Record<string, unknown>, RegExp]> = [
       [{ code: 4001 }, /authentication required/],
       [{ code: 1009 }, /peer maximum size/],
+      [{ code: 1007 }, /not valid UTF-8/],
+      [{ code: 1008, reason: 'rate limited' }, /policy \(1008\): rate limited/],
+      [{ code: 4000 }, /malformed messages/],
+      [{ code: 4002 }, /version is not supported/],
       [{ code: 1011, reason: 'server crashed' }, /\(1011\): server crashed/],
       [{}, /^WebSocket connection closed$/],
     ];
@@ -534,7 +614,7 @@ describe('WebSocketTransport', () => {
     );
   });
 
-  it('uses the global WebSocket when no factory is provided', async () => {
+  it('sends A2A- parameters in the query string with the global WebSocket', async () => {
     const created: FakeSocket[] = [];
     vi.stubGlobal(
       'WebSocket',
@@ -545,12 +625,20 @@ describe('WebSocketTransport', () => {
         }
       }
     );
-    const transport = new WebSocketTransport({ endpoint: 'ws://agent.example/a2a/ws' });
-    await transport.connect();
-    expect(created[0]).toMatchObject({
+    const transport = new WebSocketTransport({
       endpoint: 'ws://agent.example/a2a/ws',
-      protocols: ['a2a.v1'],
+      // Browsers cannot send headers: credentials must not move into the URL.
+      headers: { Authorization: 'Bearer secret', 'A2A-Extensions': 'urn:ext:a' },
     });
+    await transport.connect();
+    const url = new URL(created[0].endpoint);
+    expect(created[0].protocols).toEqual(['a2a.v1']);
+    expect(url.origin + url.pathname).toBe('ws://agent.example/a2a/ws');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      'A2A-Extensions': 'urn:ext:a',
+      'A2A-Version': '1.0',
+    });
+    expect(created[0].endpoint).not.toContain('secret');
   });
 
   it('explains how to proceed when no WebSocket implementation exists', async () => {
@@ -561,17 +649,28 @@ describe('WebSocketTransport', () => {
 });
 
 describe('WebSocketTransportFactory', () => {
-  it('creates the WEBSOCKET transport from an Agent Card interface', async () => {
+  it('creates the transport from an Agent Card interface, using its protocolVersion', async () => {
     const factory = new WebSocketTransportFactory({
       webSocketFactory: () => new FakeSocket(),
     });
-    expect(factory.protocolName).toBe('WEBSOCKET');
+    expect(factory.protocolName).toBe(WEBSOCKET_URI);
     const transport = await factory.create('ws://localhost/a2a/ws', {
       name: 'agent',
       description: '',
       version: '1.0.0',
+      supportedInterfaces: [
+        { url: 'ws://localhost/a2a/ws', protocolBinding: WEBSOCKET_URI, protocolVersion: '1.1' },
+      ],
+    } as any);
+    expect(transport.protocolName).toBe(WEBSOCKET_URI);
+    expect(transport.protocolVersion).toBe('1.1');
+  });
+
+  it('defaults the version when the interface declares none', async () => {
+    const factory = new WebSocketTransportFactory({ webSocketFactory: () => new FakeSocket() });
+    const transport = await factory.create('ws://localhost/a2a/ws', {
       supportedInterfaces: [],
     } as any);
-    expect(transport.protocolName).toBe('WEBSOCKET');
+    expect(transport.protocolVersion).toBe('1.0');
   });
 });

@@ -3,6 +3,7 @@ import {
   isBinaryWebSocketData,
   isKnownWebSocketMethod,
   isStreamingWebSocketMethod,
+  isWebSocketControlMethod,
   isWebSocketRequestId,
   mergeServiceParameters,
   normalizeServiceParameters,
@@ -28,8 +29,11 @@ describe('WebSocket protocol helpers', () => {
     expect(isStreamingWebSocketMethod('SendStreamingMessage')).toBe(true);
     expect(isStreamingWebSocketMethod('SubscribeToTask')).toBe(true);
     expect(isStreamingWebSocketMethod('SendMessage')).toBe(false);
-    expect(isKnownWebSocketMethod('Authenticate')).toBe(true);
+    expect(isKnownWebSocketMethod('SendMessage')).toBe(true);
+    expect(isKnownWebSocketMethod('ws/Authenticate')).toBe(false);
     expect(isKnownWebSocketMethod('message/send')).toBe(false);
+    expect(isWebSocketControlMethod('ws/Authenticate')).toBe(true);
+    expect(isWebSocketControlMethod('SendMessage')).toBe(false);
   });
 
   it('lowercases service parameter keys and lets request values win', () => {

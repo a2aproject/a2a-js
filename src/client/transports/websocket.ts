@@ -23,14 +23,16 @@ import { A2A_PROTOCOL_VERSION } from '../../constants.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { Transport, TransportFactory } from './transport.js';
 import { AsyncQueue } from '../../transports/websocket/async_queue.js';
+import { A2A_VERSION_HEADER } from '../../constants.js';
 import {
   DEFAULT_WEBSOCKET_MAX_MESSAGE_BYTES,
-  REAUTHENTICATION_REQUIRED_CONTROL,
   WEBSOCKET_CLOSE_CODE,
+  WEBSOCKET_CONTROL_METHOD,
   WEBSOCKET_JSONRPC_VERSION,
   WEBSOCKET_METHOD,
   WEBSOCKET_PROTOCOL_NAME,
   WEBSOCKET_SUBPROTOCOL,
+  WebSocketCredentials,
   WebSocketRequestEnvelope,
   WebSocketRequestId,
   WebSocketResponseEnvelope,
@@ -38,6 +40,7 @@ import {
   isWebSocketRequestId,
   mergeServiceParameters,
   requestIdKey,
+  withServiceParametersInQuery,
 } from '../../transports/websocket/protocol.js';
 
 export interface A2AWebSocket {
@@ -65,28 +68,43 @@ export type WebSocketFactory = (
   options: WebSocketFactoryOptions
 ) => A2AWebSocket;
 
-export interface WebSocketCredential {
-  scheme: string;
-  credentials: string;
+/** A server's `ws/ReauthenticationRequired` notification. */
+export interface WebSocketReauthenticationRequired {
+  /** ProtoJSON timestamp after which the current credentials are rejected. */
+  expiresAt: string;
 }
 
-export interface WebSocketReauthenticationRequired {
-  reason?: string;
-  retryAfterMs?: number;
+/** Result of a successful `ws/Authenticate`. */
+export interface WebSocketAuthenticateResult {
+  /** When the new credentials expire, if the server knows. */
+  expiresAt?: string;
 }
 
 export interface WebSocketTransportOptions {
   endpoint: string;
-  /** Native browser WebSocket is used when omitted. */
+  /**
+   * Native browser WebSocket is used when omitted. Browsers cannot set
+   * handshake headers, so `A2A-Version` is then sent as a query parameter.
+   */
   webSocketFactory?: WebSocketFactory;
   /** Connection-scoped service parameters sent as handshake headers by adapters. */
   headers?: Record<string, string>;
+  /**
+   * The connection's `A2A-Version`. Defaults to `A2A_PROTOCOL_VERSION`; an
+   * `A2A-Version` entry in `headers` takes precedence.
+   */
+  protocolVersion?: string;
   /** Default per-request service parameters. */
   serviceParameters?: WebSocketServiceParameters;
   maxMessageBytes?: number;
   connectTimeoutMs?: number;
   onReauthenticationRequired?: (request: WebSocketReauthenticationRequired) => void | Promise<void>;
-  credentialProvider?: () => Promise<WebSocketCredential>;
+  /**
+   * Supplies fresh credentials, keyed by Agent Card `securitySchemes` name,
+   * when the server sends `ws/ReauthenticationRequired`. They are installed
+   * with `ws/Authenticate` and must identify the same principal.
+   */
+  credentialProvider?: () => Promise<WebSocketCredentials>;
 }
 
 interface PendingUnary {
@@ -106,13 +124,16 @@ const OPEN = 1;
  * A browser-compatible A2A WebSocket client transport.
  *
  * One socket is shared by all calls. JSON-RPC ids route unary responses and
- * stream chunks to their callers; `streamEnd` and `cancelStream` are binding
- * extensions needed because the socket remains open after a stream completes.
+ * stream chunks to their callers; the `ws/StreamEnd` and `ws/CancelStream`
+ * notifications are needed because the socket remains open after a stream
+ * completes.
  */
 export class WebSocketTransport implements Transport {
   private readonly endpoint: string;
   private readonly webSocketFactory: WebSocketFactory;
-  private readonly headers?: Record<string, string>;
+  private readonly headersInQuery: boolean;
+  private readonly headers: Record<string, string>;
+  private readonly version: string;
   private readonly defaultServiceParameters: WebSocketServiceParameters;
   private readonly maxMessageBytes: number;
   private readonly connectTimeoutMs: number;
@@ -128,7 +149,16 @@ export class WebSocketTransport implements Transport {
   constructor(options: WebSocketTransportOptions) {
     this.endpoint = options.endpoint;
     this.webSocketFactory = options.webSocketFactory ?? defaultWebSocketFactory;
-    this.headers = options.headers;
+    this.headersInQuery = options.webSocketFactory === undefined;
+    const versionHeader = Object.keys(options.headers ?? {}).find(
+      (key) => key.toLowerCase() === A2A_VERSION_HEADER.toLowerCase()
+    );
+    this.version = versionHeader
+      ? options.headers![versionHeader]
+      : (options.protocolVersion ?? A2A_PROTOCOL_VERSION);
+    this.headers = versionHeader
+      ? { ...options.headers }
+      : { ...options.headers, [A2A_VERSION_HEADER]: this.version };
     this.defaultServiceParameters = options.serviceParameters ?? {};
     this.maxMessageBytes = options.maxMessageBytes ?? DEFAULT_WEBSOCKET_MAX_MESSAGE_BYTES;
     this.connectTimeoutMs = options.connectTimeoutMs ?? 10_000;
@@ -141,7 +171,7 @@ export class WebSocketTransport implements Transport {
   }
 
   get protocolVersion(): string {
-    return A2A_PROTOCOL_VERSION;
+    return this.version;
   }
 
   /** Opens the socket explicitly. Calls also connect lazily on first use. */
@@ -152,7 +182,7 @@ export class WebSocketTransport implements Transport {
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
       let settled = false;
-      const socket = this.webSocketFactory(this.endpoint, [WEBSOCKET_SUBPROTOCOL], {
+      const socket = this.webSocketFactory(this.handshakeEndpoint(), [WEBSOCKET_SUBPROTOCOL], {
         headers: this.headers,
       });
       this.socket = socket;
@@ -335,9 +365,21 @@ export class WebSocketTransport implements Transport {
     );
   }
 
-  /** Optional binding-specific in-band credential refresh. */
-  async authenticate(credential: WebSocketCredential, options?: RequestOptions): Promise<void> {
-    await this.call(WEBSOCKET_METHOD.AUTHENTICATE, credential, options);
+  /**
+   * Replaces the connection's credentials with `ws/Authenticate`. Keys are
+   * Agent Card `securitySchemes` names. Only servers that support in-band
+   * refresh accept it; others answer `-32601`.
+   */
+  async authenticate(
+    credentials: WebSocketCredentials,
+    options?: RequestOptions
+  ): Promise<WebSocketAuthenticateResult> {
+    const result = (await this.call(
+      WEBSOCKET_CONTROL_METHOD.AUTHENTICATE,
+      { credentials },
+      options
+    )) as { expiresAt?: unknown } | undefined;
+    return typeof result?.expiresAt === 'string' ? { expiresAt: result.expiresAt } : {};
   }
 
   async destroy(): Promise<void> {
@@ -485,8 +527,16 @@ export class WebSocketTransport implements Transport {
     }
     if (envelope.jsonrpc !== WEBSOCKET_JSONRPC_VERSION) return;
 
-    if (envelope.control === REAUTHENTICATION_REQUIRED_CONTROL) {
-      await this.handleReauthenticationRequired(envelope);
+    // Server notifications carry no id; unknown or malformed ones are ignored.
+    if (!('id' in envelope)) {
+      const params = envelope.params as Record<string, unknown> | undefined;
+      if (envelope.method === WEBSOCKET_CONTROL_METHOD.STREAM_END) {
+        if (isWebSocketRequestId(params?.id)) this.endStream(requestIdKey(params.id));
+      } else if (envelope.method === WEBSOCKET_CONTROL_METHOD.REAUTHENTICATION_REQUIRED) {
+        if (typeof params?.expiresAt === 'string') {
+          await this.handleReauthenticationRequired({ expiresAt: params.expiresAt });
+        }
+      }
       return;
     }
     if (!isWebSocketRequestId(envelope.id)) return;
@@ -505,10 +555,6 @@ export class WebSocketTransport implements Transport {
       this.endStream(key, error);
       return;
     }
-    if (envelope.streamEnd) {
-      this.endStream(key);
-      return;
-    }
     if (!('result' in envelope)) return;
 
     const unary = this.unary.get(key);
@@ -521,22 +567,41 @@ export class WebSocketTransport implements Transport {
     this.streams.get(key)?.queue.push(envelope.result);
   }
 
-  private async handleReauthenticationRequired(envelope: WebSocketResponseEnvelope): Promise<void> {
-    const request = { reason: envelope.reason, retryAfterMs: envelope.retryAfterMs };
+  private async handleReauthenticationRequired(
+    request: WebSocketReauthenticationRequired
+  ): Promise<void> {
     await this.onReauthenticationRequired?.(request);
     if (this.credentialProvider) {
       try {
         await this.authenticate(await this.credentialProvider());
       } catch {
-        // The server will close with 4001 if refresh fails; callers can use the
-        // close event or reconnect explicitly with fresh credentials.
+        // The server closes with 4001 at expiresAt if refresh fails; callers can
+        // use the close event or reconnect explicitly with fresh credentials.
       }
     }
   }
 
   private sendCancel(id: WebSocketRequestId): void {
     if (this.socket?.readyState !== OPEN) return;
-    this.sendEnvelope({ jsonrpc: WEBSOCKET_JSONRPC_VERSION, id, cancelStream: true });
+    this.sendEnvelope({
+      jsonrpc: WEBSOCKET_JSONRPC_VERSION,
+      method: WEBSOCKET_CONTROL_METHOD.CANCEL_STREAM,
+      params: { id },
+    });
+  }
+
+  /**
+   * The URL to open. Without a custom factory the native WebSocket cannot send
+   * headers, so the `A2A-` service parameters travel as query parameters.
+   * Credentials are never put in the URL.
+   */
+  private handshakeEndpoint(): string {
+    if (!this.headersInQuery) return this.endpoint;
+    const query: WebSocketServiceParameters = {};
+    for (const [key, value] of Object.entries(this.headers)) {
+      if (key.toLowerCase().startsWith('a2a-')) query[key] = value;
+    }
+    return withServiceParametersInQuery(this.endpoint, query);
   }
 
   private sendEnvelope(envelope: WebSocketRequestEnvelope): void {
@@ -608,8 +673,15 @@ export class WebSocketTransportFactory implements TransportFactory {
 
   constructor(private readonly options?: Omit<WebSocketTransportOptions, 'endpoint'>) {}
 
-  async create(url: string, _agentCard: AgentCard): Promise<Transport> {
-    return new WebSocketTransport({ ...this.options, endpoint: url });
+  async create(url: string, agentCard: AgentCard): Promise<Transport> {
+    const agentInterface = agentCard.supportedInterfaces?.find(
+      (candidate) => candidate.protocolBinding === WEBSOCKET_PROTOCOL_NAME && candidate.url === url
+    );
+    return new WebSocketTransport({
+      protocolVersion: agentInterface?.protocolVersion || undefined,
+      ...this.options,
+      endpoint: url,
+    });
   }
 }
 
@@ -652,6 +724,18 @@ function closeError(code?: number, reason?: string): Error {
   }
   if (code === WEBSOCKET_CLOSE_CODE.MESSAGE_TOO_BIG) {
     return new Error('WebSocket message exceeded the peer maximum size');
+  }
+  if (code === WEBSOCKET_CLOSE_CODE.INVALID_PAYLOAD) {
+    return new Error('WebSocket peer rejected a message that was not valid UTF-8');
+  }
+  if (code === WEBSOCKET_CLOSE_CODE.POLICY_VIOLATION) {
+    return new Error(`WebSocket closed by policy (1008)${reason ? `: ${reason}` : ''}`);
+  }
+  if (code === WEBSOCKET_CLOSE_CODE.A2A_PROTOCOL_ERROR) {
+    return new Error('WebSocket closed after repeated malformed messages (4000)');
+  }
+  if (code === WEBSOCKET_CLOSE_CODE.VERSION_NOT_SUPPORTED) {
+    return new Error('WebSocket closed: the A2A version is not supported (4002)');
   }
   return new Error(
     `WebSocket connection closed${code === undefined ? '' : ` (${code})`}${reason ? `: ${reason}` : ''}`
