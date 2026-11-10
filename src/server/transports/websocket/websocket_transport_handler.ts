@@ -1,4 +1,3 @@
-import { A2A_PROTOCOL_VERSION } from '../../../constants.js';
 import type { JSONRPCError } from '../../../core.js';
 import { A2A_ERROR_CODE, toJsonRpcError } from '../../../errors/index.js';
 import { Extensions } from '../../../extensions.js';
@@ -14,18 +13,35 @@ import { A2ARequestHandler } from '../../request_handler/a2a_request_handler.js'
 import { JsonRpcTransportHandler, JSONRPCResponse } from '../jsonrpc/jsonrpc_transport_handler.js';
 import {
   DEFAULT_WEBSOCKET_MAX_MESSAGE_BYTES,
+  WEBSOCKET_BINDING_ERROR,
   WEBSOCKET_CLOSE_CODE,
+  WEBSOCKET_CONTROL_METHOD,
+  WEBSOCKET_DEFAULT_A2A_VERSION,
   WEBSOCKET_JSONRPC_VERSION,
   WebSocketRequestEnvelope,
   WebSocketRequestId,
   WebSocketResponseEnvelope,
   WebSocketServiceParameters,
+  findDuplicateServiceParameter,
   isStreamingWebSocketMethod,
+  isWebSocketControlMethod,
   isWebSocketRequestId,
   mergeServiceParameters,
   requestIdKey,
+  serviceParametersFromQuery,
+  webSocketBindingError,
   WEBSOCKET_PROTOCOL_NAME,
 } from '../../../transports/websocket/protocol.js';
+
+/** Recommended keep-alive interval. */
+export const DEFAULT_WEBSOCKET_PING_INTERVAL_MS = 30_000;
+/** Recommended time to wait for a pong before closing. */
+export const DEFAULT_WEBSOCKET_PONG_TIMEOUT_MS = 10_000;
+/** Recommended idle timeout. */
+export const DEFAULT_WEBSOCKET_IDLE_TIMEOUT_MS = 5 * 60_000;
+/** Malformed messages tolerated before the connection is closed with 4000. */
+const MAX_MALFORMED_MESSAGES = 10;
+const VERSION_KEY = 'a2a-version';
 
 /** Normalized socket surface used by the framework-neutral server handler. */
 export interface WebSocketConnection {
@@ -48,6 +64,12 @@ interface WebSocketEvent {
 export interface WebSocketHandshakeContext {
   /** HTTP Upgrade headers, supplied by the host server before accepting. */
   headers?: RequestHeaders;
+  /**
+   * HTTP Upgrade request URL. Its `A2A-` query parameters are connection-scoped
+   * service parameters for clients that cannot set headers; a header with the
+   * same name wins.
+   */
+  url?: string;
   /** Identity established by the host's handshake authenticator. */
   user?: User;
   /** Connection-scoped service parameters from handshake headers/auth context. */
@@ -135,7 +157,14 @@ export function adaptWebSocketConnection(socket: WebSocketSocketLike): WebSocket
           return;
         }
         if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
-          listener(new TextDecoder().decode(data as ArrayBufferView), false);
+          let text: string;
+          try {
+            text = UTF8_DECODER.decode(data as ArrayBufferView);
+          } catch {
+            socket.close(WEBSOCKET_CLOSE_CODE.INVALID_PAYLOAD, 'invalid UTF-8');
+            return;
+          }
+          listener(text, false);
           return;
         }
         listener(data, true);
@@ -154,16 +183,33 @@ export function adaptWebSocketConnection(socket: WebSocketSocketLike): WebSocket
       return register('error', listener);
     },
     ping: socket.ping?.bind(socket),
+    onPong(listener) {
+      return register('pong', () => listener());
+    },
   };
 }
+
+const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 
 export interface WebSocketServerOptions {
   handshake?: WebSocketHandshakeContext;
   contextBuilder?: ServerCallContextBuilder;
   maxMessageBytes?: number;
   maxConcurrentStreams?: number;
-  /** Optional server keep-alive. Requires a socket adapter with ping(). */
+  /**
+   * Keep-alive ping interval; `0` disables pings. Defaults to
+   * {@link DEFAULT_WEBSOCKET_PING_INTERVAL_MS}. Requires a socket with ping().
+   */
   pingIntervalMs?: number;
+  /**
+   * Close with 1001 when no pong arrives within this time; `0` disables.
+   * Defaults to {@link DEFAULT_WEBSOCKET_PONG_TIMEOUT_MS}. Requires onPong().
+   */
+  pongTimeoutMs?: number;
+  /**
+   * Close with 1001 after this long without a message in either direction;
+   * `0` disables. Defaults to {@link DEFAULT_WEBSOCKET_IDLE_TIMEOUT_MS}.
+   */
   idleTimeoutMs?: number;
 }
 
@@ -176,6 +222,9 @@ interface SessionState {
   closed: boolean;
   lastActivity: number;
   activeStreams: Map<string, ActiveStream>;
+  malformedMessages: number;
+  /** Resolves to whether the connection's `A2A-Version` is supported. */
+  versionSupported: Promise<boolean>;
 }
 
 /**
@@ -183,8 +232,13 @@ interface SessionState {
  *
  * The HTTP Upgrade, `Sec-WebSocket-Protocol` negotiation, Origin validation,
  * and handshake authentication intentionally remain with the host runtime.
- * This class starts after a host has accepted an upgrade with `a2a.v1` and
- * gives every request to the normal A2A request handler.
+ * Hosts SHOULD also reject an unsupported `A2A-Version` with HTTP 400 before
+ * upgrading; otherwise this handler closes the connection with 4002. This
+ * class starts after a host has accepted an upgrade with `a2a.v1` and gives
+ * every request to the normal A2A request handler.
+ *
+ * In-band credential refresh is not supported: `ws/Authenticate` is answered
+ * with `-32601`.
  */
 export class WebSocketTransportHandler {
   private readonly requestHandler: A2ARequestHandler;
@@ -203,10 +257,12 @@ export class WebSocketTransportHandler {
    */
   handleConnection(connection: WebSocketConnection): () => void {
     const connectionParameters = normalizeServiceParameters({
+      ...serviceParametersFromQuery(this.options.handshake?.url),
       ...headersToServiceParameters(this.options.handshake?.headers),
       ...this.options.handshake?.serviceParameters,
       ...this.options.handshake?.authenticatedServiceParameters,
     });
+    connectionParameters[VERSION_KEY] ??= WEBSOCKET_DEFAULT_A2A_VERSION;
     const authenticatedParameters = normalizeServiceParameters(
       this.options.handshake?.authenticatedServiceParameters ?? {}
     );
@@ -214,7 +270,21 @@ export class WebSocketTransportHandler {
       closed: false,
       lastActivity: Date.now(),
       activeStreams: new Map(),
+      malformedMessages: 0,
+      versionSupported: this.isVersionSupported(connectionParameters[VERSION_KEY]),
     };
+    void state.versionSupported.then(
+      (supported) => {
+        if (supported || state.closed) return;
+        connection.close(WEBSOCKET_CLOSE_CODE.VERSION_NOT_SUPPORTED, 'A2A version not supported');
+        dispose();
+      },
+      () => {
+        if (state.closed) return;
+        connection.close(WEBSOCKET_CLOSE_CODE.INTERNAL_ERROR, 'agent card unavailable');
+        dispose();
+      }
+    );
     // Kept separate from state.closed so that teardown always runs exactly once,
     // whichever path (peer close, error, idle timeout, host cleanup) gets here first.
     let disposed = false;
@@ -271,15 +341,40 @@ export class WebSocketTransportHandler {
       return;
     }
 
-    let envelope: Partial<WebSocketRequestEnvelope> & { jsonrpc?: unknown };
+    let parsed: unknown;
     try {
-      envelope = JSON.parse(data) as Partial<WebSocketRequestEnvelope> & { jsonrpc?: unknown };
+      parsed = JSON.parse(data);
     } catch (error) {
+      // Each message is framed separately, so one malformed message does not
+      // affect other requests and the connection stays open.
       this.sendError(connection, null, {
         code: A2A_ERROR_CODE.PARSE_ERROR,
         message: `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
       });
-      connection.close(WEBSOCKET_CLOSE_CODE.PROTOCOL_ERROR, 'JSON parse error');
+      state.malformedMessages++;
+      if (state.malformedMessages >= MAX_MALFORMED_MESSAGES) {
+        connection.close(WEBSOCKET_CLOSE_CODE.A2A_PROTOCOL_ERROR, 'too many malformed messages');
+      }
+      return;
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      this.sendError(connection, null, {
+        code: A2A_ERROR_CODE.INVALID_REQUEST,
+        message: 'message must be a JSON-RPC object',
+      });
+      return;
+    }
+    const envelope = parsed as Partial<WebSocketRequestEnvelope> & { jsonrpc?: unknown };
+
+    // Notifications are never answered; unknown or malformed ones are ignored.
+    if (!('id' in envelope)) {
+      if (
+        envelope.jsonrpc === WEBSOCKET_JSONRPC_VERSION &&
+        envelope.method === WEBSOCKET_CONTROL_METHOD.CANCEL_STREAM
+      ) {
+        const streamId = (envelope.params as { id?: unknown } | undefined)?.id;
+        if (isWebSocketRequestId(streamId)) this.cancelStream(connection, state, streamId);
+      }
       return;
     }
 
@@ -298,10 +393,6 @@ export class WebSocketTransportHandler {
       return;
     }
     const id = envelope.id;
-    if (envelope.cancelStream === true) {
-      this.cancelStream(connection, state, id);
-      return;
-    }
     if (typeof envelope.method !== 'string' || envelope.method.length === 0) {
       this.sendError(connection, id, {
         code: A2A_ERROR_CODE.INVALID_REQUEST,
@@ -309,26 +400,37 @@ export class WebSocketTransportHandler {
       });
       return;
     }
-    if (envelope.method === 'Authenticate') {
+    if (isWebSocketControlMethod(envelope.method)) {
       this.sendError(connection, id, {
-        code: A2A_ERROR_CODE.UNSUPPORTED_OPERATION,
-        message: 'in-band token refresh is not supported by this handler',
+        code: A2A_ERROR_CODE.METHOD_NOT_FOUND,
+        message: `Method not found: ${envelope.method}`,
       });
       return;
     }
+    if (!(await state.versionSupported.catch(() => false)) || state.closed) return;
 
+    const duplicate = findDuplicateServiceParameter(envelope.serviceParams);
+    if (duplicate !== undefined) {
+      this.sendError(connection, id, {
+        code: A2A_ERROR_CODE.INVALID_REQUEST,
+        message: `serviceParams contains '${duplicate}' more than once`,
+      });
+      return;
+    }
     const requestParameters = mergeServiceParameters(connectionParameters, envelope.serviceParams);
+    if (requestParameters[VERSION_KEY] !== connectionParameters[VERSION_KEY]) {
+      this.sendError(connection, id, {
+        code: A2A_ERROR_CODE.VERSION_NOT_SUPPORTED,
+        message: `A2A-Version is fixed for the connection at '${connectionParameters[VERSION_KEY]}'`,
+      });
+      return;
+    }
     for (const key of Object.keys(authenticatedParameters)) {
       requestParameters[key] = connectionParameters[key];
     }
     let result: JSONRPCResponse | AsyncGenerator<JSONRPCResponse, void, undefined>;
     try {
       const context = this.createContext(requestParameters);
-      validateVersion(
-        context.requestedVersion,
-        await this.requestHandler.getAgentCard(),
-        WEBSOCKET_PROTOCOL_NAME
-      );
       result = await this.jsonRpcHandler.handle(envelope as Record<string, unknown>, context);
     } catch (error) {
       this.sendError(connection, id, toJsonRpcError(error));
@@ -345,10 +447,15 @@ export class WebSocketTransportHandler {
       }
       const key = requestIdKey(id);
       if (state.activeStreams.size >= (this.options.maxConcurrentStreams ?? Infinity)) {
-        this.sendError(connection, id, {
-          code: -32000,
-          message: 'Too many concurrent streams',
-        });
+        void result.return();
+        this.sendError(
+          connection,
+          id,
+          webSocketBindingError(
+            WEBSOCKET_BINDING_ERROR.TOO_MANY_IN_FLIGHT,
+            'Too many concurrent streams'
+          )
+        );
         return;
       }
       const active: ActiveStream = { iterator: result, cancelled: false };
@@ -371,9 +478,7 @@ export class WebSocketTransportHandler {
         if (active.cancelled || state.closed) return;
         this.sendResponse(connection, id, response);
       }
-      if (!active.cancelled && !state.closed) {
-        this.send(connection, { jsonrpc: WEBSOCKET_JSONRPC_VERSION, id, streamEnd: true });
-      }
+      if (!active.cancelled && !state.closed) this.sendStreamEnd(connection, id);
     } catch (error) {
       if (!active.cancelled && !state.closed) this.sendError(connection, id, toJsonRpcError(error));
     } finally {
@@ -392,8 +497,26 @@ export class WebSocketTransportHandler {
     active.cancelled = true;
     state.activeStreams.delete(key);
     void active.iterator.return();
-    if (!state.closed)
-      this.send(connection, { jsonrpc: WEBSOCKET_JSONRPC_VERSION, id, streamEnd: true });
+    if (!state.closed) this.sendStreamEnd(connection, id);
+  }
+
+  private sendStreamEnd(connection: WebSocketConnection, id: WebSocketRequestId): void {
+    this.send(connection, {
+      jsonrpc: WEBSOCKET_JSONRPC_VERSION,
+      method: WEBSOCKET_CONTROL_METHOD.STREAM_END,
+      params: { id },
+    });
+  }
+
+  /** Rejects if the agent card cannot be loaded. */
+  private async isVersionSupported(version: string): Promise<boolean> {
+    const agentCard = await this.requestHandler.getAgentCard();
+    try {
+      validateVersion(version, agentCard, WEBSOCKET_PROTOCOL_NAME);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private createContext(parameters: WebSocketServiceParameters): ServerCallContext {
@@ -403,7 +526,7 @@ export class WebSocketTransportHandler {
       extensions: Extensions.parseServiceParameter(parameters['a2a-extensions']),
       user: this.options.handshake?.user,
       headers,
-      requestedVersion: parameters['a2a-version'] ?? A2A_PROTOCOL_VERSION,
+      requestedVersion: parameters[VERSION_KEY],
       tenant: undefined,
     });
   }
@@ -449,26 +572,52 @@ export class WebSocketTransportHandler {
   private startLiveness(
     connection: WebSocketConnection,
     state: SessionState,
-    onIdle: () => void
+    onTimeout: () => void
   ): (() => void) | undefined {
-    const interval = this.options.pingIntervalMs;
-    if (!interval && !this.options.idleTimeoutMs) return undefined;
-    const timer = setInterval(
-      () => {
-        if (state.closed) return;
-        if (
-          this.options.idleTimeoutMs &&
-          Date.now() - state.lastActivity >= this.options.idleTimeoutMs
-        ) {
-          connection.close(WEBSOCKET_CLOSE_CODE.GOING_AWAY, 'idle timeout');
-          onIdle();
-          return;
-        }
-        if (interval && connection.ping) connection.ping();
-      },
-      interval ?? Math.min(this.options.idleTimeoutMs!, 30_000)
-    );
-    return () => clearInterval(timer);
+    const pingInterval = connection.ping
+      ? (this.options.pingIntervalMs ?? DEFAULT_WEBSOCKET_PING_INTERVAL_MS)
+      : 0;
+    const pongTimeout = connection.onPong
+      ? (this.options.pongTimeoutMs ?? DEFAULT_WEBSOCKET_PONG_TIMEOUT_MS)
+      : 0;
+    const idleTimeout = this.options.idleTimeoutMs ?? DEFAULT_WEBSOCKET_IDLE_TIMEOUT_MS;
+    if (!pingInterval && !idleTimeout) return undefined;
+
+    let awaitingPongSince: number | undefined;
+    const pongCleanup =
+      pingInterval && pongTimeout
+        ? connection.onPong!(() => {
+            awaitingPongSince = undefined;
+          })
+        : undefined;
+    const close = (reason: string) => {
+      connection.close(WEBSOCKET_CLOSE_CODE.GOING_AWAY, reason);
+      onTimeout();
+    };
+    const tick = Math.min(...[pingInterval, idleTimeout, pongTimeout].filter((ms) => ms > 0));
+    let lastPing = Date.now();
+    const timer = setInterval(() => {
+      if (state.closed) return;
+      const now = Date.now();
+      if (idleTimeout && now - state.lastActivity >= idleTimeout) {
+        close('idle timeout');
+        return;
+      }
+      if (awaitingPongSince !== undefined && now - awaitingPongSince >= pongTimeout) {
+        close('pong timeout');
+        return;
+      }
+      if (pingInterval && now - lastPing >= pingInterval) {
+        lastPing = now;
+        connection.ping!();
+        if (pongTimeout && awaitingPongSince === undefined) awaitingPongSince = now;
+      }
+    }, tick);
+    (timer as { unref?: () => void }).unref?.();
+    return () => {
+      clearInterval(timer);
+      pongCleanup?.();
+    };
   }
 }
 

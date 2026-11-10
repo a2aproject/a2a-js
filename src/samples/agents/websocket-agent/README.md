@@ -6,11 +6,20 @@ includes a Node.js client for exercising it.
 The server demonstrates the host responsibilities that sit around the SDK
 transport handler:
 
-- publishing a WebSocket interface in the Agent Card;
+- publishing a WebSocket interface in the Agent Card, with `protocolBinding`
+  set to the experimental binding URI
+  `https://a2a-protocol.org/bindings/experimental-websocket/v1`
+  (`WEBSOCKET_PROTOCOL_NAME`);
 - negotiating the `a2a.v1` subprotocol during the HTTP Upgrade;
 - validating the request `Origin` and Bearer token before accepting the socket;
 - adapting a `ws` connection with `adaptWebSocketConnection`; and
-- passing the authenticated connection to `WebSocketTransportHandler`.
+- passing the authenticated connection, its headers and its request URL to
+  `WebSocketTransportHandler`, which reads the connection's `A2A-Version`
+  (header first, then query parameter, defaulting to `0.3`) and closes with
+  `4002` when the Agent Card does not support it.
+
+The client sets `protocolVersion`, which the transport sends as the
+`A2A-Version` handshake header.
 
 The client uses one persistent socket for a streaming `SendStreamingMessage`
 and a concurrent unary `SendMessage`. The server can therefore send stream

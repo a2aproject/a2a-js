@@ -86,9 +86,9 @@ async function main(): Promise<void> {
   const transport = new WebSocketTransport({
     endpoint: AGENT_URL,
     webSocketFactory: nodeWebSocketFactory,
+    protocolVersion: A2A_PROTOCOL_VERSION,
     headers: {
       Authorization: `Bearer ${ACCESS_TOKEN}`,
-      'A2A-Version': A2A_PROTOCOL_VERSION,
       'X-A2A-User': 'websocket-example-client',
     },
   });
