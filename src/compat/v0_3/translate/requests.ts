@@ -1,7 +1,7 @@
 /**
  * RPC request/response translators. v0.3 JSON-RPC wraps params under
  * `.params`; v1.0 proto types are flat. Note the polarity inversion:
- * v1.0 `returnImmediately` = `!blocking` in v0.3. v1.0 → v0.3 helpers
+ * v1.0 `returnImmediately` = `blocking === false` in v0.3. v1.0 → v0.3 helpers
  * require an explicit `requestId` since v1.0 proto carries none.
  */
 
@@ -51,7 +51,8 @@ export function toCoreSendMessageConfiguration(
       ? toCorePushNotificationConfig(compat.pushNotificationConfig)
       : undefined,
     historyLength: compat.historyLength,
-    returnImmediately: compat.blocking === undefined ? true : !compat.blocking,
+    // v0.3 default is blocking; only an explicit false returns immediately.
+    returnImmediately: compat.blocking === false,
   };
 }
 
