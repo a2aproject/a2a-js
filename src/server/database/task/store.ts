@@ -20,7 +20,13 @@ import {
   type TaskDatabase,
   type TaskRow,
 } from './schema.js';
-import { fromTaskRow, statusLastUpdated, toTaskRow, type TaskScope } from './serialization.js';
+import {
+  fromTaskRow,
+  statusLastUpdated,
+  statusSubmillisecondNanos,
+  toTaskRow,
+  type TaskScope,
+} from './serialization.js';
 
 /**
  * The columns a listing needs. A payload column the caller will not see is left
@@ -37,9 +43,11 @@ function listColumns(params: ListTasksRequest): readonly (keyof TaskRow)[] {
   return TASK_TABLE_COLUMNS.filter((column) => !skipped.has(column));
 }
 
-/** Cursor form of the sort key. 0 means no timestamp, which InMemoryTaskStore spells ''. */
-function cursorTimestamp(statusLastUpdated: number): string {
-  return statusLastUpdated === 0 ? '' : new Date(statusLastUpdated).toISOString();
+/** Canonical UTC cursor timestamp, retaining every digit of the SQL sort key. */
+function cursorTimestamp(updated: number, nanos: number): string {
+  if (updated === 0 && nanos === 0) return '';
+  const timestamp = new Date(updated).toISOString();
+  return nanos === 0 ? timestamp : timestamp.slice(0, -1) + String(nanos).padStart(6, '0') + 'Z';
 }
 
 export interface DatabaseTaskStoreOptions {
@@ -90,6 +98,7 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
     const replaceable = {
       context_id: row.context_id,
       status_last_updated: row.status_last_updated,
+      status_last_updated_nanos: row.status_last_updated_nanos,
       status_state: row.status_state,
       status: row.status,
       artifacts: row.artifacts,
@@ -164,6 +173,7 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
       .select([...listColumns(params)])
       .where(filter)
       .orderBy('status_last_updated', 'desc')
+      .orderBy('status_last_updated_nanos', 'desc')
       .orderBy('id', 'desc')
       // One extra row answers whether a next page exists.
       .limit(pageSize + 1);
@@ -171,11 +181,18 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
     if (pageToken) {
       const cursor = decodePageToken(pageToken);
       const cursorUpdated = statusLastUpdated(cursor.timestamp);
+      const cursorNanos = statusSubmillisecondNanos(cursor.timestamp);
       // Keyset: everything ordering after the cursor row.
       query = query.where((eb) =>
         eb.or([
           eb('status_last_updated', '<', cursorUpdated),
-          eb.and([eb('status_last_updated', '=', cursorUpdated), eb('id', '<', cursor.id)]),
+          eb.and([
+            eb('status_last_updated', '=', cursorUpdated),
+            eb.or([
+              eb('status_last_updated_nanos', '<', cursorNanos),
+              eb.and([eb('status_last_updated_nanos', '=', cursorNanos), eb('id', '<', cursor.id)]),
+            ]),
+          ]),
         ])
       );
     }
@@ -210,7 +227,13 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
       nextPageToken:
         hasMore && lastRow
           ? // Number(): bigint is a string on some drivers.
-            encodePageToken(cursorTimestamp(Number(lastRow.status_last_updated)), lastRow.id)
+            encodePageToken(
+              cursorTimestamp(
+                Number(lastRow.status_last_updated),
+                lastRow.status_last_updated_nanos
+              ),
+              lastRow.id
+            )
           : '',
       pageSize,
       totalSize,
