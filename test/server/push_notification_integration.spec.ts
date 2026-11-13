@@ -135,7 +135,9 @@ describe('Push Notification Integration Tests', () => {
     mockAgentExecutor = new MockAgentExecutor();
     const executionEventBusManager = new DefaultExecutionEventBusManager();
     pushNotificationStore = new InMemoryPushNotificationStore();
-    pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore);
+    pushNotificationSender = new DefaultPushNotificationSender(pushNotificationStore, {
+      allowPrivatePushUrls: true,
+    });
     pushNotificationSenderSpy = vi.spyOn(pushNotificationSender, 'send');
     defaultContext = new ServerCallContext();
 
@@ -145,7 +147,10 @@ describe('Push Notification Integration Tests', () => {
       mockAgentExecutor,
       executionEventBusManager,
       pushNotificationStore,
-      pushNotificationSender
+      pushNotificationSender,
+      undefined,
+      undefined,
+      { allowPrivatePushUrls: true }
     );
   });
 
@@ -700,9 +705,7 @@ describe('Push Notification Integration Tests', () => {
     it('should use custom header name when tokenHeaderName is specified', async () => {
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
-        {
-          tokenHeaderName: 'X-Custom-Auth-Token',
-        }
+        { allowPrivatePushUrls: true, tokenHeaderName: 'X-Custom-Auth-Token' }
       );
       const customSenderSpy = vi.spyOn(customPushNotificationSender, 'send');
 
@@ -712,7 +715,10 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender
+        customPushNotificationSender,
+        undefined,
+        undefined,
+        { allowPrivatePushUrls: true }
       );
 
       const pushConfig: TaskPushNotificationConfig = {
@@ -882,9 +888,7 @@ describe('Push Notification Integration Tests', () => {
     it('should handle multiple push configs with different header configurations', async () => {
       const customPushNotificationSender = new DefaultPushNotificationSender(
         pushNotificationStore,
-        {
-          tokenHeaderName: 'X-Custom-Token',
-        }
+        { allowPrivatePushUrls: true, tokenHeaderName: 'X-Custom-Token' }
       );
       const customSenderSpy = vi.spyOn(customPushNotificationSender, 'send');
 
@@ -894,7 +898,10 @@ describe('Push Notification Integration Tests', () => {
         mockAgentExecutor,
         new DefaultExecutionEventBusManager(),
         pushNotificationStore,
-        customPushNotificationSender
+        customPushNotificationSender,
+        undefined,
+        undefined,
+        { allowPrivatePushUrls: true }
       );
 
       const pushConfig1: TaskPushNotificationConfig = {
