@@ -20,6 +20,7 @@ import {
   type TaskDatabase,
   type TaskRow,
 } from './schema.js';
+import { isTimestampStrictlyAfter } from '../../timestamp.js';
 import { fromTaskRow, statusLastUpdated, toTaskRow, type TaskScope } from './serialization.js';
 
 /**
@@ -40,6 +41,19 @@ function listColumns(params: ListTasksRequest): readonly (keyof TaskRow)[] {
 /** Cursor form of the sort key. 0 means no timestamp, which InMemoryTaskStore spells ''. */
 function cursorTimestamp(statusLastUpdated: number): string {
   return statusLastUpdated === 0 ? '' : new Date(statusLastUpdated).toISOString();
+}
+
+/** The status payload keeps the original timestamp. The sort column does not. */
+function rowStatusTimestamp(status: string | null): string | undefined {
+  if (!status) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(status) as { timestamp?: unknown };
+    return typeof parsed.timestamp === 'string' ? parsed.timestamp : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export interface DatabaseTaskStoreOptions {
@@ -126,7 +140,11 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
    * The caller's scope plus whichever filters the request carries. Shared by
    * the count and the page so the two cannot drift.
    */
-  private listFilter(scope: TaskScope, params: ListTasksRequest) {
+  private listFilter(
+    scope: TaskScope,
+    params: ListTasksRequest,
+    updated: 'any' | 'after' | 'equal' = 'any'
+  ) {
     return (eb: ExpressionBuilder<TaskDatabase, string>) => {
       const conditions = [eb('tenant', '=', scope.tenant), eb('owner', '=', scope.owner)];
 
@@ -137,52 +155,107 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
       if (params.status !== undefined && params.status !== TaskState.TASK_STATE_UNSPECIFIED) {
         conditions.push(eb('status_state', '=', taskStateToJSON(params.status)));
       }
-      if (params.statusTimestampAfter) {
-        conditions.push(eb('status_last_updated', '>', Date.parse(params.statusTimestampAfter)));
+      if (params.statusTimestampAfter && updated !== 'any') {
+        conditions.push(
+          eb(
+            'status_last_updated',
+            updated === 'after' ? '>' : '=',
+            Date.parse(params.statusTimestampAfter)
+          )
+        );
       }
 
       return eb.and(conditions);
     };
   }
 
+  /** Rows in the boundary millisecond whose full timestamp is strictly later. */
+  private async sameMillisecondRows(scope: TaskScope, params: ListTasksRequest) {
+    const boundary = params.statusTimestampAfter;
+    if (!boundary) {
+      return [];
+    }
+    const rows = await this.db
+      .selectFrom(this.tableName)
+      .select([...listColumns(params)])
+      .where(this.listFilter(scope, params, 'equal'))
+      .orderBy('id', 'desc')
+      .execute();
+    return rows.filter((row) => {
+      const timestamp = rowStatusTimestamp(row.status ?? null);
+      return timestamp !== undefined && isTimestampStrictlyAfter(timestamp, boundary);
+    });
+  }
+
   async list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse> {
     const scope = this.scopeOf(context);
     const { pageSize = DEFAULT_PAGE_SIZE, pageToken } = params;
-    const filter = this.listFilter(scope, params);
+    const boundary = params.statusTimestampAfter;
+    const boundaryMs = boundary ? Date.parse(boundary) : Number.NaN;
+    const hasBoundary = Boolean(boundary) && !Number.isNaN(boundaryMs);
+    const afterFilter = this.listFilter(scope, params, hasBoundary ? 'after' : 'any');
 
     // Counted before paginating, so it reports the whole match, not the page.
     const counted = await this.db
       .selectFrom(this.tableName)
       .select((eb) => eb.fn.countAll().as('total'))
-      .where(filter)
+      .where(afterFilter)
       .executeTakeFirstOrThrow();
     // The engines disagree on what type a count comes back as.
-    const totalSize = Number(counted.total);
+    let totalSize = Number(counted.total);
 
-    let query = this.db
-      .selectFrom(this.tableName)
-      .select([...listColumns(params)])
-      .where(filter)
-      .orderBy('status_last_updated', 'desc')
-      .orderBy('id', 'desc')
-      // One extra row answers whether a next page exists.
-      .limit(pageSize + 1);
-
-    if (pageToken) {
-      const cursor = decodePageToken(pageToken);
-      const cursorUpdated = statusLastUpdated(cursor.timestamp);
-      // Keyset: everything ordering after the cursor row.
-      query = query.where((eb) =>
-        eb.or([
-          eb('status_last_updated', '<', cursorUpdated),
-          eb.and([eb('status_last_updated', '=', cursorUpdated), eb('id', '<', cursor.id)]),
-        ])
-      );
+    // The column stores milliseconds. A later fraction in that same millisecond
+    // is still on the status payload, so those rows are matched separately.
+    let sameRows: Awaited<ReturnType<typeof this.sameMillisecondRows>> = [];
+    if (hasBoundary && boundary) {
+      sameRows = await this.sameMillisecondRows(scope, params);
+      totalSize += sameRows.length;
     }
 
-    const rows = await query.execute();
-    const hasMore = rows.length > pageSize;
-    const page = hasMore ? rows.slice(0, pageSize) : rows;
+    let cursorMs = Number.NaN;
+    let cursorId = '';
+    if (pageToken) {
+      const cursor = decodePageToken(pageToken);
+      cursorMs = statusLastUpdated(cursor.timestamp);
+      cursorId = cursor.id;
+    }
+    const cursorInSameMs = hasBoundary && cursorMs === boundaryMs;
+
+    let afterRows: typeof sameRows = [];
+    if (!cursorInSameMs) {
+      let query = this.db
+        .selectFrom(this.tableName)
+        .select([...listColumns(params)])
+        .where(afterFilter)
+        .orderBy('status_last_updated', 'desc')
+        .orderBy('id', 'desc')
+        // One extra row answers whether a next page exists.
+        .limit(pageSize + 1);
+
+      if (pageToken) {
+        // Keyset: everything ordering after the cursor row.
+        query = query.where((eb) =>
+          eb.or([
+            eb('status_last_updated', '<', cursorMs),
+            eb.and([eb('status_last_updated', '=', cursorMs), eb('id', '<', cursorId)]),
+          ])
+        );
+      }
+      afterRows = await query.execute();
+    }
+
+    const afterHasMore = afterRows.length > pageSize;
+    const afterPage = afterHasMore ? afterRows.slice(0, pageSize) : afterRows;
+    let page = afterPage;
+    let hasMore = afterHasMore;
+    // Same-millisecond matches sort after every later millisecond.
+    const cursorStillReachesBoundary = !pageToken || cursorMs >= boundaryMs;
+    if (!afterHasMore && hasBoundary && cursorStillReachesBoundary) {
+      const rest = cursorInSameMs ? sameRows.filter((row) => row.id < cursorId) : sameRows;
+      const room = pageSize - afterPage.length;
+      page = [...afterPage, ...rest.slice(0, room)];
+      hasMore = rest.length > room;
+    }
 
     const tasks: Task[] = [];
     for (const row of page) {
