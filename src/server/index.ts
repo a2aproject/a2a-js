@@ -34,6 +34,21 @@ export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';
 export {
+  DEFAULT_WEBSOCKET_IDLE_TIMEOUT_MS,
+  DEFAULT_WEBSOCKET_PING_INTERVAL_MS,
+  DEFAULT_WEBSOCKET_PONG_TIMEOUT_MS,
+  WebSocketTransportHandler,
+  adaptWebSocketConnection,
+  type WebSocketConnection,
+  type WebSocketHandshakeContext,
+  type WebSocketServerOptions,
+  type WebSocketSocketLike,
+} from './transports/websocket/websocket_transport_handler.js';
+export {
+  WEBSOCKET_PROTOCOL_NAME,
+  WEBSOCKET_SUBPROTOCOL,
+} from '../transports/websocket/protocol.js';
+export {
   ServerCallContext,
   defaultServerCallContextBuilder,
   STATE_HEADERS_KEY,
