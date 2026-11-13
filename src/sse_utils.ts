@@ -155,9 +155,13 @@ export async function* parseSseStream(
     }
   }
 
-  // Yield any pending event at stream end.
-  if (eventData) {
-    yield { type: eventType, data: eventData };
+  // EOF does not dispatch an event: only a blank line completes its frame.
+  // Discard pending data from an incomplete event.
+  const discarded = eventData || (buffer.trim() ? buffer : '');
+  if (discarded) {
+    console.warn(
+      `Discarding incomplete SSE event at end of stream: "${discarded.substring(0, 100)}..."`
+    );
   }
 }
 
