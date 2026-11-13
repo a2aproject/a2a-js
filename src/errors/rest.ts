@@ -16,6 +16,7 @@ import {
   A2A_ERROR_SPECS_BY_REASON,
   A2AError,
   type A2AErrorOptions,
+  clientSafeErrorMessage,
   ERROR_INFO_TYPE,
   type ErrorDetail,
 } from './base.js';
@@ -223,7 +224,11 @@ export function restStatusFor(error: unknown): number {
  * mapping for non-A2A throwables.
  */
 export function toRestErrorBody(error: unknown, httpStatus: number): RestErrorBody {
-  const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
+  // Sanitize internal exception messages (CWE-209): only semantic
+  // A2AError messages are deliberate client-facing text; raw Error
+  // messages may carry stack traces / file paths and are replaced with a
+  // generic string (the detail is logged by `clientSafeErrorMessage`).
+  const message = clientSafeErrorMessage(error);
   const details: ErrorDetail[] = [];
   let statusName: string = REST_STATUS_NAME.UNKNOWN;
 

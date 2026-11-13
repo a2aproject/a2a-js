@@ -619,3 +619,28 @@ describe('cross-entry error identity', () => {
     });
   });
 });
+
+describe('internal error message sanitization (CWE-209)', () => {
+  it('toRestErrorBody replaces raw Error messages with a generic string', () => {
+    const body = toRestErrorBody(new Error('leaked: /app/src/db.js:42 InternalFailure'), 500);
+    expect(body.error.message).toBe('An unexpected error occurred.');
+    expect(body.error.code).toBe(500);
+  });
+
+  it('toRestErrorBody preserves semantic A2AError messages', () => {
+    const body = toRestErrorBody(new TaskNotFoundError('task xyz missing'), 404);
+    expect(body.error.message).toBe('task xyz missing');
+  });
+
+  it('toJsonRpcError replaces raw Error messages with a generic string but keeps INTERNAL_ERROR code', () => {
+    const envelope = toJsonRpcError(new Error('leaked stack: at ResultManager.save'));
+    expect(envelope.message).toBe('An unexpected error occurred.');
+    expect(envelope.code).toBe(A2A_ERROR_CODE.INTERNAL_ERROR);
+  });
+
+  it('toJsonRpcError preserves semantic A2AError messages', () => {
+    const envelope = toJsonRpcError(new TaskNotFoundError('task xyz missing'));
+    expect(envelope.message).toBe('task xyz missing');
+    expect(envelope.code).toBe(A2A_ERROR_CODE.TASK_NOT_FOUND);
+  });
+});
