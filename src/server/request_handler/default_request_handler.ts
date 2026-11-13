@@ -3,6 +3,7 @@ import {
   ContentTypeNotSupportedError,
   ExtendedAgentCardNotConfiguredError,
   ExtensionSupportRequiredError,
+  InvalidAgentResponseError,
   PushNotificationNotSupportedError,
   RequestMalformedError,
   TaskNotCancelableError,
@@ -836,6 +837,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
           deliveryBuffer.pushValue(streamResponse);
           firstEventDelivered = true;
+        }
+        if (!firstEventDelivered && !deliveryBuffer.isConsumerClosed()) {
+          throw new InvalidAgentResponseError(
+            'Agent execution finished without a result, and no task context found.'
+          );
         }
       } catch (error) {
         recordError(error);

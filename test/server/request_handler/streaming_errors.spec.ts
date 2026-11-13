@@ -14,7 +14,7 @@ import {
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
-import { UnsupportedOperationError } from '../../../src/errors/index.js';
+import { InvalidAgentResponseError, UnsupportedOperationError } from '../../../src/errors/index.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
 // Streaming error synthesis: if the executor throws before a Task
@@ -36,6 +36,18 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
       {
         url: 'http://localhost/a2a',
         protocolBinding: 'HTTP+JSON',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+      {
+        url: 'http://localhost/a2a',
+        protocolBinding: 'JSONRPC',
+        tenant: '',
+        protocolVersion: '1.0',
+      },
+      {
+        url: 'http://localhost/a2a',
+        protocolBinding: 'GRPC',
         tenant: '',
         protocolVersion: '1.0',
       },
@@ -103,6 +115,31 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     const stream = nonStreamingHandler.sendMessageStream(params, serverContext);
     await expect(stream.next()).rejects.toThrow(UnsupportedOperationError);
   });
+
+  it.each([false, true])(
+    'rejects when the executor produces no response event (explicit finish: %s)',
+    async (explicitFinish) => {
+      mockExecutor.execute.mockImplementation(async (_ctx, bus) => {
+        if (explicitFinish) bus.finished();
+      });
+      const stream = handler.sendMessageStream(
+        {
+          message: makeMessage('msg-empty-stream', 'hello'),
+          tenant: '',
+          configuration: undefined,
+          metadata: {},
+        },
+        serverContext
+      );
+
+      const error = await stream.next().catch((error: unknown) => error);
+      expect(error).toBeInstanceOf(InvalidAgentResponseError);
+      expect(error).toMatchObject({
+        reason: 'INVALID_AGENT_RESPONSE',
+        message: 'Agent execution finished without a result, and no task context found.',
+      });
+    }
+  );
 
   it('executor throws before any Task event: stream yields synthetic Task + statusUpdate(FAILED), not empty', async () => {
     // This is the core regression test for PR 2's streaming half:
