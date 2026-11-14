@@ -370,7 +370,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           if (event.kind === 'message') {
             firstResult = event.data;
           } else if (event.kind === 'task') {
-            firstResult = event.data;
+            firstResult = resultManager.getCurrentTask() ?? event.data;
           } else {
             const finalResult = resultManager.getFinalResult();
             if (finalResult && ('messageId' in finalResult || 'id' in finalResult)) {
