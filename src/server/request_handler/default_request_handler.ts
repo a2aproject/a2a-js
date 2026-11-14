@@ -791,10 +791,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               );
               return;
             }
-            if (isTask(finalResult)) {
-              this._applyHistoryLengthSemantics(finalResult, historyLengthConfig ?? {});
-            }
-            resolve(finalResult);
+            resolve(
+              isTask(finalResult)
+                ? this._copyTaskWithHistoryLength(finalResult, historyLengthConfig ?? {})
+                : finalResult
+            );
           })
           .catch(reject);
       });
@@ -928,8 +929,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
     }
-    this._applyHistoryLengthSemantics(task, params);
-    return task;
+    return this._copyTaskWithHistoryLength(task, params);
   }
 
   async listTasks(
@@ -955,10 +955,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     const response = await this.taskStore.list({ ...params, pageSize }, context);
-    for (const task of response.tasks) {
-      this._applyHistoryLengthSemantics(task, params);
-    }
-    return response;
+    if (params.historyLength === undefined) return response;
+    return {
+      ...response,
+      tasks: response.tasks.map((task) => this._copyTaskWithHistoryLength(task, params)),
+    };
   }
 
   async cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task> {
@@ -1384,6 +1385,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         `${field} must be at most ${MAX_CLIENT_ID_LENGTH} characters, got ${id.length}`
       );
     }
+  }
+
+  /** Applies response history limits without modifying a store-owned task. */
+  private _copyTaskWithHistoryLength(task: Task, params: { historyLength?: number }): Task {
+    if (params.historyLength === undefined) return task;
+    // Only history is changed. Keep metadata and extension values intact and
+    // avoid requiring every custom value to be compatible with structuredClone.
+    const response = { ...task };
+    this._applyHistoryLengthSemantics(response, params);
+    return response;
   }
 
   /**
