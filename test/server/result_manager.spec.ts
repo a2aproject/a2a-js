@@ -915,6 +915,43 @@ describe('concurrent ResultManagers on the same taskId', () => {
   });
 
   describe('terminal-state guard', () => {
+    it.each([
+      [TaskState.TASK_STATE_COMPLETED, TaskState.TASK_STATE_WORKING],
+      [TaskState.TASK_STATE_CANCELED, TaskState.TASK_STATE_COMPLETED],
+      [TaskState.TASK_STATE_FAILED, TaskState.TASK_STATE_SUBMITTED],
+      [TaskState.TASK_STATE_REJECTED, TaskState.TASK_STATE_CANCELED],
+    ])(
+      'ignores Task snapshots that replace terminal state %s with %s',
+      async (terminal, incoming) => {
+        const saved = createTask('terminal-snapshot', 'ctx', {
+          status: { state: terminal, message: undefined, timestamp: undefined },
+          metadata: { retained: true },
+        });
+        await store.save(saved, context);
+        const rm = new ResultManager(store, context);
+        await rm.processEvent(
+          AgentEvent.task(
+            createTask('terminal-snapshot', 'ctx', {
+              status: { state: incoming, message: undefined, timestamp: undefined },
+              metadata: { discarded: true },
+            })
+          )
+        );
+        expect(await store.load('terminal-snapshot', context)).toEqual(saved);
+        expect(rm.getCurrentTask()).toEqual(saved);
+      }
+    );
+
+    it('applies a same-state terminal Task snapshot', async () => {
+      const saved = createTask('terminal-same', 'ctx', {
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+      });
+      await store.save(saved, context);
+      const rm = new ResultManager(store, context);
+      await rm.processEvent(AgentEvent.task({ ...saved, metadata: { final: true } }));
+      expect((await store.load('terminal-same', context))?.metadata).toEqual({ final: true });
+    });
+
     it('ignores a status update that would roll a terminal task back to a non-terminal state', async () => {
       const taskId = 'task-terminal-immutable';
       const contextId = 'ctx-terminal-immutable';
