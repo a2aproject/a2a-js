@@ -19,6 +19,7 @@ import {
 import type { SendMessageResult } from '../../../../index.js';
 import type { RequestOptions } from '../../../../client/multitransport-client.js';
 import { Transport } from '../../../../client/transports/transport.js';
+import { assertJsonRpcErrorId } from '../../../../client/transports/json_rpc_error_id.js';
 import { parseSseStream } from '../../../../sse_utils.js';
 import type {
   AgentCard as V1AgentCard,
@@ -267,6 +268,8 @@ export class LegacyJsonRpcTransport implements Transport {
         );
       }
       if (errorJson.jsonrpc && errorJson.error) {
+        if (errorJson.jsonrpc === '2.0')
+          assertJsonRpcErrorId(errorJson, rpcRequest.id, rpcRequest.method);
         throw mapJsonRpcErrorToSdkError(errorJson);
       }
       throw new Error(
@@ -276,6 +279,7 @@ export class LegacyJsonRpcTransport implements Transport {
 
     const json = (await httpResponse.json()) as LegacyJsonRpcResponse<TResponsePayload>;
     if ('error' in json) {
+      assertJsonRpcErrorId(json, rpcRequest.id, rpcRequest.method);
       throw mapJsonRpcErrorToSdkError(json);
     }
 
@@ -318,6 +322,8 @@ export class LegacyJsonRpcTransport implements Transport {
         errorBody = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
         if (errorJson.error) {
+          if (errorJson.jsonrpc === '2.0')
+            assertJsonRpcErrorId(errorJson, rpcRequest.id, rpcRequest.method);
           throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
@@ -334,6 +340,8 @@ export class LegacyJsonRpcTransport implements Transport {
         const body = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(body);
         if (errorJson.error) {
+          if (errorJson.jsonrpc === '2.0')
+            assertJsonRpcErrorId(errorJson, rpcRequest.id, rpcRequest.method);
           throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
@@ -370,14 +378,15 @@ export class LegacyJsonRpcTransport implements Transport {
       );
     }
 
+    if ('error' in legacyStreamResponse) {
+      assertJsonRpcErrorId(legacyStreamResponse, originalRequestId, 'SSE event');
+      throw mapJsonRpcErrorToSdkError(legacyStreamResponse);
+    }
+
     if (legacyStreamResponse.id !== originalRequestId) {
       throw new Error(
         `JSON-RPC response ID mismatch in SSE event. Expected ${originalRequestId}, got ${legacyStreamResponse.id}.`
       );
-    }
-
-    if ('error' in legacyStreamResponse) {
-      throw mapJsonRpcErrorToSdkError(legacyStreamResponse);
     }
 
     if (!('result' in legacyStreamResponse) || legacyStreamResponse.result === null) {

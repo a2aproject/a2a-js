@@ -30,6 +30,7 @@ import {
 import { JSON_CONTENT_TYPE } from '../../constants.js';
 import { LegacyJsonRpcTransport } from '../../compat/v0_3/client/index.js';
 import { pickMatchingInterface } from './pick_interface.js';
+import { assertJsonRpcErrorId } from './json_rpc_error_id.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'JSONRPC';
 
@@ -261,6 +262,7 @@ export class JsonRpcTransport implements Transport {
         );
       }
       if (errorJson.jsonrpc && errorJson.error) {
+        if (errorJson.jsonrpc === '2.0') assertJsonRpcErrorId(errorJson, requestId, method);
         throw mapJsonRpcErrorToSdkError(errorJson);
       } else {
         throw new Error(
@@ -273,6 +275,7 @@ export class JsonRpcTransport implements Transport {
     assertJsonRpcResponseVersion(json, method);
     const rpcResponse = json as unknown as JSONRPCResponse<TResponsePayload>;
     if ('error' in rpcResponse) {
+      assertJsonRpcErrorId(rpcResponse, requestId, method);
       throw mapJsonRpcErrorToSdkError(rpcResponse);
     }
 
@@ -325,6 +328,7 @@ export class JsonRpcTransport implements Transport {
         errorBody = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
         if (errorJson.error) {
+          if (errorJson.jsonrpc === '2.0') assertJsonRpcErrorId(errorJson, clientRequestId, method);
           throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
@@ -341,6 +345,7 @@ export class JsonRpcTransport implements Transport {
         const body = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(body);
         if (errorJson.error) {
+          if (errorJson.jsonrpc === '2.0') assertJsonRpcErrorId(errorJson, clientRequestId, method);
           throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {
@@ -378,14 +383,15 @@ export class JsonRpcTransport implements Transport {
     assertJsonRpcResponseVersion(parsedResponse, 'SSE event');
     const a2aStreamResponse = parsedResponse as unknown as JSONRPCResponse<StreamResponse>;
 
+    if ('error' in a2aStreamResponse) {
+      assertJsonRpcErrorId(a2aStreamResponse, originalRequestId, 'SSE event');
+      throw mapJsonRpcErrorToSdkError(a2aStreamResponse);
+    }
+
     if (a2aStreamResponse.id !== originalRequestId) {
       throw new Error(
         `JSON-RPC response ID mismatch in SSE event. Expected ${originalRequestId}, got ${a2aStreamResponse.id}.`
       );
-    }
-
-    if ('error' in a2aStreamResponse) {
-      throw mapJsonRpcErrorToSdkError(a2aStreamResponse);
     }
 
     if (!('result' in a2aStreamResponse) || typeof a2aStreamResponse.result === 'undefined') {
