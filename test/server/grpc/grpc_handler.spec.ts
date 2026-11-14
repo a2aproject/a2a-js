@@ -1,7 +1,11 @@
 import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import * as grpc from '@grpc/grpc-js';
 import * as proto from '../../../src/grpc/pb/a2a.js';
-import { A2ARequestHandler } from '../../../src/server/index.js';
+import {
+  A2ARequestHandler,
+  DefaultRequestHandler,
+  InMemoryTaskStore,
+} from '../../../src/server/index.js';
 import { TaskNotFoundError } from '../../../src/errors/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import {
@@ -109,6 +113,38 @@ describe('grpcHandler', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('rejects a client agent-role message in unary and streaming calls', async () => {
+    const execute = vi.fn(async () => {});
+    const requestHandler = new DefaultRequestHandler(testAgentCard, new InMemoryTaskStore(), {
+      execute,
+      cancelTask: vi.fn(),
+    });
+    const service = grpcService({
+      requestHandler,
+      userBuilder: async () => ({ id: 'test-user' }) as any,
+    });
+    const message = {
+      messageId: 'client-agent-role',
+      role: Role.ROLE_AGENT,
+      parts: [] as proto.Part[],
+    };
+    const callback = vi.fn();
+    await service.sendMessage(createMockUnaryCall({ message }), callback);
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({ code: grpc.status.INVALID_ARGUMENT }),
+      null
+    );
+
+    const stream = createMockWritableStream({ message });
+    await service.sendStreamingMessage(stream);
+    expect(stream.emit).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ code: grpc.status.INVALID_ARGUMENT })
+    );
+    expect(stream.write).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
   });
 
   describe('getExtendedAgentCard', () => {
