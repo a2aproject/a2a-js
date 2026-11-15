@@ -511,6 +511,52 @@ describe('legacyGrpcService', () => {
       const [, context] = (mockRequestHandler.getTask as Mock).mock.calls[0];
       expect(context.requestedExtensions).toEqual(['legacy-ext-v1']);
     });
+
+    // The request handler returns a lazy generator, so the executor does not
+    // run, and cannot activate anything, until the first event is pulled.
+    it('returns extensions activated while producing the first streamed event', async () => {
+      let context: { addActivatedExtension(uri: string): void } | undefined;
+      async function* lazyStream() {
+        context!.addActivatedExtension('ext-v1');
+        yield { payload: { $case: 'task' as const, value: v1Task() } };
+      }
+      (mockRequestHandler.sendMessageStream as Mock).mockImplementation((_params, ctx) => {
+        context = ctx;
+        return lazyStream();
+      });
+      const call = createMockWritableStream({
+        request: { messageId: 'm1', role: V1Role.ROLE_USER, content: [] },
+      });
+
+      await handler.sendStreamingMessage(call);
+
+      expect(call.sendMetadata).toHaveBeenCalledTimes(1);
+      const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
+      expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['ext-v1']);
+      expect((call.sendMetadata as Mock).mock.invocationCallOrder[0]).toBeLessThan(
+        (call.write as Mock).mock.invocationCallOrder[0]
+      );
+    });
+
+    it('returns activated extensions on a stream that yields no events', async () => {
+      let context: { addActivatedExtension(uri: string): void } | undefined;
+      // eslint-disable-next-line require-yield
+      async function* emptyStream() {
+        context!.addActivatedExtension('ext-v1');
+      }
+      (mockRequestHandler.resubscribe as Mock).mockImplementation((_params, ctx) => {
+        context = ctx;
+        return emptyStream();
+      });
+      const call = createMockWritableStream({ name: 'tasks/t-1' });
+
+      await handler.taskSubscription(call);
+
+      expect(call.sendMetadata).toHaveBeenCalledTimes(1);
+      const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
+      expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['ext-v1']);
+      expect(call.end).toHaveBeenCalled();
+    });
   });
 
   describe('context builder', () => {
