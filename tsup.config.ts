@@ -19,6 +19,7 @@ export default defineConfig([
       'src/compat/v0_3/server/grpc/index.ts',
       'src/compat/v0_3/client/index.ts',
       'src/compat/v0_3/client/transports/grpc/index.ts',
+      'src/plugins/index.ts',
     ],
     format: ['esm', 'cjs'],
     dts: true,
