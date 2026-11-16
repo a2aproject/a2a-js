@@ -101,24 +101,29 @@ export async function* parseSseStream(
   let buffer = '';
   let eventType = 'message';
   let eventData = '';
+  let skipLeadingLf = false;
 
   const stream = response.body.pipeThrough(new TextDecoderStream());
 
   for await (const value of readFrom(stream)) {
-    buffer += value;
+    if (value === '') continue;
+    // A CR terminates its line immediately. If it ended the previous
+    // chunk, consume a following LF as part of the same delimiter.
+    buffer += skipLeadingLf && value.startsWith('\n') ? value.substring(1) : value;
+    skipLeadingLf = false;
     let lineEndIndex: number;
 
-    while ((lineEndIndex = buffer.indexOf('\n')) >= 0) {
+    while ((lineEndIndex = buffer.search(/[\r\n]/)) >= 0) {
       if (lineEndIndex > maxEventSizeBytes) {
         throw sseSizeError('SSE line', maxEventSizeBytes);
       }
-      // Per the SSE spec lines may end with `\r\n`, `\r`, or `\n`. We
-      // strip a trailing `\r` explicitly rather than calling `.trim()`,
-      // which would also eat whitespace inside JSON-formatted `data:`
-      // payloads.
-      let line = buffer.substring(0, lineEndIndex);
-      if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
-      buffer = buffer.substring(lineEndIndex + 1);
+      // SSE permits CRLF, standalone CR, and LF. Preserve whitespace
+      // inside field values, and never interpret CRLF as two line breaks.
+      const line = buffer.substring(0, lineEndIndex);
+      const endsWithCr = buffer[lineEndIndex] === '\r';
+      const delimiterLength = endsWithCr && buffer[lineEndIndex + 1] === '\n' ? 2 : 1;
+      skipLeadingLf = endsWithCr && lineEndIndex + 1 === buffer.length;
+      buffer = buffer.substring(lineEndIndex + delimiterLength);
 
       if (line === '') {
         if (eventData) {

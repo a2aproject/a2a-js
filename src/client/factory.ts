@@ -98,7 +98,7 @@ export class ClientFactory {
    */
   async createFromAgentCard(agentCard: AgentCard): Promise<Client> {
     const normalizedAgentCard = this.agentCardResolver.normalizeAgentCard?.(agentCard) ?? agentCard;
-    return this.createFromNormalizedAgentCard(normalizedAgentCard);
+    return await this.createFromNormalizedAgentCard(normalizedAgentCard);
   }
 
   private async createFromNormalizedAgentCard(agentCard: AgentCard): Promise<Client> {
@@ -107,7 +107,10 @@ export class ClientFactory {
     const bestInterfacePerProtocol = new CaseInsensitiveMap<(typeof interfaces)[number]>();
     for (const agentInterface of interfaces) {
       const existing = bestInterfacePerProtocol.get(agentInterface.protocolBinding);
-      if (!existing || agentInterface.protocolVersion === '1.0') {
+      if (
+        !existing ||
+        (existing.protocolVersion !== '1.0' && agentInterface.protocolVersion === '1.0')
+      ) {
         bestInterfacePerProtocol.set(agentInterface.protocolBinding, agentInterface);
       }
     }

@@ -14,6 +14,7 @@ import {
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
+import { UnsupportedOperationError } from '../../../src/errors/index.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
 
 // Streaming error synthesis: if the executor throws before a Task
@@ -82,6 +83,25 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     metadata: {},
     referenceTaskIds: [],
     ...overrides,
+  });
+
+  it('throws UnsupportedOperationError if the agent does not advertise streaming', async () => {
+    const nonStreamingHandler = new DefaultRequestHandler(
+      { ...agentCard, capabilities: { ...agentCard.capabilities!, streaming: false } },
+      taskStore,
+      mockExecutor,
+      eventBusManager
+    );
+
+    const params: SendMessageRequest = {
+      message: makeMessage('msg-no-streaming', 'hello'),
+      tenant: '',
+      configuration: undefined,
+      metadata: {},
+    };
+
+    const stream = nonStreamingHandler.sendMessageStream(params, serverContext);
+    await expect(stream.next()).rejects.toThrow(UnsupportedOperationError);
   });
 
   it('executor throws before any Task event: stream yields synthetic Task + statusUpdate(FAILED), not empty', async () => {

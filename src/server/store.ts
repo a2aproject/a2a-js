@@ -1,9 +1,8 @@
 import { Task, ListTasksRequest, ListTasksResponse, TaskState } from '../index.js';
 import { ServerCallContext } from './context.js';
 import { DEFAULT_PAGE_SIZE } from '../constants.js';
-import { RequestMalformedError } from '../errors/index.js';
 import { OwnerResolver, resolveUserScope } from './owner_resolver.js';
-import { ScopedStore } from './utils.js';
+import { decodePageToken, encodePageToken, ScopedStore } from './utils.js';
 
 /**
  * Interface for task storage providers. Implementations SHOULD use
@@ -105,27 +104,17 @@ export class InMemoryTaskStore implements TaskStore {
     const totalSize = tasks.length;
 
     if (pageToken) {
-      try {
-        const decoded = Buffer.from(pageToken, 'base64').toString('utf-8');
-        const [cursorTimestamp, ...idParts] = decoded.split('|');
-        if (idParts.length === 0) {
-          throw new RequestMalformedError('Invalid page token format.');
-        }
-        const cursorId = idParts.join('|');
+      const cursor = decodePageToken(pageToken);
 
-        const cursorIndex = tasks.findIndex(
-          (task) => (task.status?.timestamp || '') === cursorTimestamp && task.id === cursorId
-        );
+      const cursorIndex = tasks.findIndex(
+        (task) => (task.status?.timestamp || '') === cursor.timestamp && task.id === cursor.id
+      );
 
-        if (cursorIndex !== -1) {
-          tasks = tasks.slice(cursorIndex + 1);
-        } else {
-          // The cursor task may have been deleted between calls.
-          tasks = [];
-        }
-      } catch (e) {
-        if (e instanceof RequestMalformedError) throw e;
-        throw new RequestMalformedError('Token is not a valid base64-encoded cursor.');
+      if (cursorIndex !== -1) {
+        tasks = tasks.slice(cursorIndex + 1);
+      } else {
+        // The cursor task may have been deleted between calls.
+        tasks = [];
       }
     }
 
@@ -142,8 +131,7 @@ export class InMemoryTaskStore implements TaskStore {
     let nextPageToken = '';
     if (paginatedTasks.length > 0 && tasks.length > paginatedTasks.length) {
       const lastTask = paginatedTasks[paginatedTasks.length - 1];
-      const lastTime = lastTask.status?.timestamp || '';
-      nextPageToken = Buffer.from(`${lastTime}|${lastTask.id}`).toString('base64');
+      nextPageToken = encodePageToken(lastTask.status?.timestamp || '', lastTask.id);
     }
 
     return {

@@ -100,9 +100,18 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
         options.contextBuilder
       );
       const stream = await handler(call.request, context);
-      call.sendMetadata(buildMetadata(context));
+      // The stream is lazy: the executor runs, and may activate extensions,
+      // only once the first event is pulled. Send metadata after that.
+      let metadataSent = false;
       for await (const responsePart of stream) {
+        if (!metadataSent) {
+          call.sendMetadata(buildMetadata(context));
+          metadataSent = true;
+        }
         call.write(responsePart);
+      }
+      if (!metadataSent) {
+        call.sendMetadata(buildMetadata(context));
       }
     } catch (error) {
       call.emit('error', mapToError(error));

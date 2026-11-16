@@ -11,6 +11,7 @@ import {
 } from '../../src/client/transports/json_rpc_transport.js';
 import { LegacyJsonRpcTransport } from '../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
+import { RestTransportFactory } from '../../src/client/transports/rest_transport.js';
 
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
@@ -149,6 +150,109 @@ describe('ClientFactory', () => {
       expect(mockTransportFactory1.create).toHaveBeenCalledExactlyOnceWith(
         'http://transport1.com',
         agentCard
+      );
+    });
+
+    describe.each(['JSONRPC', 'HTTP+JSON'])('%s interface preference', (protocolBinding) => {
+      it.each([
+        { versions: ['1.0', '1.0'], selectedIndex: 0 },
+        { versions: ['0.3', '1.0', '1.0'], selectedIndex: 1 },
+        { versions: ['1.0', '0.3', '1.0'], selectedIndex: 0 },
+        { versions: ['0.3', '0.3'], selectedIndex: 0 },
+      ])(
+        'selects interface $selectedIndex for versions $versions',
+        async ({ versions, selectedIndex }) => {
+          const card = AgentCard.fromJSON({
+            name: 'Interface order test',
+            version: '1.0.0',
+            supportedInterfaces: versions.map((protocolVersion, index) => ({
+              url: `https://agent.example/endpoint-${index}`,
+              protocolBinding: index === 0 ? protocolBinding : protocolBinding.toLowerCase(),
+              protocolVersion,
+            })),
+          });
+          const result = {
+            id: 'task-1',
+            contextId: 'context-1',
+            status: {
+              state:
+                protocolBinding === 'JSONRPC' && versions[selectedIndex] === '0.3'
+                  ? 'completed'
+                  : 'TASK_STATE_COMPLETED',
+            },
+          };
+          const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
+            if (protocolBinding === 'JSONRPC') {
+              const request = JSON.parse(init?.body as string);
+              return Response.json({ jsonrpc: '2.0', id: request.id, result });
+            }
+            return Response.json(result);
+          });
+          const options = { fetchImpl, legacyCompat: { enabled: true } };
+          const factory = new ClientFactory({
+            transports: [
+              protocolBinding === 'JSONRPC'
+                ? new JsonRpcTransportFactory(options)
+                : new RestTransportFactory(options),
+            ],
+          });
+
+          const client = await factory.createFromAgentCard(card);
+          const task = await client.getTask({ id: 'task-1', tenant: '' });
+
+          expect(task.id).toBe('task-1');
+          expect(client.transport.protocolVersion).toBe(versions[selectedIndex]);
+          expect(fetchImpl).toHaveBeenCalledOnce();
+          const expectedEndpoint = card.supportedInterfaces[selectedIndex].url;
+          const restPath = versions[selectedIndex] === '0.3' ? '/v1/tasks/task-1' : '/tasks/task-1';
+          expect(fetchImpl.mock.calls[0][0]).toBe(
+            protocolBinding === 'JSONRPC' ? expectedEndpoint : `${expectedEndpoint}${restPath}`
+          );
+        }
+      );
+    });
+
+    it('should preserve the first interface and tenant within the preferred transport', async () => {
+      const card = AgentCard.fromJSON({
+        name: 'Preferred transport order test',
+        version: '1.0.0',
+        supportedInterfaces: [
+          { url: 'https://agent.example/rpc', protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+          {
+            url: 'https://agent.example/rest-primary',
+            protocolBinding: 'HTTP+JSON',
+            protocolVersion: '1.0',
+            tenant: 'primary-tenant',
+          },
+          {
+            url: 'https://agent.example/rest-backup',
+            protocolBinding: 'http+json',
+            protocolVersion: '1.0',
+            tenant: 'backup-tenant',
+          },
+        ],
+      });
+      const fetchImpl = vi.fn<typeof fetch>(async () =>
+        Response.json({
+          id: 'task-1',
+          contextId: 'context-1',
+          status: { state: 'TASK_STATE_COMPLETED' },
+        })
+      );
+      const factory = new ClientFactory({
+        transports: [
+          new JsonRpcTransportFactory({ fetchImpl }),
+          new RestTransportFactory({ fetchImpl }),
+        ],
+        preferredTransports: ['http+json'],
+      });
+
+      const client = await factory.createFromAgentCard(card);
+      await client.getTask({ id: 'task-1', tenant: '' });
+
+      expect(fetchImpl).toHaveBeenCalledOnce();
+      expect(fetchImpl.mock.calls[0][0]).toBe(
+        'https://agent.example/rest-primary/primary-tenant/tasks/task-1'
       );
     });
 

@@ -10,6 +10,9 @@ ITK_SDK_NAME=js
 # matrix has never heard of.
 ITK_MATRIX_SDK=ts
 ITK_SCENARIO_SET=shared
+# Recorded as `sdk.language` in every ACTS report; the default would be
+# ITK_SDK_NAME, i.e. the package name rather than the language.
+ITK_ACTS_LANGUAGE=typescript
 
 itk_generate_protos() {
   # Python stubs: the launcher's own tooling reads these when it drives a

@@ -263,6 +263,15 @@ export class ResultManager {
 
     // Clone the incoming status so caller-side mutation can't drift state.
     task.status = structuredClone(updateEvent.status);
+
+    // Merge event-level metadata into the task; incoming wins for collisions.
+    if (updateEvent.metadata) {
+      task.metadata = {
+        ...task.metadata,
+        ...structuredClone(updateEvent.metadata),
+      };
+    }
+
     const update = updateEvent.status?.message;
     if (update) {
       if (!task.history?.find((msg) => msg.messageId === update.messageId)) {
@@ -313,6 +322,15 @@ export class ResultManager {
     } else {
       task.artifacts.push(structuredClone(artifact));
     }
+
+    // Merge event-level metadata into the task; incoming wins for collisions.
+    if (artifactEvent.metadata) {
+      task.metadata = {
+        ...task.metadata,
+        ...structuredClone(artifactEvent.metadata),
+      };
+    }
+
     this.currentTask = task;
     await this.saveCurrentTask();
   }

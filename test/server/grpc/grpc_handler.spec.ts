@@ -263,5 +263,49 @@ describe('grpcHandler', () => {
       expect(metadata).toBeDefined();
       expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['extension-v1']);
     });
+
+    // The request handler returns a lazy generator, so the executor does not
+    // run, and cannot activate anything, until the first event is pulled.
+    it('should return extensions activated while producing the first streamed event', async () => {
+      const call = createMockWritableStream({});
+      let context: { addActivatedExtension(uri: string): void } | undefined;
+      async function* lazyStream() {
+        context!.addActivatedExtension('extension-v1');
+        yield testTask;
+      }
+      (mockRequestHandler.sendMessageStream as Mock).mockImplementation((_params, ctx) => {
+        context = ctx;
+        return lazyStream();
+      });
+
+      await handler.sendStreamingMessage(call);
+
+      expect(call.sendMetadata).toHaveBeenCalledTimes(1);
+      const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
+      expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['extension-v1']);
+      expect((call.sendMetadata as Mock).mock.invocationCallOrder[0]).toBeLessThan(
+        (call.write as Mock).mock.invocationCallOrder[0]
+      );
+    });
+
+    it('should return activated extensions on a stream that yields no events', async () => {
+      const call = createMockWritableStream({});
+      let context: { addActivatedExtension(uri: string): void } | undefined;
+      // eslint-disable-next-line require-yield
+      async function* emptyStream() {
+        context!.addActivatedExtension('extension-v1');
+      }
+      (mockRequestHandler.resubscribe as Mock).mockImplementation((_params, ctx) => {
+        context = ctx;
+        return emptyStream();
+      });
+
+      await handler.subscribeToTask(call);
+
+      expect(call.sendMetadata).toHaveBeenCalledTimes(1);
+      const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
+      expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['extension-v1']);
+      expect(call.end).toHaveBeenCalled();
+    });
   });
 });
