@@ -329,6 +329,28 @@ describe('legacyGrpcService', () => {
       const [v1Req] = (mockRequestHandler.getTask as Mock).mock.calls[0];
       expect(v1Req.id).toBe('t-1');
     });
+
+    it('requests the full history when history_length is unset (0)', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(v1Task('t-1'));
+      const call = createMockUnaryCall({ name: 'tasks/t-1', historyLength: 0 });
+      const callback = vi.fn();
+
+      await handler.getTask(call, callback);
+
+      const [v1Req] = (mockRequestHandler.getTask as Mock).mock.calls[0];
+      expect(v1Req.historyLength).toBeUndefined();
+    });
+
+    it('forwards a positive history_length', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(v1Task('t-1'));
+      const call = createMockUnaryCall({ name: 'tasks/t-1', historyLength: 2 });
+      const callback = vi.fn();
+
+      await handler.getTask(call, callback);
+
+      const [v1Req] = (mockRequestHandler.getTask as Mock).mock.calls[0];
+      expect(v1Req.historyLength).toBe(2);
+    });
   });
 
   describe('cancelTask', () => {
