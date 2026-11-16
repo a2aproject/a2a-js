@@ -72,7 +72,8 @@ describe.each(['JSONRPC', 'HTTP+JSON'])('%s SSE end of stream', (protocol) => {
                 status: { state: 'TASK_STATE_COMPLETED' },
               },
             };
-            const body = protocol === 'JSONRPC' ? { jsonrpc: '2.0', id: requestId, result } : result;
+            const body =
+              protocol === 'JSONRPC' ? { jsonrpc: '2.0', id: requestId, result } : result;
             return `data: ${JSON.stringify(body)}${suffix}`;
           }
           const text =
