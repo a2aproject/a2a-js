@@ -46,13 +46,11 @@ jobs:
     steps:
       - name: Checkout a2a-js
         uses: actions/checkout@v7
-      - name: Set up Node
-        uses: actions/setup-node@v7
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-      - run: npm ci
       - name: Checkout a2a-tck
         uses: actions/checkout@v7
         with:

@@ -1,0 +1,35 @@
+name: Setup Node and dependencies
+description: Install Node and the root npm dependencies, with node_modules cached.
+
+inputs:
+  node-version:
+    description: Node version to install.
+    required: true
+  registry-url:
+    description: Registry URL passed to actions/setup-node.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+
+    - id: cache
+      uses: actions/cache/restore@v6
+      with:
+        path: node_modules
+        key: node-modules-${{ runner.os }}-node${{ inputs.node-version }}-${{ hashFiles('package-lock.json') }}
+
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci --no-audit --no-fund
+
+    - if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: node_modules
+        key: ${{ steps.cache.outputs.cache-primary-key }}
