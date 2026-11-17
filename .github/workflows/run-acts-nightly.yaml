@@ -37,14 +37,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
-      - name: Setup Node
-        uses: actions/setup-node@v7
+      - name: Setup Node and install dependencies
+        uses: ./.github/actions/setup
         with:
           node-version: 20
-          cache: 'npm'
-
-      - name: Install Node dependencies
-        run: npm ci
 
       - name: Clone a2a-itk
         uses: actions/checkout@v7
