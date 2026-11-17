@@ -78,7 +78,7 @@ jobs:
         run: bash itk/run_error_tests.sh
 
       - name: Run ITK Tests (PR scenarios)
-        run: bash run_itk.sh
+        run: ITK_MAX_WORKERS=$(nproc) bash run_itk.sh
         working-directory: itk
         env:
           A2A_ITK_REVISION: ${{ env.A2A_ITK_REVISION }}

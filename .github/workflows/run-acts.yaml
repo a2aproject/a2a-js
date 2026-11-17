@@ -76,7 +76,7 @@ jobs:
         # which no SDK passes yet. Delete this line to make it a merge
         # requirement.
         continue-on-error: true
-        run: bash run_itk.sh
+        run: ITK_MAX_WORKERS=$(nproc) bash run_itk.sh
         working-directory: itk
         env:
           A2A_ITK_REVISION: ${{ env.A2A_ITK_REVISION }}
