@@ -262,7 +262,9 @@ export class JsonRpcTransport implements Transport {
         );
       }
       if (errorJson.jsonrpc && errorJson.error) {
-        if (errorJson.jsonrpc === '2.0') assertJsonRpcErrorId(errorJson, requestId, method);
+        if (errorJson.jsonrpc === '2.0' && errorJson.id !== undefined) {
+          assertJsonRpcErrorId(errorJson, requestId, method);
+        }
         throw mapJsonRpcErrorToSdkError(errorJson);
       } else {
         throw new Error(
@@ -328,7 +330,9 @@ export class JsonRpcTransport implements Transport {
         errorBody = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
         if (errorJson.error) {
-          if (errorJson.jsonrpc === '2.0') assertJsonRpcErrorId(errorJson, clientRequestId, method);
+          if (errorJson.jsonrpc === '2.0' && errorJson.id !== undefined) {
+            assertJsonRpcErrorId(errorJson, clientRequestId, method);
+          }
           throw mapJsonRpcErrorToSdkError(errorJson);
         }
       } catch (e) {

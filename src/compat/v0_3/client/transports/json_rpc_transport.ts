@@ -268,7 +268,7 @@ export class LegacyJsonRpcTransport implements Transport {
         );
       }
       if (errorJson.jsonrpc && errorJson.error) {
-        if (errorJson.jsonrpc === '2.0')
+        if (errorJson.jsonrpc === '2.0' && errorJson.id !== undefined)
           assertJsonRpcErrorId(errorJson, rpcRequest.id, rpcRequest.method);
         throw mapJsonRpcErrorToSdkError(errorJson);
       }
@@ -322,7 +322,7 @@ export class LegacyJsonRpcTransport implements Transport {
         errorBody = await response.text();
         const errorJson: JSONRPCErrorResponse = JSON.parse(errorBody);
         if (errorJson.error) {
-          if (errorJson.jsonrpc === '2.0')
+          if (errorJson.jsonrpc === '2.0' && errorJson.id !== undefined)
             assertJsonRpcErrorId(errorJson, rpcRequest.id, rpcRequest.method);
           throw mapJsonRpcErrorToSdkError(errorJson);
         }

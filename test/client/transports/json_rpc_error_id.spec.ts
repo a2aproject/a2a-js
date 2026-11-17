@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { JsonRpcTransport } from '../../../src/client/transports/json_rpc_transport.js';
 import { LegacyJsonRpcTransport } from '../../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 import { JsonRpcTaskNotFoundError } from '../../../src/errors/index.js';
@@ -96,4 +98,52 @@ describe.each([
       JsonRpcTaskNotFoundError
     );
   });
+
+  it.each(['unary', 'stream'])('preserves a no-ID middleware error for %s', async (operation) => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ jsonrpc: '2.0', error: { code: -32099, message: 'unauthenticated' } }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    const transport = new Transport({ endpoint: 'https://example.test', fetchImpl });
+    const result =
+      operation === 'unary'
+        ? transport.getTask(request)
+        : transport.resubscribeTask(request).next();
+    await expect(result).rejects.toMatchObject({
+      message: 'unauthenticated',
+      envelopeCode: -32099,
+    });
+  });
+
+  it.skipIf('WebSocketPair' in globalThis).each(['unary', 'stream'])(
+    'preserves a no-ID middleware error over HTTP for %s',
+    async (operation) => {
+      const server = createServer((_req, response) => {
+        response.writeHead(401, { 'Content-Type': 'application/json' });
+        response.end(
+          JSON.stringify({ jsonrpc: '2.0', error: { code: -32099, message: 'unauthenticated' } })
+        );
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      try {
+        const { port } = server.address() as AddressInfo;
+        const transport = new Transport({ endpoint: `http://127.0.0.1:${port}` });
+        const result =
+          operation === 'unary'
+            ? transport.getTask(request)
+            : transport.resubscribeTask(request).next();
+        await expect(result).rejects.toMatchObject({
+          message: 'unauthenticated',
+          envelopeCode: -32099,
+        });
+      } finally {
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve()))
+        );
+      }
+    }
+  );
 });
