@@ -178,6 +178,20 @@ export class ResultManager {
       ? await this.taskStore.load(taskEvent.id, this.serverCallContext)
       : undefined;
 
+    const persistedState = persistedTask?.status?.state;
+    if (
+      persistedState !== undefined &&
+      TERMINAL_STATE_LIST.includes(persistedState) &&
+      taskEvent.status?.state !== persistedState
+    ) {
+      console.warn(
+        `ResultManager: ignoring Task snapshot ${taskEvent.status?.state} for terminal ` +
+          `task ${taskEvent.id} (${persistedState})`
+      );
+      this.currentTask = persistedTask;
+      return;
+    }
+
     // Deep-clone the incoming Task so further executor mutations can't
     // leak into our state.
     const mergedTask: Task = structuredClone(taskEvent);

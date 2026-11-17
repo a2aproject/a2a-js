@@ -114,6 +114,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly keepBusAliveStates: Set<TaskState>;
   private readonly validateInputModes: boolean;
   private readonly activeDrains = new WeakMap<ExecutionEventBus, ActivePersistenceDrain>();
+  private readonly activeExecutorCounts = new WeakMap<ExecutionEventBus, number>();
 
   constructor(
     agentCard: AgentCard,
@@ -346,6 +347,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
        * on the same bus once the credential is injected out-of-band.
        */
       authRequiredSnapshotResolver?: (snapshot: Task) => void;
+      persistenceGate?: ExecutionPersistenceGate;
     }
   ): Promise<void> {
     let firstResultSent = false;
@@ -409,6 +411,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             firstResultSent = true;
           }
         }
+        options?.persistenceGate?.markEventProcessed();
       }
       // Non-blocking contract guard: if the caller wired a
       // `firstResultResolver` and the executor returned without
@@ -439,6 +442,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // Detach this queue from the bus; the bus itself is cleaned up
       // when the executor settles (see `_runExecutor` / `_runStreamExecutor`).
       eventQueue.stop();
+      options?.persistenceGate?.markDrainClosed();
     }
   }
 
@@ -464,16 +468,31 @@ export class DefaultRequestHandler implements A2ARequestHandler {
    * event loop terminates with a usable final result and any concurrent
    * resubscribers see the failure on the same wire.
    */
+  private _incrementActiveExecutors(eventBus: ExecutionEventBus): void {
+    this.activeExecutorCounts.set(eventBus, (this.activeExecutorCounts.get(eventBus) ?? 0) + 1);
+  }
+
+  private _decrementActiveExecutors(eventBus: ExecutionEventBus): void {
+    const remaining = (this.activeExecutorCounts.get(eventBus) ?? 1) - 1;
+    if (remaining > 0) {
+      this.activeExecutorCounts.set(eventBus, remaining);
+    } else {
+      this.activeExecutorCounts.delete(eventBus);
+    }
+  }
+
   private _runExecutor(
     taskId: string,
     eventBus: ExecutionEventBus,
     requestContext: RequestContext,
-    finalMessageForAgent: Message
+    finalMessageForAgent: Message,
+    persistenceGate?: ExecutionPersistenceGate
   ): void {
     // Track the last task state on the bus directly: the consumer loop
     // that drains into `ResultManager` runs in a separate microtask, so
     // by the time `.finally()` runs the ResultManager's view may lag.
     const stateTracker = trackLatestTaskState(eventBus);
+    this._incrementActiveExecutors(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -530,10 +549,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       })
       .finally(() => {
+        this._decrementActiveExecutors(eventBus);
         // Close the bus for terminal tasks; keep it alive for
         // INPUT_REQUIRED / AUTH_REQUIRED so follow-up sends and
         // resubscribers can still attach.
-        this._settleBus(taskId, eventBus, stateTracker(), requestContext.context);
+        this._settleBus(taskId, eventBus, stateTracker(), requestContext.context, persistenceGate);
       });
   }
 
@@ -556,16 +576,53 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     taskId: string,
     eventBus: ExecutionEventBus,
     lastState: TaskState | undefined,
-    context: ServerCallContext
+    context: ServerCallContext,
+    persistenceGate?: ExecutionPersistenceGate
   ): void {
     if (this.eventBusManager.settleByTaskId?.(taskId, eventBus, lastState, context)) {
+      persistenceGate?.dispose();
       return;
     }
     if (lastState !== undefined && this.keepBusAliveStates.has(lastState)) {
+      if (persistenceGate) {
+        void this._reconcileKeptAliveBus(taskId, eventBus, context, persistenceGate);
+      }
       return;
     }
+    persistenceGate?.dispose();
     eventBus.finished();
     this.eventBusManager.cleanupByTaskId(taskId, context);
+  }
+
+  /**
+   * Reconciles a tentatively retained bus once `ResultManager` finishes
+   * applying the executor's events. If a stale `INPUT_REQUIRED` /
+   * `AUTH_REQUIRED` event was rejected because the persisted task was
+   * already in a terminal state (not in `keepBusAliveStates`), releases
+   * the bus without calling `settleByTaskId` a second time.
+   */
+  private async _reconcileKeptAliveBus(
+    taskId: string,
+    eventBus: ExecutionEventBus,
+    context: ServerCallContext,
+    persistenceGate: ExecutionPersistenceGate
+  ): Promise<void> {
+    try {
+      const acceptedState = await persistenceGate.waitForAcceptedState();
+      if ((this.activeExecutorCounts.get(eventBus) ?? 0) > 0) {
+        return;
+      }
+      if (this.eventBusManager.getByTaskId(taskId, context) !== eventBus) {
+        return;
+      }
+      if (acceptedState !== undefined && this.keepBusAliveStates.has(acceptedState)) {
+        return;
+      }
+      eventBus.finished();
+      this.eventBusManager.cleanupByTaskId(taskId, context);
+    } catch (error) {
+      console.error(`Failed to reconcile event bus for task ${taskId}:`, error);
+    }
   }
 
   /**
@@ -579,10 +636,12 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private _runStreamExecutor(
     taskId: string,
     eventBus: ExecutionEventBus,
-    requestContext: RequestContext
+    requestContext: RequestContext,
+    persistenceGate?: ExecutionPersistenceGate
   ): void {
     const finalMessageForAgent = requestContext.userMessage;
     const snapshotTracker = trackLatestTaskAndState(eventBus);
+    this._incrementActiveExecutors(eventBus);
     this.agentExecutor
       .execute(requestContext, eventBus)
       .catch((err: unknown) => {
@@ -668,7 +727,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         eventBus.publish(AgentEvent.statusUpdate(errorTaskStatus));
       })
       .finally(() => {
-        this._settleBus(taskId, eventBus, snapshotTracker().state, requestContext.context);
+        this._decrementActiveExecutors(eventBus);
+        this._settleBus(
+          taskId,
+          eventBus,
+          snapshotTracker().state,
+          requestContext.context,
+          persistenceGate
+        );
       });
   }
 
@@ -702,6 +768,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     // Attach the queue before kicking off the executor so no events are missed.
     const eventQueue = new ExecutionEventQueue(eventBus);
+    const persistenceGate = createPersistenceGate(
+      eventBus,
+      resultManager,
+      this.taskStore,
+      taskId,
+      context
+    );
     const historyLengthConfig = params.configuration;
 
     if (isBlocking) {
@@ -726,13 +799,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             // settlement is one-shot.
             firstResultRejector: reject,
             onProcessingError: recordError,
+            persistenceGate,
           })
         );
         // Run the executor in the background. Bus cleanup is tied to the
         // executor's lifecycle, not the consumer's, so a `tasks/resubscribe`
         // arriving after the consumer settles can still find the bus while
         // the executor is still publishing.
-        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
+        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent, persistenceGate);
         pending
           .then(() => {
             const finalResult = resultManager.getFinalResult();
@@ -764,9 +838,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
             },
             firstResultRejector: reject,
             onProcessingError: recordError,
+            persistenceGate,
           })
         );
-        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
+        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent, persistenceGate);
       });
     }
   }
@@ -792,6 +867,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     const eventQueue = new ExecutionEventQueue(eventBus);
+    const persistenceGate = createPersistenceGate(
+      eventBus,
+      resultManager,
+      this.taskStore,
+      taskId,
+      context
+    );
 
     if (
       params.configuration?.taskPushNotificationConfig &&
@@ -799,7 +881,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     ) {
       const pushConfig = structuredClone(params.configuration.taskPushNotificationConfig);
       pushConfig.taskId = taskId;
-      await this.pushNotificationStore?.save(taskId, context, pushConfig);
+      try {
+        await this.pushNotificationStore?.save(taskId, context, pushConfig);
+      } catch (error) {
+        eventQueue.stop();
+        persistenceGate.dispose();
+        throw error;
+      }
     }
 
     // Decouple persistence ownership from the caller's stream iterator so
@@ -836,6 +924,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
           deliveryBuffer.pushValue(streamResponse);
           firstEventDelivered = true;
+          persistenceGate.markEventProcessed();
         }
       } catch (error) {
         recordError(error);
@@ -856,6 +945,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       } finally {
         eventQueue.stop();
         deliveryBuffer.finish();
+        persistenceGate.markDrainClosed();
       }
     });
 
@@ -863,7 +953,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     // executor's lifecycle, not the consumer's, so a client that
     // disconnects this stream early can still attach via
     // `tasks/resubscribe` while the executor keeps running.
-    this._runStreamExecutor(taskId, eventBus, requestContext);
+    this._runStreamExecutor(taskId, eventBus, requestContext, persistenceGate);
 
     try {
       for await (const streamResponse of deliveryBuffer.items()) {
@@ -1424,6 +1514,84 @@ interface ActivePersistenceDrain {
    * error occurred during the drain.
    */
   wait: () => Promise<void>;
+}
+
+interface ExecutionPersistenceGate {
+  /**
+   * Detaches the event-count listener immediately and resolves with the
+   * accepted task state once `ResultManager` has finished processing all
+   * events published up to this call (or once the drain closes).
+   */
+  waitForAcceptedState: () => Promise<TaskState | undefined>;
+  /** Detaches the event-count listener when no async reconciliation is needed. */
+  dispose: () => void;
+  /** Called by the drain loop after processing an event through `ResultManager`. */
+  markEventProcessed: () => void;
+  /** Called in the drain loop's `finally` block. */
+  markDrainClosed: () => void;
+}
+
+function createPersistenceGate(
+  bus: ExecutionEventBus,
+  resultManager: ResultManager,
+  taskStore: TaskStore,
+  taskId: string,
+  context: ServerCallContext
+): ExecutionPersistenceGate {
+  let queuedCount = 0;
+  let processedCount = 0;
+  let drainClosed = false;
+  let detached = false;
+  const waiters: Array<{ target: number; resolve: () => void }> = [];
+
+  const onEvent = (): void => {
+    queuedCount += 1;
+  };
+  bus.on('event', onEvent);
+
+  const detach = (): void => {
+    if (!detached) {
+      detached = true;
+      bus.off('event', onEvent);
+    }
+  };
+
+  const notifyWaiters = (): void => {
+    for (let i = waiters.length - 1; i >= 0; i--) {
+      if (drainClosed || processedCount >= waiters[i].target) {
+        const { resolve } = waiters[i];
+        waiters.splice(i, 1);
+        resolve();
+      }
+    }
+  };
+
+  return {
+    waitForAcceptedState: async (): Promise<TaskState | undefined> => {
+      const target = queuedCount;
+      detach();
+      if (!drainClosed && processedCount < target) {
+        await new Promise<void>((resolve) => {
+          waiters.push({ target, resolve });
+        });
+      }
+      const persistedId = resultManager.getCurrentTask()?.id ?? taskId;
+      const persistedTask = await taskStore
+        .load(persistedId, context)
+        .catch((): undefined => undefined);
+      return persistedTask?.status?.state ?? resultManager.getCurrentTask()?.status?.state;
+    },
+    dispose: detach,
+    markEventProcessed: (): void => {
+      processedCount += 1;
+      notifyWaiters();
+    },
+    markDrainClosed: (): void => {
+      drainClosed = true;
+      detach();
+      notifyWaiters();
+    },
+  };
 }
 
 type StreamBufferEntry<T> = { kind: 'value'; value: T } | { kind: 'error'; error: unknown };
