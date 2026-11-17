@@ -48,7 +48,7 @@ interface RestErrorStatus {
 
 export class RestTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
-  private readonly endpoint: string;
+  public readonly endpoint: string;
 
   constructor(options: RestTransportOptions) {
     this.endpoint = options.endpoint.replace(/\/+$/, '');

@@ -37,9 +37,13 @@ import {
 import { ClientCallResult } from '../../src/client/interceptors.js';
 
 describe('Client', () => {
-  let transport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
+  let transport: Record<
+    Exclude<keyof Transport, 'protocolName' | 'protocolVersion' | 'endpoint'>,
+    Mock
+  > & {
     protocolName: string;
     protocolVersion: string;
+    endpoint?: string;
   };
   let client: Client;
   let agentCard: AgentCard;
@@ -1565,6 +1569,19 @@ describe('Client', () => {
           expect(got).to.deep.equal([events[0]]);
         });
       });
+    });
+  });
+
+  describe('endpoint', () => {
+    it('should resolve endpoint from transport', () => {
+      transport.endpoint = 'https://agent.example.com/a2a';
+      const client = new Client(transport, agentCard);
+      expect(client.endpoint).toBe('https://agent.example.com/a2a');
+    });
+
+    it('should be undefined when the transport does not expose it', () => {
+      const client = new Client(transport, agentCard);
+      expect(client.endpoint).toBeUndefined();
     });
   });
 

@@ -11,9 +11,13 @@ async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
 
 describe('TenantTransportDecorator', () => {
   const DEFAULT_TENANT = 'default-tenant';
-  let mockTransport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
+  let mockTransport: Record<
+    Exclude<keyof Transport, 'protocolName' | 'protocolVersion' | 'endpoint'>,
+    Mock
+  > & {
     protocolName: string;
     protocolVersion: string;
+    endpoint?: string;
   };
   let decorator: TenantTransportDecorator;
 
@@ -38,6 +42,12 @@ describe('TenantTransportDecorator', () => {
 
   it('should expose the base transport protocol name', () => {
     expect(decorator.protocolName).to.equal('MockTransport');
+  });
+
+  it('should expose the base transport endpoint', () => {
+    expect(decorator.endpoint).toBeUndefined();
+    mockTransport.endpoint = 'https://agent.example.com';
+    expect(decorator.endpoint).to.equal('https://agent.example.com');
   });
 
   describe('default tenant application', () => {
