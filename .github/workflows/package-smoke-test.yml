@@ -9,14 +9,20 @@ on:
     branches: ['main', 'epic/**']
   pull_request:
     branches: ['main', 'epic/**']
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.github/CODEOWNERS'
-      - 'test/**'
+    paths:
+      - 'src/**'
+      - '!src/samples/**'
+      - 'tsup.config.ts'
+      - 'scripts/package_smoke_test.sh'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - '.github/actions/setup/**'
+      - '.github/workflows/package-smoke-test.yml'
 
 jobs:
   smoke:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:

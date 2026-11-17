@@ -20,14 +20,19 @@ on:
     branches: [ "main", "epic/**" ]
   pull_request:
     branches: [ "main", "epic/**" ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.github/CODEOWNERS'
-      - 'test/**'
+    paths:
+      - 'src/**'
+      - '!src/samples/**'
+      - 'tsup.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - '.github/actions/setup/**'
+      - '.github/workflows/build-tests.yml'
 
 jobs:
   test:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
 
     runs-on: ubuntu-latest
 
