@@ -510,7 +510,9 @@ const _buildContext = async (
     user,
     headers,
     requestedVersion,
+    protocolBinding: 'GRPC',
   });
+  context.setProtocolBindingIfAbsent('GRPC');
 
   const agentCard = await requestHandler.getAgentCard();
   // Strict per-interface check: the card must declare a GRPC interface

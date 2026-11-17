@@ -16,9 +16,13 @@ import { RestTransportFactory } from '../../src/client/transports/rest_transport
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
   let mockTransportFactory2: { protocolName: string; create: Mock };
-  let mockTransport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
+  let mockTransport: Record<
+    Exclude<keyof Transport, 'protocolName' | 'protocolVersion' | 'endpoint'>,
+    Mock
+  > & {
     protocolName: string;
     protocolVersion: string;
+    endpoint?: string;
   };
 
   beforeEach(() => {

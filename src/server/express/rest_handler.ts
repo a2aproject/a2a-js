@@ -155,7 +155,9 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
       headers: req.headers,
       requestedVersion,
       tenant,
+      protocolBinding: 'HTTP+JSON',
     });
+    context.setProtocolBindingIfAbsent('HTTP+JSON');
     const agentCard = await restTransportHandler.getAgentCard();
     validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
     return context;

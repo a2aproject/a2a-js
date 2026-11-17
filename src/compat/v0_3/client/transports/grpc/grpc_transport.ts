@@ -99,12 +99,14 @@ export interface LegacyGrpcTransportOptions {
 }
 
 export class LegacyGrpcTransport implements Transport {
+  public readonly endpoint: string;
   private readonly grpcCallOptions?: Partial<grpc.CallOptions>;
   private readonly grpcClient: A2AServiceClient;
   // Synthetic IDs for the `toCompat*Request` translators. Never on the wire.
   private requestIdCounter: number = 1;
 
   constructor(options: LegacyGrpcTransportOptions) {
+    this.endpoint = options.endpoint;
     this.grpcCallOptions = options.grpcCallOptions;
     this.grpcClient = new A2AServiceClient(
       options.endpoint,
