@@ -15,6 +15,7 @@ on:
 
 jobs:
   integration:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

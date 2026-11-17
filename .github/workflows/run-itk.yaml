@@ -10,6 +10,7 @@ on:
       - 'itk/**'
       - 'package.json'
       - 'package-lock.json'
+      - '.github/actions/setup/**'
       # Self-callout: re-run when this workflow changes so YAML edits are
       # validated in PRs.
       - '.github/workflows/run-itk.yaml'
@@ -32,6 +33,7 @@ concurrency:
 
 jobs:
   itk-test:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
     name: ITK
     runs-on: ubuntu-latest
 
