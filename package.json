@@ -39,6 +39,9 @@
       "client/grpc": [
         "./dist/client/transports/grpc/index.d.ts"
       ],
+      "plugins": [
+        "./dist/plugins/index.d.ts"
+      ],
       "compat/v0_3": [
         "./dist/compat/v0_3/index.d.ts"
       ],
@@ -104,6 +107,11 @@
       "types": "./dist/client/transports/grpc/index.d.ts",
       "import": "./dist/client/transports/grpc/index.js",
       "require": "./dist/client/transports/grpc/index.cjs"
+    },
+    "./plugins": {
+      "types": "./dist/plugins/index.d.ts",
+      "import": "./dist/plugins/index.js",
+      "require": "./dist/plugins/index.cjs"
     },
     "./compat/v0_3": {
       "types": "./dist/compat/v0_3/index.d.ts",
@@ -186,7 +194,7 @@
     "coverage": "vitest run --coverage",
     "generate": "cd src/types && npx buf generate",
     "generate:compat": "curl -fSL https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
-    "test-build:workers-safe": "esbuild ./dist/index.js ./dist/errors/index.js ./dist/client/index.js ./dist/server/index.js ./dist/compat/v0_3/index.js ./dist/compat/v0_3/client/index.js ./dist/compat/v0_3/server/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
+    "test-build:workers-safe": "esbuild ./dist/index.js ./dist/errors/index.js ./dist/client/index.js ./dist/server/index.js ./dist/plugins/index.js ./dist/compat/v0_3/index.js ./dist/compat/v0_3/client/index.js ./dist/compat/v0_3/server/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
     "test-build:grpc": "esbuild ./dist/errors/grpc/index.js ./dist/server/grpc/index.js ./dist/client/transports/grpc/index.js ./dist/compat/v0_3/server/grpc/index.js ./dist/compat/v0_3/client/transports/grpc/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
     "test-build:express": "esbuild ./dist/server/express/index.js ./dist/compat/v0_3/server/express/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
     "test-build:database": "esbuild ./dist/server/database/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
