@@ -37,20 +37,20 @@ jobs:
   tck-test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [20, 22, 24]
+        # Full Node matrix on push only. PRs run the current LTS; the unit,
+        # integration and smoke workflows cover the Node 20 floor.
+        node-version: ${{ fromJSON(github.event_name == 'push' && '[20, 22, 24]' || '[24]') }}
+        transport: [jsonrpc, rest, grpc]
     steps:
       - name: Checkout a2a-js
         uses: actions/checkout@v7
-      - name: Set up Node
-        uses: actions/setup-node@v7
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-      - run: |
-          npm ci
-          npm run build
       - name: Checkout a2a-tck
         uses: actions/checkout@v7
         with:
@@ -113,13 +113,13 @@ jobs:
         id: run-tck-mandatory
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports jsonrpc,rest,grpc
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category mandatory --transports ${{ matrix.transport }}
         working-directory: tck/a2a-tck
       - name: Run TCK (capabilities)
         id: run-tck-capabilities
         timeout-minutes: 5
         run: |
-          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports jsonrpc,rest,grpc
+          ./run_tck.py --sut-url ${{ env.SUT_JSONRPC_URL }} --category capabilities --transports ${{ matrix.transport }}
         working-directory: tck/a2a-tck
       - name: Stop SUT
         if: always()
