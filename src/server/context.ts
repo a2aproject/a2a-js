@@ -1,3 +1,4 @@
+import { TransportProtocolName } from '../core.js';
 import { Extensions } from '../extensions.js';
 import { User } from './authentication/user.js';
 
@@ -25,6 +26,8 @@ export interface ServerCallContextBuilderOptions {
   requestedVersion?: string;
   /** Tenant identifier extracted from the request path or metadata. */
   tenant?: string;
+  /** Protocol binding of the transport that received the request. */
+  protocolBinding?: TransportProtocolName;
 }
 
 /**
@@ -61,6 +64,8 @@ export interface ServerCallContextOptions {
    * (e.g. request headers, tenant IDs) through the call pipeline.
    */
   state?: Map<string, unknown>;
+  /** Protocol binding of the transport that received the request. */
+  protocolBinding?: TransportProtocolName;
 }
 
 /**
@@ -75,6 +80,7 @@ export const defaultServerCallContextBuilder: ServerCallContextBuilder = ({
   headers,
   requestedVersion,
   tenant,
+  protocolBinding,
 }: ServerCallContextBuilderOptions): ServerCallContext => {
   const state = new Map<string, unknown>([[STATE_HEADERS_KEY, headers]]);
   return new ServerCallContext({
@@ -83,6 +89,7 @@ export const defaultServerCallContextBuilder: ServerCallContextBuilder = ({
     state,
     requestedVersion,
     tenant,
+    protocolBinding,
   });
 };
 
@@ -91,6 +98,7 @@ export class ServerCallContext {
   private readonly _user?: User;
   private readonly _requestedVersion: string;
   private _tenant?: string;
+  private _protocolBinding?: TransportProtocolName;
   private _activatedExtensions?: Extensions;
   private readonly _state: Map<string, unknown>;
 
@@ -98,12 +106,31 @@ export class ServerCallContext {
     this._requestedExtensions = options?.requestedExtensions;
     this._user = options?.user;
     this._tenant = options?.tenant;
+    this._protocolBinding = options?.protocolBinding;
     this._requestedVersion = options?.requestedVersion || ABSENT_HEADER_VERSION;
     this._state = options?.state ?? new Map();
   }
 
   get tenant(): string | undefined {
     return this._tenant;
+  }
+
+  /**
+   * Protocol binding of the transport that received the request
+   * (`JSONRPC`, `HTTP+JSON` or `GRPC`). Undefined for contexts not created
+   * by a built-in transport.
+   */
+  get protocolBinding(): TransportProtocolName | undefined {
+    return this._protocolBinding;
+  }
+
+  /**
+   * Sets the protocol binding if it is not set yet. Built-in transports call
+   * this after the context builder, so that contexts created by a custom
+   * {@link ServerCallContextBuilder} also carry the binding.
+   */
+  public setProtocolBindingIfAbsent(protocolBinding: TransportProtocolName) {
+    this._protocolBinding ??= protocolBinding;
   }
 
   /**

@@ -65,6 +65,9 @@ import {
 } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors/index.js';
+import { SequentialPluginManager } from '../../plugins/manager.js';
+import type { A2APlugin } from '../../plugins/types.js';
+import { applyServerPlugins } from './server_plugin_hooks.js';
 
 export interface DefaultRequestHandlerOptions {
   /**
@@ -91,6 +94,12 @@ export interface DefaultRequestHandlerOptions {
    * traffic an existing agent accepts today.
    */
   validateInputModes?: boolean;
+
+  /**
+   * Plugins whose server hooks run around every request handled by this
+   * handler, in the given order. See `@a2a-js/sdk/plugins`.
+   */
+  plugins?: A2APlugin[];
 }
 
 /**
@@ -140,6 +149,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       this.pushNotificationSender =
         pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
     }
+
+    applyServerPlugins(this, new SequentialPluginManager(...(options.plugins ?? [])), agentCard);
   }
 
   async getAgentCard(): Promise<AgentCard> {
