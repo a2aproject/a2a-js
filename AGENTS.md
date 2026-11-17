@@ -109,4 +109,4 @@ The `src/samples` directory contains practical examples. Each subdirectory has i
 ## Development Conventions
 
 *   **Testing**: All new features should have accompanying unit tests in `test/` or alongside source files.
-*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./client/grpc`, `./server`, `./server/express`, `./server/grpc`, `./server/database`, `./compat/v0_3`, `./compat/v0_3/server`, `./compat/v0_3/server/express`, `./compat/v0_3/server/grpc`, `./compat/v0_3/client`, `./compat/v0_3/client/grpc`). Ensure new components are exported from the correct entry point.
+*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./client/grpc`, `./server`, `./server/express`, `./server/grpc`, `./server/database`, `./plugins`, `./compat/v0_3`, `./compat/v0_3/server`, `./compat/v0_3/server/express`, `./compat/v0_3/server/grpc`, `./compat/v0_3/client`, `./compat/v0_3/client/grpc`). Ensure new components are exported from the correct entry point.

@@ -91,7 +91,9 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
         user,
         headers: req.headers,
         requestedVersion,
+        protocolBinding: 'JSONRPC',
       });
+      context.setProtocolBindingIfAbsent('JSONRPC');
       const agentCard = await options.requestHandler.getAgentCard();
       validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
       const transportHandler = useLegacy ? legacyJsonRpcTransportHandler : jsonRpcTransportHandler;
