@@ -129,7 +129,7 @@ const OPEN = 1;
  * completes.
  */
 export class WebSocketTransport implements Transport {
-  private readonly endpoint: string;
+  public readonly endpoint: string;
   private readonly webSocketFactory: WebSocketFactory;
   private readonly headersInQuery: boolean;
   private readonly headers: Record<string, string>;

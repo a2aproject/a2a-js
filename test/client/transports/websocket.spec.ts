@@ -144,6 +144,7 @@ describe('WebSocketTransport', () => {
     expect(transport.protocolName).toBe(WEBSOCKET_URI);
     expect(WEBSOCKET_PROTOCOL_NAME).toBe(WEBSOCKET_URI);
     expect(transport.protocolVersion).toBe('1.0');
+    expect(transport.endpoint).toBe('ws://agent.example/a2a/ws');
   });
 
   it('passes handshake headers, including A2A-Version, to the socket factory', async () => {
