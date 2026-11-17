@@ -152,7 +152,11 @@ export interface A2APlugin {
   beforeHandlerRun?(request: ServerRequest): void | Promise<void>;
   /** Called with the handler result, per stream event, and at the end. */
   afterHandlerRun?(response: ServerResponse): void | Promise<void>;
-  /** Wraps the handler call, after `beforeHandlerRun`. Must return `next()`. */
+  /**
+   * Wraps the handler call, after `beforeHandlerRun`. Must return `next()`.
+   * For streaming methods it wraps each pull of the next event, so it runs
+   * once per event plus once for the end of the stream.
+   */
   aroundHandlerRun?<T>(request: ServerRequest, next: () => T): T;
 
   // Client: around each call made by `Client`, outside its interceptors.
