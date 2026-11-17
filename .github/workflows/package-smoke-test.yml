@@ -30,12 +30,10 @@ jobs:
           - node-version: 24
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-      - run: npm ci
       - run: npm run test:package
         env:
           KYSELY_VERSION: ${{ matrix.kysely }}
