@@ -139,7 +139,9 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
       headers: req.headers,
       requestedVersion,
       tenant: (req.params.tenant as string) || undefined,
+      protocolBinding: 'HTTP+JSON',
     });
+    context.setProtocolBindingIfAbsent('HTTP+JSON');
     const agentCard = await transportHandler.getAgentCard();
     // Strict per-interface check: the card must declare a HTTP+JSON
     // interface at `protocolVersion: '0.3'`.

@@ -81,6 +81,12 @@ describe('GrpcTransport', () => {
     });
   });
 
+  describe('endpoint', () => {
+    it('should expose the endpoint', () => {
+      expect(transport.endpoint).toBe(endpoint);
+    });
+  });
+
   describe('getExtendedAgentCard', () => {
     it('should get agent card successfully', async () => {
       const mockCard = createMockAgentCard();

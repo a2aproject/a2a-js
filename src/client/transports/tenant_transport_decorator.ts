@@ -38,6 +38,10 @@ export class TenantTransportDecorator implements Transport {
     return this.base.protocolVersion;
   }
 
+  get endpoint(): string | undefined {
+    return this.base.endpoint;
+  }
+
   private _resolveTenant(tenant: string | undefined): string {
     return tenant || this.defaultTenant;
   }
