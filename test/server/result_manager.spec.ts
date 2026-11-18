@@ -12,6 +12,7 @@ import { ServerCallContext } from '../../src/server/context.js';
 import { ResultManager } from '../../src/server/result_manager.js';
 import { InMemoryTaskStore } from '../../src/server/store.js';
 import { AgentEvent } from '../../src/server/events/execution_event_bus.js';
+import { sequential, type TaskEventInfo } from '../../src/plugins/index.js';
 
 function createMessage(messageId: string, text: string, role: Role = Role.ROLE_USER): Message {
   return {
@@ -1012,5 +1013,85 @@ describe('concurrent ResultManagers on the same taskId', () => {
       expect(stored!.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
       expect(stored!.history?.map((m) => m.messageId)).toContain('final-1');
     });
+  });
+});
+
+describe('ResultManager task plugin hooks', () => {
+  const context = new ServerCallContext();
+  let store: InMemoryTaskStore;
+  let infos: TaskEventInfo[];
+  let manager: ResultManager;
+
+  function statusUpdate(taskId: string, state: TaskState) {
+    return AgentEvent.statusUpdate({
+      taskId,
+      contextId: 'c1',
+      status: { state, message: undefined, timestamp: undefined },
+      metadata: {},
+    });
+  }
+
+  beforeEach(() => {
+    store = new InMemoryTaskStore();
+    infos = [];
+    manager = new ResultManager(
+      store,
+      context,
+      sequential({ name: 'recorder', onTaskEvent: (info) => void infos.push(info) })
+    );
+  });
+
+  it('reports each write with the state persisted before it', async () => {
+    const created = AgentEvent.task(createTask('t1', 'c1'));
+    await manager.processEvent(created);
+    await manager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_WORKING));
+    await manager.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 't1',
+        contextId: 'c1',
+        artifact: createArtifact('a1', 'hello'),
+        append: false,
+        lastChunk: true,
+        metadata: {},
+      })
+    );
+    await manager.processEvent(
+      AgentEvent.task(
+        createTask('t1', 'c1', {
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+
+    expect(infos.map((i) => [i.event?.kind, i.fromState, i.toState])).toEqual([
+      ['task', undefined, TaskState.TASK_STATE_SUBMITTED],
+      ['statusUpdate', TaskState.TASK_STATE_SUBMITTED, TaskState.TASK_STATE_WORKING],
+      ['artifactUpdate', TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_WORKING],
+      ['task', TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED],
+    ]);
+    expect(infos[0]).toMatchObject({ taskId: 't1', event: created, context });
+    expect(infos.at(-1)!.task).toEqual(await store.load('t1', context));
+  });
+
+  it('does not report writes that were skipped or failed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await manager.processEvent(AgentEvent.task(createTask('t1', 'c1')));
+    await manager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_COMPLETED));
+    infos = [];
+
+    // Terminal task, unknown task, and message events don't write.
+    await manager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_WORKING));
+    await manager.processEvent(statusUpdate('unknown', TaskState.TASK_STATE_WORKING));
+    await manager.processEvent(AgentEvent.message(createMessage('m1', 'hi', Role.ROLE_AGENT)));
+    vi.spyOn(store, 'save').mockRejectedValue(new Error('disk full'));
+    await expect(manager.processEvent(AgentEvent.task(createTask('t2', 'c1')))).rejects.toThrow(
+      'disk full'
+    );
+
+    expect(infos).toEqual([]);
   });
 });

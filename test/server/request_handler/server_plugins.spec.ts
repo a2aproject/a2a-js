@@ -12,7 +12,12 @@ import {
 import { DefaultExecutionEventBusManager } from '../../../src/server/events/execution_event_bus_manager.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { TaskNotFoundError, UnsupportedOperationError } from '../../../src/errors/index.js';
-import type { A2APlugin, ServerRequest, ServerResponse } from '../../../src/plugins/index.js';
+import type {
+  A2APlugin,
+  ServerRequest,
+  ServerResponse,
+  TaskEventInfo,
+} from '../../../src/plugins/index.js';
 import { MockAgentExecutor, fakeTaskExecute } from '../mocks/agent-executor.mock.js';
 
 describe('DefaultRequestHandler server plugin hooks', () => {
@@ -394,5 +399,45 @@ describe('DefaultRequestHandler server plugin hooks', () => {
     const result = await handler.getTask({ id: 't1', tenant: '' }, context);
 
     expect(result.id).toBe('t1');
+  });
+
+  describe('task hooks', () => {
+    let infos: TaskEventInfo[];
+    let handler: DefaultRequestHandler;
+
+    beforeEach(() => {
+      infos = [];
+      handler = createHandler([{ name: 'tasks', onTaskEvent: (info) => void infos.push(info) }]);
+    });
+
+    it('reports the history write for a follow-up message, without an event', async () => {
+      await taskStore.save(task('t1', TaskState.TASK_STATE_INPUT_REQUIRED), context);
+      // The agent publishes nothing, so the history append is the only write.
+      executor.execute.mockImplementation(async (_ctx, bus) => bus.finished());
+      const params = sendParams();
+      params.message!.taskId = 't1';
+      params.message!.contextId = 'ctx';
+
+      await handler.sendMessage(params, context).catch(() => {});
+
+      expect(infos).toHaveLength(1);
+      expect(infos[0]).toMatchObject({
+        taskId: 't1',
+        fromState: TaskState.TASK_STATE_INPUT_REQUIRED,
+        toState: TaskState.TASK_STATE_INPUT_REQUIRED,
+      });
+      expect(infos[0].event).toBeUndefined();
+      expect(infos[0].task.history).toHaveLength(1);
+    });
+
+    it('reports the CANCELED write when no agent is running', async () => {
+      await taskStore.save(task('t1', TaskState.TASK_STATE_WORKING), context);
+
+      await handler.cancelTask({ id: 't1', tenant: '', metadata: {} }, context);
+
+      expect(infos.map((i) => [i.event?.kind, i.fromState, i.toState])).toEqual([
+        ['statusUpdate', TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED],
+      ]);
+    });
   });
 });
