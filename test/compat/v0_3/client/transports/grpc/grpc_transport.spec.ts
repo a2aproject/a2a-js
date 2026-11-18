@@ -122,6 +122,10 @@ describe('LegacyGrpcTransport', () => {
       expect(transport.protocolName).toBe('GRPC');
     });
 
+    it('exposes the endpoint', () => {
+      expect(transport.endpoint).toBe(ENDPOINT);
+    });
+
     it("protocolVersion is '0.3'", () => {
       expect(transport.protocolVersion).toBe('0.3');
     });

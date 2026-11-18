@@ -78,6 +78,10 @@ describe('LegacyJsonRpcTransport', () => {
       expect(transport.protocolName).toBe('JSONRPC');
     });
 
+    it('exposes the endpoint', () => {
+      expect(transport.endpoint).toBe(ENDPOINT);
+    });
+
     it("protocolVersion is '0.3'", () => {
       expect(transport.protocolVersion).toBe('0.3');
     });

@@ -267,7 +267,9 @@ const _buildContext = async (
     headers,
     requestedVersion,
     tenant,
+    protocolBinding: 'GRPC',
   });
+  context.setProtocolBindingIfAbsent('GRPC');
 
   const agentCard = await requestHandler.getAgentCard();
   validateVersion(context.requestedVersion, agentCard, 'GRPC');

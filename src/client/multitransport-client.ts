@@ -74,6 +74,14 @@ export class Client {
     return this.transport.protocolVersion;
   }
 
+  /**
+   * The endpoint of the remote agent, as reported by the transport.
+   * Undefined for custom transports that don't expose it.
+   */
+  public get endpoint(): string | undefined {
+    return this.transport.endpoint;
+  }
+
   constructor(
     public readonly transport: Transport,
     private agentCard: AgentCard,
