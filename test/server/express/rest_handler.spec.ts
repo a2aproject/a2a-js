@@ -36,6 +36,7 @@ import { FromProto } from '../../../src/types/converters/from_proto.js';
 import { LegacyRestTransportHandler } from '../../../src/compat/v0_3/server/transports/rest/rest_transport_handler.js';
 import {
   STATE_HEADERS_KEY,
+  ServerCallContext,
   ServerCallContextBuilder,
   defaultServerCallContextBuilder,
 } from '../../../src/server/context.js';
@@ -1674,6 +1675,70 @@ describe('restHandler', () => {
         expect(headers['a2a-version']).to.equal('0.3');
         expect(headers['x-custom']).to.equal('v');
       });
+
+      it('sets HTTP+JSON as the protocol binding on the legacy path', async () => {
+        const contextBuilder = vi.fn(defaultServerCallContextBuilder);
+        const app = express();
+        app.use(
+          restHandler({
+            requestHandler: mockRequestHandler,
+            userBuilder: UserBuilder.noAuthentication,
+            legacyCompat: { enabled: true },
+            contextBuilder,
+          })
+        );
+        let observedBinding: unknown;
+        legacySendMessageStub.mockImplementation(async (_params, context) => {
+          observedBinding = context.protocolBinding;
+          return {
+            kind: 'task',
+            id: 'legacy-binding',
+            contextId: 'ctx',
+            status: { state: 'working' },
+          };
+        });
+
+        await request(app)
+          .post('/v1/message:send')
+          .set('A2A-Version', '0.3')
+          .send(legacyMessageBody)
+          .expect(201);
+
+        expect(contextBuilder.mock.calls[0]![0].protocolBinding).to.equal('HTTP+JSON');
+        expect(observedBinding).to.equal('HTTP+JSON');
+      });
+    });
+  });
+
+  describe('protocolBinding', () => {
+    it('sets HTTP+JSON on the context passed to the request handler', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app).get('/tasks/task-1').set('A2A-Version', '1.0').expect(200);
+
+      const [, context] = (mockRequestHandler.getTask as Mock).mock.calls[0];
+      expect(context.protocolBinding).toBe('HTTP+JSON');
+    });
+
+    it('sets HTTP+JSON on a context built by a custom contextBuilder', async () => {
+      const contextBuilder = vi.fn(() => new ServerCallContext({ requestedVersion: '1.0' }));
+      const customApp = express();
+      customApp.use(
+        restHandler({
+          requestHandler: mockRequestHandler,
+          userBuilder: UserBuilder.noAuthentication,
+          contextBuilder,
+        })
+      );
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(customApp).get('/tasks/task-1').set('A2A-Version', '1.0').expect(200);
+
+      expect(contextBuilder).toHaveBeenCalledWith(
+        expect.objectContaining({ protocolBinding: 'HTTP+JSON' })
+      );
+      const [, context] = (mockRequestHandler.getTask as Mock).mock.calls[0];
+      expect(context.protocolBinding).toBe('HTTP+JSON');
     });
   });
 });

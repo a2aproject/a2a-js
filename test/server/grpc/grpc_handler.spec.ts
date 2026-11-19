@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import * as grpc from '@grpc/grpc-js';
 import * as proto from '../../../src/grpc/pb/a2a.js';
-import { A2ARequestHandler } from '../../../src/server/index.js';
+import { A2ARequestHandler, ServerCallContext } from '../../../src/server/index.js';
 import { TaskNotFoundError } from '../../../src/errors/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import {
@@ -147,6 +147,34 @@ describe('grpcHandler', () => {
         expect.objectContaining({ tenant: 'test-tenant' }),
         expect.anything()
       );
+    });
+  });
+
+  describe('protocolBinding', () => {
+    it('sets GRPC on the context passed to the request handler', async () => {
+      await handler.getExtendedAgentCard(createMockUnaryCall({}), vi.fn());
+
+      const [, context] = (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mock
+        .calls[0];
+      expect(context.protocolBinding).toBe('GRPC');
+    });
+
+    it('passes GRPC to a custom contextBuilder and sets it on the built context', async () => {
+      const contextBuilder = vi.fn(() => new ServerCallContext({ requestedVersion: '1.0' }));
+      const svc = grpcService({
+        requestHandler: mockRequestHandler,
+        userBuilder: async () => ({ id: 'test-user' }) as any,
+        contextBuilder,
+      });
+
+      await svc.getExtendedAgentCard(createMockUnaryCall({}), vi.fn());
+
+      expect(contextBuilder).toHaveBeenCalledWith(
+        expect.objectContaining({ protocolBinding: 'GRPC' })
+      );
+      const [, context] = (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mock
+        .calls[0];
+      expect(context.protocolBinding).toBe('GRPC');
     });
   });
 

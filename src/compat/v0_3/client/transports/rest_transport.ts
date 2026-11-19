@@ -82,7 +82,7 @@ interface LegacyRestErrorBody {
 
 export class LegacyRestTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
-  private readonly endpoint: string;
+  public readonly endpoint: string;
   private requestIdCounter: number = 1;
 
   constructor(options: LegacyRestTransportOptions) {

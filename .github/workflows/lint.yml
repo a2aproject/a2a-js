@@ -12,18 +12,16 @@ on:
 
 jobs:
   eslint:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
 
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-node@v7
+    - uses: ./.github/actions/setup
       with:
         node-version: 20
         registry-url: 'https://registry.npmjs.org'
-        cache: 'npm'
-        cache-dependency-path: |
-          package-lock.json
-          src/samples/package-lock.json
-    - run: npm ci && (cd src/samples && npm ci)
+    - run: npm ci
+      working-directory: src/samples
     - run: npm run lint:ci
