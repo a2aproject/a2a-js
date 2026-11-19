@@ -539,6 +539,9 @@ describe('legacyGrpcService', () => {
       // so the default builder's header-stashing keeps working.
       assert.isDefined(opts.headers);
       expect(opts.headers[A2A_VERSION_HEADER.toLowerCase()]).to.equal('0.3');
+      expect(opts.protocolBinding).to.equal('GRPC');
+      const [, context] = (mockRequestHandler.getTask as Mock).mock.calls[0];
+      expect(context.protocolBinding).to.equal('GRPC');
     });
 
     it('lets a custom contextBuilder inject tenant into context.state', async () => {

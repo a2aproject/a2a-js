@@ -79,6 +79,28 @@ describe('ServerCallContext', () => {
     });
   });
 
+  describe('protocolBinding', () => {
+    it('is undefined when not provided', () => {
+      expect(new ServerCallContext().protocolBinding).toBeUndefined();
+    });
+
+    it('stores the constructor value', () => {
+      expect(new ServerCallContext({ protocolBinding: 'GRPC' }).protocolBinding).toBe('GRPC');
+    });
+
+    it('setProtocolBindingIfAbsent sets the binding when none was provided', () => {
+      const ctx = new ServerCallContext();
+      ctx.setProtocolBindingIfAbsent('JSONRPC');
+      expect(ctx.protocolBinding).toBe('JSONRPC');
+    });
+
+    it('setProtocolBindingIfAbsent keeps an existing binding', () => {
+      const ctx = new ServerCallContext({ protocolBinding: 'HTTP+JSON' });
+      ctx.setProtocolBindingIfAbsent('JSONRPC');
+      expect(ctx.protocolBinding).toBe('HTTP+JSON');
+    });
+  });
+
   describe('addActivatedExtension', () => {
     it('adds a single extension', () => {
       const ctx = new ServerCallContext();
@@ -201,5 +223,15 @@ describe('defaultServerCallContextBuilder', () => {
       headers: {},
     });
     expect(ctx.requestedVersion).toBe('0.3');
+  });
+
+  it('passes protocolBinding to the context', () => {
+    const ctx = defaultServerCallContextBuilder({
+      extensions: undefined,
+      user: undefined,
+      headers: {},
+      protocolBinding: 'HTTP+JSON',
+    });
+    expect(ctx.protocolBinding).toBe('HTTP+JSON');
   });
 });
