@@ -5,13 +5,13 @@
  * layer.
  */
 
-import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION } from './constants.js';
+import { A2A_LEGACY_PROTOCOL_VERSION, A2A_PROTOCOL_VERSION, ProtocolVersion } from './constants.js';
 
 /** The legacy A2A protocol version string targeted by the compat layer. */
 export const PROTOCOL_VERSION_0_3 = A2A_LEGACY_PROTOCOL_VERSION;
 
-/** The current A2A protocol version string. */
-export const PROTOCOL_VERSION_1_0 = A2A_PROTOCOL_VERSION;
+/** The first non-legacy A2A protocol version; the upper bound of the legacy range. */
+export const PROTOCOL_VERSION_1_0 = ProtocolVersion.V1_0;
 
 interface NumericVersion {
   readonly major: number;
@@ -61,4 +61,33 @@ export function isLegacyVersion(version: string | null | undefined): boolean {
   if (!lower || !upper) return false;
 
   return compareVersions(v, lower) >= 0 && compareVersions(v, upper) < 0;
+}
+
+/**
+ * Returns `true` when an interface declaring `declared` can serve a request
+ * for `requested`. An interface declares the latest minor it supports per major
+ * (spec §3.6), so any lower minor of the same major is accepted. Pre-1.0
+ * minors may break compatibility and must match exactly. Patch is ignored.
+ */
+export function supportsVersion(declared: string, requested: string): boolean {
+  const d = parseVersion(declared);
+  const r = parseVersion(requested);
+  if (!d || !r || d.major !== r.major) return false;
+  return d.major === 0 ? d.minor === r.minor : r.minor <= d.minor;
+}
+
+/**
+ * Returns the `Major.Minor` version a v1+ client supporting up to `client`
+ * should request from an interface declaring `declared`: the lower of the two
+ * within the same major, or `undefined` when they cannot interoperate (pre-1.0
+ * interfaces are served by the compat transports, not negotiated here).
+ */
+export function negotiateVersion(
+  declared: string,
+  client: string = A2A_PROTOCOL_VERSION
+): string | undefined {
+  const d = parseVersion(declared);
+  const c = parseVersion(client);
+  if (!d || !c || d.major !== c.major || d.major === 0) return undefined;
+  return `${d.major}.${Math.min(d.minor, c.minor)}`;
 }

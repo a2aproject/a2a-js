@@ -6,7 +6,7 @@ import { JSON_CONTENT_TYPE } from '../../constants.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
 import { Transport, TransportFactory } from './transport.js';
-import { isLegacyVersion } from '../../version_utils.js';
+import { isLegacyVersion, negotiateVersion } from '../../version_utils.js';
 import { pickMatchingInterface } from './pick_interface.js';
 import { FromProto } from '../../types/converters/from_proto.js';
 import {
@@ -36,6 +36,8 @@ const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
 
 export interface RestTransportOptions {
   endpoint: string;
+  /** `A2A-Version` to send. Defaults to {@link A2A_PROTOCOL_VERSION}. */
+  protocolVersion?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -50,7 +52,10 @@ export class RestTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   public readonly endpoint: string;
 
+  private readonly negotiatedVersion: string;
+
   constructor(options: RestTransportOptions) {
+    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
     this.endpoint = options.endpoint.replace(/\/+$/, '');
     this.customFetchImpl = options.fetchImpl;
   }
@@ -64,7 +69,7 @@ export class RestTransport implements Transport {
   }
 
   get protocolVersion(): string {
-    return A2A_PROTOCOL_VERSION;
+    return this.negotiatedVersion;
   }
 
   async getExtendedAgentCard(
@@ -448,17 +453,16 @@ export class RestTransportFactory implements TransportFactory {
   }
 
   async create(url: string, agentCard: AgentCard): Promise<Transport> {
-    if (this.options?.legacyCompat?.enabled) {
-      const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
-      if (iface && isLegacyVersion(iface.protocolVersion)) {
-        return new LegacyRestTransport({
-          endpoint: url,
-          fetchImpl: this.options?.fetchImpl,
-        });
-      }
+    const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
+    if (this.options?.legacyCompat?.enabled && iface && isLegacyVersion(iface.protocolVersion)) {
+      return new LegacyRestTransport({
+        endpoint: url,
+        fetchImpl: this.options?.fetchImpl,
+      });
     }
     return new RestTransport({
       endpoint: url,
+      protocolVersion: iface && negotiateVersion(iface.protocolVersion),
       fetchImpl: this.options?.fetchImpl,
     });
   }

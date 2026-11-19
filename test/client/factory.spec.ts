@@ -12,6 +12,7 @@ import {
 import { LegacyJsonRpcTransport } from '../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
 import { RestTransportFactory } from '../../src/client/transports/rest_transport.js';
+import { negotiateVersion } from '../../src/version_utils.js';
 
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
@@ -163,6 +164,8 @@ describe('ClientFactory', () => {
         { versions: ['0.3', '1.0', '1.0'], selectedIndex: 1 },
         { versions: ['1.0', '0.3', '1.0'], selectedIndex: 0 },
         { versions: ['0.3', '0.3'], selectedIndex: 0 },
+        { versions: ['0.3', '1.1'], selectedIndex: 1 },
+        { versions: ['2.0', '1.0'], selectedIndex: 1 },
       ])(
         'selects interface $selectedIndex for versions $versions',
         async ({ versions, selectedIndex }) => {
@@ -205,7 +208,10 @@ describe('ClientFactory', () => {
           const task = await client.getTask({ id: 'task-1', tenant: '' });
 
           expect(task.id).toBe('task-1');
-          expect(client.transport.protocolVersion).toBe(versions[selectedIndex]);
+          // A v1 client talks the lower minor of the two; v0.3 goes through the compat transport.
+          expect(client.transport.protocolVersion).toBe(
+            negotiateVersion(versions[selectedIndex]) ?? versions[selectedIndex]
+          );
           expect(fetchImpl).toHaveBeenCalledOnce();
           const expectedEndpoint = card.supportedInterfaces[selectedIndex].url;
           const restPath = versions[selectedIndex] === '0.3' ? '/v1/tasks/task-1' : '/tasks/task-1';

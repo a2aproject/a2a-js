@@ -26,7 +26,7 @@ import { FromProto } from '../../../types/converters/from_proto.js';
 
 import { fromGrpcError } from '../../../errors/grpc/index.js';
 import { LegacyGrpcTransport } from '../../../compat/v0_3/client/transports/grpc/index.js';
-import { isLegacyVersion } from '../../../version_utils.js';
+import { isLegacyVersion, negotiateVersion } from '../../../version_utils.js';
 import { pickMatchingInterface } from '../pick_interface.js';
 
 const PROTOCOL_NAME: TransportProtocolName = 'GRPC';
@@ -46,6 +46,8 @@ type GrpcStreamCall<TReq, TRes> = (
 
 export interface GrpcTransportOptions {
   endpoint: string;
+  /** `A2A-Version` to send. Defaults to {@link A2A_PROTOCOL_VERSION}. */
+  protocolVersion?: string;
   grpcChannelCredentials?: grpc.ChannelCredentials;
   grpcCallOptions?: Partial<grpc.CallOptions>;
 }
@@ -55,7 +57,10 @@ export class GrpcTransport implements Transport {
   private readonly grpcCallOptions?: Partial<grpc.CallOptions>;
   private readonly grpcClient: A2AServiceClient;
 
+  private readonly negotiatedVersion: string;
+
   constructor(options: GrpcTransportOptions) {
+    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
     this.endpoint = options.endpoint;
     this.grpcCallOptions = options.grpcCallOptions;
     this.grpcClient = new A2AServiceClient(
@@ -69,7 +74,7 @@ export class GrpcTransport implements Transport {
   }
 
   get protocolVersion(): string {
-    return A2A_PROTOCOL_VERSION;
+    return this.negotiatedVersion;
   }
 
   async getExtendedAgentCard(
@@ -339,18 +344,17 @@ export class GrpcTransportFactory implements TransportFactory {
   }
 
   async create(url: string, agentCard: AgentCard): Promise<Transport> {
-    if (this.options?.legacyCompat?.enabled) {
-      const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
-      if (iface && isLegacyVersion(iface.protocolVersion)) {
-        return new LegacyGrpcTransport({
-          endpoint: url,
-          grpcChannelCredentials: this.options?.grpcChannelCredentials,
-          grpcCallOptions: this.options?.grpcCallOptions,
-        });
-      }
+    const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
+    if (this.options?.legacyCompat?.enabled && iface && isLegacyVersion(iface.protocolVersion)) {
+      return new LegacyGrpcTransport({
+        endpoint: url,
+        grpcChannelCredentials: this.options?.grpcChannelCredentials,
+        grpcCallOptions: this.options?.grpcCallOptions,
+      });
     }
     return new GrpcTransport({
       endpoint: url,
+      protocolVersion: iface && negotiateVersion(iface.protocolVersion),
       grpcChannelCredentials: this.options?.grpcChannelCredentials,
       grpcCallOptions: this.options?.grpcCallOptions,
     });

@@ -1,9 +1,5 @@
 import { TaskPushNotificationConfig, StreamResponse, Task } from '../../index.js';
-import {
-  A2A_LEGACY_PROTOCOL_VERSION,
-  A2A_PROTOCOL_VERSION,
-  ProtocolVersion,
-} from '../../constants.js';
+import { A2A_LEGACY_PROTOCOL_VERSION, ProtocolVersion } from '../../constants.js';
 import { ServerCallContext } from '../context.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore, StoredPushNotificationConfig } from './push_notification_store.js';
@@ -189,7 +185,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       this.warnedMissingSerializers.add(wireVersion);
       console.warn(
         `No push notification serializer registered for wire version '${wireVersion}'; ` +
-          `falling back to '${A2A_PROTOCOL_VERSION}'. Register one via ` +
+          `falling back to '${ProtocolVersion.V1_0}'. Register one via ` +
           `DefaultPushNotificationSenderOptions.serializers to silence this warning.`
       );
     }

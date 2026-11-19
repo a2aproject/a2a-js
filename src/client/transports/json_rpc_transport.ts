@@ -9,7 +9,7 @@ import {
 } from '../../index.js';
 import { RequestOptions } from '../multitransport-client.js';
 import { parseSseStream } from '../../sse_utils.js';
-import { isLegacyVersion } from '../../version_utils.js';
+import { isLegacyVersion, negotiateVersion } from '../../version_utils.js';
 import { Transport, TransportFactory } from './transport.js';
 import {
   CancelTaskRequest,
@@ -55,6 +55,8 @@ function assertJsonRpcResponseVersion(
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
+  /** `A2A-Version` to send. Defaults to {@link A2A_PROTOCOL_VERSION}. */
+  protocolVersion?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -63,7 +65,10 @@ export class JsonRpcTransport implements Transport {
   public readonly endpoint: string;
   private requestIdCounter: number = 1;
 
+  private readonly negotiatedVersion: string;
+
   constructor(options: JsonRpcTransportOptions) {
+    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
     this.endpoint = options.endpoint;
     this.customFetchImpl = options.fetchImpl;
   }
@@ -73,7 +78,7 @@ export class JsonRpcTransport implements Transport {
   }
 
   get protocolVersion(): string {
-    return A2A_PROTOCOL_VERSION;
+    return this.negotiatedVersion;
   }
 
   async getExtendedAgentCard(
@@ -422,17 +427,16 @@ export class JsonRpcTransportFactory implements TransportFactory {
   }
 
   async create(url: string, agentCard: AgentCard): Promise<Transport> {
-    if (this.options?.legacyCompat?.enabled) {
-      const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
-      if (iface && isLegacyVersion(iface.protocolVersion)) {
-        return new LegacyJsonRpcTransport({
-          endpoint: url,
-          fetchImpl: this.options?.fetchImpl,
-        });
-      }
+    const iface = pickMatchingInterface(agentCard, PROTOCOL_NAME, url);
+    if (this.options?.legacyCompat?.enabled && iface && isLegacyVersion(iface.protocolVersion)) {
+      return new LegacyJsonRpcTransport({
+        endpoint: url,
+        fetchImpl: this.options?.fetchImpl,
+      });
     }
     return new JsonRpcTransport({
       endpoint: url,
+      protocolVersion: iface && negotiateVersion(iface.protocolVersion),
       fetchImpl: this.options?.fetchImpl,
     });
   }
