@@ -51,10 +51,12 @@ export interface GrpcTransportOptions {
 }
 
 export class GrpcTransport implements Transport {
+  public readonly endpoint: string;
   private readonly grpcCallOptions?: Partial<grpc.CallOptions>;
   private readonly grpcClient: A2AServiceClient;
 
   constructor(options: GrpcTransportOptions) {
+    this.endpoint = options.endpoint;
     this.grpcCallOptions = options.grpcCallOptions;
     this.grpcClient = new A2AServiceClient(
       options.endpoint,

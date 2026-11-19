@@ -15,7 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login != 'a2a-bot'
     steps:
       - name: Download Coverage Artifacts
         uses: actions/download-artifact@v7

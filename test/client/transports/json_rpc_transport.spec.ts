@@ -41,6 +41,12 @@ describe('JsonRpcTransport', () => {
     });
   });
 
+  describe('endpoint', () => {
+    it('should expose the endpoint', () => {
+      expect(transport.endpoint).toBe(endpoint);
+    });
+  });
+
   describe('sendMessage', () => {
     it('should correctly add the extension headers', async () => {
       const messageParams: SendMessageRequest = {

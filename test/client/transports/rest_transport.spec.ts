@@ -74,6 +74,14 @@ describe('RestTransport', () => {
       const [url] = mockFetch.mock.calls[0];
       expect(url).to.equal('https://example.com/a2a/rest/message:send');
     });
+
+    it('should expose the endpoint without trailing slashes', () => {
+      const trailingSlashTransport = new RestTransport({
+        endpoint: 'https://example.com/a2a/rest/',
+        fetchImpl: mockFetch,
+      });
+      expect(trailingSlashTransport.endpoint).to.equal('https://example.com/a2a/rest');
+    });
   });
 
   describe('protocolName', () => {

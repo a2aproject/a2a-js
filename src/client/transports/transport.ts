@@ -22,6 +22,12 @@ export interface Transport {
   get protocolName(): string;
   get protocolVersion(): string;
 
+  /**
+   * The endpoint of the remote agent this transport sends requests to, e.g.
+   * `AgentInterface.url`. Optional so that custom transports keep compiling.
+   */
+  readonly endpoint?: string;
+
   getExtendedAgentCard(
     params: GetExtendedAgentCardRequest,
     options?: RequestOptions

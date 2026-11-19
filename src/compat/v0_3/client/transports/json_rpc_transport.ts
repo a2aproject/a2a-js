@@ -83,7 +83,7 @@ type LegacyJsonRpcResponse<T> = LegacyJsonRpcSuccessResponse<T> | JSONRPCErrorRe
 
 export class LegacyJsonRpcTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
-  private readonly endpoint: string;
+  public readonly endpoint: string;
   private requestIdCounter: number = 1;
 
   constructor(options: LegacyJsonRpcTransportOptions) {
