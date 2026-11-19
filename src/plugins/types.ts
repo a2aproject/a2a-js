@@ -172,10 +172,7 @@ export interface A2APlugin {
 
   /** Called before the agent runs. Throw to fail the execution without running the agent. */
   beforeExecution?(requestContext: RequestContext): void | Promise<void>;
-  /**
-   * Called synchronously for each event published on the task's event bus
-   * while the agent runs. Keep it cheap.
-   */
+  /** Called synchronously when the agent publishes an event. Keep it cheap. */
   onExecutionEvent?(requestContext: RequestContext, event: AgentExecutionEvent): void;
   /** Called after the agent returns or throws. */
   afterExecution?(requestContext: RequestContext, error?: unknown): void | Promise<void>;

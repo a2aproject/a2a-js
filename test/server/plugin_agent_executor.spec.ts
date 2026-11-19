@@ -165,34 +165,70 @@ describe('withExecutionPlugins', () => {
     expect(seen).toEqual([true]);
   });
 
-  it('passes the real bus to the agent', async () => {
-    const executor = new MockAgentExecutor();
-    const wrapped = withExecutionPlugins(executor, sequential(recorder()));
+  it('reports only the events each execution publishes, with its own context', async () => {
+    // Two executions sharing one bus, e.g. concurrent sends to the same task.
     const bus = new DefaultExecutionEventBus();
+    const ctxA = requestContext();
+    const ctxB = requestContext();
+    let releaseA!: () => void;
+    const aWaiting = new Promise<void>((resolve) => (releaseA = resolve));
+    const executor = new MockAgentExecutor();
+    executor.execute.mockImplementation(async (ctx, agentBus) => {
+      if (ctx === ctxA) {
+        agentBus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
+        await aWaiting;
+      } else {
+        agentBus.publish(statusEvent(TaskState.TASK_STATE_COMPLETED));
+      }
+    });
+    const reports: [RequestContext, AgentExecutionEvent][] = [];
+    const wrapped = withExecutionPlugins(
+      executor,
+      sequential({ name: 'p', onExecutionEvent: (ctx, event) => void reports.push([ctx, event]) })
+    );
 
-    await wrapped.execute(requestContext(), bus);
+    const runA = wrapped.execute(ctxA, bus);
+    await wrapped.execute(ctxB, bus);
+    releaseA();
+    await runA;
 
-    expect(executor.execute.mock.calls[0][1]).toBe(bus);
+    // The two contexts are structurally equal, so compare by identity.
+    expect(reports.map(([ctx]) => ctx === ctxA)).toEqual([true, false]);
+    expect(reports[1][0]).toBe(ctxB);
+    expect(
+      reports.map(([, e]) => (e.data as { status: { state: TaskState } }).status.state)
+    ).toEqual([TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED]);
   });
 
-  it.each([
-    ['returns', async () => {}],
-    [
-      'throws',
-      async () => {
-        throw new Error('agent failed');
-      },
-    ],
-  ])('stops reporting events once the agent %s', async (_, impl) => {
-    const executor = new MockAgentExecutor();
-    executor.execute.mockImplementation(impl);
-    const wrapped = withExecutionPlugins(executor, sequential(recorder()));
+  it('forwards the rest of the bus to the real one', async () => {
     const bus = new DefaultExecutionEventBus();
+    const kept = vi.fn();
+    const removed = vi.fn();
+    const onFinished = vi.fn();
+    const offFinished = vi.fn();
+    const onceFinished = vi.fn();
+    const executor = new MockAgentExecutor();
+    executor.execute.mockImplementation(async (_ctx, agentBus) => {
+      expect(agentBus.on('event', kept)).toBe(agentBus);
+      agentBus.on('event', removed).off('event', removed);
+      agentBus.publish(statusEvent(TaskState.TASK_STATE_WORKING));
+      agentBus.removeAllListeners('event');
+      agentBus.publish(statusEvent(TaskState.TASK_STATE_COMPLETED));
+      agentBus
+        .on('finished', onFinished)
+        .on('finished', offFinished)
+        .off('finished', offFinished)
+        .once('finished', onceFinished);
+      agentBus.finished();
+    });
 
-    await wrapped.execute(requestContext(), bus).catch(() => {});
-    bus.publish(statusEvent(TaskState.TASK_STATE_FAILED));
+    await withExecutionPlugins(executor, sequential(recorder())).execute(requestContext(), bus);
 
-    expect(calls.filter((c) => c.startsWith('recorder.event'))).toEqual([]);
+    expect(kept).toHaveBeenCalledOnce(); // removeAllListeners dropped it before the 2nd event
+    expect(removed).not.toHaveBeenCalled();
+    expect(onFinished).toHaveBeenCalledOnce();
+    expect(offFinished).not.toHaveBeenCalled();
+    expect(onceFinished).toHaveBeenCalledOnce();
   });
 
   it('still publishes the event when onExecutionEvent throws', async () => {
