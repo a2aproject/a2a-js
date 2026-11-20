@@ -1,11 +1,30 @@
 import { Request } from 'express';
 import { UnauthenticatedUser, User } from '../authentication/user.js';
+import { A2A_VERSION_HEADER } from '../../constants.js';
 
 export type UserBuilder = (req: Request) => Promise<User>;
 
 export const UserBuilder = {
   noAuthentication: () => Promise.resolve(new UnauthenticatedUser()),
 };
+
+/**
+ * Returns the A2A protocol version requested by an HTTP request: the
+ * `A2A-Version` header, or the `A2A-Version` request parameter when the
+ * header is absent or empty (spec §3.6.1: "Clients MAY provide the
+ * `A2A-Version` as a request parameter instead of a header"). The header
+ * takes precedence. Returns `undefined` when neither is set, so callers
+ * keep applying their own default (0.3 per §3.6.2).
+ */
+export function getRequestedVersion(req: Request): string | undefined {
+  const header = req.header(A2A_VERSION_HEADER);
+  if (header) {
+    return header;
+  }
+  const param = req.query?.[A2A_VERSION_HEADER];
+  const value = Array.isArray(param) ? param[0] : param;
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
 
 /**
  * Wraps an `AsyncIterator` in an `AsyncGenerator` that explicitly

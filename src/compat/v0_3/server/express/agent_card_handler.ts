@@ -1,8 +1,8 @@
 /**
  * v0.3 well-known agent-card Express handler. Mirrors the v1.0
  * `agentCardHandler` but serves a v0.3-shaped card produced by
- * `toCompatAgentCard` for requests whose `A2A-Version` header falls in
- * the legacy range (or is absent — defaults to `'0.3'`).
+ * `toCompatAgentCard` for requests whose `A2A-Version` (header or request
+ * parameter) falls in the legacy range (or is absent — defaults to `'0.3'`).
  *
  * Mounted at the top of the v1.0 handler's chain by the core
  * `agentCardHandler` when `legacyCompat: { enabled: true }`. Short-
@@ -19,6 +19,7 @@ import express, {
 } from 'express';
 
 import { A2A_VERSION_HEADER } from '../../../../constants.js';
+import { getRequestedVersion } from '../../../../server/express/common.js';
 import { VersionNotSupportedError } from '../../../../errors/index.js';
 import type {
   AgentCardCacheOptions,
@@ -43,9 +44,9 @@ function computeETag(json: string): string {
 
 /**
  * Creates an Express router serving a v0.3-shaped agent card for
- * legacy-range requests. Dispatch is header-based: requests whose
- * `A2A-Version` is not in `[0.3, 1.0)` are routed via `next('router')`
- * to the parent's v1.0 handler.
+ * legacy-range requests. Dispatch reads `A2A-Version` from the header or
+ * the request parameter: requests whose version is not in `[0.3, 1.0)` are
+ * routed via `next('router')` to the parent's v1.0 handler.
  *
  * Sets `Content-Type: application/json` (v0.3 spelling), emits per-
  * version `ETag` + `Vary: A2A-Version`, and honors `If-None-Match`.
@@ -69,9 +70,9 @@ export function legacyAgentCardRouter(options: LegacyAgentCardHandlerOptions): R
       : options.agentCardProvider.getAgentCard.bind(options.agentCardProvider);
 
   // Version-based dispatch: short-circuit anything outside the legacy
-  // range. Header-less requests default to `'0.3'` and stay here.
+  // range. Requests that set no version default to `'0.3'` and stay here.
   router.use((req: Request, _res: Response, next: NextFunction) => {
-    const requestedVersion = req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION;
+    const requestedVersion = getRequestedVersion(req) || A2A_LEGACY_PROTOCOL_VERSION;
     if (isLegacyVersion(requestedVersion)) {
       next();
     } else {

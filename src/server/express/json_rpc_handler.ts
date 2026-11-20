@@ -12,11 +12,10 @@ import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport
 import { ServerCallContextBuilder, defaultServerCallContextBuilder } from '../context.js';
 import {
   A2A_LEGACY_PROTOCOL_VERSION,
-  A2A_VERSION_HEADER,
   HTTP_EXTENSION_HEADER,
   JSON_CONTENT_TYPE,
 } from '../../constants.js';
-import { UserBuilder, delegateAsyncIterator } from './common.js';
+import { UserBuilder, delegateAsyncIterator, getRequestedVersion } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
 import { A2A_ERROR_CODE, ContentTypeNotSupportedError } from '../../errors/index.js';
@@ -32,7 +31,7 @@ export interface JsonRpcHandlerOptions {
   userBuilder: UserBuilder;
   /**
    * Enables the v0.3 protocol compatibility layer. When enabled, a request
-   * whose `A2A-Version` is 0.3 — explicitly, or by omitting the header — is
+   * whose `A2A-Version` is 0.3 — explicitly, or by omitting it — is
    * routed through the v0.3 compat module. The agent card MUST also declare
    * a v0.3 `JSONRPC` interface in `supportedInterfaces`.
    *
@@ -71,14 +70,13 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   router.post('/', async (req: Request, res: Response) => {
     const useLegacy =
       legacyJsonRpcTransportHandler !== undefined &&
-      (req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION) ===
-        A2A_LEGACY_PROTOCOL_VERSION;
+      (getRequestedVersion(req) || A2A_LEGACY_PROTOCOL_VERSION) === A2A_LEGACY_PROTOCOL_VERSION;
     const mapToError = useLegacy
       ? LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError
       : JsonRpcTransportHandler.mapToJSONRPCError;
     try {
       const user = await options.userBuilder(req);
-      const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
+      const requestedVersion = getRequestedVersion(req);
       // On the legacy path, accept both the v0.3 `X-A2A-Extensions`
       // header (preferred) and the v1.0 `A2A-Extensions` header as a
       // fallback. On the v1.0 path, stay strict on the v1.0 spelling.

@@ -731,6 +731,43 @@ describe('A2AExpressApp', () => {
       assert.equal(response.body.error.code, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
       assert.include(response.body.error.message, '9.9');
     });
+
+    it('should accept A2A-Version as a request parameter when the header is absent (§3.6.1)', async () => {
+      handleStub.mockResolvedValue({ jsonrpc: '2.0', id: '1', result: {} });
+
+      const response = await request(expressApp)
+        .post('/?A2A-Version=1.0')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(200);
+
+      assert.notProperty(response.body, 'error');
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      const context = handleStub.mock.calls[0][1] as ServerCallContext;
+      assert.equal(context.requestedVersion, '1.0');
+    });
+
+    it('should reject an unsupported A2A-Version request parameter', async () => {
+      const response = await request(expressApp)
+        .post('/?A2A-Version=9.9')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(200);
+
+      assert.equal(response.body.error.code, A2A_ERROR_CODE.VERSION_NOT_SUPPORTED);
+      assert.include(response.body.error.message, '9.9');
+    });
+
+    it('should prefer the A2A-Version header over the request parameter', async () => {
+      handleStub.mockResolvedValue({ jsonrpc: '2.0', id: '1', result: {} });
+
+      const response = await request(expressApp)
+        .post('/?A2A-Version=9.9')
+        .set('A2A-Version', '1.0')
+        .send(createRpcRequest('1', 'GetTask', { id: 'test-task' }))
+        .expect(200);
+
+      assert.notProperty(response.body, 'error');
+      expect(handleStub).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('legacy v0.3 JSON-RPC dispatch', () => {
@@ -826,6 +863,39 @@ describe('A2AExpressApp', () => {
       await request(expressApp)
         .post('/')
         .send(createRpcRequest('req-no-header-v1-name', 'SendMessage'))
+        .expect(200);
+
+      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+      expect(handleStub).not.toHaveBeenCalled();
+    });
+
+    it('routes to the v1 handler when the A2A-Version request parameter says 1.0', async () => {
+      handleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-v1-param',
+        result: { task: { id: 't' } },
+      });
+
+      await request(expressApp)
+        .post('/?A2A-Version=1.0')
+        .send(createRpcRequest('req-v1-param', 'SendMessage'))
+        .expect(200);
+
+      expect(handleStub).toHaveBeenCalledTimes(1);
+      expect(legacyHandleStub).not.toHaveBeenCalled();
+    });
+
+    it('routes to the legacy handler when the header says 0.3 and the request parameter says 1.0', async () => {
+      legacyHandleStub.mockResolvedValue({
+        jsonrpc: '2.0',
+        id: 'req-03-header-v1-param',
+        result: { kind: 'task' },
+      });
+
+      await request(expressApp)
+        .post('/?A2A-Version=1.0')
+        .set('A2A-Version', '0.3')
+        .send(createRpcRequest('req-03-header-v1-param', 'message/send'))
         .expect(200);
 
       expect(legacyHandleStub).toHaveBeenCalledTimes(1);
