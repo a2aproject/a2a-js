@@ -151,7 +151,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
       this.pushNotificationSender =
-        pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
+        pushNotificationSender ||
+        new DefaultPushNotificationSender(this.pushNotificationStore, { plugins: options.plugins });
     }
 
     applyServerPlugins(this, this.plugins, agentCard);
