@@ -13,6 +13,7 @@ import {
   ListTasksResponse,
   SendMessageRequest,
   SendMessageResponse,
+  StreamRequest,
   StreamResponse,
   SubscribeToTaskRequest,
   Task,
@@ -143,6 +144,13 @@ export function grpcService(options: GrpcServiceOptions): A2AServiceServer {
       call: grpc.ServerWritableStream<SubscribeToTaskRequest, StreamResponse>
     ): Promise<void> {
       return wrapStreaming(call, requestHandler.resubscribe.bind(requestHandler));
+    },
+
+    sendLiveMessage(call: grpc.ServerDuplexStream<StreamRequest, StreamResponse>): void {
+      call.emit('error', {
+        code: grpc.status.UNIMPLEMENTED,
+        details: 'SendLiveMessage is not implemented',
+      });
     },
 
     deleteTaskPushNotificationConfig(

@@ -17,6 +17,8 @@ export type TaskStatus = pb.TaskStatus;
 export type Part = pb.Part;
 export type Message = pb.Message;
 export type Artifact = pb.Artifact;
+export type TimelineEntry = pb.TimelineEntry;
+export type TaskMessageUpdateEvent = pb.TaskMessageUpdateEvent;
 export type TaskStatusUpdateEvent = pb.TaskStatusUpdateEvent;
 export type TaskArtifactUpdateEvent = pb.TaskArtifactUpdateEvent;
 export type AuthenticationInfo = pb.AuthenticationInfo;
@@ -50,6 +52,7 @@ export type PasswordOAuthFlow_ScopesEntry = pb.PasswordOAuthFlow_ScopesEntry;
 export type DeviceCodeOAuthFlow = pb.DeviceCodeOAuthFlow;
 export type DeviceCodeOAuthFlow_ScopesEntry = pb.DeviceCodeOAuthFlow_ScopesEntry;
 export type SendMessageRequest = pb.SendMessageRequest;
+export type StreamRequest = pb.StreamRequest;
 export type GetTaskRequest = pb.GetTaskRequest;
 export type ListTasksRequest = pb.ListTasksRequest;
 export type ListTasksResponse = pb.ListTasksResponse;
@@ -61,6 +64,7 @@ export type ListTaskPushNotificationConfigsRequest = pb.ListTaskPushNotification
 export type GetExtendedAgentCardRequest = pb.GetExtendedAgentCardRequest;
 export type SendMessageResponse = pb.SendMessageResponse;
 export type StreamResponse = pb.StreamResponse;
+export type StreamError = pb.StreamError;
 export type ListTaskPushNotificationConfigsResponse = pb.ListTaskPushNotificationConfigsResponse;
 
 export function taskStateFromJSON(object: JsonInput): TaskState {
@@ -180,6 +184,16 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
         : isSet(object.return_immediately)
           ? globalThis.Boolean(object.return_immediately)
           : false,
+      timelineLength: isSet(object.timelineLength)
+        ? globalThis.Number(object.timelineLength)
+        : isSet(object.timeline_length)
+          ? globalThis.Number(object.timeline_length)
+          : undefined,
+      ifGenerationMatch: isSet(object.ifGenerationMatch)
+        ? longFromJSON(object.ifGenerationMatch)
+        : isSet(object.if_generation_match)
+          ? longFromJSON(object.if_generation_match)
+          : undefined,
     };
   },
 
@@ -198,6 +212,12 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
     }
     if (message.returnImmediately !== false) {
       obj.returnImmediately = message.returnImmediately;
+    }
+    if (message.timelineLength !== undefined) {
+      obj.timelineLength = Math.round(message.timelineLength);
+    }
+    if (message.ifGenerationMatch !== undefined) {
+      obj.ifGenerationMatch = longToJSON(message.ifGenerationMatch);
     }
     return obj;
   },
@@ -219,7 +239,14 @@ export const Task: MessageFns<Task> = {
       history: globalThis.Array.isArray(object?.history)
         ? object.history.map((e: unknown) => Message.fromJSON(e))
         : [],
+      ...optional(
+        'timeline',
+        object?.timeline,
+        (v: unknown[]) => v.map((e) => TimelineEntry.fromJSON(e)),
+        globalThis.Array.isArray
+      ),
       metadata: isObject(object.metadata) ? object.metadata : undefined,
+      ...optional('generation', object.generation, longFromJSON),
     };
   },
 
@@ -240,8 +267,14 @@ export const Task: MessageFns<Task> = {
     if (message.history?.length) {
       obj.history = message.history.map((e) => Message.toJSON(e));
     }
+    if (message.timeline?.length) {
+      obj.timeline = message.timeline.map((e) => TimelineEntry.toJSON(e));
+    }
     if (message.metadata !== undefined) {
       obj.metadata = message.metadata;
+    }
+    if (message.generation) {
+      obj.generation = longToJSON(message.generation);
     }
     return obj;
   },
@@ -398,6 +431,13 @@ export const Artifact: MessageFns<Artifact> = {
       extensions: globalThis.Array.isArray(object?.extensions)
         ? object.extensions.map((e: unknown) => globalThis.String(e))
         : [],
+      ...optional(
+        'startGeneration',
+        object.startGeneration ?? object.start_generation,
+        longFromJSON
+      ),
+      ...optional('endGeneration', object.endGeneration ?? object.end_generation, longFromJSON),
+      ...optional('role', object.role, roleFromJSON),
     };
   },
 
@@ -421,6 +461,81 @@ export const Artifact: MessageFns<Artifact> = {
     if (message.extensions?.length) {
       obj.extensions = message.extensions;
     }
+    if (message.startGeneration) {
+      obj.startGeneration = longToJSON(message.startGeneration);
+    }
+    if (message.endGeneration) {
+      obj.endGeneration = longToJSON(message.endGeneration);
+    }
+    if (message.role) {
+      obj.role = roleToJSON(message.role);
+    }
+    return obj;
+  },
+};
+
+export const TimelineEntry: MessageFns<TimelineEntry> = {
+  fromJSON(object: JsonInput): TimelineEntry {
+    return {
+      entry: isSet(object.message)
+        ? { $case: 'message', value: Message.fromJSON(object.message) }
+        : isSet(object.status)
+          ? { $case: 'status', value: TaskStatus.fromJSON(object.status) }
+          : undefined,
+      generation: isSet(object.generation) ? longFromJSON(object.generation) : 0,
+    };
+  },
+
+  toJSON(message: TimelineEntry): unknown {
+    const obj: Record<string, unknown> = {};
+    if (message.entry?.$case === 'message') {
+      obj.message = Message.toJSON(message.entry.value);
+    } else if (message.entry?.$case === 'status') {
+      obj.status = TaskStatus.toJSON(message.entry.value);
+    }
+    if (message.generation !== 0) {
+      obj.generation = longToJSON(message.generation);
+    }
+    return obj;
+  },
+};
+
+export const TaskMessageUpdateEvent: MessageFns<TaskMessageUpdateEvent> = {
+  fromJSON(object: JsonInput): TaskMessageUpdateEvent {
+    return {
+      taskId: isSet(object.taskId)
+        ? globalThis.String(object.taskId)
+        : isSet(object.task_id)
+          ? globalThis.String(object.task_id)
+          : '',
+      contextId: isSet(object.contextId)
+        ? globalThis.String(object.contextId)
+        : isSet(object.context_id)
+          ? globalThis.String(object.context_id)
+          : '',
+      message: isSet(object.message) ? Message.fromJSON(object.message) : undefined,
+      metadata: isObject(object.metadata) ? object.metadata : undefined,
+      generation: isSet(object.generation) ? longFromJSON(object.generation) : 0,
+    };
+  },
+
+  toJSON(message: TaskMessageUpdateEvent): unknown {
+    const obj: Record<string, unknown> = {};
+    if (message.taskId !== '') {
+      obj.taskId = message.taskId;
+    }
+    if (message.contextId !== '') {
+      obj.contextId = message.contextId;
+    }
+    if (message.message !== undefined) {
+      obj.message = Message.toJSON(message.message);
+    }
+    if (message.metadata !== undefined) {
+      obj.metadata = message.metadata;
+    }
+    if (message.generation !== 0) {
+      obj.generation = longToJSON(message.generation);
+    }
     return obj;
   },
 };
@@ -440,6 +555,7 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
           : '',
       status: isSet(object.status) ? TaskStatus.fromJSON(object.status) : undefined,
       metadata: isObject(object.metadata) ? object.metadata : undefined,
+      ...optional('generation', object.generation, longFromJSON),
     };
   },
 
@@ -456,6 +572,9 @@ export const TaskStatusUpdateEvent: MessageFns<TaskStatusUpdateEvent> = {
     }
     if (message.metadata !== undefined) {
       obj.metadata = message.metadata;
+    }
+    if (message.generation) {
+      obj.generation = longToJSON(message.generation);
     }
     return obj;
   },
@@ -482,6 +601,7 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
           ? globalThis.Boolean(object.last_chunk)
           : false,
       metadata: isObject(object.metadata) ? object.metadata : undefined,
+      ...optional('generation', object.generation, longFromJSON),
     };
   },
 
@@ -504,6 +624,9 @@ export const TaskArtifactUpdateEvent: MessageFns<TaskArtifactUpdateEvent> = {
     }
     if (message.metadata !== undefined) {
       obj.metadata = message.metadata;
+    }
+    if (message.generation) {
+      obj.generation = longToJSON(message.generation);
     }
     return obj;
   },
@@ -748,6 +871,11 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
         : isSet(object.extended_agent_card)
           ? globalThis.Boolean(object.extended_agent_card)
           : undefined,
+      userArtifacts: isSet(object.userArtifacts)
+        ? globalThis.Boolean(object.userArtifacts)
+        : isSet(object.user_artifacts)
+          ? globalThis.Boolean(object.user_artifacts)
+          : undefined,
     };
   },
 
@@ -764,6 +892,9 @@ export const AgentCapabilities: MessageFns<AgentCapabilities> = {
     }
     if (message.extendedAgentCard !== undefined) {
       obj.extendedAgentCard = message.extendedAgentCard;
+    }
+    if (message.userArtifacts !== undefined) {
+      obj.userArtifacts = message.userArtifacts;
     }
     return obj;
   },
@@ -898,6 +1029,7 @@ export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> 
       authentication: isSet(object.authentication)
         ? AuthenticationInfo.fromJSON(object.authentication)
         : undefined,
+      ...optional('protocolVersion', object.protocolVersion ?? object.protocol_version, String),
     };
   },
 
@@ -920,6 +1052,9 @@ export const TaskPushNotificationConfig: MessageFns<TaskPushNotificationConfig> 
     }
     if (message.authentication !== undefined) {
       obj.authentication = AuthenticationInfo.toJSON(message.authentication);
+    }
+    if (message.protocolVersion) {
+      obj.protocolVersion = message.protocolVersion;
     }
     return obj;
   },
@@ -1618,6 +1753,12 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
         ? SendMessageConfiguration.fromJSON(object.configuration)
         : undefined,
       metadata: isObject(object.metadata) ? object.metadata : undefined,
+      ...optional(
+        'artifactUpdates',
+        object.artifactUpdates ?? object.artifact_updates,
+        (v: unknown[]) => v.map((e) => TaskArtifactUpdateEvent.fromJSON(e)),
+        globalThis.Array.isArray
+      ),
     };
   },
 
@@ -1635,6 +1776,37 @@ export const SendMessageRequest: MessageFns<SendMessageRequest> = {
     if (message.metadata !== undefined) {
       obj.metadata = message.metadata;
     }
+    if (message.artifactUpdates?.length) {
+      obj.artifactUpdates = message.artifactUpdates.map((e) => TaskArtifactUpdateEvent.toJSON(e));
+    }
+    return obj;
+  },
+};
+
+export const StreamRequest: MessageFns<StreamRequest> = {
+  fromJSON(object: JsonInput): StreamRequest {
+    return {
+      tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
+      payload: isSet(object.sendMessage)
+        ? { $case: 'sendMessage', value: SendMessageRequest.fromJSON(object.sendMessage) }
+        : isSet(object.send_message)
+          ? { $case: 'sendMessage', value: SendMessageRequest.fromJSON(object.send_message) }
+          : isSet(object.subscribe)
+            ? { $case: 'subscribe', value: SubscribeToTaskRequest.fromJSON(object.subscribe) }
+            : undefined,
+    };
+  },
+
+  toJSON(message: StreamRequest): unknown {
+    const obj: Record<string, unknown> = {};
+    if (message.tenant !== '') {
+      obj.tenant = message.tenant;
+    }
+    if (message.payload?.$case === 'sendMessage') {
+      obj.sendMessage = SendMessageRequest.toJSON(message.payload.value);
+    } else if (message.payload?.$case === 'subscribe') {
+      obj.subscribe = SubscribeToTaskRequest.toJSON(message.payload.value);
+    }
     return obj;
   },
 };
@@ -1649,6 +1821,16 @@ export const GetTaskRequest: MessageFns<GetTaskRequest> = {
         : isSet(object.history_length)
           ? globalThis.Number(object.history_length)
           : undefined,
+      timelineLength: isSet(object.timelineLength)
+        ? globalThis.Number(object.timelineLength)
+        : isSet(object.timeline_length)
+          ? globalThis.Number(object.timeline_length)
+          : undefined,
+      currentGeneration: isSet(object.currentGeneration)
+        ? longFromJSON(object.currentGeneration)
+        : isSet(object.current_generation)
+          ? longFromJSON(object.current_generation)
+          : undefined,
     };
   },
 
@@ -1662,6 +1844,12 @@ export const GetTaskRequest: MessageFns<GetTaskRequest> = {
     }
     if (message.historyLength !== undefined) {
       obj.historyLength = Math.round(message.historyLength);
+    }
+    if (message.timelineLength !== undefined) {
+      obj.timelineLength = Math.round(message.timelineLength);
+    }
+    if (message.currentGeneration !== undefined) {
+      obj.currentGeneration = longToJSON(message.currentGeneration);
     }
     return obj;
   },
@@ -1702,6 +1890,11 @@ export const ListTasksRequest: MessageFns<ListTasksRequest> = {
         : isSet(object.include_artifacts)
           ? globalThis.Boolean(object.include_artifacts)
           : undefined,
+      timelineLength: isSet(object.timelineLength)
+        ? globalThis.Number(object.timelineLength)
+        : isSet(object.timeline_length)
+          ? globalThis.Number(object.timeline_length)
+          : undefined,
     };
   },
 
@@ -1730,6 +1923,9 @@ export const ListTasksRequest: MessageFns<ListTasksRequest> = {
     }
     if (message.includeArtifacts !== undefined) {
       obj.includeArtifacts = message.includeArtifacts;
+    }
+    if (message.timelineLength !== undefined) {
+      obj.timelineLength = Math.round(message.timelineLength);
     }
     return obj;
   },
@@ -1864,6 +2060,11 @@ export const SubscribeToTaskRequest: MessageFns<SubscribeToTaskRequest> = {
     return {
       tenant: isSet(object.tenant) ? globalThis.String(object.tenant) : '',
       id: isSet(object.id) ? globalThis.String(object.id) : '',
+      lastSeenGeneration: isSet(object.lastSeenGeneration)
+        ? longFromJSON(object.lastSeenGeneration)
+        : isSet(object.last_seen_generation)
+          ? longFromJSON(object.last_seen_generation)
+          : undefined,
     };
   },
 
@@ -1874,6 +2075,9 @@ export const SubscribeToTaskRequest: MessageFns<SubscribeToTaskRequest> = {
     }
     if (message.id !== '') {
       obj.id = message.id;
+    }
+    if (message.lastSeenGeneration !== undefined) {
+      obj.lastSeenGeneration = longToJSON(message.lastSeenGeneration);
     }
     return obj;
   },
@@ -1980,7 +2184,19 @@ export const StreamResponse: MessageFns<StreamResponse> = {
                       $case: 'artifactUpdate',
                       value: TaskArtifactUpdateEvent.fromJSON(object.artifact_update),
                     }
-                  : undefined,
+                  : isSet(object.messageUpdate)
+                    ? {
+                        $case: 'messageUpdate',
+                        value: TaskMessageUpdateEvent.fromJSON(object.messageUpdate),
+                      }
+                    : isSet(object.message_update)
+                      ? {
+                          $case: 'messageUpdate',
+                          value: TaskMessageUpdateEvent.fromJSON(object.message_update),
+                        }
+                      : isSet(object.error)
+                        ? { $case: 'error', value: StreamError.fromJSON(object.error) }
+                        : undefined,
     };
   },
 
@@ -1994,6 +2210,50 @@ export const StreamResponse: MessageFns<StreamResponse> = {
       obj.statusUpdate = TaskStatusUpdateEvent.toJSON(message.payload.value);
     } else if (message.payload?.$case === 'artifactUpdate') {
       obj.artifactUpdate = TaskArtifactUpdateEvent.toJSON(message.payload.value);
+    } else if (message.payload?.$case === 'messageUpdate') {
+      obj.messageUpdate = TaskMessageUpdateEvent.toJSON(message.payload.value);
+    } else if (message.payload?.$case === 'error') {
+      obj.error = StreamError.toJSON(message.payload.value);
+    }
+    return obj;
+  },
+};
+
+export const StreamError: MessageFns<StreamError> = {
+  fromJSON(object: JsonInput): StreamError {
+    return {
+      taskId: isSet(object.taskId)
+        ? globalThis.String(object.taskId)
+        : isSet(object.task_id)
+          ? globalThis.String(object.task_id)
+          : '',
+      code: isSet(object.code) ? globalThis.String(object.code) : '',
+      message: isSet(object.message) ? globalThis.String(object.message) : '',
+      referenceId: isSet(object.referenceId)
+        ? globalThis.String(object.referenceId)
+        : isSet(object.reference_id)
+          ? globalThis.String(object.reference_id)
+          : '',
+      metadata: isObject(object.metadata) ? object.metadata : undefined,
+    };
+  },
+
+  toJSON(message: StreamError): unknown {
+    const obj: Record<string, unknown> = {};
+    if (message.taskId !== '') {
+      obj.taskId = message.taskId;
+    }
+    if (message.code !== '') {
+      obj.code = message.code;
+    }
+    if (message.message !== '') {
+      obj.message = message.message;
+    }
+    if (message.referenceId !== '') {
+      obj.referenceId = message.referenceId;
+    }
+    if (message.metadata !== undefined) {
+      obj.metadata = message.metadata;
     }
     return obj;
   },
@@ -2032,6 +2292,30 @@ function bytesFromBase64(b64: string): Uint8Array {
 
 function base64FromBytes(arr: Uint8Array): string {
   return globalThis.Buffer.from(arr).toString('base64');
+}
+
+/**
+ * Decodes a field that is optional in the public types (added after 1.0 without
+ * `REQUIRED`). The key is omitted when the value is absent, so a payload from a
+ * 1.0 peer decodes to the same object a 1.0-era caller would build.
+ */
+function optional<K extends string, T, V>(
+  key: K,
+  value: unknown,
+  decode: (value: V) => T,
+  present: (value: unknown) => boolean = isSet
+): { [P in K]?: T } {
+  return (present(value) ? { [key]: decode(value as V) } : {}) as { [P in K]?: T };
+}
+
+/** ProtoJSON reads `int64` from either a decimal string or a number. */
+function longFromJSON(value: unknown): number {
+  return globalThis.Number(value);
+}
+
+/** ProtoJSON writes `int64` as a decimal string. */
+function longToJSON(value: number): string {
+  return globalThis.String(Math.round(value));
 }
 
 function isObject(value: unknown): boolean {

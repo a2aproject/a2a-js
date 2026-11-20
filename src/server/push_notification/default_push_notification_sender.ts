@@ -138,8 +138,13 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         return payload.value.id;
       case 'statusUpdate':
       case 'artifactUpdate':
+      case 'messageUpdate':
       case 'message':
         return payload.value.taskId ?? '';
+      case 'error':
+        // A StreamError is returned only to the caller that sent the rejected
+        // request, never to push notification webhooks.
+        return '';
       default: {
         const _exhaustive: never = payload;
         throw new Error(`Unknown payload case: ${(_exhaustive as { $case: string }).$case}`);
