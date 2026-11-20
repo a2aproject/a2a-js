@@ -234,6 +234,10 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         signal: controller.signal,
       });
 
+      // The body is never used. Cancel it so a webhook that keeps the
+      // response open cannot hold the connection after we are done.
+      await response.body?.cancel();
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
