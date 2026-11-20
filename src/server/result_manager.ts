@@ -14,7 +14,7 @@ import {
 } from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
 import { TERMINAL_STATE_LIST } from './utils.js';
-import type { PluginManager } from '../plugins/types.js';
+import type { PluginManager, TaskEventInfo } from '../plugins/types.js';
 
 /**
  * Per-(tenant, owner, taskId) write serializer shared across every
@@ -84,6 +84,7 @@ export class ResultManager {
   private currentTask?: Task;
   private latestUserMessage?: Message;
   private finalMessageResult?: Message;
+  private pendingReport?: TaskEventInfo;
   // taskId of the last event processed under the lock, used to warn if
   // an executor switches tasks mid-stream on the same RM.
   private lastSeenTaskId?: string;
@@ -106,6 +107,20 @@ export class ResultManager {
    * `message` branch is in-memory only and intentionally unlocked.
    */
   public async processEvent(event: AgentExecutionEvent): Promise<void> {
+    let report: TaskEventInfo | undefined;
+    try {
+      await this.applyEvent(event);
+    } finally {
+      report = this.pendingReport;
+      this.pendingReport = undefined;
+    }
+    // Report outside the lock, so a hook may write to the same task without deadlocking.
+    if (report && this.plugins?.hasTaskHooks) {
+      await this.plugins.onTaskEvent(report);
+    }
+  }
+
+  private async applyEvent(event: AgentExecutionEvent): Promise<void> {
     switch (event.kind) {
       case 'message': {
         // Final-result messages may be returned to callers verbatim, so
@@ -389,16 +404,14 @@ export class ResultManager {
       return;
     }
     await this.taskStore.save(task, this.serverCallContext);
-    if (this.plugins?.hasTaskHooks) {
-      await this.plugins.onTaskEvent({
-        taskId: task.id,
-        fromState,
-        toState: task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED,
-        event,
-        task,
-        context: this.serverCallContext,
-      });
-    }
+    this.pendingReport = {
+      taskId: task.id,
+      fromState,
+      toState: task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED,
+      event,
+      task,
+      context: this.serverCallContext,
+    };
   }
 
   /**

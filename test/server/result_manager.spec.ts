@@ -1094,4 +1094,29 @@ describe('ResultManager task plugin hooks', () => {
 
     expect(infos).toEqual([]);
   });
+
+  it('lets a hook write to the same task without deadlocking', { timeout: 1000 }, async () => {
+    // E.g. a policy plugin that cancels the task it was told about.
+    const hookManager = new ResultManager(
+      store,
+      context,
+      sequential({
+        name: 'canceller',
+        onTaskEvent: async (info) => {
+          infos.push(info);
+          if (info.toState === TaskState.TASK_STATE_SUBMITTED) {
+            await hookManager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_CANCELED));
+          }
+        },
+      })
+    );
+
+    await hookManager.processEvent(AgentEvent.task(createTask('t1', 'c1')));
+
+    expect(infos.map((i) => [i.fromState, i.toState])).toEqual([
+      [undefined, TaskState.TASK_STATE_SUBMITTED],
+      [TaskState.TASK_STATE_SUBMITTED, TaskState.TASK_STATE_CANCELED],
+    ]);
+    expect((await store.load('t1', context))?.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
+  });
 });

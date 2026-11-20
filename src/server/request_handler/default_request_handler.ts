@@ -68,6 +68,7 @@ import { extractErrorMessage } from '../../errors/index.js';
 import { SequentialPluginManager } from '../../plugins/manager.js';
 import type { A2APlugin, PluginManager } from '../../plugins/types.js';
 import { applyServerPlugins } from './server_plugin_hooks.js';
+import { withExecutionPlugins } from '../agent_execution/plugin_agent_executor.js';
 
 export interface DefaultRequestHandlerOptions {
   /**
@@ -97,7 +98,8 @@ export interface DefaultRequestHandlerOptions {
 
   /**
    * Plugins whose server hooks run around every request handled by this
-   * handler, in the given order. See `@a2a-js/sdk/plugins`.
+   * handler, and whose execution hooks run around every agent execution, in
+   * the given order. See `@a2a-js/sdk/plugins`.
    */
   plugins?: A2APlugin[];
 }
@@ -136,9 +138,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     agentCardSignatureGenerator?: AgentCardSignatureGenerator,
     options: DefaultRequestHandlerOptions = {}
   ) {
+    this.plugins = new SequentialPluginManager(...(options.plugins ?? []));
     this.agentCard = agentCard;
     this.taskStore = taskStore;
-    this.agentExecutor = agentExecutor;
+    this.agentExecutor = withExecutionPlugins(agentExecutor, this.plugins);
     this.eventBusManager = eventBusManager;
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
@@ -151,7 +154,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
     }
 
-    this.plugins = new SequentialPluginManager(...(options.plugins ?? []));
     applyServerPlugins(this, this.plugins, agentCard);
   }
 
