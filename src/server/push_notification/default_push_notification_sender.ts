@@ -229,27 +229,30 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   ): Promise<void> {
     const { config: pushConfig, wireVersion } = storedConfig;
     const url = pushConfig.url;
-    const serializer = this._resolveSerializer(wireVersion);
-    const { body, contentType } = serializer.serialize(streamResponse, task);
     const request: PushRequest = {
       taskId,
       url,
-      headers: { 'Content-Type': contentType, ...this._buildAuthHeaders(pushConfig) },
+      headers: this._buildAuthHeaders(pushConfig),
       event: streamResponse,
       skip: false,
       state: new Map(),
     };
     const hooks = this.plugins.hasPushHooks;
-    const start = performance.now();
+    let start: number | undefined;
     let statusCode: number | undefined;
     let error: unknown;
     try {
+      const serializer = this._resolveSerializer(wireVersion);
+      const { body, contentType } = serializer.serialize(streamResponse, task);
+      request.headers['Content-Type'] = contentType;
+
       // A throwing hook fails this delivery; `send` logs it like a failed POST.
       if (hooks) await this.plugins.beforePushSend(request);
       if (request.skip) return;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
+      start = performance.now();
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -274,7 +277,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       if (hooks) {
         await this.plugins.onPushSent({
           request,
-          durationMs: performance.now() - start,
+          // Only the HTTP request is timed; 0 when it was never sent.
+          durationMs: start === undefined ? 0 : performance.now() - start,
           statusCode,
           error,
           skipped: request.skip,

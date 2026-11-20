@@ -444,7 +444,45 @@ describe('DefaultPushNotificationSender push plugin hooks', () => {
     );
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(results[0]).toMatchObject({ skipped: true, error: undefined });
+    expect(results[0]).toMatchObject({ skipped: true, error: undefined, durationMs: 0 });
+  });
+
+  it('reports a serializer error without sending', async () => {
+    const failure = new Error('cannot serialize');
+    const pushSender = new DefaultPushNotificationSender(store, {
+      serializers: {
+        [ProtocolVersion.V1_0]: {
+          serialize: () => {
+            throw failure;
+          },
+        },
+      },
+      plugins: [{ name: 'push', onPushSent: (r) => void results.push(r) }],
+    });
+
+    await pushSender.send(makeStatusUpdate('t1'), context);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ error: failure, durationMs: 0, skipped: false });
+    expect(results[0].request).toMatchObject({ taskId: 't1', url: 'https://hook.example/notify' });
+  });
+
+  it('times only the HTTP request, not beforePushSend', async () => {
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    fetchMock.mockImplementation(async () => {
+      now += 5;
+      return httpResponse(200);
+    });
+
+    await sender({
+      beforePushSend: () => {
+        now += 1000;
+      },
+    }).send(makeStatusUpdate('t1'), context);
+
+    expect(results[0].durationMs).toBe(5);
   });
 
   it('fails the delivery without sending when beforePushSend throws', async () => {
