@@ -41,6 +41,7 @@ await Promise.all(
         {
           name: `allowlist-${name}`,
           setup(build) {
+            // Match bare specifiers only; skip relative (./, ../) and absolute (/) paths.
             build.onResolve({ filter: /^[^./]/ }, (args) => {
               // Exempt transitive dependencies imported from node_modules.
               if (!args.importer.startsWith(distDir)) return null;
