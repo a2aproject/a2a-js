@@ -1,13 +1,6 @@
 # Ensures no accidental Node.js API usage in browser and Edge compatible
 # entrypoints, and that transport-scoped entrypoints resolve only their
-# declared peers. `scripts/test_build.mjs` bundles four isolated profiles
-# via esbuild with an import-allowlist plugin:
-#   1. workers-safe (platform=neutral): only `jose`; no optional peers or
-#      Node built-ins.
-#   2. grpc (platform=node): `jose`, `@grpc/grpc-js`, `@bufbuild/protobuf`,
-#      and Node built-ins.
-#   3. express (platform=node): `jose`, `express`, and Node built-ins.
-#   4. database (platform=neutral): `jose` and `kysely`; no Node built-ins.
+# declared peers (profiles defined in scripts/test_build.mjs).
 
 name: Run Build Tests
 

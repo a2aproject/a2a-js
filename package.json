@@ -147,7 +147,6 @@
   "files": [
     "dist",
     "!dist/**/*.map",
-    "!dist/tmp-checks",
     "README.md"
   ],
   "devDependencies": {
@@ -194,10 +193,6 @@
     "coverage": "vitest run --coverage",
     "generate": "cd src/types && npx buf generate",
     "generate:compat": "curl -fSL https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
-    "test-build:workers-safe": "node scripts/test_build.mjs workers-safe",
-    "test-build:grpc": "node scripts/test_build.mjs grpc",
-    "test-build:express": "node scripts/test_build.mjs express",
-    "test-build:database": "node scripts/test_build.mjs database",
     "test-build": "node scripts/test_build.mjs",
     "itk-agent": "tsx itk/itk_agent.ts"
   },

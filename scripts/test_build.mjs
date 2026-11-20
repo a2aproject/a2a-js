@@ -1,109 +1,62 @@
+import { readFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
 
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const requiredDeps = Object.keys(pkg.dependencies ?? {});
+const distDir = `${path.resolve('dist')}${path.sep}`;
+
 const PROFILES = {
-  'workers-safe': {
-    platform: 'neutral',
-    allowedPackages: ['jose'],
-    entryPoints: [
-      './dist/index.js',
-      './dist/errors/index.js',
-      './dist/client/index.js',
-      './dist/server/index.js',
-      './dist/plugins/index.js',
-      './dist/compat/v0_3/index.js',
-      './dist/compat/v0_3/client/index.js',
-      './dist/compat/v0_3/server/index.js',
-    ],
-  },
-  grpc: {
-    platform: 'node',
-    allowedPackages: ['jose', '@grpc/grpc-js', '@bufbuild/protobuf'],
-    entryPoints: [
-      './dist/errors/grpc/index.js',
-      './dist/server/grpc/index.js',
-      './dist/client/transports/grpc/index.js',
-      './dist/compat/v0_3/server/grpc/index.js',
-      './dist/compat/v0_3/client/transports/grpc/index.js',
-    ],
-  },
-  express: {
-    platform: 'node',
-    allowedPackages: ['jose', 'express'],
-    entryPoints: ['./dist/server/express/index.js', './dist/compat/v0_3/server/express/index.js'],
-  },
-  database: {
-    platform: 'neutral',
-    allowedPackages: ['jose', 'kysely'],
-    entryPoints: ['./dist/server/database/index.js'],
-  },
+  'workers-safe': { platform: 'neutral', peers: [] },
+  grpc: { platform: 'node', peers: ['@grpc/grpc-js', '@bufbuild/protobuf'] },
+  express: { platform: 'node', peers: ['express'] },
+  database: { platform: 'neutral', peers: ['kysely'] },
 };
 
-function getPackageName(specifier) {
-  if (specifier.startsWith('@')) {
-    const [scope, name] = specifier.split('/');
-    return name ? `${scope}/${name}` : specifier;
-  }
-  return specifier.split('/')[0];
+const entryPointsByProfile = Object.fromEntries(Object.keys(PROFILES).map((name) => [name, []]));
+for (const [subpath, target] of Object.entries(pkg.exports)) {
+  const profile =
+    Object.keys(PROFILES).find((name) => subpath.endsWith(`/${name}`)) ?? 'workers-safe';
+  entryPointsByProfile[profile].push(target.import);
 }
 
-function createAllowedImportsPlugin(name, profile) {
-  const allowed = new Set(profile.allowedPackages);
-  return {
-    name: `allowlist-${name}`,
-    setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
-        if (args.kind === 'entry-point') {
-          return null;
-        }
-        if (args.path.startsWith('.') || args.path.startsWith('/')) {
-          return null;
-        }
-        if (args.importer.split(path.sep).includes('node_modules')) {
-          return null;
-        }
-        if (profile.platform === 'node' && isBuiltin(args.path)) {
-          return null;
-        }
-        if (allowed.has(getPackageName(args.path))) {
-          return null;
-        }
-        return {
-          errors: [
-            {
-              text: `Disallowed import "${args.path}" in "${name}" profile (allowed: ${profile.allowedPackages.join(', ')})`,
-            },
-          ],
-        };
-      });
-    },
-  };
-}
-
-const requested = process.argv.slice(2);
-const profileNames = requested.length > 0 ? requested : Object.keys(PROFILES);
-
-for (const name of profileNames) {
-  if (!(name in PROFILES)) {
-    console.error(
-      `Unknown test-build profile "${name}". Available: ${Object.keys(PROFILES).join(', ')}`
-    );
-    process.exit(1);
-  }
-}
+const getPackageName = (specifier) =>
+  specifier.startsWith('@') ? specifier.split('/', 2).join('/') : specifier.split('/', 1)[0];
 
 await Promise.all(
-  profileNames.map((name) => {
-    const profile = PROFILES[name];
+  Object.entries(PROFILES).map(([name, { platform, peers }]) => {
+    const allowed = new Set([...requiredDeps, ...peers]);
+    const allowedLabel = [...allowed, ...(platform === 'node' ? ['Node built-ins'] : [])].join(
+      ', '
+    );
     return esbuild.build({
-      entryPoints: profile.entryPoints,
+      entryPoints: entryPointsByProfile[name],
       bundle: true,
       write: false,
-      platform: profile.platform,
-      outdir: 'dist/tmp-checks',
-      outbase: './dist',
-      plugins: [createAllowedImportsPlugin(name, profile)],
+      platform,
+      // esbuild requires outdir for multi-entry builds even when write is false.
+      outdir: 'out',
+      plugins: [
+        {
+          name: `allowlist-${name}`,
+          setup(build) {
+            build.onResolve({ filter: /^[^./]/ }, (args) => {
+              // Exempt transitive dependencies imported from node_modules.
+              if (!args.importer.startsWith(distDir)) return null;
+              if (platform === 'node' && isBuiltin(args.path)) return null;
+              if (allowed.has(getPackageName(args.path))) return null;
+              return {
+                errors: [
+                  {
+                    text: `Disallowed import "${args.path}" in "${name}" profile (allowed: ${allowedLabel})`,
+                  },
+                ],
+              };
+            });
+          },
+        },
+      ],
     });
   })
 );
