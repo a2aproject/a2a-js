@@ -181,7 +181,12 @@ export interface A2APlugin {
 
   // Task store.
 
-  /** Called after every successful task write. */
+  /**
+   * Called after every successful task write, once the task's write lock is
+   * released, so the hook may itself write to the same task. Reports from one
+   * request arrive in write order; reports from concurrent requests on the
+   * same task may interleave, each still matching its own write.
+   */
   onTaskEvent?(info: TaskEventInfo): void | Promise<void>;
 
   // Push notifications.
