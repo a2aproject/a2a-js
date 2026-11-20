@@ -1,17 +1,13 @@
 # Ensures no accidental Node.js API usage in browser and Edge compatible
 # entrypoints, and that transport-scoped entrypoints resolve only their
-# declared peers. Each `test-build:*` step runs in a DIFFERENT environment:
-#   1. workers-safe: NO optional peer deps installed (no @grpc/grpc-js,
-#      @bufbuild/protobuf, express, or kysely). esbuild fails natively if
-#      any Workers-safe entry pulls them in. Mirrors what a real Workers /
-#      REST-only consumer gets.
-#   2. grpc: @grpc/grpc-js + @bufbuild/protobuf reinstalled (still no
-#      express); every gRPC entry must resolve.
-#   3. express: express reinstalled on top; every express entry must
-#      resolve.
-#   4. database: kysely reinstalled on top. Runs at --platform=neutral, not
-#      node: the entry carries no Node dependency of its own, only the
-#      driver the caller supplies does.
+# declared peers. `scripts/test_build.mjs` bundles four isolated profiles
+# via esbuild with an import-allowlist plugin:
+#   1. workers-safe (platform=neutral): only `jose`; no optional peers or
+#      Node built-ins.
+#   2. grpc (platform=node): `jose`, `@grpc/grpc-js`, `@bufbuild/protobuf`,
+#      and Node built-ins.
+#   3. express (platform=node): `jose`, `express`, and Node built-ins.
+#   4. database (platform=neutral): `jose` and `kysely`; no Node built-ins.
 
 name: Run Build Tests
 
@@ -23,6 +19,7 @@ on:
     paths:
       - 'src/**'
       - '!src/samples/**'
+      - 'scripts/test_build.mjs'
       - 'tsup.config.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -43,19 +40,4 @@ jobs:
         node-version: 20
         registry-url: 'https://registry.npmjs.org'
     - run: npm run build
-    # Strip ALL the optional peer deps so esbuild sees the same module
-    # graph a non-gRPC, non-Express, non-database consumer would. Any
-    # Workers-safe entrypoint that leaks one of them fails to resolve.
-    - run: npm uninstall --no-save @grpc/grpc-js @bufbuild/protobuf express kysely
-    - run: npm run test-build:workers-safe
-    # Reinstall only the gRPC peers; verify every gRPC entry resolves
-    # (and would fail here if any of them silently required express).
-    - run: npm install --no-save @grpc/grpc-js @bufbuild/protobuf
-    - run: npm run test-build:grpc
-    # Reinstall express; verify every express entry resolves.
-    - run: npm install --no-save express
-    - run: npm run test-build:express
-    # Reinstall kysely; the database entry must resolve against it and stay
-    # clear of Node built-ins.
-    - run: npm install --no-save kysely
-    - run: npm run test-build:database
+    - run: npm run test-build
