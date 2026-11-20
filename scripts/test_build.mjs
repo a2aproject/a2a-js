@@ -1,3 +1,6 @@
+// Verifies that each built export bundles under its target platform and imports
+// only required dependencies and its profile's declared peers.
+
 import { readFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
 import path from 'node:path';
@@ -21,6 +24,7 @@ for (const [subpath, target] of Object.entries(pkg.exports)) {
   entryPointsByProfile[profile].push(target.import);
 }
 
+// e.g. 'jose/jwt' -> 'jose', '@bufbuild/protobuf/wkt' -> '@bufbuild/protobuf'
 const getPackageName = (specifier) =>
   specifier.startsWith('@') ? specifier.split('/', 2).join('/') : specifier.split('/', 1)[0];
 
