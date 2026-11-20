@@ -10,7 +10,7 @@ import {
 } from '../../../types/index.js';
 import type { ServerCallContext } from '../../context.js';
 import { type OwnerResolver, resolveUserScope } from '../../owner_resolver.js';
-import type { TaskStore } from '../../store.js';
+import type { TaskStore, TaskStoreLoadOptions } from '../../store.js';
 import { callerScope, decodePageToken, encodePageToken } from '../../utils.js';
 import { dialectOf, type DialectName } from '../dialect.js';
 import {
@@ -108,18 +108,26 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
     ).execute();
   }
 
-  async load(taskId: string, context: ServerCallContext): Promise<Task | undefined> {
+  async load(
+    taskId: string,
+    context: ServerCallContext,
+    options?: TaskStoreLoadOptions
+  ): Promise<Task | undefined> {
     const scope = this.scopeOf(context);
+    const columns =
+      options?.historyLength !== undefined && options.historyLength <= 0
+        ? TASK_TABLE_COLUMNS.filter((column) => column !== 'history')
+        : TASK_TABLE_COLUMNS;
 
     const row = await this.db
       .selectFrom(this.tableName)
-      .select([...TASK_TABLE_COLUMNS])
+      .select([...columns])
       .where('tenant', '=', scope.tenant)
       .where('owner', '=', scope.owner)
       .where('id', '=', taskId)
       .executeTakeFirst();
 
-    return row ? fromTaskRow(row) : undefined;
+    return row ? fromTaskRow({ ...row, history: row.history ?? null }) : undefined;
   }
 
   /**

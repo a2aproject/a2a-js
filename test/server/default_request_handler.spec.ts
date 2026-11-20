@@ -1751,6 +1751,25 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
   });
 
+  it.each([undefined, 0, 2])(
+    'getTask: passes historyLength %s to the store',
+    async (historyLength) => {
+      const history = [createTestMessage('h1', 'first'), createTestMessage('h2', 'second')];
+      const task = createTestTask('history-options', history);
+      const load = vi.spyOn(mockTaskStore, 'load');
+      await mockTaskStore.save(task, serverCallContext);
+
+      const result = await handler.getTask(
+        { id: task.id, tenant: '', historyLength },
+        serverCallContext
+      );
+
+      expect(load).toHaveBeenCalledWith(task.id, serverCallContext, { historyLength });
+      // Stores that ignore the optional hint still get handler-side trimming.
+      expect(result.history).toEqual(historyLength === 0 ? [] : history);
+    }
+  );
+
   it('getTask: should return an existing task from the store', async () => {
     const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);
