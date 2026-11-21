@@ -31,6 +31,16 @@ describe('FromProto', () => {
     });
   });
 
+  it('should leave historyLength unset when GetTaskRequest.history_length is 0', () => {
+    const request: proto.GetTaskRequest = {
+      name: 'tasks/task-123',
+      historyLength: 0,
+    };
+    const result = FromProto.taskQueryParams(request);
+    expect(result.id).toBe('task-123');
+    expect(result.historyLength).toBeUndefined();
+  });
+
   it('should convert CancelTaskRequest to taskIdParams', () => {
     const request: proto.CancelTaskRequest = {
       name: 'tasks/task-123',

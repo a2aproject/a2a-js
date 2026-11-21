@@ -40,10 +40,14 @@ import { extractTaskId, extractTaskAndPushNotificationConfigId } from './id_deco
 /** Converts proto types to internal types. */
 export class FromProto {
   static taskQueryParams(request: GetTaskRequest): types.TaskQueryParams {
-    return {
-      id: extractTaskId(request.name),
-      historyLength: request.historyLength,
-    };
+    const params: types.TaskQueryParams = { id: extractTaskId(request.name) };
+    // proto3 `int32` has no presence, so a client that does not set
+    // `history_length` sends 0. v0.3 treats that as "no limit"; leave it
+    // unset so the full history is returned.
+    if (request.historyLength !== 0) {
+      params.historyLength = request.historyLength;
+    }
+    return params;
   }
 
   static taskIdParams(request: CancelTaskRequest): types.TaskIdParams {
