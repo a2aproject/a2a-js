@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.4.0](https://github.com/a2aproject/a2a-js/compare/v1.3.0...v1.4.0) (2026-11-21)
+
+
+### Features
+
+* Add client plugin hooks in Client ([#838](https://github.com/a2aproject/a2a-js/issues/838)) ([337a003](https://github.com/a2aproject/a2a-js/commit/337a00372cac1acf61230a06694e8917dc522cc1))
+* Add core types and methods for plugins support ([#826](https://github.com/a2aproject/a2a-js/issues/826)) ([121db9d](https://github.com/a2aproject/a2a-js/commit/121db9d79137f5c1b931442eedf2862de3b78f1f))
+* Add execution plugin hooks around AgentExecutor ([#839](https://github.com/a2aproject/a2a-js/issues/839)) ([9d5d38f](https://github.com/a2aproject/a2a-js/commit/9d5d38f7f7a74de8339f78367f27fb285d26db7c))
+* Add push notification plugin hooks in DefaultPushNotificationSender ([#841](https://github.com/a2aproject/a2a-js/issues/841)) ([5e6f990](https://github.com/a2aproject/a2a-js/commit/5e6f990342d72e4440433782795c066703fc8a85))
+* Add server plugin hooks in DefaultRequestHandler ([#835](https://github.com/a2aproject/a2a-js/issues/835)) ([d0e458f](https://github.com/a2aproject/a2a-js/commit/d0e458f6051888386ca07a6956e17fdaaad831ce))
+* Add task plugin hooks for task store writes ([#840](https://github.com/a2aproject/a2a-js/issues/840)) ([ac275df](https://github.com/a2aproject/a2a-js/commit/ac275df0915bd6276555b72f54e1507f9458fd4c))
+* Expose protocolBinding and endpoint information ([#829](https://github.com/a2aproject/a2a-js/issues/829)) ([e02f05f](https://github.com/a2aproject/a2a-js/commit/e02f05fc3b4804a2ce4315f113e0a78d10874240))
+
+
+### Bug Fixes
+
+* **client:** preserve first matching client interface ([#764](https://github.com/a2aproject/a2a-js/issues/764)) ([ca14b82](https://github.com/a2aproject/a2a-js/commit/ca14b824bc072533ff9b8720fb6b830041e9f4d9))
+* **client:** skip stream events whose payload kind is not recognised ([#770](https://github.com/a2aproject/a2a-js/issues/770)) ([cf8ccff](https://github.com/a2aproject/a2a-js/commit/cf8ccffe4ad7b6e5af2a0d3d92103cb3ad56691d))
+* **client:** throw typed A2A errors from JSON-RPC SSE error events ([#788](https://github.com/a2aproject/a2a-js/issues/788)) ([10f8937](https://github.com/a2aproject/a2a-js/commit/10f89379274bf72575a9ab83c1aaa52e5378e9c6))
+* **grpc:** include extensions activated while producing the first streamed event ([#791](https://github.com/a2aproject/a2a-js/issues/791)) ([f8ce0b9](https://github.com/a2aproject/a2a-js/commit/f8ce0b90ce5e1a01aed2d86e98fb838d1d032bbc))
+* **jsonrpc:** include extensions activated during SendStreamingMessage's first event ([#762](https://github.com/a2aproject/a2a-js/issues/762)) ([fc7a664](https://github.com/a2aproject/a2a-js/commit/fc7a6649cebd5d6af40854a44635762b161f3938)), closes [#710](https://github.com/a2aproject/a2a-js/issues/710)
+* leave optional taskId and contextId as undefined in toCoreMessage ([#691](https://github.com/a2aproject/a2a-js/issues/691)) ([3d3ca82](https://github.com/a2aproject/a2a-js/commit/3d3ca8291e1f6b1f53293f61c12ba46c36670000))
+* persist live artifact appends once during cancelTask ([#799](https://github.com/a2aproject/a2a-js/issues/799)) ([42ecdab](https://github.com/a2aproject/a2a-js/commit/42ecdabe0cdf143c30056bd68c8d0f26b9186719))
+* preserve REST cancellation metadata ([#758](https://github.com/a2aproject/a2a-js/issues/758)) ([1468f5f](https://github.com/a2aproject/a2a-js/commit/1468f5fa7751af2eec66912cd0afd901b2395f47))
+* **rest:** forward pageSize and pageToken for push-notification config listing ([#701](https://github.com/a2aproject/a2a-js/issues/701)) ([8a4e696](https://github.com/a2aproject/a2a-js/commit/8a4e696e0f073882cc6736ff6b05b028324a9855)), closes [#700](https://github.com/a2aproject/a2a-js/issues/700)
+* **signature:** bound agent card canonicalization depth ([#786](https://github.com/a2aproject/a2a-js/issues/786)) ([4bc8d79](https://github.com/a2aproject/a2a-js/commit/4bc8d79312a166a0a57089fec378e0ef7aad38a9))
+* support CR-delimited SSE lines ([#718](https://github.com/a2aproject/a2a-js/issues/718)) ([2c81b86](https://github.com/a2aproject/a2a-js/commit/2c81b861614905b55b7e0d465d596ef69d85d721))
+
 ## [1.3.0](https://github.com/a2aproject/a2a-js/compare/v1.2.1...v1.3.0) (2026-09-29)
 
 
