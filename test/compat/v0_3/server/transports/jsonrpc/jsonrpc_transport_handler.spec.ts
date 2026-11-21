@@ -254,15 +254,16 @@ describe('LegacyJsonRpcTransportHandler', () => {
       expect(call.message.role).toBe(Role.ROLE_USER);
     });
 
-    it('inverts blocking polarity (blocking=true -> returnImmediately=false)', async () => {
+    it.each<[legacy.MessageSendConfiguration, boolean]>([
+      [{ blocking: true }, false],
+      [{ blocking: false }, true],
+      [{ acceptedOutputModes: ['text/plain'] }, false],
+    ])('maps configuration %j to returnImmediately=%s', async (configuration, expected) => {
       (mockRequestHandler.sendMessage as Mock).mockResolvedValue(sampleV1Message());
-      await transportHandler.handle(
-        buildRequest({ configuration: { blocking: true } }),
-        defaultContext
-      );
+      await transportHandler.handle(buildRequest({ configuration }), defaultContext);
 
       const call = (mockRequestHandler.sendMessage as Mock).mock.calls[0][0];
-      expect(call.configuration.returnImmediately).toBe(false);
+      expect(call.configuration.returnImmediately).toBe(expected);
     });
 
     it('returns a v0.3 Message envelope when sendMessage returns a Message', async () => {
