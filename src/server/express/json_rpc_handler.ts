@@ -129,7 +129,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
             console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
             const errorResponse: JSONRPCErrorResponse = {
               jsonrpc: '2.0',
-              id: req.body?.id || null,
+              id: req.body?.id ?? null,
               error: mapToError(streamError),
             };
             if (!res.writableEnded) {
@@ -162,7 +162,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           setExtensionsHeader();
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
-            id: req.body?.id || null,
+            id: req.body?.id ?? null,
             error: mapToError(streamError),
           };
           res.status(200).json(errorResponse);
@@ -187,7 +187,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
           console.error(`Error during SSE streaming (request ${req.body?.id}):`, streamError);
           const errorResponse: JSONRPCErrorResponse = {
             jsonrpc: '2.0',
-            id: req.body?.id || null,
+            id: req.body?.id ?? null,
             error: mapToError(streamError),
           };
           if (!res.headersSent) {
@@ -214,7 +214,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
       const mappedError = mapToError(error);
       const errorResponse: JSONRPCErrorResponse = {
         jsonrpc: '2.0',
-        id: req.body?.id || null,
+        id: req.body?.id ?? null,
         error: mappedError,
       };
       if (!res.headersSent) {
