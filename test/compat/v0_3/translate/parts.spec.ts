@@ -120,6 +120,46 @@ describe('parts', () => {
       expect(core.metadata).toEqual({ data_part_compat: 'yes' });
     });
 
+    it('preserves a v0.3 application data part with sibling fields alongside value when data_part_compat=true', () => {
+      const compat: legacy.Part = {
+        kind: 'data',
+        data: { value: 'customer', amount: 42 },
+        metadata: { data_part_compat: true },
+      };
+      const core = toCorePart(compat);
+      expect(core.content).toEqual({
+        $case: 'data',
+        value: { value: 'customer', amount: 42 },
+      });
+      expect(core.metadata).toEqual({ data_part_compat: true });
+    });
+
+    it('preserves data and metadata when data_part_compat=true but data has no value key or wraps a plain object', () => {
+      const withoutValue: legacy.Part = {
+        kind: 'data',
+        data: { amount: 42 },
+        metadata: { data_part_compat: true },
+      };
+      expect(toCorePart(withoutValue)).toEqual({
+        content: { $case: 'data', value: { amount: 42 } },
+        metadata: { data_part_compat: true },
+        filename: '',
+        mediaType: '',
+      });
+
+      const nestedObject: legacy.Part = {
+        kind: 'data',
+        data: { value: { customer: 'alice' } },
+        metadata: { data_part_compat: true },
+      };
+      expect(toCorePart(nestedObject)).toEqual({
+        content: { $case: 'data', value: { value: { customer: 'alice' } } },
+        metadata: { data_part_compat: true },
+        filename: '',
+        mediaType: '',
+      });
+    });
+
     it('throws for an unknown kind', () => {
       const compat = { kind: 'unknown' } as unknown as legacy.Part;
       expect(() => toCorePart(compat)).toThrow(A2AError);
@@ -344,6 +384,56 @@ describe('parts', () => {
         const core = toCorePart(compat);
         expect(core.content).toEqual({ $case: 'data', value });
         expect(core.metadata).toBeUndefined();
+      }
+    );
+
+    it.each([
+      ['string', { data_part_compat: 'user-value' }],
+      ['boolean true', { data_part_compat: true }],
+      ['boolean false', { data_part_compat: false }],
+      ['stacked keys', { data_part_compat: 'first', _data_part_compat: true, ext: 'keep' }],
+      ['escaped key only', { _data_part_compat: 'prefixed' }],
+    ])(
+      'preserves v1 metadata (%s) through a wrapped non-object v0.3 round trip',
+      (_label, metadata) => {
+        const core: V1Part = {
+          content: { $case: 'data', value: ['a', 'b'] },
+          metadata,
+          filename: '',
+          mediaType: '',
+        };
+        const compat = toCompatPart(core) as legacy.DataPart;
+        expect(compat.data).toEqual({ value: ['a', 'b'] });
+        expect(compat.metadata?.data_part_compat).toBe(true);
+
+        const once = toCorePart(compat);
+        expect(once).toEqual(core);
+
+        const twice = toCorePart(toCompatPart(once));
+        expect(twice).toEqual(core);
+      }
+    );
+
+    it.each([
+      ['flag true', { data_part_compat: true }],
+      ['flag true with sibling', { data_part_compat: true, _data_part_compat: 'nested', ext: 1 }],
+      ['leading escaped true', { _data_part_compat: true }],
+      ['leading escaped string', { _data_part_compat: 'keep-as-is' }],
+      ['flag false with escaped true', { data_part_compat: false, _data_part_compat: true }],
+    ])(
+      'preserves wrapper-shaped v1 object data and metadata (%s) through a v0.3 round trip',
+      (_label, metadata) => {
+        const core: V1Part = {
+          content: { $case: 'data', value: { value: 'customer' } },
+          metadata,
+          filename: '',
+          mediaType: '',
+        };
+        const once = toCorePart(toCompatPart(core));
+        expect(once).toEqual(core);
+
+        const twice = toCorePart(toCompatPart(once));
+        expect(twice).toEqual(core);
       }
     );
   });
