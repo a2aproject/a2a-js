@@ -13,8 +13,8 @@ export interface AgentCardHandlerOptions {
   cache?: AgentCardCacheOptions;
   /**
    * Enables the v0.3 protocol compatibility layer. When enabled, the
-   * handler inspects the `A2A-Version` header (defaulting to `'0.3'`
-   * when absent): legacy-range versions get a v0.3-shaped card via
+   * handler inspects `A2A-Version` (header or request parameter, defaulting
+   * to `'0.3'` when absent): legacy-range versions get a v0.3-shaped card via
    * `toCompatAgentCard(card)`; non-legacy versions get the v1.0 card
    * unchanged. Per-version `ETag`s and `Vary: A2A-Version` are emitted
    * so shared HTTP caches keep separate entries per version.

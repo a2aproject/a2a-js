@@ -1067,6 +1067,29 @@ describe('restHandler', () => {
       assert.include(response.body.error.message, '9.9');
     });
 
+    it('should accept A2A-Version as a request parameter when the header is absent (§3.6.1)', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      const response = await request(app).get('/tasks/task-1?A2A-Version=1.0').expect(200);
+
+      assert.equal(response.body.id, testTask.id);
+      const context = (mockRequestHandler.getTask as Mock).mock.calls[0][1] as ServerCallContext;
+      assert.equal(context.requestedVersion, '1.0');
+    });
+
+    it('should reject an unsupported A2A-Version request parameter', async () => {
+      const response = await request(app).get('/tasks/task-1?A2A-Version=9.9').expect(400);
+
+      assert.equal(response.body.error.details[0].reason, 'VERSION_NOT_SUPPORTED');
+      assert.include(response.body.error.message, '9.9');
+    });
+
+    it('should prefer the A2A-Version header over the request parameter', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app).get('/tasks/task-1?A2A-Version=9.9').set('A2A-Version', '1.0').expect(200);
+    });
+
     it('should reject header-less requests against a v1.0-only card even when legacyCompat is enabled (strict)', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
       const compatApp = express();
@@ -1269,6 +1292,24 @@ describe('restHandler', () => {
 
       expect(v1SendMessageStub).toHaveBeenCalledTimes(1);
       expect(legacySendMessageStub).not.toHaveBeenCalled();
+    });
+
+    it('does not route a request whose A2A-Version request parameter is 1.0 to the legacy handler', async () => {
+      (mockRequestHandler.sendMessage as Mock).mockResolvedValue({ ...testTask, id: 'v1-task-2' });
+
+      const message = ProtoMessage.toJSON({
+        ...testMessage,
+        messageId: 'msg-v1-2',
+        role: Role.ROLE_USER,
+      });
+
+      // Without the parameter this header-less request would default to
+      // 0.3 and be taken by the legacy router; with it, it falls through
+      // to the v1.0 router (`/:tenant/message:send` with tenant 'v1').
+      await request(dualApp).post('/v1/message:send?A2A-Version=1.0').send({ message }).expect(200);
+
+      expect(legacySendMessageStub).not.toHaveBeenCalled();
+      expect(v1SendMessageStub).toHaveBeenCalledTimes(1);
     });
 
     it('accepts header-less requests on the legacy path (defaults to 0.3)', async () => {
