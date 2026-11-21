@@ -1751,6 +1751,107 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     );
   });
 
+  describe('history limits on shared task store references', () => {
+    it.each([undefined, 0, 1])(
+      'getTask preserves stored history for historyLength=%s',
+      async (historyLength) => {
+        const shared = createTestTask('shared-get', [
+          createTestMessage('h1', 'one'),
+          createTestMessage('h2', 'two'),
+        ]);
+        const extraValue = () => 'custom';
+        shared.metadata = { extraValue } as unknown as Task['metadata'];
+        let stored: Task | undefined;
+        const save = vi.fn(async (task: Task) => {
+          stored = task;
+        });
+        const store: TaskStore = {
+          save,
+          async load() {
+            return stored;
+          },
+          async list() {
+            throw new Error('not used');
+          },
+        };
+        await store.save(shared, serverCallContext);
+        const customHandler = new DefaultRequestHandler(
+          testAgentCard,
+          store,
+          mockAgentExecutor,
+          executionEventBusManager
+        );
+        const result = await customHandler.getTask(
+          { id: shared.id, tenant: '', historyLength },
+          serverCallContext
+        );
+        expect(result.history?.map((message) => message.messageId)).toEqual(
+          historyLength === 0 ? [] : historyLength === 1 ? ['h2'] : ['h1', 'h2']
+        );
+        expect(result.metadata).toBe(shared.metadata);
+        expect((await store.load(shared.id, serverCallContext))?.history).toHaveLength(2);
+        expect(
+          (await customHandler.getTask({ id: shared.id, tenant: '' }, serverCallContext)).history
+        ).toHaveLength(2);
+        expect(save).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it.each([undefined, 0, 1])(
+      'listTasks preserves stored history for historyLength=%s',
+      async (historyLength) => {
+        const shared = createTestTask('shared-list', [
+          createTestMessage('h1', 'one'),
+          createTestMessage('h2', 'two'),
+        ]);
+        const extraValue = () => 'custom';
+        shared.metadata = { extraValue } as unknown as Task['metadata'];
+        let stored: Task | undefined;
+        const save = vi.fn(async (task: Task) => {
+          stored = task;
+        });
+        const page = { tasks: [shared], totalSize: 1, pageSize: 1, nextPageToken: '' };
+        const store: TaskStore = {
+          save,
+          async load() {
+            return stored;
+          },
+          async list() {
+            return page;
+          },
+        };
+        await store.save(shared, serverCallContext);
+        const customHandler = new DefaultRequestHandler(
+          testAgentCard,
+          store,
+          mockAgentExecutor,
+          executionEventBusManager
+        );
+        const result = await customHandler.listTasks(
+          {
+            tenant: '',
+            contextId: '',
+            status: undefined,
+            pageToken: '',
+            statusTimestampAfter: undefined,
+            historyLength,
+          },
+          serverCallContext
+        );
+        expect(result.tasks[0].history?.map((message) => message.messageId)).toEqual(
+          historyLength === 0 ? [] : historyLength === 1 ? ['h2'] : ['h1', 'h2']
+        );
+        expect(result.tasks[0].metadata).toBe(shared.metadata);
+        expect(page.tasks[0].history).toHaveLength(2);
+        expect((await store.load(shared.id, serverCallContext))?.history).toHaveLength(2);
+        expect(
+          (await customHandler.getTask({ id: shared.id, tenant: '' }, serverCallContext)).history
+        ).toHaveLength(2);
+        expect(save).toHaveBeenCalledTimes(1);
+      }
+    );
+  });
+
   it('getTask: should return an existing task from the store', async () => {
     const fakeTask = createTestTask('task-exist');
     await mockTaskStore.save(fakeTask, serverCallContext);
@@ -1807,6 +1908,57 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(result.history![0].messageId, 'h2', 'should return most recent messages');
     assert.equal(result.history![1].messageId, 'h3', 'should return most recent messages');
   });
+
+  it.each([0, 1])(
+    'blocking sendMessage preserves shared stored history for historyLength=%i',
+    async (historyLength) => {
+      const tasks = new Map<string, Task>();
+      const store: TaskStore = {
+        async save(task) {
+          tasks.set(task.id, task);
+        },
+        async load(id) {
+          return tasks.get(id);
+        },
+        async list() {
+          throw new Error('not used');
+        },
+      };
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
+        const task = createTestTask(ctx.taskId, [
+          createTestMessage('h1', 'one'),
+          createTestMessage('h2', 'two'),
+        ]);
+        task.contextId = ctx.contextId;
+        bus.publish(AgentEvent.task(task));
+        bus.finished();
+      });
+      const customHandler = new DefaultRequestHandler(
+        testAgentCard,
+        store,
+        mockAgentExecutor,
+        executionEventBusManager
+      );
+      const result = (await customHandler.sendMessage(
+        {
+          tenant: '',
+          message: createTestMessage('input', 'request'),
+          configuration: { historyLength, acceptedOutputModes: [], returnImmediately: false },
+          metadata: {},
+        } as SendMessageRequest,
+        serverCallContext
+      )) as Task;
+      expect(result.history?.map((message) => message.messageId)).toEqual(
+        historyLength === 0 ? [] : ['h2']
+      );
+      const persisted = await store.load(result.id, serverCallContext);
+      expect(persisted?.history?.map((message) => message.messageId)).toEqual([
+        'input',
+        'h1',
+        'h2',
+      ]);
+    }
+  );
 
   it('sendMessage: should apply historyLength=0 to omit history from task result (§3.2.4)', async () => {
     const contextId = 'ctx-send-hist-0';
