@@ -12,37 +12,23 @@ npm install
 
 ## Generating Code
 
-To generate the gRPC service definitions, run the following command from this directory (`src/grpc`):
+From the repository root:
 
 ```bash
-npx buf generate
+npm run generate
 ```
 
-This will generate the TypeScript files in the `./pb` directory (as configured in `buf.gen.yaml`).
+This regenerates `src/types/pb` and `./pb` (including `./pb/google/*`, as configured in each `buf.gen.yaml`) and then runs `scripts/postprocess_generated_types.js`. Never edit generated files by hand: a clean run must leave `git status` empty.
 
 ## Post-Processing
 
-**Important:** After running the generation, a post-processing step is **necessary**.
+The `buf` generation process produces a file (`src/grpc/pb/a2a.ts`) that contains both the service definitions and the message types. To make the gRPC services operate on the canonical types, the post-processing script replaces the generated message interfaces and enums with aliases of the ones in `src/types/pb/a2a.ts`:
 
-The `buf` generation process produces a file (e.g., `src/grpc/pb/a2a.ts`) that contains both the service definitions and the message types. However, to maintain consistency across the SDK and ensure that we are using the canonical types, we must update the generated file to import the actual types from the central types definition file.
+```typescript
+import * as pb from '../../types/pb/a2a.js';
 
-**Steps:**
+export type Task = pb.Task;
+// ... maps other types similarly
+```
 
-1.  Open the generated file (e.g., `src/grpc/pb/a2a.ts`).
-2.  Locate the imports/type definitions section.
-3.  Replace the local message type definitions or imports with an import from the shared types file:
-    `src/types/pb/a2a.ts`
-    
-    For example, change:
-    ```typescript
-    export interface Task { ... }
-    ```
-    to:
-    ```typescript
-    import * as pb from "../../types/pb/a2a.js";
-
-    export type Task = pb.Task;
-    // ... maps other types similarly
-    ```
-
-This ensures that the gRPC services operate on the same `Task` (and other) interfaces as the rest of the application, avoiding type mismatch errors.
+It also patches the binary codecs so that fields which are optional in the canonical types (see `OPTIONAL_FIELDS` in the script) are skipped by the encoder when unset and left out by the decoder unless present on the wire. A message from a 1.0 peer then decodes to the same object over gRPC as over JSON. Finally, it deletes the `google/api/*` and `google/protobuf/descriptor.ts` codecs that buf emits for `a2a.proto`'s annotation imports, which the SDK doesn't use.
