@@ -88,6 +88,7 @@ SDK-specific guides live under [`docs/`](docs/):
 - [Migration guide (`v0.3` → `v1.0`)](docs/migration-guide.md)
 - [v0.3 compatibility guide](docs/compatibility-v0_3.md)
 - [Persistent stores guide](docs/persistent-stores.md)
+- [Plugins guide](docs/plugins.md)
 
 ## Samples
 
@@ -260,6 +261,17 @@ See the [`client/interceptors`](src/samples/client/interceptors/) sample for
 header injection + per-call `AbortSignal.timeout(...)`, and the
 [`cli.ts`](src/samples/cli.ts) sample for passing `--auth "Bearer $TOKEN"` as
 per-call `serviceParameters`.
+
+### Plugins
+
+A plugin from `@a2a-js/sdk/plugins` is one object with hooks into the client,
+the server, agent execution, task writes and push notifications. Register it
+with `DefaultRequestHandlerOptions.plugins` on the server and
+`ClientConfig.plugins` on the client. Use plugins for features that span
+several of these places, such as tracing, metrics or auditing.
+
+See the [plugins guide](docs/plugins.md) and the
+[`plugins`](src/samples/plugins/) sample.
 
 ### Authentication (server side)
 
