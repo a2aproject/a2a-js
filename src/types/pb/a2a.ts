@@ -10,7 +10,17 @@ export const protobufPackage = "lf.a2a.v1";
 
 /** Older protoc compilers don't understand edition yet. */
 
-/** Defines the possible lifecycle states of a `Task`. */
+/**
+ * Defines the possible lifecycle states of a `Task`.
+ *
+ * States are either terminal or non-terminal. Terminal states (COMPLETED,
+ * FAILED, CANCELED, REJECTED) end the task: the server accepts no further
+ * messages or updates for it. Non-terminal states, including the interrupted
+ * states INPUT_REQUIRED and AUTH_REQUIRED, leave the task lifecycle under the
+ * server's control: the server may continue processing the task and transition
+ * it to another state (including out of an interrupted state) without a message
+ * from the client, and may accept further messages.
+ */
 export enum TaskState {
   /** TASK_STATE_UNSPECIFIED - The task is in an unknown or indeterminate state. */
   TASK_STATE_UNSPECIFIED = 0,
@@ -63,12 +73,24 @@ export interface SendMessageConfiguration {
     | TaskPushNotificationConfig
     | undefined;
   /**
-   * The maximum number of most recent messages from the task's history to retrieve in
-   * the response. An unset value means the client does not impose any limit. A
-   * value of zero is a request to not include any messages. The server MUST NOT
-   * return more messages than the provided value, but MAY apply a lower limit.
+   * Deprecated: use `timeline_length` instead. The maximum number of most recent
+   * messages from the task's history to retrieve in the response. An unset value
+   * means the client does not impose any limit. A value of zero is a request to
+   * not include any messages. The server MUST NOT return more messages than the
+   * provided value, but MAY apply a lower limit. Removed in 2.0. See ADR-002.
+   *
+   * @deprecated
    */
   historyLength?:
+    | number
+    | undefined;
+  /**
+   * Optional. The maximum number of most recent `timeline` entries to retrieve
+   * in the response. An unset value means the client does not impose any limit;
+   * a value of zero requests no entries. The server MUST NOT return more entries
+   * than this value, but MAY apply a lower limit. See ADR-002.
+   */
+  timelineLength?:
     | number
     | undefined;
   /**
@@ -79,6 +101,14 @@ export interface SendMessageConfiguration {
    * (`INPUT_REQUIRED`, `AUTH_REQUIRED`) state before returning.
    */
   returnImmediately: boolean;
+  /**
+   * Optional. If set, the server MUST reject the request with an appropriate
+   * error (HTTP 409 Conflict / gRPC ABORTED) if the task's
+   * current generation does not equal this value at the time the message is
+   * processed. Use this to implement optimistic concurrency control and
+   * prevent lost-update races when multiple clients interact with the same task.
+   */
+  ifGenerationMatch?: number | undefined;
 }
 
 /**
@@ -106,14 +136,38 @@ export interface Task {
   artifacts: Artifact[];
   /**
    * protolint:disable REPEATED_FIELD_NAMES_PLURALIZED
-   * The history of interactions from a `Task`.
+   * Deprecated: read the task `timeline` instead, which records the interaction
+   * (agent status entries and client messages) in generation order. Servers
+   * continue to populate `history` throughout the v1.x line for backward
+   * compatibility; it is removed in 2.0. See ADR-002.
+   *
+   * @deprecated
    */
   history: Message[];
+  /**
+   * Optional. The coherent, generation-ordered record of the interaction: agent
+   * status entries and client messages. Each status entry corresponds to a
+   * `TaskStatusUpdateEvent` already delivered on the wire, so no new event type
+   * is required to stream it. See ADR-002.
+   */
+  timeline?: TimelineEntry[];
   /**
    * protolint:enable REPEATED_FIELD_NAMES_PLURALIZED
    * A key/value object to store custom metadata about a task.
    */
-  metadata: { [key: string]: any } | undefined;
+  metadata:
+    | { [key: string]: any }
+    | undefined;
+  /**
+   * Sequentially increasing counter incremented by exactly 1 by the server on
+   * every state-changing mutation to this task, with each mutation mapping 1:1
+   * to one event. Mutations include: a status update recorded as a
+   * `TimelineEntry` (any `TaskStatusUpdateEvent`, including a progress message
+   * that does not change `TaskState`); and an `Artifact` addition or update.
+   * Starts at 1 when the task is created.
+   * May be used for event ordering, long-polling, and optimistic concurrency.
+   */
+  generation?: number;
 }
 
 /** A container for the status of a task */
@@ -209,6 +263,80 @@ export interface Artifact {
     | undefined;
   /** The URIs of extensions that are present or contributed to this Artifact. */
   extensions: string[];
+  /** Optional. The task `generation` at which this artifact first appeared. */
+  startGeneration?: number;
+  /**
+   * Optional. The task `generation` at which this artifact was completed; unset
+   * while it is still streaming.
+   */
+  endGeneration?: number;
+  /**
+   * Optional. The originator of this artifact. Artifacts are agent outputs by
+   * default (`ROLE_AGENT`); an artifact written by the client is `ROLE_USER`.
+   */
+  role?: Role;
+}
+
+/**
+ * `TimelineEntry` is a single, generation-ordered entry in a task's timeline.
+ * The timeline is the coherent, replayable record of the interaction on the
+ * wire: agent status progression (each `TaskStatus` carrying the agent's
+ * `message` and state) interleaved with client messages, in the order they
+ * occurred. Agent status entries are delivered on the wire by the existing
+ * `TaskStatusUpdateEvent`, so the timeline needs no new event type. The `entry`
+ * is a `oneof` so additional entry kinds can be added later; clients MUST fail
+ * open and skip an entry whose `entry` kind they do not recognise (its
+ * `generation` is still accounted for). See ADR-002.
+ */
+export interface TimelineEntry {
+  /** The content of this timeline entry. */
+  entry?:
+    | //
+    /**
+     * A standalone message recorded in the timeline, used for client input
+     * (`ROLE_USER`). Agent messages are carried by `status` entries.
+     */
+    { $case: "message"; value: Message }
+    | //
+    /**
+     * An agent status recorded in the timeline: the state plus the agent's
+     * `message` at that point. Streamed via `TaskStatusUpdateEvent`.
+     */
+    { $case: "status"; value: TaskStatus }
+    | undefined;
+  /**
+   * The task's `generation` at the point this entry was appended. Entries are
+   * ordered by this value, establishing a total order independent of wall-clock
+   * time. These values are monotonic but NOT contiguous: other mutations
+   * (notably `Artifact` updates) also advance `generation`, so gaps between
+   * entries are expected, and artifacts are placed relative to entries via their
+   * `start_generation`/`end_generation` (see `Task.generation`).
+   */
+  generation: number;
+}
+
+/**
+ * An event sent by the server to notify clients of a new message added to the task (e.g. client input).
+ * Emitted only to clients that negotiated a compatible protocol version (>= 1.1).
+ */
+export interface TaskMessageUpdateEvent {
+  /** The ID of the task that the message belongs to. */
+  taskId: string;
+  /** The ID of the context that this task belongs to. */
+  contextId: string;
+  /** The message that was appended to the task. */
+  message:
+    | Message
+    | undefined;
+  /** Optional. Metadata associated with the message update. */
+  metadata:
+    | { [key: string]: any }
+    | undefined;
+  /**
+   * The task's `generation` after this message was appended, allowing clients
+   * to order it correctly in the timeline and detect missed events.
+   */
+  generation: number;
 }
 
 /** An event sent by the agent to notify the client of a change in a task's status. */
@@ -222,7 +350,15 @@ export interface TaskStatusUpdateEvent {
     | TaskStatus
     | undefined;
   /** Optional. Metadata associated with the task update. */
-  metadata: { [key: string]: any } | undefined;
+  metadata:
+    | { [key: string]: any }
+    | undefined;
+  /**
+   * The task's generation after this update was applied. Clients can use this
+   * to detect missed events (a gap in generation values) and to correlate
+   * events with a specific task snapshot.
+   */
+  generation?: number;
 }
 
 /** A task delta where an artifact has been generated. */
@@ -243,7 +379,15 @@ export interface TaskArtifactUpdateEvent {
   /** If true, this is the final chunk of the artifact. */
   lastChunk: boolean;
   /** Optional. Metadata associated with the artifact update. */
-  metadata: { [key: string]: any } | undefined;
+  metadata:
+    | { [key: string]: any }
+    | undefined;
+  /**
+   * The task's generation after this artifact update was applied. Clients can
+   * use this to detect missed events (a gap in generation values) and to
+   * correlate events with a specific task snapshot.
+   */
+  generation?: number;
 }
 
 /** Defines authentication details, used for push notifications. */
@@ -264,8 +408,9 @@ export interface AuthenticationInfo {
  */
 export interface AgentInterface {
   /**
-   * The URL where this interface is available. Must be a valid absolute HTTPS URL in production.
-   * Example: "https://api.example.com/a2a/v1", "https://grpc.example.com/a2a"
+   * The URL or address where this interface is available. For HTTP-based transports, must be a valid absolute
+   * HTTPS URL in production. For gRPC, the address should be in the format "hostname:port".
+   * Example: "https://api.example.com/a2a/v1", "grpc.example.com:443"
    */
   url: string;
   /**
@@ -274,7 +419,14 @@ export interface AgentInterface {
    * supported are `JSONRPC`, `GRPC` and `HTTP+JSON`.
    */
   protocolBinding: string;
-  /** Tenant ID to be used in the request when calling the agent. */
+  /**
+   * Optional. An opaque string used for routing requests to a specific agent
+   * or tenant when multiple agents are served behind a single A2A endpoint.
+   * When set, clients MUST include this value in the `tenant` field of all
+   * request messages sent to this interface. The server is responsible for
+   * interpreting the value and routing requests accordingly; the protocol
+   * does not define its format or semantics.
+   */
   tenant: string;
   /**
    * The version of the A2A protocol this interface exposes.
@@ -377,7 +529,14 @@ export interface AgentCapabilities {
   /** A list of protocol extensions supported by the agent. */
   extensions: AgentExtension[];
   /** Indicates if the agent supports providing an extended agent card when authenticated. */
-  extendedAgentCard?: boolean | undefined;
+  extendedAgentCard?:
+    | boolean
+    | undefined;
+  /**
+   * Indicates if the agent accepts client-written artifacts (`ROLE_USER`) in
+   * `SendMessageRequest.artifact_updates`.
+   */
+  userArtifacts?: boolean | undefined;
 }
 
 /** A declaration of a protocol extension supported by an Agent. */
@@ -432,7 +591,10 @@ export interface AgentCardSignature {
 
 /** A container associating a push notification configuration with a specific task. */
 export interface TaskPushNotificationConfig {
-  /** Optional. Tenant ID. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /**
    * The push notification configuration details.
@@ -446,7 +608,15 @@ export interface TaskPushNotificationConfig {
   /** A token unique for this task or session. */
   token: string;
   /** Authentication information required to send the notification. */
-  authentication: AuthenticationInfo | undefined;
+  authentication:
+    | AuthenticationInfo
+    | undefined;
+  /**
+   * Optional. The A2A protocol version to use when delivering the notification.
+   * Defaults to the version of the request that created the configuration,
+   * or "1.0" if unset.
+   */
+  protocolVersion?: string;
 }
 
 /**
@@ -679,9 +849,16 @@ export interface DeviceCodeOAuthFlow_ScopesEntry {
 
 /** Represents a request for the `SendMessage` method. */
 export interface SendMessageRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
-  /** The message to send to the agent. */
+  /**
+   * The message to send to the agent. Required when creating a task (when no
+   * `task_id` is provided); may be omitted only when sending `artifact_updates`
+   * to an existing task.
+   */
   message:
     | Message
     | undefined;
@@ -690,27 +867,92 @@ export interface SendMessageRequest {
     | SendMessageConfiguration
     | undefined;
   /** A flexible key-value map for passing additional context or parameters. */
-  metadata: { [key: string]: any } | undefined;
+  metadata:
+    | { [key: string]: any }
+    | undefined;
+  /**
+   * Optional. Client-written artifact updates to send alongside `message` (for
+   * example, initial input artifacts when creating a task) or on their own to
+   * an existing task. Requires `AgentCard.capabilities.user_artifacts` to be
+   * `true`. The `generation` field on each update is owned by the server:
+   * clients MUST leave it unset and servers MUST ignore any value sent.
+   */
+  artifactUpdates?: TaskArtifactUpdateEvent[];
+}
+
+/**
+ * A wrapper object used in streaming operations to encapsulate different types of client input.
+ * New `payload` kinds MAY be added in future minor versions. A server that
+ * receives a request whose payload kind it does not recognise MUST reject that
+ * request (on a live stream, with a `StreamError`) rather than terminating the
+ * stream.
+ */
+export interface StreamRequest {
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
+  tenant: string;
+  /** The payload of the stream request. */
+  payload?:
+    | //
+    /** Send a message on the stream, optionally with per-request configuration. */
+    { $case: "sendMessage"; value: SendMessageRequest }
+    | //
+    /**
+     * Attach to an existing task. Only valid as the first request of a stream;
+     * a server that receives it later MUST reject it with a `StreamError`.
+     */
+    { $case: "subscribe"; value: SubscribeToTaskRequest }
+    | undefined;
 }
 
 /** Represents a request for the `GetTask` method. */
 export interface GetTaskRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /** The resource ID of the task to retrieve. */
   id: string;
   /**
-   * The maximum number of most recent messages from the task's history to retrieve. An
-   * unset value means the client does not impose any limit. A value of zero is
-   * a request to not include any messages. The server MUST NOT return more
-   * messages than the provided value, but MAY apply a lower limit.
+   * Deprecated: use `timeline_length` instead. The maximum number of most recent
+   * messages from the task's history to retrieve. An unset value means the
+   * client does not impose any limit. A value of zero is a request to not
+   * include any messages. The server MUST NOT return more messages than the
+   * provided value, but MAY apply a lower limit. Removed in 2.0. See ADR-002.
+   *
+   * @deprecated
    */
-  historyLength?: number | undefined;
+  historyLength?:
+    | number
+    | undefined;
+  /**
+   * Optional. The maximum number of most recent `timeline` entries to retrieve.
+   * An unset value means the client does not impose any limit; a value of zero
+   * requests no entries. The server MUST NOT return more entries than this
+   * value, but MAY apply a lower limit. See ADR-002.
+   */
+  timelineLength?:
+    | number
+    | undefined;
+  /**
+   * Optional. If set, the server SHOULD NOT return until the task's generation
+   * is strictly greater than this value, enabling efficient long-polling.
+   * The server MAY return earlier (e.g. on timeout) with the current task state.
+   * If the task's current generation already exceeds this value the server
+   * MUST return immediately.
+   */
+  currentGeneration?: number | undefined;
 }
 
 /** Parameters for listing tasks with optional filtering criteria. */
 export interface ListTasksRequest {
-  /** Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /** Filter tasks by context ID to get tasks from a specific conversation or session. */
   contextId: string;
@@ -731,8 +973,20 @@ export interface ListTasksRequest {
    * Provide this to retrieve the subsequent page.
    */
   pageToken: string;
-  /** The maximum number of messages to include in each task's history. */
+  /**
+   * Deprecated: use `timeline_length` instead. The maximum number of messages to
+   * include in each task's history. Removed in 2.0. See ADR-002.
+   *
+   * @deprecated
+   */
   historyLength?:
+    | number
+    | undefined;
+  /**
+   * Optional. The maximum number of `timeline` entries to include in each task.
+   * See ADR-002.
+   */
+  timelineLength?:
     | number
     | undefined;
   /**
@@ -763,7 +1017,10 @@ export interface ListTasksResponse {
 
 /** Represents a request for the `CancelTask` method. */
 export interface CancelTaskRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /** The resource ID of the task to cancel. */
   id: string;
@@ -773,7 +1030,10 @@ export interface CancelTaskRequest {
 
 /** Represents a request for the `GetTaskPushNotificationConfig` method. */
 export interface GetTaskPushNotificationConfigRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /** The parent task resource ID. */
   taskId: string;
@@ -783,7 +1043,10 @@ export interface GetTaskPushNotificationConfigRequest {
 
 /** Represents a request for the `DeleteTaskPushNotificationConfig` method. */
 export interface DeleteTaskPushNotificationConfigRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /** The parent task resource ID. */
   taskId: string;
@@ -793,15 +1056,27 @@ export interface DeleteTaskPushNotificationConfigRequest {
 
 /** Represents a request for the `SubscribeToTask` method. */
 export interface SubscribeToTaskRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /** The resource ID of the task to subscribe to. */
   id: string;
+  /**
+   * Optional. Resume after this `generation`: the server replays only what
+   * followed it and does NOT open with a `Task` snapshot. When unset, the
+   * server opens with a `Task` snapshot and streams onward from it.
+   */
+  lastSeenGeneration?: number | undefined;
 }
 
 /** Represents a request for the `ListTaskPushNotificationConfigs` method. */
 export interface ListTaskPushNotificationConfigsRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
   /** The parent task resource ID. */
   taskId: string;
@@ -813,7 +1088,10 @@ export interface ListTaskPushNotificationConfigsRequest {
 
 /** Represents a request for the `GetExtendedAgentCard` method. */
 export interface GetExtendedAgentCardRequest {
-  /** Optional. Tenant ID, provided as a path parameter. */
+  /**
+   * Optional. Opaque routing identifier. Must match the `tenant` value from
+   * the selected `AgentInterface` in the Agent Card when that field is set.
+   */
   tenant: string;
 }
 
@@ -830,7 +1108,12 @@ export interface SendMessageResponse {
     | undefined;
 }
 
-/** A wrapper object used in streaming operations to encapsulate different types of response data. */
+/**
+ * A wrapper object used in streaming operations to encapsulate different types of response data.
+ * New `payload` kinds MAY be added in future minor versions. A client that
+ * receives a response whose payload kind it does not recognise MUST skip it and
+ * continue reading the stream, rather than failing or closing the stream.
+ */
 export interface StreamResponse {
   /** The payload of the stream response. */
   payload?:
@@ -846,7 +1129,40 @@ export interface StreamResponse {
     | //
     /** An event indicating a task artifact update. */
     { $case: "artifactUpdate"; value: TaskArtifactUpdateEvent }
+    | //
+    /** An event indicating a new message was appended to the task (e.g. client input). */
+    { $case: "messageUpdate"; value: TaskMessageUpdateEvent }
+    | //
+    /** A non-fatal rejection of a single client request on the uplink. */
+    { $case: "error"; value: StreamError }
     | undefined;
+}
+
+/**
+ * A non-fatal error reported on a live stream. It rejects a single client
+ * request without terminating the stream, so the client can correct and retry.
+ * Conditions that make the stream itself unusable remain transport-level errors
+ * and close the stream as before.
+ */
+export interface StreamError {
+  /** The ID of the task the rejected request applied to, when known. */
+  taskId: string;
+  /**
+   * A machine-readable identifier for the rejection, using the same codes as
+   * the equivalent unary operation (e.g. `INVALID_ARGUMENT` for a malformed
+   * request, `UNAVAILABLE` when the agent is not accepting input right now).
+   */
+  code: string;
+  /** A human readable description of why the request was rejected. */
+  message: string;
+  /**
+   * Optional. The `message_id` of the rejected client `Message`, or the
+   * `artifact_id` of the rejected artifact update, so the client can correlate
+   * the rejection with what it sent.
+   */
+  referenceId: string;
+  /** Optional. Metadata associated with the rejection. */
+  metadata: { [key: string]: any } | undefined;
 }
 
 /**

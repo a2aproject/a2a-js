@@ -30,6 +30,7 @@ export const A2A_LEGACY_PROTOCOL_VERSION = '0.3';
 export enum ProtocolVersion {
   V0_3 = '0.3',
   V1_0 = '1.0',
+  V1_1 = '1.1',
 }
 
 /** Content-Type for JSON-RPC requests. */
