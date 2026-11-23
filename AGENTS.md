@@ -104,6 +104,7 @@ The `src/samples` directory contains practical examples. Each subdirectory has i
 *   **`authentication/`**: Bearer/JWT authentication with Passport, including a `UserBuilder` that propagates the authenticated user into the agent context.
 *   **`extensions/`**: Protocol extension implemented as an `AgentExecutor` decorator that stamps metadata onto outgoing events.
 *   **`client/interceptors/`**: Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.
+*   **`plugins/`**: Client and server plugins (`@a2a-js/sdk/plugins`) over JSON-RPC, REST and gRPC: experiment-ID propagation, call audit and timing, and `aroundExecution` scoping (server + client).
 *   **`cli.ts`**: Multi-transport interactive CLI client (JSON-RPC / REST / gRPC); `--auth` / `--svc-param` inject headers (gRPC metadata) into every request.
 
 ## Development Conventions
