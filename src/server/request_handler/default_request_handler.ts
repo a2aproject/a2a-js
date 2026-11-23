@@ -66,8 +66,9 @@ import {
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors/index.js';
 import { SequentialPluginManager } from '../../plugins/manager.js';
-import type { A2APlugin } from '../../plugins/types.js';
+import type { A2APlugin, PluginManager } from '../../plugins/types.js';
 import { applyServerPlugins } from './server_plugin_hooks.js';
+import { withExecutionPlugins } from '../agent_execution/plugin_agent_executor.js';
 
 export interface DefaultRequestHandlerOptions {
   /**
@@ -97,7 +98,8 @@ export interface DefaultRequestHandlerOptions {
 
   /**
    * Plugins whose server hooks run around every request handled by this
-   * handler, in the given order. See `@a2a-js/sdk/plugins`.
+   * handler, and whose execution hooks run around every agent execution, in
+   * the given order. See `@a2a-js/sdk/plugins`.
    */
   plugins?: A2APlugin[];
 }
@@ -122,6 +124,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
   private readonly keepBusAliveStates: Set<TaskState>;
   private readonly validateInputModes: boolean;
+  private readonly plugins: PluginManager;
   private readonly activeDrains = new WeakMap<ExecutionEventBus, ActivePersistenceDrain>();
 
   constructor(
@@ -135,9 +138,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     agentCardSignatureGenerator?: AgentCardSignatureGenerator,
     options: DefaultRequestHandlerOptions = {}
   ) {
+    this.plugins = new SequentialPluginManager(...(options.plugins ?? []));
     this.agentCard = agentCard;
     this.taskStore = taskStore;
-    this.agentExecutor = agentExecutor;
+    this.agentExecutor = withExecutionPlugins(agentExecutor, this.plugins);
     this.eventBusManager = eventBusManager;
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
@@ -147,10 +151,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
       this.pushNotificationSender =
-        pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
+        pushNotificationSender ||
+        new DefaultPushNotificationSender(this.pushNotificationStore, { plugins: options.plugins });
     }
 
-    applyServerPlugins(this, new SequentialPluginManager(...(options.plugins ?? [])), agentCard);
+    applyServerPlugins(this, this.plugins, agentCard);
   }
 
   async getAgentCard(): Promise<AgentCard> {
@@ -251,6 +256,16 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       }
       task.history = [...(task.history || []), incomingMessage];
       await this.taskStore.save(task, context);
+      if (this.plugins.hasTaskHooks) {
+        const state = task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED;
+        await this.plugins.onTaskEvent({
+          taskId: task.id,
+          fromState: state,
+          toState: state,
+          task,
+          context,
+        });
+      }
     }
     const taskId = incomingMessage.taskId || crypto.randomUUID();
     const referenceTaskIds =
@@ -694,7 +709,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Default to blocking behavior if 'returnImmediately' is not explicitly true.
     const isBlocking = params.configuration?.returnImmediately !== true;
-    const resultManager = new ResultManager(this.taskStore, context);
+    const resultManager = new ResultManager(this.taskStore, context, this.plugins);
     resultManager.setContext(incomingMessage);
 
     const requestContext = await this._createRequestContext(params, context);
@@ -795,7 +810,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('message.messageId is required for streaming.');
     }
 
-    const resultManager = new ResultManager(this.taskStore, context);
+    const resultManager = new ResultManager(this.taskStore, context, this.plugins);
     resultManager.setContext(incomingMessage);
 
     const requestContext = await this._createRequestContext(params, context);
@@ -973,7 +988,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         let fallbackQueue: ExecutionEventQueue | undefined;
         if (!activeDrain) {
           fallbackQueue = new ExecutionEventQueue(eventBus);
-          const fallbackResultManager = new ResultManager(this.taskStore, context);
+          const fallbackResultManager = new ResultManager(this.taskStore, context, this.plugins);
           activeDrain = this._registerActiveDrain(eventBus, (recordError) =>
             this._processEvents(taskId, fallbackResultManager, fallbackQueue!, context, {
               onProcessingError: recordError,
@@ -1013,7 +1028,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         extensions: [],
         referenceTaskIds: [],
       };
-      await new ResultManager(this.taskStore, context).processEvent(
+      await new ResultManager(this.taskStore, context, this.plugins).processEvent(
         AgentEvent.statusUpdate({
           taskId: task.id,
           contextId: task.contextId,

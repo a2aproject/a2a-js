@@ -1,5 +1,11 @@
 import type { AgentCard } from '../../index.js';
-import type { A2AMethodName, PluginManager, ServerRequest } from '../../plugins/types.js';
+import { runCall, runStream, type CallHooks } from '../../plugins/run.js';
+import type {
+  A2AMethodName,
+  PluginManager,
+  ServerRequest,
+  ServerResponse,
+} from '../../plugins/types.js';
 import type { ServerCallContext } from '../context.js';
 import type { A2ARequestHandler } from './a2a_request_handler.js';
 
@@ -32,6 +38,12 @@ export function applyServerPlugins(
   if (!plugins.hasServerHooks) {
     return;
   }
+  const hooks: CallHooks<ServerRequest, ServerResponse> = {
+    before: (req) => plugins.beforeHandlerRun(req),
+    around: (req, next) => plugins.aroundHandlerRun(req, next),
+    after: (res) => plugins.afterHandlerRun(res),
+    response: ({ method, context }, outcome) => ({ method, context, ...outcome }),
+  };
   const methods = handler as unknown as Record<string, HandlerMethod>;
   for (const [name, method] of Object.entries(SERVER_METHODS)) {
     const impl = methods[name].bind(handler);
@@ -40,91 +52,8 @@ export function applyServerPlugins(
       const request: ServerRequest = { method, payload, context, agentCard };
       const call = () => impl(payload, context);
       return streaming
-        ? runServerStream(plugins, request, call as () => AsyncGenerator<unknown, void, undefined>)
-        : runServerCall(plugins, request, call as () => Promise<unknown>);
+        ? runStream(hooks, request, call as () => AsyncGenerator<unknown, void, undefined>)
+        : runCall(hooks, request, call as () => Promise<unknown>);
     };
-  }
-}
-
-/**
- * Runs a unary handler call with the server plugin hooks:
- * `beforeHandlerRun`, then the call wrapped by `aroundHandlerRun`, then
- * `afterHandlerRun` with the result or the error.
- */
-async function runServerCall<T>(
-  plugins: PluginManager,
-  request: ServerRequest,
-  call: () => Promise<T>
-): Promise<T> {
-  const { method, context } = request;
-  await plugins.beforeHandlerRun(request);
-  let result: T;
-  try {
-    result = await plugins.aroundHandlerRun(request, call);
-  } catch (error) {
-    await plugins.afterHandlerRun({ method, context, error, isStreamEvent: false, isFinal: true });
-    throw error;
-  }
-  await plugins.afterHandlerRun({
-    method,
-    payload: result,
-    context,
-    isStreamEvent: false,
-    isFinal: true,
-  });
-  return result;
-}
-
-/**
- * Runs a streaming handler call with the server plugin hooks.
- *
- * `aroundHandlerRun` wraps every pull of the inner stream, so the handler
- * code that runs to produce an event (including the agent execution it
- * starts) runs inside the plugin's scope. `afterHandlerRun` runs once per
- * event and once more when the stream ends, including on error and when the
- * consumer stops early.
- */
-async function* runServerStream<T>(
-  plugins: PluginManager,
-  request: ServerRequest,
-  open: () => AsyncGenerator<T, void, undefined>
-): AsyncGenerator<T, void, undefined> {
-  const { method, context } = request;
-  await plugins.beforeHandlerRun(request);
-  let iterator: AsyncGenerator<T, void, undefined> | undefined;
-  let error: unknown;
-  try {
-    iterator = open();
-    while (true) {
-      const next = await plugins.aroundHandlerRun(request, () => iterator!.next());
-      if (next.done === true) {
-        break;
-      }
-      await plugins.afterHandlerRun({
-        method,
-        payload: next.value,
-        context,
-        isStreamEvent: true,
-        isFinal: false,
-      });
-      yield next.value;
-    }
-  } catch (e) {
-    error = e;
-    throw e;
-  } finally {
-    try {
-      // Closes the inner stream if the consumer stopped early; a no-op on a
-      // generator that already finished or threw.
-      await iterator?.return(undefined);
-    } finally {
-      await plugins.afterHandlerRun({
-        method,
-        context,
-        error,
-        isStreamEvent: false,
-        isFinal: true,
-      });
-    }
   }
 }
