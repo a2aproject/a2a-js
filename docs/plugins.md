@@ -126,6 +126,25 @@ Hooks are awaited, so a slow hook slows the call it runs in. Errors thrown by
 `after*` and `on*` hooks are logged with `console.error` and ignored, so an
 observing plugin can't break a call.
 
+To reject a request in `beforeHandlerRun` or `aroundHandlerRun`, throw an
+`A2AError` subclass from `@a2a-js/sdk/errors`, such as `RequestMalformedError`
+or `UnsupportedOperationError`. Each transport maps it to its own HTTP status,
+JSON-RPC code or gRPC status. Any other error becomes a server error: REST 500
+`INTERNAL`, JSON-RPC `-32603` or gRPC `UNKNOWN`. The client sees the error
+message, so keep internal details out of it.
+
+No A2A error maps to HTTP 401 or 403, or to gRPC `UNAUTHENTICATED` or
+`PERMISSION_DENIED`. To answer with one of those, reject the request before it
+reaches the A2A handler: in Express middleware in front of the A2A routes, or in
+a gRPC server interceptor. The [`authentication` sample](../src/samples/authentication/)
+shows how to pass the authenticated user to `context.user`, so a plugin can
+check `context.user?.isAuthenticated` and throw an `A2AError`.
+
+If `beforeExecution` or `aroundExecution` throws, the execution fails the same
+way as when the agent throws: the call still succeeds, and the task ends in
+`TASK_STATE_FAILED` with `Agent execution error: <message>` as its status
+message, which the client also sees.
+
 For streams (`SendStreamingMessage`, `SubscribeToTask`):
 
 - `after*` runs once per event with `isStreamEvent: true`, then once more with
