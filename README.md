@@ -111,6 +111,7 @@ Each sample directory has its own `README.md` with run instructions.
 | [`agents/compat-v1-server`](src/samples/agents/compat-v1-server/)               | v1.0-native server with `legacyCompat: { enabled: true }` on every transport — JSON-RPC, REST, gRPC, agent card, and push notifications.       |
 | [`agents/compat-v1-client`](src/samples/agents/compat-v1-client/)               | v1.0-native client driving both the compat-aware server above and a hand-rolled mock v0.3 server in-process; pairs with `compat-v1-server`.    |
 | [`agents/database-agent`](src/samples/agents/database-agent/)                   | Agent with a server that uses persistent stores, so tasks and push notification configs survive restarts.                                      |
+| [`plugins`](src/samples/plugins/)                                               | Client and server plugins across JSON-RPC, REST and gRPC: experiment-ID propagation, call audit and timing, and `aroundExecution` scoping.     |
 
 To run a sample, install dependencies inside `src/samples` and use the
 provided npm scripts:
