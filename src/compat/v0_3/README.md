@@ -60,7 +60,7 @@ Notable policy decisions:
 
 Per A2A spec §3.6.2, clients that omit the `A2A-Version` header are treated as v0.3 requests. v0.3 advertisement and routing are strictly per-interface: a binding is only reachable at v0.3 if the agent card declares an `AgentInterface` for it with `protocolVersion: '0.3'`.
 
-- `validateVersion(requestedVersion, card, binding)` accepts the request iff an interface declared for `binding` in `supportedInterfaces` supports `requestedVersion`: same major and a minor no higher than the declared one for v1+ (an interface declaring `1.1` also serves `1.0`), and an exact `Major.Minor` match for pre-1.0 versions such as `0.3`.
+- `validateVersion(requestedVersion, card, binding)` accepts the request iff an interface declared for `binding` in `supportedInterfaces` supports `requestedVersion`: same major and a minor no higher than the declared one for v1+ (an interface declaring `1.1` also serves `1.0`), and an exact `Major.Minor` match for pre-1.0 versions such as `0.3`. Patch numbers are ignored, so `0.3.0` is served as `0.3`, including the JSON-RPC legacy routing and the push serializer choice.
 - `legacyAgentCardRouter` calls `toCompatAgentCard(card)` (strict filter) and serves the resulting v0.3-shaped card to legacy-range requests. A v1.0-only card produces HTTP 400 on the legacy path.
 
 Operators advertise a binding at v0.3 by declaring a per-interface `protocolVersion: '0.3'` — manually or via `duplicateInterfacesForLegacy`. The `compat-v1-server` sample shows the helper in use.

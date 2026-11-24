@@ -12,7 +12,6 @@ import {
 import { LegacyJsonRpcTransport } from '../../src/compat/v0_3/client/transports/json_rpc_transport.js';
 import { DefaultAgentCardResolver } from '../../src/client/card-resolver.js';
 import { RestTransportFactory } from '../../src/client/transports/rest_transport.js';
-import { negotiateVersion } from '../../src/version_utils.js';
 
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
@@ -160,15 +159,16 @@ describe('ClientFactory', () => {
 
     describe.each(['JSONRPC', 'HTTP+JSON'])('%s interface preference', (protocolBinding) => {
       it.each([
-        { versions: ['1.0', '1.0'], selectedIndex: 0 },
-        { versions: ['0.3', '1.0', '1.0'], selectedIndex: 1 },
-        { versions: ['1.0', '0.3', '1.0'], selectedIndex: 0 },
-        { versions: ['0.3', '0.3'], selectedIndex: 0 },
-        { versions: ['0.3', '1.1'], selectedIndex: 1 },
-        { versions: ['2.0', '1.0'], selectedIndex: 1 },
+        { versions: ['1.0', '1.0'], selectedIndex: 0, sent: '1.0' },
+        { versions: ['0.3', '1.0', '1.0'], selectedIndex: 1, sent: '1.0' },
+        { versions: ['1.0', '0.3', '1.0'], selectedIndex: 0, sent: '1.0' },
+        { versions: ['0.3', '0.3'], selectedIndex: 0, sent: '0.3' },
+        { versions: ['0.3', '1.1'], selectedIndex: 1, sent: '1.0' },
+        { versions: ['2.0', '1.0'], selectedIndex: 1, sent: '1.0' },
+        { versions: ['2.0', '0.3'], selectedIndex: 1, sent: '0.3' },
       ])(
         'selects interface $selectedIndex for versions $versions',
-        async ({ versions, selectedIndex }) => {
+        async ({ versions, selectedIndex, sent }) => {
           const card = AgentCard.fromJSON({
             name: 'Interface order test',
             version: '1.0.0',
@@ -208,10 +208,7 @@ describe('ClientFactory', () => {
           const task = await client.getTask({ id: 'task-1', tenant: '' });
 
           expect(task.id).toBe('task-1');
-          // A v1 client talks the lower minor of the two; v0.3 goes through the compat transport.
-          expect(client.transport.protocolVersion).toBe(
-            negotiateVersion(versions[selectedIndex]) ?? versions[selectedIndex]
-          );
+          expect(client.transport.protocolVersion).toBe(sent);
           expect(fetchImpl).toHaveBeenCalledOnce();
           const expectedEndpoint = card.supportedInterfaces[selectedIndex].url;
           const restPath = versions[selectedIndex] === '0.3' ? '/v1/tasks/task-1' : '/tasks/task-1';
@@ -506,6 +503,32 @@ describe('ClientFactory', () => {
       expect(client).to.be.instanceOf(Client);
       expect(client.transport).to.be.instanceOf(JsonRpcTransport);
       expect(client.transport).not.to.be.instanceOf(LegacyJsonRpcTransport);
+    });
+
+    it('skips a binding that only offers another major version', async () => {
+      const factory = new ClientFactory();
+      agentCard.supportedInterfaces = [
+        {
+          url: 'https://v2.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '2.0',
+        },
+        {
+          url: 'https://v1.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+      ];
+
+      const client = await factory.createFromAgentCard(agentCard);
+      expect(client.transport.protocolName).toBe('HTTP+JSON');
+
+      agentCard.supportedInterfaces = agentCard.supportedInterfaces.slice(0, 1);
+      await expect(factory.createFromAgentCard(agentCard)).rejects.toThrow(
+        'No compatible transport found'
+      );
     });
 
     it('ClientFactory with legacyCompat-enabled JSON-RPC factory routes v0.3 agents through LegacyJsonRpcTransport', async () => {

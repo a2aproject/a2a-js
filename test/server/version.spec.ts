@@ -208,6 +208,9 @@ describe('validateVersion minor-version compatibility', () => {
     { declared: '1.1', requested: '2.0', ok: false },
     { declared: '1.1', requested: '0.3', ok: false },
     { declared: '0.3', requested: '0.2', ok: false },
+    { declared: '0.3', requested: '0.3.0', ok: true },
+    { declared: '1.0', requested: '1.0-rc1', ok: false },
+    { declared: '1.0', requested: '1.0, 9.9', ok: false },
   ])('interface $declared, request $requested → accepted: $ok', ({ declared, requested, ok }) => {
     const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: declared }]);
     const validate = () => validateVersion(requested, card, 'JSONRPC');
@@ -228,6 +231,7 @@ describe('negotiateVersion', () => {
     { declared: '2.0', client: '1.1', expected: undefined },
     { declared: '0.3', client: '1.1', expected: undefined },
     { declared: '', client: '1.1', expected: undefined },
+    { declared: undefined as unknown as string, client: '1.1', expected: undefined },
   ])('interface $declared, client $client → $expected', ({ declared, client, expected }) => {
     expect(negotiateVersion(declared, client)).toBe(expected);
   });

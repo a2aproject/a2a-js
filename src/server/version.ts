@@ -28,9 +28,9 @@ export function getSupportedVersions(
  * Validates that the requested A2A protocol version is supported by the
  * agent for the given protocol binding. Throws
  * {@link VersionNotSupportedError} if not. An interface declaring `1.1`
- * also serves `1.0` requests (see {@link supportsVersion}); pre-1.0 versions
- * must be declared exactly. To advertise v0.3 on a binding, declare a
- * per-interface `protocolVersion: '0.3'` (manually or via
+ * also serves `1.0` requests (see {@link supportsVersion}); pre-1.0 minors
+ * must be declared exactly. Patch numbers are ignored. To advertise v0.3 on a
+ * binding, declare a per-interface `protocolVersion: '0.3'` (manually or via
  * `duplicateInterfacesForLegacy`).
  */
 export function validateVersion(

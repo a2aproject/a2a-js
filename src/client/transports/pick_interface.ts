@@ -6,19 +6,20 @@
 
 import type { AgentCard, AgentInterface } from '../../types/pb/a2a.js';
 import { A2A_PROTOCOL_VERSION } from '../../constants.js';
-import { negotiateVersion, supportsVersion } from '../../version_utils.js';
+import { isLegacyVersion, negotiateVersion, supportsVersion } from '../../version_utils.js';
 
 /**
  * Picks the interface to use among `candidates` of one binding: the first
  * that serves this client's version, else the first the client can
- * downgrade to (an older v1 minor), else the first listed (e.g. a v0.3
- * interface, served by the compat transports when enabled).
+ * downgrade to (an older v1 minor), else the first legacy v0.3 interface
+ * (served by the compat transports when enabled). Returns `undefined` when
+ * only other majors are offered, so the caller can try another binding.
  */
 export function preferredInterface(candidates: AgentInterface[]): AgentInterface | undefined {
   return (
     candidates.find((i) => supportsVersion(i.protocolVersion, A2A_PROTOCOL_VERSION)) ??
     candidates.find((i) => negotiateVersion(i.protocolVersion) !== undefined) ??
-    candidates[0]
+    candidates.find((i) => isLegacyVersion(i.protocolVersion))
   );
 }
 

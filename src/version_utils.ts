@@ -22,22 +22,17 @@ interface NumericVersion {
  * Parses a `Major.Minor[.Patch...]` version string into its leading
  * `(major, minor)` pair. Returns `undefined` for unparseable inputs.
  */
-function parseVersion(version: string): NumericVersion | undefined {
-  const trimmed = version.trim();
-  if (trimmed === '') return undefined;
-
-  const segments = trimmed.split('.');
-  if (segments.length === 0) return undefined;
-
-  const major = Number.parseInt(segments[0]!, 10);
-  if (!Number.isFinite(major) || major < 0) return undefined;
-
+function parseVersion(version: string | null | undefined): NumericVersion | undefined {
+  const match = /^(\d+)(?:\.(\d+))?(?:\.\d+)*$/.exec(version?.trim() ?? '');
+  if (!match) return undefined;
   // Minor is optional; default to 0 to match `packaging.Version("1") == 1.0`.
-  const minorRaw = segments[1];
-  const minor = minorRaw === undefined ? 0 : Number.parseInt(minorRaw, 10);
-  if (!Number.isFinite(minor) || minor < 0) return undefined;
+  return { major: Number(match[1]), minor: Number(match[2] ?? 0) };
+}
 
-  return { major, minor };
+/** Normalizes a version to `Major.Minor`, dropping any patch; unparseable input is returned as is. */
+export function majorMinor(version: string): string {
+  const v = parseVersion(version);
+  return v ? `${v.major}.${v.minor}` : version;
 }
 
 function compareVersions(a: NumericVersion, b: NumericVersion): number {

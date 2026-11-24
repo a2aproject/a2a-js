@@ -1,5 +1,6 @@
 import { TaskPushNotificationConfig, StreamResponse, Task } from '../../index.js';
 import { A2A_LEGACY_PROTOCOL_VERSION, ProtocolVersion } from '../../constants.js';
+import { majorMinor } from '../../version_utils.js';
 import { ServerCallContext } from '../context.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore, StoredPushNotificationConfig } from './push_notification_store.js';
@@ -189,7 +190,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    * registered.
    */
   private _resolveSerializer(wireVersion: string): PushNotificationSerializer {
-    const serializer = this.serializers.get(wireVersion);
+    const serializer =
+      this.serializers.get(wireVersion) ?? this.serializers.get(majorMinor(wireVersion));
     if (serializer) {
       return serializer;
     }
