@@ -602,7 +602,12 @@ describe('ClientFactory', () => {
       };
       const overrides: Partial<ClientFactoryOptions> = {
         transports: [mockTransportFactory2],
-        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
+        clientConfig: {
+          polling: false,
+          acceptedOutputModes: undefined,
+          interceptors: undefined,
+          plugins: undefined,
+        },
         preferredTransports: ['Transport2'],
         cardResolver: { resolve: vi.fn() } as any,
       };
@@ -612,6 +617,7 @@ describe('ClientFactory', () => {
         polling: false,
         acceptedOutputModes: undefined,
         interceptors: undefined,
+        plugins: undefined,
       });
       expect(result.preferredTransports).to.deep.equal(['Transport2']);
       expect(result.cardResolver).to.equal(overrides.cardResolver);
@@ -621,7 +627,12 @@ describe('ClientFactory', () => {
       const original: ClientFactoryOptions = {
         transports: [mockTransportFactory1],
         preferredTransports: ['Transport1'],
-        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
+        clientConfig: {
+          polling: false,
+          acceptedOutputModes: undefined,
+          interceptors: undefined,
+          plugins: undefined,
+        },
       };
       const overrides: Partial<ClientFactoryOptions> = {};
       const result = ClientFactoryOptions.createFrom(original, overrides);
@@ -635,7 +646,12 @@ describe('ClientFactory', () => {
       const overrides: Partial<ClientFactoryOptions> = {
         transports: [mockTransportFactory1],
         preferredTransports: ['Transport1'],
-        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
+        clientConfig: {
+          polling: false,
+          acceptedOutputModes: undefined,
+          interceptors: undefined,
+          plugins: undefined,
+        },
       };
       const result = ClientFactoryOptions.createFrom(original, overrides);
       console.log(result);
@@ -688,7 +704,18 @@ describe('ClientFactory', () => {
         polling: true,
         acceptedOutputModes: ['mode2'],
         interceptors: [interceptor1, interceptor2],
+        plugins: undefined,
       });
+    });
+
+    it('should concatenate plugins', () => {
+      const plugin1 = { name: 'p1' };
+      const plugin2 = { name: 'p2' };
+      const result = ClientFactoryOptions.createFrom(
+        { transports: [mockTransportFactory1], clientConfig: { plugins: [plugin1] } },
+        { clientConfig: { plugins: [plugin2] } }
+      );
+      expect(result.clientConfig?.plugins).to.deep.equal([plugin1, plugin2]);
     });
 
     it('should handle undefined preferredTransports in original correctly', () => {

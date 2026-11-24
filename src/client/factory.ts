@@ -38,7 +38,7 @@ export const ClientFactoryOptions = {
   /**
    * Creates new options by merging an original and an override object.
    * Transports are merged based on `TransportFactory.protocolName`,
-   * interceptors are concatenated, other fields are overriden.
+   * interceptors and plugins are concatenated, other fields are overriden.
    *
    * @example
    * ```ts
@@ -63,6 +63,7 @@ export const ClientFactoryOptions = {
           original.clientConfig?.interceptors,
           overrides.clientConfig?.interceptors
         ),
+        plugins: mergeArrays(original.clientConfig?.plugins, overrides.clientConfig?.plugins),
         acceptedOutputModes:
           overrides.clientConfig?.acceptedOutputModes ?? original.clientConfig?.acceptedOutputModes,
       },

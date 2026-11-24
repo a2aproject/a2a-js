@@ -115,18 +115,17 @@ jobs:
         ref: ${{ github.event.pull_request.base.ref || 'main' }}
         clean: true
 
-    - uses: actions/setup-node@v7
+    - name: Setup (Base Branch)
+      uses: ./.github/actions/setup
       with:
         node-version: 24
-        cache: 'npm'
 
-    - name: Install & Test (Base Branch)
+    - name: Test (Base Branch)
       timeout-minutes: 10
       run: |
-        npm ci
         npm run coverage
         mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-base-summary.json
-    
+
     - name: Upload Artifact (base)
       uses: actions/upload-artifact@v7
       if: github.event_name != 'pull_request'
@@ -141,11 +140,16 @@ jobs:
       with:
         clean: true
 
-    - name: Install & Test (PR)
+    - name: Setup (PR)
+      if: github.event_name == 'pull_request'
+      uses: ./.github/actions/setup
+      with:
+        node-version: 24
+
+    - name: Test (PR)
       if: github.event_name == 'pull_request'
       timeout-minutes: 10
       run: |
-        npm ci
         npm run coverage
         mv coverage/coverage-summary.json coverage-pr-summary.json
         mv ${{ runner.temp }}/coverage-base-summary.json coverage-base-summary.json
