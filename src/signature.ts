@@ -187,12 +187,31 @@ function cleanEmpty(d: unknown, depth = 1): unknown {
   return d;
 }
 
+// A lone surrogate has no UTF-8 encoding, so RFC 8785 gives a string that
+// holds one no canonical form. JSON.stringify would write it as a \u escape
+// instead, and the Python and Go SDKs refuse to verify a card signed that way.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+function assertWellFormed(text: string): void {
+  if (LONE_SURROGATE.test(text)) {
+    throw new CanonicalizationError('value contains text that is not valid Unicode');
+  }
+}
+
 /**
  * JCS canonicalization (RFC 8785): sorts object keys recursively and
  * serializes to a deterministic JSON string.
+ *
+ * Exported for `scripts/a2a-jcs-conformance.ts`; it is not re-exported from
+ * the package entry point.
  */
-function jcsStringify(value: unknown, depth = 1): string {
+export function jcsStringify(value: unknown, depth = 1): string {
   assertNestingDepth(value, depth);
+
+  if (typeof value === 'string') {
+    assertWellFormed(value);
+    return JSON.stringify(value);
+  }
 
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value);
@@ -204,6 +223,7 @@ function jcsStringify(value: unknown, depth = 1): string {
 
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
+  keys.forEach(assertWellFormed);
   const parts = keys.map((key) => `${JSON.stringify(key)}:${jcsStringify(record[key], depth + 1)}`);
 
   return '{' + parts.join(',') + '}';

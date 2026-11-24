@@ -192,6 +192,27 @@ describe('Agent Card Signature', () => {
       const card = cardWithParams({ items: value });
       expect(() => canonicalizeAgentCard(card)).toThrow(CanonicalizationError);
     });
+
+    // RFC 8785 output is UTF-8, and a lone surrogate has no UTF-8 encoding.
+    it('should reject a lone surrogate in a string value', () => {
+      expect(() => canonicalizeAgentCard(cardWithParams({ note: 'broken \udc00 value' }))).toThrow(
+        CanonicalizationError
+      );
+      expect(() => canonicalizeAgentCard(cardWithParams({ note: '\ud800x' }))).toThrow(
+        CanonicalizationError
+      );
+    });
+
+    it('should reject a lone surrogate in an object key', () => {
+      expect(() => canonicalizeAgentCard(cardWithParams({ 'b\ud800key': 1 }))).toThrow(
+        CanonicalizationError
+      );
+    });
+
+    it('should keep a surrogate pair as literal UTF-8', () => {
+      const canonical = canonicalizeAgentCard(cardWithParams({ note: 'smile \ud83d\ude00' }));
+      expect(canonical).toContain('"note":"smile \u{1F600}"');
+    });
   });
 
   describe('generateAgentCardSignature', () => {
