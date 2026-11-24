@@ -24,6 +24,7 @@ interface NumericVersion {
  */
 function parseVersion(version: string | null | undefined): NumericVersion | undefined {
   const match = /^(\d+)(?:\.(\d+))?(?:\.\d+)*$/.exec(version?.trim() ?? '');
+  // Version "1.2.3" will produce match = ["1.2.3", "1", "2"]
   if (!match) return undefined;
   // Minor is optional; default to 0 to match `packaging.Version("1") == 1.0`.
   return { major: Number(match[1]), minor: Number(match[2] ?? 0) };
@@ -31,13 +32,13 @@ function parseVersion(version: string | null | undefined): NumericVersion | unde
 
 /** Normalizes a version to `Major.Minor`, dropping any patch; unparseable input is returned as is. */
 export function majorMinor(version: string): string {
-  const v = parseVersion(version);
-  return v ? `${v.major}.${v.minor}` : version;
+  const parsed = parseVersion(version);
+  return parsed ? `${parsed.major}.${parsed.minor}` : version;
 }
 
-function compareVersions(a: NumericVersion, b: NumericVersion): number {
-  if (a.major !== b.major) return a.major - b.major;
-  return a.minor - b.minor;
+function compareVersions(left: NumericVersion, right: NumericVersion): number {
+  if (left.major !== right.major) return left.major - right.major;
+  return left.minor - right.minor;
 }
 
 /**
@@ -48,14 +49,14 @@ function compareVersions(a: NumericVersion, b: NumericVersion): number {
  */
 export function isLegacyVersion(version: string | null | undefined): boolean {
   if (!version || version.trim() === '') return true;
-  const v = parseVersion(version);
-  if (!v) return false;
+  const parsed = parseVersion(version);
+  if (!parsed) return false;
 
   const lower = parseVersion(PROTOCOL_VERSION_0_3);
   const upper = parseVersion(PROTOCOL_VERSION_1_0);
   if (!lower || !upper) return false;
 
-  return compareVersions(v, lower) >= 0 && compareVersions(v, upper) < 0;
+  return compareVersions(parsed, lower) >= 0 && compareVersions(parsed, upper) < 0;
 }
 
 /**
@@ -65,10 +66,13 @@ export function isLegacyVersion(version: string | null | undefined): boolean {
  * minors may break compatibility and must match exactly. Patch is ignored.
  */
 export function supportsVersion(declared: string, requested: string): boolean {
-  const d = parseVersion(declared);
-  const r = parseVersion(requested);
-  if (!d || !r || d.major !== r.major) return false;
-  return d.major === 0 ? d.minor === r.minor : r.minor <= d.minor;
+  const declaredVersion = parseVersion(declared);
+  const requestedVersion = parseVersion(requested);
+  if (!declaredVersion || !requestedVersion) return false;
+  if (declaredVersion.major !== requestedVersion.major) return false;
+  // Pre-1.0 minors may break compatibility, so 0.x must match exactly.
+  if (declaredVersion.major === 0) return declaredVersion.minor === requestedVersion.minor;
+  return requestedVersion.minor <= declaredVersion.minor;
 }
 
 /**
@@ -81,8 +85,11 @@ export function negotiateVersion(
   declared: string,
   client: string = A2A_PROTOCOL_VERSION
 ): string | undefined {
-  const d = parseVersion(declared);
-  const c = parseVersion(client);
-  if (!d || !c || d.major !== c.major || d.major === 0) return undefined;
-  return `${d.major}.${Math.min(d.minor, c.minor)}`;
+  const declaredVersion = parseVersion(declared);
+  const clientVersion = parseVersion(client);
+  if (!declaredVersion || !clientVersion) return undefined;
+  if (declaredVersion.major !== clientVersion.major || declaredVersion.major === 0) {
+    return undefined;
+  }
+  return `${declaredVersion.major}.${Math.min(declaredVersion.minor, clientVersion.minor)}`;
 }

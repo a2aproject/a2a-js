@@ -55,7 +55,6 @@ function assertJsonRpcResponseVersion(
 
 export interface JsonRpcTransportOptions {
   endpoint: string;
-  /** `A2A-Version` to send. Defaults to {@link A2A_PROTOCOL_VERSION}. */
   protocolVersion?: string;
   fetchImpl?: typeof fetch;
 }
@@ -64,13 +63,12 @@ export class JsonRpcTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   public readonly endpoint: string;
   private requestIdCounter: number = 1;
-
   private readonly negotiatedVersion: string;
 
   constructor(options: JsonRpcTransportOptions) {
-    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
     this.endpoint = options.endpoint;
     this.customFetchImpl = options.fetchImpl;
+    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
   }
 
   get protocolName(): string {

@@ -17,9 +17,9 @@ import { isLegacyVersion, negotiateVersion, supportsVersion } from '../../versio
  */
 export function preferredInterface(candidates: AgentInterface[]): AgentInterface | undefined {
   return (
-    candidates.find((i) => supportsVersion(i.protocolVersion, A2A_PROTOCOL_VERSION)) ??
-    candidates.find((i) => negotiateVersion(i.protocolVersion) !== undefined) ??
-    candidates.find((i) => isLegacyVersion(i.protocolVersion))
+    candidates.find((iface) => supportsVersion(iface.protocolVersion, A2A_PROTOCOL_VERSION)) ??
+    candidates.find((iface) => negotiateVersion(iface.protocolVersion) !== undefined) ??
+    candidates.find((iface) => isLegacyVersion(iface.protocolVersion))
   );
 }
 
@@ -35,7 +35,7 @@ export function pickMatchingInterface(
   url: string
 ): AgentInterface | undefined {
   const candidates = interfacesForBinding(agentCard, protocolBinding);
-  const byUrl = candidates.filter((i) => i.url === url);
+  const byUrl = candidates.filter((iface) => iface.url === url);
   return preferredInterface(byUrl.length > 0 ? byUrl : candidates);
 }
 
@@ -46,6 +46,6 @@ export function interfacesForBinding(
 ): AgentInterface[] {
   const target = protocolBinding.toUpperCase();
   return (agentCard.supportedInterfaces ?? []).filter(
-    (i) => i.protocolBinding?.toUpperCase() === target
+    (iface) => iface.protocolBinding?.toUpperCase() === target
   );
 }

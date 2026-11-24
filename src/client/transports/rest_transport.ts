@@ -36,7 +36,6 @@ const PROTOCOL_NAME: TransportProtocolName = 'HTTP+JSON';
 
 export interface RestTransportOptions {
   endpoint: string;
-  /** `A2A-Version` to send. Defaults to {@link A2A_PROTOCOL_VERSION}. */
   protocolVersion?: string;
   fetchImpl?: typeof fetch;
 }
@@ -51,13 +50,12 @@ interface RestErrorStatus {
 export class RestTransport implements Transport {
   private readonly customFetchImpl?: typeof fetch;
   public readonly endpoint: string;
-
   private readonly negotiatedVersion: string;
 
   constructor(options: RestTransportOptions) {
-    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
     this.endpoint = options.endpoint.replace(/\/+$/, '');
     this.customFetchImpl = options.fetchImpl;
+    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
   }
 
   private _buildPath(path: string, tenant?: string): string {

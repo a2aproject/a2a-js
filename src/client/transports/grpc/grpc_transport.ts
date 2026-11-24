@@ -46,7 +46,6 @@ type GrpcStreamCall<TReq, TRes> = (
 
 export interface GrpcTransportOptions {
   endpoint: string;
-  /** `A2A-Version` to send. Defaults to {@link A2A_PROTOCOL_VERSION}. */
   protocolVersion?: string;
   grpcChannelCredentials?: grpc.ChannelCredentials;
   grpcCallOptions?: Partial<grpc.CallOptions>;
@@ -56,17 +55,16 @@ export class GrpcTransport implements Transport {
   public readonly endpoint: string;
   private readonly grpcCallOptions?: Partial<grpc.CallOptions>;
   private readonly grpcClient: A2AServiceClient;
-
   private readonly negotiatedVersion: string;
 
   constructor(options: GrpcTransportOptions) {
-    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
     this.endpoint = options.endpoint;
     this.grpcCallOptions = options.grpcCallOptions;
     this.grpcClient = new A2AServiceClient(
       options.endpoint,
       options.grpcChannelCredentials ?? grpc.credentials.createInsecure()
     );
+    this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
   }
 
   get protocolName(): string {
