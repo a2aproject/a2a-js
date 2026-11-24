@@ -61,6 +61,13 @@ The project is structured into modular entry points to allow tree-shaking and se
 
 See `docs/persistent-stores.md` for the user guide.
 
+### 4d. Plugins (`src/plugins/index.ts`)
+*   **`A2APlugin`**: One object with optional hooks for the client (`before`/`around`/`afterClientRequest`), server requests (`before`/`around`/`afterHandlerRun`), agent execution (`before`/`around`/`afterExecution`, `onExecutionEvent`), task writes (`onTaskEvent`) and push delivery (`beforePushSend`, `onPushSent`). Workers-safe (type-only imports).
+*   **Registration**: `DefaultRequestHandlerOptions.plugins` (server, execution, task, and push via the default sender), `ClientConfig.plugins`, `DefaultPushNotificationSenderOptions.plugins`.
+*   **`SequentialPluginManager`** / **`sequential()`**: Run plugins in order. Hook wiring lives next to each call site (`server_plugin_hooks.ts`, `plugin_agent_executor.ts`, `result_manager.ts`, `default_request_handler.ts` for the follow-up message write, `default_push_notification_sender.ts`, `multitransport-client.ts`); the shared call and stream runner is `src/plugins/run.ts`.
+
+See `docs/plugins.md` for the user guide.
+
 ### 5. v0.3 Backward Compatibility (`src/compat/v0_3/`)
 The compat layer is shipped as six subpath exports off `@a2a-js/sdk`, mirroring the v1.0 layout (`server` is framework-agnostic; `server/express` and `server/grpc` carry the runtime-specific bits):
 
