@@ -2,13 +2,19 @@ import {
   Artifact,
   Message,
   Task,
+  TaskState,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
 } from '../index.js';
 import { ServerCallContext } from './context.js';
-import { AgentExecutionEvent, assertUnreachableEvent } from './events/execution_event_bus.js';
+import {
+  AgentExecutionEvent,
+  AgentEvent,
+  assertUnreachableEvent,
+} from './events/execution_event_bus.js';
 import { TaskStore } from './store.js';
 import { TERMINAL_STATE_LIST } from './utils.js';
+import type { PluginManager, TaskEventInfo } from '../plugins/types.js';
 
 /**
  * Per-(tenant, owner, taskId) write serializer shared across every
@@ -73,17 +79,20 @@ async function serializeByScope<T>(key: string, fn: () => Promise<T>): Promise<T
 export class ResultManager {
   private readonly taskStore: TaskStore;
   private readonly serverCallContext: ServerCallContext;
+  private readonly plugins?: PluginManager;
 
   private currentTask?: Task;
   private latestUserMessage?: Message;
   private finalMessageResult?: Message;
+  private pendingReport?: TaskEventInfo;
   // taskId of the last event processed under the lock, used to warn if
   // an executor switches tasks mid-stream on the same RM.
   private lastSeenTaskId?: string;
 
-  constructor(taskStore: TaskStore, serverCallContext: ServerCallContext) {
+  constructor(taskStore: TaskStore, serverCallContext: ServerCallContext, plugins?: PluginManager) {
     this.taskStore = taskStore;
     this.serverCallContext = serverCallContext;
+    this.plugins = plugins;
   }
 
   public setContext(latestUserMessage: Message): void {
@@ -98,6 +107,20 @@ export class ResultManager {
    * `message` branch is in-memory only and intentionally unlocked.
    */
   public async processEvent(event: AgentExecutionEvent): Promise<void> {
+    let report: TaskEventInfo | undefined;
+    try {
+      await this.applyEvent(event);
+    } finally {
+      report = this.pendingReport;
+      this.pendingReport = undefined;
+    }
+    // Report outside the lock, so a hook may write to the same task without deadlocking.
+    if (report && this.plugins?.hasTaskHooks) {
+      await this.plugins.onTaskEvent(report);
+    }
+  }
+
+  private async applyEvent(event: AgentExecutionEvent): Promise<void> {
     switch (event.kind) {
       case 'message': {
         // Final-result messages may be returned to callers verbatim, so
@@ -213,7 +236,10 @@ export class ResultManager {
     }
 
     this.currentTask = mergedTask;
-    await this.saveCurrentTask();
+    await this.saveCurrentTask(
+      AgentEvent.task(taskEvent),
+      persistedTask?.id === taskEvent.id ? persistedTask.status?.state : undefined
+    );
   }
 
   /**
@@ -279,7 +305,7 @@ export class ResultManager {
       }
     }
     this.currentTask = task;
-    await this.saveCurrentTask();
+    await this.saveCurrentTask(AgentEvent.statusUpdate(updateEvent), persistedState);
   }
 
   private async applyArtifactUpdate(artifactEvent: TaskArtifactUpdateEvent): Promise<void> {
@@ -332,7 +358,7 @@ export class ResultManager {
     }
 
     this.currentTask = task;
-    await this.saveCurrentTask();
+    await this.saveCurrentTask(AgentEvent.artifactUpdate(artifactEvent), task.status?.state);
   }
 
   /**
@@ -369,10 +395,23 @@ export class ResultManager {
     return merged;
   }
 
-  private async saveCurrentTask(): Promise<void> {
-    if (this.currentTask) {
-      await this.taskStore.save(this.currentTask, this.serverCallContext);
+  private async saveCurrentTask(
+    event: AgentExecutionEvent,
+    fromState: TaskState | undefined
+  ): Promise<void> {
+    const task = this.currentTask;
+    if (!task) {
+      return;
     }
+    await this.taskStore.save(task, this.serverCallContext);
+    this.pendingReport = {
+      taskId: task.id,
+      fromState,
+      toState: task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED,
+      event,
+      task,
+      context: this.serverCallContext,
+    };
   }
 
   /**

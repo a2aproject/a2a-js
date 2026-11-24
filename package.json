@@ -147,7 +147,6 @@
   "files": [
     "dist",
     "!dist/**/*.map",
-    "!dist/tmp-checks",
     "README.md"
   ],
   "devDependencies": {
@@ -192,13 +191,9 @@
     "lint:ci": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint .",
     "format:readme": "prettier --write ./README.md",
     "coverage": "vitest run --coverage",
-    "generate": "cd src/types && npx buf generate",
+    "generate": "(cd src/types && npx buf generate) && (cd src/grpc && npx buf generate) && node scripts/postprocess_generated_types.js",
     "generate:compat": "curl -fSL https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
-    "test-build:workers-safe": "esbuild ./dist/index.js ./dist/errors/index.js ./dist/client/index.js ./dist/server/index.js ./dist/plugins/index.js ./dist/compat/v0_3/index.js ./dist/compat/v0_3/client/index.js ./dist/compat/v0_3/server/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
-    "test-build:grpc": "esbuild ./dist/errors/grpc/index.js ./dist/server/grpc/index.js ./dist/client/transports/grpc/index.js ./dist/compat/v0_3/server/grpc/index.js ./dist/compat/v0_3/client/transports/grpc/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
-    "test-build:express": "esbuild ./dist/server/express/index.js ./dist/compat/v0_3/server/express/index.js --bundle --platform=node --outdir=dist/tmp-checks --outbase=./dist",
-    "test-build:database": "esbuild ./dist/server/database/index.js --bundle --platform=neutral --outdir=dist/tmp-checks --outbase=./dist",
-    "test-build": "npm run test-build:workers-safe && npm run test-build:grpc && npm run test-build:express && npm run test-build:database",
+    "test-build": "node scripts/test_build.mjs",
     "itk-agent": "tsx itk/itk_agent.ts"
   },
   "dependencies": {
