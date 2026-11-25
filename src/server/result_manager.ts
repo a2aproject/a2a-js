@@ -62,6 +62,26 @@ async function serializeByScope<T>(key: string, fn: () => Promise<T>): Promise<T
 }
 
 /**
+ * Runs `fn` under the same per-task write lock {@link ResultManager} uses,
+ * for writes made outside it (the follow-up message append in
+ * `DefaultRequestHandler`), so their load-modify-save can't race a drain.
+ */
+export function withTaskWriteLock<T>(
+  context: ServerCallContext,
+  taskId: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  return serializeByScope(lockKey(context, taskId), fn);
+}
+
+/** Advances a task's `generation` by one; a task stored before v1.1 starts at 1. */
+export function advanceGeneration(task: Task): void {
+  // shortcut: callers hold the in-process task lock only, so two replicas sharing a
+  // store can assign the same generation; upgrade to a TaskStore compare-and-set (F6).
+  task.generation = (task.generation ?? 0) + 1;
+}
+
+/**
  * Tracks the in-flight task/message state for a single A2A request and
  * persists updates to the {@link TaskStore}.
  *
@@ -105,6 +125,9 @@ export class ResultManager {
    * Store-touching branches run under a per-(tenant, owner, taskId) lock
    * so concurrent RMs linearize their load-merge-save sequences. The
    * `message` branch is in-memory only and intentionally unlocked.
+   *
+   * A persisted task, status or artifact event gets the task's new
+   * `generation` written onto its `data`, so callers deliver it as is.
    */
   public async processEvent(event: AgentExecutionEvent): Promise<void> {
     let report: TaskEventInfo | undefined;
@@ -204,6 +227,9 @@ export class ResultManager {
     // Deep-clone the incoming Task so further executor mutations can't
     // leak into our state.
     const mergedTask: Task = structuredClone(taskEvent);
+    // The server owns `generation`; `saveCurrentTask` advances the persisted one.
+    mergedTask.generation =
+      persistedTask && persistedTask.id === taskEvent.id ? persistedTask.generation : undefined;
 
     if (persistedTask && persistedTask.id === taskEvent.id) {
       // Preserve persisted history when the incoming event omits it. If
@@ -403,7 +429,12 @@ export class ResultManager {
     if (!task) {
       return;
     }
+    advanceGeneration(task);
     await this.taskStore.save(task, this.serverCallContext);
+    // `event.data` is the executor's published object, which the caller delivers.
+    if (event.kind !== 'message') {
+      event.data.generation = task.generation;
+    }
     this.pendingReport = {
       taskId: task.id,
       fromState,

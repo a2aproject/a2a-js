@@ -10,7 +10,7 @@ describeStoreMigrations({
   id: 'push-notification-configs',
   table: 'push_notification_configs',
   ledgerTable: 'a2a_push_notification_configs_migrations',
-  migration: '0001_create_push_notification_configs',
+  migrations: ['0001_create_push_notification_configs'],
   tableNameFlag: '--push-notification-configs-table-name',
   keyColumns: KEY_COLUMNS,
   allColumns: [...KEY_COLUMNS, 'config_data', 'protocol_version'],

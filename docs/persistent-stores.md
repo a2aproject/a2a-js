@@ -120,6 +120,8 @@ Choose the resolver before you store data. Changing it later changes the owner c
 
 The SDK ships an `a2a-db` CLI that creates and updates the store tables. Once `@a2a-js/sdk` is installed, run it with `npx a2a-db`; `npx a2a-db --help` prints the full usage.
 
+Run `a2a-db upgrade` before deploying a new SDK version: `DatabaseTaskStore` reads the columns the latest migration creates, so it fails against a table that is behind. For example, `0002_add_task_generation` adds the task `generation` column (A2A v1.1); tasks stored before it start counting at 1 on their next change.
+
 ### Commands
 
 - `status`: Show the migration status of each store.
@@ -183,7 +185,7 @@ npx a2a-db downgrade --url postgresql://user:pass@localhost:5432/my_db
 npx a2a-db downgrade base --url postgresql://user:pass@localhost:5432/my_db
 
 # Revert the task store down to a named migration, which stays applied. A migration name
-# belongs to one store, so name it; with one migration per store, this changes nothing yet.
+# belongs to one store, so name it; this reverts 0002_add_task_generation (drops the generation column).
 npx a2a-db downgrade 0001_create_tasks --store tasks --url postgresql://user:pass@localhost:5432/my_db
 
 # Migrate only the task store, taking the URL from the environment
@@ -205,7 +207,7 @@ npx a2a-db downgrade --sql --dialect mysql > rollback.sql
 npx a2a-db downgrade base --sql --dialect sqlite > rollback.sql
 
 # SQL from a known migration forward. A migration name belongs to one store, so name the
-# store too; each store has a single migration today, so this renders nothing yet.
+# store too; this renders 0002_add_task_generation.
 npx a2a-db upgrade --sql --dialect sqlite --store tasks --from 0001_create_tasks
 
 # Cloudflare D1: render the schema, then apply it with Wrangler

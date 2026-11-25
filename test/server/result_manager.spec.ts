@@ -6,7 +6,9 @@ import {
   Role,
   Task,
   TaskState,
+  TaskStatus,
   TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
 } from '../../src/types/pb/a2a.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { ResultManager } from '../../src/server/result_manager.js';
@@ -1013,6 +1015,77 @@ describe('concurrent ResultManagers on the same taskId', () => {
       expect(stored!.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
       expect(stored!.history?.map((m) => m.messageId)).toContain('final-1');
     });
+  });
+});
+
+describe('ResultManager generation', () => {
+  let store: InMemoryTaskStore;
+  const context = new ServerCallContext();
+  const working: TaskStatus = {
+    state: TaskState.TASK_STATE_WORKING,
+    message: undefined,
+    timestamp: undefined,
+  };
+
+  beforeEach(() => {
+    store = new InMemoryTaskStore();
+  });
+
+  it('starts at 1 and stamps each persisted event with the generation after it', async () => {
+    const rm = new ResultManager(store, context);
+    // An executor-supplied generation is overwritten: the server owns it.
+    const task = createTask('task-1', 'ctx-1', { generation: 99 });
+    const statusUpdate: TaskStatusUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      status: working,
+      metadata: {},
+    };
+    const artifactUpdate: TaskArtifactUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      artifact: createArtifact('a-1', 'x'),
+      append: false,
+      lastChunk: true,
+      metadata: {},
+    };
+
+    await rm.processEvent(AgentEvent.task(task));
+    await rm.processEvent(AgentEvent.statusUpdate(statusUpdate));
+    await rm.processEvent(AgentEvent.artifactUpdate(artifactUpdate));
+
+    expect([task, statusUpdate, artifactUpdate].map((e) => e.generation)).toEqual([1, 2, 3]);
+    expect((await store.load('task-1', context))!.generation).toBe(3);
+  });
+
+  it('continues from the stored generation on a later task event', async () => {
+    await store.save(createTask('task-1', 'ctx-1', { generation: 4 }), context);
+    const task = createTask('task-1', 'ctx-1');
+
+    await new ResultManager(store, context).processEvent(AgentEvent.task(task));
+
+    expect(task.generation).toBe(5);
+  });
+
+  it('does not advance for a status update ignored for a terminal task', async () => {
+    await store.save(
+      createTask('task-1', 'ctx-1', {
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+        generation: 2,
+      }),
+      context
+    );
+    const statusUpdate: TaskStatusUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      status: working,
+      metadata: {},
+    };
+
+    await new ResultManager(store, context).processEvent(AgentEvent.statusUpdate(statusUpdate));
+
+    expect(statusUpdate.generation).toBeUndefined();
+    expect((await store.load('task-1', context))!.generation).toBe(2);
   });
 });
 

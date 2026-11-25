@@ -272,6 +272,7 @@ describe('Push Notification Integration Tests', () => {
                 message: undefined,
                 timestamp: undefined,
               },
+              generation: 1,
             },
           },
         })
@@ -292,6 +293,7 @@ describe('Push Notification Integration Tests', () => {
                 timestamp: undefined,
               },
               metadata: {},
+              generation: 2,
             },
           },
         })
@@ -312,6 +314,7 @@ describe('Push Notification Integration Tests', () => {
                 timestamp: undefined,
               },
               metadata: {},
+              generation: 3,
             },
           },
         })

@@ -53,12 +53,21 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
         artifacts: [makeArtifact()],
         history: [makeMessage()],
         metadata: { note: 'kept' },
+        generation: 7,
       });
       const context = makeContext({ tenant: 'acme', user: 'alice' });
 
       await store.save(task, context);
 
       expect(await store.load('task-1', context)).toEqual(task);
+    });
+
+    // A row written before the generation column existed, or by a pre-v1.1 store.
+    it('reads a null generation as unset', async () => {
+      await store.save(makeTask({ generation: 3 }), makeContext());
+      await execute(`update ${TABLE} set generation = null`);
+
+      expect((await store.load('task-1', makeContext()))?.generation).toBeUndefined();
     });
 
     it('returns undefined for a task that is not there', async () => {

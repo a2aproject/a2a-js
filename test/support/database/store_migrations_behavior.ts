@@ -33,8 +33,8 @@ export interface MigratedStore {
   readonly id: string;
   readonly table: string;
   readonly ledgerTable: string;
-  /** The store's only migration so far. */
-  readonly migration: string;
+  /** The store's migrations, oldest first. */
+  readonly migrations: readonly string[];
   /** The flag that renames the table. */
   readonly tableNameFlag: string;
   /** The primary key, in order. */
@@ -242,7 +242,7 @@ export function describeStoreMigrations(store: MigratedStore): void {
     id: STORE_ID,
     table: TABLE,
     ledgerTable: LEDGER_TABLE,
-    migration: MIGRATION,
+    migrations: MIGRATIONS,
     tableNameFlag: TABLE_NAME_FLAG,
     keyColumns: KEY_COLUMNS,
     allColumns: ALL_COLUMNS,
@@ -257,6 +257,8 @@ export function describeStoreMigrations(store: MigratedStore): void {
     secondLedgerTable: SECOND_LEDGER_TABLE,
     otherStoreTables: OTHER_STORE_TABLES,
   } = store;
+  const MIGRATION = MIGRATIONS[0]!;
+  const LATEST_MIGRATION = MIGRATIONS[MIGRATIONS.length - 1]!;
   const RENAMED_TABLES = [RENAMED_TABLE, RENAMED_LEDGER_TABLE, SECOND_TABLE, SECOND_LEDGER_TABLE];
 
   describeOnEachEngine(
@@ -429,7 +431,7 @@ export function describeStoreMigrations(store: MigratedStore): void {
         );
       });
 
-      it('upgrade twice changes nothing and leaves one ledger row', async () => {
+      it('upgrade twice changes nothing and leaves one ledger row per migration', async () => {
         await cli('upgrade');
         const before = await structure();
 
@@ -441,7 +443,7 @@ export function describeStoreMigrations(store: MigratedStore): void {
         const ledger = await introspect((db) =>
           sql.raw(`select name from ${LEDGER_TABLE}`).execute(db)
         );
-        expect(ledger.rows).toHaveLength(1);
+        expect(ledger.rows).toHaveLength(MIGRATIONS.length);
       });
 
       it('status reports the migration as pending before upgrade', async () => {
@@ -478,21 +480,21 @@ export function describeStoreMigrations(store: MigratedStore): void {
         expect((await cli('status')).out).toContain('pending');
       });
 
-      it('downgrade drops the table and names the reverted migration', async () => {
+      // Dropping the table is covered by `downgrade base` below.
+      it('downgrade reverts the latest migration and names it', async () => {
         await cli('upgrade');
 
         const { code, out } = await cli('downgrade');
 
         expect(code).toBe(0);
-        expect(out).toContain(`reverted ${MIGRATION}`);
-        expect(await tableNames()).not.toContain(TABLE);
+        expect(out).toContain(`reverted ${LATEST_MIGRATION}`);
       });
 
       it('downgrade reports nothing to revert when the ledger is empty', async () => {
         await cli('upgrade');
-        await cli('downgrade');
+        await cli('downgrade', BASE);
 
-        const { code, out } = await cli('downgrade');
+        const { code, out } = await cli('downgrade', '--store', STORE_ID);
 
         expect(code).toBe(0);
         expect(out).toContain('nothing to revert');

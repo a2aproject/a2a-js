@@ -44,7 +44,7 @@ import {
   ExecutionEventBus,
 } from '../events/execution_event_bus.js';
 import { ExecutionEventQueue } from '../events/execution_event_queue.js';
-import { ResultManager } from '../result_manager.js';
+import { ResultManager, advanceGeneration, withTaskWriteLock } from '../result_manager.js';
 import { TaskStore } from '../store.js';
 import { A2ARequestHandler } from './a2a_request_handler.js';
 import {
@@ -233,29 +233,39 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     if (incomingMessage.taskId) {
-      this._requireValidTaskId(incomingMessage.taskId);
-      task = await this.taskStore.load(incomingMessage.taskId, context);
-      if (!task) {
-        throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
-      }
-      if (task.status?.state !== undefined && TERMINAL_STATE_LIST.includes(task.status.state)) {
-        // UnsupportedOperationError is what the TCK expects for terminal tasks.
-        throw new UnsupportedOperationError(
-          `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
-        );
-      }
-      if (
-        incomingMessage.contextId &&
-        task.contextId &&
-        incomingMessage.contextId !== task.contextId
-      ) {
-        throw new RequestMalformedError(
-          `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
-            `does not match task '${task.id}' contextId '${task.contextId}'`
-        );
-      }
-      task.history = [...(task.history || []), incomingMessage];
-      await this.taskStore.save(task, context);
+      const followUpTaskId = incomingMessage.taskId;
+      this._requireValidTaskId(followUpTaskId);
+      // Under the task write lock, so the appended message's generation can't
+      // collide with one assigned by a drain still running on this task.
+      task = await withTaskWriteLock(context, followUpTaskId, async () => {
+        const loaded = await this.taskStore.load(followUpTaskId, context);
+        if (!loaded) {
+          throw new TaskNotFoundError(`Task not found: ${followUpTaskId}`);
+        }
+        if (
+          loaded.status?.state !== undefined &&
+          TERMINAL_STATE_LIST.includes(loaded.status.state)
+        ) {
+          // UnsupportedOperationError is what the TCK expects for terminal tasks.
+          throw new UnsupportedOperationError(
+            `Task ${loaded.id} is in a terminal state (${loaded.status!.state}) and cannot be modified.`
+          );
+        }
+        if (
+          incomingMessage.contextId &&
+          loaded.contextId &&
+          incomingMessage.contextId !== loaded.contextId
+        ) {
+          throw new RequestMalformedError(
+            `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
+              `does not match task '${loaded.id}' contextId '${loaded.contextId}'`
+          );
+        }
+        loaded.history = [...(loaded.history || []), incomingMessage];
+        advanceGeneration(loaded);
+        await this.taskStore.save(loaded, context);
+        return loaded;
+      });
       if (this.plugins.hasTaskHooks) {
         const state = task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED;
         await this.plugins.onTaskEvent({
