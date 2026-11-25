@@ -76,8 +76,6 @@ export function withTaskWriteLock<T>(
 
 /** Advances a task's `generation` by one; a task stored before v1.1 starts at 1. */
 export function advanceGeneration(task: Task): void {
-  // shortcut: callers hold the in-process task lock only, so two replicas sharing a
-  // store can assign the same generation; upgrade to a TaskStore compare-and-set (F6).
   task.generation = (task.generation ?? 0) + 1;
 }
 
