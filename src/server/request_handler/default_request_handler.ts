@@ -113,6 +113,10 @@ export interface DefaultRequestHandlerOptions {
  * The built-in `InMemoryTaskStore`, `InMemoryPushNotificationStore` and
  * `DefaultExecutionEventBusManager` scope data by `tenant` to provide isolation.
  */
+// The database stores declare context_id and config_id as varchar(36). Ids the
+// client chooses are checked against it here, so every store accepts the same ids.
+const MAX_CLIENT_ID_LENGTH = 36;
+
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
   private readonly taskStore: TaskStore;
@@ -212,6 +216,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const incomingMessage = request.message;
     if (!incomingMessage) {
       throw new RequestMalformedError('request.message is required.');
+    }
+    this._requireStorableId(incomingMessage.contextId, 'message.contextId');
+    if (this.agentCard.capabilities?.pushNotifications) {
+      this._requireStorableId(
+        request.configuration?.taskPushNotificationConfig?.id,
+        'taskPushNotificationConfig.id'
+      );
     }
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
@@ -1061,6 +1072,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
     const taskId = params.taskId;
     this._requireValidTaskId(taskId);
+    this._requireStorableId(params.id, 'id');
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -1353,6 +1365,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private _requireValidTaskId(taskId: string | undefined): void {
     if (!taskId || taskId.trim() === '') {
       throw new RequestMalformedError('Task ID is required');
+    }
+  }
+
+  private _requireStorableId(id: string | undefined, field: string): void {
+    if (id && id.length > MAX_CLIENT_ID_LENGTH) {
+      throw new RequestMalformedError(
+        `${field} must be at most ${MAX_CLIENT_ID_LENGTH} characters, got ${id.length}`
+      );
     }
   }
 

@@ -4995,4 +4995,117 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       expect(result).toBeDefined();
     });
   });
+
+  describe('client-supplied ids that the database stores cannot hold (#828)', () => {
+    // The database migrations declare context_id and config_id as varchar(36).
+    const longId = 'x'.repeat(37);
+    const maxId = 'x'.repeat(36);
+
+    const messageWith = (contextId: string, taskId = ''): Message => ({
+      ...createTestMessage('msg-long-id', 'hello'),
+      contextId,
+      taskId,
+    });
+
+    const pushConfigWith = (id: string): TaskPushNotificationConfig => ({
+      tenant: '',
+      taskId: '',
+      id,
+      url: 'https://example.com/notify',
+      token: '',
+      authentication: undefined,
+    });
+
+    const saveWorkingTask = async (id: string) => {
+      await mockTaskStore.save(
+        {
+          id,
+          contextId: 'ctx-existing',
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        },
+        serverCallContext
+      );
+    };
+
+    it('sendMessage rejects a contextId over 36 characters before running the executor', async () => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+      await expect(
+        handler.sendMessage(
+          { tenant: '', message: messageWith(longId), configuration: undefined, metadata: {} },
+          serverCallContext
+        )
+      ).rejects.toThrow(RequestMalformedError);
+      expect((mockAgentExecutor as MockAgentExecutor).execute).not.toHaveBeenCalled();
+    });
+
+    it('sendMessage accepts a contextId of exactly 36 characters', async () => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+      const result = (await handler.sendMessage(
+        { tenant: '', message: messageWith(maxId), configuration: undefined, metadata: {} },
+        serverCallContext
+      )) as Task;
+
+      expect(result.contextId).toBe(maxId);
+    });
+
+    it('sendMessageStream rejects a contextId over 36 characters', async () => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+      const stream = handler.sendMessageStream(
+        { tenant: '', message: messageWith(longId), configuration: undefined, metadata: {} },
+        serverCallContext
+      );
+
+      await expect(stream.next()).rejects.toThrow(RequestMalformedError);
+      expect((mockAgentExecutor as MockAgentExecutor).execute).not.toHaveBeenCalled();
+    });
+
+    it('createTaskPushNotificationConfig rejects a config id over 36 characters and saves nothing', async () => {
+      const taskId = 'task-long-config-id';
+      await saveWorkingTask(taskId);
+
+      await expect(
+        handler.createTaskPushNotificationConfig(
+          { ...pushConfigWith(longId), taskId },
+          serverCallContext
+        )
+      ).rejects.toThrow(RequestMalformedError);
+
+      const listed = await handler.listTaskPushNotificationConfigs(
+        { tenant: '', taskId, pageSize: 0, pageToken: '' },
+        serverCallContext
+      );
+      expect(listed.configs).toEqual([]);
+    });
+
+    it('sendMessage rejects an inline push config id over 36 characters before touching the task', async () => {
+      const taskId = 'task-long-inline-config-id';
+      await saveWorkingTask(taskId);
+
+      await expect(
+        handler.sendMessage(
+          {
+            tenant: '',
+            message: messageWith('ctx-existing', taskId),
+            configuration: {
+              acceptedOutputModes: [],
+              taskPushNotificationConfig: pushConfigWith(longId),
+              returnImmediately: false,
+            },
+            metadata: {},
+          },
+          serverCallContext
+        )
+      ).rejects.toThrow(RequestMalformedError);
+
+      const stored = await mockTaskStore.load(taskId, serverCallContext);
+      expect(stored?.history).toEqual([]);
+      expect((mockAgentExecutor as MockAgentExecutor).execute).not.toHaveBeenCalled();
+    });
+  });
 });
