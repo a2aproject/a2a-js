@@ -316,6 +316,25 @@ describe('restHandler', () => {
         .expect(400);
     });
 
+    it('should support timelineLength query parameter and reject invalid values', async () => {
+      (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
+
+      await request(app)
+        .get('/tasks/task-1?timelineLength=3')
+        .set('A2A-Version', '1.0')
+        .expect(200);
+
+      expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', tenant: '', timelineLength: 3 },
+        expect.anything()
+      );
+
+      await request(app)
+        .get('/tasks/task-1?timelineLength=invalid')
+        .set('A2A-Version', '1.0')
+        .expect(400);
+    });
+
     it('should return 404 if task is not found', async () => {
       (mockRequestHandler.getTask as Mock).mockRejectedValue(new TaskNotFoundError('task-1'));
 

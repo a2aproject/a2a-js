@@ -273,7 +273,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
           );
         }
         loaded.history = [...(loaded.history || []), incomingMessage];
-        advanceGeneration(loaded);
+        const generation = advanceGeneration(loaded);
+        loaded.timeline = [
+          ...(loaded.timeline ?? []),
+          { entry: { $case: 'message', value: structuredClone(incomingMessage) }, generation },
+        ];
         await this.taskStore.save(loaded, context);
         return loaded;
       });
@@ -413,19 +417,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         }
 
         if (options?.firstResultResolver && !firstResultSent) {
-          let firstResult: Message | Task | undefined;
-          if (event.kind === 'message') {
-            firstResult = event.data;
-          } else if (event.kind === 'task') {
-            firstResult = event.data;
-          } else {
-            const finalResult = resultManager.getFinalResult();
-            if (finalResult && ('messageId' in finalResult || 'id' in finalResult)) {
-              firstResult = finalResult;
-            }
-          }
+          const firstResult = resultManager.getFinalResult();
           if (firstResult) {
-            options.firstResultResolver(firstResult);
+            options.firstResultResolver(structuredClone(firstResult));
             firstResultSent = true;
           }
         }
@@ -727,6 +721,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!incomingMessage?.messageId) {
       throw new RequestMalformedError('message.messageId is required.');
     }
+    this._validateTimelineLength(params.configuration?.timelineLength);
 
     // Default to blocking behavior if 'returnImmediately' is not explicitly true.
     const isBlocking = params.configuration?.returnImmediately !== true;
@@ -830,6 +825,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!incomingMessage?.messageId) {
       throw new RequestMalformedError('message.messageId is required for streaming.');
     }
+    this._validateTimelineLength(params.configuration?.timelineLength);
 
     const resultManager = new ResultManager(this.taskStore, context, this.plugins);
     resultManager.setContext(incomingMessage);
@@ -924,6 +920,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   async getTask(params: GetTaskRequest, context: ServerCallContext): Promise<Task> {
     const taskId = params.id;
     this._requireValidTaskId(taskId);
+    this._validateTimelineLength(params.timelineLength);
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${params.id}`);
@@ -953,6 +950,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (params.statusTimestampAfter && isNaN(Date.parse(params.statusTimestampAfter))) {
       throw new RequestMalformedError('statusTimestampAfter must be a valid ISO 8601 date string');
     }
+    this._validateTimelineLength(params.timelineLength);
 
     const response = await this.taskStore.list({ ...params, pageSize }, context);
     for (const task of response.tasks) {
@@ -1386,18 +1384,34 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
+  private _validateTimelineLength(timelineLength: number | undefined): void {
+    if (timelineLength !== undefined && (!Number.isInteger(timelineLength) || timelineLength < 0)) {
+      throw new RequestMalformedError('timelineLength must be a non-negative integer');
+    }
+  }
+
   /**
-   * Applies `historyLength` semantics:
-   * - undefined: return all history
-   * - 0: omit history
-   * - N > 0: return at most N most recent messages
+   * Applies `historyLength` and `timelineLength` semantics (§3.2.4):
+   * - undefined: return all entries
+   * - 0: omit the corresponding field
+   * - N > 0: return at most N most recent entries
    */
-  private _applyHistoryLengthSemantics(task: Task, params: { historyLength?: number }): void {
+  private _applyHistoryLengthSemantics(
+    task: Task,
+    params: { historyLength?: number; timelineLength?: number }
+  ): void {
     if (params.historyLength !== undefined) {
       if (params.historyLength <= 0) {
         task.history = [];
       } else {
         task.history = (task.history ?? []).slice(-params.historyLength);
+      }
+    }
+    if (params.timelineLength !== undefined) {
+      if (params.timelineLength <= 0) {
+        delete task.timeline;
+      } else if (task.timeline !== undefined) {
+        task.timeline = task.timeline.slice(-params.timelineLength);
       }
     }
   }

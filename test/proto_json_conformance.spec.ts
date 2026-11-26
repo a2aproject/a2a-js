@@ -140,6 +140,14 @@ describe('proto3 JSON conformance', () => {
       expect(Task.toJSON(Task.fromJSON(json))).toEqual(json);
     });
 
+    it('fails open on unknown TimelineEntry kinds while keeping generation (§3.2.8)', () => {
+      const decoded = Task.fromJSON({
+        id: 't',
+        timeline: [{ futureKind: { value: 1 }, generation: '5' }],
+      });
+      expect(decoded.timeline).toEqual([{ entry: undefined, generation: 5 }]);
+    });
+
     it('round-trips the new StreamResponse payloads', () => {
       const messageUpdate = {
         messageUpdate: { taskId: 't', message: { messageId: 'm' }, generation: '2' },

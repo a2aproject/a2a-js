@@ -195,6 +195,16 @@ describe('RestTransport', () => {
       expect(options?.method).to.equal('GET');
     });
 
+    it('should pass timelineLength as query parameter', async () => {
+      const taskId = 'task-123';
+      mockFetch.mockResolvedValue(createRestResponse(createMockProtoTask(taskId)));
+
+      await transport.getTask({ id: taskId, tenant: '', timelineLength: 4 });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tasks/${taskId}?timelineLength=4`);
+    });
+
     it('should throw TaskNotFoundError when task does not exist', async () => {
       mockFetch.mockResolvedValue(createRestErrorResponse(-32001, 'Task not found', 404));
 
@@ -276,6 +286,23 @@ describe('RestTransport', () => {
 
       const [url] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/tenant1/tasks`);
+    });
+
+    it('should pass timelineLength as query parameter', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.listTasks({
+        tenant: '',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+        timelineLength: 2,
+      });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tasks?timelineLength=2`);
     });
   });
 
