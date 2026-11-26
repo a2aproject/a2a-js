@@ -86,12 +86,20 @@ export class RestTransportHandler {
   async getTask(
     taskId: string,
     context: ServerCallContext,
-    historyLength?: unknown,
-    tenant?: string
+    queryParams: Record<string, unknown> = {}
   ): Promise<Task> {
-    const params: GetTaskRequest = { id: taskId, tenant: tenant || '' };
-    if (historyLength !== undefined) {
-      params.historyLength = this.parseHistoryLength(historyLength);
+    const params: GetTaskRequest = {
+      id: taskId,
+      tenant: (queryParams.tenant as string) || '',
+    };
+    if (queryParams.historyLength !== undefined) {
+      params.historyLength = this.parseHistoryLength(queryParams.historyLength);
+    }
+    if (queryParams.timelineLength !== undefined) {
+      params.timelineLength = this.parseNonNegativeInt(
+        queryParams.timelineLength,
+        'timelineLength'
+      );
     }
     return this.requestHandler.getTask(params, context);
   }
@@ -126,6 +134,10 @@ export class RestTransportHandler {
       historyLength:
         queryParams.historyLength !== undefined && queryParams.historyLength !== ''
           ? this.parseHistoryLength(queryParams.historyLength)
+          : undefined,
+      timelineLength:
+        queryParams.timelineLength !== undefined && queryParams.timelineLength !== ''
+          ? this.parseNonNegativeInt(queryParams.timelineLength, 'timelineLength')
           : undefined,
       statusTimestampAfter: (queryParams.statusTimestampAfter as string) || undefined,
       includeArtifacts: parseIncludeArtifacts(queryParams.includeArtifacts),

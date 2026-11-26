@@ -1087,6 +1087,175 @@ describe('ResultManager generation', () => {
     expect(statusUpdate.generation).toBeUndefined();
     expect((await store.load('task-1', context))!.generation).toBe(2);
   });
+
+  it('records timeline entries in generation order and tracks artifact generation ranges (§3.2.8)', async () => {
+    const rm = new ResultManager(store, context);
+    const userMessage = createMessage('user-1', 'start');
+    rm.setContext(userMessage);
+
+    // 1: task creation (user message + initial status)
+    await rm.processEvent(AgentEvent.task(createTask('task-tl', 'ctx-1')));
+    // 2: working status
+    await rm.processEvent(
+      AgentEvent.statusUpdate({
+        taskId: 'task-tl',
+        contextId: 'ctx-1',
+        status: working,
+        metadata: {},
+      })
+    );
+    // 3: artifact first chunk (streaming, not complete yet)
+    await rm.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 'task-tl',
+        contextId: 'ctx-1',
+        artifact: createArtifact('art-1', 'part1'),
+        append: false,
+        lastChunk: false,
+        metadata: {},
+      })
+    );
+    const streaming = (await store.load('task-tl', context))!;
+    expect(streaming.artifacts?.[0].startGeneration).toBe(3);
+    expect(streaming.artifacts?.[0].endGeneration).toBeUndefined();
+
+    // 4: artifact final chunk
+    await rm.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 'task-tl',
+        contextId: 'ctx-1',
+        artifact: createArtifact('art-1', 'part2'),
+        append: true,
+        lastChunk: true,
+        metadata: {},
+      })
+    );
+    // 5: completed status
+    const completed: TaskStatus = {
+      state: TaskState.TASK_STATE_COMPLETED,
+      message: undefined,
+      timestamp: undefined,
+    };
+    await rm.processEvent(
+      AgentEvent.statusUpdate({
+        taskId: 'task-tl',
+        contextId: 'ctx-1',
+        status: completed,
+        metadata: {},
+      })
+    );
+    // Ignored late update to terminal task must not append to timeline.
+    await rm.processEvent(
+      AgentEvent.statusUpdate({
+        taskId: 'task-tl',
+        contextId: 'ctx-1',
+        status: working,
+        metadata: {},
+      })
+    );
+
+    const finalTask = (await store.load('task-tl', context))!;
+    expect(finalTask.generation).toBe(5);
+    expect(finalTask.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
+      ['message', 1],
+      ['status', 1],
+      ['status', 2],
+      ['status', 5],
+    ]);
+    expect(finalTask.artifacts?.[0].startGeneration).toBe(3);
+    expect(finalTask.artifacts?.[0].endGeneration).toBe(4);
+  });
+
+  it('stamps artifactUpdate.artifact on the event and clears stale endGeneration on non-final append', async () => {
+    const rm = new ResultManager(store, context);
+    await rm.processEvent(AgentEvent.task(createTask('task-art-stream', 'ctx-1')));
+
+    const firstChunk: TaskArtifactUpdateEvent = {
+      taskId: 'task-art-stream',
+      contextId: 'ctx-1',
+      artifact: { ...createArtifact('art-1', 'one'), startGeneration: 99, endGeneration: 99 },
+      append: false,
+      lastChunk: true,
+      metadata: {},
+    };
+    await rm.processEvent(AgentEvent.artifactUpdate(firstChunk));
+    expect(firstChunk.artifact?.startGeneration).toBe(2);
+    expect(firstChunk.artifact?.endGeneration).toBe(2);
+
+    // Re-opening a completed artifact with lastChunk: false must clear endGeneration.
+    const reopenedChunk: TaskArtifactUpdateEvent = {
+      taskId: 'task-art-stream',
+      contextId: 'ctx-1',
+      artifact: createArtifact('art-1', 'two'),
+      append: true,
+      lastChunk: false,
+      metadata: {},
+    };
+    await rm.processEvent(AgentEvent.artifactUpdate(reopenedChunk));
+    expect(reopenedChunk.artifact?.startGeneration).toBe(2);
+    expect(reopenedChunk.artifact?.endGeneration).toBeUndefined();
+    const persisted = (await store.load('task-art-stream', context))!;
+    expect(persisted.artifacts?.[0].startGeneration).toBe(2);
+    expect(persisted.artifacts?.[0].endGeneration).toBeUndefined();
+  });
+
+  it('preserves prior-turn status and artifact endGeneration when Turn 2 echoes the persisted Task snapshot', async () => {
+    const rmTurn1 = new ResultManager(store, context);
+    rmTurn1.setContext(createMessage('user-1', 'turn 1'));
+    await rmTurn1.processEvent(AgentEvent.task(createTask('task-echo', 'ctx-1')));
+    await rmTurn1.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 'task-echo',
+        contextId: 'ctx-1',
+        artifact: createArtifact('art-turn1', 'draft'),
+        append: false,
+        lastChunk: true,
+        metadata: {},
+      })
+    );
+    const inputRequired: TaskStatus = {
+      state: TaskState.TASK_STATE_INPUT_REQUIRED,
+      message: createMessage('agent-q', 'clarify?', Role.ROLE_AGENT),
+      timestamp: undefined,
+    };
+    await rmTurn1.processEvent(
+      AgentEvent.statusUpdate({
+        taskId: 'task-echo',
+        contextId: 'ctx-1',
+        status: inputRequired,
+        metadata: {},
+      })
+    );
+
+    // Simulate _createRequestContext persisting Turn 2's user message at generation 4.
+    const turn2Stored = (await store.load('task-echo', context))!;
+    const turn2UserMessage = createMessage('user-2', 'turn 2');
+    turn2Stored.generation = 4;
+    turn2Stored.history = [...(turn2Stored.history ?? []), turn2UserMessage];
+    turn2Stored.timeline = [
+      ...(turn2Stored.timeline ?? []),
+      { entry: { $case: 'message', value: turn2UserMessage }, generation: 4 },
+    ];
+    await store.save(turn2Stored, context);
+
+    // Turn 2 opens by echoing the persisted snapshot, as streaming agents must do.
+    const rmTurn2 = new ResultManager(store, context);
+    rmTurn2.setContext(turn2UserMessage);
+    await rmTurn2.processEvent(AgentEvent.task(structuredClone(turn2Stored)));
+
+    const afterEcho = (await store.load('task-echo', context))!;
+    expect(afterEcho.generation).toBe(5);
+    // Turn 1's INPUT_REQUIRED status is NOT duplicated after Turn 2's user message.
+    expect(afterEcho.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
+      ['message', 1],
+      ['status', 1],
+      ['status', 3],
+      ['message', 4],
+    ]);
+    // Turn 1's untouched artifact keeps its original generation range.
+    expect(afterEcho.artifacts?.[0].startGeneration).toBe(2);
+    expect(afterEcho.artifacts?.[0].endGeneration).toBe(2);
+  });
 });
 
 describe('ResultManager task plugin hooks', () => {

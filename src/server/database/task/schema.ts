@@ -20,6 +20,7 @@ export interface TaskRow {
   metadata: string | null;
   protocol_version: string | null;
   generation: number | string | null;
+  timeline: string | null;
 }
 
 /**
@@ -48,4 +49,5 @@ export const TASK_TABLE_COLUMNS = [
   'metadata',
   'protocol_version',
   'generation',
+  'timeline',
 ] as const satisfies readonly (keyof TaskRow)[];

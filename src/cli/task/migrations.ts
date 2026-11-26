@@ -3,6 +3,7 @@ import { ledgerTableFor, type StoreMigrations } from '../store_migrations.js';
 
 import { createTasks } from './migrations/0001_create_tasks.js';
 import { addTaskGeneration } from './migrations/0002_add_task_generation.js';
+import { addTaskTimeline } from './migrations/0003_add_task_timeline.js';
 
 /** Names this store on the command line. */
 export const TASK_STORE_ID = 'tasks';
@@ -18,6 +19,7 @@ export function taskStoreMigrations(tableName: string = TASK_TABLE): StoreMigrat
     migrations: {
       '0001_create_tasks': createTasks(tableName),
       '0002_add_task_generation': addTaskGeneration(tableName),
+      '0003_add_task_timeline': addTaskTimeline(tableName),
     },
   };
 }

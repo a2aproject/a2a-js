@@ -3,8 +3,10 @@ import {
   Message,
   Task,
   TaskState,
+  TaskStatus,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
+  TimelineEntry,
 } from '../index.js';
 import { ServerCallContext } from './context.js';
 import {
@@ -74,9 +76,38 @@ export function withTaskWriteLock<T>(
   return serializeByScope(lockKey(context, taskId), fn);
 }
 
-/** Advances a task's `generation` by one; a task stored before v1.1 starts at 1. */
-export function advanceGeneration(task: Task): void {
+/** Advances a task's `generation` by one and returns it; a task stored before v1.1 starts at 1. */
+export function advanceGeneration(task: Task): number {
   task.generation = (task.generation ?? 0) + 1;
+  return task.generation;
+}
+
+function stampArtifactGeneration(
+  artifact: Artifact,
+  startGeneration: number,
+  endGeneration?: number
+): Artifact {
+  artifact.startGeneration = startGeneration;
+  if (endGeneration !== undefined) {
+    artifact.endGeneration = endGeneration;
+  } else {
+    delete artifact.endGeneration;
+  }
+  return artifact;
+}
+
+function sameStatus(left: TaskStatus | undefined, right: TaskStatus | undefined): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+  return JSON.stringify(TaskStatus.toJSON(left)) === JSON.stringify(TaskStatus.toJSON(right));
+}
+
+function artifactContentKey(artifact: Artifact): string {
+  const json = Artifact.toJSON(artifact) as Record<string, unknown>;
+  delete json.startGeneration;
+  delete json.endGeneration;
+  return JSON.stringify(json);
 }
 
 /**
@@ -225,44 +256,76 @@ export class ResultManager {
     // Deep-clone the incoming Task so further executor mutations can't
     // leak into our state.
     const mergedTask: Task = structuredClone(taskEvent);
-    // The server owns `generation`; `saveCurrentTask` advances the persisted one.
-    mergedTask.generation =
-      persistedTask && persistedTask.id === taskEvent.id ? persistedTask.generation : undefined;
+    const hasPersisted = Boolean(persistedTask && persistedTask.id === taskEvent.id);
+    // The server owns `generation` and `timeline`; start from persisted state.
+    mergedTask.generation = hasPersisted ? persistedTask!.generation : undefined;
+    const generation = advanceGeneration(mergedTask);
 
-    if (persistedTask && persistedTask.id === taskEvent.id) {
+    if (hasPersisted) {
       // Preserve persisted history when the incoming event omits it. If
       // the incoming event carries its own history, treat it as
       // authoritative (the executor is responsible for what's persisted).
-      if ((!mergedTask.history || mergedTask.history.length === 0) && persistedTask.history) {
-        mergedTask.history = structuredClone(persistedTask.history);
+      if ((!mergedTask.history || mergedTask.history.length === 0) && persistedTask!.history) {
+        mergedTask.history = structuredClone(persistedTask!.history);
       }
 
-      // Merge artifacts by `artifactId`; incoming wins for collisions.
-      mergedTask.artifacts = this.mergeArtifacts(persistedTask.artifacts, taskEvent.artifacts);
-
       // Merge metadata; incoming wins for key collisions.
-      if (persistedTask.metadata || taskEvent.metadata) {
+      if (persistedTask!.metadata || taskEvent.metadata) {
         mergedTask.metadata = {
-          ...structuredClone(persistedTask.metadata ?? {}),
+          ...structuredClone(persistedTask!.metadata ?? {}),
           ...structuredClone(taskEvent.metadata ?? {}),
         };
       }
     }
 
-    // Ensure the latest user message is in history. Clone again so the
-    // same reference can't be shared between the history array and the
-    // `latestUserMessage` slot when the same RM handles multiple events.
+    // Merge artifacts by `artifactId`; incoming wins for collisions and gets stamped.
+    mergedTask.artifacts = this.mergeArtifacts(
+      hasPersisted ? persistedTask!.artifacts : undefined,
+      taskEvent.artifacts,
+      generation
+    );
+
+    const timeline: TimelineEntry[] =
+      hasPersisted && persistedTask!.timeline ? structuredClone(persistedTask!.timeline) : [];
+
+    // Ensure the latest user message is in history and timeline. Clone again so the
+    // same reference can't be shared between arrays and `latestUserMessage`.
     if (this.latestUserMessage) {
       const latest = this.latestUserMessage;
       if (!mergedTask.history?.find((msg) => msg.messageId === latest.messageId)) {
         mergedTask.history = [structuredClone(latest), ...(mergedTask.history || [])];
       }
+      const alreadyInTimeline = timeline.some(
+        (entry) =>
+          entry.entry?.$case === 'message' && entry.entry.value.messageId === latest.messageId
+      );
+      if (!alreadyInTimeline) {
+        timeline.push({ entry: { $case: 'message', value: structuredClone(latest) }, generation });
+      }
+    }
+
+    // Streaming turns open by echoing the persisted Task snapshot; don't record
+    // an unchanged prior-turn status a second time after the new user message.
+    const statusChanged =
+      !hasPersisted ||
+      !persistedTask!.timeline?.length ||
+      !sameStatus(mergedTask.status, persistedTask!.status);
+    if (mergedTask.status && statusChanged) {
+      timeline.push({
+        entry: { $case: 'status', value: structuredClone(mergedTask.status) },
+        generation,
+      });
+    }
+    if (timeline.length > 0) {
+      mergedTask.timeline = timeline;
+    } else {
+      delete mergedTask.timeline;
     }
 
     this.currentTask = mergedTask;
     await this.saveCurrentTask(
       AgentEvent.task(taskEvent),
-      persistedTask?.id === taskEvent.id ? persistedTask.status?.state : undefined
+      hasPersisted ? persistedTask!.status?.state : undefined
     );
   }
 
@@ -311,6 +374,8 @@ export class ResultManager {
       return;
     }
 
+    const generation = advanceGeneration(task);
+
     // Clone the incoming status so caller-side mutation can't drift state.
     task.status = structuredClone(updateEvent.status);
 
@@ -328,6 +393,12 @@ export class ResultManager {
         task.history = [...(task.history || []), structuredClone(update)];
       }
     }
+    if (task.status) {
+      task.timeline = [
+        ...(task.timeline ?? []),
+        { entry: { $case: 'status', value: structuredClone(task.status) }, generation },
+      ];
+    }
     this.currentTask = task;
     await this.saveCurrentTask(AgentEvent.statusUpdate(updateEvent), persistedState);
   }
@@ -344,12 +415,16 @@ export class ResultManager {
       return;
     }
 
+    const generation = advanceGeneration(task);
+
     if (!task.artifacts) {
       task.artifacts = [];
     }
     const existingArtifactIndex = task.artifacts.findIndex(
       (art) => art.artifactId === artifact.artifactId
     );
+    const endGeneration = artifactEvent.lastChunk ? generation : undefined;
+    let startGeneration = generation;
     if (existingArtifactIndex !== -1) {
       if (artifactEvent.append) {
         // Clone incoming parts/metadata so the persisted artifact owns
@@ -366,12 +441,27 @@ export class ResultManager {
             ...existingArtifact.metadata,
             ...structuredClone(artifact.metadata),
           };
+        startGeneration = existingArtifact.startGeneration ?? generation;
+        stampArtifactGeneration(existingArtifact, startGeneration, endGeneration);
       } else {
-        task.artifacts[existingArtifactIndex] = structuredClone(artifact);
+        task.artifacts[existingArtifactIndex] = stampArtifactGeneration(
+          structuredClone(artifact),
+          generation,
+          endGeneration
+        );
       }
     } else {
-      task.artifacts.push(structuredClone(artifact));
+      task.artifacts.push(
+        stampArtifactGeneration(structuredClone(artifact), generation, endGeneration)
+      );
     }
+
+    // Stamp generation bounds onto the outgoing event's artifact too (§3.2.1, §3.2.8).
+    artifactEvent.artifact = stampArtifactGeneration(
+      structuredClone(artifact),
+      startGeneration,
+      endGeneration
+    );
 
     // Merge event-level metadata into the task; incoming wins for collisions.
     if (artifactEvent.metadata) {
@@ -393,10 +483,15 @@ export class ResultManager {
    */
   private mergeArtifacts(
     persisted: Artifact[] | undefined,
-    incoming: Artifact[] | undefined
+    incoming: Artifact[] | undefined,
+    generation: number
   ): Artifact[] {
     if (!persisted || persisted.length === 0) {
-      return incoming ? structuredClone(incoming) : [];
+      return incoming
+        ? incoming.map((art) =>
+            stampArtifactGeneration(structuredClone(art), generation, generation)
+          )
+        : [];
     }
     if (!incoming || incoming.length === 0) {
       return structuredClone(persisted);
@@ -407,13 +502,21 @@ export class ResultManager {
       incomingById.set(art.artifactId, art);
     }
 
-    const merged: Artifact[] = persisted.map((art) =>
-      structuredClone(incomingById.get(art.artifactId) ?? art)
-    );
+    const merged: Artifact[] = persisted.map((art) => {
+      const replacement = incomingById.get(art.artifactId);
+      if (!replacement || artifactContentKey(replacement) === artifactContentKey(art)) {
+        return structuredClone(art);
+      }
+      return stampArtifactGeneration(
+        structuredClone(replacement),
+        art.startGeneration ?? generation,
+        generation
+      );
+    });
     const seenIds = new Set(persisted.map((art) => art.artifactId));
     for (const art of incoming) {
       if (!seenIds.has(art.artifactId)) {
-        merged.push(structuredClone(art));
+        merged.push(stampArtifactGeneration(structuredClone(art), generation, generation));
       }
     }
     return merged;
@@ -427,7 +530,6 @@ export class ResultManager {
     if (!task) {
       return;
     }
-    advanceGeneration(task);
     await this.taskStore.save(task, this.serverCallContext);
     // `event.data` is the executor's published object, which the caller delivers.
     if (event.kind !== 'message') {

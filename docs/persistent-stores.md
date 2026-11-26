@@ -120,7 +120,7 @@ Choose the resolver before you store data. Changing it later changes the owner c
 
 The SDK ships an `a2a-db` CLI that creates and updates the store tables. Once `@a2a-js/sdk` is installed, run it with `npx a2a-db`; `npx a2a-db --help` prints the full usage.
 
-Run `a2a-db upgrade` before deploying a new SDK version: `DatabaseTaskStore` reads the columns the latest migration creates, so it fails against a table that is behind. For example, `0002_add_task_generation` adds the task `generation` column (A2A v1.1); tasks stored before it start counting at 1 on their next change.
+Run `a2a-db upgrade` before deploying a new SDK version: `DatabaseTaskStore` reads the columns the latest migration creates, so it fails against a table that is behind. For example, `0002_add_task_generation` and `0003_add_task_timeline` add the v1.1 `generation` and `timeline` columns; tasks stored before them start counting at 1 on their next change.
 
 ### Commands
 
@@ -185,7 +185,7 @@ npx a2a-db downgrade --url postgresql://user:pass@localhost:5432/my_db
 npx a2a-db downgrade base --url postgresql://user:pass@localhost:5432/my_db
 
 # Revert the task store down to a named migration, which stays applied. A migration name
-# belongs to one store, so name it; this reverts 0002_add_task_generation (drops the generation column).
+# belongs to one store, so name it; this reverts 0003_add_task_timeline and 0002_add_task_generation.
 npx a2a-db downgrade 0001_create_tasks --store tasks --url postgresql://user:pass@localhost:5432/my_db
 
 # Migrate only the task store, taking the URL from the environment
@@ -207,7 +207,7 @@ npx a2a-db downgrade --sql --dialect mysql > rollback.sql
 npx a2a-db downgrade base --sql --dialect sqlite > rollback.sql
 
 # SQL from a known migration forward. A migration name belongs to one store, so name the
-# store too; this renders 0002_add_task_generation.
+# store too; this renders 0002_add_task_generation and 0003_add_task_timeline.
 npx a2a-db upgrade --sql --dialect sqlite --store tasks --from 0001_create_tasks
 
 # Cloudflare D1: render the schema, then apply it with Wrangler
@@ -231,7 +231,7 @@ wrangler d1 execute <database-name> --remote --file schema.sql
 
 The SDK writes `config_data` as plain text on every supported engine. It does not encrypt or hash it, because the push notification sender needs the original values to call the webhook. Anyone who can read the table, a backup of it, or a replica can read the webhook credentials.
 
-The task table carries the same exposure for different data: its `history` and `artifacts` columns hold message content, which may include user data.
+The task table carries the same exposure for different data: its `history`, `timeline`, and `artifacts` columns hold message content, which may include user data.
 
 The A2A specification asks agents to protect this data: agents "SHOULD securely store push notification configurations and credentials" ([§13.2](https://a2a-protocol.org/v1.0.0/specification/#132-push-notification-security)).
 

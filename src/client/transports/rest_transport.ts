@@ -190,7 +190,10 @@ export class RestTransport implements Transport {
   async getTask(params: GetTaskRequest, options?: RequestOptions): Promise<Task> {
     const queryParams = new URLSearchParams();
     if (params.historyLength !== undefined) {
-      queryParams.set('historyLength', params.historyLength.toString());
+      queryParams.set('historyLength', String(params.historyLength));
+    }
+    if (params.timelineLength !== undefined) {
+      queryParams.set('timelineLength', String(params.timelineLength));
     }
     const queryString = queryParams.toString();
     const path = this._buildPath(
@@ -231,6 +234,8 @@ export class RestTransport implements Transport {
     if (params.pageToken) queryParams.set('pageToken', params.pageToken);
     if (params.historyLength !== undefined)
       queryParams.set('historyLength', String(params.historyLength));
+    if (params.timelineLength !== undefined)
+      queryParams.set('timelineLength', String(params.timelineLength));
     if (params.statusTimestampAfter)
       queryParams.set('statusTimestampAfter', params.statusTimestampAfter);
     if (params.includeArtifacts !== undefined)
