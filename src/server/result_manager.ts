@@ -79,6 +79,25 @@ export function advanceGeneration(task: Task): void {
   task.generation = (task.generation ?? 0) + 1;
 }
 
+/** Returns a shallow copy of `event` with `generation` set; messages are returned as is. */
+function withGeneration(
+  event: AgentExecutionEvent,
+  generation: number | undefined
+): AgentExecutionEvent {
+  switch (event.kind) {
+    case 'message':
+      return event;
+    case 'task':
+      return AgentEvent.task({ ...event.data, generation });
+    case 'statusUpdate':
+      return AgentEvent.statusUpdate({ ...event.data, generation });
+    case 'artifactUpdate':
+      return AgentEvent.artifactUpdate({ ...event.data, generation });
+    default:
+      assertUnreachableEvent(event);
+  }
+}
+
 /**
  * Tracks the in-flight task/message state for a single A2A request and
  * persists updates to the {@link TaskStore}.
@@ -124,10 +143,12 @@ export class ResultManager {
    * so concurrent RMs linearize their load-merge-save sequences. The
    * `message` branch is in-memory only and intentionally unlocked.
    *
-   * A persisted task, status or artifact event gets the task's new
-   * `generation` written onto its `data`, so callers deliver it as is.
+   * Returns a copy of `event` carrying the task's new `generation` when
+   * persisted, or `event` unchanged when nothing was written (e.g. a
+   * standalone message or an ignored update). The input object is never
+   * mutated.
    */
-  public async processEvent(event: AgentExecutionEvent): Promise<void> {
+  public async processEvent(event: AgentExecutionEvent): Promise<AgentExecutionEvent> {
     let report: TaskEventInfo | undefined;
     try {
       await this.applyEvent(event);
@@ -139,6 +160,7 @@ export class ResultManager {
     if (report && this.plugins?.hasTaskHooks) {
       await this.plugins.onTaskEvent(report);
     }
+    return report?.event ?? event;
   }
 
   private async applyEvent(event: AgentExecutionEvent): Promise<void> {
@@ -429,15 +451,11 @@ export class ResultManager {
     }
     advanceGeneration(task);
     await this.taskStore.save(task, this.serverCallContext);
-    // `event.data` is the executor's published object, which the caller delivers.
-    if (event.kind !== 'message') {
-      event.data.generation = task.generation;
-    }
     this.pendingReport = {
       taskId: task.id,
       fromState,
       toState: task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED,
-      event,
+      event: withGeneration(event, task.generation),
       task,
       context: this.serverCallContext,
     };

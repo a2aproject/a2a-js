@@ -1031,9 +1031,9 @@ describe('ResultManager generation', () => {
     store = new InMemoryTaskStore();
   });
 
-  it('starts at 1 and stamps each persisted event with the generation after it', async () => {
+  it('starts at 1 and returns a stamped copy per persisted event without mutating input', async () => {
     const rm = new ResultManager(store, context);
-    // An executor-supplied generation is overwritten: the server owns it.
+    // An executor-supplied generation is overwritten on the returned copy: the server owns it.
     const task = createTask('task-1', 'ctx-1', { generation: 99 });
     const statusUpdate: TaskStatusUpdateEvent = {
       taskId: 'task-1',
@@ -1050,11 +1050,26 @@ describe('ResultManager generation', () => {
       metadata: {},
     };
 
-    await rm.processEvent(AgentEvent.task(task));
-    await rm.processEvent(AgentEvent.statusUpdate(statusUpdate));
-    await rm.processEvent(AgentEvent.artifactUpdate(artifactUpdate));
+    const publishedTask = AgentEvent.task(task);
+    const publishedStatus = AgentEvent.statusUpdate(statusUpdate);
+    const publishedArtifact = AgentEvent.artifactUpdate(artifactUpdate);
 
-    expect([task, statusUpdate, artifactUpdate].map((e) => e.generation)).toEqual([1, 2, 3]);
+    const stampedTask = await rm.processEvent(publishedTask);
+    const stampedStatus = await rm.processEvent(publishedStatus);
+    const stampedArtifact = await rm.processEvent(publishedArtifact);
+
+    expect(
+      [stampedTask, stampedStatus, stampedArtifact].map((event) =>
+        event.kind === 'message' ? undefined : event.data.generation
+      )
+    ).toEqual([1, 2, 3]);
+    // Both the wrappers and their payloads shared on the bus must stay untouched.
+    expect(publishedTask.data).toBe(task);
+    expect(publishedStatus.data).toBe(statusUpdate);
+    expect(publishedArtifact.data).toBe(artifactUpdate);
+    expect(task.generation).toBe(99);
+    expect(statusUpdate.generation).toBeUndefined();
+    expect(artifactUpdate.generation).toBeUndefined();
     expect((await store.load('task-1', context))!.generation).toBe(3);
   });
 
@@ -1062,9 +1077,10 @@ describe('ResultManager generation', () => {
     await store.save(createTask('task-1', 'ctx-1', { generation: 4 }), context);
     const task = createTask('task-1', 'ctx-1');
 
-    await new ResultManager(store, context).processEvent(AgentEvent.task(task));
+    const stamped = await new ResultManager(store, context).processEvent(AgentEvent.task(task));
 
-    expect(task.generation).toBe(5);
+    expect(stamped.kind === 'task' ? stamped.data.generation : undefined).toBe(5);
+    expect(task.generation).toBeUndefined();
   });
 
   it('does not advance for a status update ignored for a terminal task', async () => {
@@ -1081,9 +1097,11 @@ describe('ResultManager generation', () => {
       status: working,
       metadata: {},
     };
+    const published = AgentEvent.statusUpdate(statusUpdate);
 
-    await new ResultManager(store, context).processEvent(AgentEvent.statusUpdate(statusUpdate));
+    const returned = await new ResultManager(store, context).processEvent(published);
 
+    expect(returned).toBe(published);
     expect(statusUpdate.generation).toBeUndefined();
     expect((await store.load('task-1', context))!.generation).toBe(2);
   });

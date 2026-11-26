@@ -387,8 +387,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     let firstResultSent = false;
     let authRequiredSnapshotSent = false;
     try {
-      for await (const event of eventQueue.events()) {
-        await resultManager.processEvent(event);
+      for await (const published of eventQueue.events()) {
+        const event = await resultManager.processEvent(published);
 
         try {
           const streamResponse = this._mapEventToStreamResponse(event, resultManager);
@@ -847,10 +847,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       let streamPattern = StreamPattern.UNDETERMINED;
       let firstEventDelivered = false;
       try {
-        for await (const event of eventQueue.events()) {
-          streamPattern = this._advanceStreamPattern(event, streamPattern);
+        for await (const published of eventQueue.events()) {
+          streamPattern = this._advanceStreamPattern(published, streamPattern);
 
-          await resultManager.processEvent(event);
+          const event = await resultManager.processEvent(published);
 
           const streamResponse = this._mapEventToStreamResponse(event, resultManager);
           if (streamResponse.payload?.$case === 'task') {
