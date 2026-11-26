@@ -33,8 +33,10 @@ export interface MigratedStore {
   readonly id: string;
   readonly table: string;
   readonly ledgerTable: string;
-  /** The store's only migration so far. */
+  /** The first migration. */
   readonly migration: string;
+  /** All migrations, when the store has more than one. */
+  readonly migrations?: readonly string[];
   /** The flag that renames the table. */
   readonly tableNameFlag: string;
   /** The primary key, in order. */
@@ -429,7 +431,7 @@ export function describeStoreMigrations(store: MigratedStore): void {
         );
       });
 
-      it('upgrade twice changes nothing and leaves one ledger row', async () => {
+      it('upgrade twice changes nothing and preserves the migration ledger', async () => {
         await cli('upgrade');
         const before = await structure();
 
@@ -441,7 +443,9 @@ export function describeStoreMigrations(store: MigratedStore): void {
         const ledger = await introspect((db) =>
           sql.raw(`select name from ${LEDGER_TABLE}`).execute(db)
         );
-        expect(ledger.rows).toHaveLength(1);
+        expect(ledger.rows.map((row) => (row as { name: string }).name).sort()).toEqual(
+          [...(store.migrations ?? [MIGRATION])].sort()
+        );
       });
 
       it('status reports the migration as pending before upgrade', async () => {
@@ -481,6 +485,9 @@ export function describeStoreMigrations(store: MigratedStore): void {
       it('downgrade drops the table and names the reverted migration', async () => {
         await cli('upgrade');
 
+        for (let revision = 1; revision < (store.migrations?.length ?? 1); revision++) {
+          expect((await cli('downgrade')).code).toBe(0);
+        }
         const { code, out } = await cli('downgrade');
 
         expect(code).toBe(0);
@@ -490,7 +497,7 @@ export function describeStoreMigrations(store: MigratedStore): void {
 
       it('downgrade reports nothing to revert when the ledger is empty', async () => {
         await cli('upgrade');
-        await cli('downgrade');
+        await cli('downgrade', BASE);
 
         const { code, out } = await cli('downgrade');
 
@@ -535,7 +542,7 @@ export function describeStoreMigrations(store: MigratedStore): void {
         await cli('upgrade');
         const before = await structure();
 
-        await cli('downgrade');
+        await cli('downgrade', BASE);
         await cli('upgrade');
 
         expect(await structure()).toEqual(before);
@@ -569,8 +576,7 @@ export function describeStoreMigrations(store: MigratedStore): void {
         );
         expect(code).toBe(0);
 
-        const statements = out
-          .split(';')
+        const statements = (out.match(/(?:\$\$[\s\S]*?\$\$|[^;])+/g) ?? [])
           .map((statement) => statement.trim())
           .filter(Boolean);
         await introspect(async (db) => {
