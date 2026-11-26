@@ -10,12 +10,8 @@ import { JSONRPCResponse } from '../transports/jsonrpc/jsonrpc_transport_handler
 import { A2ARequestHandler } from '../request_handler/a2a_request_handler.js';
 import { JsonRpcTransportHandler } from '../transports/jsonrpc/jsonrpc_transport_handler.js';
 import { ServerCallContextBuilder, defaultServerCallContextBuilder } from '../context.js';
-import {
-  A2A_LEGACY_PROTOCOL_VERSION,
-  A2A_VERSION_HEADER,
-  HTTP_EXTENSION_HEADER,
-  JSON_CONTENT_TYPE,
-} from '../../constants.js';
+import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER, JSON_CONTENT_TYPE } from '../../constants.js';
+import { isLegacyVersion } from '../../version_utils.js';
 import { UserBuilder, delegateAsyncIterator } from './common.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../sse_utils.js';
 import { Extensions } from '../../extensions.js';
@@ -71,8 +67,7 @@ export function jsonRpcHandler(options: JsonRpcHandlerOptions): RequestHandler {
   router.post('/', async (req: Request, res: Response) => {
     const useLegacy =
       legacyJsonRpcTransportHandler !== undefined &&
-      (req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION) ===
-        A2A_LEGACY_PROTOCOL_VERSION;
+      isLegacyVersion(req.header(A2A_VERSION_HEADER));
     const mapToError = useLegacy
       ? LegacyJsonRpcTransportHandler.mapToLegacyJSONRPCError
       : JsonRpcTransportHandler.mapToJSONRPCError;

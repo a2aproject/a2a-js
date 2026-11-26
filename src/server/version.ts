@@ -1,6 +1,7 @@
 import { TransportProtocolName } from '../core.js';
 import { VersionNotSupportedError } from '../errors/index.js';
 import { AgentCard } from '../index.js';
+import { supportsVersion } from '../version_utils.js';
 
 /**
  * Extracts the set of unique protocol versions explicitly declared in the
@@ -26,10 +27,11 @@ export function getSupportedVersions(
 /**
  * Validates that the requested A2A protocol version is supported by the
  * agent for the given protocol binding. Throws
- * {@link VersionNotSupportedError} if not. Accepts only versions
- * explicitly declared in `agentCard.supportedInterfaces`; to advertise
- * v0.3 on a binding, declare a per-interface `protocolVersion: '0.3'`
- * (manually or via `duplicateInterfacesForLegacy`).
+ * {@link VersionNotSupportedError} if not. An interface declaring `1.1`
+ * also serves `1.0` requests (see {@link supportsVersion}); pre-1.0 minors
+ * must be declared exactly. Patch numbers are ignored. To advertise v0.3 on a
+ * binding, declare a per-interface `protocolVersion: '0.3'` (manually or via
+ * `duplicateInterfacesForLegacy`).
  */
 export function validateVersion(
   requestedVersion: string,
@@ -38,7 +40,7 @@ export function validateVersion(
 ): void {
   const supported = getSupportedVersions(agentCard, protocolBinding);
 
-  if (!supported.has(requestedVersion)) {
+  if (![...supported].some((declared) => supportsVersion(declared, requestedVersion))) {
     throw new VersionNotSupportedError(
       `The requested A2A protocol version '${requestedVersion}' is not supported. ` +
         `Supported versions: ${[...supported].join(', ')}`
