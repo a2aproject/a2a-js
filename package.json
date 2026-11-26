@@ -191,7 +191,7 @@
     "lint:ci": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && npx eslint .",
     "format:readme": "prettier --write ./README.md",
     "coverage": "vitest run --coverage",
-    "generate": "cd src/types && npx buf generate",
+    "generate": "(cd src/types && npx buf generate) && (cd src/grpc && npx buf generate) && node scripts/postprocess_generated_types.js",
     "generate:compat": "curl -fSL https://raw.githubusercontent.com/a2aproject/A2A/v0.3.0/specification/json/a2a.json > compat_spec.json && node scripts/generateCompatTypes.js && rm compat_spec.json",
     "test-build": "node scripts/test_build.mjs",
     "itk-agent": "tsx itk/itk_agent.ts"

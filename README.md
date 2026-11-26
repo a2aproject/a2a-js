@@ -88,6 +88,7 @@ SDK-specific guides live under [`docs/`](docs/):
 - [Migration guide (`v0.3` → `v1.0`)](docs/migration-guide.md)
 - [v0.3 compatibility guide](docs/compatibility-v0_3.md)
 - [Persistent stores guide](docs/persistent-stores.md)
+- [Plugins guide](docs/plugins.md)
 
 ## Samples
 
@@ -110,6 +111,7 @@ Each sample directory has its own `README.md` with run instructions.
 | [`agents/compat-v1-server`](src/samples/agents/compat-v1-server/)               | v1.0-native server with `legacyCompat: { enabled: true }` on every transport — JSON-RPC, REST, gRPC, agent card, and push notifications.       |
 | [`agents/compat-v1-client`](src/samples/agents/compat-v1-client/)               | v1.0-native client driving both the compat-aware server above and a hand-rolled mock v0.3 server in-process; pairs with `compat-v1-server`.    |
 | [`agents/database-agent`](src/samples/agents/database-agent/)                   | Agent with a server that uses persistent stores, so tasks and push notification configs survive restarts.                                      |
+| [`plugins`](src/samples/plugins/)                                               | Client and server plugins across JSON-RPC, REST and gRPC: experiment-ID propagation, call audit and timing, and `aroundExecution` scoping.     |
 
 To run a sample, install dependencies inside `src/samples` and use the
 provided npm scripts:
@@ -260,6 +262,17 @@ See the [`client/interceptors`](src/samples/client/interceptors/) sample for
 header injection + per-call `AbortSignal.timeout(...)`, and the
 [`cli.ts`](src/samples/cli.ts) sample for passing `--auth "Bearer $TOKEN"` as
 per-call `serviceParameters`.
+
+### Plugins
+
+A plugin from `@a2a-js/sdk/plugins` is one object with hooks into the client,
+the server, agent execution, task writes and push notifications. Register it
+with `DefaultRequestHandlerOptions.plugins` on the server and
+`ClientConfig.plugins` on the client. Use plugins for features that span
+several of these places, such as tracing, metrics or auditing.
+
+See the [plugins guide](docs/plugins.md) and the
+[`plugins`](src/samples/plugins/) sample.
 
 ### Authentication (server side)
 

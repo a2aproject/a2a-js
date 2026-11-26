@@ -46,6 +46,9 @@ export class V03PushNotificationSerializer implements PushNotificationSerializer
           legacyEvent = toCompatTaskArtifactUpdateEvent(payload.value);
         }
         break;
+      case 'messageUpdate':
+      case 'error':
+        throw new Error(`StreamResponse payload '${payload.$case}' has no v0.3 representation`);
       default: {
         // Exhaustive check on the `StreamResponse` payload union.
         const _exhaustive: never = payload;
