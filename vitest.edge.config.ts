@@ -28,6 +28,8 @@ const merged = mergeConfig(defaultConfig, {
       'test/e2e.spec.ts',
       // Spawns the sample agent and CLI as child processes over real sockets.
       'test/integration/samples_smoke.spec.ts',
+      // Runs real Express and gRPC servers to check plugin hooks across every transport.
+      'test/integration/plugins.spec.ts',
       'test/server/push_notification_integration.spec.ts',
       // Push-notification senders are exercised against a real Express webhook
       // (sibling pure-unit serializer tests stay in the edge suite).

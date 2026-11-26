@@ -4,7 +4,7 @@
 version: v2
 inputs:
   - git_repo: https://github.com/a2aproject/A2A.git
-    ref: v1.0.0
+    ref: v1.1.0-rc
     subdir: specification
   - module: buf.build/googleapis/googleapis
     paths:
