@@ -160,6 +160,23 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received[0].body).toEqual({ kind: 'task', fake: 'v0.3-body' });
   });
 
+  it('ignores the patch of a stored wire version when picking a serializer', async () => {
+    const v03Serializer: PushNotificationSerializer = {
+      serialize(): SerializedPushNotification {
+        return { body: '{"v":"0.3"}', contentType: 'application/json' };
+      },
+    };
+    const sender = new DefaultPushNotificationSender(store, {
+      serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
+    });
+    const ctx = new ServerCallContext({ requestedVersion: '0.3.0' });
+    await store.save('task-v030', ctx, makeConfig(`${baseUrl}/notify`));
+
+    await sender.send(makeStatusUpdate('task-v030'), ctx);
+
+    expect(received[0].body).toEqual({ v: '0.3' });
+  });
+
   it('uses the right serializer per stored entry when configs on one task have mixed versions', async () => {
     const v03Serializer: PushNotificationSerializer = {
       serialize(): SerializedPushNotification {
