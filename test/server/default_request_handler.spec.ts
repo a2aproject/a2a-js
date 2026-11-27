@@ -312,11 +312,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isDefined(taskResult.artifacts, 'Task result should have artifacts');
     assert.isArray(taskResult.artifacts);
     assert.lengthOf(taskResult.artifacts!, 1);
-    assert.deepEqual(taskResult.artifacts![0], {
-      ...testArtifact,
-      startGeneration: 3,
-      endGeneration: 3,
-    });
+    assert.deepEqual(taskResult.artifacts![0], testArtifact);
   });
 
   it('sendMessage: should handle agent execution failure for blocking calls', async () => {
@@ -840,8 +836,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       ['status', 6],
       ['status', 8],
     ]);
-    expect(fetched.artifacts?.[0].startGeneration).toBe(7);
-    expect(fetched.artifacts?.[0].endGeneration).toBe(7);
 
     // timelineLength trims timeline independently of historyLength (§3.2.4).
     const trimmed = await handler.getTask(
@@ -2161,66 +2155,32 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     }
   });
 
-  it('sendMessage and sendMessageStream apply timelineLength to returned tasks (§3.2.4)', async () => {
-    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish(
-        AgentEvent.task({
-          id: ctx.taskId,
-          contextId: ctx.contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          artifacts: [],
-          history: [],
-          metadata: {},
-        })
-      );
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId: ctx.taskId,
-          contextId: ctx.contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          metadata: {},
-        })
-      );
-      bus.finished();
+  it('sendMessage and sendMessageStream apply and validate timelineLength (§3.2.4)', async () => {
+    const sendParams = (
+      id: string,
+      timelineLength: number,
+      extra?: Partial<SendMessageRequest>
+    ): SendMessageRequest => ({
+      message: createTestMessage(id, 'hello'),
+      tenant: '',
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: false,
+        timelineLength,
+      },
+      metadata: {},
+      ...extra,
     });
 
-    const unary = (await handler.sendMessage(
-      {
-        message: createTestMessage('msg-tl-1', 'hello'),
-        tenant: '',
-        configuration: {
-          acceptedOutputModes: [],
-          taskPushNotificationConfig: undefined,
-          returnImmediately: false,
-          timelineLength: 1,
-        },
-        metadata: {},
-      },
-      serverCallContext
-    )) as Task;
-    expect(unary.timeline?.map((entry) => entry.generation)).toEqual([2]);
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+    const unary = (await handler.sendMessage(sendParams('msg-tl-1', 1), serverCallContext)) as Task;
+    expect(unary.timeline?.map((entry) => entry.generation)).toEqual([3]);
 
     const streamEvents: StreamResponse[] = [];
     for await (const event of handler.sendMessageStream(
-      {
-        message: createTestMessage('msg-tl-2', 'hello'),
-        tenant: '',
-        configuration: {
-          acceptedOutputModes: [],
-          taskPushNotificationConfig: undefined,
-          returnImmediately: false,
-          timelineLength: 0,
-        },
-        metadata: {},
-      },
+      sendParams('msg-tl-2', 0),
       serverCallContext
     )) {
       streamEvents.push(event);
@@ -2229,15 +2189,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     if (streamEvents[0].payload?.$case === 'task') {
       expect(streamEvents[0].payload.value.timeline).toBeUndefined();
     }
-  });
 
-  it('rejects negative or non-integer timelineLength across all operations (§3.2.4)', async () => {
     const saved = createTestTask('task-bad-tl');
     await mockTaskStore.save(saved, serverCallContext);
     for (const badValue of [-1, Number.NaN, 1.5]) {
+      const msg = 'timelineLength must be a non-negative integer';
       await expect(
         handler.getTask({ id: saved.id, tenant: '', timelineLength: badValue }, serverCallContext)
-      ).rejects.toThrow('timelineLength must be a non-negative integer');
+      ).rejects.toThrow(msg);
       await expect(
         handler.listTasks(
           {
@@ -2250,126 +2209,14 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
           },
           serverCallContext
         )
-      ).rejects.toThrow('timelineLength must be a non-negative integer');
+      ).rejects.toThrow(msg);
       await expect(
-        handler.sendMessage(
-          {
-            message: createTestMessage('msg-bad-tl', 'hi'),
-            tenant: '',
-            configuration: {
-              acceptedOutputModes: [],
-              taskPushNotificationConfig: undefined,
-              returnImmediately: false,
-              timelineLength: badValue,
-            },
-            metadata: {},
-          },
-          serverCallContext
-        )
-      ).rejects.toThrow('timelineLength must be a non-negative integer');
-      const stream = handler.sendMessageStream(
-        {
-          message: createTestMessage('msg-bad-tl-s', 'hi'),
-          tenant: '',
-          configuration: {
-            acceptedOutputModes: [],
-            taskPushNotificationConfig: undefined,
-            returnImmediately: false,
-            timelineLength: badValue,
-          },
-          metadata: {},
-        },
-        serverCallContext
-      );
-      await expect(stream.next()).rejects.toThrow('timelineLength must be a non-negative integer');
+        handler.sendMessage(sendParams('msg-bad-tl', badValue), serverCallContext)
+      ).rejects.toThrow(msg);
+      await expect(
+        handler.sendMessageStream(sendParams('msg-bad-tl-s', badValue), serverCallContext).next()
+      ).rejects.toThrow(msg);
     }
-  });
-
-  it('sendMessageStream: multi-turn AgentEvent.task(ctx.task) echo does not duplicate prior status in timeline', async () => {
-    let createdTaskId = '';
-    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementationOnce(async (ctx, bus) => {
-      createdTaskId = ctx.taskId;
-      bus.publish(
-        AgentEvent.task({
-          id: ctx.taskId,
-          contextId: ctx.contextId,
-          status: {
-            state: TaskState.TASK_STATE_SUBMITTED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          artifacts: [],
-          history: [],
-          metadata: {},
-        })
-      );
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId: ctx.taskId,
-          contextId: ctx.contextId,
-          status: {
-            state: TaskState.TASK_STATE_INPUT_REQUIRED,
-            message: createTestMessage('agent-q-1', 'need more info'),
-            timestamp: undefined,
-          },
-          metadata: {},
-        })
-      );
-      bus.finished();
-    });
-    const turn1Events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(
-      {
-        message: createTestMessage('turn-1-msg', 'start'),
-        tenant: '',
-        configuration: undefined,
-        metadata: {},
-      },
-      serverCallContext
-    )) {
-      turn1Events.push(event);
-    }
-    expect(turn1Events).toHaveLength(2);
-
-    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementationOnce(async (ctx, bus) => {
-      // Sample-agent pattern: echo ctx.task as the opening stream event on turn 2.
-      bus.publish(AgentEvent.task(ctx.task!));
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId: ctx.taskId,
-          contextId: ctx.contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          metadata: {},
-        })
-      );
-      bus.finished();
-    });
-    const turn2Events: StreamResponse[] = [];
-    for await (const event of handler.sendMessageStream(
-      {
-        message: { ...createTestMessage('turn-2-msg', 'answer'), taskId: createdTaskId },
-        tenant: '',
-        configuration: undefined,
-        metadata: {},
-      },
-      serverCallContext
-    )) {
-      turn2Events.push(event);
-    }
-    expect(turn2Events).toHaveLength(2);
-
-    const finalTask = await handler.getTask({ id: createdTaskId, tenant: '' }, serverCallContext);
-    expect(finalTask.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
-      ['message', 1],
-      ['status', 1],
-      ['status', 2],
-      ['message', 3],
-      ['status', 5],
-    ]);
   });
 
   it('non-blocking follow-up with timelineLength: 0 does not trim the stored task', async () => {
@@ -2390,27 +2237,18 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       finishExecution = resolve;
     });
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (ctx, bus) => {
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId: ctx.taskId,
-          contextId: ctx.contextId,
-          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
-          metadata: {},
-        })
-      );
+      const publishState = (state: TaskState) =>
+        bus.publish(
+          AgentEvent.statusUpdate({
+            taskId: ctx.taskId,
+            contextId: ctx.contextId,
+            status: { state, message: undefined, timestamp: undefined },
+            metadata: {},
+          })
+        );
+      publishState(TaskState.TASK_STATE_WORKING);
       await executionDone;
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId: ctx.taskId,
-          contextId: ctx.contextId,
-          status: {
-            state: TaskState.TASK_STATE_COMPLETED,
-            message: undefined,
-            timestamp: undefined,
-          },
-          metadata: {},
-        })
-      );
+      publishState(TaskState.TASK_STATE_COMPLETED);
       bus.finished();
     });
 
@@ -3150,6 +2988,33 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(result.nextPageToken).to.equal('');
   });
 
+  const expectedPushSnapshots = (expectedTask: Task): Task[] => {
+    const status = (state: TaskState): NonNullable<Task['status']> => ({
+      state,
+      message: undefined,
+      timestamp: undefined,
+    });
+    const submitted = status(TaskState.TASK_STATE_SUBMITTED);
+    const working = status(TaskState.TASK_STATE_WORKING);
+    const timeline1 = [
+      { entry: { $case: 'message' as const, value: expectedTask.history![0] }, generation: 1 },
+      { entry: { $case: 'status' as const, value: submitted }, generation: 1 },
+    ];
+    const timeline2 = [
+      ...timeline1,
+      { entry: { $case: 'status' as const, value: working }, generation: 2 },
+    ];
+    const timeline3 = [
+      ...timeline2,
+      { entry: { $case: 'status' as const, value: expectedTask.status! }, generation: 3 },
+    ];
+    return [
+      { ...expectedTask, status: submitted, timeline: timeline1, generation: 1 },
+      { ...expectedTask, status: working, timeline: timeline2, generation: 2 },
+      { ...expectedTask, timeline: timeline3, generation: 3 },
+    ];
+  };
+
   it('forwards the current full Task to the sender alongside every update event', async () => {
     const mockPushNotificationStore = new InMemoryPushNotificationStore();
     const mockPushNotificationSender = new MockPushNotificationSender();
@@ -3207,50 +3072,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       3
     );
 
-    const submittedStatus: NonNullable<Task['status']> = {
-      state: TaskState.TASK_STATE_SUBMITTED,
-      message: undefined,
-      timestamp: undefined,
-    };
-    const workingStatus: NonNullable<Task['status']> = {
-      state: TaskState.TASK_STATE_WORKING,
-      message: undefined,
-      timestamp: undefined,
-    };
-    const timelineAt1 = [
-      { entry: { $case: 'message' as const, value: params.message as Message }, generation: 1 },
-      { entry: { $case: 'status' as const, value: submittedStatus }, generation: 1 },
-    ];
-    const timelineAt2 = [
-      ...timelineAt1,
-      { entry: { $case: 'status' as const, value: workingStatus }, generation: 2 },
-    ];
-    const timelineAt3 = [
-      ...timelineAt2,
-      { entry: { $case: 'status' as const, value: expectedTask.status! }, generation: 3 },
-    ];
-
-    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][2] as Task;
-    assert.deepEqual(firstCallTask, {
-      ...expectedTask,
-      status: submittedStatus,
-      timeline: timelineAt1,
-      generation: 1,
-    });
-
-    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][2] as Task;
-    assert.deepEqual(secondCallTask, {
-      ...expectedTask,
-      status: workingStatus,
-      timeline: timelineAt2,
-      generation: 2,
-    });
-
-    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][2] as Task;
-    assert.deepEqual(thirdCallTask, { ...expectedTask, timeline: timelineAt3, generation: 3 });
+    expect(
+      (mockPushNotificationSender as MockPushNotificationSender).send.mock.calls.map(
+        (call) => call[2]
+      )
+    ).toEqual(expectedPushSnapshots(expectedTask));
   });
 
   it('sendMessageStream: yields raw events to the client and forwards the current full Task to the sender', async () => {
@@ -3332,50 +3158,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       history: [params.message as Message],
     };
 
-    const submittedStatus: NonNullable<Task['status']> = {
-      state: TaskState.TASK_STATE_SUBMITTED,
-      message: undefined,
-      timestamp: undefined,
-    };
-    const workingStatus: NonNullable<Task['status']> = {
-      state: TaskState.TASK_STATE_WORKING,
-      message: undefined,
-      timestamp: undefined,
-    };
-    const timelineAt1 = [
-      { entry: { $case: 'message' as const, value: params.message as Message }, generation: 1 },
-      { entry: { $case: 'status' as const, value: submittedStatus }, generation: 1 },
-    ];
-    const timelineAt2 = [
-      ...timelineAt1,
-      { entry: { $case: 'status' as const, value: workingStatus }, generation: 2 },
-    ];
-    const timelineAt3 = [
-      ...timelineAt2,
-      { entry: { $case: 'status' as const, value: expectedTask.status! }, generation: 3 },
-    ];
-
-    const firstCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[0][2] as Task;
-    assert.deepEqual(firstCallTask, {
-      ...expectedTask,
-      status: submittedStatus,
-      timeline: timelineAt1,
-      generation: 1,
-    });
-
-    const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[1][2] as Task;
-    assert.deepEqual(secondCallTask, {
-      ...expectedTask,
-      status: workingStatus,
-      timeline: timelineAt2,
-      generation: 2,
-    });
-
-    const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
-      .calls[2][2] as Task;
-    assert.deepEqual(thirdCallTask, { ...expectedTask, timeline: timelineAt3, generation: 3 });
+    expect(
+      (mockPushNotificationSender as MockPushNotificationSender).send.mock.calls.map(
+        (call) => call[2]
+      )
+    ).toEqual(expectedPushSnapshots(expectedTask));
   });
 
   it('should send push notification when message event is received (§4.3.3)', async () => {

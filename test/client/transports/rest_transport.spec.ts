@@ -178,31 +178,28 @@ describe('RestTransport', () => {
       expect(url).to.equal(`${endpoint}/tenant1/tasks/${taskId}?historyLength=0`);
     });
 
-    it('should pass historyLength as query parameter', async () => {
+    it('should pass historyLength and timelineLength as query parameters', async () => {
       const taskId = 'task-123';
       const historyLength = 10;
       const mockTask = createMockProtoTask(taskId);
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.getTask({ id: taskId, tenant: '', historyLength });
+      const result = await transport.getTask({
+        id: taskId,
+        tenant: '',
+        historyLength,
+        timelineLength: 4,
+      });
 
       expect(result).to.deep.equal(createMockTask(taskId));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=${historyLength}`);
+      expect(url).to.equal(
+        `${endpoint}/tasks/${taskId}?historyLength=${historyLength}&timelineLength=4`
+      );
       expect(options?.method).to.equal('GET');
-    });
-
-    it('should pass timelineLength as query parameter', async () => {
-      const taskId = 'task-123';
-      mockFetch.mockResolvedValue(createRestResponse(createMockProtoTask(taskId)));
-
-      await transport.getTask({ id: taskId, tenant: '', timelineLength: 4 });
-
-      const [url] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/tasks/${taskId}?timelineLength=4`);
     });
 
     it('should throw TaskNotFoundError when task does not exist', async () => {

@@ -82,32 +82,11 @@ export function advanceGeneration(task: Task): number {
   return task.generation;
 }
 
-function stampArtifactGeneration(
-  artifact: Artifact,
-  startGeneration: number,
-  endGeneration?: number
-): Artifact {
-  artifact.startGeneration = startGeneration;
-  if (endGeneration !== undefined) {
-    artifact.endGeneration = endGeneration;
-  } else {
-    delete artifact.endGeneration;
-  }
-  return artifact;
-}
-
 function sameStatus(left: TaskStatus | undefined, right: TaskStatus | undefined): boolean {
   if (!left || !right) {
     return left === right;
   }
   return JSON.stringify(TaskStatus.toJSON(left)) === JSON.stringify(TaskStatus.toJSON(right));
-}
-
-function artifactContentKey(artifact: Artifact): string {
-  const json = Artifact.toJSON(artifact) as Record<string, unknown>;
-  delete json.startGeneration;
-  delete json.endGeneration;
-  return JSON.stringify(json);
 }
 
 /** Returns a shallow copy of `event` with `generation` set; messages are returned as is. */
@@ -291,6 +270,9 @@ export class ResultManager {
         mergedTask.history = structuredClone(persistedTask!.history);
       }
 
+      // Merge artifacts by `artifactId`; incoming wins for collisions.
+      mergedTask.artifacts = this.mergeArtifacts(persistedTask!.artifacts, taskEvent.artifacts);
+
       // Merge metadata; incoming wins for key collisions.
       if (persistedTask!.metadata || taskEvent.metadata) {
         mergedTask.metadata = {
@@ -299,13 +281,6 @@ export class ResultManager {
         };
       }
     }
-
-    // Merge artifacts by `artifactId`; incoming wins for collisions and gets stamped.
-    mergedTask.artifacts = this.mergeArtifacts(
-      hasPersisted ? persistedTask!.artifacts : undefined,
-      taskEvent.artifacts,
-      generation
-    );
 
     const timeline: TimelineEntry[] =
       hasPersisted && persistedTask!.timeline ? structuredClone(persistedTask!.timeline) : [];
@@ -437,7 +412,7 @@ export class ResultManager {
       return;
     }
 
-    const generation = advanceGeneration(task);
+    advanceGeneration(task);
 
     if (!task.artifacts) {
       task.artifacts = [];
@@ -445,8 +420,6 @@ export class ResultManager {
     const existingArtifactIndex = task.artifacts.findIndex(
       (art) => art.artifactId === artifact.artifactId
     );
-    const endGeneration = artifactEvent.lastChunk ? generation : undefined;
-    let startGeneration = generation;
     if (existingArtifactIndex !== -1) {
       if (artifactEvent.append) {
         // Clone incoming parts/metadata so the persisted artifact owns
@@ -463,19 +436,11 @@ export class ResultManager {
             ...existingArtifact.metadata,
             ...structuredClone(artifact.metadata),
           };
-        startGeneration = existingArtifact.startGeneration ?? generation;
-        stampArtifactGeneration(existingArtifact, startGeneration, endGeneration);
       } else {
-        task.artifacts[existingArtifactIndex] = stampArtifactGeneration(
-          structuredClone(artifact),
-          generation,
-          endGeneration
-        );
+        task.artifacts[existingArtifactIndex] = structuredClone(artifact);
       }
     } else {
-      task.artifacts.push(
-        stampArtifactGeneration(structuredClone(artifact), generation, endGeneration)
-      );
+      task.artifacts.push(structuredClone(artifact));
     }
 
     // Merge event-level metadata into the task; incoming wins for collisions.
@@ -486,19 +451,8 @@ export class ResultManager {
       };
     }
 
-    // Stamp generation bounds onto a copy of the outgoing event's artifact (§3.2.1, §3.2.8)
-    // without mutating the shared object published on the bus.
-    const stampedArtifact = stampArtifactGeneration(
-      structuredClone(artifact),
-      startGeneration,
-      endGeneration
-    );
-
     this.currentTask = task;
-    await this.saveCurrentTask(
-      AgentEvent.artifactUpdate({ ...artifactEvent, artifact: stampedArtifact }),
-      task.status?.state
-    );
+    await this.saveCurrentTask(AgentEvent.artifactUpdate(artifactEvent), task.status?.state);
   }
 
   /**
@@ -509,15 +463,10 @@ export class ResultManager {
    */
   private mergeArtifacts(
     persisted: Artifact[] | undefined,
-    incoming: Artifact[] | undefined,
-    generation: number
+    incoming: Artifact[] | undefined
   ): Artifact[] {
     if (!persisted || persisted.length === 0) {
-      return incoming
-        ? incoming.map((art) =>
-            stampArtifactGeneration(structuredClone(art), generation, generation)
-          )
-        : [];
+      return incoming ? structuredClone(incoming) : [];
     }
     if (!incoming || incoming.length === 0) {
       return structuredClone(persisted);
@@ -528,21 +477,13 @@ export class ResultManager {
       incomingById.set(art.artifactId, art);
     }
 
-    const merged: Artifact[] = persisted.map((art) => {
-      const replacement = incomingById.get(art.artifactId);
-      if (!replacement || artifactContentKey(replacement) === artifactContentKey(art)) {
-        return structuredClone(art);
-      }
-      return stampArtifactGeneration(
-        structuredClone(replacement),
-        art.startGeneration ?? generation,
-        generation
-      );
-    });
+    const merged: Artifact[] = persisted.map((art) =>
+      structuredClone(incomingById.get(art.artifactId) ?? art)
+    );
     const seenIds = new Set(persisted.map((art) => art.artifactId));
     for (const art of incoming) {
       if (!seenIds.has(art.artifactId)) {
-        merged.push(stampArtifactGeneration(structuredClone(art), generation, generation));
+        merged.push(structuredClone(art));
       }
     }
     return merged;

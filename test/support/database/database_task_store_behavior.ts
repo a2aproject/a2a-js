@@ -52,7 +52,7 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
     it('round-trips a fully populated task', async () => {
       const message = makeMessage();
       const task = makeTask({
-        artifacts: [{ ...makeArtifact(), startGeneration: 2, endGeneration: 3 }],
+        artifacts: [makeArtifact()],
         history: [message],
         timeline: [
           { entry: { $case: 'message', value: message }, generation: 1 },
@@ -653,17 +653,7 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
 
       const stored = await store.load(result.id, context);
       expect(stored?.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
-      expect(stored?.artifacts).toEqual([
-        {
-          ...artifact,
-          parts: artifact.parts.map((part) => ({
-            ...part,
-            metadata: undefined as Record<string, unknown> | undefined,
-          })),
-          startGeneration: 3,
-          endGeneration: 3,
-        },
-      ]);
+      expect(stored?.artifacts).toEqual([artifact]);
       expect(stored?.history).toEqual([userMessage, { ...agentMessage, taskId: result.id }]);
 
       const fetched = await handler.getTask({ id: result.id, tenant: 'acme' }, context);

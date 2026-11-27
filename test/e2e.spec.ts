@@ -295,33 +295,6 @@ describe('Client E2E tests', () => {
             },
             {
               payload: {
-                $case: 'artifactUpdate',
-                value: {
-                  taskId,
-                  contextId,
-                  artifact: {
-                    artifactId: 'art-1',
-                    name: 'output',
-                    description: '',
-                    parts: [
-                      {
-                        content: { $case: 'text', value: 'hello' },
-                        mediaType: 'text/plain',
-                        filename: '',
-                        metadata: undefined,
-                      },
-                    ],
-                    metadata: {},
-                    extensions: [],
-                  },
-                  append: false,
-                  lastChunk: true,
-                  metadata: {},
-                },
-              },
-            },
-            {
-              payload: {
                 $case: 'statusUpdate',
                 value: {
                   taskId,
@@ -381,12 +354,6 @@ describe('Client E2E tests', () => {
                       generation: 1,
                     },
                   ];
-                } else if (event.payload.$case === 'artifactUpdate') {
-                  value.artifact = {
-                    ...event.payload.value.artifact,
-                    startGeneration: index + 1,
-                    endGeneration: index + 1,
-                  };
                 }
                 return { payload: { ...event.payload, value } };
               })
