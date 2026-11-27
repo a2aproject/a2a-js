@@ -224,6 +224,9 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         'taskPushNotificationConfig.id'
       );
     }
+    if (incomingMessage.role !== Role.ROLE_USER) {
+      throw new RequestMalformedError('Client messages must have role ROLE_USER.');
+    }
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
 
