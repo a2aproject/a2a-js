@@ -16,6 +16,7 @@ import { AgentEvent } from '../../../src/server/events/execution_event_bus.js';
 import { ServerCallContext } from '../../../src/server/context.js';
 import { UnsupportedOperationError } from '../../../src/errors/index.js';
 import { MockAgentExecutor } from '../mocks/agent-executor.mock.js';
+import { ResultManager } from '../../../src/server/result_manager.js';
 
 // Streaming error synthesis: if the executor throws before a Task
 // event, _runStreamExecutor synthesizes Task + statusUpdate(FAILED).
@@ -83,6 +84,117 @@ describe('DefaultRequestHandler streaming error synthesis (_runStreamExecutor)',
     metadata: {},
     referenceTaskIds: [],
     ...overrides,
+  });
+
+  it('returns the terminal task when a stale Task snapshot races a terminal transition', async () => {
+    const taskId = 'task-terminal-race';
+    const contextId = 'ctx-terminal-race';
+    const task: Task = {
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    await taskStore.save(task, serverContext);
+    let entered!: () => void;
+    const executorStarted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    mockExecutor.execute.mockImplementation(async (_ctx, bus) => {
+      entered();
+      await gate;
+      bus.publish(AgentEvent.task(task));
+    });
+    const stream = handler.sendMessageStream(
+      {
+        message: makeMessage('msg-terminal-race', 'hello', { taskId, contextId }),
+        tenant: '',
+        configuration: undefined,
+        metadata: {},
+      },
+      serverContext
+    );
+    const first = stream.next();
+    await executorStarted;
+    await new ResultManager(taskStore, serverContext).processEvent(
+      AgentEvent.statusUpdate({
+        taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_CANCELED, message: undefined, timestamp: undefined },
+        metadata: {},
+      })
+    );
+    resume();
+    const response = await first;
+    if (!response.value || response.value.payload?.$case !== 'task') {
+      throw new Error('expected task');
+    }
+    expect(response.value.payload.value.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
+    expect((await taskStore.load(taskId, serverContext))?.status?.state).toBe(
+      TaskState.TASK_STATE_CANCELED
+    );
+    await stream.return(undefined);
+  });
+
+  it('returns the terminal snapshot for an immediate response after the same race', async () => {
+    const taskId = 'task-immediate-race';
+    const contextId = 'ctx-immediate-race';
+    const task: Task = {
+      id: taskId,
+      contextId,
+      status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      artifacts: [],
+      history: [],
+      metadata: {},
+    };
+    await taskStore.save(task, serverContext);
+    let entered!: () => void;
+    const executorStarted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    mockExecutor.execute.mockImplementation(async (_ctx, bus) => {
+      entered();
+      await gate;
+      bus.publish(AgentEvent.task(task));
+    });
+    const pending = handler.sendMessage(
+      {
+        message: makeMessage('msg-immediate-race', 'hello', { taskId, contextId }),
+        tenant: '',
+        configuration: {
+          returnImmediately: true,
+          acceptedOutputModes: [],
+          taskPushNotificationConfig: undefined,
+        },
+        metadata: {},
+      },
+      serverContext
+    );
+    await executorStarted;
+    await new ResultManager(taskStore, serverContext).processEvent(
+      AgentEvent.statusUpdate({
+        taskId,
+        contextId,
+        status: { state: TaskState.TASK_STATE_CANCELED, message: undefined, timestamp: undefined },
+        metadata: {},
+      })
+    );
+    resume();
+    const response = await pending;
+    expect('status' in response && response.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
+    expect((await taskStore.load(taskId, serverContext))?.status?.state).toBe(
+      TaskState.TASK_STATE_CANCELED
+    );
   });
 
   it('throws UnsupportedOperationError if the agent does not advertise streaming', async () => {
