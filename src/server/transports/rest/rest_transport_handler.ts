@@ -136,7 +136,7 @@ export class RestTransportHandler {
           ? this.parseHistoryLength(queryParams.historyLength)
           : undefined,
       timelineLength:
-        queryParams.timelineLength !== undefined && queryParams.timelineLength !== ''
+        queryParams.timelineLength !== undefined
           ? this.parseNonNegativeInt(queryParams.timelineLength, 'timelineLength')
           : undefined,
       statusTimestampAfter: (queryParams.statusTimestampAfter as string) || undefined,

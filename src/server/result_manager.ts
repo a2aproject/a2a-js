@@ -510,10 +510,8 @@ export class ResultManager {
 
   /**
    * Returns the final result (Message or Task) after the event stream
-   * has been fully processed. Returns the internally-tracked object
-   * directly (not a clone) so downstream callers can apply in-place
-   * edits; safe because RMs are scoped to a single request and discarded
-   * immediately after.
+   * has been fully processed. Returns the internally-tracked reference,
+   * so callers that trim or mutate the response must clone it first.
    */
   public getFinalResult(): Message | Task | undefined {
     if (this.finalMessageResult) {

@@ -2175,8 +2175,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
 
     (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
 
+    const saveSpy = vi.spyOn(mockTaskStore, 'save');
     const unary = (await handler.sendMessage(sendParams('msg-tl-1', 1), serverCallContext)) as Task;
     expect(unary.timeline?.map((entry) => entry.generation)).toEqual([3]);
+    // Trimming the returned task must not mutate the live task handed to TaskStore.save / plugins.
+    expect(saveSpy.mock.calls.at(-1)![0].timeline?.map((entry) => entry.generation)).toEqual([
+      1, 1, 2, 3,
+    ]);
 
     const streamEvents: StreamResponse[] = [];
     for await (const event of handler.sendMessageStream(

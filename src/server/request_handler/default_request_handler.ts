@@ -787,7 +787,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
               return;
             }
             if (isTask(finalResult)) {
-              this._applyHistoryLengthSemantics(finalResult, historyLengthConfig ?? {});
+              const taskResult = structuredClone(finalResult);
+              this._applyHistoryLengthSemantics(taskResult, historyLengthConfig ?? {});
+              resolve(taskResult);
+              return;
             }
             resolve(finalResult);
           })

@@ -167,6 +167,13 @@ describe('proto3 JSON conformance', () => {
       expect(StreamRequest.toJSON(StreamRequest.fromJSON(live))).toEqual(live);
       const get = { id: 't', timelineLength: 0, currentGeneration: '2' };
       expect(GetTaskRequest.toJSON(GetTaskRequest.fromJSON(get))).toEqual(get);
+      // Non-numeric JSON values must not coerce to 0/1 and bypass handler validation.
+      for (const badValue of ['', '   ', false, true, []] as unknown[]) {
+        expect(
+          GetTaskRequest.fromJSON({ id: 't', timelineLength: badValue }).timelineLength
+        ).toBeNaN();
+      }
+      expect(GetTaskRequest.fromJSON({ id: 't', timelineLength: '0' }).timelineLength).toBe(0);
     });
   });
 });

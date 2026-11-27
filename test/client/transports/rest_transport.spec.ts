@@ -189,7 +189,7 @@ describe('RestTransport', () => {
         id: taskId,
         tenant: '',
         historyLength,
-        timelineLength: 4,
+        timelineLength: 0,
       });
 
       expect(result).to.deep.equal(createMockTask(taskId));
@@ -197,7 +197,7 @@ describe('RestTransport', () => {
 
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).to.equal(
-        `${endpoint}/tasks/${taskId}?historyLength=${historyLength}&timelineLength=4`
+        `${endpoint}/tasks/${taskId}?historyLength=${historyLength}&timelineLength=0`
       );
       expect(options?.method).to.equal('GET');
     });
@@ -295,11 +295,11 @@ describe('RestTransport', () => {
         status: TaskState.TASK_STATE_UNSPECIFIED,
         pageToken: '',
         statusTimestampAfter: '',
-        timelineLength: 2,
+        timelineLength: 0,
       });
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/tasks?timelineLength=2`);
+      expect(url).to.equal(`${endpoint}/tasks?timelineLength=0`);
     });
   });
 

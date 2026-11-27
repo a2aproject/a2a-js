@@ -256,11 +256,11 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should include timelineLength if provided', async () => {
-      await transportHandler.getTask('task-1', mockContext, { timelineLength: '5' });
+    it('should include timelineLength if provided (including 0)', async () => {
+      await transportHandler.getTask('task-1', mockContext, { timelineLength: '0' });
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
-        { id: 'task-1', timelineLength: 5, tenant: '' },
+        { id: 'task-1', timelineLength: 0, tenant: '' },
         mockContext
       );
     });
@@ -277,13 +277,15 @@ describe('RestTransportHandler', () => {
       ).rejects.toThrow('historyLength must be non-negative');
     });
 
-    it('should throw InvalidParams if timelineLength is invalid or negative', async () => {
-      await expect(
-        transportHandler.getTask('task-1', mockContext, { timelineLength: 'invalid' })
-      ).rejects.toThrow('timelineLength must be a non-negative integer');
-      await expect(
-        transportHandler.getTask('task-1', mockContext, { timelineLength: '-1' })
-      ).rejects.toThrow('timelineLength must be a non-negative integer');
+    it('should throw InvalidParams if timelineLength is invalid, empty, fractional, or negative', async () => {
+      for (const badValue of ['invalid', '', '1.5', '-1']) {
+        await expect(
+          transportHandler.getTask('task-1', mockContext, { timelineLength: badValue })
+        ).rejects.toThrow('timelineLength must be a non-negative integer');
+        await expect(
+          transportHandler.listTasks({ timelineLength: badValue }, mockContext)
+        ).rejects.toThrow('timelineLength must be a non-negative integer');
+      }
     });
   });
 
@@ -303,7 +305,7 @@ describe('RestTransportHandler', () => {
           pageSize: '10',
           pageToken: 'abc',
           historyLength: '5',
-          timelineLength: '3',
+          timelineLength: '0',
           contextId: 'ctx-1',
         },
         mockContext
@@ -318,7 +320,7 @@ describe('RestTransportHandler', () => {
           pageSize: 10,
           pageToken: 'abc',
           historyLength: 5,
-          timelineLength: 3,
+          timelineLength: 0,
           statusTimestampAfter: undefined,
           includeArtifacts: false,
         },

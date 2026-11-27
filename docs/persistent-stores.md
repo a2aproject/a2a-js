@@ -120,7 +120,7 @@ Choose the resolver before you store data. Changing it later changes the owner c
 
 The SDK ships an `a2a-db` CLI that creates and updates the store tables. Once `@a2a-js/sdk` is installed, run it with `npx a2a-db`; `npx a2a-db --help` prints the full usage.
 
-Run `a2a-db upgrade` before deploying a new SDK version: `DatabaseTaskStore` reads the columns the latest migration creates, so it fails against a table that is behind. For example, `0002_add_task_generation` and `0003_add_task_timeline` add the v1.1 `generation` and `timeline` columns; tasks stored before them start counting at 1 on their next change.
+Run `a2a-db upgrade` before deploying a new SDK version: `DatabaseTaskStore` reads the columns the latest migration creates, so it fails against a table that is behind. For example, `0002_add_task_generation` adds `generation` (tasks stored before it start counting at 1 on their next change), and `0003_add_task_timeline` adds `timeline` (tasks stored before it read `timeline` as unset until new entries are appended).
 
 ### Commands
 
