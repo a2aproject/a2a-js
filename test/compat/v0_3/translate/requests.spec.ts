@@ -40,19 +40,15 @@ import type * as legacy from '../../../../src/compat/v0_3/types/types.js';
 
 describe('requests', () => {
   describe('SendMessageConfiguration polarity inversion', () => {
-    it('compat blocking=true → core returnImmediately=false', () => {
-      const core = toCoreSendMessageConfiguration({ blocking: true });
-      expect(core.returnImmediately).toBe(false);
-    });
-
-    it('compat blocking=false → core returnImmediately=true', () => {
-      const core = toCoreSendMessageConfiguration({ blocking: false });
-      expect(core.returnImmediately).toBe(true);
-    });
-
-    it('compat blocking undefined → core returnImmediately=true (v0.3 default is non-blocking)', () => {
-      const core = toCoreSendMessageConfiguration({});
-      expect(core.returnImmediately).toBe(true);
+    it.each<[legacy.MessageSendConfiguration, boolean]>([
+      [{ blocking: true }, false],
+      [{ blocking: false }, true],
+      // v0.3 default is blocking.
+      [{}, false],
+      [{ acceptedOutputModes: ['text/plain'] }, false],
+    ])('compat %j → core returnImmediately=%s', (config, expected) => {
+      const core = toCoreSendMessageConfiguration(config);
+      expect(core.returnImmediately).toBe(expected);
     });
 
     it('core returnImmediately=true → compat blocking=false', () => {
