@@ -10,7 +10,7 @@ describeStoreMigrations({
   id: 'tasks',
   table: 'tasks',
   ledgerTable: 'a2a_tasks_migrations',
-  migrations: ['0001_create_tasks', '0002_add_task_generation'],
+  migrations: ['0001_create_tasks', '0002_add_task_generation', '0003_add_task_timeline'],
   tableNameFlag: '--tasks-table-name',
   keyColumns: KEY_COLUMNS,
   allColumns: [
@@ -24,6 +24,7 @@ describeStoreMigrations({
     'metadata',
     'protocol_version',
     'generation',
+    'timeline',
   ],
   notNullColumns: [...KEY_COLUMNS, 'context_id', 'status_last_updated'],
   nullableColumns: [
@@ -34,6 +35,7 @@ describeStoreMigrations({
     'metadata',
     'protocol_version',
     'generation',
+    'timeline',
   ],
   widths: { tenant: 255, owner: 255, id: 36, context_id: 36, status_state: 255 },
   collatedColumns: [...KEY_COLUMNS, 'context_id', 'status_state'],

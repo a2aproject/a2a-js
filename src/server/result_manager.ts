@@ -3,8 +3,10 @@ import {
   Message,
   Task,
   TaskState,
+  TaskStatus,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
+  TimelineEntry,
 } from '../index.js';
 import { ServerCallContext } from './context.js';
 import {
@@ -74,9 +76,17 @@ export function withTaskWriteLock<T>(
   return serializeByScope(lockKey(context, taskId), fn);
 }
 
-/** Advances a task's `generation` by one; a task stored before v1.1 starts at 1. */
-export function advanceGeneration(task: Task): void {
+/** Advances a task's `generation` by one and returns it; a task stored before v1.1 starts at 1. */
+export function advanceGeneration(task: Task): number {
   task.generation = (task.generation ?? 0) + 1;
+  return task.generation;
+}
+
+function sameStatus(left: TaskStatus | undefined, right: TaskStatus | undefined): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+  return JSON.stringify(TaskStatus.toJSON(left)) === JSON.stringify(TaskStatus.toJSON(right));
 }
 
 /** Returns a shallow copy of `event` with `generation` set; messages are returned as is. */
@@ -247,44 +257,94 @@ export class ResultManager {
     // Deep-clone the incoming Task so further executor mutations can't
     // leak into our state.
     const mergedTask: Task = structuredClone(taskEvent);
-    // The server owns `generation`; `saveCurrentTask` advances the persisted one.
-    mergedTask.generation =
-      persistedTask && persistedTask.id === taskEvent.id ? persistedTask.generation : undefined;
+    const hasPersisted = Boolean(persistedTask && persistedTask.id === taskEvent.id);
+    // The server owns `generation` and `timeline`; start from persisted state.
+    mergedTask.generation = hasPersisted ? persistedTask!.generation : undefined;
 
-    if (persistedTask && persistedTask.id === taskEvent.id) {
+    if (hasPersisted) {
       // Preserve persisted history when the incoming event omits it. If
       // the incoming event carries its own history, treat it as
       // authoritative (the executor is responsible for what's persisted).
-      if ((!mergedTask.history || mergedTask.history.length === 0) && persistedTask.history) {
-        mergedTask.history = structuredClone(persistedTask.history);
+      if ((!mergedTask.history || mergedTask.history.length === 0) && persistedTask!.history) {
+        mergedTask.history = structuredClone(persistedTask!.history);
       }
 
       // Merge artifacts by `artifactId`; incoming wins for collisions.
-      mergedTask.artifacts = this.mergeArtifacts(persistedTask.artifacts, taskEvent.artifacts);
+      mergedTask.artifacts = this.mergeArtifacts(persistedTask!.artifacts, taskEvent.artifacts);
 
       // Merge metadata; incoming wins for key collisions.
-      if (persistedTask.metadata || taskEvent.metadata) {
+      if (persistedTask!.metadata || taskEvent.metadata) {
         mergedTask.metadata = {
-          ...structuredClone(persistedTask.metadata ?? {}),
+          ...structuredClone(persistedTask!.metadata ?? {}),
           ...structuredClone(taskEvent.metadata ?? {}),
         };
       }
     }
 
-    // Ensure the latest user message is in history. Clone again so the
-    // same reference can't be shared between the history array and the
-    // `latestUserMessage` slot when the same RM handles multiple events.
+    const timeline: TimelineEntry[] =
+      hasPersisted && persistedTask!.timeline ? structuredClone(persistedTask!.timeline) : [];
+
+    // Ensure the latest user message is in history and timeline. Clone again so the
+    // same reference can't be shared between arrays and `latestUserMessage`.
+    let mutated = false;
+    let userMessageAdded = false;
     if (this.latestUserMessage) {
       const latest = this.latestUserMessage;
       if (!mergedTask.history?.find((msg) => msg.messageId === latest.messageId)) {
         mergedTask.history = [structuredClone(latest), ...(mergedTask.history || [])];
+      }
+      const alreadyInTimeline = timeline.some(
+        (entry) =>
+          entry.entry?.$case === 'message' && entry.entry.value.messageId === latest.messageId
+      );
+      if (!alreadyInTimeline) {
+        const generation = advanceGeneration(mergedTask);
+        timeline.push({ entry: { $case: 'message', value: structuredClone(latest) }, generation });
+        userMessageAdded = true;
+        mutated = true;
+      }
+    }
+
+    // Omit bare SUBMITTED on creation when the user message already holds generation 1,
+    // so every timeline entry has a unique generation (§3.2.8). On existing tasks, only
+    // record a changed status (or backfill a pre-timeline task), not an unchanged echo.
+    const isBareSubmitted =
+      mergedTask.status?.state === TaskState.TASK_STATE_SUBMITTED && !mergedTask.status.message;
+    const shouldRecordStatus = Boolean(
+      mergedTask.status &&
+      (hasPersisted
+        ? !persistedTask!.timeline?.length || !sameStatus(mergedTask.status, persistedTask!.status)
+        : !userMessageAdded || !isBareSubmitted)
+    );
+    if (shouldRecordStatus) {
+      const generation = advanceGeneration(mergedTask);
+      timeline.push({
+        entry: { $case: 'status', value: structuredClone(mergedTask.status!) },
+        generation,
+      });
+      mutated = true;
+    }
+    if (timeline.length > 0) {
+      mergedTask.timeline = timeline;
+    } else {
+      delete mergedTask.timeline;
+    }
+
+    // Advance generation for non-timeline mutations (e.g. new artifacts or metadata)
+    // and ensure new tasks start at 1, without advancing on an unchanged snapshot echo (§3.2.7).
+    if (!mutated) {
+      const isUnchangedEcho =
+        hasPersisted &&
+        JSON.stringify(Task.toJSON(mergedTask)) === JSON.stringify(Task.toJSON(persistedTask!));
+      if (!isUnchangedEcho) {
+        advanceGeneration(mergedTask);
       }
     }
 
     this.currentTask = mergedTask;
     await this.saveCurrentTask(
       AgentEvent.task(taskEvent),
-      persistedTask?.id === taskEvent.id ? persistedTask.status?.state : undefined
+      hasPersisted ? persistedTask!.status?.state : undefined
     );
   }
 
@@ -333,6 +393,8 @@ export class ResultManager {
       return;
     }
 
+    const generation = advanceGeneration(task);
+
     // Clone the incoming status so caller-side mutation can't drift state.
     task.status = structuredClone(updateEvent.status);
 
@@ -350,6 +412,12 @@ export class ResultManager {
         task.history = [...(task.history || []), structuredClone(update)];
       }
     }
+    if (task.status) {
+      task.timeline = [
+        ...(task.timeline ?? []),
+        { entry: { $case: 'status', value: structuredClone(task.status) }, generation },
+      ];
+    }
     this.currentTask = task;
     await this.saveCurrentTask(AgentEvent.statusUpdate(updateEvent), persistedState);
   }
@@ -365,6 +433,8 @@ export class ResultManager {
       this.currentTask = task;
       return;
     }
+
+    advanceGeneration(task);
 
     if (!task.artifacts) {
       task.artifacts = [];
@@ -449,7 +519,6 @@ export class ResultManager {
     if (!task) {
       return;
     }
-    advanceGeneration(task);
     await this.taskStore.save(task, this.serverCallContext);
     this.pendingReport = {
       taskId: task.id,
@@ -463,10 +532,8 @@ export class ResultManager {
 
   /**
    * Returns the final result (Message or Task) after the event stream
-   * has been fully processed. Returns the internally-tracked object
-   * directly (not a clone) so downstream callers can apply in-place
-   * edits; safe because RMs are scoped to a single request and discarded
-   * immediately after.
+   * has been fully processed. Returns the internally-tracked reference,
+   * so callers that trim or mutate the response must clone it first.
    */
   public getFinalResult(): Message | Task | undefined {
     if (this.finalMessageResult) {

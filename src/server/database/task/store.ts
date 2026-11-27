@@ -34,6 +34,9 @@ function listColumns(params: ListTasksRequest): readonly (keyof TaskRow)[] {
   if (params.historyLength !== undefined && params.historyLength <= 0) {
     skipped.add('history');
   }
+  if (params.timelineLength !== undefined && params.timelineLength <= 0) {
+    skipped.add('timeline');
+  }
   return TASK_TABLE_COLUMNS.filter((column) => !skipped.has(column));
 }
 
@@ -97,6 +100,7 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
       metadata: row.metadata,
       protocol_version: row.protocol_version,
       generation: row.generation,
+      timeline: row.timeline,
     };
 
     const insert = this.db.insertInto(this.tableName).values(row);
@@ -190,7 +194,12 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
       try {
         // An unselected payload column reads as absent, which is an empty value.
         tasks.push(
-          fromTaskRow({ ...row, artifacts: row.artifacts ?? null, history: row.history ?? null })
+          fromTaskRow({
+            ...row,
+            artifacts: row.artifacts ?? null,
+            history: row.history ?? null,
+            timeline: row.timeline ?? null,
+          })
         );
       } catch (error) {
         // One unreadable row must not lose the rest, nor the rows behind it.

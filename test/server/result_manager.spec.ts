@@ -1105,6 +1105,94 @@ describe('ResultManager generation', () => {
     expect(statusUpdate.generation).toBeUndefined();
     expect((await store.load('task-1', context))!.generation).toBe(2);
   });
+
+  it('records timeline entries in generation order and leaves gaps for artifact updates (§3.2.8)', async () => {
+    const rm = new ResultManager(store, context);
+    rm.setContext(createMessage('user-1', 'start'));
+    const statusEvent = (state: TaskState) =>
+      AgentEvent.statusUpdate({
+        taskId: 'task-tl',
+        contextId: 'ctx-1',
+        status: { state, message: undefined, timestamp: undefined },
+        metadata: {},
+      });
+
+    await rm.processEvent(AgentEvent.task(createTask('task-tl', 'ctx-1')));
+    await rm.processEvent(statusEvent(TaskState.TASK_STATE_WORKING));
+    await rm.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 'task-tl',
+        contextId: 'ctx-1',
+        artifact: createArtifact('art-1', 'chunk'),
+        append: false,
+        lastChunk: true,
+        metadata: {},
+      })
+    );
+    await rm.processEvent(statusEvent(TaskState.TASK_STATE_COMPLETED));
+    // Ignored late update to terminal task must not append to timeline.
+    await rm.processEvent(statusEvent(TaskState.TASK_STATE_WORKING));
+
+    const finalTask = (await store.load('task-tl', context))!;
+    expect(finalTask.generation).toBe(4);
+    expect(finalTask.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
+      ['message', 1],
+      ['status', 2],
+      ['status', 4],
+    ]);
+
+    // A task created directly in a non-bare status gets unique generations for both entries.
+    const rmImmediate = new ResultManager(store, context);
+    rmImmediate.setContext(createMessage('user-imm', 'quick'));
+    await rmImmediate.processEvent(
+      AgentEvent.task(
+        createTask('task-imm', 'ctx-1', {
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: createMessage('agent-imm', 'done', Role.ROLE_AGENT),
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+    const immediateTask = (await store.load('task-imm', context))!;
+    expect(immediateTask.generation).toBe(2);
+    expect(immediateTask.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
+      ['message', 1],
+      ['status', 2],
+    ]);
+  });
+
+  it('does not advance generation or duplicate status when Turn 2 echoes the persisted Task snapshot', async () => {
+    const inputRequired: TaskStatus = {
+      state: TaskState.TASK_STATE_INPUT_REQUIRED,
+      message: createMessage('agent-q', 'clarify?', Role.ROLE_AGENT),
+      timestamp: undefined,
+    };
+    const turn2UserMessage = createMessage('user-2', 'turn 2');
+    const persisted = createTask('task-echo', 'ctx-1', {
+      generation: 3,
+      status: inputRequired,
+      history: [turn2UserMessage],
+      timeline: [
+        { entry: { $case: 'status', value: inputRequired }, generation: 2 },
+        { entry: { $case: 'message', value: turn2UserMessage }, generation: 3 },
+      ],
+    });
+    await store.save(persisted, context);
+
+    const rmTurn2 = new ResultManager(store, context);
+    rmTurn2.setContext(turn2UserMessage);
+    const echoed = await rmTurn2.processEvent(AgentEvent.task(structuredClone(persisted)));
+
+    expect(echoed.kind === 'task' ? echoed.data.generation : undefined).toBe(3);
+    const afterEcho = (await store.load('task-echo', context))!;
+    expect(afterEcho.generation).toBe(3);
+    expect(afterEcho.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
+      ['status', 2],
+      ['message', 3],
+    ]);
+  });
 });
 
 describe('ResultManager task plugin hooks', () => {

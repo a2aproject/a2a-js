@@ -50,9 +50,24 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
 
   describe('save() and load()', () => {
     it('round-trips a fully populated task', async () => {
+      const message = makeMessage();
       const task = makeTask({
         artifacts: [makeArtifact()],
-        history: [makeMessage()],
+        history: [message],
+        timeline: [
+          { entry: { $case: 'message', value: message }, generation: 1 },
+          {
+            entry: {
+              $case: 'status',
+              value: {
+                state: TaskState.TASK_STATE_WORKING,
+                message: undefined,
+                timestamp: '2026-01-01T00:00:00.000Z',
+              },
+            },
+            generation: 2,
+          },
+        ],
         metadata: { note: 'kept' },
         generation: 7,
       });
@@ -63,12 +78,20 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
       expect(await store.load('task-1', context)).toEqual(task);
     });
 
-    // A row written before the generation column existed, or by a pre-v1.1 store.
-    it('reads a null generation as unset', async () => {
-      await store.save(makeTask({ generation: 3 }), makeContext());
-      await execute(`update ${TABLE} set generation = null`);
+    // A row written before the v1.1 columns existed, or by a pre-v1.1 store.
+    it('reads null generation and timeline as unset', async () => {
+      await store.save(
+        makeTask({
+          generation: 3,
+          timeline: [{ entry: { $case: 'message', value: makeMessage() }, generation: 1 }],
+        }),
+        makeContext()
+      );
+      await execute(`update ${TABLE} set generation = null, timeline = null`);
 
-      expect((await store.load('task-1', makeContext()))?.generation).toBeUndefined();
+      const loaded = await store.load('task-1', makeContext());
+      expect(loaded?.generation).toBeUndefined();
+      expect(loaded?.timeline).toBeUndefined();
     });
 
     it('returns undefined for a task that is not there', async () => {
@@ -301,6 +324,20 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
 
       const [limited] = (await store.list(makeListRequest({ historyLength: 1 }), context)).tasks;
       expect(limited.history).toEqual([first, second]);
+    });
+
+    it('drops timeline for a non-positive timelineLength and keeps it otherwise', async () => {
+      const entry = { entry: { $case: 'message' as const, value: makeMessage() }, generation: 1 };
+      await store.save(makeTask({ timeline: [entry] }), context);
+
+      const [unset] = (await store.list(makeListRequest(), context)).tasks;
+      expect(unset.timeline).toEqual([entry]);
+
+      const [zero] = (await store.list(makeListRequest({ timelineLength: 0 }), context)).tasks;
+      expect(zero.timeline).toBeUndefined();
+
+      const [limited] = (await store.list(makeListRequest({ timelineLength: 1 }), context)).tasks;
+      expect(limited.timeline).toEqual([entry]);
     });
 
     it('returns an empty page for no matches and for a page size of zero', async () => {

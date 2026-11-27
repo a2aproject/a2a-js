@@ -338,11 +338,21 @@ describe('Client E2E tests', () => {
           }
 
           expect(removeUndefinedFields(actual)).to.deep.equal(
-            // Each persisted event carries the task's generation after it.
+            // Each persisted event carries the task's generation after it, and the
+            // opening task carries the timeline entries recorded on creation.
             removeUndefinedFields(
-              expected.map((e: any, index: number) => ({
-                payload: { ...e.payload, value: { ...e.payload.value, generation: index + 1 } },
-              }))
+              expected.map((event: any, index: number) => {
+                const value = { ...event.payload.value, generation: index + 1 };
+                if (event.payload.$case === 'task') {
+                  value.timeline = [
+                    {
+                      entry: { $case: 'message', value: createTestMessage('1', 'test') },
+                      generation: 1,
+                    },
+                  ];
+                }
+                return { payload: { ...event.payload, value } };
+              })
             )
           );
         });

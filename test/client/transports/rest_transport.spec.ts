@@ -178,20 +178,27 @@ describe('RestTransport', () => {
       expect(url).to.equal(`${endpoint}/tenant1/tasks/${taskId}?historyLength=0`);
     });
 
-    it('should pass historyLength as query parameter', async () => {
+    it('should pass historyLength and timelineLength as query parameters', async () => {
       const taskId = 'task-123';
       const historyLength = 10;
       const mockTask = createMockProtoTask(taskId);
 
       mockFetch.mockResolvedValue(createRestResponse(mockTask));
 
-      const result = await transport.getTask({ id: taskId, tenant: '', historyLength });
+      const result = await transport.getTask({
+        id: taskId,
+        tenant: '',
+        historyLength,
+        timelineLength: 0,
+      });
 
       expect(result).to.deep.equal(createMockTask(taskId));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).to.equal(`${endpoint}/tasks/${taskId}?historyLength=${historyLength}`);
+      expect(url).to.equal(
+        `${endpoint}/tasks/${taskId}?historyLength=${historyLength}&timelineLength=0`
+      );
       expect(options?.method).to.equal('GET');
     });
 
@@ -276,6 +283,23 @@ describe('RestTransport', () => {
 
       const [url] = mockFetch.mock.calls[0];
       expect(url).to.equal(`${endpoint}/tenant1/tasks`);
+    });
+
+    it('should pass timelineLength as query parameter', async () => {
+      const mockResponse = { tasks: [] as any[], nextPageToken: '', pageSize: 0, totalSize: 0 };
+      mockFetch.mockResolvedValue(createRestResponse(mockResponse));
+
+      await transport.listTasks({
+        tenant: '',
+        contextId: '',
+        status: TaskState.TASK_STATE_UNSPECIFIED,
+        pageToken: '',
+        statusTimestampAfter: '',
+        timelineLength: 0,
+      });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).to.equal(`${endpoint}/tasks?timelineLength=0`);
     });
   });
 
