@@ -312,7 +312,11 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.isDefined(taskResult.artifacts, 'Task result should have artifacts');
     assert.isArray(taskResult.artifacts);
     assert.lengthOf(taskResult.artifacts!, 1);
-    assert.deepEqual(taskResult.artifacts![0], testArtifact);
+    assert.deepEqual(taskResult.artifacts![0], {
+      ...testArtifact,
+      startGeneration: 3,
+      endGeneration: 3,
+    });
   });
 
   it('sendMessage: should handle agent execution failure for blocking calls', async () => {
@@ -833,6 +837,8 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       ['status', 6],
       ['status', 8],
     ]);
+    expect(fetched.artifacts?.[0].startGeneration).toBe(7);
+    expect(fetched.artifacts?.[0].endGeneration).toBe(7);
 
     // timelineLength trims timeline independently of historyLength (§3.2.4).
     const trimmed = await handler.getTask(

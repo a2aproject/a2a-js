@@ -1173,6 +1173,7 @@ describe('ResultManager generation', () => {
     const persisted = createTask('task-echo', 'ctx-1', {
       generation: 3,
       status: inputRequired,
+      artifacts: [{ ...createArtifact('art-prev', 'draft'), startGeneration: 1, endGeneration: 1 }],
       history: [turn2UserMessage],
       timeline: [
         { entry: { $case: 'status', value: inputRequired }, generation: 2 },
@@ -1192,6 +1193,92 @@ describe('ResultManager generation', () => {
       ['status', 2],
       ['message', 3],
     ]);
+    expect(afterEcho.artifacts?.[0].startGeneration).toBe(1);
+    expect(afterEcho.artifacts?.[0].endGeneration).toBe(1);
+  });
+
+  it('tracks artifact startGeneration and endGeneration across chunks and Task events (§3.2.8)', async () => {
+    const rm = new ResultManager(store, context);
+    rm.setContext(createMessage('user-art', 'go'));
+    await rm.processEvent(AgentEvent.task(createTask('task-art', 'ctx-1')));
+
+    const chunk1: TaskArtifactUpdateEvent = {
+      taskId: 'task-art',
+      contextId: 'ctx-1',
+      artifact: { ...createArtifact('art-1', 'part1'), startGeneration: 99, endGeneration: 99 },
+      append: false,
+      lastChunk: false,
+      metadata: {},
+    };
+    const stamped1 = await rm.processEvent(AgentEvent.artifactUpdate(chunk1));
+    expect(
+      stamped1.kind === 'artifactUpdate' ? stamped1.data.artifact?.startGeneration : undefined
+    ).toBe(2);
+    expect(
+      stamped1.kind === 'artifactUpdate' ? stamped1.data.artifact?.endGeneration : undefined
+    ).toBeUndefined();
+    // Shared bus input is never mutated.
+    expect(chunk1.artifact?.startGeneration).toBe(99);
+    expect(chunk1.artifact?.endGeneration).toBe(99);
+
+    const stamped2 = await rm.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 'task-art',
+        contextId: 'ctx-1',
+        artifact: createArtifact('art-1', 'part2'),
+        append: true,
+        lastChunk: true,
+        metadata: {},
+      })
+    );
+    expect(
+      stamped2.kind === 'artifactUpdate' ? stamped2.data.artifact?.startGeneration : undefined
+    ).toBe(2);
+    expect(
+      stamped2.kind === 'artifactUpdate' ? stamped2.data.artifact?.endGeneration : undefined
+    ).toBe(3);
+
+    // Re-opening a completed artifact with lastChunk: false clears stale endGeneration.
+    const stamped3 = await rm.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 'task-art',
+        contextId: 'ctx-1',
+        artifact: createArtifact('art-1', 'part3'),
+        append: true,
+        lastChunk: false,
+        metadata: {},
+      })
+    );
+    expect(
+      stamped3.kind === 'artifactUpdate' ? stamped3.data.artifact?.endGeneration : undefined
+    ).toBeUndefined();
+    const persisted = (await store.load('task-art', context))!;
+    expect(persisted.artifacts?.[0].startGeneration).toBe(2);
+    expect(persisted.artifacts?.[0].endGeneration).toBeUndefined();
+
+    // Artifacts attached on a completed Task creation interleave between message and status.
+    const rmInline = new ResultManager(store, context);
+    rmInline.setContext(createMessage('user-inline', 'make'));
+    await rmInline.processEvent(
+      AgentEvent.task(
+        createTask('task-inline', 'ctx-1', {
+          artifacts: [createArtifact('art-inline', 'out')],
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: createMessage('agent-inline', 'done', Role.ROLE_AGENT),
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+    const inlineTask = (await store.load('task-inline', context))!;
+    expect(inlineTask.generation).toBe(3);
+    expect(inlineTask.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
+      ['message', 1],
+      ['status', 3],
+    ]);
+    expect(inlineTask.artifacts?.[0].startGeneration).toBe(2);
+    expect(inlineTask.artifacts?.[0].endGeneration).toBe(2);
   });
 });
 

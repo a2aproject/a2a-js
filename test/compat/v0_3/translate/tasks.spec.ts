@@ -96,12 +96,23 @@ describe('tasks', () => {
       expect(compat.metadata).toBeUndefined();
     });
 
-    it('drops v1.1 generation and timeline going to compat', () => {
+    it('drops v1.1 generation, timeline and artifact generations going to compat', () => {
       const core: V1Task = {
         id: 't1',
         contextId: 'ctx',
         status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: '' },
-        artifacts: [],
+        artifacts: [
+          {
+            artifactId: 'a1',
+            name: 'art',
+            description: '',
+            parts: [],
+            metadata: undefined,
+            extensions: [],
+            startGeneration: 2,
+            endGeneration: 3,
+          },
+        ],
         history: [],
         timeline: [
           {
@@ -118,6 +129,8 @@ describe('tasks', () => {
       const compat = toCompatTask(core);
       expect(compat).not.toHaveProperty('generation');
       expect(compat).not.toHaveProperty('timeline');
+      expect(compat.artifacts?.[0]).not.toHaveProperty('startGeneration');
+      expect(compat.artifacts?.[0]).not.toHaveProperty('endGeneration');
       expect(
         toCompatTaskStatusUpdateEvent({
           taskId: 't1',
