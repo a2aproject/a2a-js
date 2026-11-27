@@ -10,6 +10,7 @@ import type { AgentExecutor } from '../../../src/server/agent_execution/agent_ex
 import type { ServerCallContext } from '../../../src/server/context.js';
 import { Role, TaskState, type AgentCard, type Task } from '../../../src/types/pb/a2a.js';
 import { DEFAULT_PAGE_SIZE } from '../../../src/constants.js';
+import { RequestMalformedError } from '../../../src/errors/index.js';
 
 import { makeArtifact, makeContext, makeListRequest, makeMessage, makeTask } from './builders.js';
 import type { StoreHarness } from './store_harness.js';
@@ -620,6 +621,48 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
 
       const fetched = await handler.getTask({ id: result.id, tenant: 'acme' }, context);
       expect(fetched).toEqual(stored);
+    });
+
+    it('rejects a client contextId longer than the context_id column before saving anything', async () => {
+      const context = makeContext({ tenant: 'acme', user: 'alice' });
+      const contextId = 'c'.repeat(37);
+      let executed = false;
+      const executor: AgentExecutor = {
+        async execute(ctx, bus) {
+          executed = true;
+          bus.publish(AgentEvent.task(makeTask({ id: ctx.taskId, contextId: ctx.contextId })));
+          bus.publish(
+            AgentEvent.statusUpdate({
+              taskId: ctx.taskId,
+              contextId: ctx.contextId,
+              status: {
+                state: TaskState.TASK_STATE_COMPLETED,
+                message: undefined,
+                timestamp: undefined,
+              },
+              metadata: undefined,
+            })
+          );
+        },
+        async cancelTask() {},
+      };
+
+      const handler = new DefaultRequestHandler(agentCard, store, executor);
+      await expect(
+        handler.sendMessage(
+          {
+            tenant: 'acme',
+            message: makeMessage({ messageId: 'msg-long-ctx', taskId: '', contextId }),
+            configuration: undefined,
+            metadata: undefined,
+          },
+          context
+        )
+      ).rejects.toThrow(RequestMalformedError);
+
+      expect(executed).toBe(false);
+      const page = await store.list(makeListRequest({ tenant: 'acme', contextId }), context);
+      expect(page.tasks).toEqual([]);
     });
   });
 }
