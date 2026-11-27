@@ -1,3 +1,4 @@
+import { buildRestUrl } from './rest_url.js';
 import { TransportProtocolName } from '../../core.js';
 import { fromRestErrorBody } from '../../errors/index.js';
 
@@ -53,7 +54,7 @@ export class RestTransport implements Transport {
   private readonly negotiatedVersion: string;
 
   constructor(options: RestTransportOptions) {
-    this.endpoint = options.endpoint.replace(/\/+$/, '');
+    this.endpoint = options.endpoint;
     this.customFetchImpl = options.fetchImpl;
     this.negotiatedVersion = options.protocolVersion ?? A2A_PROTOCOL_VERSION;
   }
@@ -296,7 +297,7 @@ export class RestTransport implements Transport {
     requestType: MessageFns<TRequest> | undefined,
     responseType: MessageFns<TResponse> | undefined
   ): Promise<TResponse> {
-    const url = `${this.endpoint}${path}`;
+    const url = buildRestUrl(this.endpoint, path);
     const requestInit: RequestInit = {
       method,
       headers: this._buildHeaders(options),
@@ -368,7 +369,7 @@ export class RestTransport implements Transport {
     body: unknown | undefined,
     options?: RequestOptions
   ): AsyncGenerator<StreamResponse, void, undefined> {
-    const url = `${this.endpoint}${path}`;
+    const url = buildRestUrl(this.endpoint, path);
     const requestInit: RequestInit = {
       method: 'POST',
       headers: this._buildHeaders(options, 'text/event-stream'),
