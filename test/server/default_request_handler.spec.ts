@@ -414,7 +414,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(taskResult.generation, 1, 'The stored generation, not the executor event');
     expect(taskResult.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
       ['message', 1],
-      ['status', 1],
     ]);
 
     // The background processing should not have completed yet
@@ -820,7 +819,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.equal(fetched.generation, 8);
     expect(turn2ContextTimeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
       ['message', 1],
-      ['status', 1],
       ['status', 2],
       ['status', 3],
       ['message', 4],
@@ -828,7 +826,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     // Generation 7 is the artifact update, so timeline jumps 6 -> 8 as §3.2.8 specifies.
     expect(fetched.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
       ['message', 1],
-      ['status', 1],
       ['status', 2],
       ['status', 3],
       ['message', 4],
@@ -2180,7 +2177,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     expect(unary.timeline?.map((entry) => entry.generation)).toEqual([3]);
     // Trimming the returned task must not mutate the live task handed to TaskStore.save / plugins.
     expect(saveSpy.mock.calls.at(-1)![0].timeline?.map((entry) => entry.generation)).toEqual([
-      1, 1, 2, 3,
+      1, 2, 3,
     ]);
 
     const streamEvents: StreamResponse[] = [];
@@ -3003,7 +3000,6 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const working = status(TaskState.TASK_STATE_WORKING);
     const timeline1 = [
       { entry: { $case: 'message' as const, value: expectedTask.history![0] }, generation: 1 },
-      { entry: { $case: 'status' as const, value: submitted }, generation: 1 },
     ];
     const timeline2 = [
       ...timeline1,

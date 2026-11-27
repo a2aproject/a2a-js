@@ -260,7 +260,6 @@ export class ResultManager {
     const hasPersisted = Boolean(persistedTask && persistedTask.id === taskEvent.id);
     // The server owns `generation` and `timeline`; start from persisted state.
     mergedTask.generation = hasPersisted ? persistedTask!.generation : undefined;
-    const generation = advanceGeneration(mergedTask);
 
     if (hasPersisted) {
       // Preserve persisted history when the incoming event omits it. If
@@ -287,6 +286,8 @@ export class ResultManager {
 
     // Ensure the latest user message is in history and timeline. Clone again so the
     // same reference can't be shared between arrays and `latestUserMessage`.
+    let mutated = false;
+    let userMessageAdded = false;
     if (this.latestUserMessage) {
       const latest = this.latestUserMessage;
       if (!mergedTask.history?.find((msg) => msg.messageId === latest.messageId)) {
@@ -297,26 +298,47 @@ export class ResultManager {
           entry.entry?.$case === 'message' && entry.entry.value.messageId === latest.messageId
       );
       if (!alreadyInTimeline) {
+        const generation = advanceGeneration(mergedTask);
         timeline.push({ entry: { $case: 'message', value: structuredClone(latest) }, generation });
+        userMessageAdded = true;
+        mutated = true;
       }
     }
 
-    // Streaming turns open by echoing the persisted Task snapshot; don't record
-    // an unchanged prior-turn status a second time after the new user message.
-    const statusChanged =
-      !hasPersisted ||
-      !persistedTask!.timeline?.length ||
-      !sameStatus(mergedTask.status, persistedTask!.status);
-    if (mergedTask.status && statusChanged) {
+    // Omit bare SUBMITTED on creation when the user message already holds generation 1,
+    // so every timeline entry has a unique generation (§3.2.8). On existing tasks, only
+    // record a changed status (or backfill a pre-timeline task), not an unchanged echo.
+    const isBareSubmitted =
+      mergedTask.status?.state === TaskState.TASK_STATE_SUBMITTED && !mergedTask.status.message;
+    const shouldRecordStatus = Boolean(
+      mergedTask.status &&
+      (hasPersisted
+        ? !persistedTask!.timeline?.length || !sameStatus(mergedTask.status, persistedTask!.status)
+        : !userMessageAdded || !isBareSubmitted)
+    );
+    if (shouldRecordStatus) {
+      const generation = advanceGeneration(mergedTask);
       timeline.push({
-        entry: { $case: 'status', value: structuredClone(mergedTask.status) },
+        entry: { $case: 'status', value: structuredClone(mergedTask.status!) },
         generation,
       });
+      mutated = true;
     }
     if (timeline.length > 0) {
       mergedTask.timeline = timeline;
     } else {
       delete mergedTask.timeline;
+    }
+
+    // Advance generation for non-timeline mutations (e.g. new artifacts or metadata)
+    // and ensure new tasks start at 1, without advancing on an unchanged snapshot echo (§3.2.7).
+    if (!mutated) {
+      const isUnchangedEcho =
+        hasPersisted &&
+        JSON.stringify(Task.toJSON(mergedTask)) === JSON.stringify(Task.toJSON(persistedTask!));
+      if (!isUnchangedEcho) {
+        advanceGeneration(mergedTask);
+      }
     }
 
     this.currentTask = mergedTask;

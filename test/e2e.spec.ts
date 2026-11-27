@@ -349,10 +349,6 @@ describe('Client E2E tests', () => {
                       entry: { $case: 'message', value: createTestMessage('1', 'test') },
                       generation: 1,
                     },
-                    {
-                      entry: { $case: 'status', value: event.payload.value.status },
-                      generation: 1,
-                    },
                   ];
                 }
                 return { payload: { ...event.payload, value } };

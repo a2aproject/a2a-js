@@ -1137,13 +1137,33 @@ describe('ResultManager generation', () => {
     expect(finalTask.generation).toBe(4);
     expect(finalTask.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
       ['message', 1],
-      ['status', 1],
       ['status', 2],
       ['status', 4],
     ]);
+
+    // A task created directly in a non-bare status gets unique generations for both entries.
+    const rmImmediate = new ResultManager(store, context);
+    rmImmediate.setContext(createMessage('user-imm', 'quick'));
+    await rmImmediate.processEvent(
+      AgentEvent.task(
+        createTask('task-imm', 'ctx-1', {
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: createMessage('agent-imm', 'done', Role.ROLE_AGENT),
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+    const immediateTask = (await store.load('task-imm', context))!;
+    expect(immediateTask.generation).toBe(2);
+    expect(immediateTask.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
+      ['message', 1],
+      ['status', 2],
+    ]);
   });
 
-  it('does not duplicate prior-turn status when Turn 2 echoes the persisted Task snapshot', async () => {
+  it('does not advance generation or duplicate status when Turn 2 echoes the persisted Task snapshot', async () => {
     const inputRequired: TaskStatus = {
       state: TaskState.TASK_STATE_INPUT_REQUIRED,
       message: createMessage('agent-q', 'clarify?', Role.ROLE_AGENT),
@@ -1163,10 +1183,11 @@ describe('ResultManager generation', () => {
 
     const rmTurn2 = new ResultManager(store, context);
     rmTurn2.setContext(turn2UserMessage);
-    await rmTurn2.processEvent(AgentEvent.task(structuredClone(persisted)));
+    const echoed = await rmTurn2.processEvent(AgentEvent.task(structuredClone(persisted)));
 
+    expect(echoed.kind === 'task' ? echoed.data.generation : undefined).toBe(3);
     const afterEcho = (await store.load('task-echo', context))!;
-    expect(afterEcho.generation).toBe(4);
+    expect(afterEcho.generation).toBe(3);
     expect(afterEcho.timeline?.map((entry) => [entry.entry?.$case, entry.generation])).toEqual([
       ['status', 2],
       ['message', 3],

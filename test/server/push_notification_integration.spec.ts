@@ -260,11 +260,6 @@ describe('Push Notification Integration Tests', () => {
       assert.equal(firstNotification.url, '/notify/delay_on_submitted');
       assert.equal(firstNotification.headers['content-type'], 'application/a2a+json');
       assert.equal(firstNotification.headers['x-a2a-notification-token'], 'test-auth-token');
-      const submittedStatus: Task['status'] = {
-        state: TaskState.TASK_STATE_SUBMITTED,
-        message: undefined,
-        timestamp: undefined,
-      };
       assert.deepEqual(
         firstNotification.body,
         StreamResponse.toJSON({
@@ -272,13 +267,16 @@ describe('Push Notification Integration Tests', () => {
             $case: 'task',
             value: {
               ...expectedTaskResult,
-              status: submittedStatus,
+              status: {
+                state: TaskState.TASK_STATE_SUBMITTED,
+                message: undefined,
+                timestamp: undefined,
+              },
               timeline: [
                 {
                   entry: { $case: 'message', value: expectedTaskResult.history![0] },
                   generation: 1,
                 },
-                { entry: { $case: 'status', value: submittedStatus }, generation: 1 },
               ],
               generation: 1,
             },
