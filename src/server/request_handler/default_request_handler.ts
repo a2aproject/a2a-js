@@ -104,6 +104,10 @@ export interface DefaultRequestHandlerOptions {
   plugins?: A2APlugin[];
 }
 
+// The database stores declare context_id and config_id as varchar(36). Ids the
+// client chooses are checked against it here, so every store accepts the same ids.
+const MAX_CLIENT_ID_LENGTH = 36;
+
 /**
  * Default implementation of the A2A request handler.
  *
@@ -113,10 +117,6 @@ export interface DefaultRequestHandlerOptions {
  * The built-in `InMemoryTaskStore`, `InMemoryPushNotificationStore` and
  * `DefaultExecutionEventBusManager` scope data by `tenant` to provide isolation.
  */
-// The database stores declare context_id and config_id as varchar(36). Ids the
-// client chooses are checked against it here, so every store accepts the same ids.
-const MAX_CLIENT_ID_LENGTH = 36;
-
 export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCard: AgentCard;
   private readonly taskStore: TaskStore;
