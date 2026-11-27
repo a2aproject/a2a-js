@@ -44,7 +44,7 @@ import {
   ExecutionEventBus,
 } from '../events/execution_event_bus.js';
 import { ExecutionEventQueue } from '../events/execution_event_queue.js';
-import { ResultManager } from '../result_manager.js';
+import { ResultManager, advanceGeneration, withTaskWriteLock } from '../result_manager.js';
 import { TaskStore } from '../store.js';
 import { A2ARequestHandler } from './a2a_request_handler.js';
 import {
@@ -65,6 +65,10 @@ import {
 } from '../utils.js';
 import { AgentCardSignatureGenerator } from '../../signature.js';
 import { extractErrorMessage } from '../../errors/index.js';
+import { SequentialPluginManager } from '../../plugins/manager.js';
+import type { A2APlugin, PluginManager } from '../../plugins/types.js';
+import { applyServerPlugins } from './server_plugin_hooks.js';
+import { withExecutionPlugins } from '../agent_execution/plugin_agent_executor.js';
 
 export interface DefaultRequestHandlerOptions {
   /**
@@ -91,7 +95,18 @@ export interface DefaultRequestHandlerOptions {
    * traffic an existing agent accepts today.
    */
   validateInputModes?: boolean;
+
+  /**
+   * Plugins whose server hooks run around every request handled by this
+   * handler, and whose execution hooks run around every agent execution, in
+   * the given order. See `@a2a-js/sdk/plugins`.
+   */
+  plugins?: A2APlugin[];
 }
+
+// The database stores declare context_id and config_id as varchar(36). Ids the
+// client chooses are checked against it here, so every store accepts the same ids.
+const MAX_CLIENT_ID_LENGTH = 36;
 
 /**
  * Default implementation of the A2A request handler.
@@ -113,6 +128,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
   private readonly agentCardSignatureGenerator?: AgentCardSignatureGenerator;
   private readonly keepBusAliveStates: Set<TaskState>;
   private readonly validateInputModes: boolean;
+  private readonly plugins: PluginManager;
+  private readonly activeDrains = new WeakMap<ExecutionEventBus, ActivePersistenceDrain>();
 
   constructor(
     agentCard: AgentCard,
@@ -125,9 +142,10 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     agentCardSignatureGenerator?: AgentCardSignatureGenerator,
     options: DefaultRequestHandlerOptions = {}
   ) {
+    this.plugins = new SequentialPluginManager(...(options.plugins ?? []));
     this.agentCard = agentCard;
     this.taskStore = taskStore;
-    this.agentExecutor = agentExecutor;
+    this.agentExecutor = withExecutionPlugins(agentExecutor, this.plugins);
     this.eventBusManager = eventBusManager;
     this.extendedAgentCardProvider = extendedAgentCardProvider;
     this.agentCardSignatureGenerator = agentCardSignatureGenerator;
@@ -137,8 +155,11 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (agentCard.capabilities?.pushNotifications) {
       this.pushNotificationStore = pushNotificationStore || new InMemoryPushNotificationStore();
       this.pushNotificationSender =
-        pushNotificationSender || new DefaultPushNotificationSender(this.pushNotificationStore);
+        pushNotificationSender ||
+        new DefaultPushNotificationSender(this.pushNotificationStore, { plugins: options.plugins });
     }
+
+    applyServerPlugins(this, this.plugins, agentCard);
   }
 
   async getAgentCard(): Promise<AgentCard> {
@@ -196,6 +217,13 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     if (!incomingMessage) {
       throw new RequestMalformedError('request.message is required.');
     }
+    this._requireStorableId(incomingMessage.contextId, 'message.contextId');
+    if (this.agentCard.capabilities?.pushNotifications) {
+      this._requireStorableId(
+        request.configuration?.taskPushNotificationConfig?.id,
+        'taskPushNotificationConfig.id'
+      );
+    }
     let task: Task | undefined;
     let referenceTasks: Task[] | undefined;
 
@@ -216,29 +244,49 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
 
     if (incomingMessage.taskId) {
-      this._requireValidTaskId(incomingMessage.taskId);
-      task = await this.taskStore.load(incomingMessage.taskId, context);
-      if (!task) {
-        throw new TaskNotFoundError(`Task not found: ${incomingMessage.taskId}`);
+      const followUpTaskId = incomingMessage.taskId;
+      this._requireValidTaskId(followUpTaskId);
+      // Under the task write lock, so the appended message's generation can't
+      // collide with one assigned by a drain still running on this task.
+      task = await withTaskWriteLock(context, followUpTaskId, async () => {
+        const loaded = await this.taskStore.load(followUpTaskId, context);
+        if (!loaded) {
+          throw new TaskNotFoundError(`Task not found: ${followUpTaskId}`);
+        }
+        if (
+          loaded.status?.state !== undefined &&
+          TERMINAL_STATE_LIST.includes(loaded.status.state)
+        ) {
+          // UnsupportedOperationError is what the TCK expects for terminal tasks.
+          throw new UnsupportedOperationError(
+            `Task ${loaded.id} is in a terminal state (${loaded.status!.state}) and cannot be modified.`
+          );
+        }
+        if (
+          incomingMessage.contextId &&
+          loaded.contextId &&
+          incomingMessage.contextId !== loaded.contextId
+        ) {
+          throw new RequestMalformedError(
+            `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
+              `does not match task '${loaded.id}' contextId '${loaded.contextId}'`
+          );
+        }
+        loaded.history = [...(loaded.history || []), incomingMessage];
+        advanceGeneration(loaded);
+        await this.taskStore.save(loaded, context);
+        return loaded;
+      });
+      if (this.plugins.hasTaskHooks) {
+        const state = task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED;
+        await this.plugins.onTaskEvent({
+          taskId: task.id,
+          fromState: state,
+          toState: state,
+          task,
+          context,
+        });
       }
-      if (task.status?.state !== undefined && TERMINAL_STATE_LIST.includes(task.status.state)) {
-        // UnsupportedOperationError is what the TCK expects for terminal tasks.
-        throw new UnsupportedOperationError(
-          `Task ${task.id} is in a terminal state (${task.status!.state}) and cannot be modified.`
-        );
-      }
-      if (
-        incomingMessage.contextId &&
-        task.contextId &&
-        incomingMessage.contextId !== task.contextId
-      ) {
-        throw new RequestMalformedError(
-          `contextId mismatch: message contextId '${incomingMessage.contextId}' ` +
-            `does not match task '${task.id}' contextId '${task.contextId}'`
-        );
-      }
-      task.history = [...(task.history || []), incomingMessage];
-      await this.taskStore.save(task, context);
     }
     const taskId = incomingMessage.taskId || crypto.randomUUID();
     const referenceTaskIds =
@@ -282,6 +330,51 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     return new RequestContext(resolvedRequest, taskId, contextId, context, task, referenceTasks);
   }
 
+  /**
+   * Registers the single active persistence drain for `eventBus` while `run`
+   * executes. Concurrent callers (such as `cancelTask`) can await `handle.wait()`
+   * without attaching a second `ResultManager` to the same bus.
+   */
+  private _registerActiveDrain(
+    eventBus: ExecutionEventBus,
+    run: (recordError: (error: unknown) => void) => Promise<void>
+  ): { promise: Promise<void>; handle: ActivePersistenceDrain } {
+    let hasError = false;
+    let recordedError: unknown;
+    const recordError = (error: unknown): void => {
+      if (!hasError) {
+        hasError = true;
+        recordedError = error;
+      }
+    };
+
+    let settled = Promise.resolve();
+    const handle: ActivePersistenceDrain = {
+      wait: async (): Promise<void> => {
+        await settled;
+        if (hasError) {
+          throw recordedError;
+        }
+      },
+    };
+    this.activeDrains.set(eventBus, handle);
+
+    const rawPromise = run(recordError);
+    // `settled` never rejects, preventing floating unhandled rejections when
+    // no external caller invokes `handle.wait()`.
+    settled = rawPromise
+      .catch((error) => {
+        recordError(error);
+      })
+      .finally(() => {
+        if (this.activeDrains.get(eventBus) === handle) {
+          this.activeDrains.delete(eventBus);
+        }
+      });
+
+    return { promise: rawPromise, handle };
+  }
+
   private async _processEvents(
     taskId: string,
     resultManager: ResultManager,
@@ -290,6 +383,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     options?: {
       firstResultResolver?: (value: Message | Task) => void;
       firstResultRejector?: (reason?: unknown) => void;
+      onProcessingError?: (error: unknown) => void;
       /**
        * Fires (at most once) the first time the queue yields a
        * `statusUpdate` whose state is in
@@ -304,8 +398,8 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     let firstResultSent = false;
     let authRequiredSnapshotSent = false;
     try {
-      for await (const event of eventQueue.events()) {
-        await resultManager.processEvent(event);
+      for await (const published of eventQueue.events()) {
+        const event = await resultManager.processEvent(published);
 
         try {
           const streamResponse = this._mapEventToStreamResponse(event, resultManager);
@@ -375,6 +469,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         );
       }
     } catch (error) {
+      options?.onProcessingError?.(error);
       console.error(`Event processing loop failed for task ${taskId}:`, error);
       // Must be awaited: `_handleProcessingError` re-throws in the blocking
       // (no `firstResultRejector`) case so the caller's `await` catches it.
@@ -635,7 +730,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
 
     // Default to blocking behavior if 'returnImmediately' is not explicitly true.
     const isBlocking = params.configuration?.returnImmediately !== true;
-    const resultManager = new ResultManager(this.taskStore, context);
+    const resultManager = new ResultManager(this.taskStore, context, this.plugins);
     resultManager.setContext(incomingMessage);
 
     const requestContext = await this._createRequestContext(params, context);
@@ -654,13 +749,6 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const eventBus = this.eventBusManager.createOrGetByTaskId(taskId, context);
     // Attach the queue before kicking off the executor so no events are missed.
     const eventQueue = new ExecutionEventQueue(eventBus);
-
-    // Run the executor in the background. Bus cleanup is tied to the
-    // executor's lifecycle, not the consumer's, so a `tasks/resubscribe`
-    // arriving after the consumer settles can still find the bus while
-    // the executor is still publishing.
-    this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
-
     const historyLengthConfig = params.configuration;
 
     if (isBlocking) {
@@ -670,20 +758,28 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       // observed, and the drain detaches into the background so the
       // executor can keep publishing on the same bus.
       return new Promise<Message | Task>((resolve, reject) => {
-        const pending = this._processEvents(taskId, resultManager, eventQueue, context, {
-          authRequiredSnapshotResolver: (snapshot) => {
-            this._applyHistoryLengthSemantics(snapshot, historyLengthConfig ?? {});
-            resolve(snapshot);
-            this._continueDraining(taskId, pending);
-          },
-          // Pre-AUTH_REQUIRED drain errors reject the outer promise so
-          // `await sendMessage(...)` throws. Post-AUTH_REQUIRED drain
-          // errors fall into `_handleProcessingError`'s "first result
-          // already sent" branch (persisting FAILED via ResultManager)
-          // and the `reject` call here becomes a no-op because Promise
-          // settlement is one-shot.
-          firstResultRejector: reject,
-        });
+        const { promise: pending } = this._registerActiveDrain(eventBus, (recordError) =>
+          this._processEvents(taskId, resultManager, eventQueue, context, {
+            authRequiredSnapshotResolver: (snapshot) => {
+              this._applyHistoryLengthSemantics(snapshot, historyLengthConfig ?? {});
+              resolve(snapshot);
+              this._continueDraining(taskId, pending);
+            },
+            // Pre-AUTH_REQUIRED drain errors reject the outer promise so
+            // `await sendMessage(...)` throws. Post-AUTH_REQUIRED drain
+            // errors fall into `_handleProcessingError`'s "first result
+            // already sent" branch (persisting FAILED via ResultManager)
+            // and the `reject` call here becomes a no-op because Promise
+            // settlement is one-shot.
+            firstResultRejector: reject,
+            onProcessingError: recordError,
+          })
+        );
+        // Run the executor in the background. Bus cleanup is tied to the
+        // executor's lifecycle, not the consumer's, so a `tasks/resubscribe`
+        // arriving after the consumer settles can still find the bus while
+        // the executor is still publishing.
+        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
         pending
           .then(() => {
             const finalResult = resultManager.getFinalResult();
@@ -705,15 +801,19 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     } else {
       // Non-blocking mode resolves with the first task/message event.
       return new Promise<Message | Task>((resolve, reject) => {
-        this._processEvents(taskId, resultManager, eventQueue, context, {
-          firstResultResolver: (result) => {
-            if (isTask(result)) {
-              this._applyHistoryLengthSemantics(result, historyLengthConfig ?? {});
-            }
-            resolve(result);
-          },
-          firstResultRejector: reject,
-        });
+        this._registerActiveDrain(eventBus, (recordError) =>
+          this._processEvents(taskId, resultManager, eventQueue, context, {
+            firstResultResolver: (result) => {
+              if (isTask(result)) {
+                this._applyHistoryLengthSemantics(result, historyLengthConfig ?? {});
+              }
+              resolve(result);
+            },
+            firstResultRejector: reject,
+            onProcessingError: recordError,
+          })
+        );
+        this._runExecutor(taskId, eventBus, requestContext, finalMessageForAgent);
       });
     }
   }
@@ -731,7 +831,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       throw new RequestMalformedError('message.messageId is required for streaming.');
     }
 
-    const resultManager = new ResultManager(this.taskStore, context);
+    const resultManager = new ResultManager(this.taskStore, context, this.plugins);
     resultManager.setContext(incomingMessage);
 
     const requestContext = await this._createRequestContext(params, context);
@@ -749,38 +849,75 @@ export class DefaultRequestHandler implements A2ARequestHandler {
       await this.pushNotificationStore?.save(taskId, context, pushConfig);
     }
 
+    // Decouple persistence ownership from the caller's stream iterator so
+    // explicit early generator closure (`break` / `return()`) or paused reads
+    // neither abandon task persistence nor force `cancelTask` to attach a
+    // duplicate `ResultManager`.
+    const deliveryBuffer = new StreamDeliveryBuffer<StreamResponse>();
+    this._registerActiveDrain(eventBus, async (recordError) => {
+      let streamPattern = StreamPattern.UNDETERMINED;
+      let firstEventDelivered = false;
+      try {
+        for await (const published of eventQueue.events()) {
+          streamPattern = this._advanceStreamPattern(published, streamPattern);
+
+          const event = await resultManager.processEvent(published);
+
+          const streamResponse = this._mapEventToStreamResponse(event, resultManager);
+          if (streamResponse.payload?.$case === 'task') {
+            this._applyHistoryLengthSemantics(
+              streamResponse.payload.value,
+              params.configuration ?? {}
+            );
+          }
+
+          try {
+            await this._sendPushNotificationIfNeeded(
+              context,
+              streamResponse,
+              structuredClone(resultManager.getCurrentTask())
+            );
+          } catch (error) {
+            console.error(`Error sending push notification: ${error}`);
+          }
+
+          deliveryBuffer.pushValue(streamResponse);
+          firstEventDelivered = true;
+        }
+      } catch (error) {
+        recordError(error);
+        if (!deliveryBuffer.isConsumerClosed()) {
+          deliveryBuffer.pushError(error);
+        } else {
+          console.error(`Event processing loop failed for task ${taskId}:`, error);
+          await this._handleProcessingError(
+            error,
+            resultManager,
+            firstEventDelivered,
+            taskId,
+            () => {
+              // Consumer generator already closed; error is logged and recorded for cancelTask.
+            }
+          );
+        }
+      } finally {
+        eventQueue.stop();
+        deliveryBuffer.finish();
+      }
+    });
+
     // Run the executor in the background. Bus cleanup is tied to the
     // executor's lifecycle, not the consumer's, so a client that
     // disconnects this stream early can still attach via
     // `tasks/resubscribe` while the executor keeps running.
     this._runStreamExecutor(taskId, eventBus, requestContext);
 
-    let streamPattern = StreamPattern.UNDETERMINED;
     try {
-      for await (const event of eventQueue.events()) {
-        streamPattern = this._advanceStreamPattern(event, streamPattern);
-
-        await resultManager.processEvent(event);
-
-        const streamResponse = this._mapEventToStreamResponse(event, resultManager);
-        if (streamResponse.payload?.$case === 'task') {
-          this._applyHistoryLengthSemantics(
-            streamResponse.payload.value,
-            params.configuration ?? {}
-          );
-        }
-
-        await this._sendPushNotificationIfNeeded(
-          context,
-          streamResponse,
-          resultManager.getCurrentTask()
-        );
+      for await (const streamResponse of deliveryBuffer.items()) {
         yield streamResponse;
       }
     } finally {
-      // Detach THIS consumer's queue; the bus stays alive until the
-      // executor settles.
-      eventQueue.stop();
+      deliveryBuffer.closeConsumer();
     }
   }
 
@@ -847,15 +984,48 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     const eventBus = this.eventBusManager.getByTaskId(taskId, context);
 
     if (eventBus) {
-      const eventQueue = new ExecutionEventQueue(eventBus);
-      await this.agentExecutor.cancelTask(taskId, eventBus);
-      // Drain until the task reaches a terminal state.
-      await this._processEvents(
-        taskId,
-        new ResultManager(this.taskStore, context),
-        eventQueue,
-        context
-      );
+      let activeDrain = this.activeDrains.get(eventBus);
+      if (activeDrain) {
+        await this.agentExecutor.cancelTask(taskId, eventBus);
+        // Wait for the execution's existing persistence owner to finish saving
+        // instead of attaching a second ResultManager that would re-apply
+        // live `append: true` artifact updates.
+        await activeDrain.wait();
+      } else {
+        // Re-check persisted state in case an execution's active drain just
+        // finished persisting a terminal transition before `_settleBus`
+        // removed `eventBus` from `eventBusManager`.
+        const refreshedTask = await this.taskStore.load(taskId, context);
+        if (!refreshedTask) {
+          throw new TaskNotFoundError(`Task not found: ${params.id}`);
+        }
+        const refreshedState = refreshedTask.status?.state;
+        if (refreshedState === TaskState.TASK_STATE_CANCELED) {
+          return refreshedTask;
+        }
+        if (refreshedState !== undefined && TERMINAL_STATE_LIST.includes(refreshedState)) {
+          throw new TaskNotCancelableError(`Task not cancelable: ${params.id}`);
+        }
+
+        activeDrain = this.activeDrains.get(eventBus);
+        let fallbackQueue: ExecutionEventQueue | undefined;
+        if (!activeDrain) {
+          fallbackQueue = new ExecutionEventQueue(eventBus);
+          const fallbackResultManager = new ResultManager(this.taskStore, context, this.plugins);
+          activeDrain = this._registerActiveDrain(eventBus, (recordError) =>
+            this._processEvents(taskId, fallbackResultManager, fallbackQueue!, context, {
+              onProcessingError: recordError,
+            })
+          ).handle;
+        }
+        try {
+          await this.agentExecutor.cancelTask(taskId, eventBus);
+        } catch (error) {
+          fallbackQueue?.stop();
+          throw error;
+        }
+        await activeDrain.wait();
+      }
     } else {
       // Mark the task as cancelled directly. We do not wait for the
       // executor to actually cancel processing. Routing through the
@@ -881,7 +1051,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
         extensions: [],
         referenceTaskIds: [],
       };
-      await new ResultManager(this.taskStore, context).processEvent(
+      await new ResultManager(this.taskStore, context, this.plugins).processEvent(
         AgentEvent.statusUpdate({
           taskId: task.id,
           contextId: task.contextId,
@@ -914,6 +1084,7 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
     const taskId = params.taskId;
     this._requireValidTaskId(taskId);
+    this._requireStorableId(params.id, 'id');
     const task = await this.taskStore.load(taskId, context);
     if (!task) {
       throw new TaskNotFoundError(`Task not found: ${taskId}`);
@@ -1209,6 +1380,14 @@ export class DefaultRequestHandler implements A2ARequestHandler {
     }
   }
 
+  private _requireStorableId(id: string | undefined, field: string): void {
+    if (id && id.length > MAX_CLIENT_ID_LENGTH) {
+      throw new RequestMalformedError(
+        `${field} must be at most ${MAX_CLIENT_ID_LENGTH} characters, got ${id.length}`
+      );
+    }
+  }
+
   /**
    * Applies `historyLength` semantics:
    * - undefined: return all history
@@ -1294,4 +1473,92 @@ function trackLatestTaskAndState(bus: ExecutionEventBus): () => LatestTaskSnapsh
     bus.off('event', listener);
     return { task: lastTask, state: lastState };
   };
+}
+
+interface ActivePersistenceDrain {
+  /**
+   * Resolves once the active persistence drain has finished writing to
+   * `TaskStore` and detached its queue, or rejects if an event-processing
+   * error occurred during the drain.
+   */
+  wait: () => Promise<void>;
+}
+
+type StreamBufferEntry<T> = { kind: 'value'; value: T } | { kind: 'error'; error: unknown };
+
+/**
+ * Single-producer / single-consumer FIFO buffer decoupling an execution's
+ * persistence loop from the public `sendMessageStream` async generator.
+ * Closing the consumer early (`break` / `return()`) discards unread items and
+ * turns subsequent pushes into no-ops while allowing the persistence drain to
+ * complete independently.
+ */
+class StreamDeliveryBuffer<T> {
+  private readonly queue: StreamBufferEntry<T>[] = [];
+  private wakeConsumer?: () => void;
+  private finished = false;
+  private consumerClosed = false;
+
+  public isConsumerClosed(): boolean {
+    return this.consumerClosed;
+  }
+
+  public pushValue(value: T): void {
+    if (this.consumerClosed || this.finished) {
+      return;
+    }
+    this.queue.push({ kind: 'value', value });
+    this._notify();
+  }
+
+  public pushError(error: unknown): void {
+    if (this.consumerClosed || this.finished) {
+      return;
+    }
+    this.queue.push({ kind: 'error', error });
+    this._notify();
+  }
+
+  public finish(): void {
+    if (this.finished) {
+      return;
+    }
+    this.finished = true;
+    this._notify();
+  }
+
+  public closeConsumer(): void {
+    if (this.consumerClosed) {
+      return;
+    }
+    this.consumerClosed = true;
+    this.queue.length = 0;
+    this._notify();
+  }
+
+  public async *items(): AsyncGenerator<T, void, undefined> {
+    while (!this.consumerClosed) {
+      if (this.queue.length > 0) {
+        const entry = this.queue.shift()!;
+        if (entry.kind === 'error') {
+          throw entry.error;
+        }
+        yield entry.value;
+      } else if (this.finished) {
+        break;
+      } else {
+        await new Promise<void>((resolve) => {
+          this.wakeConsumer = resolve;
+        });
+      }
+    }
+  }
+
+  private _notify(): void {
+    if (this.wakeConsumer) {
+      const wake = this.wakeConsumer;
+      this.wakeConsumer = undefined;
+      wake();
+    }
+  }
 }

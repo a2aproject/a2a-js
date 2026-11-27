@@ -61,6 +61,13 @@ The project is structured into modular entry points to allow tree-shaking and se
 
 See `docs/persistent-stores.md` for the user guide.
 
+### 4d. Plugins (`src/plugins/index.ts`)
+*   **`A2APlugin`**: One object with optional hooks for the client (`before`/`around`/`afterClientRequest`), server requests (`before`/`around`/`afterHandlerRun`), agent execution (`before`/`around`/`afterExecution`, `onExecutionEvent`), task writes (`onTaskEvent`) and push delivery (`beforePushSend`, `onPushSent`). Workers-safe (type-only imports).
+*   **Registration**: `DefaultRequestHandlerOptions.plugins` (server, execution, task, and push via the default sender), `ClientConfig.plugins`, `DefaultPushNotificationSenderOptions.plugins`.
+*   **`SequentialPluginManager`** / **`sequential()`**: Run plugins in order. Hook wiring lives next to each call site (`server_plugin_hooks.ts`, `plugin_agent_executor.ts`, `result_manager.ts`, `default_request_handler.ts` for the follow-up message write, `default_push_notification_sender.ts`, `multitransport-client.ts`); the shared call and stream runner is `src/plugins/run.ts`.
+
+See `docs/plugins.md` for the user guide.
+
 ### 5. v0.3 Backward Compatibility (`src/compat/v0_3/`)
 The compat layer is shipped as six subpath exports off `@a2a-js/sdk`, mirroring the v1.0 layout (`server` is framework-agnostic; `server/express` and `server/grpc` carry the runtime-specific bits):
 
@@ -104,9 +111,10 @@ The `src/samples` directory contains practical examples. Each subdirectory has i
 *   **`authentication/`**: Bearer/JWT authentication with Passport, including a `UserBuilder` that propagates the authenticated user into the agent context.
 *   **`extensions/`**: Protocol extension implemented as an `AgentExecutor` decorator that stamps metadata onto outgoing events.
 *   **`client/interceptors/`**: Client `CallInterceptor`s for header injection and request timing, plus per-call `AbortSignal.timeout(...)`.
+*   **`plugins/`**: Client and server plugins (`@a2a-js/sdk/plugins`) over JSON-RPC, REST and gRPC: experiment-ID propagation, call audit and timing, and `aroundExecution` scoping (server + client).
 *   **`cli.ts`**: Multi-transport interactive CLI client (JSON-RPC / REST / gRPC); `--auth` / `--svc-param` inject headers (gRPC metadata) into every request.
 
 ## Development Conventions
 
 *   **Testing**: All new features should have accompanying unit tests in `test/` or alongside source files.
-*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./client/grpc`, `./server`, `./server/express`, `./server/grpc`, `./server/database`, `./compat/v0_3`, `./compat/v0_3/server`, `./compat/v0_3/server/express`, `./compat/v0_3/server/grpc`, `./compat/v0_3/client`, `./compat/v0_3/client/grpc`). Ensure new components are exported from the correct entry point.
+*   **Exports**: The project uses specific export paths in `package.json` (`.`, `./client`, `./client/grpc`, `./server`, `./server/express`, `./server/grpc`, `./server/database`, `./plugins`, `./compat/v0_3`, `./compat/v0_3/server`, `./compat/v0_3/server/express`, `./compat/v0_3/server/grpc`, `./compat/v0_3/client`, `./compat/v0_3/client/grpc`). Ensure new components are exported from the correct entry point.

@@ -3,6 +3,7 @@ import { AgentCard } from '../index.js';
 import { AgentCardResolver } from './card-resolver.js';
 import { Client, ClientConfig } from './multitransport-client.js';
 import { JsonRpcTransportFactory } from './transports/json_rpc_transport.js';
+import { interfacesForBinding, preferredInterface } from './transports/pick_interface.js';
 import { RestTransportFactory } from './transports/rest_transport.js';
 import { TenantTransportDecorator } from './transports/tenant_transport_decorator.js';
 import { TransportFactory } from './transports/transport.js';
@@ -37,7 +38,7 @@ export const ClientFactoryOptions = {
   /**
    * Creates new options by merging an original and an override object.
    * Transports are merged based on `TransportFactory.protocolName`,
-   * interceptors are concatenated, other fields are overriden.
+   * interceptors and plugins are concatenated, other fields are overriden.
    *
    * @example
    * ```ts
@@ -62,6 +63,7 @@ export const ClientFactoryOptions = {
           original.clientConfig?.interceptors,
           overrides.clientConfig?.interceptors
         ),
+        plugins: mergeArrays(original.clientConfig?.plugins, overrides.clientConfig?.plugins),
         acceptedOutputModes:
           overrides.clientConfig?.acceptedOutputModes ?? original.clientConfig?.acceptedOutputModes,
       },
@@ -104,23 +106,12 @@ export class ClientFactory {
   private async createFromNormalizedAgentCard(agentCard: AgentCard): Promise<Client> {
     const interfaces = agentCard.supportedInterfaces ?? [];
 
-    const bestInterfacePerProtocol = new CaseInsensitiveMap<(typeof interfaces)[number]>();
-    for (const agentInterface of interfaces) {
-      const existing = bestInterfacePerProtocol.get(agentInterface.protocolBinding);
-      if (
-        !existing ||
-        (existing.protocolVersion !== '1.0' && agentInterface.protocolVersion === '1.0')
-      ) {
-        bestInterfacePerProtocol.set(agentInterface.protocolBinding, agentInterface);
-      }
-    }
-
     const transportsByPreference = [
       ...(this.options.preferredTransports ?? []),
       ...interfaces.map((i) => i.protocolBinding),
     ];
     for (const transportName of transportsByPreference) {
-      const selectedInterface = bestInterfacePerProtocol.get(transportName);
+      const selectedInterface = preferredInterface(interfacesForBinding(agentCard, transportName));
       const factory = this.transportsByName.get(transportName);
       if (factory && selectedInterface) {
         let transport = await factory.create(selectedInterface.url, agentCard);

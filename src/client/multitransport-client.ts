@@ -29,6 +29,33 @@ import {
 } from './interceptors.js';
 import { ServiceParameters } from './service-parameters.js';
 import { Transport } from './transports/transport.js';
+import { SequentialPluginManager } from '../plugins/manager.js';
+import { runCall, runStream, type CallHooks } from '../plugins/run.js';
+import type {
+  A2AMethodName,
+  A2APlugin,
+  ClientRequest,
+  ClientResponse,
+  PluginManager,
+} from '../plugins/types.js';
+
+/** A2A method name reported to plugins for each client method that calls the server. */
+const PLUGIN_METHODS = {
+  getAgentCard: 'GetExtendedAgentCard',
+  sendMessage: 'SendMessage',
+  sendMessageStream: 'SendStreamingMessage',
+  getTask: 'GetTask',
+  listTasks: 'ListTasks',
+  cancelTask: 'CancelTask',
+  createTaskPushNotificationConfig: 'CreateTaskPushNotificationConfig',
+  getTaskPushNotificationConfig: 'GetTaskPushNotificationConfig',
+  listTaskPushNotificationConfig: 'ListTaskPushNotificationConfigs',
+  deleteTaskPushNotificationConfig: 'DeleteTaskPushNotificationConfig',
+  resubscribeTask: 'SubscribeToTask',
+} as const satisfies Record<
+  Exclude<keyof Client, 'transport' | 'config' | 'protocolVersion' | 'endpoint'>,
+  A2AMethodName
+>;
 
 export interface ClientConfig {
   /**
@@ -48,6 +75,12 @@ export interface ClientConfig {
 
   /** Interceptors invoked for each request. */
   interceptors?: CallInterceptor[];
+
+  /**
+   * Plugins whose client hooks run around every call to the server, outside
+   * the interceptors, in the given order. See `@a2a-js/sdk/plugins`.
+   */
+  plugins?: A2APlugin[];
 }
 
 export interface RequestOptions {
@@ -74,11 +107,31 @@ export class Client {
     return this.transport.protocolVersion;
   }
 
+  /**
+   * The endpoint of the remote agent, as reported by the transport.
+   * Undefined for custom transports that don't expose it.
+   */
+  public get endpoint(): string | undefined {
+    return this.transport.endpoint;
+  }
+
+  private readonly plugins: PluginManager;
+  private readonly pluginHooks: CallHooks<ClientRequest, ClientResponse>;
+
   constructor(
     public readonly transport: Transport,
     private agentCard: AgentCard,
     public readonly config?: ClientConfig
-  ) {}
+  ) {
+    const plugins = new SequentialPluginManager(...(config?.plugins ?? []));
+    this.plugins = plugins;
+    this.pluginHooks = {
+      before: (req) => plugins.beforeClientRequest(req),
+      around: (req, next) => plugins.aroundClientRequest(req, next),
+      after: (res) => plugins.afterClientRequest(res),
+      response: ({ method, options }, outcome) => ({ method, options, ...outcome }),
+    };
+  }
 
   /**
    * If the current agent card supports the extended feature, fetches the
@@ -129,9 +182,18 @@ export class Client {
     params: SendMessageRequest,
     options?: RequestOptions
   ): AsyncGenerator<StreamResponse, void, undefined> {
+    params = this.applyClientConfig({ params, returnImmediately: false });
+    yield* this.streamWithPlugins('sendMessageStream', params, options, (params, options) =>
+      this.sendMessageStreamThroughInterceptors(params, options)
+    );
+  }
+
+  private async *sendMessageStreamThroughInterceptors(
+    params: SendMessageRequest,
+    options?: RequestOptions
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'sendMessageStream';
 
-    params = this.applyClientConfig({ params, returnImmediately: false });
     const beforeArgs: BeforeArgs<'sendMessageStream'> = {
       input: { method, value: params },
       agentCard: this.agentCard,
@@ -292,6 +354,15 @@ export class Client {
     params: SubscribeToTaskRequest,
     options?: RequestOptions
   ): AsyncGenerator<StreamResponse, void, undefined> {
+    yield* this.streamWithPlugins('resubscribeTask', params, options, (params, options) =>
+      this.resubscribeTaskThroughInterceptors(params, options)
+    );
+  }
+
+  private async *resubscribeTaskThroughInterceptors(
+    params: SubscribeToTaskRequest,
+    options?: RequestOptions
+  ): AsyncGenerator<StreamResponse, void, undefined> {
     const method = 'resubscribeTask';
 
     const beforeArgs: BeforeArgs<'resubscribeTask'> = {
@@ -430,7 +501,58 @@ export class Client {
     };
   }
 
-  private async executeWithInterceptors<K extends keyof Client>(
+  private async executeWithInterceptors<K extends keyof typeof PLUGIN_METHODS>(
+    input: ClientCallInput<K>,
+    options: RequestOptions | undefined,
+    transportCall: (
+      params: ClientCallInput<K>['value'],
+      options?: RequestOptions
+    ) => Promise<ClientCallResult<K>['value']>
+  ): Promise<ClientCallResult<K>['value']> {
+    if (!this.plugins.hasClientHooks) {
+      return this.callThroughInterceptors(input, options, transportCall);
+    }
+    const request = this.pluginRequest(input.method, input.value, options);
+    return runCall(this.pluginHooks, request, () =>
+      this.callThroughInterceptors(
+        { method: input.method, value: request.payload } as ClientCallInput<K>,
+        request.options,
+        transportCall
+      )
+    );
+  }
+
+  /** Runs a streaming call through the plugins, then `open`. */
+  private streamWithPlugins<P>(
+    method: 'sendMessageStream' | 'resubscribeTask',
+    params: P,
+    options: RequestOptions | undefined,
+    open: (
+      params: P,
+      options: RequestOptions | undefined
+    ) => AsyncGenerator<StreamResponse, void, undefined>
+  ): AsyncGenerator<StreamResponse, void, undefined> {
+    if (!this.plugins.hasClientHooks) {
+      return open(params, options);
+    }
+    const request = this.pluginRequest(method, params, options);
+    return runStream(this.pluginHooks, request, () => open(request.payload as P, request.options));
+  }
+
+  private pluginRequest(
+    method: keyof typeof PLUGIN_METHODS,
+    payload: unknown,
+    options: RequestOptions | undefined
+  ): ClientRequest {
+    return {
+      method: PLUGIN_METHODS[method],
+      payload,
+      agentCard: this.agentCard,
+      options: { ...options, serviceParameters: { ...options?.serviceParameters } },
+    };
+  }
+
+  private async callThroughInterceptors<K extends keyof Client>(
     input: ClientCallInput<K>,
     options: RequestOptions | undefined,
     transportCall: (

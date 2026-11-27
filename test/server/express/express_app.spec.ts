@@ -160,6 +160,26 @@ describe('A2AExpressApp', () => {
     expect(response.headers[HTTP_EXTENSION_HEADER.toLowerCase()]).toBe('ext://trace');
   });
 
+  it('sets JSONRPC as the protocol binding on default and custom contexts', async () => {
+    const custom = new ServerCallContext({ requestedVersion: '1.0' });
+    const contextBuilder = vi.fn(() => custom);
+    setupA2ARoutes(expressApp, mockRequestHandler, undefined, '', [], undefined, {
+      contextBuilder,
+    });
+    (mockRequestHandler.listTasks as Mock).mockResolvedValue({ tasks: [] });
+
+    await request(expressApp)
+      .post('/')
+      .set('A2A-Version', '1.0')
+      .send(createRpcRequest('binding', 'ListTasks', {}))
+      .expect(200);
+
+    expect(contextBuilder).toHaveBeenCalledWith(
+      expect.objectContaining({ protocolBinding: 'JSONRPC' })
+    );
+    expect(custom.protocolBinding).toBe('JSONRPC');
+  });
+
   describe('agent card endpoint', () => {
     beforeEach(() => {
       setupA2ARoutes(expressApp, mockRequestHandler);
@@ -742,22 +762,25 @@ describe('A2AExpressApp', () => {
       setupA2ARoutesWithLegacyCompat(expressApp, mockRequestHandler);
     });
 
-    it('routes a v0.3 method to the legacy handler', async () => {
-      legacyHandleStub.mockResolvedValue({
-        jsonrpc: '2.0',
-        id: 'req-1',
-        result: { kind: 'task' },
-      });
+    it.each(['0.3', '0.3.0'])(
+      'routes a v0.3 method to the legacy handler (A2A-Version: %s)',
+      async (version) => {
+        legacyHandleStub.mockResolvedValue({
+          jsonrpc: '2.0',
+          id: 'req-1',
+          result: { kind: 'task' },
+        });
 
-      await request(expressApp)
-        .post('/')
-        .set('A2A-Version', '0.3')
-        .send(createRpcRequest('req-1', 'message/send'))
-        .expect(200);
+        await request(expressApp)
+          .post('/')
+          .set('A2A-Version', version)
+          .send(createRpcRequest('req-1', 'message/send'))
+          .expect(200);
 
-      expect(legacyHandleStub).toHaveBeenCalledTimes(1);
-      expect(handleStub).not.toHaveBeenCalled();
-    });
+        expect(legacyHandleStub).toHaveBeenCalledTimes(1);
+        expect(handleStub).not.toHaveBeenCalled();
+      }
+    );
 
     it('routes a v1.0 method to the v1 handler', async () => {
       handleStub.mockResolvedValue({

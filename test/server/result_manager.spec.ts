@@ -6,12 +6,15 @@ import {
   Role,
   Task,
   TaskState,
+  TaskStatus,
   TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
 } from '../../src/types/pb/a2a.js';
 import { ServerCallContext } from '../../src/server/context.js';
 import { ResultManager } from '../../src/server/result_manager.js';
 import { InMemoryTaskStore } from '../../src/server/store.js';
 import { AgentEvent } from '../../src/server/events/execution_event_bus.js';
+import { sequential, type TaskEventInfo } from '../../src/plugins/index.js';
 
 function createMessage(messageId: string, text: string, role: Role = Role.ROLE_USER): Message {
   return {
@@ -1012,5 +1015,199 @@ describe('concurrent ResultManagers on the same taskId', () => {
       expect(stored!.status?.state).toBe(TaskState.TASK_STATE_COMPLETED);
       expect(stored!.history?.map((m) => m.messageId)).toContain('final-1');
     });
+  });
+});
+
+describe('ResultManager generation', () => {
+  let store: InMemoryTaskStore;
+  const context = new ServerCallContext();
+  const working: TaskStatus = {
+    state: TaskState.TASK_STATE_WORKING,
+    message: undefined,
+    timestamp: undefined,
+  };
+
+  beforeEach(() => {
+    store = new InMemoryTaskStore();
+  });
+
+  it('starts at 1 and returns a stamped copy per persisted event without mutating input', async () => {
+    const rm = new ResultManager(store, context);
+    // An executor-supplied generation is overwritten on the returned copy: the server owns it.
+    const task = createTask('task-1', 'ctx-1', { generation: 99 });
+    const statusUpdate: TaskStatusUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      status: working,
+      metadata: {},
+    };
+    const artifactUpdate: TaskArtifactUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      artifact: createArtifact('a-1', 'x'),
+      append: false,
+      lastChunk: true,
+      metadata: {},
+    };
+
+    const publishedTask = AgentEvent.task(task);
+    const publishedStatus = AgentEvent.statusUpdate(statusUpdate);
+    const publishedArtifact = AgentEvent.artifactUpdate(artifactUpdate);
+
+    const stampedTask = await rm.processEvent(publishedTask);
+    const stampedStatus = await rm.processEvent(publishedStatus);
+    const stampedArtifact = await rm.processEvent(publishedArtifact);
+
+    expect(
+      [stampedTask, stampedStatus, stampedArtifact].map((event) =>
+        event.kind === 'message' ? undefined : event.data.generation
+      )
+    ).toEqual([1, 2, 3]);
+    // Both the wrappers and their payloads shared on the bus must stay untouched.
+    expect(publishedTask.data).toBe(task);
+    expect(publishedStatus.data).toBe(statusUpdate);
+    expect(publishedArtifact.data).toBe(artifactUpdate);
+    expect(task.generation).toBe(99);
+    expect(statusUpdate.generation).toBeUndefined();
+    expect(artifactUpdate.generation).toBeUndefined();
+    expect((await store.load('task-1', context))!.generation).toBe(3);
+  });
+
+  it('continues from the stored generation on a later task event', async () => {
+    await store.save(createTask('task-1', 'ctx-1', { generation: 4 }), context);
+    const task = createTask('task-1', 'ctx-1');
+
+    const stamped = await new ResultManager(store, context).processEvent(AgentEvent.task(task));
+
+    expect(stamped.kind === 'task' ? stamped.data.generation : undefined).toBe(5);
+    expect(task.generation).toBeUndefined();
+  });
+
+  it('does not advance for a status update ignored for a terminal task', async () => {
+    await store.save(
+      createTask('task-1', 'ctx-1', {
+        status: { state: TaskState.TASK_STATE_COMPLETED, message: undefined, timestamp: undefined },
+        generation: 2,
+      }),
+      context
+    );
+    const statusUpdate: TaskStatusUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      status: working,
+      metadata: {},
+    };
+    const published = AgentEvent.statusUpdate(statusUpdate);
+
+    const returned = await new ResultManager(store, context).processEvent(published);
+
+    expect(returned).toBe(published);
+    expect(statusUpdate.generation).toBeUndefined();
+    expect((await store.load('task-1', context))!.generation).toBe(2);
+  });
+});
+
+describe('ResultManager task plugin hooks', () => {
+  const context = new ServerCallContext();
+  let store: InMemoryTaskStore;
+  let infos: TaskEventInfo[];
+  let manager: ResultManager;
+
+  function statusUpdate(taskId: string, state: TaskState) {
+    return AgentEvent.statusUpdate({
+      taskId,
+      contextId: 'c1',
+      status: { state, message: undefined, timestamp: undefined },
+      metadata: {},
+    });
+  }
+
+  beforeEach(() => {
+    store = new InMemoryTaskStore();
+    infos = [];
+    manager = new ResultManager(
+      store,
+      context,
+      sequential({ name: 'recorder', onTaskEvent: (info) => void infos.push(info) })
+    );
+  });
+
+  it('reports each write with the state persisted before it', async () => {
+    const created = AgentEvent.task(createTask('t1', 'c1'));
+    await manager.processEvent(created);
+    await manager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_WORKING));
+    await manager.processEvent(
+      AgentEvent.artifactUpdate({
+        taskId: 't1',
+        contextId: 'c1',
+        artifact: createArtifact('a1', 'hello'),
+        append: false,
+        lastChunk: true,
+        metadata: {},
+      })
+    );
+    await manager.processEvent(
+      AgentEvent.task(
+        createTask('t1', 'c1', {
+          status: {
+            state: TaskState.TASK_STATE_COMPLETED,
+            message: undefined,
+            timestamp: undefined,
+          },
+        })
+      )
+    );
+
+    expect(infos.map((i) => [i.event?.kind, i.fromState, i.toState])).toEqual([
+      ['task', undefined, TaskState.TASK_STATE_SUBMITTED],
+      ['statusUpdate', TaskState.TASK_STATE_SUBMITTED, TaskState.TASK_STATE_WORKING],
+      ['artifactUpdate', TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_WORKING],
+      ['task', TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED],
+    ]);
+    expect(infos[0]).toMatchObject({ taskId: 't1', event: created, context });
+    expect(infos.at(-1)!.task).toEqual(await store.load('t1', context));
+  });
+
+  it('does not report writes that were skipped or failed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await manager.processEvent(AgentEvent.task(createTask('t1', 'c1')));
+    await manager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_COMPLETED));
+    infos = [];
+
+    // Terminal task, unknown task, and message events don't write.
+    await manager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_WORKING));
+    await manager.processEvent(statusUpdate('unknown', TaskState.TASK_STATE_WORKING));
+    await manager.processEvent(AgentEvent.message(createMessage('m1', 'hi', Role.ROLE_AGENT)));
+    vi.spyOn(store, 'save').mockRejectedValue(new Error('disk full'));
+    await expect(manager.processEvent(AgentEvent.task(createTask('t2', 'c1')))).rejects.toThrow(
+      'disk full'
+    );
+
+    expect(infos).toEqual([]);
+  });
+
+  it('lets a hook write to the same task without deadlocking', { timeout: 1000 }, async () => {
+    // E.g. a policy plugin that cancels the task it was told about.
+    const hookManager = new ResultManager(
+      store,
+      context,
+      sequential({
+        name: 'canceller',
+        onTaskEvent: async (info) => {
+          infos.push(info);
+          if (info.toState === TaskState.TASK_STATE_SUBMITTED) {
+            await hookManager.processEvent(statusUpdate('t1', TaskState.TASK_STATE_CANCELED));
+          }
+        },
+      })
+    );
+
+    await hookManager.processEvent(AgentEvent.task(createTask('t1', 'c1')));
+
+    expect(infos.map((i) => [i.fromState, i.toState])).toEqual([
+      [undefined, TaskState.TASK_STATE_SUBMITTED],
+      [TaskState.TASK_STATE_SUBMITTED, TaskState.TASK_STATE_CANCELED],
+    ]);
+    expect((await store.load('t1', context))?.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
   });
 });

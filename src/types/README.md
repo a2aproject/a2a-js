@@ -1,4 +1,4 @@
-# A2A v1.0 Types
+# A2A v1.x Types
 
 This directory holds the protocol message types and their JSON codecs.
 
@@ -19,7 +19,7 @@ import { Task, TaskState, Message } from '@a2a-js/sdk';
 | `converters/`   | hand          | `from_proto` / `to_proto` oneof (un)wrappers. Legacy; slated for removal.             |
 
 `index.ts` deliberately re-exports the enums by name rather than adding a
-second `export *`. Both it and `protojson.ts` export the same 51 message-type
+second `export *`. Both it and `protojson.ts` export the same 55 message-type
 names, so a second star export would make every one of them ambiguous and drop
 it from the public API.
 
@@ -33,18 +33,29 @@ regeneration.
 ## Regenerating
 
 ```bash
-cd src/types
-npx buf generate
+npm run generate
 ```
 
-This rewrites `./pb/a2a.ts` only, from the proto pinned in `buf.gen.yaml`.
+This runs `buf generate` in `src/types` and `src/grpc` against the proto pinned
+in each `buf.gen.yaml`, then `scripts/postprocess_generated_types.js`, which:
+
+- marks fields added after 1.0 without `REQUIRED` as optional (`?:`) in
+  `pb/a2a.ts`. ts-proto ignores `google.api.field_behavior` and types every
+  field without the proto `optional` keyword as required. That would turn each
+  additive minor release into a compile break for code that builds these
+  objects. Add new fields of that kind to `OPTIONAL_FIELDS` in the script.
+- replaces the message types in `src/grpc/pb/a2a.ts` with aliases of the ones
+  here (see `src/grpc/README.md`).
+
+Never edit generated files by hand. A clean `npm run generate` must leave
+`git status` empty.
 
 > [!IMPORTANT]
 > `protojson.ts` is **not** regenerated. After any proto change you must update
 > it by hand, otherwise a new message ships with no codec and a new field is
 > silently dropped on both parse and serialize. Keep the set of `export type`
 > re-exports and the set of `MessageFns` implementations in step with the
-> `export interface` declarations in `pb/a2a.ts` — currently 51 of each.
+> `export interface` declarations in `pb/a2a.ts` — currently 55 of each.
 
 ## Adding a message type
 

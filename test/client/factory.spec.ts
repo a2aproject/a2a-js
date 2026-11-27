@@ -16,9 +16,13 @@ import { RestTransportFactory } from '../../src/client/transports/rest_transport
 describe('ClientFactory', () => {
   let mockTransportFactory1: { protocolName: string; create: Mock };
   let mockTransportFactory2: { protocolName: string; create: Mock };
-  let mockTransport: Record<Exclude<keyof Transport, 'protocolName' | 'protocolVersion'>, Mock> & {
+  let mockTransport: Record<
+    Exclude<keyof Transport, 'protocolName' | 'protocolVersion' | 'endpoint'>,
+    Mock
+  > & {
     protocolName: string;
     protocolVersion: string;
+    endpoint?: string;
   };
 
   beforeEach(() => {
@@ -155,13 +159,16 @@ describe('ClientFactory', () => {
 
     describe.each(['JSONRPC', 'HTTP+JSON'])('%s interface preference', (protocolBinding) => {
       it.each([
-        { versions: ['1.0', '1.0'], selectedIndex: 0 },
-        { versions: ['0.3', '1.0', '1.0'], selectedIndex: 1 },
-        { versions: ['1.0', '0.3', '1.0'], selectedIndex: 0 },
-        { versions: ['0.3', '0.3'], selectedIndex: 0 },
+        { versions: ['1.0', '1.0'], selectedIndex: 0, sent: '1.0' },
+        { versions: ['0.3', '1.0', '1.0'], selectedIndex: 1, sent: '1.0' },
+        { versions: ['1.0', '0.3', '1.0'], selectedIndex: 0, sent: '1.0' },
+        { versions: ['0.3', '0.3'], selectedIndex: 0, sent: '0.3' },
+        { versions: ['0.3', '1.1'], selectedIndex: 1, sent: '1.0' },
+        { versions: ['2.0', '1.0'], selectedIndex: 1, sent: '1.0' },
+        { versions: ['2.0', '0.3'], selectedIndex: 1, sent: '0.3' },
       ])(
         'selects interface $selectedIndex for versions $versions',
-        async ({ versions, selectedIndex }) => {
+        async ({ versions, selectedIndex, sent }) => {
           const card = AgentCard.fromJSON({
             name: 'Interface order test',
             version: '1.0.0',
@@ -201,7 +208,7 @@ describe('ClientFactory', () => {
           const task = await client.getTask({ id: 'task-1', tenant: '' });
 
           expect(task.id).toBe('task-1');
-          expect(client.transport.protocolVersion).toBe(versions[selectedIndex]);
+          expect(client.transport.protocolVersion).toBe(sent);
           expect(fetchImpl).toHaveBeenCalledOnce();
           const expectedEndpoint = card.supportedInterfaces[selectedIndex].url;
           const restPath = versions[selectedIndex] === '0.3' ? '/v1/tasks/task-1' : '/tasks/task-1';
@@ -498,6 +505,32 @@ describe('ClientFactory', () => {
       expect(client.transport).not.to.be.instanceOf(LegacyJsonRpcTransport);
     });
 
+    it('skips a binding that only offers another major version', async () => {
+      const factory = new ClientFactory();
+      agentCard.supportedInterfaces = [
+        {
+          url: 'https://v2.example/rpc',
+          protocolBinding: 'JSONRPC',
+          tenant: '',
+          protocolVersion: '2.0',
+        },
+        {
+          url: 'https://v1.example/rest',
+          protocolBinding: 'HTTP+JSON',
+          tenant: '',
+          protocolVersion: '1.0',
+        },
+      ];
+
+      const client = await factory.createFromAgentCard(agentCard);
+      expect(client.transport.protocolName).toBe('HTTP+JSON');
+
+      agentCard.supportedInterfaces = agentCard.supportedInterfaces.slice(0, 1);
+      await expect(factory.createFromAgentCard(agentCard)).rejects.toThrow(
+        'No compatible transport found'
+      );
+    });
+
     it('ClientFactory with legacyCompat-enabled JSON-RPC factory routes v0.3 agents through LegacyJsonRpcTransport', async () => {
       const factory = new ClientFactory(
         ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
@@ -592,7 +625,12 @@ describe('ClientFactory', () => {
       };
       const overrides: Partial<ClientFactoryOptions> = {
         transports: [mockTransportFactory2],
-        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
+        clientConfig: {
+          polling: false,
+          acceptedOutputModes: undefined,
+          interceptors: undefined,
+          plugins: undefined,
+        },
         preferredTransports: ['Transport2'],
         cardResolver: { resolve: vi.fn() } as any,
       };
@@ -602,6 +640,7 @@ describe('ClientFactory', () => {
         polling: false,
         acceptedOutputModes: undefined,
         interceptors: undefined,
+        plugins: undefined,
       });
       expect(result.preferredTransports).to.deep.equal(['Transport2']);
       expect(result.cardResolver).to.equal(overrides.cardResolver);
@@ -611,7 +650,12 @@ describe('ClientFactory', () => {
       const original: ClientFactoryOptions = {
         transports: [mockTransportFactory1],
         preferredTransports: ['Transport1'],
-        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
+        clientConfig: {
+          polling: false,
+          acceptedOutputModes: undefined,
+          interceptors: undefined,
+          plugins: undefined,
+        },
       };
       const overrides: Partial<ClientFactoryOptions> = {};
       const result = ClientFactoryOptions.createFrom(original, overrides);
@@ -625,7 +669,12 @@ describe('ClientFactory', () => {
       const overrides: Partial<ClientFactoryOptions> = {
         transports: [mockTransportFactory1],
         preferredTransports: ['Transport1'],
-        clientConfig: { polling: false, acceptedOutputModes: undefined, interceptors: undefined },
+        clientConfig: {
+          polling: false,
+          acceptedOutputModes: undefined,
+          interceptors: undefined,
+          plugins: undefined,
+        },
       };
       const result = ClientFactoryOptions.createFrom(original, overrides);
       console.log(result);
@@ -678,7 +727,18 @@ describe('ClientFactory', () => {
         polling: true,
         acceptedOutputModes: ['mode2'],
         interceptors: [interceptor1, interceptor2],
+        plugins: undefined,
       });
+    });
+
+    it('should concatenate plugins', () => {
+      const plugin1 = { name: 'p1' };
+      const plugin2 = { name: 'p2' };
+      const result = ClientFactoryOptions.createFrom(
+        { transports: [mockTransportFactory1], clientConfig: { plugins: [plugin1] } },
+        { clientConfig: { plugins: [plugin2] } }
+      );
+      expect(result.clientConfig?.plugins).to.deep.equal([plugin1, plugin2]);
     });
 
     it('should handle undefined preferredTransports in original correctly', () => {

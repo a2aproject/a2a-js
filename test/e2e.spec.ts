@@ -337,7 +337,14 @@ describe('Client E2E tests', () => {
             actual.push(message);
           }
 
-          expect(removeUndefinedFields(actual)).to.deep.equal(removeUndefinedFields(expected));
+          expect(removeUndefinedFields(actual)).to.deep.equal(
+            // Each persisted event carries the task's generation after it.
+            removeUndefinedFields(
+              expected.map((e: any, index: number) => ({
+                payload: { ...e.payload, value: { ...e.payload.value, generation: index + 1 } },
+              }))
+            )
+          );
         });
 
         it('should fallback to non-streaming sendMessage if agent does not support streaming', async () => {

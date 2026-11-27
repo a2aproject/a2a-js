@@ -8,14 +8,21 @@ on:
     branches: [ "main", "epic/**" ]
   pull_request:
     branches: [ "main", "epic/**" ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.github/CODEOWNERS'
-      - 'src/samples/**'
+    paths:
+      - 'src/**'
+      - '!src/samples/**'
+      - 'test/**'
+      - 'vitest.config.ts'
+      - 'vitest.edge.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - '.github/actions/setup/**'
+      - '.github/workflows/unit-tests.yml'
 
 jobs:
   test:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -58,12 +65,10 @@ jobs:
           --health-cmd="mysqladmin ping --protocol=TCP -h 127.0.0.1 -u a2a -pa2a_password" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-node@v7
+    - uses: ./.github/actions/setup
       with:
         node-version: ${{ matrix.node-version }}
         registry-url: 'https://registry.npmjs.org'
-        cache: 'npm'
-    - run: npm ci
     # Overrides the lockfile pins and the devDependencies. Skipped where the matrix
     # names no versions.
     - if: matrix.kysely
@@ -88,20 +93,20 @@ jobs:
   # ensures the SDK works in non-Node.js server environments, including the database
   # stores, which `test/edge/` drives against a miniflare-provided D1 binding.
   test-edge:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-node@v7
+    - uses: ./.github/actions/setup
       with:
         node-version: 24
         registry-url: 'https://registry.npmjs.org'
-        cache: 'npm'
-    - run: npm ci
     - run: npm run test:edge
 
   # Run coverage once to generate a report.
   coverage:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Base Branch
@@ -110,18 +115,17 @@ jobs:
         ref: ${{ github.event.pull_request.base.ref || 'main' }}
         clean: true
 
-    - uses: actions/setup-node@v7
+    - name: Setup (Base Branch)
+      uses: ./.github/actions/setup
       with:
         node-version: 24
-        cache: 'npm'
 
-    - name: Install & Test (Base Branch)
+    - name: Test (Base Branch)
       timeout-minutes: 10
       run: |
-        npm ci
         npm run coverage
         mv coverage/coverage-summary.json ${{ runner.temp }}/coverage-base-summary.json
-    
+
     - name: Upload Artifact (base)
       uses: actions/upload-artifact@v7
       if: github.event_name != 'pull_request'
@@ -136,11 +140,16 @@ jobs:
       with:
         clean: true
 
-    - name: Install & Test (PR)
+    - name: Setup (PR)
+      if: github.event_name == 'pull_request'
+      uses: ./.github/actions/setup
+      with:
+        node-version: 24
+
+    - name: Test (PR)
       if: github.event_name == 'pull_request'
       timeout-minutes: 10
       run: |
-        npm ci
         npm run coverage
         mv coverage/coverage-summary.json coverage-pr-summary.json
         mv ${{ runner.temp }}/coverage-base-summary.json coverage-base-summary.json

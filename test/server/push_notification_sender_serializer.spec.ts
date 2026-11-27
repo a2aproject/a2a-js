@@ -14,7 +14,13 @@ import {
   V1PushNotificationSerializer,
 } from '../../src/server/push_notification/push_notification_serializer.js';
 import { ServerCallContext } from '../../src/server/context.js';
+import type { A2APlugin, PushResult } from '../../src/plugins/index.js';
+import { DefaultRequestHandler } from '../../src/server/request_handler/default_request_handler.js';
+import { InMemoryTaskStore } from '../../src/server/store.js';
+import { MockAgentExecutor, fakeTaskExecute } from './mocks/agent-executor.mock.js';
 import {
+  AgentCard,
+  Message,
   Role,
   StreamResponse,
   TaskPushNotificationConfig,
@@ -152,6 +158,23 @@ describe('DefaultPushNotificationSender serializer registry', () => {
     expect(received).toHaveLength(1);
     expect(received[0].headers['content-type']).toBe('application/json');
     expect(received[0].body).toEqual({ kind: 'task', fake: 'v0.3-body' });
+  });
+
+  it('ignores the patch of a stored wire version when picking a serializer', async () => {
+    const v03Serializer: PushNotificationSerializer = {
+      serialize(): SerializedPushNotification {
+        return { body: '{"v":"0.3"}', contentType: 'application/json' };
+      },
+    };
+    const sender = new DefaultPushNotificationSender(store, {
+      serializers: { [A2A_LEGACY_PROTOCOL_VERSION]: v03Serializer },
+    });
+    const ctx = new ServerCallContext({ requestedVersion: '0.3.0' });
+    await store.save('task-v030', ctx, makeConfig(`${baseUrl}/notify`));
+
+    await sender.send(makeStatusUpdate('task-v030'), ctx);
+
+    expect(received[0].body).toEqual({ v: '0.3' });
   });
 
   it('uses the right serializer per stored entry when configs on one task have mixed versions', async () => {
@@ -355,5 +378,175 @@ describe('V1PushNotificationSerializer', () => {
     const result = serializer.serialize(event);
     expect(result.contentType).toBe(A2A_CONTENT_TYPE);
     expect(JSON.parse(result.body)).toEqual(StreamResponse.toJSON(event));
+  });
+});
+
+describe('DefaultPushNotificationSender push plugin hooks', () => {
+  const httpResponse = (status: number, statusText = '') => ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+  });
+  const context = new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION });
+  let store: InMemoryPushNotificationStore;
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let results: PushResult[];
+
+  function sender(plugin: Partial<A2APlugin> = {}): DefaultPushNotificationSender {
+    return new DefaultPushNotificationSender(store, {
+      plugins: [{ name: 'push', onPushSent: (r) => void results.push(r), ...plugin }],
+    });
+  }
+
+  beforeEach(async () => {
+    store = new InMemoryPushNotificationStore();
+    await store.save('t1', context, makeConfig('https://hook.example/notify', { token: 'tok' }));
+    fetchMock = vi.fn().mockResolvedValue(httpResponse(200));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    results = [];
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('sends headers added in beforePushSend and reports the result', async () => {
+    const event = makeStatusUpdate('t1');
+
+    await sender({
+      beforePushSend: (req) => {
+        req.headers['traceparent'] = 'tp-1';
+        req.state.set('start', 1);
+      },
+    }).send(event, context);
+
+    const sentHeaders = fetchMock.mock.calls[0][1].headers;
+    expect(sentHeaders).toMatchObject({ 'X-A2A-Notification-Token': 'tok', traceparent: 'tp-1' });
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ statusCode: 200, error: undefined, skipped: false });
+    expect(results[0].request).toMatchObject({
+      taskId: 't1',
+      url: 'https://hook.example/notify',
+      event,
+    });
+    expect(results[0].request.state.get('start')).toBe(1);
+    expect(results[0].durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reports the status and error of a failed delivery', async () => {
+    fetchMock.mockResolvedValue(httpResponse(503, 'Unavailable'));
+
+    await sender().send(makeStatusUpdate('t1'), context);
+
+    expect(results[0]).toMatchObject({ statusCode: 503, skipped: false });
+    expect(String(results[0].error)).toContain('HTTP 503');
+  });
+
+  it('reports a network error with no status code', async () => {
+    const failure = new TypeError('fetch failed');
+    fetchMock.mockRejectedValue(failure);
+
+    await sender().send(makeStatusUpdate('t1'), context);
+
+    expect(results[0]).toMatchObject({ statusCode: undefined, error: failure });
+  });
+
+  it('drops the delivery when beforePushSend sets skip', async () => {
+    await sender({ beforePushSend: (req) => void (req.skip = true) }).send(
+      makeStatusUpdate('t1'),
+      context
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(results[0]).toMatchObject({ skipped: true, error: undefined, durationMs: 0 });
+  });
+
+  it('reports a serializer error without sending', async () => {
+    const failure = new Error('cannot serialize');
+    const pushSender = new DefaultPushNotificationSender(store, {
+      serializers: {
+        [ProtocolVersion.V1_0]: {
+          serialize: () => {
+            throw failure;
+          },
+        },
+      },
+      plugins: [{ name: 'push', onPushSent: (r) => void results.push(r) }],
+    });
+
+    await pushSender.send(makeStatusUpdate('t1'), context);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ error: failure, durationMs: 0, skipped: false });
+    expect(results[0].request).toMatchObject({ taskId: 't1', url: 'https://hook.example/notify' });
+  });
+
+  it('times only the HTTP request, not beforePushSend', async () => {
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    fetchMock.mockImplementation(async () => {
+      now += 5;
+      return httpResponse(200);
+    });
+
+    await sender({
+      beforePushSend: () => {
+        now += 1000;
+      },
+    }).send(makeStatusUpdate('t1'), context);
+
+    expect(results[0].durationMs).toBe(5);
+  });
+
+  it('fails the delivery without sending when beforePushSend throws', async () => {
+    const rejection = new Error('denied');
+
+    await sender({
+      beforePushSend: () => {
+        throw rejection;
+      },
+    }).send(makeStatusUpdate('t1'), context);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(results[0]).toMatchObject({ error: rejection, skipped: false });
+  });
+
+  it('gives the default sender built by DefaultRequestHandler its push hooks', async () => {
+    const executor = new MockAgentExecutor();
+    executor.execute.mockImplementation(fakeTaskExecute);
+    // The handler sends pushes without awaiting them, so wait for the hook itself.
+    const firstPush = new Promise<PushResult>((resolve) => {
+      const handler = new DefaultRequestHandler(
+        { capabilities: { pushNotifications: true } } as AgentCard,
+        new InMemoryTaskStore(),
+        executor,
+        undefined,
+        store,
+        undefined,
+        undefined,
+        undefined,
+        { plugins: [{ name: 'push', onPushSent: resolve }] }
+      );
+      void handler.sendMessage(
+        {
+          tenant: '',
+          message: { messageId: 'm1', role: Role.ROLE_USER, parts: [] } as unknown as Message,
+          configuration: {
+            taskPushNotificationConfig: makeConfig('https://hook.example/handler'),
+            historyLength: 0,
+            returnImmediately: false,
+            acceptedOutputModes: [],
+          },
+          metadata: {},
+        },
+        context
+      );
+    });
+
+    expect((await firstPush).request.url).toBe('https://hook.example/handler');
   });
 });

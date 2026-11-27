@@ -3,6 +3,7 @@ import { validateVersion, getSupportedVersions } from '../../src/server/version.
 import { VersionNotSupportedError } from '../../src/errors/index.js';
 import { AgentCard } from '../../src/index.js';
 import { ServerCallContext } from '../../src/server/context.js';
+import { negotiateVersion } from '../../src/version_utils.js';
 
 function createAgentCard(
   interfaces: Array<{ protocolBinding: string; protocolVersion: string }> = []
@@ -195,6 +196,44 @@ describe('validateVersion strict v0.3 acceptance', () => {
     const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: '0.3' }]);
     validateVersion('0.3', card, 'JSONRPC');
     expect(getSupportedVersions(card).has('1.0')).toBe(false);
+  });
+});
+
+describe('validateVersion minor-version compatibility', () => {
+  it.each([
+    { declared: '1.1', requested: '1.0', ok: true },
+    { declared: '1.1', requested: '1.1', ok: true },
+    { declared: '1.0', requested: '1.1', ok: false },
+    { declared: '1.0', requested: '1.0.5', ok: true },
+    { declared: '1.1', requested: '2.0', ok: false },
+    { declared: '1.1', requested: '0.3', ok: false },
+    { declared: '0.3', requested: '0.2', ok: false },
+    { declared: '0.3', requested: '0.3.0', ok: true },
+    { declared: '1.0', requested: '1.0-rc1', ok: false },
+    { declared: '1.0', requested: '1.0, 9.9', ok: false },
+  ])('interface $declared, request $requested → accepted: $ok', ({ declared, requested, ok }) => {
+    const card = createAgentCard([{ protocolBinding: 'JSONRPC', protocolVersion: declared }]);
+    const validate = () => validateVersion(requested, card, 'JSONRPC');
+    if (ok) {
+      expect(validate).not.toThrow();
+    } else {
+      expect(validate).toThrow(VersionNotSupportedError);
+    }
+  });
+});
+
+describe('negotiateVersion', () => {
+  it.each([
+    { declared: '1.0', client: '1.1', expected: '1.0' },
+    { declared: '1.1', client: '1.0', expected: '1.0' },
+    { declared: '1.1', client: '1.1', expected: '1.1' },
+    { declared: '1.1.2', client: '1.1', expected: '1.1' },
+    { declared: '2.0', client: '1.1', expected: undefined },
+    { declared: '0.3', client: '1.1', expected: undefined },
+    { declared: '', client: '1.1', expected: undefined },
+    { declared: undefined as unknown as string, client: '1.1', expected: undefined },
+  ])('interface $declared, client $client → $expected', ({ declared, client, expected }) => {
+    expect(negotiateVersion(declared, client)).toBe(expected);
   });
 });
 

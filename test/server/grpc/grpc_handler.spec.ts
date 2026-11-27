@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, assert, expect, vi, Mock } from 'vitest';
 import * as grpc from '@grpc/grpc-js';
 import * as proto from '../../../src/grpc/pb/a2a.js';
-import { A2ARequestHandler } from '../../../src/server/index.js';
+import { A2ARequestHandler, ServerCallContext } from '../../../src/server/index.js';
 import { TaskNotFoundError } from '../../../src/errors/index.js';
 import { grpcService } from '../../../src/server/grpc/grpc_service.js';
 import {
@@ -150,6 +150,34 @@ describe('grpcHandler', () => {
     });
   });
 
+  describe('protocolBinding', () => {
+    it('sets GRPC on the context passed to the request handler', async () => {
+      await handler.getExtendedAgentCard(createMockUnaryCall({}), vi.fn());
+
+      const [, context] = (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mock
+        .calls[0];
+      expect(context.protocolBinding).toBe('GRPC');
+    });
+
+    it('passes GRPC to a custom contextBuilder and sets it on the built context', async () => {
+      const contextBuilder = vi.fn(() => new ServerCallContext({ requestedVersion: '1.0' }));
+      const svc = grpcService({
+        requestHandler: mockRequestHandler,
+        userBuilder: async () => ({ id: 'test-user' }) as any,
+        contextBuilder,
+      });
+
+      await svc.getExtendedAgentCard(createMockUnaryCall({}), vi.fn());
+
+      expect(contextBuilder).toHaveBeenCalledWith(
+        expect.objectContaining({ protocolBinding: 'GRPC' })
+      );
+      const [, context] = (mockRequestHandler.getAuthenticatedExtendedAgentCard as Mock).mock
+        .calls[0];
+      expect(context.protocolBinding).toBe('GRPC');
+    });
+  });
+
   describe('sendMessage', () => {
     it('should successfully send a message and return a task', async () => {
       const call = createMockUnaryCall({ message: { role: Role.ROLE_USER, parts: [] as any } });
@@ -262,6 +290,50 @@ describe('grpcHandler', () => {
       const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
       expect(metadata).toBeDefined();
       expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['extension-v1']);
+    });
+
+    // The request handler returns a lazy generator, so the executor does not
+    // run, and cannot activate anything, until the first event is pulled.
+    it('should return extensions activated while producing the first streamed event', async () => {
+      const call = createMockWritableStream({});
+      let context: { addActivatedExtension(uri: string): void } | undefined;
+      async function* lazyStream() {
+        context!.addActivatedExtension('extension-v1');
+        yield testTask;
+      }
+      (mockRequestHandler.sendMessageStream as Mock).mockImplementation((_params, ctx) => {
+        context = ctx;
+        return lazyStream();
+      });
+
+      await handler.sendStreamingMessage(call);
+
+      expect(call.sendMetadata).toHaveBeenCalledTimes(1);
+      const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
+      expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['extension-v1']);
+      expect((call.sendMetadata as Mock).mock.invocationCallOrder[0]).toBeLessThan(
+        (call.write as Mock).mock.invocationCallOrder[0]
+      );
+    });
+
+    it('should return activated extensions on a stream that yields no events', async () => {
+      const call = createMockWritableStream({});
+      let context: { addActivatedExtension(uri: string): void } | undefined;
+      // eslint-disable-next-line require-yield
+      async function* emptyStream() {
+        context!.addActivatedExtension('extension-v1');
+      }
+      (mockRequestHandler.resubscribe as Mock).mockImplementation((_params, ctx) => {
+        context = ctx;
+        return emptyStream();
+      });
+
+      await handler.subscribeToTask(call);
+
+      expect(call.sendMetadata).toHaveBeenCalledTimes(1);
+      const [metadata] = (call.sendMetadata as Mock).mock.calls[0];
+      expect(metadata.get(HTTP_EXTENSION_HEADER.toLowerCase())).toEqual(['extension-v1']);
+      expect(call.end).toHaveBeenCalled();
     });
   });
 });

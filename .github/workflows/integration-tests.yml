@@ -15,17 +15,16 @@ on:
 
 jobs:
   integration:
+    if: ${{ github.event.pull_request.user.login != 'a2a-bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         with:
           # Min supported node (package.json engines: >=20); catches floor breakage.
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-      - run: npm ci
       # The samples are a separate workspace the integration suite spawns.
       - name: Install sample workspace dependencies
         run: npm ci

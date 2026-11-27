@@ -93,6 +93,10 @@ describe('LegacyRestTransport', () => {
       expect(transport.protocolName).toBe('HTTP+JSON');
     });
 
+    it('exposes the endpoint', () => {
+      expect(transport.endpoint).toBe(ENDPOINT.replace(/\/+$/, ''));
+    });
+
     it("protocolVersion is '0.3'", () => {
       expect(transport.protocolVersion).toBe('0.3');
     });

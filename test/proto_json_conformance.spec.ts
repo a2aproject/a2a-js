@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { Part, TaskStatus } from '../src/index.js';
+import {
+  GetTaskRequest,
+  Part,
+  SendMessageRequest,
+  StreamRequest,
+  StreamResponse,
+  Task,
+  TaskStatus,
+  TaskStatusUpdateEvent,
+} from '../src/index.js';
 
 /**
  * proto3 JSON conformance for the generated codecs.
@@ -83,6 +92,73 @@ describe('proto3 JSON conformance', () => {
     // arm survives depends on the order of the generated fromJSON body.
     it.fails('rejects more than one content arm', () => {
       expect(() => Part.fromJSON({ text: 'hello', url: 'https://example.com/x' })).toThrow();
+    });
+  });
+
+  describe('v1.1 fields', () => {
+    it('writes int64 generation as a string and reads string or number', () => {
+      const task = Task.fromJSON({ id: 't', generation: '7' });
+      expect(task.generation).toBe(7);
+      expect((Task.toJSON(task) as any).generation).toBe('7');
+      expect(TaskStatusUpdateEvent.fromJSON({ generation: 3 }).generation).toBe(3);
+    });
+
+    it('omits unset 1.1 fields so a 1.0 payload round-trips unchanged', () => {
+      const v10 = {
+        id: 't',
+        contextId: 'c',
+        status: { state: 'TASK_STATE_WORKING' },
+        artifacts: [{ artifactId: 'a', parts: [{ text: 'x' }] }],
+      };
+      expect(Task.toJSON(Task.fromJSON(v10))).toEqual(v10);
+    });
+
+    it('accepts objects built without the new optional fields', () => {
+      const task: Task = {
+        id: 't',
+        contextId: 'c',
+        status: undefined,
+        artifacts: [],
+        history: [],
+        metadata: undefined,
+      };
+      expect(Task.toJSON(task)).toEqual({ id: 't', contextId: 'c' });
+    });
+
+    it('round-trips the timeline and artifact generations', () => {
+      const json = {
+        id: 't',
+        timeline: [
+          { message: { messageId: 'm', role: 'ROLE_USER' }, generation: '1' },
+          { status: { state: 'TASK_STATE_WORKING' }, generation: '2' },
+        ],
+        artifacts: [
+          { artifactId: 'a', startGeneration: '3', endGeneration: '4', role: 'ROLE_USER' },
+        ],
+        generation: '4',
+      };
+      expect(Task.toJSON(Task.fromJSON(json))).toEqual(json);
+    });
+
+    it('round-trips the new StreamResponse payloads', () => {
+      const messageUpdate = {
+        messageUpdate: { taskId: 't', message: { messageId: 'm' }, generation: '2' },
+      };
+      expect(StreamResponse.toJSON(StreamResponse.fromJSON(messageUpdate))).toEqual(messageUpdate);
+      const error = { error: { code: 'INVALID', referenceId: 'm' } };
+      expect(StreamResponse.toJSON(StreamResponse.fromJSON(error))).toEqual(error);
+    });
+
+    it('round-trips request fields', () => {
+      const send = {
+        artifactUpdates: [{ taskId: 't', artifact: { artifactId: 'a' } }],
+        configuration: { timelineLength: 5, ifGenerationMatch: '3' },
+      };
+      expect(SendMessageRequest.toJSON(SendMessageRequest.fromJSON(send))).toEqual(send);
+      const live = { subscribe: { id: 't', lastSeenGeneration: '9' } };
+      expect(StreamRequest.toJSON(StreamRequest.fromJSON(live))).toEqual(live);
+      const get = { id: 't', timelineLength: 0, currentGeneration: '2' };
+      expect(GetTaskRequest.toJSON(GetTaskRequest.fromJSON(get))).toEqual(get);
     });
   });
 });

@@ -19,6 +19,7 @@ export default defineConfig([
       'src/compat/v0_3/server/grpc/index.ts',
       'src/compat/v0_3/client/index.ts',
       'src/compat/v0_3/client/transports/grpc/index.ts',
+      'src/plugins/index.ts',
     ],
     format: ['esm', 'cjs'],
     dts: true,
@@ -27,7 +28,7 @@ export default defineConfig([
     splitting: false,
   },
   {
-    // `a2a-db` CLI. Node-only, so deliberately absent from test-build:workers-safe.
+    // `a2a-db` CLI. Node-only, so deliberately absent from package.json exports and test-build.
     // The bin runs as ESM and nothing imports its types, so it ships ESM only, without dts.
     entry: {
       'cli/a2a_db': 'src/cli/a2a_db.ts',

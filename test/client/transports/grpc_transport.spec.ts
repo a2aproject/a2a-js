@@ -81,6 +81,12 @@ describe('GrpcTransport', () => {
     });
   });
 
+  describe('endpoint', () => {
+    it('should expose the endpoint', () => {
+      expect(transport.endpoint).toBe(endpoint);
+    });
+  });
+
   describe('getExtendedAgentCard', () => {
     it('should get agent card successfully', async () => {
       const mockCard = createMockAgentCard();
@@ -460,6 +466,20 @@ describe('GrpcTransportFactory', () => {
       const transport = await factory.create('localhost:50051', agentCard);
       // pickMatchingInterface prefers protocolVersion === '1.0'.
       expect(transport).toBeInstanceOf(GrpcTransport);
+    });
+
+    it('sends the version negotiated with the interface', async () => {
+      const factory = new GrpcTransportFactory();
+      const agentCard = createMockAgentCard({
+        supportedInterfaces: [
+          { url: 'localhost:50051', protocolBinding: 'GRPC', tenant: '', protocolVersion: '1.0' },
+        ],
+      });
+      const transport = await factory.create('localhost:50051', agentCard);
+      expect(transport.protocolVersion).toBe('1.0');
+      expect(new GrpcTransport({ endpoint: 'x', protocolVersion: '1.1' }).protocolVersion).toBe(
+        '1.1'
+      );
     });
   });
 });

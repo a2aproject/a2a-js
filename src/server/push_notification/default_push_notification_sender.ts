@@ -1,9 +1,6 @@
 import { TaskPushNotificationConfig, StreamResponse, Task } from '../../index.js';
-import {
-  A2A_LEGACY_PROTOCOL_VERSION,
-  A2A_PROTOCOL_VERSION,
-  ProtocolVersion,
-} from '../../constants.js';
+import { A2A_LEGACY_PROTOCOL_VERSION, ProtocolVersion } from '../../constants.js';
+import { majorMinor } from '../../version_utils.js';
 import { ServerCallContext } from '../context.js';
 import { PushNotificationSender } from './push_notification_sender.js';
 import { PushNotificationStore, StoredPushNotificationConfig } from './push_notification_store.js';
@@ -11,6 +8,8 @@ import {
   PushNotificationSerializer,
   V1PushNotificationSerializer,
 } from './push_notification_serializer.js';
+import { SequentialPluginManager } from '../../plugins/manager.js';
+import type { A2APlugin, PluginManager, PushRequest } from '../../plugins/types.js';
 
 export interface DefaultPushNotificationSenderOptions {
   /** Timeout in milliseconds for the abort controller. Defaults to 5000ms. */
@@ -37,14 +36,23 @@ export interface DefaultPushNotificationSenderOptions {
    * accepts any string at runtime.
    */
   serializers?: Partial<Record<ProtocolVersion, PushNotificationSerializer>>;
+
+  /**
+   * Plugins whose push hooks run around every webhook delivery, in the given
+   * order. See `@a2a-js/sdk/plugins`.
+   */
+  plugins?: A2APlugin[];
 }
 
 export class DefaultPushNotificationSender implements PushNotificationSender {
   private readonly pushNotificationStore: PushNotificationStore;
   private notificationChain: Map<string, Promise<unknown>>;
-  private readonly options: Required<Omit<DefaultPushNotificationSenderOptions, 'serializers'>>;
+  private readonly options: Required<
+    Omit<DefaultPushNotificationSenderOptions, 'serializers' | 'plugins'>
+  >;
   private readonly serializers: Map<string, PushNotificationSerializer>;
   private readonly fallbackSerializer: PushNotificationSerializer;
+  private readonly plugins: PluginManager;
   // Avoid log spam when many notifications target the same unknown version.
   private readonly warnedMissingSerializers: Set<string> = new Set();
 
@@ -58,6 +66,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       timeout: options.timeout ?? 5000,
       tokenHeaderName: options.tokenHeaderName ?? 'X-A2A-Notification-Token',
     };
+    this.plugins = new SequentialPluginManager(...(options.plugins ?? []));
 
     // Seed with the built-in v1.0 serializer, then overlay user-supplied
     // entries. User entries with key '1.0' override the default
@@ -138,8 +147,13 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
         return payload.value.id;
       case 'statusUpdate':
       case 'artifactUpdate':
+      case 'messageUpdate':
       case 'message':
-        return payload.value.taskId;
+        return payload.value.taskId ?? '';
+      case 'error':
+        // A StreamError is returned only to the caller that sent the rejected
+        // request, never to push notification webhooks.
+        return '';
       default: {
         const _exhaustive: never = payload;
         throw new Error(`Unknown payload case: ${(_exhaustive as { $case: string }).$case}`);
@@ -176,7 +190,8 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
    * registered.
    */
   private _resolveSerializer(wireVersion: string): PushNotificationSerializer {
-    const serializer = this.serializers.get(wireVersion);
+    const serializer =
+      this.serializers.get(wireVersion) ?? this.serializers.get(majorMinor(wireVersion));
     if (serializer) {
       return serializer;
     }
@@ -184,7 +199,7 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
       this.warnedMissingSerializers.add(wireVersion);
       console.warn(
         `No push notification serializer registered for wire version '${wireVersion}'; ` +
-          `falling back to '${A2A_PROTOCOL_VERSION}'. Register one via ` +
+          `falling back to '${ProtocolVersion.V1_0}'. Register one via ` +
           `DefaultPushNotificationSenderOptions.serializers to silence this warning.`
       );
     }
@@ -217,30 +232,61 @@ export class DefaultPushNotificationSender implements PushNotificationSender {
   ): Promise<void> {
     const { config: pushConfig, wireVersion } = storedConfig;
     const url = pushConfig.url;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
-
+    const request: PushRequest = {
+      taskId,
+      url,
+      headers: this._buildAuthHeaders(pushConfig),
+      event: streamResponse,
+      skip: false,
+      state: new Map(),
+    };
+    const hooks = this.plugins.hasPushHooks;
+    let start: number | undefined;
+    let statusCode: number | undefined;
+    let error: unknown;
     try {
       const serializer = this._resolveSerializer(wireVersion);
       const { body, contentType } = serializer.serialize(streamResponse, task);
+      request.headers['Content-Type'] = contentType;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': contentType,
-          ...this._buildAuthHeaders(pushConfig),
-        },
-        body,
-        signal: controller.signal,
-      });
+      // A throwing hook fails this delivery; `send` logs it like a failed POST.
+      if (hooks) await this.plugins.beforePushSend(request);
+      if (request.skip) return;
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
+      start = performance.now();
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: request.headers,
+          body,
+          signal: controller.signal,
+        });
+        statusCode = response.status;
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        console.info(`Push notification sent for task_id=${taskId} to URL: ${url}`);
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      console.info(`Push notification sent for task_id=${taskId} to URL: ${url}`);
+    } catch (e) {
+      error = e;
+      throw e;
     } finally {
-      clearTimeout(timeoutId);
+      if (hooks) {
+        await this.plugins.onPushSent({
+          request,
+          // Only the HTTP request is timed; 0 when it was never sent.
+          durationMs: start === undefined ? 0 : performance.now() - start,
+          statusCode,
+          error,
+          skipped: request.skip,
+        });
+      }
     }
   }
 }
