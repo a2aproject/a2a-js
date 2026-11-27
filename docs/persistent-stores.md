@@ -4,7 +4,7 @@ The in-memory stores, `InMemoryTaskStore` (which you pass to `DefaultRequestHand
 
 For persistent production deployments, `@a2a-js/sdk/server/database` provides database-backed implementations powered by [Kysely](https://kysely.dev/):
 
-- **`DatabaseTaskStore`** — stores task snapshots, status updates, message histories, and artifacts.
+- **`DatabaseTaskStore`** — stores task snapshots, status updates, message histories, and artifacts. Read-only `getTask` requests pass `historyLength` to the store; when it is zero, the database query leaves the history column unread. Calls that update and save a task continue to load its full history.
 - **`DatabasePushNotificationStore`** — stores client-registered webhook URLs, notification tokens, and webhook authentication credentials. See [Security and Data Retention](#security-and-data-retention).
 
 Both stores work with:

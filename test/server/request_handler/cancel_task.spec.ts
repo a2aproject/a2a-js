@@ -186,7 +186,7 @@ describe('DefaultRequestHandler.cancelTask persistence ownership (#798)', () => 
     const memory = new InMemoryTaskStore();
 
     const store: TaskStore = {
-      load: (...args) => memory.load(...args),
+      load: (taskId, context) => memory.load(taskId, context),
       list: (...args) => memory.list(...args),
       async save(task, context) {
         if (saveDelayMs > 0) {

@@ -29,7 +29,7 @@ export type {
   ExtendedAgentCardProvider,
 } from './request_handler/default_request_handler.js';
 export { ResultManager } from './result_manager.js';
-export type { TaskStore } from './store.js';
+export type { TaskStore, TaskStoreLoadOptions } from './store.js';
 export { InMemoryTaskStore } from './store.js';
 
 export { JsonRpcTransportHandler } from './transports/jsonrpc/jsonrpc_transport_handler.js';

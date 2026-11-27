@@ -63,6 +63,28 @@ export function describeDatabaseTaskStoreBehavior(harness: StoreHarness): void {
       expect(await store.load('task-1', context)).toEqual(task);
     });
 
+    it('does not read history when load requests zero messages', async () => {
+      const context = makeContext({ tenant: 'acme', user: 'alice' });
+      const task = makeTask({ artifacts: [makeArtifact()], history: [makeMessage()] });
+      await store.save(task, context);
+
+      expect(await store.load(task.id, context, { historyLength: 0 })).toEqual({
+        ...task,
+        history: [],
+      });
+      // A partial read must not alter the saved task or later full loads.
+      expect(await store.load(task.id, context)).toEqual(task);
+      expect(await store.load(task.id, context, { historyLength: 1 })).toEqual(task);
+
+      // Prove the unwanted column is not decoded, rather than trimmed afterward.
+      await execute(`update ${TABLE} set history = 'not json'`);
+      expect(await store.load(task.id, context, { historyLength: 0 })).toEqual({
+        ...task,
+        history: [],
+      });
+      await expect(store.load(task.id, context)).rejects.toThrow();
+    });
+
     // A row written before the generation column existed, or by a pre-v1.1 store.
     it('reads a null generation as unset', async () => {
       await store.save(makeTask({ generation: 3 }), makeContext());
