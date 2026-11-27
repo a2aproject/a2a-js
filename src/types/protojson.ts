@@ -185,9 +185,9 @@ export const SendMessageConfiguration: MessageFns<SendMessageConfiguration> = {
           ? globalThis.Boolean(object.return_immediately)
           : false,
       timelineLength: isSet(object.timelineLength)
-        ? globalThis.Number(object.timelineLength)
+        ? strictNumberFromJSON(object.timelineLength)
         : isSet(object.timeline_length)
-          ? globalThis.Number(object.timeline_length)
+          ? strictNumberFromJSON(object.timeline_length)
           : undefined,
       ifGenerationMatch: isSet(object.ifGenerationMatch)
         ? longFromJSON(object.ifGenerationMatch)
@@ -1822,9 +1822,9 @@ export const GetTaskRequest: MessageFns<GetTaskRequest> = {
           ? globalThis.Number(object.history_length)
           : undefined,
       timelineLength: isSet(object.timelineLength)
-        ? globalThis.Number(object.timelineLength)
+        ? strictNumberFromJSON(object.timelineLength)
         : isSet(object.timeline_length)
-          ? globalThis.Number(object.timeline_length)
+          ? strictNumberFromJSON(object.timeline_length)
           : undefined,
       currentGeneration: isSet(object.currentGeneration)
         ? longFromJSON(object.currentGeneration)
@@ -1891,9 +1891,9 @@ export const ListTasksRequest: MessageFns<ListTasksRequest> = {
           ? globalThis.Boolean(object.include_artifacts)
           : undefined,
       timelineLength: isSet(object.timelineLength)
-        ? globalThis.Number(object.timelineLength)
+        ? strictNumberFromJSON(object.timelineLength)
         : isSet(object.timeline_length)
-          ? globalThis.Number(object.timeline_length)
+          ? strictNumberFromJSON(object.timeline_length)
           : undefined,
     };
   },
@@ -2306,6 +2306,20 @@ function optional<K extends string, T, V>(
   present: (value: unknown) => boolean = isSet
 ): { [P in K]?: T } {
   return (present(value) ? { [key]: decode(value as V) } : {}) as { [P in K]?: T };
+}
+
+/**
+ * Reads a numeric JSON field without JS's loose coercions (`""`, `false`, `[]` -> `0`).
+ * Non-numeric values return `NaN` so handler validation rejects them.
+ */
+function strictNumberFromJSON(value: unknown): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    return globalThis.Number(value);
+  }
+  return Number.NaN;
 }
 
 /** ProtoJSON reads `int64` from either a decimal string or a number. */

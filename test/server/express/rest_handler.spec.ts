@@ -291,11 +291,11 @@ describe('restHandler', () => {
       );
     });
 
-    it('should support historyLength query parameter', async () => {
+    it('should support historyLength and timelineLength query parameters', async () => {
       (mockRequestHandler.getTask as Mock).mockResolvedValue(testTask);
 
       await request(app)
-        .get('/tasks/task-1?historyLength=10')
+        .get('/tasks/task-1?historyLength=10&timelineLength=3')
         .set('A2A-Version', '1.0')
         .expect(200);
 
@@ -304,6 +304,7 @@ describe('restHandler', () => {
           id: 'task-1',
           tenant: '',
           historyLength: 10,
+          timelineLength: 3,
         },
         expect.anything()
       );

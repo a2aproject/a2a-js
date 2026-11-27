@@ -248,7 +248,7 @@ describe('RestTransportHandler', () => {
     });
 
     it('should include historyLength if provided', async () => {
-      await transportHandler.getTask('task-1', mockContext, '10');
+      await transportHandler.getTask('task-1', mockContext, { historyLength: '10' });
 
       expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
         { id: 'task-1', historyLength: 10, tenant: '' },
@@ -256,16 +256,36 @@ describe('RestTransportHandler', () => {
       );
     });
 
-    it('should throw InvalidParams if historyLength is invalid', async () => {
-      await expect(transportHandler.getTask('task-1', mockContext, 'invalid')).rejects.toThrow(
-        'historyLength must be a valid integer'
+    it('should include timelineLength if provided (including 0)', async () => {
+      await transportHandler.getTask('task-1', mockContext, { timelineLength: '0' });
+
+      expect(mockRequestHandler.getTask as Mock).toHaveBeenCalledWith(
+        { id: 'task-1', timelineLength: 0, tenant: '' },
+        mockContext
       );
     });
 
+    it('should throw InvalidParams if historyLength is invalid', async () => {
+      await expect(
+        transportHandler.getTask('task-1', mockContext, { historyLength: 'invalid' })
+      ).rejects.toThrow('historyLength must be a valid integer');
+    });
+
     it('should throw InvalidParams if historyLength is negative', async () => {
-      await expect(transportHandler.getTask('task-1', mockContext, '-5')).rejects.toThrow(
-        'historyLength must be non-negative'
-      );
+      await expect(
+        transportHandler.getTask('task-1', mockContext, { historyLength: '-5' })
+      ).rejects.toThrow('historyLength must be non-negative');
+    });
+
+    it('should throw InvalidParams if timelineLength is invalid, empty, fractional, or negative', async () => {
+      for (const badValue of ['invalid', '', '1.5', '-1']) {
+        await expect(
+          transportHandler.getTask('task-1', mockContext, { timelineLength: badValue })
+        ).rejects.toThrow('timelineLength must be a non-negative integer');
+        await expect(
+          transportHandler.listTasks({ timelineLength: badValue }, mockContext)
+        ).rejects.toThrow('timelineLength must be a non-negative integer');
+      }
     });
   });
 
@@ -285,6 +305,7 @@ describe('RestTransportHandler', () => {
           pageSize: '10',
           pageToken: 'abc',
           historyLength: '5',
+          timelineLength: '0',
           contextId: 'ctx-1',
         },
         mockContext
@@ -299,6 +320,7 @@ describe('RestTransportHandler', () => {
           pageSize: 10,
           pageToken: 'abc',
           historyLength: 5,
+          timelineLength: 0,
           statusTimestampAfter: undefined,
           includeArtifacts: false,
         },

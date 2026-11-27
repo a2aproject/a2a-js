@@ -272,6 +272,12 @@ describe('Push Notification Integration Tests', () => {
                 message: undefined,
                 timestamp: undefined,
               },
+              timeline: [
+                {
+                  entry: { $case: 'message', value: expectedTaskResult.history![0] },
+                  generation: 1,
+                },
+              ],
               generation: 1,
             },
           },

@@ -427,8 +427,9 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
    *
    * @param req.params.taskId - Task identifier
    * @param req.query.historyLength - Optional number of history messages to include
+   * @param req.query.timelineLength - Optional number of timeline entries to include
    * @returns 200 OK with RestTask
-   * @returns 400 Bad Request if historyLength is invalid
+   * @returns 400 Bad Request if historyLength or timelineLength is invalid
    * @returns 404 Not Found if task doesn't exist
    */
   registerRoute('get', '/tasks/:taskId', async (req, res) => {
@@ -436,8 +437,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
     const result = await restTransportHandler.getTask(
       req.params.taskId as string,
       context,
-      req.query.historyLength,
-      (req.query.tenant as string) || ''
+      req.query
     );
     sendResponse<Task>(res, HTTP_STATUS.OK, context, result, Task);
   });

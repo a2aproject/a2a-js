@@ -140,6 +140,14 @@ describe('proto3 JSON conformance', () => {
       expect(Task.toJSON(Task.fromJSON(json))).toEqual(json);
     });
 
+    it('fails open on unknown TimelineEntry kinds while keeping generation (§3.2.8)', () => {
+      const decoded = Task.fromJSON({
+        id: 't',
+        timeline: [{ futureKind: { value: 1 }, generation: '5' }],
+      });
+      expect(decoded.timeline).toEqual([{ entry: undefined, generation: 5 }]);
+    });
+
     it('round-trips the new StreamResponse payloads', () => {
       const messageUpdate = {
         messageUpdate: { taskId: 't', message: { messageId: 'm' }, generation: '2' },
@@ -159,6 +167,13 @@ describe('proto3 JSON conformance', () => {
       expect(StreamRequest.toJSON(StreamRequest.fromJSON(live))).toEqual(live);
       const get = { id: 't', timelineLength: 0, currentGeneration: '2' };
       expect(GetTaskRequest.toJSON(GetTaskRequest.fromJSON(get))).toEqual(get);
+      // Non-numeric JSON values must not coerce to 0/1 and bypass handler validation.
+      for (const badValue of ['', '   ', false, true, []] as unknown[]) {
+        expect(
+          GetTaskRequest.fromJSON({ id: 't', timelineLength: badValue }).timelineLength
+        ).toBeNaN();
+      }
+      expect(GetTaskRequest.fromJSON({ id: 't', timelineLength: '0' }).timelineLength).toBe(0);
     });
   });
 });
