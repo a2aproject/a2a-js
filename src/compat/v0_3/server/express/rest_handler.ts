@@ -12,14 +12,18 @@ import express, {
   type Response,
 } from 'express';
 
-import { A2A_VERSION_HEADER, HTTP_EXTENSION_HEADER } from '../../../../constants.js';
+import { HTTP_EXTENSION_HEADER } from '../../../../constants.js';
 import { Extensions } from '../../../../extensions.js';
 import {
   ServerCallContext,
   ServerCallContextBuilder,
   defaultServerCallContextBuilder,
 } from '../../../../server/context.js';
-import { UserBuilder, delegateAsyncIterator } from '../../../../server/express/common.js';
+import {
+  UserBuilder,
+  delegateAsyncIterator,
+  getRequestedVersion,
+} from '../../../../server/express/common.js';
 import { type A2ARequestHandler } from '../../../../server/request_handler/a2a_request_handler.js';
 import { SSE_HEADERS, formatSSEEvent, formatSSEErrorEvent } from '../../../../sse_utils.js';
 import { validateVersion } from '../../../../server/version.js';
@@ -83,9 +87,9 @@ type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
 /**
  * Creates an Express router exposing the v0.3 HTTP+JSON/REST endpoints
  * at the canonical v0.3 reference URLs (`/v1/card`, `/v1/message:send`,
- * etc.). Dispatch is header-based: requests whose `A2A-Version` is not
- * in `[0.3, 1.0)` are routed via `next('router')` to the parent's v1.0
- * middleware.
+ * etc.). Dispatch reads `A2A-Version` from the header or the request
+ * parameter: requests whose version is not in `[0.3, 1.0)` are routed via
+ * `next('router')` to the parent's v1.0 middleware.
  *
  * Responds with `application/json` (v0.3 spelling); errors use the bare
  * v0.3 `{ code, message, data? }` shape. Reads both `X-A2A-Extensions`
@@ -101,12 +105,12 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
   const router = express.Router();
   const transportHandler = new LegacyRestTransportHandler(options.requestHandler);
 
-  // Hand off non-legacy requests to the parent router. Header-less
-  // requests default to '0.3' and stay here. This keeps the body
+  // Hand off non-legacy requests to the parent router. Requests that set
+  // no version default to '0.3' and stay here. This keeps the body
   // parser, content-type setter, and error handler below isolated from
   // v1.0 traffic.
   router.use((req: Request, _res: Response, next: NextFunction) => {
-    const requestedVersion = req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION;
+    const requestedVersion = getRequestedVersion(req) || A2A_LEGACY_PROTOCOL_VERSION;
     if (isLegacyVersion(requestedVersion)) {
       next();
     } else {
@@ -129,7 +133,7 @@ export function legacyRestRouter(options: LegacyRestHandlerOptions): RequestHand
 
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
-    const requestedVersion = req.header(A2A_VERSION_HEADER) || A2A_LEGACY_PROTOCOL_VERSION;
+    const requestedVersion = getRequestedVersion(req) || A2A_LEGACY_PROTOCOL_VERSION;
     const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
     const context = ctxBuilder({
       extensions: Extensions.parseServiceParameter(

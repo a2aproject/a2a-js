@@ -181,6 +181,17 @@ describe('agentCardHandler with legacyCompat', () => {
       assert.isUndefined(response.body.preferredTransport);
     });
 
+    it('serves the modern v1.0 card when A2A-Version 1.0 is a request parameter', async () => {
+      const app = createApp(dualVersionCard(), { enabled: true });
+      const response = await request(app)
+        .get('/.well-known/agent-card.json?A2A-Version=1.0')
+        .expect(200);
+
+      assert.isArray(response.body.supportedInterfaces);
+      assert.isUndefined(response.body.url);
+      assert.isUndefined(response.body.preferredTransport);
+    });
+
     it('serves the modern v1.0 card on a non-legacy version > 1.0', async () => {
       const app = createApp(dualVersionCard(), { enabled: true });
       const response = await request(app)

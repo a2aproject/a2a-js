@@ -20,13 +20,8 @@ import {
   ServerCallContextBuilder,
   defaultServerCallContextBuilder,
 } from '../context.js';
-import {
-  JSON_CONTENT_TYPE,
-  A2A_CONTENT_TYPE,
-  A2A_VERSION_HEADER,
-  HTTP_EXTENSION_HEADER,
-} from '../../constants.js';
-import { UserBuilder, delegateAsyncIterator } from './common.js';
+import { JSON_CONTENT_TYPE, A2A_CONTENT_TYPE, HTTP_EXTENSION_HEADER } from '../../constants.js';
+import { UserBuilder, delegateAsyncIterator, getRequestedVersion } from './common.js';
 import { Extensions } from '../../extensions.js';
 import { validateVersion } from '../version.js';
 import { legacyRestRouter } from '../../compat/v0_3/server/express/index.js';
@@ -122,8 +117,8 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const restTransportHandler = new RestTransportHandler(options.requestHandler);
 
   // Opt-in v0.3 compatibility. Dispatch between v0.3 and v1.0 happens
-  // INSIDE the legacy router via a header-based middleware that parses
-  // `A2A-Version` and short-circuits non-legacy requests via
+  // INSIDE the legacy router via a middleware that reads `A2A-Version`
+  // (header or request parameter) and short-circuits non-legacy requests via
   // `next('router')`. Path-based dispatch is intentionally avoided so
   // tenant routes (`/:tenant/...`) remain free to use `v1` (or any
   // other label) as a tenant identifier.
@@ -147,7 +142,7 @@ export function restHandler(options: RestHandlerOptions): RequestHandler {
   const buildContext = async (req: Request): Promise<ServerCallContext> => {
     const user = await options.userBuilder(req);
     const tenant = (req.params.tenant as string) || undefined;
-    const requestedVersion = req.header(A2A_VERSION_HEADER) || undefined;
+    const requestedVersion = getRequestedVersion(req);
     const ctxBuilder = options.contextBuilder ?? defaultServerCallContextBuilder;
     const context = ctxBuilder({
       extensions: Extensions.parseServiceParameter(req.header(HTTP_EXTENSION_HEADER)),
