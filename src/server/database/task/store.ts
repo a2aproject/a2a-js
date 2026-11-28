@@ -96,6 +96,7 @@ export class DatabaseTaskStore<DB = unknown> implements TaskStore {
       history: row.history,
       metadata: row.metadata,
       protocol_version: row.protocol_version,
+      generation: row.generation,
     };
 
     const insert = this.db.insertInto(this.tableName).values(row);

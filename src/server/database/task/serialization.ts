@@ -50,6 +50,7 @@ export function toTaskRow(scope: TaskScope, task: Task): TaskRow {
     history: encode(payload.history),
     metadata: encode(payload.metadata),
     protocol_version: PAYLOAD_FORMAT,
+    generation: task.generation ?? null,
   };
 }
 
@@ -63,6 +64,8 @@ export function fromTaskRow(row: TaskRow): Task {
       artifacts: decode(row.artifacts),
       history: decode(row.history),
       metadata: decode(row.metadata),
+      // bigint can come back as a string (pg); null is a task stored before v1.1.
+      generation: row.generation ?? undefined,
     });
   } catch (cause) {
     throw new Error(`task "${row.id}" is not readable`, { cause });

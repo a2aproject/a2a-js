@@ -56,6 +56,7 @@ import { MockPushNotificationSender } from './mocks/push_notification_sender.moc
 import { ServerCallContext } from '../../src/server/context.js';
 import { MockTaskStore } from './mocks/task_store.mock.js';
 import { TERMINAL_STATE_LIST } from '../../src/server/utils.js';
+import { withTaskWriteLock } from '../../src/server/result_manager.js';
 import { A2A_PROTOCOL_VERSION } from '../../src/constants.js';
 
 describe('DefaultRequestHandler as A2ARequestHandler', () => {
@@ -410,6 +411,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       TaskState.TASK_STATE_SUBMITTED,
       'Should return immediately with TaskState.TASK_STATE_SUBMITTED state'
     );
+    assert.equal(taskResult.generation, 1, 'The stored generation, not the executor event');
 
     // The background processing should not have completed yet
     expect(saveSpy).toHaveBeenCalledTimes(1);
@@ -566,6 +568,43 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
       errorMessage,
       'Error message should be in the status'
     );
+  });
+
+  it('sendMessage: appends a follow-up message under the task write lock (§3.2.7)', async () => {
+    const task = { ...createTestTask('task-locked'), generation: 4 };
+    await mockTaskStore.save(task, serverCallContext);
+    const loadSpy = vi.spyOn(mockTaskStore, 'load');
+    (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(async (_ctx, bus) => {
+      bus.finished();
+    });
+
+    // A drain holding the lock, as a ResultManager save in flight would.
+    let release!: () => void;
+    const held = withTaskWriteLock(
+      serverCallContext,
+      task.id,
+      () => new Promise<void>((resolve) => (release = resolve))
+    );
+    const followUp = handler.sendMessage(
+      {
+        message: {
+          ...createTestMessage('msg-follow', 'more'),
+          taskId: task.id,
+          contextId: task.contextId,
+        },
+        tenant: '',
+        configuration: undefined,
+        metadata: {},
+      },
+      serverCallContext
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(loadSpy).not.toHaveBeenCalled();
+
+    release();
+    await held;
+    await followUp.catch(() => {});
+    expect((await mockTaskStore.load(task.id, serverCallContext))!.generation).toBe(5);
   });
 
   it('sendMessage: should return second task with full history if message is sent to an existing, non-terminal task', async () => {
@@ -766,6 +805,13 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     const secondTask = secondResult as Task;
     assert.equal(secondTask.id, taskId, 'Should be the same task');
     assert.equal(secondTask.status.state, TaskState.TASK_STATE_COMPLETED);
+
+    // Turn 1: task, working, input-required. Turn 2: the appended message,
+    // two status updates, an artifact and the completion, one generation each.
+    assert.equal(firstTask.generation, 3);
+    assert.equal(secondTask.generation, 8);
+    const fetched = await handler.getTask({ id: firstTask.id, tenant: '' }, serverCallContext);
+    assert.equal(fetched.generation, 8);
 
     // Check the history
     assert.isDefined(secondTask.history, 'Second task should have history');
@@ -2835,6 +2881,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         message: undefined,
         timestamp: undefined,
       },
+      generation: 1,
     });
 
     const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
@@ -2842,11 +2889,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(secondCallTask, {
       ...expectedTask,
       status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      generation: 2,
     });
 
     const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[2][2] as Task;
-    assert.deepEqual(thirdCallTask, expectedTask);
+    assert.deepEqual(thirdCallTask, { ...expectedTask, generation: 3 });
   });
 
   it('sendMessageStream: yields raw events to the client and forwards the current full Task to the sender', async () => {
@@ -2937,6 +2985,7 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         message: undefined,
         timestamp: undefined,
       },
+      generation: 1,
     });
 
     const secondCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
@@ -2944,11 +2993,12 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
     assert.deepEqual(secondCallTask, {
       ...expectedTask,
       status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+      generation: 2,
     });
 
     const thirdCallTask = (mockPushNotificationSender as MockPushNotificationSender).send.mock
       .calls[2][2] as Task;
-    assert.deepEqual(thirdCallTask, expectedTask);
+    assert.deepEqual(thirdCallTask, { ...expectedTask, generation: 3 });
   });
 
   it('should send push notification when message event is received (§4.3.3)', async () => {
@@ -4993,6 +5043,119 @@ describe('DefaultRequestHandler as A2ARequestHandler', () => {
         serverCallContext
       );
       expect(result).toBeDefined();
+    });
+  });
+
+  describe('client-supplied ids that the database stores cannot hold (#828)', () => {
+    // The database migrations declare context_id and config_id as varchar(36).
+    const longId = 'x'.repeat(37);
+    const maxId = 'x'.repeat(36);
+
+    const messageWith = (contextId: string, taskId = ''): Message => ({
+      ...createTestMessage('msg-long-id', 'hello'),
+      contextId,
+      taskId,
+    });
+
+    const pushConfigWith = (id: string): TaskPushNotificationConfig => ({
+      tenant: '',
+      taskId: '',
+      id,
+      url: 'https://example.com/notify',
+      token: '',
+      authentication: undefined,
+    });
+
+    const saveWorkingTask = async (id: string) => {
+      await mockTaskStore.save(
+        {
+          id,
+          contextId: 'ctx-existing',
+          status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: undefined },
+          artifacts: [],
+          history: [],
+          metadata: {},
+        },
+        serverCallContext
+      );
+    };
+
+    it('sendMessage rejects a contextId over 36 characters before running the executor', async () => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+      await expect(
+        handler.sendMessage(
+          { tenant: '', message: messageWith(longId), configuration: undefined, metadata: {} },
+          serverCallContext
+        )
+      ).rejects.toThrow(RequestMalformedError);
+      expect((mockAgentExecutor as MockAgentExecutor).execute).not.toHaveBeenCalled();
+    });
+
+    it('sendMessage accepts a contextId of exactly 36 characters', async () => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+      const result = (await handler.sendMessage(
+        { tenant: '', message: messageWith(maxId), configuration: undefined, metadata: {} },
+        serverCallContext
+      )) as Task;
+
+      expect(result.contextId).toBe(maxId);
+    });
+
+    it('sendMessageStream rejects a contextId over 36 characters', async () => {
+      (mockAgentExecutor as MockAgentExecutor).execute.mockImplementation(fakeTaskExecute);
+
+      const stream = handler.sendMessageStream(
+        { tenant: '', message: messageWith(longId), configuration: undefined, metadata: {} },
+        serverCallContext
+      );
+
+      await expect(stream.next()).rejects.toThrow(RequestMalformedError);
+      expect((mockAgentExecutor as MockAgentExecutor).execute).not.toHaveBeenCalled();
+    });
+
+    it('createTaskPushNotificationConfig rejects a config id over 36 characters and saves nothing', async () => {
+      const taskId = 'task-long-config-id';
+      await saveWorkingTask(taskId);
+
+      await expect(
+        handler.createTaskPushNotificationConfig(
+          { ...pushConfigWith(longId), taskId },
+          serverCallContext
+        )
+      ).rejects.toThrow(RequestMalformedError);
+
+      const listed = await handler.listTaskPushNotificationConfigs(
+        { tenant: '', taskId, pageSize: 0, pageToken: '' },
+        serverCallContext
+      );
+      expect(listed.configs).toEqual([]);
+    });
+
+    it('sendMessage rejects an inline push config id over 36 characters before touching the task', async () => {
+      const taskId = 'task-long-inline-config-id';
+      await saveWorkingTask(taskId);
+
+      await expect(
+        handler.sendMessage(
+          {
+            tenant: '',
+            message: messageWith('ctx-existing', taskId),
+            configuration: {
+              acceptedOutputModes: [],
+              taskPushNotificationConfig: pushConfigWith(longId),
+              returnImmediately: false,
+            },
+            metadata: {},
+          },
+          serverCallContext
+        )
+      ).rejects.toThrow(RequestMalformedError);
+
+      const stored = await mockTaskStore.load(taskId, serverCallContext);
+      expect(stored?.history).toEqual([]);
+      expect((mockAgentExecutor as MockAgentExecutor).execute).not.toHaveBeenCalled();
     });
   });
 });

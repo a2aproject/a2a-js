@@ -62,6 +62,43 @@ async function serializeByScope<T>(key: string, fn: () => Promise<T>): Promise<T
 }
 
 /**
+ * Runs `fn` under the same per-task write lock {@link ResultManager} uses,
+ * for writes made outside it (the follow-up message append in
+ * `DefaultRequestHandler`), so their load-modify-save can't race a drain.
+ */
+export function withTaskWriteLock<T>(
+  context: ServerCallContext,
+  taskId: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  return serializeByScope(lockKey(context, taskId), fn);
+}
+
+/** Advances a task's `generation` by one; a task stored before v1.1 starts at 1. */
+export function advanceGeneration(task: Task): void {
+  task.generation = (task.generation ?? 0) + 1;
+}
+
+/** Returns a shallow copy of `event` with `generation` set; messages are returned as is. */
+function withGeneration(
+  event: AgentExecutionEvent,
+  generation: number | undefined
+): AgentExecutionEvent {
+  switch (event.kind) {
+    case 'message':
+      return event;
+    case 'task':
+      return AgentEvent.task({ ...event.data, generation });
+    case 'statusUpdate':
+      return AgentEvent.statusUpdate({ ...event.data, generation });
+    case 'artifactUpdate':
+      return AgentEvent.artifactUpdate({ ...event.data, generation });
+    default:
+      assertUnreachableEvent(event);
+  }
+}
+
+/**
  * Tracks the in-flight task/message state for a single A2A request and
  * persists updates to the {@link TaskStore}.
  *
@@ -105,8 +142,13 @@ export class ResultManager {
    * Store-touching branches run under a per-(tenant, owner, taskId) lock
    * so concurrent RMs linearize their load-merge-save sequences. The
    * `message` branch is in-memory only and intentionally unlocked.
+   *
+   * Returns a copy of `event` carrying the task's new `generation` when
+   * persisted, or `event` unchanged when nothing was written (e.g. a
+   * standalone message or an ignored update). The input object is never
+   * mutated.
    */
-  public async processEvent(event: AgentExecutionEvent): Promise<void> {
+  public async processEvent(event: AgentExecutionEvent): Promise<AgentExecutionEvent> {
     let report: TaskEventInfo | undefined;
     try {
       await this.applyEvent(event);
@@ -118,6 +160,7 @@ export class ResultManager {
     if (report && this.plugins?.hasTaskHooks) {
       await this.plugins.onTaskEvent(report);
     }
+    return report?.event ?? event;
   }
 
   private async applyEvent(event: AgentExecutionEvent): Promise<void> {
@@ -204,6 +247,9 @@ export class ResultManager {
     // Deep-clone the incoming Task so further executor mutations can't
     // leak into our state.
     const mergedTask: Task = structuredClone(taskEvent);
+    // The server owns `generation`; `saveCurrentTask` advances the persisted one.
+    mergedTask.generation =
+      persistedTask && persistedTask.id === taskEvent.id ? persistedTask.generation : undefined;
 
     if (persistedTask && persistedTask.id === taskEvent.id) {
       // Preserve persisted history when the incoming event omits it. If
@@ -403,12 +449,13 @@ export class ResultManager {
     if (!task) {
       return;
     }
+    advanceGeneration(task);
     await this.taskStore.save(task, this.serverCallContext);
     this.pendingReport = {
       taskId: task.id,
       fromState,
       toState: task.status?.state ?? TaskState.TASK_STATE_UNSPECIFIED,
-      event,
+      event: withGeneration(event, task.generation),
       task,
       context: this.serverCallContext,
     };

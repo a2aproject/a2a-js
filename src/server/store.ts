@@ -16,7 +16,9 @@ import { decodePageToken, encodePageToken, ScopedStore } from './utils.js';
  */
 export interface TaskStore {
   /**
-   * Saves a task, overwriting any existing entry with the same ID.
+   * Saves a task, overwriting any existing entry with the same ID. Must
+   * persist every field, including `generation`, which the server advances
+   * from the loaded value on each save.
    * @param task The task to save.
    * @param context The context of the current call. Use `context.tenant`
    *   for tenant-scoped storage and `context.user` for owner scoping.

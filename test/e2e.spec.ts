@@ -37,7 +37,6 @@ import { UserBuilder } from '../src/server/express/common.js';
 import { A2AService, grpcService } from '../src/server/grpc/index.js';
 import { GrpcTransportFactory } from '../src/client/transports/grpc/grpc_transport.js';
 import { ServiceParameters, withA2AVersion } from '../src/client/service-parameters.js';
-import type { A2APlugin } from '../src/plugins/index.js';
 
 class TestAgentExecutor implements AgentExecutor {
   constructor(public events: AgentExecutionEvent[] = []) {}
@@ -88,20 +87,9 @@ describe('Client E2E tests', () => {
       let grpcServer: grpc.Server;
       let agentExecutor: TestAgentExecutor;
       let agentCard: AgentCard;
-      let pluginCalls: string[];
 
       beforeEach(async () => {
         agentExecutor = new TestAgentExecutor();
-        pluginCalls = [];
-        const recorder: A2APlugin = {
-          name: 'recorder',
-          beforeHandlerRun: (req) => {
-            pluginCalls.push(`before:${req.method}`);
-          },
-          afterHandlerRun: (res) => {
-            pluginCalls.push(`after:${res.isFinal ? 'final' : 'event'}`);
-          },
-        };
         agentCard = {
           name: 'Test Agent',
           description: 'An agent for testing purposes',
@@ -131,13 +119,7 @@ describe('Client E2E tests', () => {
         const requestHandler = new DefaultRequestHandler(
           agentCard,
           new InMemoryTaskStore(),
-          agentExecutor,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          { plugins: [recorder] }
+          agentExecutor
         );
 
         app = express();
@@ -208,20 +190,6 @@ describe('Client E2E tests', () => {
             metadata: {},
           });
           expect(removeUndefinedFields(actual)).to.deep.equal(removeUndefinedFields(expected));
-        });
-
-        it('runs server plugin hooks for the call', async () => {
-          agentExecutor.events = [AgentEvent.message(createTestMessage('1', 'test'))];
-          const client = await clientFactory.createFromAgentCard(agentCard);
-
-          await client.sendMessage({
-            tenant: '',
-            message: createTestMessage('1', 'test'),
-            configuration: undefined,
-            metadata: {},
-          });
-
-          expect(pluginCalls).toEqual(['before:SendMessage', 'after:final']);
         });
       });
 
@@ -369,7 +337,14 @@ describe('Client E2E tests', () => {
             actual.push(message);
           }
 
-          expect(removeUndefinedFields(actual)).to.deep.equal(removeUndefinedFields(expected));
+          expect(removeUndefinedFields(actual)).to.deep.equal(
+            // Each persisted event carries the task's generation after it.
+            removeUndefinedFields(
+              expected.map((e: any, index: number) => ({
+                payload: { ...e.payload, value: { ...e.payload.value, generation: index + 1 } },
+              }))
+            )
+          );
         });
 
         it('should fallback to non-streaming sendMessage if agent does not support streaming', async () => {

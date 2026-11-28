@@ -96,6 +96,28 @@ describe('tasks', () => {
       expect(compat.metadata).toBeUndefined();
     });
 
+    it('drops the v1.1 generation going to compat', () => {
+      const core: V1Task = {
+        id: 't1',
+        contextId: 'ctx',
+        status: { state: TaskState.TASK_STATE_WORKING, message: undefined, timestamp: '' },
+        artifacts: [],
+        history: [],
+        metadata: undefined,
+        generation: 4,
+      };
+      expect(toCompatTask(core)).not.toHaveProperty('generation');
+      expect(
+        toCompatTaskStatusUpdateEvent({
+          taskId: 't1',
+          contextId: 'ctx',
+          status: core.status,
+          metadata: undefined,
+          generation: 4,
+        })
+      ).not.toHaveProperty('generation');
+    });
+
     it('coerces missing arrays to empty going to core', () => {
       const compat: legacy.Task = {
         kind: 'task',
